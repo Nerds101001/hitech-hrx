@@ -1,0 +1,13 @@
+{
+  "name": "AiChat",
+  "alias": "aichat",
+  "version": "1.0.0",
+  "description": "AI chat enables you to chat with the bot",
+  "displayName": "AI Bot",
+  "keywords": [],
+  "priority": 0,
+  "providers": [
+    "Modules\\AiChat\\Providers\\AiChatServiceProvider"
+  ],
+  "files": []
+}

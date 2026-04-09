@@ -1,0 +1,493 @@
+// Hitech Minimalist Awesome Navbar (Flush/Connected/Correct-Offset)
+// -------------------------------------------------------------------------------------
+
+$teal: #005a5a;
+
+// NUCLEAR RESET: Force everything to the absolute top
+html:not(.front-style) {
+
+    &,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .layout-wrapper,
+    .layout-container,
+    .layout-page {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    // Force Navbar to absolute top zero
+    .layout-navbar {
+        top: 0 !important;
+        margin-top: 0 !important;
+
+        // Ensure no inherited padding-top from Sneat default layout
+        padding-top: 0 !important;
+
+        // FIXED MODE: Respect sidebar offset (Sneat default handles this, we just ensure top: 0)
+        &.fixed,
+        .layout-navbar-fixed & {
+            top: 0 !important;
+        }
+    }
+}
+
+.hitech-navbar {
+    &.layout-navbar {
+        background: rgba(255, 255, 255, 0.98) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border: none;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.95),
+            0 8px 18px -16px rgba(15, 23, 42, 0.45) !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+
+        // DO NOT FORCE LEFT: 0 on desktop, it overlaps sidebar
+        // Default layout will handle the left offset if we don't override it with !important
+
+        min-height: 60px !important;
+        padding: 0 0.9rem !important;
+        top: 0 !important;
+        z-index: 1070 !important;
+
+        // Ensure it's sticky or fixed based on config but always top: 0
+        position: sticky !important;
+
+        .layout-navbar-fixed & {
+            position: fixed !important;
+            // No left: 0 here!
+        }
+
+        > .container-fluid {
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
+        }
+
+        // Navbar Brand / Title Area
+        .hitech-nav-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-right: auto;
+            display: flex;
+            align-items: center;
+
+            h4 {
+                font-size: 1.25rem;
+                letter-spacing: -0.02em;
+                margin-bottom: 0;
+                padding-top: 0 !important;
+            }
+        }
+
+        // Icon & Link Styling
+        .navbar-nav {
+            gap: 0.45rem;
+            align-items: center;
+
+            > .nav-item {
+                margin-right: 0 !important;
+                margin-left: 0 !important;
+            }
+
+            > .nav-item:not(.dropdown-user) > .nav-link {
+                color: #0f6868 !important;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                border: 1.5px solid rgba(0, 122, 122, 0.24) !important;
+                background: linear-gradient(180deg, #ffffff, #f5fbfb) !important;
+                box-shadow:
+                    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+                    0 8px 16px -14px rgba(0, 90, 90, 0.5) !important;
+                transition: all 0.22s ease;
+                padding: 0 !important;
+
+                &:hover {
+                    color: $teal !important;
+                    border-color: rgba(0, 122, 122, 0.45) !important;
+                    background: linear-gradient(180deg, #f8fefe, #ebf8f8) !important;
+                    box-shadow:
+                        inset 0 1px 0 rgba(255, 255, 255, 1),
+                        0 10px 18px -12px rgba(0, 90, 90, 0.6) !important;
+                    transform: translateY(-1px);
+                }
+
+                i {
+                    font-size: 1.28rem;
+                    color: inherit !important;
+                }
+            }
+
+            // User Profile Styling
+            .dropdown-user {
+                margin-left: 0;
+
+                .nav-link {
+                    width: auto;
+                    height: auto;
+                    padding: 2px 9px 2px 2px !important;
+                    border-radius: 50px;
+                    background: linear-gradient(180deg, #ffffff, #f8fbfb) !important;
+                    border: 1.5px solid rgba(0, 122, 122, 0.24) !important;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    box-shadow:
+                        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+                        0 8px 16px -14px rgba(0, 90, 90, 0.45) !important;
+
+                    &:hover {
+                        background: linear-gradient(180deg, #f9fefe, #edf9f9) !important;
+                        border-color: rgba(0, 122, 122, 0.4) !important;
+                        box-shadow:
+                            inset 0 1px 0 rgba(255, 255, 255, 1),
+                            0 10px 18px -12px rgba(0, 90, 90, 0.55) !important;
+                    }
+
+                    .avatar {
+                        width: 30px;
+                        height: 30px;
+                    }
+
+                    .hitech-user-chevron {
+                        font-size: 1rem;
+                        color: #7b8aa0;
+                    }
+
+                    .user-name-wrapper {
+                        display: flex;
+                        flex-direction: column;
+                        text-align: left;
+                        line-height: 1.1;
+
+                        .user-name {
+                            font-size: 0.85rem;
+                            font-weight: 700;
+                            color: #1e293b;
+                        }
+
+                        .user-role {
+                            font-size: 0.7rem;
+                            font-weight: 500;
+                            color: #64748b;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Mobile Adjustments
+@media (max-width: 1199.98px) {
+    .hitech-navbar.layout-navbar {
+        padding: 0 0.7rem !important;
+        left: 0 !important; // On mobile, we DO want it left: 0
+        width: 100% !important;
+    }
+}
+
+/* Shared user switch/dropdown styles (global so every page matches) */
+.hitech-user-switch {
+    display: flex;
+    align-items: center;
+    background: transparent;
+    padding: 2px 7px 2px 2px;
+    border-radius: 50px;
+    gap: 6px;
+    transition: all 0.25s ease;
+    border: none;
+    box-shadow: none;
+    cursor: pointer;
+
+    .switch-selector {
+        width: 34px;
+        height: 34px;
+        background: #008080;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        box-shadow: 0 4px 10px rgba(0, 128, 128, 0.2);
+        transition: all 0.2s ease;
+        font-weight: 800;
+        font-size: 0.85rem;
+        overflow: hidden;
+
+        img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: 2px solid #fff;
+            border-radius: 50%;
+        }
+    }
+
+    .switch-content {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.1;
+
+        .name {
+            font-size: 0.84rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 1px;
+        }
+
+        .role {
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+    }
+
+    .hitech-user-chevron {
+        font-size: 0.95rem;
+        color: #7b8aa0;
+    }
+
+    &:hover {
+        transform: translateY(-1px);
+
+        .switch-selector {
+            transform: scale(1.02);
+            box-shadow: 0 6px 13px rgba(0, 128, 128, 0.24);
+        }
+    }
+
+    &:active {
+        transform: scale(0.99);
+    }
+}
+
+.dropdown-user .nav-link {
+    padding: 0 !important;
+    background: linear-gradient(180deg, #ffffff, #f8fbfb) !important;
+    border: 1px solid rgba(0, 122, 122, 0.28) !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 8px 16px -14px rgba(0, 90, 90, 0.45) !important;
+    border-radius: 50px !important;
+
+    &:hover {
+        border-color: rgba(0, 122, 122, 0.42) !important;
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 1),
+            0 10px 18px -12px rgba(0, 90, 90, 0.6) !important;
+    }
+}
+
+.hitech-dropdown-menu {
+    border-radius: 14px !important;
+    border: 1px solid #aebfd0 !important;
+    box-shadow:
+        0 12px 24px -18px rgba(15, 23, 42, 0.28),
+        0 5px 12px -10px rgba(0, 80, 80, 0.14) !important;
+    padding: 0.38rem !important;
+    margin-top: 7px !important;
+    min-width: 252px !important;
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.98) !important;
+    right: 0 !important;
+    left: auto !important;
+
+    &[data-bs-popper] {
+        inset: calc(100% + 8px) 0 auto auto !important;
+    }
+
+    .dropdown-item {
+        border-radius: 10px !important;
+        padding: 0.5rem 0.62rem !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        line-height: 1.15 !important;
+        color: #475569 !important;
+        transition: all 0.2s ease !important;
+        margin-bottom: 3px !important;
+        border: 1px solid #d9e3eb !important;
+
+        i {
+            font-size: 0.95rem !important;
+            color: #5f6f86 !important;
+            transition: all 0.2s ease !important;
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #f4f8fb;
+            border: 1px solid rgba(15, 23, 42, 0.06);
+        }
+
+        &:hover {
+            background: linear-gradient(180deg, #f4fbfb 0%, #eef8f8 100%) !important;
+            color: #005a5a !important;
+            border-color: rgba(0, 128, 128, 0.16) !important;
+
+            i {
+                color: #008080 !important;
+                background: #e8f8f8;
+                border-color: rgba(0, 128, 128, 0.18);
+                transform: scale(1.03);
+            }
+        }
+
+        &.logout-item:hover {
+            background: #fef2f2 !important;
+            color: #dc2626 !important;
+            border-color: rgba(220, 38, 38, 0.16) !important;
+
+            i {
+                color: #dc2626 !important;
+                background: #fff0f0;
+                border-color: rgba(220, 38, 38, 0.18);
+            }
+        }
+    }
+
+    .dropdown-divider {
+        margin: 0.4rem 0 !important;
+        opacity: 0.16 !important;
+    }
+}
+
+.hitech-dropdown-user-header {
+    background: linear-gradient(180deg, #ffffff 0%, #f5fbfb 100%);
+    padding: 0.58rem 0.65rem;
+    border-radius: 10px;
+    margin-bottom: 0.42rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(0, 128, 128, 0.1);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 8px 16px -14px rgba(0, 128, 128, 0.24);
+
+    .avatar {
+        width: 32px !important;
+        height: 32px !important;
+
+        .avatar-initial {
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+    }
+
+    .user-info {
+        .name {
+            font-weight: 800;
+            color: #0f172a;
+            font-size: 0.86rem;
+            margin-bottom: 1px;
+            display: block;
+        }
+
+        .role {
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+        }
+    }
+}
+
+@media (max-width: 767.98px) {
+    .hitech-navbar.layout-navbar {
+        min-height: 56px !important;
+        padding-left: 0.55rem !important;
+        padding-right: 0.55rem !important;
+    }
+
+    .hitech-navbar .navbar-nav {
+        gap: 0.32rem !important;
+    }
+
+    .hitech-navbar .navbar-nav > .nav-item,
+    .hitech-navbar .navbar-nav > .nav-item.me-2 {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+
+    .hitech-navbar .navbar-nav > .nav-item:not(.dropdown-user) > .nav-link {
+        width: 36px !important;
+        height: 36px !important;
+    }
+
+    .hitech-navbar .navbar-nav > .nav-item:not(.dropdown-user) > .nav-link i {
+        font-size: 1rem !important;
+    }
+
+    .hitech-user-switch {
+        padding: 2px 6px 2px 2px;
+        gap: 5px;
+
+        .switch-selector {
+            width: 30px;
+            height: 30px;
+        }
+    }
+
+    .hitech-dropdown-menu {
+        min-width: min(248px, calc(100vw - 0.85rem)) !important;
+        max-width: calc(100vw - 0.85rem) !important;
+        margin-top: 6px !important;
+        padding: 0.34rem !important;
+
+        &[data-bs-popper] {
+            inset: calc(100% + 6px) 0 auto auto !important;
+        }
+
+        .dropdown-item {
+            padding: 0.44rem 0.54rem !important;
+            font-size: 0.86rem !important;
+        }
+    }
+
+    .hitech-dropdown-user-header {
+        padding: 0.5rem 0.56rem;
+
+        .avatar {
+            width: 30px !important;
+            height: 30px !important;
+        }
+    }
+}
+
+@media (max-width: 575.98px) {
+    .hitech-navbar.layout-navbar {
+        min-height: 54px !important;
+        padding-left: 0.4rem !important;
+        padding-right: 0.4rem !important;
+    }
+
+    .hitech-navbar .navbar-nav > .nav-item:not(.dropdown-user) > .nav-link {
+        width: 34px !important;
+        height: 34px !important;
+    }
+
+    .hitech-dropdown-menu {
+        min-width: calc(100vw - 0.6rem) !important;
+        max-width: calc(100vw - 0.6rem) !important;
+        border-radius: 12px !important;
+    }
+}

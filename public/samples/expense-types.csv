@@ -1,0 +1,5 @@
+name,code,description,isimagerequired
+Travel 1, CODE001 Expense,true,
+Food 2, CODE002 Expense,true,
+Hotel 3, CODE003, Expense,true,
+Taxi 4, CODE004, Expense,true,

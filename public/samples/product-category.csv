@@ -1,0 +1,4 @@
+name,code,description,parent_id,status
+Category A,CAT001,Description for Category A,,active
+Category B,CAT002,Description for Category B,1,active
+Category C,CAT003,Description for Category C,1,inactive

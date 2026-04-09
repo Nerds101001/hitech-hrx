@@ -1,0 +1,3 @@
+name,code,notes,status,level,is_leave_approver,is_expense_approver,is_loan_approver,is_document_approver,department_id,parent_id
+Manager,MNGR,Top level,active,1,1,1,0,0,1,2
+Supervisor,SPRV,Second level,active,2,0,0,0,1,3,1

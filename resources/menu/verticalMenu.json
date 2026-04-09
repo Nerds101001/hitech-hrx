@@ -1,0 +1,73 @@
+{
+  "menu": [
+    {
+      "url": "/",
+      "name": "Dashboard",
+      "icon": "menu-icon tf-icons bx bx-home-smile",
+      "slug": "superAdmin.dashboard"
+    },
+    {
+      "url": "/account/customerIndex",
+      "icon": "menu-icon tf-icons bx bx-user",
+      "name": "Customers",
+      "slug": "account.customerIndex"
+    },
+    {
+      "url": "/domainRequests",
+      "icon": "menu-icon tf-icons bx bx-globe",
+      "name": "Domain Requests",
+      "slug": "domainRequests.index"
+    },
+    {
+      "url": "/offlineRequests",
+      "icon": "menu-icon tf-icons bx bx-wifi-off",
+      "name": "Offline Requests",
+      "slug": "offlineRequests.index"
+    },
+    {
+      "url": "/orders",
+      "icon": "menu-icon tf-icons bx bx-cart",
+      "name": "Orders",
+      "slug": "orders.index"
+    },
+    {
+      "url": "/plans",
+      "icon": "menu-icon tf-icons bx bx-credit-card",
+      "name": "Plans",
+      "slug": "plans.index"
+    },
+    {
+      "url": "/account",
+      "icon": "menu-icon tf-icons bx bx-user",
+      "name": "Users",
+      "slug": "account.index"
+    },
+    {
+      "url": "/addons",
+      "icon": "menu-icon tf-icons bx bx-category",
+      "name": "Addons",
+      "slug": "addons.index"
+    },
+    {
+      "url": "/support",
+      "name": "Support",
+      "icon": "menu-icon bx bx-support",
+      "slug": "support.index"
+    },
+    {
+      "menuHeader": "Tools"
+    },
+    {
+      "url": "/auditLogs",
+      "icon": "menu-icon tf-icons bx bx-history",
+      "name": "Audit Logs",
+      "slug": "auditLogs.index"
+    },
+    {
+      "url": "/job",
+      "icon": "menu-icon tf-icons bx bx-user-plus",
+      "name": "Recruitment",
+      "slug": "job.index"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+name,code,description,isimagerequired
+Demo Leave 1,L1,demo description 1,true
+Demo Leave 2,L2,demo description 2,false
+Demo Leave 3,L3,demo description 3,false
+Demo Leave 4,L4,demo description 4,false

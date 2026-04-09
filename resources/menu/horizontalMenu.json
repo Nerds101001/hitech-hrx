@@ -1,0 +1,571 @@
+{
+  "menu": [
+    {
+      "url": "/user/dashboard",
+      "name": "Dashboard",
+      "icon": "menu-icon bx bx-home",
+      "slug": "user.dashboard.index"
+    },
+    {
+      "icon": "menu-icon bx bx-group",
+      "name": "Workforce",
+      "slug": [
+        "employees.index",
+        "recruitment.jobOpenings.index",
+        "recruitment.onboardingTasks.index",
+        "attendance.index",
+        "payroll.index",
+        "teams.index",
+        "departments.index",
+        "designations.index",
+        "organizationHierarchy.index"
+      ],
+      "submenu": [
+        {
+          "url": "/employees",
+          "name": "Employees",
+          "icon": "menu-icon bx bx-group",
+          "slug": "employees.index"
+        },
+        {
+          "name": "Recruitment",
+          "icon": "menu-icon bx bx-user-plus",
+          "slug": [
+            "job.index",
+            "job.application.index",
+            "job.application.candidate",
+            "custom-question.index",
+            "interview-schedule.index",
+            "job-category.index",
+            "job-stage.index"
+          ],
+          "roles": [
+            "admin",
+            "hr"
+          ],
+          "submenu": [
+            {
+              "url": "/job",
+              "name": "Jobs",
+              "slug": "job.index",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/job-application",
+              "name": "Job Application",
+              "slug": "job.application.index",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/candidates",
+              "name": "Candidate",
+              "slug": "job.application.candidate",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/custom-question",
+              "name": "Custom Question",
+              "slug": "custom-question.index",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/interview-schedule",
+              "name": "Interview Schedule",
+              "slug": "interview-schedule.index",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/job-category",
+              "name": "Job Category",
+              "slug": "job-category.index",
+              "roles": ["admin", "hr"]
+            },
+            {
+              "url": "/job-stage",
+              "name": "Job Stage",
+              "slug": "job-stage.index",
+              "roles": ["admin", "hr"]
+            }
+          ]
+        },
+        {
+          "url": "/attendance",
+          "name": "Attendance",
+          "icon": "menu-icon bx bx-time-five",
+          "slug": "attendance.index"
+        },
+        {
+          "url": "/payroll",
+          "name": "Payroll",
+          "icon": "menu-icon bx bx-money",
+          "slug": "payroll.index",
+          "addon": "Payroll"
+        },
+        {
+          "name": "Organization",
+          "icon": "menu-icon bx bx-building",
+          "roles": [
+            "admin",
+            "hr",
+            "manager"
+          ],
+          "slug": [
+            "teams.index",
+            "departments.index",
+            "designations.index",
+            "organizationHierarchy.index"
+          ],
+          "submenu": [
+            {
+              "url": "/teams",
+              "name": "Teams",
+              "slug": "teams.index",
+              "roles": [
+                "admin",
+                "hr",
+                "manager"
+              ]
+            },
+            {
+              "url": "/departments",
+              "name": "Departments",
+              "slug": "departments.index",
+              "roles": [
+                "admin",
+                "hr",
+                "manager"
+              ]
+            },
+            {
+              "url": "/designations",
+              "name": "Designations",
+              "slug": "designations.index",
+              "roles": [
+                "admin",
+                "hr",
+                "manager"
+              ]
+            },
+            {
+              "url": "/organizationHierarchy",
+              "name": "Hierarchy",
+              "icon": "menu-icon bx bx-sitemap",
+              "slug": "organizationHierarchy.index",
+              "roles": [
+                "admin",
+                "hr",
+                "manager"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "icon": "menu-icon bx bx-briefcase-alt-2",
+      "name": "Operations",
+      "slug": [
+        "liveLocationView",
+        "timelineView",
+        "cardView",
+        "taskView",
+        "task.index",
+        "client.index",
+        "visits.index",
+        "order.index",
+        "product.index",
+        "productcategory.index",
+        "paymentcollection.index"
+      ],
+      "submenu": [
+        {
+          "name": "Monitoring",
+          "icon": "menu-icon bx bx-bullseye",
+          "slug": [
+            "liveLocationView",
+            "timelineView",
+            "cardView",
+            "taskView"
+          ],
+          "submenu": [
+            {
+              "url": "/liveLocation",
+              "name": "Live Location",
+              "slug": "liveLocationView"
+            },
+            {
+              "url": "/timeline",
+              "name": "Time Line",
+              "slug": "timelineView"
+            },
+            {
+              "url": "/cardView",
+              "name": "Card View",
+              "slug": "cardView"
+            },
+            {
+              "url": "/taskView",
+              "name": "KRA Overview",
+              "slug": "taskView",
+              "addon": "TaskSystem"
+            }
+          ]
+        },
+        {
+          "url": "/task",
+          "name": "KRA Management",
+          "icon": "menu-icon bx bx-task",
+          "slug": "task.index",
+          "addon": "TaskSystem"
+        },
+        {
+          "name": "Clients & Visits",
+          "icon": "menu-icon bx bx-user",
+          "slug": [
+            "client.index",
+            "visits.index"
+          ],
+          "submenu": [
+            {
+              "url": "/clients",
+              "name": "Clients",
+              "slug": "client.index"
+            },
+            {
+              "url": "/visits",
+              "name": "Visits",
+              "slug": "visits.index",
+              "standardAddon": "ClientVisit"
+            }
+          ]
+        },
+        {
+          "name": "Products & Orders",
+          "icon": "menu-icon bx bx-package",
+          "addon": "ProductOrder",
+          "slug": [
+            "order.index",
+            "product.index",
+            "productcategory.index"
+          ],
+          "submenu": [
+            {
+              "url": "/order",
+              "name": "Orders",
+              "slug": "order.index"
+            },
+            {
+              "url": "/product",
+              "name": "Product",
+              "slug": "product.index"
+            },
+            {
+              "url": "/productcategory",
+              "name": "Product Categories",
+              "slug": "productcategory.index"
+            }
+          ]
+        },
+        {
+          "url": "/paymentcollection",
+          "name": "Payment Collections",
+          "icon": "menu-icon bx bx-money",
+          "slug": "paymentcollection.index",
+          "addon": "PaymentCollection"
+        }
+      ]
+    },
+    {
+      "icon": "menu-icon bx bx-file-blank",
+      "name": "Requests",
+      "slug": [
+        "leaveRequests.index",
+        "expenseRequests.index",
+        "documentmanagement.index",
+        "loan.index"
+      ],
+      "submenu": [
+        {
+          "url": "/leaveRequests",
+          "name": "Leave Requests",
+          "slug": "leaveRequests.index"
+        },
+        {
+          "url": "/expenseRequests",
+          "name": "Expense Requests",
+          "slug": "expenseRequests.index"
+        },
+        {
+          "url": "/documentmanagement",
+          "name": "Document Requests",
+          "slug": "documentmanagement.index"
+        },
+        {
+          "url": "/loan",
+          "name": "Loan Requests",
+          "slug": "loan.index"
+        }
+      ]
+    },
+    {
+      "icon": "menu-icon bx bx-cog",
+      "name": "Settings",
+      "slug": [
+        "shifts.index",
+        "holidays.index",
+        "ipgroup.index",
+        "geofencegroup.index",
+        "qrcode.index",
+        "leaveTypes.index",
+        "expenseTypes.index",
+        "documenttypes.index",
+        "siteattendance.index",
+        "roles.index",
+        "auditLogs.index",
+        "device.index",
+        "dynamicqrattendance.index",
+        "notifications.index",
+        "assets.index",
+        "assetCategories.index"
+      ],
+      "submenu": [
+        {
+          "name": "HR Setup",
+          "slug": [
+            "shifts.index",
+            "holidays.index",
+            "leaveTypes.index"
+          ],
+          "submenu": [
+            {
+              "url": "/shifts",
+              "name": "Shifts",
+              "slug": "shifts.index"
+            },
+            {
+              "url": "/holidays",
+              "name": "Holidays",
+              "slug": "holidays.index"
+            },
+            {
+              "url": "/leaveTypes",
+              "name": "Leave Types",
+              "slug": "leaveTypes.index"
+            }
+          ]
+        },
+        {
+          "name": "Operations Setup",
+          "slug": [
+            "expenseTypes.index",
+            "documenttypes.index"
+          ],
+          "submenu": [
+            {
+              "url": "/expenseTypes",
+              "name": "Expense Types",
+              "slug": "expenseTypes.index"
+            },
+            {
+              "url": "/documenttypes",
+              "name": "Document Types",
+              "slug": "documenttypes.index"
+            }
+          ]
+        },
+        {
+          "name": "Attendance Setup",
+          "slug": [
+            "ipgroup.index",
+            "geofencegroup.index",
+            "qrcode.index",
+            "siteattendance.index",
+            "dynamicqrattendance.index"
+          ],
+          "submenu": [
+            {
+              "url": "/ipgroup",
+              "name": "IP Groups",
+              "slug": "ipgroup.index",
+              "addon": "IpAddressAttendance"
+            },
+            {
+              "url": "/geofencegroup",
+              "name": "Geofence Groups",
+              "slug": "geofencegroup.index",
+              "addon": "GeofenceSystem"
+            },
+            {
+              "url": "/qrcode",
+              "name": "QR Code Groups",
+              "slug": "qrcode.index",
+              "addon": "QRAttendance"
+            },
+            {
+              "url": "/siteattendance",
+              "name": "Sites",
+              "slug": "siteattendance.index",
+              "addon": "SiteAttendance"
+            },
+            {
+              "url": "/dynamicqrattendance",
+              "name": "QR Devices (Dynamic)",
+              "slug": "dynamicqrattendance.index",
+              "addon": "DynamicQrAttendance"
+            }
+          ]
+        },
+        {
+          "name": "Access & System",
+          "slug": [
+            "roles.index",
+            "auditLogs.index",
+            "device.index",
+            "notifications.index",
+            "dataImportExport.index"
+          ],
+          "submenu": [
+            {
+              "url": "/roles",
+              "name": "Roles",
+              "icon": "menu-icon tf-icons bx bx-user",
+              "slug": "roles.index"
+            },
+            {
+              "url": "/auditLogs",
+              "name": "Audit Logs",
+              "icon": "menu-icon tf-icons bx bx-history",
+              "slug": "auditLogs.index"
+            },
+            {
+              "url": "/device",
+              "name": "Registered Devices",
+              "icon": "menu-icon bx bx-devices",
+              "slug": "device.index"
+            },
+            {
+              "url": "/notifications",
+              "name": "Notifications",
+              "icon": "menu-icon bx bx-bell",
+              "slug": "notifications.index"
+            }
+          ]
+        },
+        {
+          "url": "/assetManagement",
+          "name": "Asset Management",
+          "slug": [
+            "assets.index",
+            "assetCategories.index"
+          ],
+          "submenu": [
+            {
+              "url": "/assetsManagement",
+              "name": "Assets",
+              "slug": "assets.index"
+            },
+            {
+              "url": "/asset-categories",
+              "name": "Asset Categories",
+              "slug": "assetCategories.index"
+            }
+          ]
+        },
+        {
+          "url": "/reports",
+          "name": "Reports",
+          "icon": "menu-icon bx bx-file",
+          "slug": "reports.index"
+        }
+      ]
+    },
+    {
+      "icon": "menu-icon bx bx-extension",
+      "name": "Tools",
+      "slug": [
+        "noticeboard.index",
+        "aiChat.index",
+        "forms.index",
+        "formSubmissions.index",
+        "formAssignments.index",
+        "lms.my.courses"
+      ],
+      "submenu": [
+        {
+          "url": "/noticeboard",
+          "name": "Noticeboard",
+          "icon": "menu-icon bx bx-note",
+          "slug": "noticeboard.index",
+          "addon": "NoticeBoard"
+        },
+        {
+          "url": "/my-learning",
+          "name": "My Learning",
+          "icon": "menu-icon bx bx-book",
+          "slug": "lms.my.courses",
+          "addon": "LMS"
+        },
+        {
+          "url": "/lms",
+          "name": "Learning Management",
+          "icon": "menu-icon bx bx-book",
+          "addon": "LMS",
+          "slug": [
+            "lms.categories.index",
+            "lms.courses.index"
+          ],
+          "submenu": [
+            {
+              "url": "/lms/courses",
+              "name": "Courses",
+              "slug": "lms.courses.index"
+            },
+            {
+              "url": "/lms/categories",
+              "name": "Categories",
+              "slug": "lms.categories.index"
+            }
+          ]
+        },
+        {
+          "url": "/aiChat",
+          "name": "AI Chat",
+          "icon": "menu-icon bx bx-chat",
+          "slug": "aiChat.index",
+          "addon": "AiChat",
+          "badge": [
+            "danger",
+            "Beta"
+          ]
+        },
+        {
+          "name": "Custom Forms",
+          "icon": "menu-icon bx bx-file",
+          "addon": "DynamicForms",
+          "slug": [
+            "forms.index",
+            "formSubmissions.index",
+            "formAssignments.index"
+          ],
+          "submenu": [
+            {
+              "url": "/forms",
+              "name": "Forms",
+              "slug": "forms.index"
+            },
+            {
+              "url": "/formSubmissions",
+              "name": "Submissions",
+              "slug": "formSubmissions.index"
+            },
+            {
+              "url": "/formAssignments",
+              "name": "Assignments",
+              "slug": "formAssignments.index"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

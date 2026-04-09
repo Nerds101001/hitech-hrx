@@ -1,0 +1,40 @@
+<?php
+
+use App\Enums\CallLogType;
+use App\Enums\CallStatus;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+  /**
+   * Run the migrations.
+   */
+  public function up(): void
+  {
+    Schema::create('call_logs', function (Blueprint $table) {
+      $table->id();
+      $table->string('channel_id')->unique(); // Unique Agora channel ID for the call
+      $table->enum('call_type', [CallLogType::AUDIO->value, CallLogType::VIDEO->value]);
+      $table->foreignId('initiated_by_id')->constrained('users')->onDelete('cascade');
+      $table->timestamp('start_time')->nullable();
+      $table->timestamp('end_time')->nullable();
+      $table->enum('status', [CallStatus::MISSED->value, CallStatus::DECLINED->value, CallStatus::COMPLETED->value])->default(CallStatus::MISSED->value);
+      $table->integer('duration')->nullable(); // Duration in seconds (calculated)
+
+      $table->foreignId('created_by_id')->nullable()->constrained('users')->onDelete('set null');
+      $table->foreignId('updated_by_id')->nullable()->constrained('users')->onDelete('set null');
+      $table->string('tenant_id', 191)->nullable();
+      $table->softDeletes();
+      $table->timestamps();
+    });
+  }
+
+  /**
+   * Reverse the migrations.
+   */
+  public function down(): void
+  {
+    Schema::dropIfExists('call_logs');
+  }
+};

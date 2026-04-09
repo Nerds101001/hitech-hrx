@@ -1,0 +1,13 @@
+@php
+  $configData = Helper::appClasses();
+@endphp
+
+@extends('layouts/layoutMaster')
+
+@section('title', '$LOWER_NAME$ - Module')
+@section('content')
+    <h1>Hello World</h1>
+
+    <p>Module: {!! config('$LOWER_NAME$.name') !!}</p>
+    <p>Module Version: {!! config('$LOWER_NAME$.version') !!}</p>
+@endsection

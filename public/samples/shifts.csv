@@ -1,0 +1,4 @@
+name,code,description,start_time,end_time,monday,tuesday,wednesday,thursday,friday,saturday,sunday
+General Shift 01,GS01,Test Description,8:00 AM,4:00 PM,false,true,true,true,true,true,true
+Night Shift,NS02,Test Description,8:00 PM,4:00 AM,false,true,true,true,true,true,true
+Afternoon Shift,ASO3,Test Description,4:00 PM,12:00 AM,false,true,true,true,true,true,true

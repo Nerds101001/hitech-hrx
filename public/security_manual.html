@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payr Security & Hardening Manual</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #1e293b;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #f8fafc;
+        }
+        .container {
+            background: white;
+            padding: 60px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            border-bottom: 2px solid #06edf9;
+            padding-bottom: 20px;
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+        h2 {
+            color: #0f172a;
+            border-left: 5px solid #06edf9;
+            padding-left: 15px;
+            margin-top: 40px;
+            font-size: 1.5rem;
+        }
+        .key-box {
+            background: #0f172a;
+            color: #06edf9;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', Courier, monospace;
+            word-break: break-all;
+            margin: 20px 0;
+            border: 1px solid #1e293b;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .card {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+        .badge {
+            background: #dcfce7;
+            color: #166534;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background: #f8fafc;
+            color: #475569;
+        }
+        .footer {
+            margin-top: 60px;
+            text-align: center;
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 20px; }
+            .key-box { border: 1px solid #ccc; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ Payr Security Manual</h1>
+            <p class="subtitle">Complete Technical Hardening Documentation & Master Keys</p>
+            <p><strong>Version:</strong> 1.0 | <strong>Date:</strong> March 22, 2026</p>
+        </header>
+
+        <h2>1. Environment Encryption (The Master Key)</h2>
+        <p>The core configuration file (<code>.env</code>) is encrypted to protect database credentials, mail keys, and API secrets.</p>
+        <div class="key-box">
+            base64:3fYXRKmRwEdzH+uyPlDQOxxfnWUPRH9AWoLG17pEgYU=
+        </div>
+        <p><em>Store this key securely. You will need it whenever you deploy to a new server or clear the environment cache.</em></p>
+
+        <h2>2. Authentication & Brute Force Protection</h2>
+        <div class="info-grid">
+            <div class="card">
+                <h3>2-Step Verification</h3>
+                <p>Mandatory 6-digit Email OTP after successful password login. Codes expire in 10 minutes and are cleared immediately after use.</p>
+                <span class="badge">ACTIVE</span>
+            </div>
+            <div class="card">
+                <h3>Brute Force Defense</h3>
+                <p>3-strike policy (Passwords or OTP). Automatic 40-minute lockout of both User Account and Source IP address.</p>
+                <span class="badge">ACTIVE</span>
+            </div>
+        </div>
+
+        <h2>3. Data Protection (AES-256)</h2>
+        <p>Personal Identifiable Information (PII) and documentation are encrypted at rest.</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data Type</th>
+                    <th>Security Measure</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Aadhaar / PAN Cards</td>
+                    <td>AES-256 Encryption</td>
+                    <td>✅ Encrypted</td>
+                </tr>
+                <tr>
+                    <td>Bank Passbooks</td>
+                    <td>AES-256 Encryption</td>
+                    <td>✅ Encrypted</td>
+                </tr>
+                <tr>
+                    <td>Profile Photos</td>
+                    <td>AES-256 Encryption</td>
+                    <td>✅ Encrypted</td>
+                </tr>
+                <tr>
+                    <td>View Access</td>
+                    <td>Secure Proxy + Audit Trail</td>
+                    <td>✅ Logged</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>4. Session & Header Hardening</h2>
+        <p>The portal is protected against Session Hijacking and common Web Vulnerabilities.</p>
+        <ul>
+            <li><strong>Session Fingerprinting:</strong> Validates browser agent and IP address on every request.</li>
+            <li><strong>Security Headers:</strong> Includes HSTS, X-Frame-Options (Clickjacking protection), and X-Content-Type-Options.</li>
+            <li><strong>Cookie Hardening:</strong> All session cookies are set to HttpOnly and SameSite: Lax.</li>
+        </ul>
+
+        <h2>5. Administrator Action Guide</h2>
+        <p>To view audit trails or manage security:</p>
+        <ol>
+            <li>Navigate to <strong>Security Logs</strong> in the admin panel to see document access trails.</li>
+            <li>Check <strong>Audit Logs</strong> for failed login attempts and IP blocks.</li>
+            <li>Use the <strong>Self-Service Unlock</strong> link in emails to assist users who are legitimately locked out.</li>
+        </ol>
+
+        <div class="footer">
+            <p>© 2026 Hitech Soft Glass - Payr Security Protocol. Document generated by Antigravity AI.</p>
+        </div>
+    </div>
+</body>
+</html>

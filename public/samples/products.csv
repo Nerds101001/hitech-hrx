@@ -1,0 +1,3 @@
+name,description,product_code,status,category_code,base_price,discount,tax,price,stock
+Product A,Description for Product A,PROD001,active,CAT001,100,10,5,95,50
+Product B,Description for Product B,PROD002,active,CAT002,200,15,10,185,100

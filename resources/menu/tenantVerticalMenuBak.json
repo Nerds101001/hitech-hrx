@@ -1,0 +1,173 @@
+{
+  "menu": [
+    {
+      "menuHeader": "Monitoring"
+    },
+    {
+      "url": "/",
+      "name": "Dashboard",
+      "icon": "menu-icon tf-icons bx bx-home-smile",
+      "slug": "dashboard"
+    },
+    {
+      "url": "/liveLocationView",
+      "name": "Live Location",
+      "icon": "menu-icon tf-icons bx bx-map",
+      "slug": "liveLocationView"
+    },
+    {
+      "url": "/timeLineView",
+      "name": "Time Line",
+      "icon": "menu-icon tf-icons bx bx-network-chart",
+      "slug": "timelineView"
+    },
+    {
+      "url": "/taskView",
+      "name": "Task View",
+      "icon": "menu-icon tf-icons bx bx-task",
+      "slug": "taskView"
+    },
+    {
+      "menuHeader": "HR"
+    },
+    {
+      "url": "/employees",
+      "icon": "menu-icon tf-icons bx bx-user",
+      "name": "Employees",
+      "slug": "employees.index"
+    },
+    {
+      "url": "/attendances",
+      "name": "Attendances",
+      "icon": "menu-icon tf-icons bx bx-time-five",
+      "slug": "attendances.index"
+    },
+    {
+      "url": "/visits",
+      "name": "Visits",
+      "icon": "menu-icon tf-icons bx bx-show",
+      "slug": "visits.index"
+    },
+    {
+      "url": "/leaves",
+      "name": "Leave",
+      "icon": "menu-icon tf-icons bx bx-calendar",
+      "slug": "leaves.index"
+    },
+    {
+      "url": "/expenses",
+      "name": "Expense",
+      "icon": "menu-icon tf-icons bx bx-money",
+      "slug": "expenses.index"
+    },
+    {
+      "url": "/announcements",
+      "name": "Announcements",
+      "icon": "menu-icon tf-icons bx bx-volume-full",
+      "slug": "announcements.index"
+    },
+    {
+      "url": "/reports",
+      "name": "Reports",
+      "icon": "menu-icon tf-icons bx bx-file",
+      "slug": "reports.index"
+    },
+    {
+      "url": "/client",
+      "icon": "menu-icon tf-icons bx bx-building",
+      "name": "Clients",
+      "slug": "client.index"
+    },
+    {
+      "icon": "menu-icon tf-icons bx bx-data",
+      "name": "Masters",
+      "slug": [
+        "departments.index",
+        "designations.index",
+        "locations.index",
+        "shifts.index",
+        "teams.index",
+        "holidays.index",
+        "leaveTypes.index",
+        "expenseTypes.index"
+      ],
+      "submenu": [
+        {
+          "url": "/departments",
+          "icon": "menu-icon tf-icons bx bx-building",
+          "name": "Departments",
+          "slug": "departments.index"
+        },
+        {
+          "url": "/designations",
+          "icon": "menu-icon tf-icons bx bx-briefcase",
+          "name": "Designations",
+          "slug": "designations.index"
+        },
+        {
+          "url": "/locations",
+          "icon": "menu-icon tf-icons bx bx-map",
+          "name": "Locations",
+          "slug": "locations.index"
+        },
+        {
+          "url": "/shifts",
+          "icon": "menu-icon tf-icons bx bx-time-five",
+          "name": "Shifts",
+          "slug": "shifts.index"
+        },
+        {
+          "url": "/teams",
+          "icon": "menu-icon tf-icons bx bx-building",
+          "name": "Teams",
+          "slug": "teams.index"
+        },
+        {
+          "url": "/holidays",
+          "icon": "menu-icon tf-icons bx bx-calendar",
+          "name": "Holidays",
+          "slug": "holidays.index"
+        },
+        {
+          "url": "/leaveTypes",
+          "icon": "menu-icon tf-icons bx bx-calendar",
+          "name": "Leave Types",
+          "slug": "leaveTypes.index"
+        },
+        {
+          "url": "expenseTypes",
+          "icon": "menu-icon tf-icons bx bx-money",
+          "name": "Expense Types",
+          "slug": "expenseTypes.index"
+        },
+        {
+          "url": "documentTypes",
+          "icon": "menu-icon tf-icons bx bx-expand-vertical",
+          "name": "Document Types",
+          "slug": "documentTypes.index"
+        }
+      ]
+    },
+    {
+      "menuHeader": "Tools"
+    },
+    {
+      "url": "/roles",
+      "icon": "menu-icon tf-icons bx bx-shield",
+      "name": "Roles",
+      "slug": "roles.index"
+    },
+    {
+      "url": "/permissions",
+      "icon": "menu-icon tf-icons bx bx-shield",
+      "name": "Permissions",
+      "slug": "permissions.index"
+    },
+    {
+      "url": "/auditLogs",
+      "icon": "menu-icon tf-icons bx bx-history",
+      "name": "Audit Logs",
+      "slug": "auditLogs.index"
+    }
+  ]
+}
