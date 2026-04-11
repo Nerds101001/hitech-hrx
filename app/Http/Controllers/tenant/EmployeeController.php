@@ -96,23 +96,22 @@ class EmployeeController extends Controller
 
     try {
       PayrollAdjustment::updateOrCreate(
-      ['id' => $validated['id'] ?? null],
-      [
-        'user_id' => $request->userId,
-        'name' => $validated['adjustmentName'],
-        'code' => $validated['adjustmentCode'],
-        'type' => $validated['adjustmentType'],
-        'applicability' => 'employee',
-        'amount' => $validated['adjustmentAmount'] ?? 0,
-        'percentage' => $validated['adjustmentPercentage'],
-        'notes' => $validated['adjustmentNotes'],
-        'updated_by_id' => auth()->id(),
-      ]
+        ['id' => $validated['id'] ?? null],
+        [
+          'user_id' => $request->userId,
+          'name' => $validated['adjustmentName'],
+          'code' => $validated['adjustmentCode'],
+          'type' => $validated['adjustmentType'],
+          'applicability' => 'employee',
+          'amount' => $validated['adjustmentAmount'] ?? 0,
+          'percentage' => $validated['adjustmentPercentage'],
+          'notes' => $validated['adjustmentNotes'],
+          'updated_by_id' => auth()->id(),
+        ]
       );
 
       return redirect()->back()->with('success', __('Payroll adjustment saved successfully.'));
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('Payroll Adjustment Error: ' . $e->getMessage());
       return redirect()->back()->with('error', __('Failed to save payroll adjustment.'));
     }
@@ -148,15 +147,15 @@ class EmployeeController extends Controller
     $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
 
     if ($isEmployee) {
-        // Check for existing pending request for bank_details
-        $existing = ProfileUpdateApproval::where('user_id', auth()->id())
-            ->where('type', 'bank_details')
-            ->where('status', 'pending')
-            ->first();
+      // Check for existing pending request for bank_details
+      $existing = ProfileUpdateApproval::where('user_id', auth()->id())
+        ->where('type', 'bank_details')
+        ->where('status', 'pending')
+        ->first();
 
-        if ($existing) {
-            return redirect()->back()->with('error', 'You already have a bank update request pending approval.');
-        }
+      if ($existing) {
+        return redirect()->back()->with('error', 'You already have a bank update request pending approval.');
+      }
     }
 
     $user = User::find($validated['userId']);
@@ -168,24 +167,24 @@ class EmployeeController extends Controller
     }
 
     if ($isEmployee) {
-        // Create approval request instead of direct update
-        ProfileUpdateApproval::create([
-            'user_id' => $user->id,
-            'type' => 'bank_details',
-            'requested_data' => [
-                'bank_name' => $validated['bankName'],
-                'bank_code' => $validated['bankCode'],
-                'account_name' => $validated['accountName'],
-                'account_number' => $validated['accountNumber'],
-                'branch_name' => $validated['branchName'] ?? null,
-                'branch_code' => $validated['branchCode'] ?? null,
-                'passbook_path' => $path
-            ],
-            'status' => 'pending',
-            'tenant_id' => $user->tenant_id
-        ]);
+      // Create approval request instead of direct update
+      ProfileUpdateApproval::create([
+        'user_id' => $user->id,
+        'type' => 'bank_details',
+        'requested_data' => [
+          'bank_name' => $validated['bankName'],
+          'bank_code' => $validated['bankCode'],
+          'account_name' => $validated['accountName'],
+          'account_number' => $validated['accountNumber'],
+          'branch_name' => $validated['branchName'] ?? null,
+          'branch_code' => $validated['branchCode'] ?? null,
+          'passbook_path' => $path
+        ],
+        'status' => 'pending',
+        'tenant_id' => $user->tenant_id
+      ]);
 
-        return redirect()->back()->with('info', 'Bank details update request has been submitted to HR for approval.');
+      return redirect()->back()->with('info', 'Bank details update request has been submitted to HR for approval.');
     }
 
     $bank = BankAccount::where('user_id', $user->id)->first();
@@ -199,10 +198,38 @@ class EmployeeController extends Controller
       $bank->branch_code = $validated['branchCode'] ?? $bank->branch_code;
       if ($path) {
         $bank->passbook_path = $path;
+
+        // Synchronize with DocumentRequest for visibility in Documents tab
+        try {
+          $docType = \App\Models\DocumentType::where('code', 'BANK_PASSBOOK')->first();
+          if (!$docType) {
+            $docType = \App\Models\DocumentType::create([
+              'name' => 'Bank Passbook',
+              'code' => 'BANK_PASSBOOK',
+              'is_mandatory' => false
+            ]);
+          }
+
+          \App\Models\DocumentRequest::updateOrCreate(
+            [
+              'user_id' => $user->id,
+              'document_type_id' => $docType->id
+            ],
+            [
+              'generated_file' => $path,
+              'status' => 'approved',
+              'remarks' => 'Updated via Bank Details form',
+              'action_taken_at' => now(),
+              'updated_by_id' => auth()->id(),
+              'tenant_id' => $user->tenant_id
+            ]
+          );
+        } catch (\Exception $e) {
+          \Log::error('Bank document sync error: ' . $e->getMessage());
+        }
       }
       $bank->save();
-    }
-    else {
+    } else {
       $user->bankAccount()->create([
         'bank_name' => $validated['bankName'],
         'bank_code' => $validated['bankCode'],
@@ -286,27 +313,27 @@ class EmployeeController extends Controller
   public function allotDevice(Request $request)
   {
     $validated = $request->validate([
-      'userId'         => 'required|exists:users,id',
-      'deviceId'       => 'nullable|string|max:255',
-      'brand'          => 'nullable|string|max:255',
-      'deviceType'     => 'nullable|string|max:100',
-      'assetId'        => 'nullable|exists:assets,id',
-      'serialNumber'   => 'nullable|string|max:255',
-      'serviceTag'     => 'nullable|string|max:255',
-      'modelNumber'    => 'nullable|string|max:255',
+      'userId' => 'required|exists:users,id',
+      'deviceId' => 'nullable|string|max:255',
+      'brand' => 'nullable|string|max:255',
+      'deviceType' => 'nullable|string|max:100',
+      'assetId' => 'nullable|exists:assets,id',
+      'serialNumber' => 'nullable|string|max:255',
+      'serviceTag' => 'nullable|string|max:255',
+      'modelNumber' => 'nullable|string|max:255',
       'warrantyExpiry' => 'nullable|date',
     ]);
 
     // Auto-generate Asset Code if not provided
     $deviceTypeMap = [
-        'laptop'     => 'LAP',
-        'desktop'    => 'DSK',
-        'mobile'     => 'MOB',
-        'tablet'     => 'TAB',
-        'peripheral' => 'PER',
-        'biometric'  => 'BIO',
+      'laptop' => 'LAP',
+      'desktop' => 'DSK',
+      'mobile' => 'MOB',
+      'tablet' => 'TAB',
+      'peripheral' => 'PER',
+      'biometric' => 'BIO',
     ];
-    $prefix    = $deviceTypeMap[strtolower($validated['deviceType'] ?? '')] ?? 'AST';
+    $prefix = $deviceTypeMap[strtolower($validated['deviceType'] ?? '')] ?? 'AST';
     $assetCode = $validated['deviceId'] ?? ($prefix . '-' . strtoupper(substr(uniqid(), -5)));
 
     // 1. Sync with Asset Management
@@ -315,40 +342,39 @@ class EmployeeController extends Controller
       if ($asset) {
         $assetCode = $asset->asset_code;
         $asset->update([
-          'assigned_to'     => $validated['userId'],
-          'status'          => 'assigned',
-          'serial_number'   => $validated['serialNumber'] ?? $asset->serial_number,
-          'model'           => $validated['modelNumber'] ?? $asset->model,
+          'assigned_to' => $validated['userId'],
+          'status' => 'assigned',
+          'serial_number' => $validated['serialNumber'] ?? $asset->serial_number,
+          'model' => $validated['modelNumber'] ?? $asset->model,
           'warranty_expiry' => $validated['warrantyExpiry'] ?? $asset->warranty_expiry,
-          'notes'           => $validated['serviceTag'] ?? $asset->notes,
+          'notes' => $validated['serviceTag'] ?? $asset->notes,
         ]);
       }
-    }
-    else {
+    } else {
       // Create new asset record for this allotment if not from inventory
       $asset = \App\Models\Asset::create([
-        'asset_code'      => $assetCode,
-        'name'            => $validated['brand'] ?? 'Manual Allotment',
-        'model'           => $validated['modelNumber'] ?? null,
-        'serial_number'   => $validated['serialNumber'] ?? null,
-        'notes'           => $validated['serviceTag'] ?? null,
+        'asset_code' => $assetCode,
+        'name' => $validated['brand'] ?? 'Manual Allotment',
+        'model' => $validated['modelNumber'] ?? null,
+        'serial_number' => $validated['serialNumber'] ?? null,
+        'notes' => $validated['serviceTag'] ?? null,
         'warranty_expiry' => $validated['warrantyExpiry'] ?? null,
-        'assigned_to'     => $validated['userId'],
-        'status'          => 'assigned',
-        'purchase_date'   => now(),
-        'created_by'      => auth()->id(),
+        'assigned_to' => $validated['userId'],
+        'status' => 'assigned',
+        'purchase_date' => now(),
+        'created_by' => auth()->id(),
       ]);
     }
 
     // 2. Record Assignment History
     if ($asset && \Illuminate\Support\Facades\Schema::hasTable('asset_assignments')) {
       \App\Models\AssetAssignment::create([
-        'asset_id'    => $asset->id,
-        'user_id'     => $validated['userId'],
+        'asset_id' => $asset->id,
+        'user_id' => $validated['userId'],
         'assigned_by' => auth()->id(),
         'assigned_at' => now(),
-        'notes'       => 'Allotted via Employee Portal',
-        'tenant_id'   => auth()->user()->tenant_id,
+        'notes' => 'Allotted via Employee Portal',
+        'tenant_id' => auth()->user()->tenant_id,
       ]);
     }
 
@@ -412,17 +438,17 @@ class EmployeeController extends Controller
     $user->department_id = $validated['departmentId'];
     $user->designation_id = $validated['designationId'];
     $user->reporting_to_id = $validated['reportingToId'];
-    
+
     if ($request->has('leavePolicyProfileId')) {
-        $user->leave_policy_profile_id = $validated['leavePolicyProfileId'];
+      $user->leave_policy_profile_id = $validated['leavePolicyProfileId'];
     }
 
     if ($request->has('work_type')) {
-        $user->work_type = $validated['work_type'];
+      $user->work_type = $validated['work_type'];
     }
 
     if ($request->has('biometric_id')) {
-        $user->biometric_id = $validated['biometric_id'];
+      $user->biometric_id = $validated['biometric_id'];
     }
 
     // Role Sync
@@ -434,7 +460,7 @@ class EmployeeController extends Controller
     // Initialize Leaves (Idempotent)
     $leaveCount = 0;
     if ($user->leave_policy_profile_id) {
-        $leaveCount = \App\Services\LeaveAccrualService::initializeForUser($user);
+      $leaveCount = \App\Services\LeaveAccrualService::initializeForUser($user);
     }
 
     switch ($validated['attendanceType']) {
@@ -539,9 +565,9 @@ class EmployeeController extends Controller
       // Must bypass TenantTrait global scope globally since the database has a strict unique index on `code`
       $docCode = strtoupper(str_replace(' ', '_', $request->documentName));
       $docType = DocumentType::withoutGlobalScopes()->withTrashed()->where('code', $docCode)->first();
-      
+
       if ($docType && $docType->trashed()) {
-          $docType->restore();
+        $docType->restore();
       } elseif (!$docType) {
         $docType = DocumentType::create([
           'name' => $request->documentName,
@@ -550,19 +576,19 @@ class EmployeeController extends Controller
           'tenant_id' => $user->tenant_id
         ]);
       }
-      
+
       $actualDocumentNumber = $request->documentNumber ?? $request->remarks;
 
       if ($isEmployee) {
-          // Check for existing pending request of SAME document type
-          $existing = DocumentRequest::where('user_id', $user->id)
-              ->where('document_type_id', $docType->id)
-              ->where('status', 'pending')
-              ->first();
+        // Check for existing pending request of SAME document type
+        $existing = DocumentRequest::where('user_id', $user->id)
+          ->where('document_type_id', $docType->id)
+          ->where('status', 'pending')
+          ->first();
 
-          if ($existing) {
-              return redirect()->back()->with('error', 'You already have a pending request for this document.');
-          }
+        if ($existing) {
+          return redirect()->back()->with('error', 'You already have a pending request for this document.');
+        }
       }
 
       $folder = Constants::BaseFolderOnboardingDocuments . $user->id;
@@ -578,48 +604,62 @@ class EmployeeController extends Controller
       $docNameLower = strtolower(trim($request->documentName));
       $userUpdateData = [];
 
-      if ($docNameLower === 'aadhar card') {
-          $filePrefix = 'aadhaar_card';
-          if ($actualDocumentNumber) $userUpdateData['aadhaar_no'] = $actualDocumentNumber;
+      if (str_contains($docNameLower, 'aadhaar') || str_contains($docNameLower, 'aadhar')) {
+        $filePrefix = 'aadhaar_card';
+        if ($actualDocumentNumber)
+          $userUpdateData['aadhaar_no'] = $actualDocumentNumber;
       } elseif (str_contains($docNameLower, 'pan')) {
-          $filePrefix = 'pan_card';
-          if ($actualDocumentNumber) $userUpdateData['pan_no'] = $actualDocumentNumber;
-      } elseif ($docNameLower === '10th marksheet' || $docNameLower === 'matriculation (10th)') {
-          $filePrefix = 'matric_certificate';
-          if ($actualDocumentNumber) $userUpdateData['matric_marksheet_no'] = $actualDocumentNumber;
-      } elseif ($docNameLower === 'intermediate marksheet' || $docNameLower === 'intermediate (12th)') {
-          $filePrefix = 'inter_certificate';
-          if ($actualDocumentNumber) $userUpdateData['inter_marksheet_no'] = $actualDocumentNumber;
-      } elseif ($docNameLower === 'graduation marksheet' || $docNameLower === 'bachelor degree') {
-          $filePrefix = 'graduation_certificate';
-          if ($actualDocumentNumber) $userUpdateData['bachelor_marksheet_no'] = $actualDocumentNumber;
-      } elseif ($docNameLower === 'post graduation marksheet' || $docNameLower === 'master degree') {
-          $filePrefix = 'master_certificate';
-          if ($actualDocumentNumber) $userUpdateData['master_marksheet_no'] = $actualDocumentNumber;
+        $filePrefix = 'pan_card';
+        if ($actualDocumentNumber)
+          $userUpdateData['pan_no'] = $actualDocumentNumber;
+      } elseif (str_contains($docNameLower, '10th') || str_contains($docNameLower, 'matric')) {
+        $filePrefix = 'matric_certificate';
+        if ($actualDocumentNumber)
+          $userUpdateData['matric_marksheet_no'] = $actualDocumentNumber;
+      } elseif (str_contains($docNameLower, '12th') || str_contains($docNameLower, 'inter')) {
+        $filePrefix = 'inter_certificate';
+        if ($actualDocumentNumber)
+          $userUpdateData['inter_marksheet_no'] = $actualDocumentNumber;
+      } elseif (str_contains($docNameLower, 'graduation') || str_contains($docNameLower, 'bachelor')) {
+        $filePrefix = 'graduation_certificate';
+        if ($actualDocumentNumber)
+          $userUpdateData['bachelor_marksheet_no'] = $actualDocumentNumber;
+      } elseif (str_contains($docNameLower, 'post graduation') || str_contains($docNameLower, 'master')) {
+        $filePrefix = 'master_certificate';
+        if ($actualDocumentNumber)
+          $userUpdateData['master_marksheet_no'] = $actualDocumentNumber;
+      } elseif (str_contains($docNameLower, 'experience')) {
+        $filePrefix = 'experience_certificate';
+        if ($actualDocumentNumber)
+          $userUpdateData['experience_certificate_no'] = $actualDocumentNumber;
       } elseif ($docNameLower === 'cancelled cheque') {
-          $filePrefix = 'cancelled_cheque';
+        $filePrefix = 'cancelled_cheque';
       }
 
       // If any core fields need to be updated and user has rights or is pending review but Admin processes it
       if (!$isEmployee && !empty($userUpdateData)) {
-          $user->update($userUpdateData);
+        $user->update($userUpdateData);
       }
 
       $path = \App\Helpers\FileSecurityHelper::encryptAndStore($file, $folder, $filePrefix, 'public');
 
-      DocumentRequest::create([
-        'user_id' => $user->id,
-        'document_type_id' => $docType->id,
-        'remarks' => $actualDocumentNumber,
-        'generated_file' => $path,
-        'status' => $isEmployee ? 'pending' : 'approved',
-        'created_by_id' => auth()->id(),
-        'tenant_id' => $user->tenant_id
-      ]);
+      $documentRequest = \App\Models\DocumentRequest::updateOrCreate(
+        [
+          'user_id' => $user->id,
+          'document_type_id' => $docType->id,
+        ],
+        [
+          'remarks' => $actualDocumentNumber,
+          'generated_file' => $path,
+          'status' => $isEmployee ? 'pending' : 'approved',
+          'action_taken_at' => !$isEmployee ? now() : null,
+          'updated_by_id' => auth()->id(),
+          'tenant_id' => $user->tenant_id
+        ]
+      );
 
       return redirect()->back()->with('success', $isEmployee ? 'Document update request submitted for approval.' : 'Document uploaded successfully.');
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('Upload Document Error: ' . $e->getMessage());
       return redirect()->back()->with('error', 'Failed to upload document.');
     }
@@ -676,42 +716,76 @@ class EmployeeController extends Controller
     $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
 
     // ONLY update fields that are actually in the request AND non-empty to prevent wiping out data
-    if ($request->filled('phone')) $user->phone = $request->phone;
-    if ($request->filled('official_phone')) $user->official_phone = $request->official_phone;
-    if ($request->filled('email')) $user->email = $request->email;
-    if ($request->filled('personal_email')) $user->personal_email = $request->personal_email;
-    if ($request->filled('altPhone')) $user->alternate_number = $request->altPhone;
-    
+    if ($request->filled('phone'))
+      $user->phone = $request->phone;
+    if ($request->filled('official_phone'))
+      $user->official_phone = $request->official_phone;
+    if ($request->filled('email'))
+      $user->email = $request->email;
+    if ($request->filled('personal_email'))
+      $user->personal_email = $request->personal_email;
+    if ($request->filled('altPhone'))
+      $user->alternate_number = $request->altPhone;
+
     // Address fields
-    foreach (['temp_building', 'temp_street', 'temp_city', 'temp_state', 'temp_zip', 'temp_country',
-              'perm_building', 'perm_street', 'perm_city', 'perm_state', 'perm_zip', 'perm_country'] as $field) {
-        if ($request->filled($field)) $user->$field = $request->$field;
+    foreach ([
+      'temp_building',
+      'temp_street',
+      'temp_city',
+      'temp_state',
+      'temp_zip',
+      'temp_country',
+      'perm_building',
+      'perm_street',
+      'perm_city',
+      'perm_state',
+      'perm_zip',
+      'perm_country'
+    ] as $field) {
+      if ($request->filled($field))
+        $user->$field = $request->$field;
     }
 
     // Emergency Contact
-    if ($request->has('emergency_contact_name')) $user->emergency_contact_name = $request->emergency_contact_name;
-    if ($request->has('emergency_contact_relation')) $user->emergency_contact_relation = $request->emergency_contact_relation;
-    if ($request->has('emergency_contact_phone')) $user->emergency_contact_phone = $request->emergency_contact_phone;
+    if ($request->has('emergency_contact_name'))
+      $user->emergency_contact_name = $request->emergency_contact_name;
+    if ($request->has('emergency_contact_relation'))
+      $user->emergency_contact_relation = $request->emergency_contact_relation;
+    if ($request->has('emergency_contact_phone'))
+      $user->emergency_contact_phone = $request->emergency_contact_phone;
 
     // Profile Details
-    if ($request->filled('blood_group')) $user->blood_group = $request->blood_group;
-    if ($request->filled('marital_status')) $user->marital_status = $request->marital_status;
-    if ($request->filled('father_name')) $user->father_name = $request->father_name;
-    if ($request->filled('mother_name')) $user->mother_name = $request->mother_name;
-    if ($request->filled('spouse_name')) $user->spouse_name = $request->spouse_name;
-    if ($request->filled('no_of_children')) $user->no_of_children = $request->no_of_children;
-    if ($request->filled('birth_country')) $user->birth_country = $request->birth_country;
-    if ($request->filled('citizenship')) $user->citizenship = $request->citizenship;
+    if ($request->filled('blood_group'))
+      $user->blood_group = $request->blood_group;
+    if ($request->filled('marital_status'))
+      $user->marital_status = $request->marital_status;
+    if ($request->filled('father_name'))
+      $user->father_name = $request->father_name;
+    if ($request->filled('mother_name'))
+      $user->mother_name = $request->mother_name;
+    if ($request->filled('spouse_name'))
+      $user->spouse_name = $request->spouse_name;
+    if ($request->filled('no_of_children'))
+      $user->no_of_children = $request->no_of_children;
+    if ($request->filled('birth_country'))
+      $user->birth_country = $request->birth_country;
+    if ($request->filled('citizenship'))
+      $user->citizenship = $request->citizenship;
 
     // Restricted fields: Only update if NOT an employee (or if admin/hr/manager)
     // Exception: employees CAN update their own record
     $isSelfEdit = ($validated['id'] == auth()->id());
     if (!$isEmployee || $isSelfEdit) {
-        if ($request->filled('firstName')) $user->first_name = $request->firstName;
-        if ($request->filled('lastName')) $user->last_name = $request->lastName;
-        if ($request->filled('dob')) $user->dob = $request->dob;
-        if ($request->filled('gender')) $user->gender = $request->gender;
-        if ($request->filled('biometric_id') && !$isEmployee) $user->biometric_id = $request->biometric_id;
+      if ($request->filled('firstName'))
+        $user->first_name = $request->firstName;
+      if ($request->filled('lastName'))
+        $user->last_name = $request->lastName;
+      if ($request->filled('dob'))
+        $user->dob = $request->dob;
+      if ($request->filled('gender'))
+        $user->gender = $request->gender;
+      if ($request->filled('biometric_id') && !$isEmployee)
+        $user->biometric_id = $request->biometric_id;
     }
 
     $user->save();
@@ -776,8 +850,7 @@ class EmployeeController extends Controller
         'success' => true,
         'message' => 'Employee termination process initiated successfully.'
       ]);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error("Error terminating employee ID {$user->id}: " . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'An error occurred during termination.'], 500);
@@ -861,8 +934,7 @@ class EmployeeController extends Controller
         'message' => 'Employee probation confirmed successfully.'
         // Optionally return updated user data or probation status
       ]);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack(); // Rollback transaction on error
       Log::error("Error confirming probation for User ID {$user->id}: " . $e->getMessage());
       return response()->json([
@@ -942,8 +1014,7 @@ class EmployeeController extends Controller
         'success' => true,
         'message' => 'Employee probation extended successfully.'
       ]);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error("Error extending probation for User ID {$user->id}: " . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'An error occurred while extending probation.'], 500);
@@ -1027,8 +1098,7 @@ class EmployeeController extends Controller
         'success' => true,
         'message' => 'Employee probation failed and termination process initiated.'
       ]);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error("Error failing probation for User ID {$user->id}: " . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'An error occurred while failing probation.'], 500);
@@ -1043,8 +1113,8 @@ class EmployeeController extends Controller
     $inactive = User::where('status', UserAccountStatus::INACTIVE)->count();
     $relieved = User::where('status', UserAccountStatus::RELIEVED)->count();
     $onboarding = User::whereIn('status', [
-      UserAccountStatus::ONBOARDING, 
-      UserAccountStatus::ONBOARDING_SUBMITTED, 
+      UserAccountStatus::ONBOARDING,
+      UserAccountStatus::ONBOARDING_SUBMITTED,
       UserAccountStatus::ONBOARDING_REQUESTED,
       UserAccountStatus::INVITED
     ])->count();
@@ -1130,8 +1200,7 @@ class EmployeeController extends Controller
       }
 
       return redirect()->back()->with('success', 'Profile picture updated successfully');
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@changeEmployeeProfilePicture: ' . $e->getMessage());
       return redirect()->back()->with('error', 'Failed to update profile picture');
     }
@@ -1210,21 +1279,21 @@ class EmployeeController extends Controller
       if (!empty($users)) {
         $data = $users->map(function ($user) {
           return [
-            'id'                  => $user->id,
-            'name'                => $user->full_name,
-            'attendance_type'     => $user->attendance_type,
-            'team'                => $user->team->name ?? null,
-            'designation'         => $user->designation->name ?? null,
-            'joined'              => $user->date_of_joining,
-            'email'               => $user->email,
-            'email_verified_at'   => $user->email_verified_at,
-            'status'              => $user->status->value,
-            'code'                => $user->code,
-            'phone'               => $user->phone,
-            'role'                => $user->role_display_name,
-            'profile_picture'     => $user->getProfilePicture(),
-            'personal_email'      => $user->personal_email,
-            'official_phone'      => $user->official_phone,
+            'id' => $user->id,
+            'name' => $user->full_name,
+            'attendance_type' => $user->attendance_type,
+            'team' => $user->team->name ?? null,
+            'designation' => $user->designation->name ?? null,
+            'joined' => $user->date_of_joining,
+            'email' => $user->email,
+            'email_verified_at' => $user->email_verified_at,
+            'status' => $user->status->value,
+            'code' => $user->code,
+            'phone' => $user->phone,
+            'role' => $user->role_display_name,
+            'profile_picture' => $user->getProfilePicture(),
+            'personal_email' => $user->personal_email,
+            'official_phone' => $user->official_phone,
           ];
         })->toArray();
       }
@@ -1236,8 +1305,7 @@ class EmployeeController extends Controller
         'code' => 200,
         'data' => $data,
       ]);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@userListAjax: ' . $e->getMessage());
       return Error::response($e->getMessage());
     }
@@ -1267,8 +1335,7 @@ class EmployeeController extends Controller
       $user->save();
 
       return Success::response($msg);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@deleteEmployeeAjax: ' . $e->getMessage());
       return Error::response('Failed to delete user');
     }
@@ -1281,8 +1348,7 @@ class EmployeeController extends Controller
       $user->password = bcrypt('123456');
       $user->save();
       return Success::response('Password reset successfully to default (123456)');
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       return Error::response($e->getMessage());
     }
   }
@@ -1291,13 +1357,29 @@ class EmployeeController extends Controller
   {
     validator(['id' => $id], ['id' => 'required|exists:users,id'])->validate();
 
+    // Optimize: Eager load only necessary fields for performance
     $user = User::where('id', $id)
-      ->with(['userDevice', 'team', 'department', 'leaveBalances.leaveType', 'shift', 'designation.department', 'salesTargets', 'bankAccount', 'tasks', 'payrollAdjustments', 'documentRequests', 'payslips'])
+      ->with([
+        'userDevice' => fn($q) => $q->select('id', 'user_id', 'device_id', 'brand', 'device_type', 'model'),
+        'team:id,name,code',
+        'department:id,name,code',
+        'leaveBalances.leaveType:id,name,code',
+        'shift:id,name,code,start_time,end_time',
+        'designation.department:id,name,code',
+        'bankAccount:id,user_id,bank_name,bank_code,account_name,account_number,branch_name,branch_code,passbook_path',
+        // Only fetch 10 most recent records for these heavy relationships
+        'tasks' => fn($q) => $q->latest()->take(10),
+        'documentRequests' => fn($q) => $q->with('documentType')->latest(),
+        'payslips' => fn($q) => $q->latest()->take(6),
+        'payrollAdjustments' => fn($q) => $q->latest()->take(10),
+        'salesTargets' => fn($q) => $q->latest()->take(10)
+      ])
       ->first();
 
-    $auditLogs = Audit::where('user_id', $id)->latest()->take(10)->get();
+    $auditLogs = Audit::where('user_id', $id)->latest()->take(5)->get();
 
     $documentTypes = DocumentType::where('status', CommonStatus::ACTIVE)
+      ->select('id', 'name', 'code') // Optimization: Select only needed fields
       ->get();
 
     $leaveTypes = LeaveType::where('status', Status::ACTIVE)
@@ -1308,14 +1390,20 @@ class EmployeeController extends Controller
       ->select('id', 'name', 'asset_code', 'serial_number')
       ->get();
 
-    $leavePolicyProfiles = \App\Models\LeavePolicyProfile::all();
-    $roles = \Spatie\Permission\Models\Role::all();
-    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get();
-    $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
+    $leavePolicyProfiles = \App\Models\LeavePolicyProfile::select('id', 'name')->get();
+
+    // Role of currently viewed user
+    $role = $user->getRoleNames()->first() ?? 'Employee';
+
+    // Optimization: These are only needed for the Edit Modals. 
+    // In a future step, these will be moved to an AJAX-on-demand endpoint.
+    $roles = \Spatie\Permission\Models\Role::select('id', 'name')->get();
+    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
+    $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
     $allUsers = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
-        ->where('id', '!=', $id)
-        ->select('id', 'first_name', 'last_name')
-        ->get();
+      ->where('id', '!=', $id)
+      ->select('id', 'first_name', 'last_name')
+      ->get();
 
     return view('tenant.employees.view', [
       'user' => $user,
@@ -1323,7 +1411,7 @@ class EmployeeController extends Controller
       'leaveTypes' => $leaveTypes,
       'availableAssets' => $availableAssets,
       'auditLogs' => $auditLogs,
-      'role' => $user->getRoleNames()->first() ?? 'Employee',
+      'role' => $role,
       'leavePolicyProfiles' => $leavePolicyProfiles,
       'roles' => $roles,
       'departments' => $departments,
@@ -1381,8 +1469,7 @@ class EmployeeController extends Controller
 
       if ($request->has('useDefaultPassword') && $request->input('useDefaultPassword') == 'on') {
         $user->password = bcrypt(Settings::first()->default_password ?? 123456);
-      }
-      else {
+      } else {
         $user->password = bcrypt($request->input('password'));
       }
 
@@ -1456,8 +1543,7 @@ class EmployeeController extends Controller
 
 
       return redirect()->route('employees.index')->with('success', 'Employee created successfully');
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@store: ' . $e->getMessage());
       return redirect()->back()->with('error', 'Failed to create employee');
     }
@@ -1480,8 +1566,7 @@ class EmployeeController extends Controller
         return response()->json([
           "valid" => false,
         ]);
-      }
-      else {
+      } else {
         return response()->json([
           "valid" => true,
         ]);
@@ -1517,8 +1602,7 @@ class EmployeeController extends Controller
         return response()->json([
           "valid" => false,
         ]);
-      }
-      else {
+      } else {
         return response()->json([
           "valid" => true,
         ]);
@@ -1553,8 +1637,7 @@ class EmployeeController extends Controller
         return response()->json([
           "valid" => false,
         ]);
-      }
-      else {
+      } else {
         return response()->json([
           "valid" => true,
         ]);
@@ -1631,8 +1714,7 @@ class EmployeeController extends Controller
 
     if ($user->status == UserAccountStatus::ACTIVE) {
       $user->status = UserAccountStatus::INACTIVE;
-    }
-    else {
+    } else {
       $user->status = UserAccountStatus::ACTIVE;
     }
 
@@ -1686,8 +1768,19 @@ class EmployeeController extends Controller
   public function myProfile()
   {
     $user = User::with([
-        'userDevice', 'team', 'userAvailableLeaves', 'shift', 'designation.department', 
-        'assets.category', 'salesTargets', 'bankAccount', 'tasks', 'payrollAdjustments', 'documentRequests', 'payslips', 'roles'
+      'userDevice',
+      'team',
+      'userAvailableLeaves',
+      'shift',
+      'designation.department',
+      'assets.category',
+      'salesTargets',
+      'bankAccount',
+      'tasks',
+      'payrollAdjustments',
+      'documentRequests',
+      'payslips',
+      'roles'
     ])->findOrFail(auth()->id());
 
     $auditLogs = Audit::where('user_id', $user->id)
@@ -1703,7 +1796,7 @@ class EmployeeController extends Controller
       ->get();
 
     $documentTypes = \App\Models\DocumentType::where('status', 'Active')->get();
-        
+
     return view('account.my-profile', compact('user', 'auditLogs', 'role', 'pendingApprovals', 'documentTypes'));
   }
 
@@ -1875,8 +1968,7 @@ class EmployeeController extends Controller
 
       return redirect()->route('tenant.dashboard')->with('success', 'Onboarding invitation sent! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword);
 
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error('Onboarding Initiation Error: ' . $e->getMessage());
       return redirect()->back()->with('error', 'Failed to initiate onboarding: ' . $e->getMessage());
@@ -1888,150 +1980,151 @@ class EmployeeController extends Controller
    */
   public function validateBulkImport(Request $request)
   {
-      $request->validate(['file' => 'required|mimes:csv,txt|max:5120']);
-      $file = $request->file('file');
-      $handle = fopen($file->getRealPath(), 'r');
-      $header = fgetcsv($handle);
+    $request->validate(['file' => 'required|mimes:csv,txt|max:5120']);
+    $file = $request->file('file');
+    $handle = fopen($file->getRealPath(), 'r');
+    $header = fgetcsv($handle);
 
-      $headerMap = [];
-      if (is_array($header)) {
-          foreach ($header as $idx => $col) {
-              $key = strtolower(trim((string) $col));
-              if ($key !== '') {
-                  $headerMap[$key] = $idx;
-              }
-          }
+    $headerMap = [];
+    if (is_array($header)) {
+      foreach ($header as $idx => $col) {
+        $key = strtolower(trim((string) $col));
+        if ($key !== '') {
+          $headerMap[$key] = $idx;
+        }
+      }
+    }
+
+    $getValue = function (array $data, string $key, int $fallbackIndex = -1) use ($headerMap) {
+      if (isset($headerMap[$key])) {
+        return trim((string) ($data[$headerMap[$key]] ?? ''));
+      }
+      if ($fallbackIndex >= 0) {
+        return trim((string) ($data[$fallbackIndex] ?? ''));
+      }
+      return '';
+    };
+
+    $rows = [];
+    $rowNum = 1;
+
+    while (($data = fgetcsv($handle)) !== FALSE) {
+      $rowNum++;
+      if (count($data) < 5)
+        continue;
+
+      $email = $getValue($data, 'email', 3);
+      $phone = $getValue($data, 'phone', 4);
+      $code = $getValue($data, 'employee id', 0);
+
+      $errors = [];
+      $isValid = true;
+
+      // Email Check
+      $existEmail = User::where('email', $email)->first();
+      if ($existEmail && $existEmail->status !== UserAccountStatus::TERMINATED) {
+        $errors[] = "Email exists";
+        $isValid = false;
       }
 
-      $getValue = function (array $data, string $key, int $fallbackIndex = -1) use ($headerMap) {
-          if (isset($headerMap[$key])) {
-              return trim((string) ($data[$headerMap[$key]] ?? ''));
-          }
-          if ($fallbackIndex >= 0) {
-              return trim((string) ($data[$fallbackIndex] ?? ''));
-          }
-          return '';
-      };
-      
-      $rows = [];
-      $rowNum = 1;
-
-      while (($data = fgetcsv($handle)) !== FALSE) {
-          $rowNum++;
-          if (count($data) < 5) continue;
-
-          $email = $getValue($data, 'email', 3);
-          $phone = $getValue($data, 'phone', 4);
-          $code  = $getValue($data, 'employee id', 0);
-
-          $errors = [];
-          $isValid = true;
-
-          // Email Check
-          $existEmail = User::where('email', $email)->first();
-          if ($existEmail && $existEmail->status !== UserAccountStatus::TERMINATED) {
-              $errors[] = "Email exists";
-              $isValid = false;
-          }
-
-          // Phone Check
-          $existPhone = User::where('phone', $phone)->first();
-          if ($existPhone && $existPhone->status !== UserAccountStatus::TERMINATED) {
-              $errors[] = "Phone exists";
-              $isValid = false;
-          }
-
-          // Code Check
-          if (!empty($code) && User::where('code', $code)->exists()) {
-              $errors[] = "ID exists";
-              $isValid = false;
-          }
-
-          // Role Check & Normalization
-          $roleName = $getValue($data, 'role', 5) ?: 'employee';
-          if (strtolower($roleName) === 'employee' || strtolower($roleName) === 'office_employee') {
-              $roleName = 'employee';
-          }
-          
-          $availableRoles = \Spatie\Permission\Models\Role::pluck('name')->toArray();
-          if (!in_array($roleName, $availableRoles)) {
-              $errors[] = "Invalid Role: $roleName";
-              $isValid = false;
-          }
-
-          $genderValue = $getValue($data, 'gender');
-          $genderEnum = $genderValue ? \App\Enums\Gender::tryFrom(strtolower($genderValue)) : null;
-          if ($genderValue && !$genderEnum) {
-              $errors[] = "Invalid Gender: $genderValue";
-              $isValid = false;
-          }
-
-          $rows[] = [
-              'row' => $rowNum,
-              'code' => $code,
-              'first_name' => $getValue($data, 'first name', 1),
-              'last_name' => $getValue($data, 'last name', 2),
-              'email' => $email,
-              'phone' => $phone,
-              'role' => $roleName,
-              'team_id' => $getValue($data, 'team id', 6),
-              'designation_id' => $getValue($data, 'designation id', 7),
-              'reporting_to_id' => $getValue($data, 'reporting to id', 8),
-              'doj' => $getValue($data, 'date of joining (yyyy-mm-dd)', 9) ?: now()->toDateString(),
-              'salary' => $getValue($data, 'annual ctc', 10),
-              'shift_id' => $getValue($data, 'shift id', 11),
-              'gender' => $genderValue,
-              'dob' => $getValue($data, 'date of birth'),
-              'blood_group' => $getValue($data, 'blood group'),
-              'marital_status' => $getValue($data, 'marital status'),
-              'father_name' => $getValue($data, "father's name"),
-              'mother_name' => $getValue($data, "mother's name"),
-              'spouse_name' => $getValue($data, 'spouse name'),
-              'no_of_children' => $getValue($data, 'no of children'),
-              'birth_country' => $getValue($data, 'birth country'),
-              'citizenship' => $getValue($data, 'citizenship'),
-              'temp_building' => $getValue($data, 'temp building'),
-              'temp_street' => $getValue($data, 'temp street'),
-              'temp_city' => $getValue($data, 'temp city'),
-              'temp_state' => $getValue($data, 'temp state'),
-              'temp_zip' => $getValue($data, 'temp zip'),
-              'temp_country' => $getValue($data, 'temp country'),
-              'perm_building' => $getValue($data, 'perm building'),
-              'perm_street' => $getValue($data, 'perm street'),
-              'perm_city' => $getValue($data, 'perm city'),
-              'perm_state' => $getValue($data, 'perm state'),
-              'perm_zip' => $getValue($data, 'perm zip'),
-              'perm_country' => $getValue($data, 'perm country'),
-              'emergency_contact_name' => $getValue($data, 'emergency contact name'),
-              'emergency_contact_relation' => $getValue($data, 'emergency contact relation'),
-              'emergency_contact_phone' => $getValue($data, 'emergency contact phone'),
-              'biometric_id' => $getValue($data, 'biometric id'),
-              'aadhaar_no' => $getValue($data, 'aadhaar no'),
-              'pan_no' => $getValue($data, 'pan no'),
-              'pf_no' => $getValue($data, 'pf no'),
-              'esi_no' => $getValue($data, 'esi no'),
-              'uan_no' => $getValue($data, 'uan no'),
-              'bank_name' => $getValue($data, 'bank name'),
-              'bank_code' => $getValue($data, 'bank code'),
-              'account_name' => $getValue($data, 'account name'),
-              'account_number' => $getValue($data, 'account number'),
-              'branch_name' => $getValue($data, 'branch name'),
-              'branch_code' => $getValue($data, 'branch code'),
-              'tax_no' => $getValue($data, 'tax no'),
-              'ctc_offered' => $getValue($data, 'ctc offered'),
-              'available_leave_count' => $getValue($data, 'available leave count'),
-              'is_valid' => $isValid,
-              'errors' => $errors
-          ];
+      // Phone Check
+      $existPhone = User::where('phone', $phone)->first();
+      if ($existPhone && $existPhone->status !== UserAccountStatus::TERMINATED) {
+        $errors[] = "Phone exists";
+        $isValid = false;
       }
-      fclose($handle);
 
-      return response()->json([
-          'success' => true,
-          'data' => $rows,
-          'total' => count($rows),
-          'valid_count' => collect($rows)->where('is_valid', true)->count()
-      ]);
+      // Code Check
+      if (!empty($code) && User::where('code', $code)->exists()) {
+        $errors[] = "ID exists";
+        $isValid = false;
+      }
+
+      // Role Check & Normalization
+      $roleName = $getValue($data, 'role', 5) ?: 'employee';
+      if (strtolower($roleName) === 'employee' || strtolower($roleName) === 'office_employee') {
+        $roleName = 'employee';
+      }
+
+      $availableRoles = \Spatie\Permission\Models\Role::pluck('name')->toArray();
+      if (!in_array($roleName, $availableRoles)) {
+        $errors[] = "Invalid Role: $roleName";
+        $isValid = false;
+      }
+
+      $genderValue = $getValue($data, 'gender');
+      $genderEnum = $genderValue ? \App\Enums\Gender::tryFrom(strtolower($genderValue)) : null;
+      if ($genderValue && !$genderEnum) {
+        $errors[] = "Invalid Gender: $genderValue";
+        $isValid = false;
+      }
+
+      $rows[] = [
+        'row' => $rowNum,
+        'code' => $code,
+        'first_name' => $getValue($data, 'first name', 1),
+        'last_name' => $getValue($data, 'last name', 2),
+        'email' => $email,
+        'phone' => $phone,
+        'role' => $roleName,
+        'team_id' => $getValue($data, 'team id', 6),
+        'designation_id' => $getValue($data, 'designation id', 7),
+        'reporting_to_id' => $getValue($data, 'reporting to id', 8),
+        'doj' => $getValue($data, 'date of joining (yyyy-mm-dd)', 9) ?: now()->toDateString(),
+        'salary' => $getValue($data, 'annual ctc', 10),
+        'shift_id' => $getValue($data, 'shift id', 11),
+        'gender' => $genderValue,
+        'dob' => $getValue($data, 'date of birth'),
+        'blood_group' => $getValue($data, 'blood group'),
+        'marital_status' => $getValue($data, 'marital status'),
+        'father_name' => $getValue($data, "father's name"),
+        'mother_name' => $getValue($data, "mother's name"),
+        'spouse_name' => $getValue($data, 'spouse name'),
+        'no_of_children' => $getValue($data, 'no of children'),
+        'birth_country' => $getValue($data, 'birth country'),
+        'citizenship' => $getValue($data, 'citizenship'),
+        'temp_building' => $getValue($data, 'temp building'),
+        'temp_street' => $getValue($data, 'temp street'),
+        'temp_city' => $getValue($data, 'temp city'),
+        'temp_state' => $getValue($data, 'temp state'),
+        'temp_zip' => $getValue($data, 'temp zip'),
+        'temp_country' => $getValue($data, 'temp country'),
+        'perm_building' => $getValue($data, 'perm building'),
+        'perm_street' => $getValue($data, 'perm street'),
+        'perm_city' => $getValue($data, 'perm city'),
+        'perm_state' => $getValue($data, 'perm state'),
+        'perm_zip' => $getValue($data, 'perm zip'),
+        'perm_country' => $getValue($data, 'perm country'),
+        'emergency_contact_name' => $getValue($data, 'emergency contact name'),
+        'emergency_contact_relation' => $getValue($data, 'emergency contact relation'),
+        'emergency_contact_phone' => $getValue($data, 'emergency contact phone'),
+        'biometric_id' => $getValue($data, 'biometric id'),
+        'aadhaar_no' => $getValue($data, 'aadhaar no'),
+        'pan_no' => $getValue($data, 'pan no'),
+        'pf_no' => $getValue($data, 'pf no'),
+        'esi_no' => $getValue($data, 'esi no'),
+        'uan_no' => $getValue($data, 'uan no'),
+        'bank_name' => $getValue($data, 'bank name'),
+        'bank_code' => $getValue($data, 'bank code'),
+        'account_name' => $getValue($data, 'account name'),
+        'account_number' => $getValue($data, 'account number'),
+        'branch_name' => $getValue($data, 'branch name'),
+        'branch_code' => $getValue($data, 'branch code'),
+        'tax_no' => $getValue($data, 'tax no'),
+        'ctc_offered' => $getValue($data, 'ctc offered'),
+        'available_leave_count' => $getValue($data, 'available leave count'),
+        'is_valid' => $isValid,
+        'errors' => $errors
+      ];
+    }
+    fclose($handle);
+
+    return response()->json([
+      'success' => true,
+      'data' => $rows,
+      'total' => count($rows),
+      'valid_count' => collect($rows)->where('is_valid', true)->count()
+    ]);
   }
 
   /**
@@ -2039,131 +2132,190 @@ class EmployeeController extends Controller
    */
   public function processBulkImport(Request $request)
   {
-      $data = $request->input('candidates', []);
-      $count = 0;
+    $data = $request->input('candidates', []);
+    $count = 0;
 
-      DB::beginTransaction();
-      try {
-          foreach ($data as $item) {
-              if (!($item['is_valid'] ?? false)) continue;
+    DB::beginTransaction();
+    try {
+      foreach ($data as $item) {
+        if (!($item['is_valid'] ?? false))
+          continue;
 
-              $email = $item['email'];
-              $phone = $item['phone'];
+        $email = $item['email'];
+        $phone = $item['phone'];
 
-              // Handle Terminated User cleanup
-              $existEmail = User::where('email', $email)->first();
-              if ($existEmail && $existEmail->status === UserAccountStatus::TERMINATED) {
-                  $existEmail->update(['email' => $existEmail->email . '_term_' . time()]);
-              }
-              $existPhone = User::where('phone', $phone)->first();
-              if ($existPhone && $existPhone->status === UserAccountStatus::TERMINATED) {
-                  $existPhone->update(['phone' => $existPhone->phone . '_term_' . time()]);
-              }
+        // Handle Terminated User cleanup
+        $existEmail = User::where('email', $email)->first();
+        if ($existEmail && $existEmail->status === UserAccountStatus::TERMINATED) {
+          $existEmail->update(['email' => $existEmail->email . '_term_' . time()]);
+        }
+        $existPhone = User::where('phone', $phone)->first();
+        if ($existPhone && $existPhone->status === UserAccountStatus::TERMINATED) {
+          $existPhone->update(['phone' => $existPhone->phone . '_term_' . time()]);
+        }
 
-          $plainPassword = \Illuminate\Support\Str::random(10);
-          $employeeCode = !empty($item['code']) ? strtoupper(trim($item['code'])) : $this->generateEmployeeCode(auth()->user()->tenant_id);
-          $user = User::create([
-              'tenant_id' => auth()->user()->tenant_id,
-              'first_name' => $item['first_name'],
-              'last_name' => $item['last_name'],
-              'name' => $item['first_name'] . ' ' . $item['last_name'],
-              'email' => $email,
-              'phone' => $phone,
-              'code' => $employeeCode,
-              'team_id' => $item['team_id'],
-              'designation_id' => $item['designation_id'],
-              'reporting_to_id' => $item['reporting_to_id'],
-              'date_of_joining' => $item['doj'],
-                  'base_salary' => $item['salary'],
-                  'ctc_offered' => $item['ctc_offered'] ?? null,
-                  'available_leave_count' => $item['available_leave_count'] ?? null,
-                  'shift_id' => $item['shift_id'] ?? null,
-                  'gender' => !empty($item['gender']) ? \App\Enums\Gender::tryFrom(strtolower($item['gender'])) : null,
-                  'dob' => $item['dob'] ?? null,
-                  'blood_group' => $item['blood_group'] ?? null,
-                  'marital_status' => $item['marital_status'] ?? null,
-                  'father_name' => $item['father_name'] ?? null,
-                  'mother_name' => $item['mother_name'] ?? null,
-                  'spouse_name' => $item['spouse_name'] ?? null,
-                  'no_of_children' => $item['no_of_children'] ?? null,
-                  'birth_country' => $item['birth_country'] ?? null,
-                  'citizenship' => $item['citizenship'] ?? null,
-                  'temp_building' => $item['temp_building'] ?? null,
-                  'temp_street' => $item['temp_street'] ?? null,
-                  'temp_city' => $item['temp_city'] ?? null,
-                  'temp_state' => $item['temp_state'] ?? null,
-                  'temp_zip' => $item['temp_zip'] ?? null,
-                  'temp_country' => $item['temp_country'] ?? null,
-                  'perm_building' => $item['perm_building'] ?? null,
-                  'perm_street' => $item['perm_street'] ?? null,
-                  'perm_city' => $item['perm_city'] ?? null,
-                  'perm_state' => $item['perm_state'] ?? null,
-                  'perm_zip' => $item['perm_zip'] ?? null,
-                  'perm_country' => $item['perm_country'] ?? null,
-                  'emergency_contact_name' => $item['emergency_contact_name'] ?? null,
-                  'emergency_contact_relation' => $item['emergency_contact_relation'] ?? null,
-                  'emergency_contact_phone' => $item['emergency_contact_phone'] ?? null,
-                  'biometric_id' => $item['biometric_id'] ?? null,
-                  'aadhaar_no' => $item['aadhaar_no'] ?? null,
-                  'pan_no' => $item['pan_no'] ?? null,
-                  'pf_no' => $item['pf_no'] ?? null,
-                  'esi_no' => $item['esi_no'] ?? null,
-                  'uan_no' => $item['uan_no'] ?? null,
-                  'status' => UserAccountStatus::ONBOARDING,
-                  'onboarding_at' => now(),
-                  'onboarding_deadline' => now()->addDays(3),
-                  'created_by_id' => auth()->id(),
-                  'password' => bcrypt($plainPassword),
-              ]);
+        $plainPassword = \Illuminate\Support\Str::random(10);
+        $employeeCode = !empty($item['code']) ? strtoupper(trim($item['code'])) : $this->generateEmployeeCode(auth()->user()->tenant_id);
+        $user = User::create([
+          'tenant_id' => auth()->user()->tenant_id,
+          'first_name' => $item['first_name'],
+          'last_name' => $item['last_name'],
+          'name' => $item['first_name'] . ' ' . $item['last_name'],
+          'email' => $email,
+          'phone' => $phone,
+          'code' => $employeeCode,
+          'team_id' => $item['team_id'],
+          'designation_id' => $item['designation_id'],
+          'reporting_to_id' => $item['reporting_to_id'],
+          'date_of_joining' => $item['doj'],
+          'base_salary' => $item['salary'],
+          'ctc_offered' => $item['ctc_offered'] ?? null,
+          'available_leave_count' => $item['available_leave_count'] ?? null,
+          'shift_id' => $item['shift_id'] ?? null,
+          'gender' => !empty($item['gender']) ? \App\Enums\Gender::tryFrom(strtolower($item['gender'])) : null,
+          'dob' => $item['dob'] ?? null,
+          'blood_group' => $item['blood_group'] ?? null,
+          'marital_status' => $item['marital_status'] ?? null,
+          'father_name' => $item['father_name'] ?? null,
+          'mother_name' => $item['mother_name'] ?? null,
+          'spouse_name' => $item['spouse_name'] ?? null,
+          'no_of_children' => $item['no_of_children'] ?? null,
+          'birth_country' => $item['birth_country'] ?? null,
+          'citizenship' => $item['citizenship'] ?? null,
+          'temp_building' => $item['temp_building'] ?? null,
+          'temp_street' => $item['temp_street'] ?? null,
+          'temp_city' => $item['temp_city'] ?? null,
+          'temp_state' => $item['temp_state'] ?? null,
+          'temp_zip' => $item['temp_zip'] ?? null,
+          'temp_country' => $item['temp_country'] ?? null,
+          'perm_building' => $item['perm_building'] ?? null,
+          'perm_street' => $item['perm_street'] ?? null,
+          'perm_city' => $item['perm_city'] ?? null,
+          'perm_state' => $item['perm_state'] ?? null,
+          'perm_zip' => $item['perm_zip'] ?? null,
+          'perm_country' => $item['perm_country'] ?? null,
+          'emergency_contact_name' => $item['emergency_contact_name'] ?? null,
+          'emergency_contact_relation' => $item['emergency_contact_relation'] ?? null,
+          'emergency_contact_phone' => $item['emergency_contact_phone'] ?? null,
+          'biometric_id' => $item['biometric_id'] ?? null,
+          'aadhaar_no' => $item['aadhaar_no'] ?? null,
+          'pan_no' => $item['pan_no'] ?? null,
+          'pf_no' => $item['pf_no'] ?? null,
+          'esi_no' => $item['esi_no'] ?? null,
+          'uan_no' => $item['uan_no'] ?? null,
+          'status' => UserAccountStatus::ONBOARDING,
+          'onboarding_at' => now(),
+          'onboarding_deadline' => now()->addDays(3),
+          'created_by_id' => auth()->id(),
+          'password' => bcrypt($plainPassword),
+        ]);
 
-              $roleToAssign = $item['role'] ?? 'employee';
-              if (!\Spatie\Permission\Models\Role::where('name', $roleToAssign)->exists()) {
-                  $roleToAssign = 'employee'; // Final fallback
-              }
-              $user->assignRole($roleToAssign);
-              $user->notify(new OnboardingInvite($user, $plainPassword));
-              $count++;
+        $roleToAssign = $item['role'] ?? 'employee';
+        if (!\Spatie\Permission\Models\Role::where('name', $roleToAssign)->exists()) {
+          $roleToAssign = 'employee'; // Final fallback
+        }
+        $user->assignRole($roleToAssign);
+        $user->notify(new OnboardingInvite($user, $plainPassword));
+        $count++;
 
-              if (!empty($item['bank_name']) || !empty($item['account_number'])) {
-                  \App\Models\BankAccount::updateOrCreate(
-                      ['user_id' => $user->id],
-                      [
-                          'bank_name' => $item['bank_name'] ?? null,
-                          'bank_code' => $item['bank_code'] ?? null,
-                          'account_name' => $item['account_name'] ?? null,
-                          'account_number' => $item['account_number'] ?? null,
-                          'branch_name' => $item['branch_name'] ?? null,
-                          'branch_code' => $item['branch_code'] ?? null,
-                          'tax_no' => $item['tax_no'] ?? null,
-                          'tenant_id' => $user->tenant_id,
-                          'created_by_id' => auth()->id(),
-                          'updated_by_id' => auth()->id(),
-                      ]
-                  );
-              }
-          }
-          DB::commit();
-          return response()->json(['success' => true, 'message' => "Successfully invited $count candidates."]);
-      } catch (\Exception $e) {
-          DB::rollBack();
-          return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        if (!empty($item['bank_name']) || !empty($item['account_number'])) {
+          \App\Models\BankAccount::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+              'bank_name' => $item['bank_name'] ?? null,
+              'bank_code' => $item['bank_code'] ?? null,
+              'account_name' => $item['account_name'] ?? null,
+              'account_number' => $item['account_number'] ?? null,
+              'branch_name' => $item['branch_name'] ?? null,
+              'branch_code' => $item['branch_code'] ?? null,
+              'tax_no' => $item['tax_no'] ?? null,
+              'tenant_id' => $user->tenant_id,
+              'created_by_id' => auth()->id(),
+              'updated_by_id' => auth()->id(),
+            ]
+          );
+        }
       }
+      DB::commit();
+      return response()->json(['success' => true, 'message' => "Successfully invited $count candidates."]);
+    } catch (\Exception $e) {
+      DB::rollBack();
+      return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
   }
 
   public function downloadImportTemplate()
   {
     $rows = [
       [
-        'Employee ID', 'First Name', 'Last Name', 'Email', 'Phone', 'Role', 'Team ID', 'Designation ID',
-        'Account Number', 'Branch Name', 'Branch Code', 'Tax No', 'Ctc Offered', 'Available Leave Count', 'Shift Id'
+        'Employee ID',
+        'First Name',
+        'Last Name',
+        'Email',
+        'Phone',
+        'Role',
+        'Team ID',
+        'Designation ID',
+        'Account Number',
+        'Branch Name',
+        'Branch Code',
+        'Tax No',
+        'Ctc Offered',
+        'Available Leave Count',
+        'Shift Id'
       ],
       [
-        'EMP001', 'John', 'Doe', 'john@example.com', '9876543210', 'employee', '1', '1', '1',
-        '2026-03-18', '500000', 'male', '2000-01-01', 'O+', 'single', 'Robert Doe', 'Jane Doe', '',
-        '0', 'India', 'India', '12A', 'MG Road', 'Pune', 'Maharashtra', '411001', 'India',
-        '34B', 'Park Street', 'Pune', 'Maharashtra', '411001', 'India', 'Alice Doe', 'Spouse', '9876543210',
-        'BIO-001', '123412341234', 'ABCDE1234F', 'ESI12345', 'UAN12345', 'HDFC Bank', 'HDFC0001234',
-        'John Doe', '1234567890', 'Main Branch', 'BR-001', 'TAX123', '500000', '12', '1'
+        'EMP001',
+        'John',
+        'Doe',
+        'john@example.com',
+        '9876543210',
+        'employee',
+        '1',
+        '1',
+        '1',
+        '2026-03-18',
+        '500000',
+        'male',
+        '2000-01-01',
+        'O+',
+        'single',
+        'Robert Doe',
+        'Jane Doe',
+        '',
+        '0',
+        'India',
+        'India',
+        '12A',
+        'MG Road',
+        'Pune',
+        'Maharashtra',
+        '411001',
+        'India',
+        '34B',
+        'Park Street',
+        'Pune',
+        'Maharashtra',
+        '411001',
+        'India',
+        'Alice Doe',
+        'Spouse',
+        '9876543210',
+        'BIO-001',
+        '123412341234',
+        'ABCDE1234F',
+        'ESI12345',
+        'UAN12345',
+        'HDFC Bank',
+        'HDFC0001234',
+        'John Doe',
+        '1234567890',
+        'Main Branch',
+        'BR-001',
+        'TAX123',
+        '500000',
+        '12',
+        '1'
       ],
     ];
 
@@ -2193,7 +2345,7 @@ class EmployeeController extends Controller
     foreach ($employees as $emp) {
       $status = is_object($emp->status) ? $emp->status->value : ($emp->status ?? '');
       $csvLines[] = implode(',', array_map(
-        fn($v) => '"' . str_replace('"', '""', (string)($v ?? '')).  '"',
+        fn($v) => '"' . str_replace('"', '""', (string) ($v ?? '')) . '"',
         [
           $emp->code,
           $emp->full_name ?? $emp->name,
@@ -2250,13 +2402,13 @@ class EmployeeController extends Controller
 
     $nextNumber = 1;
     if ($lastCode && preg_match('/^' . preg_quote($prefix, '/') . '(\\d+)$/', $lastCode, $matches)) {
-      $nextNumber = (int)$matches[1] + 1;
+      $nextNumber = (int) $matches[1] + 1;
     }
 
-    $code = $prefix . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
+    $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
     while (User::where('code', $code)->exists()) {
       $nextNumber++;
-      $code = $prefix . str_pad((string)$nextNumber, 3, '0', STR_PAD_LEFT);
+      $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
     }
 
     return $code;
@@ -2277,8 +2429,7 @@ class EmployeeController extends Controller
     $selectedUser = null;
     if ($request->has('user_id')) {
       $selectedUser = User::with(['team', 'roles', 'bankAccount'])->find($request->user_id);
-    }
-    elseif ($onboardingUsers->where('status', UserAccountStatus::ONBOARDING_SUBMITTED)->isNotEmpty()) {
+    } elseif ($onboardingUsers->where('status', UserAccountStatus::ONBOARDING_SUBMITTED)->isNotEmpty()) {
       $selectedUser = $onboardingUsers->where('status', UserAccountStatus::ONBOARDING_SUBMITTED)->first();
     }
 
@@ -2289,10 +2440,13 @@ class EmployeeController extends Controller
       ->limit(5)
       ->get();
 
-    $roles = Role::all();
-    $teams = Team::where('status', Status::ACTIVE)->get();
-    $designations = Designation::where('status', Status::ACTIVE)->get();
-    $managers = User::where('status', UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+    $roles = Role::select('id', 'name')->get();
+    $teams = Team::where('status', Status::ACTIVE)->select('id', 'name')->get();
+    $designations = Designation::where('status', Status::ACTIVE)->select('id', 'name')->get();
+    $managers = User::where('status', UserAccountStatus::ACTIVE)
+      ->select('id', 'first_name', 'last_name')
+      ->orderBy('first_name')
+      ->get();
 
     return view('tenant.onboarding.review_center', [
       'onboardingUsers' => $onboardingUsers,
@@ -2342,12 +2496,12 @@ class EmployeeController extends Controller
 
       // Ensure joining date is never null
       if (empty($user->date_of_joining)) {
-          $user->date_of_joining = now()->format('Y-m-d');
+        $user->date_of_joining = now()->format('Y-m-d');
       }
 
       // Final check for employee code just in case
       if (empty($user->code)) {
-          $user->code = $this->generateEmployeeCode($user->tenant_id);
+        $user->code = $this->generateEmployeeCode($user->tenant_id);
       }
 
       $user->save();
@@ -2362,8 +2516,7 @@ class EmployeeController extends Controller
       }
       return redirect()->route('employees.index')->with('success', 'Onboarding approved! ' . $user->name . ' is now an active employee.');
 
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error('Onboarding Approval Error: ' . $e->getMessage());
       if (request()->ajax()) {
@@ -2403,8 +2556,7 @@ class EmployeeController extends Controller
       }
       return redirect()->route('employees.index')->with('success', 'Resubmission request sent to ' . $user->email);
 
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       DB::rollBack();
       Log::error('Onboarding Resubmission Error: ' . $e->getMessage());
       if ($request->ajax()) {
@@ -2468,10 +2620,15 @@ class EmployeeController extends Controller
         ]
       );
 
+      if ($request->ajax()) {
+        return response()->json(['success' => true, 'message' => 'KPI targets deployed successfully!']);
+      }
       return redirect()->back()->with('success', 'KPI targets deployed successfully!');
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@addOrUpdateSalesTarget: ' . $e->getMessage());
+      if ($request->ajax()) {
+        return response()->json(['success' => false, 'message' => 'Failed to deploy performance target.']);
+      }
       return redirect()->back()->with('error', 'Failed to deploy performance target.');
     }
   }
@@ -2485,8 +2642,7 @@ class EmployeeController extends Controller
       $salesTarget = SalesTarget::findOrFail($id);
       $salesTarget->delete();
       return response()->json(['success' => true, 'message' => 'KPI target deleted successfully.']);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@destroySalesTarget: ' . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'Failed to delete KPI target.']);
     }
@@ -2507,8 +2663,7 @@ class EmployeeController extends Controller
       $salesTarget->save();
 
       return response()->json(['success' => true, 'message' => 'KPI status updated successfully!']);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@updateKpiStatus: ' . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'Failed to update status.']);
     }
@@ -2530,8 +2685,7 @@ class EmployeeController extends Controller
       $salesTarget->save();
 
       return response()->json(['success' => true, 'message' => 'Self-assessment submitted successfully!']);
-    }
-    catch (\Exception $e) {
+    } catch (\Exception $e) {
       Log::error('EmployeeController@submitKpiSelfAssessment: ' . $e->getMessage());
       return response()->json(['success' => false, 'message' => 'Failed to submit assessment.']);
     }

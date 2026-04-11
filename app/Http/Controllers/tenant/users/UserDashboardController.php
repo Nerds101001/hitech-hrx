@@ -34,8 +34,20 @@ class UserDashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
+        $userStatus = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
+
+        // Redirect to Onboarding Form if status is Onboarding or Requested
+        if (in_array($userStatus, [UserAccountStatus::ONBOARDING->value, UserAccountStatus::ONBOARDING_REQUESTED->value])) {
+            return redirect()->route('onboarding.form');
+        }
+
+        // Show Restricted View if status is Submitted (Review Required)
+        if ($userStatus === UserAccountStatus::ONBOARDING_SUBMITTED->value) {
+            return view('tenant.users.dashboard.review-restricted');
+        }
+
         $isHR = $user->hasRole('hr');
-        $isFieldEmployee = $user->hasRole('employee');
+        $isFieldEmployee = $user->hasRole('field_employee') || $user->hasRole('employee');
         $isManager = $user->hasRole('manager');
 
         // Common Personal Stats

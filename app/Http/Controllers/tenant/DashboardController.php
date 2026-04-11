@@ -67,23 +67,32 @@ class DashboardController extends Controller
 
       // --- Strategic Data for Revamped Dashboard ---
 
-      // 1. Hiring Trends (Last 12 Months)
-      $hiringTrend = [];
-      for ($i = 11; $i >= 0; $i--) {
-        $month = Carbon::now()->subMonths($i);
-        $start = $month->copy()->startOfMonth();
-        $end = $month->copy()->endOfMonth();
+      // 1. Hiring Trends (Last 12 Months) - Optimized with single aggregation queries
+      $twelveMonthsAgo = Carbon::now()->subMonths(11)->startOfMonth();
+      
+      $hiresByMonth = User::where('date_of_joining', '>=', $twelveMonthsAgo)
+        ->selectRaw("DATE_FORMAT(date_of_joining, '%M %Y') as month, count(*) as count")
+        ->groupBy('month')
+        ->pluck('count', 'month');
 
-        $hiringTrend['labels'][] = $month->format('M Y');
-        $hiringTrend['hires'][] = User::whereBetween('date_of_joining', [$start, $end])->count();
-        $hiringTrend['attrition'][] = User::whereBetween('relieved_at', [$start, $end])->count();
+      $attritionByMonth = User::where('relieved_at', '>=', $twelveMonthsAgo)
+        ->selectRaw("DATE_FORMAT(relieved_at, '%M %Y') as month, count(*) as count")
+        ->groupBy('month')
+        ->pluck('count', 'month');
+
+      $hiringTrend = ['labels' => [], 'hires' => [], 'attrition' => []];
+      for ($i = 11; $i >= 0; $i--) {
+        $monthLabel = Carbon::now()->subMonths($i)->format('F Y');
+        $hiringTrend['labels'][] = Carbon::now()->subMonths($i)->format('M Y');
+        $hiringTrend['hires'][] = $hiresByMonth->get($monthLabel, 0);
+        $hiringTrend['attrition'][] = $attritionByMonth->get($monthLabel, 0);
       }
 
       // 2. Department Distribution
       $departmentData = Department::withCount('users')->get()->map(function ($dept) {
         return [
-        'name' => $dept->name,
-        'count' => $dept->users_count
+          'name' => $dept->name,
+          'count' => $dept->users_count
         ];
       });
 
@@ -102,16 +111,13 @@ class DashboardController extends Controller
 
       $jobStages = JobStage::orderBy('order', 'asc')->get();
 
-      // 5. Active Job Openings
+      // 5. Active Job Openings - Optimized with withCount
       $activeJobsCount = Job::where('status', 'active')->count();
       $activeJobs = Job::where('status', 'active')
+        ->withCount('applications')
         ->latest()
         ->take(4)
-        ->get()
-        ->map(function ($job) {
-        $job->applicant_count = $job->applications()->count();
-        return $job;
-      });
+        ->get();
 
       // 6. Recent Applicant Activity
       $newApplicantsToday = JobApplication::whereDate('created_at', now())->count();

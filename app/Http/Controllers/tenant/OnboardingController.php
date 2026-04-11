@@ -32,19 +32,18 @@ class OnboardingController extends Controller
         // If already submitted, we still show the form but it will be read-only in the view
         // (Handled by $isSubmitted logic in Blade)
         if ($userStatus === UserAccountStatus::ONBOARDING_SUBMITTED->value) {
-            // No redirect, proceed to view
+            return redirect()->route('user.dashboard.index');
         }
 
         if ($userStatus !== UserAccountStatus::ONBOARDING->value && 
-            $userStatus !== UserAccountStatus::ONBOARDING_REQUESTED->value &&
-            $userStatus !== UserAccountStatus::ONBOARDING_SUBMITTED->value) {
+            $userStatus !== UserAccountStatus::ONBOARDING_REQUESTED->value) {
             return redirect()->route('tenant.dashboard');
         }
 
         return view('tenant.onboarding.form', [
             'user' => $user,
-            'teams' => Team::all(),
-            'designations' => Designation::all(),
+            'teams' => Team::select('id', 'name')->get(),
+            'designations' => Designation::select('id', 'name')->get(),
             'pageConfigs' => ['myLayout' => 'blank'],
         ]);
     }
@@ -116,18 +115,20 @@ class OnboardingController extends Controller
                 'photo' => ($isResubmission || $hasPhoto ? 'nullable' : 'required') . '|image|mimes:jpg,png|max:100',
                 'aadhaar_file' => ($isResubmission || $hasAadhaar ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,png|max:300',
                 'pan_file' => ($isResubmission || $hasPan ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,png|max:300',
-                'matric_university' => 'required|string',
-                'matric_marksheet_no' => 'required|string',
+                'matric_university' => 'nullable|string',
+                'matric_marksheet_no' => 'nullable|string',
                 'matric_file' => ($isResubmission || $hasMatric ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,png|max:300',
-                'inter_university' => 'required|string',
-                'inter_marksheet_no' => 'required|string',
+                'inter_university' => 'nullable|string',
+                'inter_marksheet_no' => 'nullable|string',
                 'inter_file' => ($isResubmission || $hasInter ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,png|max:300',
-                'bachelor_university' => 'required|string',
-                'bachelor_marksheet_no' => 'required|string',
+                'bachelor_university' => 'nullable|string',
+                'bachelor_marksheet_no' => 'nullable|string',
                 'graduation_file' => ($isResubmission || $hasBachelor ? 'nullable' : 'required') . '|file|mimes:pdf,jpg,png|max:300',
                 'master_university' => 'nullable|string',
                 'master_marksheet_no' => 'nullable|string',
                 'master_file' => 'nullable|file|mimes:pdf,jpg,png|max:300',
+                'experience_certificate_no' => 'nullable|string',
+                'experience_file' => 'nullable|file|mimes:pdf,jpg,png|max:300',
             ]);
         }
 
@@ -151,6 +152,7 @@ class OnboardingController extends Controller
                 'inter_marksheet_no', 'inter_university',
                 'bachelor_marksheet_no', 'bachelor_university',
                 'master_marksheet_no', 'master_university',
+                'experience_certificate_no',
             ]);
 
             if ($request->has('same_as_permanent')) {
@@ -226,16 +228,16 @@ class OnboardingController extends Controller
             
             // Validate incoming data
             $rules = [
-                'personal_email' => 'nullable|email|max:255|unique:users,personal_email,' . $user->id,
-                'phone' => 'nullable|digits:10',
-                'official_phone' => 'nullable|digits:10',
-                'perm_zip' => 'nullable|digits:6',
-                'temp_zip' => 'nullable|digits:6',
-                'aadhaar_no' => 'nullable|digits:12',
-                'pan_no' => ['nullable', 'string', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/'],
+                'personal_email' => 'nullable|email|max:255',
+                'phone' => 'nullable|string|max:15',
+                'official_phone' => 'nullable|string|max:15',
+                'perm_zip' => 'nullable|string|max:10',
+                'temp_zip' => 'nullable|string|max:10',
+                'aadhaar_no' => 'nullable|string|max:20',
+                'pan_no' => 'nullable|string|max:15',
                 'dob' => 'nullable|date',
-                'first_name' => 'nullable|string|regex:/^[a-zA-Z\s]+$/|max:255',
-                'last_name' => 'nullable|string|regex:/^[a-zA-Z\s]+$/|max:255',
+                'first_name' => 'nullable|string|max:255',
+                'last_name' => 'nullable|string|max:255',
             ];
             
             $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
@@ -307,6 +309,7 @@ class OnboardingController extends Controller
             'inter_file' => 'inter_certificate',
             'graduation_file' => 'graduation_certificate',
             'master_file' => 'master_certificate',
+            'experience_file' => 'experience_certificate',
         ];
 
         $prefix = $filePrefixes[$inputName] ?? 'document';
@@ -322,6 +325,47 @@ class OnboardingController extends Controller
             if ($inputName === 'photo') {
                 $user->profile_picture = $path;
                 $user->save();
+            } else {
+                // Create/Update Document Request for visibility in standard system
+                $docMapping = [
+                    'aadhaar_card' => ['name' => 'Aadhaar Card', 'code' => 'AADHAAR_CARD'],
+                    'pan_card' => ['name' => 'PAN Card', 'code' => 'PAN_CARD'],
+                    'matric_certificate' => ['name' => '10th Marksheet (Matric)', 'code' => 'MATRIC_CERTIFICATE'],
+                    'inter_certificate' => ['name' => '12th Marksheet (Intermediate)', 'code' => 'INTER_CERTIFICATE'],
+                    'graduation_certificate' => ['name' => 'Graduation Marksheet', 'code' => 'GRADUATION_CERTIFICATE'],
+                    'master_certificate' => ['name' => 'Post Graduation Marksheet', 'code' => 'MASTER_CERTIFICATE'],
+                    'experience_certificate' => ['name' => 'Experience Certificate', 'code' => 'EXPERIENCE_CERTIFICATE'],
+                    'cancelled_cheque' => ['name' => 'Cancelled Cheque', 'code' => 'CANCELLED_CHEQUE'],
+                ];
+
+                $mapping = $docMapping[$prefix] ?? [
+                    'name' => ucwords(str_replace('_', ' ', $prefix)),
+                    'code' => strtoupper($prefix)
+                ];
+                
+                // Find or Create Document Type
+                $docType = \App\Models\DocumentType::withoutGlobalScopes()->where('code', $mapping['code'])->first();
+                if (!$docType) {
+                    $docType = \App\Models\DocumentType::create([
+                        'name' => $mapping['name'],
+                        'code' => $mapping['code'],
+                        'status' => \App\Enums\CommonStatus::ACTIVE,
+                        'tenant_id' => $user->tenant_id
+                    ]);
+                }
+
+                \App\Models\DocumentRequest::updateOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'document_type_id' => $docType->id,
+                    ],
+                    [
+                        'generated_file' => $path,
+                        'status' => 'pending',
+                        'remarks' => 'Uploaded during onboarding (AJAX)',
+                        'tenant_id' => $user->tenant_id
+                    ]
+                );
             }
 
             return response()->json([
@@ -364,6 +408,7 @@ class OnboardingController extends Controller
             'inter_file' => 'inter_certificate',
             'graduation_file' => 'graduation_certificate',
             'master_file' => 'master_certificate',
+            'experience_file' => 'experience_certificate',
         ];
 
         foreach ($files as $inputName => $fileNamePrefix) {
@@ -371,9 +416,52 @@ class OnboardingController extends Controller
                 $file = $request->file($inputName);
                 $path = \App\Helpers\FileSecurityHelper::encryptAndStore($file, $folder, $fileNamePrefix, 'public');
                 
-                if ($path && $inputName === 'photo') {
-                    $user->profile_picture = $path;
-                    $user->save();
+                if ($path) {
+                    if ($inputName === 'photo') {
+                        $user->profile_picture = $path;
+                        $user->save();
+                    } else {
+                        // Create/Update Document Request for visibility in standard system
+                        $docMapping = [
+                            'aadhaar_card' => ['name' => 'Aadhaar Card', 'code' => 'AADHAAR_CARD'],
+                            'pan_card' => ['name' => 'PAN Card', 'code' => 'PAN_CARD'],
+                            'matric_certificate' => ['name' => '10th Marksheet (Matric)', 'code' => 'MATRIC_CERTIFICATE'],
+                            'inter_certificate' => ['name' => '12th Marksheet (Intermediate)', 'code' => 'INTER_CERTIFICATE'],
+                            'graduation_certificate' => ['name' => 'Graduation Marksheet', 'code' => 'GRADUATION_CERTIFICATE'],
+                            'master_certificate' => ['name' => 'Post Graduation Marksheet', 'code' => 'MASTER_CERTIFICATE'],
+                            'experience_certificate' => ['name' => 'Experience Certificate', 'code' => 'EXPERIENCE_CERTIFICATE'],
+                            'cancelled_cheque' => ['name' => 'Cancelled Cheque', 'code' => 'CANCELLED_CHEQUE'],
+                        ];
+
+                        $mapping = $docMapping[$fileNamePrefix] ?? [
+                            'name' => ucwords(str_replace('_', ' ', $fileNamePrefix)),
+                            'code' => strtoupper($fileNamePrefix)
+                        ];
+                        
+                        // Find or Create Document Type
+                        $docType = \App\Models\DocumentType::withoutGlobalScopes()->where('code', $mapping['code'])->first();
+                        if (!$docType) {
+                            $docType = \App\Models\DocumentType::create([
+                                'name' => $mapping['name'],
+                                'code' => $mapping['code'],
+                                'status' => \App\Enums\CommonStatus::ACTIVE,
+                                'tenant_id' => $user->tenant_id
+                            ]);
+                        }
+
+                        \App\Models\DocumentRequest::updateOrCreate(
+                            [
+                                'user_id' => $user->id,
+                                'document_type_id' => $docType->id,
+                            ],
+                            [
+                                'generated_file' => $path,
+                                'status' => 'pending',
+                                'remarks' => 'Uploaded during onboarding',
+                                'tenant_id' => $user->tenant_id
+                            ]
+                        );
+                    }
                 }
             }
         }

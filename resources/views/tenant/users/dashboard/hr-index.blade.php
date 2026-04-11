@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="icon-wrap-sm bg-teal-light text-teal rounded-circle" style="width:40px; height:40px;"><i class="bx bx-briefcase fs-5"></i></div>
             <div>
               <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $job->title }}</h6>
-              <small class="text-muted">{{ $job->applicant_count }} Applicants</small>
+              <small class="text-muted">{{ $job->applications_count }} Applicants</small>
             </div>
           </div>
           <span class="badge bg-label-success rounded-pill p-1 px-2 fw-bold" style="font-size: 0.65rem;">Active</span>

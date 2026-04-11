@@ -203,32 +203,27 @@ class AttendanceController extends Controller
       })
       ->rawColumns(['user', 'status', 'actions', 'shift', 'working_hours', 'check_in_time', 'check_out_time'])
       ->with('stats', function() use ($query) {
-          $records = (clone $query)->get(['status', 'admin_reason', 'check_in_time', 'check_out_time']);
-          $present = 0; $absent = 0; $leave = 0; $late = 0;
-          $totalCount = max($records->count(), 1);
-          
-          foreach ($records as $att) {
-              $s = strtolower($att->status ?: 'present');
-              
-              if (empty($att->admin_reason) && $att->check_in_time && $att->check_out_time) {
-                  $mins = $att->check_in_time->diffInMinutes($att->check_out_time);
-                  if ($mins < 465 && $s === 'present') {
-                      $s = 'half-day';
-                  }
-              }
-              
-              if ($s == 'absent') $absent++;
-              elseif ($s == 'late' || $s == 'half-day') $late++;
-              elseif ($s == 'on_leave' || $s == 'leave' || $s == 'work_from_home' || $s == 'wfh') $leave++;
-              else $present++;
-          }
+          $stats = (clone $query)
+              ->selectRaw("
+                  COUNT(*) as total,
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND admin_reason IS NULL AND TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) < 465 THEN 1 ELSE 0 END) as half_days,
+                  SUM(CASE WHEN LOWER(status) = 'absent' THEN 1 ELSE 0 END) as absents,
+                  SUM(CASE WHEN LOWER(status) IN ('on_leave', 'leave', 'work_from_home', 'wfh') THEN 1 ELSE 0 END) as leaves,
+                  SUM(CASE WHEN LOWER(status) = 'late' THEN 1 ELSE 0 END) as lates,
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND (admin_reason IS NOT NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 465) THEN 1 ELSE 0 END) as presents
+              ")
+              ->first();
+
+          $totalCount = max($stats->total, 1);
+          $presentCount = $stats->presents;
+          $lateCount = $stats->lates + $stats->half_days;
           
           return [
-              'present' => $present,
-              'absent' => $absent,
-              'leave' => $leave,
-              'late' => $late,
-              'presentPercentage' => round(($present / $totalCount) * 100)
+              'present' => $presentCount,
+              'absent' => $stats->absents,
+              'leave' => $stats->leaves,
+              'late' => $lateCount,
+              'presentPercentage' => round(($presentCount / $totalCount) * 100)
           ];
       })
       ->make(true);
@@ -460,6 +455,23 @@ class AttendanceController extends Controller
         }
         $totalStaff = $userCount->count();
 
+        $attendancesByDate = Attendance::whereBetween('check_in_time', [$startDate, $endDate])
+            ->selectRaw("DATE(check_in_time) as date, COUNT(*) as count")
+            ->whereIn('status', ['present', 'late', 'work_from_home', 'Present', 'Late', 'Work From Home'])
+            ->when($teamId, fn($q) => $q->whereHas('user', fn($u) => $u->where('team_id', $teamId)))
+            ->when($userId, fn($q) => $q->where('user_id', $userId))
+            ->when($request->shiftId, fn($q) => $q->where('shift_id', $request->shiftId))
+            ->when($request->searchTerm, function($q) use ($request) {
+                $term = $request->searchTerm;
+                $q->whereHas('user', function($u) use ($term) {
+                    $u->where('first_name', 'like', "%{$term}%")
+                      ->orWhere('last_name', 'like', "%{$term}%")
+                      ->orWhere('code', 'like', "%{$term}%");
+                });
+            })
+            ->groupBy('date')
+            ->pluck('count', 'date');
+
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dateStr = $date->toDateString();
             $label = $period == 'today' ? $date->format('H:i') : $date->format('d M');
@@ -467,29 +479,7 @@ class AttendanceController extends Controller
             
             $categories[] = $label;
 
-            // Count Present (Standard, Late, WFH)
-            $presentQuery = Attendance::whereDate('check_in_time', $dateStr)
-                ->whereIn('status', ['present', 'late', 'work_from_home', 'Present', 'Late', 'Work From Home']);
-            
-            if ($teamId) {
-                $presentQuery->whereHas('user', fn($q) => $q->where('team_id', $teamId));
-            }
-            if ($userId) {
-                $presentQuery->where('user_id', $userId);
-            }
-            if ($request->shiftId) {
-                $presentQuery->where('shift_id', $request->shiftId);
-            }
-            if ($request->searchTerm) {
-                $term = $request->searchTerm;
-                $presentQuery->whereHas('user', function($q) use ($term) {
-                    $q->where('first_name', 'like', "%$term%")
-                      ->orWhere('last_name', 'like', "%$term%")
-                      ->orWhere('code', 'like', "%$term%");
-                });
-            }
-            
-            $pCount = $presentQuery->count();
+            $pCount = $attendancesByDate->get($dateStr, 0);
             $presentData[] = $pCount;
 
             // Count Absents (Simple Formula: Total Filtered Staff - Present)

@@ -27,21 +27,19 @@ class PayrollController extends Controller
         $now = now();
         $periodName = $now->format('F Y');
 
-        $processedThisMonth = Payslip::whereHas('payrollRecord', function($q) use ($periodName) {
+        // Optimized: Single query to get counts, sums, and user IDs
+        $monthStats = Payslip::whereHas('payrollRecord', function($q) use ($periodName) {
             $q->where('period', $periodName);
-        })->count();
+        })
+        ->selectRaw('count(*) as count, sum(net_salary) as total_payout, GROUP_CONCAT(user_id) as processed_user_ids')
+        ->first();
 
-        $totalPayout = Payslip::whereHas('payrollRecord', function($q) use ($periodName) {
-            $q->where('period', $periodName);
-        })->sum('net_salary');
-
-        // Pending processing: Active users without a payslip this month
-        $processedUserIds = Payslip::whereHas('payrollRecord', function($q) use ($periodName) {
-            $q->where('period', $periodName);
-        })->pluck('user_id');
+        $processedThisMonth = $monthStats->count ?? 0;
+        $totalPayout = $monthStats->total_payout ?? 0;
+        $processedUserIds = explode(',', $monthStats->processed_user_ids ?? '');
 
         $pendingProcessing = User::where('status', 'active')
-            ->whereNotIn('id', $processedUserIds)
+            ->whereNotIn('id', array_filter($processedUserIds))
             ->count();
 
         return view('tenant.payroll.index', [

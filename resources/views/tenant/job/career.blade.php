@@ -323,6 +323,10 @@
                     <a href="{{ route('career', [$currantLang]) }}" class="btn btn-primary rounded-pill">Reset Filters</a>
                 </div>
             @endforelse
+
+            <div class="d-flex justify-content-center mt-8">
+                {{ $jobs->links('pagination::bootstrap-5') }}
+            </div>
         </div>
     </div>
 </div>

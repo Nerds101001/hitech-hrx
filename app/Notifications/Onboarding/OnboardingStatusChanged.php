@@ -7,7 +7,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class OnboardingStatusChanged extends Notification
+use Illuminate\Contracts\Queue\ShouldQueue;
+
+class OnboardingStatusChanged extends Notification implements ShouldQueue
 {
     use Queueable;
 

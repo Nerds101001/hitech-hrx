@@ -23,25 +23,32 @@ class LeaveController extends Controller
     $employees = User::all();
     $leaveTypes = LeaveType::all();
     
-    $pendingRequests = LeaveRequest::where('status', LeaveRequestStatus::PENDING->value)->count();
-    $approvedToday = LeaveRequest::where('status', LeaveRequestStatus::APPROVED->value)
-        ->whereDate('updated_at', today())
-        ->count();
-    $onLeaveNow = LeaveRequest::where('status', LeaveRequestStatus::APPROVED->value)
-        ->whereDate('from_date', '<=', today())
-        ->whereDate('to_date', '>=', today())
-        ->count();
-    $totalLeaveBalance = LeaveRequest::where('status', LeaveRequestStatus::APPROVED->value)->count();
+    // Optimized: Fetch all stats in one query using selectRaw
+    $stats = LeaveRequest::selectRaw("
+        SUM(CASE WHEN status = '" . LeaveRequestStatus::PENDING->value . "' THEN 1 ELSE 0 END) as pending_count,
+        SUM(CASE WHEN status = '" . LeaveRequestStatus::APPROVED->value . "' AND DATE(updated_at) = '" . today()->toDateString() . "' THEN 1 ELSE 0 END) as approved_today,
+        SUM(CASE WHEN status = '" . LeaveRequestStatus::APPROVED->value . "' AND DATE(from_date) <= '" . today()->toDateString() . "' AND DATE(to_date) >= '" . today()->toDateString() . "' THEN 1 ELSE 0 END) as on_leave_now,
+        SUM(CASE WHEN status = '" . LeaveRequestStatus::APPROVED->value . "' THEN 1 ELSE 0 END) as total_approved
+    ")->first();
 
-    // Build real leave balance chart data from leave_balances table
+    $pendingRequests = $stats->pending_count ?? 0;
+    $approvedToday = $stats->approved_today ?? 0;
+    $onLeaveNow = $stats->on_leave_now ?? 0;
+    $totalLeaveBalance = $stats->total_approved ?? 0;
+
+    // Optimized: Fetch all balances in one query grouped by leave_type_id
+    $balancesByGroup = \App\Models\LeaveBalance::selectRaw('leave_type_id, SUM(balance) as total_balance, SUM(used) as total_used')
+        ->groupBy('leave_type_id')
+        ->get()
+        ->keyBy('leave_type_id');
+
     $leaveBalanceData = [];
     foreach ($leaveTypes as $type) {
-        $totalBalance = \App\Models\LeaveBalance::where('leave_type_id', $type->id)->sum('balance');
-        $totalUsed    = \App\Models\LeaveBalance::where('leave_type_id', $type->id)->sum('used');
+        $group = $balancesByGroup->get($type->id);
         $leaveBalanceData[] = [
             'name'    => $type->name,
-            'balance' => (int) $totalBalance,
-            'used'    => (int) $totalUsed,
+            'balance' => (int) ($group->total_balance ?? 0),
+            'used'    => (int) ($group->total_used ?? 0),
         ];
     }
 

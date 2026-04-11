@@ -16,6 +16,7 @@
   $existingInter = (bool) $user->getInterUrl();
   $existingBachelor = (bool) $user->getBachelorUrl();
   $existingMaster = (bool) $user->getMasterUrl();
+  $existingExperience = (bool) $user->getExperienceUrl();
   
   // Revised Logic:
   // 1. If submitted (Under Review): EVERYTHING LOCKED.
@@ -42,6 +43,12 @@
   ])
   @vite(['resources/assets/vendor/scss/pages/hitech-portal.scss'])
   <style>
+    :root {
+        --primary-teal: #006D77;
+        --deep-teal: #004d54;
+        --bg-light: #F8FAFC;
+    }
+
     /* Unique variants for Onboarding Form (Overriding BS Stepper) */
     .step-circle-custom {
         width: 32px;
@@ -96,6 +103,150 @@
         box-shadow: 0 10px 30px rgba(0, 77, 84, 0.15);
         color: white;
     }
+
+    /* Document Upload UI Improvements */
+    .upload-progress-wrapper {
+        margin-top: 8px;
+        display: none;
+    }
+    .progress-hitech {
+        height: 6px;
+        background: #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .progress-bar-hitech {
+        height: 100%;
+        background: var(--primary-teal);
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+    .upload-status-compact {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 10px;
+        padding: 8px 14px;
+        background: #f0fdfa;
+        border: 1px dashed #5eead4;
+        border-radius: 12px;
+    }
+    .status-icon-success {
+        color: #0d9488;
+        font-size: 1.25rem;
+    }
+    .view-doc-link {
+        color: #0d9488;
+        font-weight: 800;
+        font-size: 11px;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: white;
+        padding: 4px 10px;
+        border-radius: 8px;
+        border: 1px solid #ccfbf1;
+        transition: all 0.2s;
+    }
+    .view-doc-link:hover {
+        background: #ccfbf1;
+        color: var(--deep-teal);
+    }
+    .replace-doc-btn {
+        color: #64748b;
+        font-weight: 700;
+        font-size: 10px;
+        text-transform: uppercase;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        border-bottom: 1px solid transparent;
+    }
+    .replace-doc-btn:hover {
+        color: #ef4444;
+        border-bottom-color: #ef4444;
+    }
+    
+    .badge-uploaded, .badge-error {
+        display: none;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        padding: 4px 10px;
+        border-radius: 20px;
+    }
+    .badge-uploaded { background: #dcfce7; color: #166534; }
+    .badge-error { background: #fee2e2; color: #991b1b; }
+
+    /* Footer / Step Toggles Alignment */
+    .hitech-footer {
+        background: #F8FAFC;
+        border-top: 1px solid #E2E8F0;
+        padding: 2.5rem 3rem !important; /* Increased padding */
+        display: flex;
+        justify-content: center;
+        border-bottom-left-radius: 20px;
+        border-bottom-right-radius: 20px;
+        margin-top: 1rem;
+    }
+
+    .footer-content {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .btn-prev-hitech {
+        background: white;
+        border: 1px solid #E2E8F0;
+        color: #64748B;
+        padding: 0.75rem 1.75rem;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s;
+    }
+
+    .btn-prev-hitech:hover {
+        color: var(--deep-teal);
+        background: #F8FAFC;
+    }
+
+    .btn-next-hitech {
+        background: var(--deep-teal) !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.8rem 2.5rem !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        font-size: 0.9rem !important;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        box-shadow: 0 4px 12px rgba(0, 77, 84, 0.15);
+    }
+
+    .btn-next-hitech:hover {
+        background: var(--primary-teal) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(0, 109, 119, 0.25);
+    }
+
+    #wizard-onboarding {
+        margin-bottom: 2rem !important;
+    }
+
   </style>
 @endsection
 
@@ -632,7 +783,7 @@
                             </div>
                         @endif
                         @if($canEditDocs)
-                        <input type="file" id="photo_input" name="photo" class="hitech-input" accept=".jpg,.jpeg,.png" @if(!$existingPhoto) required @endif @if($existingPhoto) data-existing="true" @endif>
+                        <input type="file" id="photo_input" name="photo" class="hitech-input" accept=".jpg,.jpeg,.png" @if(!$existingPhoto) required @endif @if($existingPhoto) data-existing="true" data-file-url="{{ $user->getProfilePicture() }}" @endif>
                         <div class="invalid-feedback" id="photo_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid photo: JPG/PNG max 100KB.</div>
                         <p class="text-muted small mt-1">JPG, PNG only. Max 100KB.</p>
                         @endif
@@ -649,7 +800,7 @@
                            <div class="mb-2"><a href="{{ $user->getAadhaarUrl() }}" target="_blank" class="badge bg-label-info"><i class="bx bx-link-external me-1"></i>View Uploaded Aadhaar</a></div>
                         @endif
                         @if($canEditDocs)
-                           <input type="file" id="aadhaar_file" name="aadhaar_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingAadhaar) required @endif @if($existingAadhaar) data-existing="true" @endif>
+                           <input type="file" id="aadhaar_file" name="aadhaar_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingAadhaar) required @endif @if($existingAadhaar) data-existing="true" data-file-url="{{ $user->getAadhaarUrl() }}" @endif>
                            <div class="invalid-feedback" id="aadhaar_file_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid file: PDF/JPG/PNG max 300KB.</div>
                            <p class="text-muted small mt-1">PDF, JPG, PNG only. Max 300KB.</p>
                         @endif
@@ -662,7 +813,7 @@
                            <div class="mb-2"><a href="{{ $user->getPanUrl() }}" target="_blank" class="badge bg-label-info"><i class="bx bx-link-external me-1"></i>View Uploaded PAN</a></div>
                         @endif
                         @if($canEditDocs)
-                           <input type="file" id="pan_file" name="pan_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingPan) required @endif @if($existingPan) data-existing="true" @endif>
+                           <input type="file" id="pan_file" name="pan_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingPan) required @endif @if($existingPan) data-existing="true" data-file-url="{{ $user->getPanUrl() }}" @endif>
                            <div class="invalid-feedback" id="pan_file_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid file: PDF/JPG/PNG max 300KB.</div>
                            <p class="text-muted small mt-1">PDF, JPG, PNG only. Max 300KB.</p>
                         @endif
@@ -673,50 +824,65 @@
                 <div class="row g-4 mb-4">
                    <!-- Matric -->
                     <div class="col-md-6 border-bottom pb-4">
-                        <label class="hitech-label fw-bold">Matric / 10th Certificate <span class="text-danger">*</span></label>
-                        <input type="text" name="matric_university" id="matric_university" class="hitech-input mb-2" value="{{ $user->matric_university }}" placeholder="Board / University Name" required {{ !$canEditDocs ? 'readonly' : '' }}>
-                        <input type="text" name="matric_marksheet_no" id="matric_marksheet_no" class="hitech-input mb-2" value="{{ $user->matric_marksheet_no }}" placeholder="Marksheet / Serial Number" required {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <label class="hitech-label fw-bold">10th Marksheet (Matric) <span class="text-muted small italic">(Optional Details)</span></label>
+                        <input type="text" name="matric_university" id="matric_university" class="hitech-input mb-2" value="{{ $user->matric_university }}" placeholder="Board / University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <input type="text" name="matric_marksheet_no" id="matric_marksheet_no" class="hitech-input mb-2" value="{{ $user->matric_marksheet_no }}" placeholder="Marksheet / Serial Number" {{ !$canEditDocs ? 'readonly' : '' }}>
                         @if($existingMatric)
                            <div class="mb-2"><a href="{{ $user->getMatricUrl() }}" target="_blank" class="badge bg-label-info"><i class="bx bx-link-external me-1"></i>View Uploaded Certificate</a></div>
                         @endif
+                        <label class="hitech-label small mb-1">Upload Certificate <span class="text-danger">*</span></label>
                         @if($canEditDocs)
-                           <input type="file" id="matric_file" name="matric_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingMatric) required @endif @if($existingMatric) data-existing="true" @endif>
+                           <input type="file" id="matric_file" name="matric_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingMatric) required @endif @if($existingMatric) data-existing="true" data-file-url="{{ $user->getMatricUrl() }}" @endif>
                            <div class="invalid-feedback" id="matric_file_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid file: PDF/JPG/PNG max 300KB.</div>
                            <p class="text-muted small mt-1">Max 300KB.</p>
                         @endif
                    </div>
                    <!-- Intermediate -->
                    <div class="col-md-6 border-bottom pb-4">
-                        <label class="hitech-label fw-bold">Intermediate / 12th Certificate <span class="text-danger">*</span></label>
-                        <input type="text" name="inter_university" id="inter_university" class="hitech-input mb-2" value="{{ $user->inter_university }}" placeholder="Board / University Name" required {{ !$canEditDocs ? 'readonly' : '' }}>
-                        <input type="text" name="inter_marksheet_no" id="inter_marksheet_no" class="hitech-input mb-2" value="{{ $user->inter_marksheet_no }}" placeholder="Marksheet / Serial Number" required {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <label class="hitech-label fw-bold">12th Marksheet (Intermediate) <span class="text-muted small italic">(Optional Details)</span></label>
+                        <input type="text" name="inter_university" id="inter_university" class="hitech-input mb-2" value="{{ $user->inter_university }}" placeholder="Board / University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <input type="text" name="inter_marksheet_no" id="inter_marksheet_no" class="hitech-input mb-2" value="{{ $user->inter_marksheet_no }}" placeholder="Marksheet / Serial Number" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <label class="hitech-label small mb-1">Upload Certificate <span class="text-danger">*</span></label>
                         @if($canEditDocs)
-                           <input type="file" id="inter_file" name="inter_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingInter) required @endif @if($existingInter) data-existing="true" @endif>
+                           <input type="file" id="inter_file" name="inter_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingInter) required @endif @if($existingInter) data-existing="true" data-file-url="{{ $user->getInterUrl() }}" @endif>
                            <div class="invalid-feedback" id="inter_file_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid file: PDF/JPG/PNG max 300KB.</div>
                            <p class="text-muted small mt-1">Max 300KB.</p>
                         @endif
                    </div>
                     <!-- Bachelor -->
                    <div class="col-md-6">
-                        <label class="hitech-label fw-bold">Bachelor's Degree Certificate <span class="text-danger">*</span></label>
-                        <input type="text" name="bachelor_university" id="bachelor_university" class="hitech-input mb-2" value="{{ $user->bachelor_university }}" placeholder="University Name" required {{ !$canEditDocs ? 'readonly' : '' }}>
-                        <input type="text" name="bachelor_marksheet_no" id="bachelor_marksheet_no" class="hitech-input mb-2" value="{{ $user->bachelor_marksheet_no }}" placeholder="Degree / Marksheet Number" required {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <label class="hitech-label fw-bold">Graduation Marksheet <span class="text-muted small italic">(Optional Details)</span></label>
+                        <input type="text" name="bachelor_university" id="bachelor_university" class="hitech-input mb-2" value="{{ $user->bachelor_university }}" placeholder="University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <input type="text" name="bachelor_marksheet_no" id="bachelor_marksheet_no" class="hitech-input mb-2" value="{{ $user->bachelor_marksheet_no }}" placeholder="Degree / Marksheet Number" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        <label class="hitech-label small mb-1">Upload Certificate <span class="text-danger">*</span></label>
                         @if($canEditDocs)
-                           <input type="file" id="graduation_file" name="graduation_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingBachelor) required @endif @if($existingBachelor) data-existing="true" @endif>
+                           <input type="file" id="graduation_file" name="graduation_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if(!$existingBachelor) required @endif @if($existingBachelor) data-existing="true" data-file-url="{{ $user->getBachelorUrl() }}" @endif>
                            <div class="invalid-feedback" id="graduation_file_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid file: PDF/JPG/PNG max 300KB.</div>
                            <p class="text-muted small mt-1">Max 300KB.</p>
                         @endif
                    </div>
                    <!-- Master -->
                    <div class="col-md-6">
-                        <label class="hitech-label fw-bold">Master's Degree Certificate</label>
+                        <label class="hitech-label fw-bold">Post Graduation Marksheet</label>
                         <input type="text" name="master_university" class="hitech-input mb-2" value="{{ $user->master_university }}" placeholder="University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
                         <input type="text" name="master_marksheet_no" class="hitech-input mb-2" value="{{ $user->master_marksheet_no }}" placeholder="Degree / Marksheet Number" {{ !$canEditDocs ? 'readonly' : '' }}>
                         @if($canEditDocs)
-                           <input type="file" name="master_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if($existingMaster) data-existing="true" @endif>
+                           <input type="file" name="master_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if($existingMaster) data-existing="true" data-file-url="{{ $user->getMasterUrl() }}" @endif>
+                           <p class="text-muted small mt-1">Max 300KB.</p>
+                        @endif
+                      <!-- Experience Certificate -->
+                   <div class="col-md-12 mt-4 pt-4 border-top">
+                        <label class="hitech-label fw-bold">Experience Certificate</label>
+                        <input type="text" name="experience_certificate_no" id="experience_certificate_no" class="hitech-input mb-2" value="{{ $user->experience_certificate_no }}" placeholder="Experience Certificate / Relieving Letter Number" {{ !$canEditDocs ? 'readonly' : '' }}>
+                        @if($existingExperience)
+                           <div class="mb-2"><a href="{{ $user->getExperienceUrl() }}" target="_blank" class="badge bg-label-info"><i class="bx bx-link-external me-1"></i>View Uploaded Experience Certificate</a></div>
+                        @endif
+                        @if($canEditDocs)
+                           <input type="file" id="experience_file" name="experience_file" class="hitech-input" accept=".pdf,.png,.jpg,.jpeg" @if($existingExperience) data-existing="true" data-file-url="{{ $user->getExperienceUrl() }}" @endif>
                            <p class="text-muted small mt-1">Max 300KB.</p>
                         @endif
                    </div>
+                </div>
                 </div>
 
                 <h4 class="section-title">Travel & Visa (Optional)</h4>
@@ -853,6 +1019,41 @@ function ensureStepper() {
     }
 }
 
+function showErrorSwal(msg) {
+    Swal.fire({
+        title: 'Error',
+        text: msg,
+        icon: 'error',
+        customClass: {
+            confirmButton: 'btn btn-primary'
+        },
+        buttonsStyling: false
+    });
+}
+function showSuccessSwal(msg) {
+    Swal.fire({
+        title: 'Success',
+        text: msg,
+        icon: 'success',
+        customClass: {
+            confirmButton: 'btn btn-primary'
+        },
+        buttonsStyling: false
+    });
+}
+function showWarningSwal(msg) {
+    return Swal.fire({
+        title: 'Warning',
+        text: msg,
+        icon: 'warning',
+        customClass: {
+            confirmButton: 'btn btn-primary',
+            cancelButton: 'btn btn-label-secondary'
+        },
+        buttonsStyling: false
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     ensureStepper();
 
@@ -987,16 +1188,60 @@ document.addEventListener('DOMContentLoaded', function () {
             wrapper.className = 'upload-progress-wrapper';
             wrapper.id = `progress_wrapper_${input.id || input.name}`;
             wrapper.innerHTML = `
-                <div class="d-flex align-items-center justify-content-between mb-1">
-                    <span class="text-muted small upload-percent" style="font-size: 9px; font-weight: 700;">0%</span>
-                    <span class="upload-status-badge badge-uploaded">Uploaded</span>
-                    <span class="upload-status-badge badge-error">Failed</span>
-                </div>
-                <div class="progress-hitech">
+                <div class="progress-hitech" style="display: none;">
                     <div class="progress-bar-hitech"></div>
                 </div>
+                <div class="upload-status-compact" style="display: none;">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bx bxs-check-circle status-icon-success"></i>
+                        <span class="text-success fw-bold" style="font-size: 11px;">File Uploaded</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="#" target="_blank" class="view-doc-link">
+                            <i class="bx bx-show"></i> View
+                        </a>
+                        <button type="button" class="replace-doc-btn">
+                            <i class="bx bx-refresh"></i> Replace
+                        </button>
+                    </div>
+                </div>
+                <div class="badge-error mt-1" style="display: none;"></div>
             `;
             input.parentNode.insertBefore(wrapper, input.nextSibling);
+
+            const statusCompact = wrapper.querySelector('.upload-status-compact');
+            const viewLink = wrapper.querySelector('.view-doc-link');
+            const replaceBtn = wrapper.querySelector('.replace-doc-btn');
+
+            // --- Handle Initial Flow ---
+            // If data-existing is true (set by PHP), show the compact UI immediately
+            if (input.dataset.existing === 'true' || input.getAttribute('data-existing') === 'true') {
+                const existingUrl = input.dataset.fileUrl || ''; // We need to pass this from PHP ideally
+                wrapper.style.display = 'block';
+                statusCompact.style.display = 'flex';
+                input.style.display = 'none';
+                
+                // If we don't have the URL in data-file-url, we might need to find the PHP-rendered link
+                // but it's cleaner to just pass it in data-file-url in the PHP template.
+                if (existingUrl) viewLink.href = existingUrl;
+                else {
+                    // Fallback: try to find the link rendered by PHP nearby
+                    const prevLink = input.parentElement.querySelector('a[target="_blank"]');
+                    if (prevLink) {
+                        viewLink.href = prevLink.href;
+                        prevLink.parentElement.style.display = 'none'; // Hide the raw PHP link
+                    }
+                }
+
+                replaceBtn.onclick = () => {
+                    statusCompact.style.display = 'none';
+                    input.style.display = 'block';
+                    input.value = '';
+                    input.removeAttribute('data-uploaded');
+                    input.removeAttribute('data-existing');
+                    input.dataset.existing = 'false';
+                };
+            }
 
             input.addEventListener('change', function() {
                 if (this.files && this.files.length > 0) {
@@ -1011,17 +1256,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const fieldName = input.name;
         const wrapperId = `progress_wrapper_${input.id || input.name}`;
         const wrapper = document.getElementById(wrapperId);
+        const barContainer = wrapper.querySelector('.progress-hitech');
         const bar = wrapper.querySelector('.progress-bar-hitech');
-        const percentText = wrapper.querySelector('.upload-percent');
-        const successBadge = wrapper.querySelector('.badge-uploaded');
+        const statusCompact = wrapper.querySelector('.upload-status-compact');
         const errorBadge = wrapper.querySelector('.badge-error');
+        const viewLink = wrapper.querySelector('.view-doc-link');
+        const replaceBtn = wrapper.querySelector('.replace-doc-btn');
 
         // Reset UI
         wrapper.style.display = 'block';
+        barContainer.style.display = 'block';
         bar.style.width = '0%';
-        percentText.textContent = '0%';
-        successBadge.style.display = 'none';
+        statusCompact.style.display = 'none';
         errorBadge.style.display = 'none';
+        input.style.display = 'none'; // Hide actual input during upload
 
         const formData = new FormData();
         formData.append('file', file);
@@ -1037,40 +1285,48 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.lengthComputable) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 bar.style.width = percent + '%';
-                percentText.textContent = percent + '%';
             }
         };
 
         xhr.onload = function() {
+            barContainer.style.display = 'none'; // Hide bar after finish
             if (xhr.status === 200) {
                 const response = JSON.parse(xhr.responseText);
                 if (response.success) {
-                    successBadge.style.display = 'inline-block';
-                    percentText.textContent = '100%';
-                    bar.style.width = '100%';
+                    statusCompact.style.display = 'flex';
+                    viewLink.href = response.url;
                     input.dataset.uploaded = 'true';
+                    input.dataset.fileUrl = response.url;
+                    input.setAttribute('data-existing', 'true');
                     input.removeAttribute('required');
                     input.classList.remove('is-invalid');
                     input.classList.add('is-valid');
-                    input.value = '';
+                    
+                    // Setup replace button
+                    replaceBtn.onclick = () => {
+                        statusCompact.style.display = 'none';
+                        input.style.display = 'block';
+                        input.value = '';
+                        input.removeAttribute('data-uploaded');
+                        input.removeAttribute('data-existing');
+                    };
+
                     autoSaveStep();
                 } else {
+                    input.style.display = 'block';
                     errorBadge.style.display = 'inline-block';
                     errorBadge.textContent = response.message || 'Error';
-                    showErrorSwal(response.message || 'The server rejected the file upload.');
                 }
-            } else if (xhr.status === 419) {
-                errorBadge.style.display = 'inline-block';
-                errorBadge.textContent = 'Session Expired';
-                showWarningSwal('Your session has timed out. Please refresh the page and try again.').then(() => { window.location.reload(); });
             } else {
+                input.style.display = 'block';
                 errorBadge.style.display = 'inline-block';
                 errorBadge.textContent = 'Upload failed';
-                showErrorSwal('Could not upload the file. Error code: ' + xhr.status);
             }
         };
 
         xhr.onerror = function() {
+            input.style.display = 'block';
+            barContainer.style.display = 'none';
             errorBadge.style.display = 'inline-block';
             errorBadge.textContent = 'Network error';
         };
@@ -1448,36 +1704,73 @@ document.addEventListener('DOMContentLoaded', function () {
             const pFile = document.getElementById('pan_file');
             const photo = document.getElementById('photo_input');
 
-            if (aFile && !validateFile(aFile, 300, ['.pdf', '.png', '.jpg', '.jpeg'], 'aadhaar_file_error')) {
+            // Aadhaar File Missing?
+            if (aFile && (!aFile.files || aFile.files.length === 0) && !aFile.getAttribute('data-existing')) {
+                showError(aFile, true, 'aadhaar_file_error');
                 valid = false;
-                errorFields.add("Aadhaar Upload (Max 300KB)");
-            }
-            if (pFile && !validateFile(pFile, 300, ['.pdf', '.png', '.jpg', '.jpeg'], 'pan_file_error')) {
+                errorFields.add("Aadhaar File is required");
+            } else if (aFile && !validateFile(aFile, 300, ['.pdf', '.png', '.jpg', '.jpeg'], 'aadhaar_file_error')) {
                 valid = false;
-                errorFields.add("PAN Upload (Max 300KB)");
+                errorFields.add("Aadhaar File (Max 300KB)");
             }
-            if (photo && !validateFile(photo, 100, ['.png', '.jpg', '.jpeg'], 'photo_error')) {
+
+            // PAN File Missing?
+            if (pFile && (!pFile.files || pFile.files.length === 0) && !pFile.getAttribute('data-existing')) {
+                showError(pFile, true, 'pan_file_error');
+                valid = false;
+                errorFields.add("PAN File is required");
+            } else if (pFile && !validateFile(pFile, 300, ['.pdf', '.png', '.jpg', '.jpeg'], 'pan_file_error')) {
+                valid = false;
+                errorFields.add("PAN File (Max 300KB)");
+            }
+
+            // Photo Missing?
+            if (photo && (!photo.files || photo.files.length === 0) && !photo.getAttribute('data-existing')) {
+                showError(photo, true, 'photo_error');
+                valid = false;
+                errorFields.add("Profile Photo is required");
+            } else if (photo && !validateFile(photo, 100, ['.png', '.jpg', '.jpeg'], 'photo_error')) {
                 valid = false;
                 errorFields.add("Profile Photo (Max 100KB)");
             }
 
-            ['matric', 'inter', 'bachelor'].forEach(prefix => {
+            // Educational & Experience Documents
+            const docGroups = [
+                { id: 'matric', label: '10th Marksheet (Matric)', required: false, requiredFile: true },
+                { id: 'inter', label: '12th Marksheet (Intermediate)', required: false, requiredFile: true },
+                { id: 'bachelor', label: 'Graduation Marksheet', required: false, requiredFile: true, fileId: 'graduation_file' },
+                { id: 'master', label: 'Post Graduation Marksheet', required: false },
+                { id: 'experience', label: 'Experience Certificate', required: false, fileId: 'experience_file' }
+            ];
+
+            docGroups.forEach(group => {
+                const prefix = group.id;
                 const uni = document.getElementById(prefix + '_university');
-                const mark = document.getElementById(prefix + '_marksheet_no');
-                const file = document.getElementById(prefix === 'bachelor' ? 'graduation_file' : prefix + '_file');
+                const mark = document.getElementById(prefix + (prefix === 'experience' ? '_certificate_no' : '_marksheet_no'));
+                const file = document.getElementById(group.fileId || (prefix + '_file'));
                 
-                if (uni && !uni.value) { showError(uni, true); valid = false; errorFields.add(prefix.charAt(0).toUpperCase() + prefix.slice(1) + " Board/Uni"); }
-                else if(uni) showError(uni, false);
+                if (group.required) {
+                    if (uni && !uni.value) { showError(uni, true); valid = false; errorFields.add(group.label + " Board/Uni"); }
+                    else if(uni) showError(uni, false);
 
-                if (mark && !mark.value) { showError(mark, true); valid = false; errorFields.add(prefix.charAt(0).toUpperCase() + prefix.slice(1) + " Marksheet No."); }
-                else if(mark) showError(mark, false);
+                    if (mark && !mark.value) { showError(mark, true); valid = false; errorFields.add(group.label + " Number"); }
+                    else if(mark) showError(mark, false);
+                }
 
-                if (file && !validateFile(file, 300, ['.pdf', '.png', '.jpg', '.jpeg'], prefix + '_file_error')) {
+                // Check Mandatory File Upload
+                const fileMissing = file && (!file.files || file.files.length === 0) && !file.getAttribute('data-existing');
+                if (group.requiredFile && fileMissing) {
+                    showError(file, true, (group.fileId || prefix + '_file') + '_error');
                     valid = false;
-                    errorFields.add(prefix.charAt(0).toUpperCase() + prefix.slice(1) + " File (Max 300KB)");
+                    errorFields.add(group.label + " File is required");
+                } else if(file && !validateFile(file, 300, ['.pdf', '.png', '.jpg', '.jpeg'], (group.fileId || prefix + '_file') + '_error')) {
+                    valid = false;
+                    errorFields.add(group.label + " File (Max 300KB)");
                 }
             });
-
+        }
+        
+        if (step === 4) {
             const consent = document.getElementById('consent_accepted');
             if (consent && !consent.checked) {
                 valid = false;
@@ -1496,22 +1789,19 @@ document.addEventListener('DOMContentLoaded', function () {
             Swal.fire({
                 title: 'Submission Issues',
                 html: `
-                    <div style="font-family: 'Plus Jakarta Sans', sans-serif;">
-                        <p style="margin-bottom: 1.5rem; color: #1e293b; font-weight: 700;">The following items require your attention before we can proceed:</p>
+                    <div style="font-family: inherit;">
+                        <p style="margin-bottom: 1rem; color: #1e293b; font-weight: 700;">The following items require your attention:</p>
                         <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr; gap: 4px;">
                             ${errorList}
                         </ul>
                     </div>
                 `,
+                icon: 'warning',
                 customClass: {
-                    popup: 'hitech-swal animate__animated animate__fadeInDown',
-                    title: 'hitech-swal-title',
-                    htmlContainer: 'hitech-swal-html',
-                    actions: 'hitech-swal-actions',
-                    confirmButton: 'hitech-swal-confirm'
+                    confirmButton: 'btn btn-primary'
                 },
                 buttonsStyling: false,
-                confirmButtonText: 'I understand, let me fix it'
+                confirmButtonText: 'I understand'
             });
         }
 

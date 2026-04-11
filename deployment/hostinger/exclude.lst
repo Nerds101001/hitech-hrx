@@ -1,6 +1,9 @@
 .git
 .gitignore
 .github
+.editorconfig
+.eslintignore
+.prettierignore
 backup
 backups
 design_*
@@ -30,7 +33,11 @@ tests
 *.py
 *.txt
 !resources/lang/**/*.txt
+*.md
+!README.md
+!INSTALLATION.md
 PROJECT_ANALYSIS_REPORT.md
+SYSTEM_AUDIT_REPORT.md
 audit_system.php
 test_*.php
 detect_*.php
@@ -51,3 +58,8 @@ seeder_error.txt
 *out.txt
 required_fields*.txt
 hrx_clean_final.tar.gz
+research_*.php
+check_*.php
+create_*.php
+*.mjs
+*.mjs.map

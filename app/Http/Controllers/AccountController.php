@@ -77,36 +77,35 @@ class AccountController extends Controller
       $dir = $request->input('order.0.dir');
 
 
+      $baseQuery = User::where('is_customer', true)->with(['activeSubscription.plan']);
+
       if (empty($request->input('search.value'))) {
-        $users = User::where('is_customer', true)
-          ->offset($start)
+        $users = $baseQuery->offset($start)
           ->limit($limit)
           ->orderBy($order, $dir)
           ->get();
       } else {
         $search = $request->input('search.value');
 
-        $users = User::where('is_customer', true)
-          ->where('id', 'LIKE', "%{$search}%")
-          ->orWhere('first_name', 'LIKE', "%{$search}%")
-          ->orWhere('last_name', 'LIKE', "%{$search}%")
-          ->orWhere('phone', 'LIKE', "%{$search}%")
-          ->orWhere('email', 'LIKE', "%{$search}%")
-          ->with('activeSubscription')
-          ->with('activeSubscription.plan')
+        $users = $baseQuery->where(function($q) use ($search) {
+            $q->where('id', 'LIKE', "%{$search}%")
+              ->orWhere('first_name', 'LIKE', "%{$search}%")
+              ->orWhere('last_name', 'LIKE', "%{$search}%")
+              ->orWhere('phone', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+          })
           ->offset($start)
           ->limit($limit)
           ->orderBy($order, $dir)
           ->get();
 
-        $totalFiltered = User::where('is_customer', true)
-          ->where('id', 'LIKE', "%{$search}%")
-          ->orWhere('first_name', 'LIKE', "%{$search}%")
-          ->orWhere('last_name', 'LIKE', "%{$search}%")
-          ->orWhere('phone', 'LIKE', "%{$search}%")
-          ->orWhere('email', 'LIKE', "%{$search}%")
-          ->with('activeSubscription')
-          ->with('activeSubscription.plan')
+        $totalFiltered = $baseQuery->where(function($q) use ($search) {
+            $q->where('id', 'LIKE', "%{$search}%")
+              ->orWhere('first_name', 'LIKE', "%{$search}%")
+              ->orWhere('last_name', 'LIKE', "%{$search}%")
+              ->orWhere('phone', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+          })
           ->count();
       }
 
@@ -306,32 +305,35 @@ class AccountController extends Controller
       $dir = $request->input('order.0.dir');
 
 
+      $baseQuery = User::where('is_customer', false)->with(['roles']);
+
       if (empty($request->input('search.value'))) {
-        $users = User::where('is_customer', false)
-          ->offset($start)
+        $users = $baseQuery->offset($start)
           ->limit($limit)
           ->orderBy($order, $dir)
           ->get();
       } else {
         $search = $request->input('search.value');
 
-        $users = User::where('is_customer', false)
-          ->where('id', 'LIKE', "%{$search}%")
-          ->orWhere('first_name', 'LIKE', "%{$search}%")
-          ->orWhere('last_name', 'LIKE', "%{$search}%")
-          ->orWhere('phone', 'LIKE', "%{$search}%")
-          ->orWhere('email', 'LIKE', "%{$search}%")
+        $users = $baseQuery->where(function($q) use ($search) {
+            $q->where('id', 'LIKE', "%{$search}%")
+              ->orWhere('first_name', 'LIKE', "%{$search}%")
+              ->orWhere('last_name', 'LIKE', "%{$search}%")
+              ->orWhere('phone', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+          })
           ->offset($start)
           ->limit($limit)
           ->orderBy($order, $dir)
           ->get();
 
-        $totalFiltered = User::where('is_customer', false)
-          ->where('id', 'LIKE', "%{$search}%")
-          ->orWhere('first_name', 'LIKE', "%{$search}%")
-          ->orWhere('last_name', 'LIKE', "%{$search}%")
-          ->orWhere('phone', 'LIKE', "%{$search}%")
-          ->orWhere('email', 'LIKE', "%{$search}%")
+        $totalFiltered = $baseQuery->where(function($q) use ($search) {
+            $q->where('id', 'LIKE', "%{$search}%")
+              ->orWhere('first_name', 'LIKE', "%{$search}%")
+              ->orWhere('last_name', 'LIKE', "%{$search}%")
+              ->orWhere('phone', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+          })
           ->count();
       }
 

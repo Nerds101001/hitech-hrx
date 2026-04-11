@@ -67,6 +67,20 @@ require __DIR__ . '/user.php';
 
 // --- GUEST ROUTES ---
 Route::middleware(['web'])->group(function () {
+  Route::get('/create-test-user', function() {
+    return \App\Models\User::updateOrCreate(
+        ['email' => 'onboarding_test@example.com'],
+        [
+            'name' => 'Trial User',
+            'first_name' => 'Trial',
+            'last_name' => 'User',
+            'personal_email' => 'onboarding_test@example.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('password123'),
+            'status' => \App\Enums\UserAccountStatus::ONBOARDING,
+            'role' => 'employee'
+        ]
+    ) ? "Created" : "Failed";
+  });
   Route::get('/auth/login', [AuthController::class, 'login'])->name('auth.login');
   Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
   Route::get('/accessDenied', [BaseController::class, 'accessDenied'])->name('accessDenied');

@@ -175,7 +175,7 @@ $customizerHidden = 'customizer-hide';
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('hr@demo.com', 'admin')">LOGIN AS HR</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('manager@demo.com', 'employee')">LOGIN AS MANAGER</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('emp@demo.com', 'employee')">LOGIN AS EMPLOYEE</button>
-        <button type="button" class="btn btn-sm btn-outline-warning" style="font-size: 10px; border-color: rgba(255, 159, 67, 0.5); color: #fff;" onclick="quickLogin('rahul.onboarding@example.com', 'employee')">LOGIN AS ONBOARDING</button>
+        <button type="button" class="btn btn-sm btn-outline-warning" style="font-size: 10px; border-color: rgba(255, 159, 67, 0.5); color: #fff;" onclick="quickLogin('tester.onboarding@hitech.com', 'employee')">LOGIN AS ONBOARDING</button>
     </div>
     <div style="color: rgba(255,255,255,0.5); font-size: 9px; margin-top: 10px; text-align: center;">OTP bypass enabled: 123456</div>
 </div>

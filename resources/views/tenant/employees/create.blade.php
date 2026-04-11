@@ -470,7 +470,6 @@
                     <option value="site" data-icon="bx-buildings">Site Specific</option>
                   @endif
                   <option value="face" data-icon="bx-user-check">Facial Recognition</option>
-                  @endif
                 </select>
               </div>
 

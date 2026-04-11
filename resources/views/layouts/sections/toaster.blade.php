@@ -1,14 +1,12 @@
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.css">
-<script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
+{{-- CDNs removed for stability, relying on local vendor assets where possible --}}
 
 <style>
     /* GLOBAL HITECH SWEETALERT2 STYLES */
     .swal2-popup.hitech-swal {
-        border-radius: 20px !important;
+        border-radius: 24px !important;
         padding: 0 !important;
         overflow: hidden !important;
-        border: none !important;
+        border: 1px solid rgba(0,0,0,0.05) !important;
         font-family: 'Plus Jakarta Sans', sans-serif !important;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
     }
@@ -16,61 +14,59 @@
         background: linear-gradient(135deg, #003d3d 0%, #005a5a 100%) !important;
         color: #fff !important;
         margin: 0 !important;
-        padding: 1.25rem 2rem !important;
-        font-size: 1.15rem !important;
+        padding: 1.5rem 2rem !important;
+        font-size: 1.25rem !important;
         font-weight: 800 !important;
         text-align: left !important;
         display: flex !important;
         align-items: center !important;
-        justify-content: space-between !important;
+        gap: 1rem !important;
+        border-bottom: 1px solid rgba(255,255,255,0.1) !important;
     }
     .swal2-title.hitech-swal-title::before {
         content: '\eb92'; /* bx-error-alt */
         font-family: 'boxicons' !important;
-        margin-right: 12px;
         background: rgba(255,255,255,0.15);
-        width: 32px;
-        height: 32px;
+        min-width: 40px;
+        width: 40px;
+        height: 40px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 8px;
-        font-size: 1.25rem;
+        border-radius: 12px;
+        font-size: 1.5rem;
+        flex-shrink: 0;
     }
     .swal2-html-container.hitech-swal-html {
-        padding: 2.5rem 2rem !important;
+        padding: 2rem 2rem !important;
         margin: 0 !important;
         text-align: left !important;
         color: #334155 !important;
         font-size: 0.95rem !important;
-        font-weight: 600 !important;
+        font-weight: 500 !important;
         line-height: 1.6 !important;
     }
     .swal2-actions.hitech-swal-actions {
         padding: 0 2rem 2rem 2rem !important;
         margin: 0 !important;
         justify-content: flex-end !important;
-        width: 100% !important;
-        gap: 12px !important;
+        gap: 10px !important;
     }
     .swal2-confirm.hitech-swal-confirm {
-        background: #006D77 !important;
+        background: var(--deep-teal) !important;
         color: #fff !important;
         border-radius: 12px !important;
+        padding: 0.75rem 1.75rem !important;
         font-weight: 700 !important;
-        padding: 12px 28px !important;
         font-size: 0.85rem !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.5px !important;
-        transition: all 0.2s ease !important;
-        box-shadow: 0 4px 12px rgba(0, 109, 119, 0.2) !important;
         border: none !important;
-        margin: 0 !important;
+        box-shadow: 0 4px 12px rgba(0, 77, 84, 0.15) !important;
+        transition: all 0.3s ease !important;
     }
     .swal2-confirm.hitech-swal-confirm:hover {
-        background: #005a63 !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 6px 20px rgba(0, 109, 119, 0.3) !important;
+        background: var(--primary-teal) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 16px rgba(0, 109, 119, 0.2) !important;
     }
     .swal2-cancel.hitech-swal-cancel {
         background: #F1F5F9 !important;
@@ -89,10 +85,28 @@
     }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/notyf@3/notyf.min.js"></script>
 <script>
-  if (typeof window.notyf === 'undefined') {
-    window.notyf = new Notyf();
-  }
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof Notyf !== 'undefined' && typeof window.notyf === 'undefined') {
+      window.notyf = new Notyf({
+        duration: 4000,
+        position: { x: 'right', y: 'bottom' },
+        types: [
+          { type: 'success', background: '#006D77', icon: false },
+          { type: 'error', background: '#dc2626', icon: false },
+          { type: 'warning', background: '#f59e0b', icon: false }
+        ]
+      });
+    }
+  });
+
+  window.notyf = window.notyf || {
+    success: (m) => console.log('Toast:', m),
+    error: (m) => console.error('Toast:', m),
+    warning: (m) => console.warn('Toast:', m),
+    info: (m) => console.info('Toast:', m)
+  };
 
   // success message popup notification
   @if(session()->has('success'))

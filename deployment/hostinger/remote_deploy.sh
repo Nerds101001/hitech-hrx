@@ -58,6 +58,8 @@ php artisan optimize:clear
 if ! php artisan migrate --force --no-interaction; then
   echo "[7.0/8] migrate skipped due existing schema conflict; continuing deployment."
 fi
+echo "[7.1/8] Standardizing legacy documents..."
+php artisan documents:standardize --no-interaction || echo "Standardize failed, continuing..."
 php artisan config:cache
 if ! php artisan route:cache; then
   echo "[7.1/8] route:cache skipped (duplicate route names present)."

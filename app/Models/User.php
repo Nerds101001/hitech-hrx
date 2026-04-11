@@ -128,12 +128,23 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     'emergency_contact_phone',
     'onboarding_rejected_sections',
     'highest_qualification',
-    'matric_marksheet_no', 'matric_university',
-    'inter_marksheet_no', 'inter_university',
-    'bachelor_marksheet_no', 'bachelor_university',
-    'master_marksheet_no', 'master_university',
-    'otp_code', 'otp_expires_at', 'locked_until', 'login_attempts', 'otp_attempts',
-    'biometric_id', 'attendance_type', 'work_type',
+    'matric_marksheet_no',
+    'matric_university',
+    'inter_marksheet_no',
+    'inter_university',
+    'bachelor_marksheet_no',
+    'bachelor_university',
+    'master_marksheet_no',
+    'master_university',
+    'experience_certificate_no',
+    'otp_code',
+    'otp_expires_at',
+    'locked_until',
+    'login_attempts',
+    'otp_attempts',
+    'biometric_id',
+    'attendance_type',
+    'work_type',
   ];
   /**
    * The attributes that should be hidden for serialization.
@@ -209,27 +220,27 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   {
     if (!$this->profile_picture) {
       return null;
-    } 
-    
+    }
+
     $path = $this->profile_picture;
 
     // 1. Check if the path exists as-is (already fully prefixed)
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
-        return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
     }
-    
+
     // 2. Try prefixing with employee profile folder (Standard/Legacy)
     $profilePath = Constants::BaseFolderEmployeeProfileWithSlash . $path;
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($profilePath)) {
-        return \App\Helpers\FileSecurityHelper::generateSecureUrl($profilePath);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($profilePath);
     }
 
     // 3. Try prefixing with onboarding folder (if only filename was saved)
     $onboardingPath = Constants::BaseFolderOnboardingDocuments . $this->id . '/' . $path;
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($onboardingPath)) {
-        return \App\Helpers\FileSecurityHelper::generateSecureUrl($onboardingPath);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($onboardingPath);
     }
-    
+
     return null;
   }
 
@@ -238,15 +249,15 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getAadhaarUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'aadhaar_card') || str_contains($name, 'aadhaar');
-      })->last();
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
 
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'aadhaar_card') || str_contains($name, 'aadhaar');
+    })->last();
+
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -254,15 +265,15 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getPanUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'pan_card') || str_contains($name, 'pan_card') || str_contains($name, 'pan');
-      })->last();
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
 
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'pan_card') || str_contains($name, 'pan_card') || str_contains($name, 'pan');
+    })->last();
+
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -270,13 +281,13 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getChequeUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'cancelled_cheque') || str_contains($name, 'cheque') || str_contains($name, 'bank');
-      })->last();
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'cancelled_cheque') || str_contains($name, 'cheque') || str_contains($name, 'bank');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -284,13 +295,13 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getMatricUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'matric_certificate') || str_contains($name, 'matric') || str_contains($name, '10th');
-      })->last();
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'matric_certificate') || str_contains($name, 'matric') || str_contains($name, '10th');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -298,13 +309,13 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getInterUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'inter_certificate') || str_contains($name, 'inter') || str_contains($name, '12th');
-      })->last();
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'inter_certificate') || str_contains($name, 'inter') || str_contains($name, '12th');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -312,13 +323,13 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getBachelorUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'graduation_certificate') || str_contains($name, 'graduation') || str_contains($name, 'bachelor');
-      })->last();
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'graduation_certificate') || str_contains($name, 'graduation') || str_contains($name, 'bachelor');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
   /**
@@ -326,21 +337,35 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
    */
   public function getMasterUrl()
   {
-      $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
-      $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
-      $file = collect($files)->filter(function($f) {
-          $name = strtolower(basename($f));
-          return str_starts_with($name, 'master_certificate') || str_contains($name, 'master');
-      })->last();
-      return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'master_certificate') || str_contains($name, 'master') || str_contains($name, 'post');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
 
-/*
-  public function activePlan()
+  /**
+   * Get URL for Experience Certificate from onboarding documents.
+   */
+  public function getExperienceUrl()
   {
-    return $this->belongsTo(Plan::class, 'plan_id');
+    $folder = Constants::BaseFolderOnboardingDocuments . $this->id;
+    $files = \Illuminate\Support\Facades\Storage::disk('public')->files($folder);
+    $file = collect($files)->filter(function ($f) {
+      $name = strtolower(basename($f));
+      return str_starts_with($name, 'experience_certificate') || str_contains($name, 'experience');
+    })->last();
+    return $file ? \App\Helpers\FileSecurityHelper::generateSecureUrl($file) : null;
   }
-*/
+
+  /*
+    public function activePlan()
+    {
+      return $this->belongsTo(Plan::class, 'plan_id');
+    }
+  */
 
   public function getJWTIdentifier()
   {
@@ -373,41 +398,41 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->plan_id != null && $this->plan_expired_date >= now()->toDateString();
   }
 
-/*
-  public function hasPendingOfflineRequest(): bool
-  {
-    return OfflineRequest::where('user_id', $this->id)
-      ->where('status', OfflineRequestStatus::PENDING)
-      ->exists();
-  }
-*/
+  /*
+    public function hasPendingOfflineRequest(): bool
+    {
+      return OfflineRequest::where('user_id', $this->id)
+        ->where('status', OfflineRequestStatus::PENDING)
+        ->exists();
+    }
+  */
 
-/*
-  public function activeSubscription()
-  {
-    return $this->subscriptions()
-      ->where('status', SubscriptionStatus::ACTIVE)
-      ->where('end_date', '>=', now()->toDateString())
-      ->first();
-  }
-*/
+  /*
+    public function activeSubscription()
+    {
+      return $this->subscriptions()
+        ->where('status', SubscriptionStatus::ACTIVE)
+        ->where('end_date', '>=', now()->toDateString())
+        ->first();
+    }
+  */
 
-/*
-  public function subscriptions()
-  {
-    return $this->hasMany(Subscription::class);
-  }
-*/
+  /*
+    public function subscriptions()
+    {
+      return $this->hasMany(Subscription::class);
+    }
+  */
 
   public function getFullNameAttribute()
-{
+  {
     return trim("{$this->first_name} {$this->last_name}");
-}
+  }
 
   public function getNameAttribute()
-{
+  {
     return $this->getFullNameAttribute();
-}
+  }
 
 
   //Tenant Specific
@@ -446,132 +471,132 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->created_by_id ?? 1; // Fallback to first user
   }
 
-    public function dateFormat($date)
-    {
-        return \Carbon\Carbon::parse($date)->format('M d, Y');
-    }
-    public function documentRequests()
-    {
-        return $this->hasMany(DocumentRequest::class);
+  public function dateFormat($date)
+  {
+    return \Carbon\Carbon::parse($date)->format('M d, Y');
+  }
+  public function documentRequests()
+  {
+    return $this->hasMany(DocumentRequest::class);
+  }
+
+  public function site()
+  {
+    return $this->belongsTo(Site::class, 'site_id');
+  }
+
+  /**
+   * Check if multiple check-in/out is enabled for the user.
+   * Priorities: Unit Override > Role Setting
+   */
+  public function isMultiCheckInOutEnabled(): bool
+  {
+    if ($this->site_id) {
+      $site = $this->site;
+      if ($site && !is_null($site->is_multiple_check_in_enabled)) {
+        return (bool) $site->is_multiple_check_in_enabled;
+      }
     }
 
-    public function site()
-    {
-        return $this->belongsTo(Site::class, 'site_id');
+    $role = $this->roles->first();
+    return $role ? (bool) $role->is_multiple_check_in_enabled : false;
+  }
+
+  /**
+   * Check if auto check-out is enabled for the user.
+   * Priorities: Unit Override > Global Setting
+   */
+  public function isAutoCheckOutEnabled(): bool
+  {
+    if ($this->site_id) {
+      $site = $this->site;
+      if ($site && !is_null($site->is_auto_check_out_enabled)) {
+        return (bool) $site->is_auto_check_out_enabled;
+      }
     }
 
-    /**
-     * Check if multiple check-in/out is enabled for the user.
-     * Priorities: Unit Override > Role Setting
-     */
-    public function isMultiCheckInOutEnabled(): bool
-    {
-        if ($this->site_id) {
-            $site = $this->site;
-            if ($site && !is_null($site->is_multiple_check_in_enabled)) {
-                return (bool) $site->is_multiple_check_in_enabled;
-            }
-        }
-        
-        $role = $this->roles->first();
-        return $role ? (bool) $role->is_multiple_check_in_enabled : false;
+    $settings = Settings::first();
+    return $settings ? (bool) $settings->is_auto_check_out_enabled : false;
+  }
+
+  /**
+   * Check if biometric verification is enabled for the user.
+   * Priorities: Unit Override > Global Setting
+   */
+  public function isBiometricVerificationEnabled(): bool
+  {
+    if ($this->site_id) {
+      $site = $this->site;
+      if ($site && !is_null($site->is_biometric_verification_enabled)) {
+        return (bool) $site->is_biometric_verification_enabled;
+      }
     }
 
-    /**
-     * Check if auto check-out is enabled for the user.
-     * Priorities: Unit Override > Global Setting
-     */
-    public function isAutoCheckOutEnabled(): bool
-    {
-        if ($this->site_id) {
-            $site = $this->site;
-            if ($site && !is_null($site->is_auto_check_out_enabled)) {
-                return (bool) $site->is_auto_check_out_enabled;
-            }
-        }
-        
-        $settings = Settings::first();
-        return $settings ? (bool) $settings->is_auto_check_out_enabled : false;
-    }
+    $settings = Settings::first();
+    return $settings ? (bool) $settings->is_biometric_verification_enabled : false;
+  }
 
-    /**
-     * Check if biometric verification is enabled for the user.
-     * Priorities: Unit Override > Global Setting
-     */
-    public function isBiometricVerificationEnabled(): bool
-    {
-        if ($this->site_id) {
-            $site = $this->site;
-            if ($site && !is_null($site->is_biometric_verification_enabled)) {
-                return (bool) $site->is_biometric_verification_enabled;
-            }
-        }
-        
-        $settings = Settings::first();
-        return $settings ? (bool) $settings->is_biometric_verification_enabled : false;
-    }
+  public function designation()
+  {
+    return $this->belongsTo(Designation::class, 'designation_id');
+  }
 
-    public function designation()
-    {
-        return $this->belongsTo(Designation::class, 'designation_id');
-    }
+  public function assets()
+  {
+    return $this->hasMany(Asset::class, 'assigned_to');
+  }
 
-    public function assets()
-    {
-        return $this->hasMany(Asset::class, 'assigned_to');
-    }
+  public function currentAssets()
+  {
+    return $this->assets()->where('status', 'assigned');
+  }
 
-    public function currentAssets()
-    {
-        return $this->assets()->where('status', 'assigned');
-    }
+  /**
+   * Get the display name of the user's primary role.
+   */
+  public function getRoleDisplayNameAttribute(): string
+  {
+    $role = $this->roles->first();
+    return $role && !empty($role->display_name) ? $role->display_name : 'No Role';
+  }
 
-    /**
-     * Get the display name of the user's primary role.
-     */
-    public function getRoleDisplayNameAttribute(): string
-    {
-        $role = $this->roles->first();
-        return $role && !empty($role->display_name) ? $role->display_name : 'No Role';
-    }
+  public function payslips()
+  {
+    return $this->hasMany(Payslip::class, 'user_id');
+  }
 
-    public function payslips()
-    {
-        return $this->hasMany(Payslip::class, 'user_id');
-    }
+  public function bankAccount()
+  {
+    return $this->hasOne(BankAccount::class, 'user_id');
+  }
 
-    public function bankAccount()
-    {
-        return $this->hasOne(BankAccount::class, 'user_id');
-    }
+  public function department()
+  {
+    return $this->belongsTo(Department::class, 'department_id');
+  }
 
-    public function department()
-    {
-        return $this->belongsTo(Department::class, 'department_id');
-    }
+  public function leavePolicyProfile()
+  {
+    return $this->belongsTo(LeavePolicyProfile::class, 'leave_policy_profile_id');
+  }
 
-    public function leavePolicyProfile()
-    {
-        return $this->belongsTo(LeavePolicyProfile::class, 'leave_policy_profile_id');
-    }
+  public function leaveBalances()
+  {
+    return $this->hasMany(LeaveBalance::class, 'user_id');
+  }
 
-    public function leaveBalances()
-    {
-        return $this->hasMany(LeaveBalance::class, 'user_id');
-    }
+  public function attendance()
+  {
+    return $this->hasMany(Attendance::class);
+  }
 
-    public function attendance()
-    {
-        return $this->hasMany(Attendance::class);
-    }
+  public function attendances()
+  {
+    return $this->hasMany(Attendance::class);
+  }
 
-    public function attendances()
-    {
-        return $this->hasMany(Attendance::class);
-    }
-
-    public function leaveRequests()
-    {
-        return $this->hasMany(LeaveRequest::class);
-    }
+  public function leaveRequests()
+  {
+    return $this->hasMany(LeaveRequest::class);
+  }
 }

@@ -26,11 +26,19 @@ class JobController extends Controller
     public function index($lang = 'en')
     {
         if (Auth::user()->can('Manage Job')) {
-            $jobs = Job::where('created_by', '=', Auth::user()->creatorId())->get();
+            $jobs = Job::where('created_by', '=', Auth::user()->creatorId())->latest()->get();
 
-            $data['total']     = Job::where('created_by', '=', Auth::user()->creatorId())->count();
-            $data['active']    = Job::where('status', 'active')->where('created_by', '=', Auth::user()->creatorId())->count();
-            $data['in_active'] = Job::where('status', 'in_active')->where('created_by', '=', Auth::user()->creatorId())->count();
+            $stats = Job::where('created_by', '=', Auth::user()->creatorId())
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active,
+                    SUM(CASE WHEN status = 'in_active' THEN 1 ELSE 0 END) as in_active
+                ")
+                ->first();
+
+            $data['total']     = $stats->total ?? 0;
+            $data['active']    = $stats->active ?? 0;
+            $data['in_active'] = $stats->in_active ?? 0;
             $Offerletter = GenerateOfferLetter::all();
             $currOfferletterTempLang = GenerateOfferLetter::where('created_by',  Auth::user()->id)->where('lang', $lang)->first();
 
@@ -232,7 +240,7 @@ class JobController extends Controller
             $query->where('branch', request()->location);
         }
 
-        $jobs = $query->get();
+        $jobs = $query->paginate(10);
         
         $categories = \App\Models\JobCategory::all();
         $locations = \App\Models\Site::where('status', 1)->get();

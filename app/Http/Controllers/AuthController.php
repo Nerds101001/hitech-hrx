@@ -207,7 +207,6 @@ class AuthController extends Controller
 
             if (in_array($userStatus, [
               \App\Enums\UserAccountStatus::ONBOARDING->value,
-              \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED->value,
               \App\Enums\UserAccountStatus::ONBOARDING_REQUESTED->value
             ])) {
               return redirect()->route('onboarding.form');
