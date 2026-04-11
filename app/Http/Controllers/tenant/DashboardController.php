@@ -133,22 +133,24 @@ class DashboardController extends Controller
       $upcomingBirthdays = User::whereNotNull('dob')
         ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
         ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
-        ->take(6)
         ->get()
+        ->unique('id')
+        ->take(6)
         ->map(function ($u) use ($todayMd) {
-        $u->is_today = (Carbon::parse($u->dob)->format('md') === $todayMd);
-        return $u;
-      });
+          $u->is_today = (Carbon::parse($u->dob)->format('md') === $todayMd);
+          return $u;
+        });
 
       $upcomingAnniversaries = User::whereNotNull('date_of_joining')
         ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
         ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
-        ->take(6)
         ->get()
+        ->unique('id')
+        ->take(6)
         ->map(function ($u) use ($todayMd) {
-        $u->is_today = (Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
-        return $u;
-      });
+          $u->is_today = (Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
+          return $u;
+        });
 
       // Extra Stats for Suggestions
       $absentCount = max(0, $active - $presentUsersCount - $onLeaveUsersCount);

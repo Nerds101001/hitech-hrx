@@ -1801,6 +1801,47 @@ class EmployeeController extends Controller
   }
 
   /**
+   * Display upcoming birthdays and anniversaries for the next 30 days.
+   */
+  public function celebrations()
+  {
+    $todayMd = now()->format('md');
+    $thirtyDaysLaterMd = now()->addDays(30)->format('md');
+
+    // Show all employees as requested
+    $users = User::all()
+      ->unique('id');
+
+    $birthdays = $users->filter(function($u) use ($todayMd, $thirtyDaysLaterMd) {
+        if (!$u->dob) return false;
+        $md = Carbon::parse($u->dob)->format('md');
+        if ($todayMd <= $thirtyDaysLaterMd) {
+            return $md >= $todayMd && $md <= $thirtyDaysLaterMd;
+        }
+        // Handles year crossover
+        return $md >= $todayMd || $md <= $thirtyDaysLaterMd;
+    })->sortBy(function($u) {
+        $md = Carbon::parse($u->dob)->format('md');
+        // If md is less than today, it's for next year's window (if crossover)
+        return $md < now()->format('md') ? '1' . $md : '0' . $md;
+    });
+
+    $anniversaries = $users->filter(function($u) use ($todayMd, $thirtyDaysLaterMd) {
+        if (!$u->date_of_joining) return false;
+        $md = Carbon::parse($u->date_of_joining)->format('md');
+        if ($todayMd <= $thirtyDaysLaterMd) {
+            return $md >= $todayMd && $md <= $thirtyDaysLaterMd;
+        }
+        return $md >= $todayMd || $md <= $thirtyDaysLaterMd;
+    })->sortBy(function($u) {
+        $md = Carbon::parse($u->date_of_joining)->format('md');
+        return $md < now()->format('md') ? '1' . $md : '0' . $md;
+    });
+
+    return view('tenant.employees.celebrations', compact('birthdays', 'anniversaries'));
+  }
+
+  /**
    * Update the authenticated user's profile.
    */
   public function updateMyProfile(Request $request)

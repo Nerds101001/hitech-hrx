@@ -460,6 +460,8 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
       'children_details' => 'array',
       'onboarding_rejected_sections' => 'array',
       'status' => UserAccountStatus::class,
+      'date_of_joining' => 'date',
+      'anniversary_date' => 'date',
     ];
   }
 

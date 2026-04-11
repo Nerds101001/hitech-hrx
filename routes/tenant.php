@@ -540,6 +540,7 @@ Route::middleware([
       // Singular named routes (legacy/navbar support)
       Route::name('employee.')->group(function() {
         Route::get('myProfile', [EmployeeController::class, 'myProfile'])->name('myProfile');
+        Route::get('celebrations', [EmployeeController::class, 'celebrations'])->name('celebrations');
         Route::post('changeEmployeeProfilePicture', [EmployeeController::class, 'changeEmployeeProfilePicture'])->name('changeEmployeeProfilePicture');
       });
 

@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="icon-wrap-sm bg-pink-light text-pink"><i class="bx bx-cake"></i></div>
           <h5 class="title mb-0">Birthdays</h5>
         </div>
-        <a href="javascript:void(0);" class="small fw-bold text-teal">View All</a>
+        <a href="{{ route('employee.celebrations') }}" class="small fw-bold text-teal">View All</a>
       </div>
       <div class="scroll-container-fixed">
         @php
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="icon-wrap-sm bg-purple-light text-purple"><i class="bx bx-party"></i></div>
           <h5 class="title mb-0">Work Anniversaries</h5>
         </div>
-        <a href="javascript:void(0);" class="small fw-bold text-teal">View All</a>
+        <a href="{{ route('employee.celebrations') }}" class="small fw-bold text-teal">View All</a>
       </div>
       <div class="scroll-container-fixed">
         @php
@@ -280,8 +280,8 @@ document.addEventListener('DOMContentLoaded', function() {
              </div>
           </div>
           <div class="d-flex gap-2">
-            <a href="{{ route('leaveRequests.index') }}" class="btn btn-sm btn-icon btn-success shadow-none" title="Manage"><i class="bx bx-check"></i></a>
-            <a href="{{ route('leaveRequests.index') }}" class="btn btn-sm btn-icon btn-danger shadow-none" title="Manage"><i class="bx bx-x"></i></a>
+            <a href="{{ $approval['type'] == 'Leave' ? route('leaveRequests.index') : ($approval['type'] == 'Expense' ? route('expenseRequests.index') : ($approval['type'] == 'Document' ? route('documentmanagement.index') : route('loan.index'))) }}" class="btn btn-sm btn-icon btn-success shadow-none" title="Manage"><i class="bx bx-check"></i></a>
+            <a href="{{ $approval['type'] == 'Leave' ? route('leaveRequests.index') : ($approval['type'] == 'Expense' ? route('expenseRequests.index') : ($approval['type'] == 'Document' ? route('documentmanagement.index') : route('loan.index'))) }}" class="btn btn-sm btn-icon btn-danger shadow-none" title="Manage"><i class="bx bx-x"></i></a>
           </div>
         </div>
         @empty
@@ -310,8 +310,9 @@ document.addEventListener('DOMContentLoaded', function() {
          <h5 class="title mb-0">Organization Structure</h5>
        </div>
        <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 350px;">
-         <div id="departmentChart"></div>
-         <div class="dept-legend-custom w-100 mt-4 px-3">
+        <div id="departmentChart"></div>
+        <a href="{{ route('departments.index') }}" class="small fw-bold text-teal mt-3">View Structure</a>
+        <div class="dept-legend-custom w-100 mt-4 px-3">
             @foreach($departmentData->take(4) as $index => $dept)
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="small fw-bold text-muted"><span class="dot" style="background: {{ ['#004D4D', '#00897b', '#00D2D2', '#D1FAE5'][$index % 4] }}"></span> {{ $dept['name'] }}</span>
@@ -351,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hitech-stat-card dashboard-variant card-blue uniform-card shadow-sm animate__animated animate__fadeInUp" style="animation-delay: 0.55s">
       <div class="hitech-card-header-inner mb-4 d-flex justify-content-between align-items-center">
         <h5 class="title mb-0">Open Positions</h5>
-        <a href="{{ url('job') }}" class="small fw-bold text-teal">View All</a>
+        <a href="{{ route('job.index') }}" class="small fw-bold text-teal">View All</a>
       </div>
       <div class="list-scroll-p pe-2">
         @foreach($activeJobs as $job)
@@ -374,7 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="hitech-stat-card dashboard-variant card-amber uniform-card shadow-sm animate__animated animate__fadeInUp" style="animation-delay: 0.6s">
       <div class="hitech-card-header-inner mb-4 d-flex justify-content-between align-items-center">
         <h5 class="title mb-0">Notice & Holidays</h5>
-        <a href="{{ url('announcements') }}" class="small fw-bold text-teal">All</a>
+        <a href="{{ route('employee-lifecycle.announcements') }}" class="small fw-bold text-teal">All</a>
       </div>
       <div class="list-scroll-p pe-2">
         {{-- Mix of Announcements and Holidays --}}
@@ -411,8 +412,8 @@ document.addEventListener('DOMContentLoaded', function() {
     <a href="javascript:void(0);" class="fab-btn-p" data-label="Onboarding" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal"><i class="bx bx-paper-plane"></i></a>
     <a href="{{ route('job-application.create') }}" class="fab-btn-p" data-label="Add Candidate"><i class="bx bx-user-plus"></i></a>
     <a href="{{ route('job.create') }}" class="fab-btn-p" data-label="Post Job"><i class="bx bx-briefcase-alt-2"></i></a>
-    <a href="{{ url('holidays') }}" class="fab-btn-p" data-label="Holiday"><i class="bx bx-calendar-star"></i></a>
-    <a href="{{ url('announcements') }}" class="fab-btn-p" data-label="Announce"><i class="bx bx-bell"></i></a>
+    <a href="{{ route('holidays.index') }}" class="fab-btn-p" data-label="Holiday"><i class="bx bx-calendar-star"></i></a>
+    <a href="{{ route('employee-lifecycle.announcements') }}" class="fab-btn-p" data-label="Announce"><i class="bx bx-bell"></i></a>
   </div>
 </div>
 
