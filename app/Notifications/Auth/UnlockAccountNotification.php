@@ -37,13 +37,10 @@ class UnlockAccountNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('🔐 Your Account Unlock Link - Hitech HRX')
-            ->greeting('Hello!')
-            ->line('We received a request to unlock your Hitech HRX account.')
-            ->line('If this was you, please click the button below to restore your access instantly.')
-            ->action('Unlock My Account', $this->unlockUrl)
-            ->line('This secure link will expire in 15 minutes.')
-            ->line('If you did not request this, please ignore this email and your account will remain locked for your safety.');
+            ->subject('🔐 Your Account Unlock Link - Hi Tech Group')
+            ->view('emails.account_unlock', [
+                'unlockUrl' => $this->unlockUrl
+            ]);
     }
 
     /**

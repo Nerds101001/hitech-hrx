@@ -74,6 +74,7 @@
                         'Settings' => ['hr.settings.view', 'hr.settings.create', 'hr.settings.edit', 'hr.settings.delete', 'hr.settings.manage'],
                         'Approvals' => ['hr.approvals.view', 'hr.approvals.create', 'hr.approvals.edit', 'hr.approvals.delete'],
                         'Assets' => ['assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.index'],
+                        'AI & Library Vault' => ['library.view', 'library.upload', 'bot.chat', 'ai.training.manage'],
                         'LMS' => ['lms.courses.view', 'lms.courses.create', 'lms.courses.edit', 'lms.courses.delete', 'lms.courses.index'],
                         'System Logs' => ['auditLogs.view', 'auditLogs.create', 'auditLogs.edit', 'auditLogs.delete', 'auditLogs.index']
                     ];
@@ -101,6 +102,12 @@
                                     if(str_contains(strtolower($p), $action)) {
                                         $matchedPerm = $p;
                                         break;
+                                    }
+                                    // Custom mappings for specific modules that don't follow .view, .create, etc.
+                                    if($moduleName == 'AI & Library Vault') {
+                                        if($action == 'create' && str_contains($p, 'upload')) { $matchedPerm = $p; break; }
+                                        if($action == 'edit' && str_contains($p, 'chat')) { $matchedPerm = $p; break; }
+                                        if($action == 'delete' && str_contains($p, 'manage')) { $matchedPerm = $p; break; }
                                     }
                                 }
                                 if(!$matchedPerm && $action == 'view' && count($perms) > 0) $matchedPerm = $perms[0];

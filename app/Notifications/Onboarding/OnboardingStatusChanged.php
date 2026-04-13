@@ -52,16 +52,13 @@ class OnboardingStatusChanged extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage)
+        return (new MailMessage)
             ->subject($this->title)
-            ->greeting('Hi ' . $this->user->first_name . ',')
-            ->line($this->message);
-
-        if ($this->notes) {
-            $mail->line('Notes from HR: ' . $this->notes);
-        }
-
-        return $mail->action('View Dashboard', url('/login'));
+            ->view('emails.onboarding_status', [
+                'user'   => $this->user,
+                'status' => $this->status,
+                'notes'  => $this->notes,
+            ]);
     }
 
     /**

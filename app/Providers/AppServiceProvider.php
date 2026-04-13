@@ -24,6 +24,10 @@ class AppServiceProvider extends ServiceProvider
    */
   public function boot(): void
   {
+    \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
+        return $user->hasRole(['admin', 'Admin', 'super_admin']) ? true : null;
+    });
+
     Paginator::useBootstrapFive();
 
     Vite::useStyleTagAttributes(function (?string $src, string $url, ?array $chunk, ?array $manifest) {

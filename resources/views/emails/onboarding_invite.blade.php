@@ -380,7 +380,7 @@
 
     <p style="font-size: 12.5px; color: #94a3b8; text-align: center; line-height: 1.7;">
       If you did not expect this email or believe this was sent in error, please ignore it or contact HR at
-      <a href="mailto:hr@hitechgroup.in" style="color: #008080;">hr@hitechgroup.in</a>
+      <a href="mailto:suchita@rustx.com" style="color: #008080;">suchita@rustx.com</a>
     </p>
   </div>
 
@@ -393,7 +393,7 @@
     <div class="footer-links">
       <a href="{{ url('/') }}">Portal</a>
       <a href="{{ url('/onboarding/status') }}">Onboarding Status</a>
-      <a href="mailto:hr@hitechgroup.in">Contact HR</a>
+      <a href="mailto:suchita@rustx.com">Contact HR</a>
     </div>
     <p class="footer-copy">(c) {{ date('Y') }} Hi Tech Group. All rights reserved.<br>
     Plot 6 IMT Manesar, Gurugram, Haryana - +91 9814215000</p>

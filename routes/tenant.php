@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 use App\Http\Controllers\AccountController;
@@ -35,6 +34,8 @@ use App\Http\Controllers\tenant\MyAssetsController;
 use App\Http\Controllers\tenant\OrganisationHierarchyController;
 use App\Http\Controllers\tenant\PayrollController;
 use App\Http\Controllers\tenant\PermissionController;
+use App\Http\Controllers\tenant\DigitalLibraryController;
+use App\Http\Controllers\tenant\ProbationController;
 use App\Http\Controllers\tenant\QrGroupController;
 use App\Http\Controllers\tenant\ReportController;
 use App\Http\Controllers\tenant\UnitController;
@@ -53,6 +54,7 @@ use App\Http\Controllers\tenant\JobStageController;
 use App\Http\Controllers\tenant\JobApplicationController;
 use App\Http\Controllers\tenant\CustomQuestionController;
 use App\Http\Controllers\tenant\InterviewScheduleController;
+use App\Http\Controllers\tenant\AiTrainingController;
 use App\Constants\ModuleConstants;
 use App\Services\AddonService\IAddonService;
 use Illuminate\Support\Facades\Route;
@@ -133,6 +135,20 @@ Route::middleware([
     Route::get('getNotificationsAjax', [NotificationController::class, 'getNotificationsAjax'])->name('tenant.notifications.getNotificationsAjax');
     Route::get('/lang/{locale}', [LanguageController::class, 'swap']);
     Route::get('/getSearchDataAjax', [BaseController::class, 'getSearchDataAjax'])->name('search.Ajax');
+
+    // --- PROBATION MANAGEMENT ---
+    Route::prefix('probation')->name('probation.')->group(function() {
+        Route::get('evaluate/{id}', [ProbationController::class, 'showEvaluationForm'])->name('evaluate');
+        Route::post('store/{id}', [ProbationController::class, 'storeEvaluation'])->name('store');
+        
+        // HR Review Routes
+        Route::group(['middleware' => ['role:hr|admin']], function() {
+            Route::get('evaluations', [ProbationController::class, 'index'])->name('index');
+            Route::get('review/{id}', [ProbationController::class, 'review'])->name('review');
+            Route::post('finalize/{id}', [ProbationController::class, 'finalize'])->name('finalize');
+        });
+    });
+
 
     // --- AUTH ACTIONS ---
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
@@ -409,6 +425,7 @@ Route::middleware([
           Route::post('approve/{id}', [EmployeeController::class, 'approveOnboarding'])->name('approve');
           Route::post('resubmit/{id}', [EmployeeController::class, 'requestResubmission'])->name('resubmit');
       });
+
       });
       
       // Singular named routes for dropdowns and profile
@@ -533,35 +550,60 @@ Route::middleware([
     Route::resource('interview-schedule', InterviewScheduleController::class)->except(['create']);
     Route::get('interview-schedule/create/{candidate?}', [InterviewScheduleController::class, 'create'])->name('interview-schedule.create');
 
-    }); // Close the admin|hr|manager group starting at line 67
+    }); // Close the admin|hr|manager group starting at line 108
 
-    // Employee Profile & Self-Update Routes - Accessible by all roles
-    Route::middleware(['web', 'auth', 'role:employee|manager|Admin|admin|hr'])->prefix('employees')->group(function () {
-      // Singular named routes (legacy/navbar support)
-      Route::name('employee.')->group(function() {
-        Route::get('myProfile', [EmployeeController::class, 'myProfile'])->name('myProfile');
-        Route::get('celebrations', [EmployeeController::class, 'celebrations'])->name('celebrations');
-        Route::post('changeEmployeeProfilePicture', [EmployeeController::class, 'changeEmployeeProfilePicture'])->name('changeEmployeeProfilePicture');
-      });
+    // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
+    Route::middleware(['web', 'auth'])->group(function() {
 
-      // Plural named routes (update form support)
-      Route::name('employees.')->group(function() {
-        Route::post('updateBasicInfo', [EmployeeController::class, 'updateBasicInfo'])->name('updateBasicInfo');
-        Route::post('addOrUpdateBankAccount', [EmployeeController::class, 'addOrUpdateBankAccount'])->name('addOrUpdateBankAccount');
-        Route::post('addOrUpdateDocument', [EmployeeController::class, 'addOrUpdateDocument'])->name('addOrUpdateDocument');
-      });
+        // Digital Library - Viewable by all with permission
+        Route::middleware(['can:library.view'])->prefix('digital-library')->name('library.')->group(function() {
+            Route::get('/', [DigitalLibraryController::class, 'index'])->name('index');
+            Route::get('access/{id}', [DigitalLibraryController::class, 'access'])->name('access');
+            
+            // AI Chatbot - Visible to all with library access
+            Route::post('chat', [DigitalLibraryController::class, 'chat'])->name('chat')->middleware('can:bot.chat');
+
+            // Admin/HR Upload Routes
+            Route::middleware(['can:library.upload'])->group(function() {
+                Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
+                Route::post('store', [DigitalLibraryController::class, 'store'])->name('store');
+                Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulkStore');
+            });
+        });
+
+        // AI Training (Admin Only by permission)
+        Route::middleware(['can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {
+            Route::get('/', [AiTrainingController::class, 'index'])->name('index');
+            Route::post('/store', [AiTrainingController::class, 'store'])->name('store');
+            Route::post('/update-instructions', [AiTrainingController::class, 'updateInstructions'])->name('update-instructions');
+            Route::delete('/destroy/{id}', [AiTrainingController::class, 'destroy'])->name('destroy');
+        });
+
+        // Employee Profile & Self-Update Routes
+        Route::prefix('employees')->group(function () {
+          Route::name('employee.')->group(function() {
+            Route::get('myProfile', [EmployeeController::class, 'myProfile'])->name('myProfile');
+            Route::get('celebrations', [EmployeeController::class, 'celebrations'])->name('celebrations');
+            Route::post('changeEmployeeProfilePicture', [EmployeeController::class, 'changeEmployeeProfilePicture'])->name('changeEmployeeProfilePicture');
+          });
+
+          Route::name('employees.')->group(function() {
+            Route::post('updateBasicInfo', [EmployeeController::class, 'updateBasicInfo'])->name('updateBasicInfo');
+            Route::post('addOrUpdateBankAccount', [EmployeeController::class, 'addOrUpdateBankAccount'])->name('addOrUpdateBankAccount');
+            Route::post('addOrUpdateDocument', [EmployeeController::class, 'addOrUpdateDocument'])->name('addOrUpdateDocument');
+          });
+        });
+
+        // My Assets
+        Route::prefix('my-assets')->name('myAssets.')->group(function () {
+          Route::get('', [MyAssetsController::class, 'index'])->name('index');
+          Route::get('{id}', [MyAssetsController::class, 'show'])->name('show');
+          Route::get('getListAjax', [MyAssetsController::class, 'getListAjax'])->name('getListAjax');
+          Route::post('request-maintenance/{id}', [MyAssetsController::class, 'requestMaintenance'])->name('requestMaintenance');
+        });
     });
 
-    // My Assets (Employee) - Moved outside the admin|hr|manager group to allow employee access
-
-    Route::middleware(['web', 'auth', 'role:employee|manager|Admin|admin|hr'])->prefix('my-assets')->name('myAssets.')->group(function () {
-      Route::get('', [MyAssetsController::class, 'index'])->name('index');
-      Route::get('{id}', [MyAssetsController::class, 'show'])->name('show');
-      Route::get('getListAjax', [MyAssetsController::class, 'getListAjax'])->name('getListAjax');
-      Route::post('request-maintenance/{id}', [MyAssetsController::class, 'requestMaintenance'])->name('requestMaintenance');
-    });
-
-    // Re-open admin|hr|manager group for the remaining sensitive routes
+    // --- RE-OPEN ADMINISTRATIVE ROUTES (Admin/HR/Manager) ---
     Route::middleware([
       'web',
       'auth',
@@ -661,3 +703,5 @@ Route::middleware([
     });
 
 });
+
+

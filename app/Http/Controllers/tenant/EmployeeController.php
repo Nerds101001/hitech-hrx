@@ -1994,6 +1994,7 @@ class EmployeeController extends Controller
         'status' => UserAccountStatus::ONBOARDING,
         'onboarding_at' => now(),
         'onboarding_deadline' => now()->addDays(3),
+        'probation_period_months' => $request->probationPeriodMonths ?? 6,
         'created_by_id' => $authenticatedUser->id,
         'password' => bcrypt($plainPassword),
       ]);
@@ -2538,6 +2539,13 @@ class EmployeeController extends Controller
       // Ensure joining date is never null
       if (empty($user->date_of_joining)) {
         $user->date_of_joining = now()->format('Y-m-d');
+      }
+
+      // Calculate Probation End Date
+      if ($user->probation_period_months > 0) {
+        $user->probation_end_date = \Carbon\Carbon::parse($user->date_of_joining)
+          ->addMonths($user->probation_period_months)
+          ->format('Y-m-d');
       }
 
       // Final check for employee code just in case

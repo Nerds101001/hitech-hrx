@@ -190,7 +190,7 @@
   <div class="email-body">
     <p class="greeting">Hi {{ $user->first_name }},</p>
     <p class="message-text">
-        An administrator has reset your portal password. You can now log in to the <strong>Hitech HRX Portal</strong> using the temporary credentials provided below.
+        An administrator has reset your portal password. You can now log in to the <strong>Hi Tech Group Portal</strong> using the temporary credentials provided below.
     </p>
 
     <div class="info-card">
@@ -204,11 +204,11 @@
     </div>
 
     <p class="warning-text">
-        If you did not request this change or if you believe this is an error, please contact your HR department or the security team immediately at <strong>hr@hitechgroup.in</strong>.
+        If you did not request this change or if you believe this is an error, please contact your HR department or the security team immediately at <strong>suchita@rustx.com</strong>.
     </p>
 
     <hr class="divider">
-    <p style="font-size: 12px; color: #94a3b8; text-align: center;">🛡️ This is an automated security notification from Hi Tech HRX.</p>
+    <p style="font-size: 12px; color: #94a3b8; text-align: center;">🛡️ This is an automated security notification from Hi Tech Group.</p>
   </div>
 
   <div class="email-footer">

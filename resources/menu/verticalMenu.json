@@ -68,6 +68,12 @@
       "icon": "menu-icon tf-icons bx bx-user-plus",
       "name": "Recruitment",
       "slug": "job.index"
+    },
+    {
+      "url": "/ai-training",
+      "name": "Sentinel Bot Training",
+      "icon": "menu-icon bx bx-brain",
+      "slug": "ai-training.index"
     }
   ]
 }

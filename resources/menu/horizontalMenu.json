@@ -28,6 +28,12 @@
           "slug": "employees.index"
         },
         {
+          "url": "/probation/evaluations",
+          "name": "Probation",
+          "icon": "menu-icon bx bx-check-double",
+          "slug": "probation.index"
+        },
+        {
           "name": "Recruitment",
           "icon": "menu-icon bx bx-user-plus",
           "slug": [

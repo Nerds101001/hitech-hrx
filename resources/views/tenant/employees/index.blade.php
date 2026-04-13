@@ -130,7 +130,11 @@
             },
             {
               targets: 5, // Joined
-              render: function (data, type, full, meta) { return `<span class="text-body">${full['joined'] || 'N/A'}</span>`; }
+              render: function (data, type, full, meta) {
+                var date = full['joined'];
+                if (!date || date === 'N/A') return '<span class="text-body">N/A</span>';
+                return `<span class="text-body">${moment(date).format('DD MMM, YYYY')}</span>`;
+              }
             },
             {
               targets: 6, // Actions

@@ -174,7 +174,7 @@
   <div class="email-body">
     <p class="greeting">Hi {{ $user->first_name }},</p>
     <p class="message-text">
-        To ensure your account remains secure, we require a quick verification. Please use the 6-digit code below to finalize your login to the <strong>Hitech HRX Portal</strong>.
+        To ensure your account remains secure, we require a quick verification. Please use the 6-digit code below to finalize your login to the <strong>Hi Tech Group Portal</strong>.
     </p>
 
     <div class="otp-card">
@@ -184,11 +184,11 @@
     </div>
 
     <p class="warning-text">
-        If you did not attempt to log in to your account, please contact our security team immediately at <strong>hr@hitechgroup.in</strong> and consider changing your password.
+        If you did not attempt to log in to your account, please contact our security team immediately at <strong>suchita@rustx.com</strong> and consider changing your password.
     </p>
 
     <hr class="divider">
-    <p style="font-size: 12px; color: #94a3b8; text-align: center;">🛡️ This is a secure notification from Hi Tech HRX.</p>
+    <p style="font-size: 12px; color: #94a3b8; text-align: center;">🛡️ This is a secure notification from Hi Tech Group.</p>
   </div>
 
   <div class="email-footer">

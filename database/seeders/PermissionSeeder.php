@@ -64,6 +64,12 @@ class PermissionSeeder extends Seeder
       ['name' => 'training.manage', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
       ['name' => 'performance.manage', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
       ['name' => 'calendar.manage', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
+      
+      // AI & Library Permissions
+      ['name' => 'library.view', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
+      ['name' => 'library.upload', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
+      ['name' => 'bot.chat', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
+      ['name' => 'ai.training.manage', 'guard_name' => 'web', 'created_at' => now(), 'updated_at' => now()],
     ];
 
     // Insert permissions in batches

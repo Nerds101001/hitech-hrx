@@ -1,0 +1,13 @@
+app/Http/Controllers/tenant/EmployeeController.php
+routes/tenant.php
+resources/views/tenant/users/dashboard/hr-index.blade.php
+resources/views/tenant/employees/celebrations.blade.php
+resources/views/tenant/employee-lifecycle/announcements.blade.php
+resources/views/tenant/employee-lifecycle/complaints.blade.php
+resources/views/tenant/employee-lifecycle/resignations.blade.php
+resources/views/tenant/employee-lifecycle/terminations.blade.php
+resources/views/tenant/employee-lifecycle/transfers.blade.php
+resources/views/tenant/employee-lifecycle/trips.blade.php
+resources/views/tenant/employee-lifecycle/warnings.blade.php
+public/assets/img/celebrations/hero-bg.png
+database/migrations/2026_04_10_163624_add_experience_certificate_to_users_table.php

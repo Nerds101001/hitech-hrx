@@ -401,6 +401,37 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
   </div>
 
+  <div class="col-xl-4">
+    <div class="hitech-stat-card dashboard-variant card-teal uniform-card shadow-sm animate__animated animate__fadeInUp" style="animation-delay: 0.65s">
+      <div class="hitech-card-header-inner mb-4 d-flex justify-content-between align-items-center">
+        <h5 class="title mb-0">Probation Watch</h5>
+        <span class="badge bg-label-teal rounded-pill p-1 px-2 fw-bold" style="font-size: 0.65rem;">{{ $upcomingProbationEnds->count() }} Alert(s)</span>
+      </div>
+      <div class="list-scroll-p pe-2">
+        @forelse($upcomingProbationEnds as $emp)
+        <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-light">
+          <div class="d-flex align-items-center gap-3">
+            <div class="icon-wrap-sm bg-teal-light text-teal rounded-circle" style="width:40px; height:40px;"><i class="bx bx-timer fs-5"></i></div>
+            <div>
+              <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $emp->name }}</h6>
+              <small class="text-muted">{{ \Carbon\Carbon::parse($emp->probation_end_date)->diffForHumans() }}</small>
+            </div>
+          </div>
+          <div class="text-end">
+             <div class="fw-bold text-teal small" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($emp->probation_end_date)->format('M d') }}</div>
+             <small class="text-muted" style="font-size: 0.6rem;">Ends</small>
+          </div>
+        </div>
+        @empty
+        <div class="text-center py-5">
+            <i class="bx bx-check-shield text-teal opacity-50 mb-2" style="font-size: 3rem;"></i>
+            <p class="text-muted small">No probations ending soon</p>
+        </div>
+        @endforelse
+      </div>
+    </div>
+  </div>
+
 </div>
 
 {{-- PIXEL PERFECT FAB --}}

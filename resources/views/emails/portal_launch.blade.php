@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🚀 Hitech HRX Portal is Live! - Welcome to the Future of Work</title>
+  <title>🚀 Hi Tech Group Portal is Live! - Welcome to the Future of Work</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -297,7 +297,7 @@
     </div>
     <div>
       <div class="header-badge">The Wait is Over! 🚀</div>
-      <h1 class="header-title">The Hitech HRX Portal<br>is Now Live!</h1>
+      <h1 class="header-title">The Hi Tech Group Portal<br>is Now Live!</h1>
       <p class="header-subtitle">Welcome to the Next Generation of HR Mastery.</p>
     </div>
   </div>
@@ -306,7 +306,7 @@
   <div class="email-body">
     <p class="greeting">Hi {{ $user->first_name }},</p>
     <p class="message-text">
-      We are thrilled to announce the official launch of the **Hitech HRX Portal** – your new, state-of-the-art gateway to a smarter, faster, and more seamless workplace experience.
+      We are thrilled to announce the official launch of the **Hi Tech Group Portal** – your new, state-of-the-art gateway to a smarter, faster, and more seamless workplace experience.
       <br><br>
       As we kick off this exciting new chapter, we need your help to finalize your onboarding. Please log in today to complete your profile (Personal details, Bank Account, Emergency Contacts, and Documents).
     </p>
@@ -374,7 +374,7 @@
     </div>
 
     <p style="font-size: 14.5px; color: #64748b; line-height: 1.8; margin-bottom: 28px;">
-      We can't wait for you to experience the future of work with Hitech HRX. If you hit any snags, the HR team is standing by to help!
+      We can't wait for you to experience the future of work with Hi Tech Group. If you hit any snags, the HR team is standing by to help!
     </p>
 
     <!-- CTA -->
@@ -386,7 +386,7 @@
 
     <p style="font-size: 12.5px; color: #94a3b8; text-align: center; line-height: 1.7;">
       If you did not expect this email or believe this was sent in error, please ignore it or contact HR at
-      <a href="mailto:hr@hitechgroup.in" style="color: #008080;">hr@hitechgroup.in</a>
+      <a href="mailto:suchita@rustx.com" style="color: #008080;">suchita@rustx.com</a>
     </p>
   </div>
 
@@ -399,7 +399,7 @@
     <div class="footer-links">
       <a href="{{ url('/') }}">Portal</a>
       <a href="{{ url('/onboarding/status') }}">Onboarding Status</a>
-      <a href="mailto:hr@hitechgroup.in">Contact HR</a>
+      <a href="mailto:suchita@rustx.com">Contact HR</a>
     </div>
     <p class="footer-copy">(c) {{ date('Y') }} Hi Tech Group. All rights reserved.<br>
     Plot 6 IMT Manesar, Gurugram, Haryana - +91 9814215000</p>

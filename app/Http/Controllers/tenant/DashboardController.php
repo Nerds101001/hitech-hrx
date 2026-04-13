@@ -152,6 +152,15 @@ class DashboardController extends Controller
           return $u;
         });
 
+      // 8. Upcoming Probation Ends (Past the date + Next 30 Days)
+      $upcomingProbationEnds = User::where('status', UserAccountStatus::ACTIVE)
+        ->whereNotNull('probation_end_date')
+        ->whereNull('probation_confirmed_at')
+        ->where('probation_end_date', '<=', now()->addDays(30)->toDateString())
+        ->with('reportingTo')
+        ->orderBy('probation_end_date')
+        ->get();
+
       // Extra Stats for Suggestions
       $absentCount = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
       $newHiresThisMonth = User::whereMonth('date_of_joining', now()->month)->whereYear('date_of_joining', now()->year)->count();
@@ -263,6 +272,7 @@ class DashboardController extends Controller
         'activeJobsCount' => $activeJobsCount,
         'pendingApprovals' => $pendingApprovals->sortByDesc('raw_date'),
         'trends' => $trends,
+        'upcomingProbationEnds' => $upcomingProbationEnds,
         'upcomingHolidays' => Holiday::where('date', '>=', now()->toDateString())->orderBy('date', 'asc')->take(5)->get(),
         'absentCount' => $absentCount,
         'newHiresThisMonth' => $newHiresThisMonth,

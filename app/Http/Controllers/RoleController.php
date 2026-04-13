@@ -21,11 +21,12 @@ class RoleController extends Controller
     // Group permissions by module/category
     $groupedPermissions = [
         'Dashboard & Stats' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'dashboard')),
-        'Employee Management' => $permissions->filter(fn($p) => str_contains($p->name, 'employees.') || str_contains(strtolower($p->name), 'employee') || str_contains(strtolower($p->name), 'training')),
+        'Employee Management' => $permissions->filter(fn($p) => str_contains($p->name, 'employees.') || str_contains(strtolower($p->name), 'employee')),
         'Attendance & Visits' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'attendance') || str_contains(strtolower($p->name), 'visit')),
         'Leave & Holidays' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'leave') || str_contains(strtolower($p->name), 'holiday')),
         'Payroll & Finance' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'payroll') || str_contains(strtolower($p->name), 'expense') || str_contains(strtolower($p->name), 'loan') || str_contains(strtolower($p->name), 'adjustment')),
         'Recruitment' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'job') || str_contains(strtolower($p->name), 'interview') || str_contains(strtolower($p->name), 'recruitment') || str_contains(strtolower($p->name), 'onboard')),
+        'AI & Intelligent Vault' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'library') || str_contains(strtolower($p->name), 'bot') || str_contains(strtolower($p->name), 'ai')),
         'Assets & Documents' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'asset') || str_contains(strtolower($p->name), 'document')),
         'Organization' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'department') || str_contains(strtolower($p->name), 'designation') || str_contains(strtolower($p->name), 'team') || str_contains(strtolower($p->name), 'unit') || str_contains(strtolower($p->name), 'hierarchy')),
         'System & Settings' => $permissions->filter(fn($p) => str_contains(strtolower($p->name), 'settings') || str_contains(strtolower($p->name), 'roles') || str_contains(strtolower($p->name), 'permission') || str_contains(strtolower($p->name), 'audit') || str_contains(strtolower($p->name), 'device') || str_contains(strtolower($p->name), 'geofence') || str_contains(strtolower($p->name), 'ipgroup') || str_contains(strtolower($p->name), 'qrcode') || str_contains(strtolower($p->name), 'sos'))

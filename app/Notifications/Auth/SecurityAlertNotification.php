@@ -39,15 +39,9 @@ class SecurityAlertNotification extends Notification
         return (new MailMessage)
             ->error()
             ->subject('🚩 URGENT: Security Alert - ' . $this->details['reason'])
-            ->greeting('Security Alert Triggered!')
-            ->line('The system has detected a brute force attempt and taken defensive action.')
-            ->line('**Target Email:** ' . $this->details['email'])
-            ->line('**Source IP Address:** ' . $this->details['ip'])
-            ->line('**Action Taken:** ' . $this->details['action'])
-            ->line('**Lock Duration:** 40 Minutes')
-            ->line('**Timestamp:** ' . now()->toDayDateTimeString())
-            ->action('Review Audit Logs', url('/auditLogs'))
-            ->line('This is an automated security measure from Hitech HRX Portal.');
+            ->view('emails.security_alert', [
+                'details' => $this->details
+            ]);
     }
 
     /**

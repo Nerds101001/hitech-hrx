@@ -125,6 +125,14 @@
                 <input type="number" name="baseSalary" class="form-control form-control-hitech" placeholder="Optional CTC">
               </div>
             </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech">Probation Period (Months) <span class="text-danger">*</span></label>
+              <div class="input-group input-group-merge hitech-input-group">
+                <span class="input-group-text"><i class="bx bx-time-five"></i></span>
+                <input type="number" name="probationPeriodMonths" class="form-control form-control-hitech" value="6" required min="0" max="24">
+              </div>
+            </div>
           </div>
 
           <div class="d-flex justify-content-end gap-3 mt-4 pt-2">

@@ -104,6 +104,16 @@
       ]
     },
     {
+      "url": "/probation/evaluations",
+      "name": "Probation",
+      "icon": "menu-icon bx bx-check-double",
+      "slug": "probation.index",
+      "roles": [
+        "admin",
+        "hr"
+      ]
+    },
+    {
       "name": "Recruitment",
       "icon": "menu-icon bx bx-user-plus",
       "slug": [
@@ -317,6 +327,29 @@
           "name": "Acknowledgments",
           "icon": "menu-icon bx bx-check-circle",
           "slug": "hrpolicies.policy-acknowledgments.index"
+        }
+      ]
+    },
+    {
+      "name": "Intelligent Vault",
+      "icon": "menu-icon bx bx-library",
+      "permission": "library.view",
+      "slug": [
+        "library.index",
+        "ai-training.index"
+      ],
+      "submenu": [
+        {
+          "url": "/digital-library",
+          "name": "Digital Library",
+          "slug": "library.index",
+          "permission": "library.view"
+        },
+        {
+          "url": "/ai-training",
+          "name": "Bot Training",
+          "slug": "ai-training.index",
+          "permission": "ai.training.manage"
         }
       ]
     },

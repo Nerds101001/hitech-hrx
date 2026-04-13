@@ -57,6 +57,7 @@
                     <th class="text-center">@lang('Create')</th>
                     <th class="text-center">@lang('Edit')</th>
                     <th class="text-center">@lang('Delete')</th>
+                    <th class="text-center">@lang('Manage')</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -70,6 +71,7 @@
                         'Settings' => ['hr.settings.view', 'hr.settings.create', 'hr.settings.edit', 'hr.settings.delete', 'hr.settings.manage'],
                         'Approvals' => ['hr.approvals.view', 'hr.approvals.create', 'hr.approvals.edit', 'hr.approvals.delete'],
                         'Assets' => ['assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.index'],
+                        'AI & Library Vault' => ['library.view', 'library.upload', 'bot.chat', 'ai.training.manage'],
                         'LMS' => ['lms.courses.view', 'lms.courses.create', 'lms.courses.edit', 'lms.courses.delete', 'lms.courses.index'],
                         'System Logs' => ['auditLogs.view', 'auditLogs.create', 'auditLogs.edit', 'auditLogs.delete', 'auditLogs.index']
                     ];
@@ -89,12 +91,21 @@
                             <span class="checkmark"></span>
                         </label>
                     </td>
-                    @foreach(['view', 'create', 'edit', 'delete'] as $action)
+                    @foreach(['view', 'create', 'edit', 'delete', 'manage'] as $action)
                         <td class="text-center">
                             @php
                                 $matchedPerm = null;
                                 foreach($perms as $p) {
-                                    if(str_contains(strtolower($p), $action)) {
+                                    $pLower = strtolower($p);
+                                    
+                                    // Custom mappings for specific modules
+                                    if($moduleName == 'AI & Library Vault') {
+                                        if($action == 'create' && str_contains($pLower, 'upload')) { $matchedPerm = $p; break; }
+                                        if($action == 'edit' && str_contains($pLower, 'chat')) { $matchedPerm = $p; break; }
+                                        if($action == 'manage' && str_contains($pLower, 'manage')) { $matchedPerm = $p; break; }
+                                    }
+                                    
+                                    if(str_contains($pLower, $action)) {
                                         $matchedPerm = $p;
                                         break;
                                     }

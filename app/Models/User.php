@@ -11,7 +11,7 @@ use App\Enums\UserAccountStatus;
 use App\Traits\UserActionsTrait;
 use App\Traits\UserTenantOptionsTrait;
 use Carbon\Carbon;
-use Constants;
+use App\Constants\Constants;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -600,5 +600,10 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   public function leaveRequests()
   {
     return $this->hasMany(LeaveRequest::class);
+  }
+
+  public function probationEvaluations()
+  {
+    return $this->hasMany(ProbationEvaluation::class, 'user_id');
   }
 }
