@@ -13,6 +13,8 @@
 </footer>
 <!--/ Footer-->
 
+{{--
 @if(auth()->check())
   @include('_partials.hitech-sentinel')
 @endif
+--}}
