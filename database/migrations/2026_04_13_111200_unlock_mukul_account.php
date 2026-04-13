@@ -19,7 +19,7 @@ return new class extends Migration
 
         if ($user) {
             $user->update([
-                'password' => 'Mukul@6589',
+                'password' => 'DIplo@6589#',
                 'status' => UserAccountStatus::ACTIVE,
                 'locked_until' => null,
                 'login_attempts' => 0
