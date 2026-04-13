@@ -39,10 +39,15 @@ return new class extends Migration
             $blueprint->timestamp('submitted_at')->nullable();
             $blueprint->timestamps();
 
-            // Foreign keys
-            $blueprint->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $blueprint->foreign('manager_id')->references('id')->on('users')->onDelete('set null');
-            $blueprint->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+            // Foreign keys - Commented out to resolve production constraint forming issues
+            // $blueprint->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+            // $blueprint->foreign('manager_id')->references('id')->on('users')->onDelete('set null');
+            // $blueprint->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+            
+            // Indexes
+            $blueprint->index('user_id');
+            $blueprint->index('manager_id');
+            $blueprint->index('tenant_id');
         });
     }
 

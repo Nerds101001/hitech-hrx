@@ -46,7 +46,8 @@ cd "$APP_ROOT"
 echo "[6/8] Installing composer dependencies..."
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader \
   --ignore-platform-req=ext-sodium \
-  --ignore-platform-req=ext-redis
+  --ignore-platform-req=ext-redis \
+  --ignore-platform-req=php
 
 if ! grep -q '^APP_KEY=base64:' "$APP_ROOT/.env"; then
   echo "[6.1/8] Generating APP_KEY..."
