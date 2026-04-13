@@ -40,6 +40,14 @@ class CustomerController extends Controller
       return redirect()->route('superAdmin.dashboard');
     }
 
+    if ($user->hasRole(['admin', 'hr', 'manager'])) {
+        return redirect()->to('/');
+    }
+
+    if ($user->hasRole('employee')) {
+        return redirect()->route('user.dashboard.index');
+    }
+
     // Fetch active plan details
     $activePlan = null;
     if ($user->hasActivePlan()) {

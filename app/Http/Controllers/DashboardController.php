@@ -16,7 +16,7 @@ class DashboardController extends Controller
   {
 
     if (!auth()->user()->hasRole('super_admin')) {
-      return redirect()->route('customer.dashboard');
+      return redirect('/');
     }
 
     // Order History (Last 6 months)

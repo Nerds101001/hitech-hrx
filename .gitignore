@@ -25,3 +25,6 @@ yarn-error.log
 /.vscode
 node_modules
 vite.config.js.timestamp-*
+/deployment/hostinger/artifacts
+/hrx-release.tar.gz
+/hrx-partial-release.tar.gz
