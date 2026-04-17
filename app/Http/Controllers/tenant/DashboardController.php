@@ -295,7 +295,13 @@ class DashboardController extends Controller
             'mySOSCount' => 0,
             'nextHoliday' => Holiday::where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
-            'latestNetSalary' => 0
+            'latestNetSalary' => 0,
+            'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),
+            'roles' => \Spatie\Permission\Models\Role::all(),
+            'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
+            'managers' => \App\Models\User::whereHas('roles', function($q) {
+                $q->whereIn('name', ['admin', 'hr', 'manager']);
+            })->where('status', UserAccountStatus::ACTIVE)->get()
         ]);
       }
 
