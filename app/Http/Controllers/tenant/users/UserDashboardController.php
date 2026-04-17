@@ -109,116 +109,11 @@ class UserDashboardController extends Controller
         $active = User::where('status', UserAccountStatus::ACTIVE)->count();
         $presentUsersCount = Attendance::whereDate('created_at', now())->count();
         
-        // 1. Manager Dashboard (Highest Priority for Revamp check)
-        if ($isManager) {
-            // Get Subordinates (Direct Reports)
-            $teamMembers = User::where('reporting_to_id', $user->id)
-                ->where('status', UserAccountStatus::ACTIVE)
-                ->get();
-            
-            $teamMemberIds = $teamMembers->pluck('id')->toArray();
-
-            // Override global counts for the view to ensure "Team Only" view
-            $active = count($teamMemberIds);
-            $totalUser = $active;
-
-            // Scoped Pending Requests
-            $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
-                ->where('status', 'pending')
-                ->count();
-            $pendingExpenseRequests = ExpenseRequest::whereIn('user_id', $teamMemberIds)
-                ->where('status', 'pending')
-                ->count();
-
-            // Daily Digest Stats (Present/Absent/OnLeave)
-            $todayPresentCount = Attendance::whereIn('user_id', $teamMemberIds)
-                ->whereDate('check_in_time', now())
-                ->count();
-            
-            $todayOnLeaveCount = LeaveRequest::whereIn('user_id', $teamMemberIds)
-                ->whereDate('from_date', '<=', now())
-                ->whereDate('to_date', '>=', now())
-                ->where('status', LeaveRequestStatus::APPROVED)
-                ->count();
-            
-            $todayAbsentCount = count($teamMemberIds) - $todayPresentCount - $todayOnLeaveCount;
-            if ($todayAbsentCount < 0) $todayAbsentCount = 0;
-
-            $todayPresentUsersList = Attendance::whereIn('user_id', $teamMemberIds)
-                ->whereDate('check_in_time', now())
-                ->with('user')
-                ->get();
-
-            // Team Birthdays & Anniversaries (Next 30 days)
-            $teamBirthdays = User::whereIn('id', $teamMemberIds)
-                ->whereMonth('dob', '>=', now()->month)
-                ->orderByRaw('MONTH(dob), DAY(dob)')
-                ->limit(5)
-                ->get();
-            
-            $pendingDocumentRequests = DocumentRequest::whereIn('user_id', $teamMemberIds)
-                ->where('status', 'pending')
-                ->count();
-            
-            $pendingLoanRequests = LoanRequest::whereIn('user_id', $teamMemberIds)
-                ->where('status', 'pending')
-                ->count();
-
-            // MNC Grade: Org Celebrations (Birthdays & Work Anniversaries)
-            $todayMd = now()->format('md');
-            $orgBirthdays = User::whereNotNull('dob')
-                ->where('status', UserAccountStatus::ACTIVE)
-                ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
-                ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
-                ->take(10)
-                ->get();
-
-            $orgAnniversaries = User::whereNotNull('date_of_joining')
-                ->where('status', UserAccountStatus::ACTIVE)
-                ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
-                ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
-                ->take(10)
-                ->get();
-
-            return view('tenant.users.dashboard.manager-index', [
-                'pendingLeaveRequests' => $pendingLeaveRequests,
-                'pendingExpenseRequests' => $pendingExpenseRequests,
-                'pendingDocumentRequests' => $pendingDocumentRequests,
-                'pendingLoanRequests' => $pendingLoanRequests,
-                'activeEmployees' => $active,
-                'todayPresentUsers' => $todayPresentCount,
-                'todayOnLeaveCount' => $todayOnLeaveCount,
-                'todayAbsentUsers' => $todayAbsentCount,
-                'myLeavesCount' => $myLeavesCount,
-                'myExpensesCount' => $myExpensesCount,
-                'mySOSCount' => $mySOSCount,
-                'nextHoliday' => $nextHoliday,
-                'recentNotices' => $recentNotices,
-                'teamOutToday' => $teamOutToday,
-                'teamBirthdays' => $teamBirthdays,
-                'orgBirthdays' => $orgBirthdays,
-                'orgAnniversaries' => $orgAnniversaries,
-                'payrollTrend' => $payrollTrend,
-                'latestNetSalary' => $latestNetSalary,
-                'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),
-                'roles' => \Spatie\Permission\Models\Role::all(),
-                'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
-                'managers' => \App\Models\User::whereHas('roles', function($q) {
-                    $q->whereIn('name', ['admin', 'hr', 'manager']);
-                })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()
-            ]);
-        }
-
-        // Global Stats (Needed for HR and Admin)
-        $totalUser = User::count();
-        $active = User::where('status', UserAccountStatus::ACTIVE)->count();
-        $presentUsersCount = Attendance::whereDate('created_at', now())->count();
-        
         // Pending Requests (All for now, could be scoped to team for manager)
         $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
-        // 2. HR/Admin Dashboard
+        // 1. HR/Admin Dashboard (First Priority)
         if ($isHR || $user->hasRole('admin')) {
             // HR-specific calculations
             $presentUsersCountLastWeek = Attendance::whereBetween('created_at', [now()->startOfWeek()->subWeek(), now()->endOfWeek()->subWeek()])
@@ -254,7 +149,41 @@ class UserDashboardController extends Controller
                 $q->whereIn('name', ['admin', 'hr', 'manager']);
             })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
 
-        // 3. Employee Dashboard
+            return view('tenant.users.dashboard.hr-index', [
+                'totalUser' => $totalUser,
+                'activeEmployees' => $active,
+                'active' => $active,
+                'presentUsersCount' => $presentUsersCount,
+                'pendingLeaveRequests' => $pendingLeaveRequests,
+                'pendingExpenseRequests' => $pendingExpenseRequests,
+                'pendingDocumentRequests' => DocumentRequest::where('status', 'pending')->count(),
+                'pendingLoanRequests' => LoanRequest::where('status', 'pending')->count(),
+                'thisWeekWorkingHours' => round($thisWeekWorkingHours, 2),
+                'todayHours' => round($todayHours, 2),
+                'tasks' => Task::where('status', 'new')->count(),
+                'onGoingTasks' => Task::where('status', 'in_progress')->count(),
+                'todayPresentUsers' => $presentUsersCount,
+                'todayAbsentUsers' => $active - $presentUsersCount,
+                'presentUsersCountLastWeek' => $presentUsersCountLastWeek,
+                'absentUsersCountLastWeek' => $active - $presentUsersCountLastWeek,
+                'onLeaveUsersCount' => $onLeaveUsersCount,
+                'isSelfService' => false,
+                'myLeavesCount' => $myLeavesCount,
+                'myExpensesCount' => $myExpensesCount,
+                'mySOSCount' => $mySOSCount,
+                'nextHoliday' => $nextHoliday,
+                'recentNotices' => $recentNotices,
+                'teamOutToday' => $teamOutToday,
+                'payrollTrend' => $payrollTrend,
+                'latestNetSalary' => $latestNetSalary,
+                'departments' => $departments,
+                'roles' => $roles,
+                'designations' => $designations,
+                'managers' => $managers
+            ]);
+        }
+
+        // 2. Employee Dashboard
         if ($isFieldEmployee) {
             $settings = Settings::first();
             return view('tenant.users.dashboard.employee-index', compact(
@@ -334,21 +263,30 @@ class UserDashboardController extends Controller
                 ->where('status', 'pending')
                 ->count();
 
-            // MNC Grade: Org Celebrations (Birthdays & Work Anniversaries)
+            // MNC Grade: Org Celebrations (Split Today vs Upcoming)
             $todayMd = now()->format('md');
-            $orgBirthdays = User::whereNotNull('dob')
+            
+            // Birthdays
+            $allBirthdays = User::whereNotNull('dob')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
-                ->take(10)
+                ->take(15) // Get broad set
                 ->get();
+            
+            $todayBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') === $todayMd);
+            $upcomingBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') !== $todayMd)->take(2);
 
-            $orgAnniversaries = User::whereNotNull('date_of_joining')
+            // Anniversaries
+            $allAnniversaries = User::whereNotNull('date_of_joining')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
-                ->take(10)
+                ->take(15)
                 ->get();
+
+            $todayAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
+            $upcomingAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') !== $todayMd)->take(2);
 
             return view('tenant.users.dashboard.manager-index', [
                 'pendingLeaveRequests' => $pendingLeaveRequests,
@@ -366,8 +304,10 @@ class UserDashboardController extends Controller
                 'recentNotices' => $recentNotices,
                 'teamOutToday' => $teamOutToday,
                 'teamBirthdays' => $teamBirthdays,
-                'orgBirthdays' => $orgBirthdays,
-                'orgAnniversaries' => $orgAnniversaries,
+                'todayBirthdays' => $todayBirthdays,
+                'upcomingBirthdays' => $upcomingBirthdays,
+                'todayAnniversaries' => $todayAnniversaries,
+                'upcomingAnniversaries' => $upcomingAnniversaries,
                 'payrollTrend' => $payrollTrend,
                 'latestNetSalary' => $latestNetSalary,
                 'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),

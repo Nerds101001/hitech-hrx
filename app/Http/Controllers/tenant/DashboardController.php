@@ -133,27 +133,30 @@ class DashboardController extends Controller
       // 7. Celebrations (Birthdays & Work Anniversaries - Next 6 Imminent)
       $todayMd = now()->format('md');
 
-      $upcomingBirthdays = User::whereNotNull('dob')
-        ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
-        ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
+        ->take(15) // Get broad set
         ->get()
         ->unique('id')
-        ->take(6)
         ->map(function ($u) use ($todayMd) {
           $u->is_today = (Carbon::parse($u->dob)->format('md') === $todayMd);
           return $u;
         });
+      
+      $todayBirthdays = $upcomingBirthdays->filter(fn($u) => $u->is_today);
+      $upcomingBirthdaysFiltered = $upcomingBirthdays->filter(fn($u) => !$u->is_today)->take(2);
 
       $upcomingAnniversaries = User::whereNotNull('date_of_joining')
         ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
         ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
+        ->take(15)
         ->get()
         ->unique('id')
-        ->take(6)
         ->map(function ($u) use ($todayMd) {
           $u->is_today = (Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
           return $u;
         });
+      
+      $todayAnniversaries = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
+      $upcomingAnniversariesFiltered = $upcomingAnniversaries->filter(fn($u) => !$u->is_today)->take(2);
 
       // 8. Upcoming Probation Ends (Past the date + Next 30 Days)
       $upcomingProbationEnds = User::where('status', UserAccountStatus::ACTIVE)
@@ -286,8 +289,12 @@ class DashboardController extends Controller
             'pendingDocumentRequests' => DocumentRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
             'pendingLoanRequests' => LoanRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
             'teamOutToday' => $teamOutToday,
-            'orgBirthdays' => $upcomingBirthdays,
-            'orgAnniversaries' => $upcomingAnniversaries,
+            'todayBirthdays' => $todayBirthdays,
+            'upcomingBirthdays' => $upcomingBirthdaysFiltered,
+            'todayAnniversaries' => $todayAnniversaries,
+            'upcomingAnniversaries' => $upcomingAnniversariesFiltered,
+            'orgBirthdays' => $todayBirthdays->merge($upcomingBirthdaysFiltered), // Legacy fallback
+            'orgAnniversaries' => $todayAnniversaries->merge($upcomingAnniversariesFiltered), // Legacy fallback
             'recentNotices' => $announcements, // Reuse announcements as notices
             'trends' => $trends,
             'myLeavesCount' => 0,
