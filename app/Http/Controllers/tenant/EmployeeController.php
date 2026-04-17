@@ -1969,6 +1969,13 @@ class EmployeeController extends Controller
     ]);
 
     if ($validator->fails()) {
+      if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+          'status' => 'error',
+          'message' => 'Validation failed: ' . $validator->errors()->first(),
+          'errors' => $validator->errors()
+        ], 422);
+      }
       return redirect()->back()
         ->withErrors($validator)
         ->withInput()

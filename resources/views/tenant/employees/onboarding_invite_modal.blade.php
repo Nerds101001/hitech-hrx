@@ -187,7 +187,7 @@
               <label class="form-label-hitech">Joining Date <span class="text-danger">*</span></label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-calendar"></i></span>
-                <input type="date" name="doj" class="form-control form-control-hitech" min="{{ date('Y-m-d') }}" required>
+                <input type="date" name="doj" class="form-control form-control-hitech" id="onboarding_doj" required>
               </div>
             </div>
 
@@ -210,7 +210,7 @@
 
           <div class="d-flex justify-content-end gap-3 mt-4 pt-2">
             <button type="button" class="btn btn-label-danger px-6 rounded-pill" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" class="btn btn-hitech px-8 rounded-pill fw-bold">Send Invitation</button>
+            <button type="submit" id="onboardingSubmitBtn" class="btn btn-hitech px-8 rounded-pill fw-bold">Send Invitation</button>
           </div>
         </form>
       </div>
@@ -218,5 +218,81 @@
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('onboardingInviteForm');
+    const submitBtn = document.getElementById('onboardingSubmitBtn');
+    
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // UI State: Loading
+            const originalBtnHtml = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Sending...';
+            
+            const formData = new FormData(form);
+            
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                }
+            })
+            .then(async response => {
+                const data = await response.json();
+                if (response.ok) {
+                    // Success
+                    bootstrap.Modal.getInstance(document.getElementById('onboardingInviteModal')).hide();
+                    if (window.showSuccessSwal) {
+                        window.showSuccessSwal(data.message || 'Onboarding invitation sent successfully!');
+                    } else if (window.showSuccessToast) {
+                        window.showSuccessToast(data.message || 'Invitation sent!');
+                    } else {
+                        alert('Invitation sent successfully!');
+                    }
+                    
+                    // Refresh if dashboard
+                    if (window.location.pathname.includes('dashboard')) {
+                        setTimeout(() => window.location.reload(), 2000);
+                    }
+                } else {
+                    // Validation Errors
+                    let errorMsg = data.message || 'Something went wrong. Please check your input.';
+                    if (data.errors) {
+                        const firstError = Object.values(data.errors)[0][0];
+                        errorMsg = firstError;
+                    }
+                    
+                    if (window.showErrorSwal) {
+                        window.showErrorSwal(errorMsg);
+                    } else if (window.showErrorToast) {
+                        window.showErrorToast(errorMsg);
+                    } else {
+                        alert(errorMsg);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+                if (window.showErrorToast) {
+                    window.showErrorToast('Failed to connect to server. Please try again.');
+                } else {
+                    alert('Network error. Please try again.');
+                }
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalBtnHtml;
+            });
+        });
+    }
+});
+</script>
 
 

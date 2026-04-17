@@ -104,6 +104,18 @@
       ]
     },
     {
+      "url": "/organizationHierarchy",
+      "name": "Hierarchy",
+      "icon": "menu-icon bx bx-sitemap",
+      "slug": "organizationHierarchy.index",
+      "roles": [
+        "admin",
+        "hr",
+        "manager",
+        "employee"
+      ]
+    },
+    {
       "url": "/probation/evaluations",
       "name": "Probation",
       "icon": "menu-icon bx bx-check-double",
@@ -821,23 +833,13 @@
           ]
         },
         {
-          "url": "/organizationHierarchy",
-          "name": "Hierarchy",
-          "slug": "organizationHierarchy.index",
-          "roles": [
-            "admin",
-            "hr",
-            "manager",
-            "employee"
-          ]
-        },
-        {
           "url": "/units",
           "name": "Units",
           "slug": "units.index",
           "roles": [
             "admin",
-            "hr"
+            "hr",
+            "manager"
           ]
         },
         {

@@ -8,39 +8,42 @@ $app = require_once __DIR__ . '/bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
-echo "--- Harmonizing Permissions for Managers & Staff ---\n";
+echo "--- Harmonizing Permissions for Managers & Staff (v2) ---\n";
 
-// Ensure permissions exist
-$hierarchyPerm = Permission::firstOrCreate(['name' => 'organizationHierarchy.view']);
+// Sidebar View Permissions
+$approvalsViewPerm = Permission::firstOrCreate(['name' => 'hr.approvals.view']);
+$settingsViewPerm = Permission::firstOrCreate(['name' => 'hr.settings.view']);
+$hierarchyViewPerm = Permission::firstOrCreate(['name' => 'organizationHierarchy.view']);
+
+// Leave & Expense Permissions
 $leaveViewPerm = Permission::firstOrCreate(['name' => 'leaveRequests.view']);
 $leaveApprovePerm = Permission::firstOrCreate(['name' => 'leaveRequests.approve']);
 $expenseViewPerm = Permission::firstOrCreate(['name' => 'expenseRequests.view']);
 $expenseApprovePerm = Permission::firstOrCreate(['name' => 'expenseRequests.approve']);
-$approvalsViewPerm = Permission::firstOrCreate(['name' => 'approvals.view']); // Profile updates
+$approvalsIndexPerm = Permission::firstOrCreate(['name' => 'approvals.view']);
 
-// 1. Give Hierarchy View to EVERYONE
-foreach (['admin', 'hr', 'manager', 'employee'] as $roleName) {
-    if ($role = Role::where('name', $roleName)->first()) {
-        $role->givePermissionTo($hierarchyPerm);
-    }
-}
-
-// 2. Give Managers Approval Access
+// 1. Give Managers Sidebar Access
 if ($manager = Role::where('name', 'manager')->first()) {
     $manager->givePermissionTo([
+        $approvalsViewPerm,
+        $hierarchyViewPerm,
         $leaveViewPerm, 
         $leaveApprovePerm, 
         $expenseViewPerm, 
         $expenseApprovePerm, 
-        $approvalsViewPerm
+        $approvalsIndexPerm
     ]);
-    echo "Manager role updated with approval permissions.\n";
+    echo "Manager role updated.\n";
 }
 
-// 3. Ensure Employee can see their own leaves (usually they have separate permissions or role-based check)
+// 2. Give Employees Hierarchy Access
 if ($employee = Role::where('name', 'employee')->first()) {
-    $employee->givePermissionTo([$leaveViewPerm, $expenseViewPerm]);
-    echo "Employee role updated with view permissions.\n";
+    $employee->givePermissionTo([$hierarchyViewPerm]);
+    echo "Employee role updated.\n";
 }
+
+// Clear Cache
+app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+echo "Permission cache cleared.\n";
 
 echo "Done.\n";
