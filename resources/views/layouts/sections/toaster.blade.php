@@ -1,87 +1,80 @@
 {{-- CDNs removed for stability, relying on local vendor assets where possible --}}
 
 <style>
-    /* GLOBAL HITECH SWEETALERT2 STYLES */
+    /* GLOBAL HITECH SWEETALERT2 STYLES - PREMIUM OVERHAUL */
     .swal2-popup.hitech-swal {
-        border-radius: 24px !important;
+        border-radius: 20px !important;
         padding: 0 !important;
         overflow: hidden !important;
-        border: 1px solid rgba(0,0,0,0.05) !important;
+        border: 1px solid rgba(0, 77, 84, 0.1) !important;
+        background: #fff !important;
         font-family: 'Plus Jakarta Sans', sans-serif !important;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+        box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.15) !important;
     }
     .swal2-title.hitech-swal-title {
-        background: linear-gradient(135deg, #003d3d 0%, #005a5a 100%) !important;
-        color: #fff !important;
+        background: #f8fafc !important;
+        color: #0f172a !important;
         margin: 0 !important;
-        padding: 1.5rem 2rem !important;
-        font-size: 1.25rem !important;
+        padding: 1.5rem 2rem 0.5rem !important;
+        font-size: 1.5rem !important;
         font-weight: 800 !important;
         text-align: left !important;
         display: flex !important;
         align-items: center !important;
-        gap: 1rem !important;
-        border-bottom: 1px solid rgba(255,255,255,0.1) !important;
+        gap: 0.75rem !important;
     }
-    .swal2-title.hitech-swal-title::before {
-        content: '\eb92'; /* bx-error-alt */
-        font-family: 'boxicons' !important;
-        background: rgba(255,255,255,0.15);
-        min-width: 40px;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 12px;
-        font-size: 1.5rem;
-        flex-shrink: 0;
+    .swal2-title.hitech-swal-title i {
+        color: #008080;
     }
     .swal2-html-container.hitech-swal-html {
-        padding: 2rem 2rem !important;
+        padding: 0.5rem 2rem 1.5rem !important;
         margin: 0 !important;
         text-align: left !important;
-        color: #334155 !important;
+        color: #475569 !important;
         font-size: 0.95rem !important;
         font-weight: 500 !important;
         line-height: 1.6 !important;
     }
+    
+    /* Footer Protocol Styling */
+    .hitech-swal-footer {
+        padding: 1rem 2rem !important;
+        background: #f8fafc !important;
+        border-top: 1px solid #e2e8f0 !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        font-size: 10px !important;
+        font-weight: 800 !important;
+        color: #94a3b8 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+    }
+
     .swal2-actions.hitech-swal-actions {
-        padding: 0 2rem 2rem 2rem !important;
+        padding: 1rem 2rem 2rem !important;
         margin: 0 !important;
         justify-content: flex-end !important;
-        gap: 10px !important;
+        background: #fff !important;
     }
     .swal2-confirm.hitech-swal-confirm {
-        background: var(--deep-teal) !important;
+        background: #004D54 !important;
         color: #fff !important;
         border-radius: 12px !important;
-        padding: 0.75rem 1.75rem !important;
+        padding: 0.8rem 2rem !important;
         font-weight: 700 !important;
         font-size: 0.85rem !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(0, 77, 84, 0.15) !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 77, 84, 0.2) !important;
     }
     .swal2-confirm.hitech-swal-confirm:hover {
-        background: var(--primary-teal) !important;
+        background: #006D77 !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 8px 16px rgba(0, 109, 119, 0.2) !important;
-    }
-    .swal2-cancel.hitech-swal-cancel {
-        background: #F1F5F9 !important;
-        color: #475569 !important;
-        border-radius: 12px !important;
-        font-weight: 700 !important;
-        padding: 12px 28px !important;
-        font-size: 0.85rem !important;
-        text-transform: uppercase !important;
-        border: 1px solid #E2E8F0 !important;
-        transition: all 0.2s ease !important;
-        margin: 0 !important;
+        box-shadow: 0 20px 25px -5px rgba(0, 109, 119, 0.3) !important;
     }
     .swal2-icon {
-        display: none !important; /* Use our custom header styling instead of standard icon */
+        display: none !important;
     }
 </style>
 
@@ -156,8 +149,15 @@
 
   window.showSuccessSwal = function(message) {
     Swal.fire({
-      title: 'Success!',
+      title: '<i class="bx bx-check-circle"></i> Success!',
       text: message,
+      html: `
+        <div class="hitech-swal-html">${message}</div>
+        <div class="hitech-swal-footer">
+            <i class="bx bx-shield-quarter"></i>
+            PROTOCOL: SYSTEM_EXECUTION_SUCCESS
+        </div>
+      `,
       customClass: { 
         popup: 'hitech-swal', 
         title: 'hitech-swal-title', 
@@ -169,48 +169,20 @@
     });
   };
 
-  window.showInfoSwal = function(message) {
-    return Swal.fire({
-      title: 'Information',
-      html: `<div style="font-family: 'Plus Jakarta Sans', sans-serif;">${message}</div>`,
-      icon: 'info',
-      customClass: {
-        popup: 'hitech-swal animate__animated animate__fadeInDown',
-        title: 'hitech-swal-title hitech-swal-info',
-        htmlContainer: 'hitech-swal-html',
-        actions: 'hitech-swal-actions',
-        confirmButton: 'hitech-swal-confirm'
-      },
-      buttonsStyling: false,
-      confirmButtonText: 'Got it'
-    });
-  };
-
-  window.showWarningSwal = function(message) {
-    return Swal.fire({
-      title: 'Warning!',
-      html: `<div style="font-family: 'Plus Jakarta Sans', sans-serif;">${message}</div>`,
-      icon: 'warning',
-      customClass: {
-        popup: 'hitech-swal animate__animated animate__fadeInDown',
-        title: 'hitech-swal-title hitech-swal-warning',
-        htmlContainer: 'hitech-swal-html',
-        actions: 'hitech-swal-actions',
-        confirmButton: 'hitech-swal-confirm'
-      },
-      buttonsStyling: false,
-      confirmButtonText: 'OK'
-    });
-  };
-
   window.showErrorSwal = function(message) {
     Swal.fire({
-      title: 'Error!',
-      text: message,
+      title: '<i class="bx bx-error-alt"></i> Error!',
+      html: `
+        <div class="hitech-swal-html">${message}</div>
+        <div class="hitech-swal-footer">
+            <i class="bx bx-shield-quarter"></i>
+            PROTOCOL: SYSTEM_EXECUTION_FAILURE
+        </div>
+      `,
       customClass: { 
         popup: 'hitech-swal animate__animated animate__shakeX', 
         title: 'hitech-swal-title', 
-        htmlContainer: 'hitech-swal-html',
+        htmlContainer: 'hitech-swal-html-wrapper', // dummy to avoid double padding
         actions: 'hitech-swal-actions',
         confirmButton: 'hitech-swal-confirm' 
       },
@@ -219,18 +191,7 @@
   };
 
   window.showErrorSwalHtml = function(message) {
-    Swal.fire({
-      title: 'Error!',
-      html: message,
-      customClass: { 
-        popup: 'hitech-swal animate__animated animate__shakeX', 
-        title: 'hitech-swal-title', 
-        htmlContainer: 'hitech-swal-html',
-        actions: 'hitech-swal-actions',
-        confirmButton: 'hitech-swal-confirm' 
-      },
-      buttonsStyling: false
-    });
+      window.showErrorSwal(message);
   };
 
 </script>
