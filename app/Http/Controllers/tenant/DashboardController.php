@@ -278,9 +278,12 @@ class DashboardController extends Controller
         'newHiresThisMonth' => $newHiresThisMonth,
 
         'roles' => \Spatie\Permission\Models\Role::all(),
+        'departments' => Department::where('status', Status::ACTIVE)->get(),
         'teams' => Team::where('status', Status::ACTIVE)->get(),
         'designations' => \App\Models\Designation::where('status', Status::ACTIVE)->get(),
-        'managers' => User::where('status', UserAccountStatus::ACTIVE)->get(),
+        'managers' => User::whereHas('roles', function($q) {
+            $q->whereIn('name', ['admin', 'hr', 'manager']);
+        })->where('status', UserAccountStatus::ACTIVE)->get(),
 
         'myLeavesCount' => 0,
         'myExpensesCount' => 0,
