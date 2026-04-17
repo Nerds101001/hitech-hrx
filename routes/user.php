@@ -7,7 +7,7 @@ use App\Http\Controllers\tenant\users\UserPayrollController;
 Route::middleware([
   'web',
   'auth',
-  'role:admin|hr|manager|employee|field_employee'
+  'role:admin|hr|manager|employee'
 ])->prefix('user')->name('user.')->group(function () {
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
 

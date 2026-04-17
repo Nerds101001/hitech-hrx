@@ -47,7 +47,7 @@ class UserDashboardController extends Controller
         }
 
         $isHR = $user->hasRole('hr');
-        $isFieldEmployee = $user->hasRole('field_employee') || $user->hasRole('employee');
+        $isFieldEmployee = $user->hasRole('employee');
         $isManager = $user->hasRole('manager');
 
         // Common Personal Stats

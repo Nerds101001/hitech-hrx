@@ -31,108 +31,64 @@
 
       @foreach ($targetMenu as $menu)
         @php
-          // 1. Addon Check
+          // 1. Addon & Visibility Logic
           if(isset($menu->addon) && !$addonService->isAddonEnabled($menu->addon)) continue;
           
-          // 2. Identify User & Admin Status (Robust Check)
           $user = auth()->user();
-          $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
-          $isAdmin = !empty(array_intersect($userRoles, ['admin', 'super_admin']));
-          
-          // 3. Visibility Check
-          $isVisible = $isAdmin; // Admins see everything by default
-          
+          $isAdmin = $user->hasRole(['admin', 'super_admin']);
+          $isVisible = $isAdmin; 
+
           if (!$isVisible) {
-              $hasRole = true;
-              $hasPermission = true;
-
-              // Check Roles
-              if (isset($menu->roles)) {
-                  $requiredRoles = array_map('strtolower', (array) $menu->roles);
-                  // Map 'employee' in JSON to 'field_employee' in DB if needed
-                  if (in_array('employee', $requiredRoles) && !in_array('field_employee', $requiredRoles)) {
-                      $requiredRoles[] = 'field_employee';
-                  }
-                  $hasRole = !empty(array_intersect($userRoles, $requiredRoles));
-              }
-
-              // Check Permissions
-              if (isset($menu->permission)) {
-                  $hasPermission = $user->can($menu->permission);
-              }
-
-              // Item is visible if it satisfies both if they are set
-              $isVisible = $hasRole && $hasPermission;
+              $hasRole = isset($menu->roles) ? $user->hasRole((array) $menu->roles) : true;
+              $hasPerm = isset($menu->permission) ? $user->can($menu->permission) : true;
+              $isVisible = $hasRole && $hasPerm;
           }
 
           if (!$isVisible) continue;
         @endphp
 
+        {{-- 2. Rendering --}}
         @if (isset($menu->menuHeader))
-          <li class="menu-header small text-uppercase">
-            <span class="menu-header-text">{{ __($menu->menuHeader) }}</span>
+          <li class="menu-header small text-uppercase py-3">
+            <span class="menu-header-text text-muted" style="padding: 0 1.5rem; font-size: 0.75rem; font-weight: 600;">{{ __($menu->menuHeader) }}</span>
           </li>
         @else
           @php
-            $activeClass = '';
-            $currentRouteName = Route::currentRouteName();
-            if ($currentRouteName === ($menu->slug ?? '')) {
-              $activeClass = 'active';
-            } elseif (isset($menu->submenu)) {
-              if (gettype($menu->slug) === 'array') {
-                foreach($menu->slug as $slug) {
-                  if (str_contains($currentRouteName,$slug) && strpos($currentRouteName,$slug) === 0) {
-                    $activeClass = 'active open';
-                  }
+            $activeClass = Route::currentRouteName() === ($menu->slug ?? '') ? 'active' : '';
+            if (isset($menu->submenu)) {
+                $subSlugs = (array) ($menu->slug ?? []);
+                foreach($subSlugs as $slug) {
+                    if (str_contains(Route::currentRouteName(), $slug)) {
+                        $activeClass = 'active open';
+                    }
                 }
-              } else {
-                if (str_contains($currentRouteName,($menu->slug ?? '')) && strpos($currentRouteName,($menu->slug ?? '')) === 0) {
-                  $activeClass = 'active open';
-                }
-              }
             }
           @endphp
+
           <li class="hitech-menu-item {{$activeClass}}">
-            <a href="{{ $isLocked ? 'javascript:void(0);' : (isset($menu->url) ? url($menu->url) : 'javascript:void(0);') }}"
-               class="hitech-menu-link {{ isset($menu->submenu) ? 'has-submenu' : '' }} {{ $isLocked ? 'hitech-menu-locked' : '' }}">
+            <a href="{{ isset($menu->url) ? url($menu->url) : 'javascript:void(0);' }}"
+               class="hitech-menu-link {{ isset($menu->submenu) ? 'has-submenu' : '' }}">
               @isset($menu->icon)
                 <i class="hitech-menu-icon {{ $menu->icon }}"></i>
               @endisset
               <span class="hitech-menu-text">{{ isset($menu->name) ? __($menu->name) : '' }}</span>
-              @if($isLocked)
-                 <i class="bx bx-lock-alt ms-auto menu-lock-icon"></i>
-              @endif
             </a>
+
             @isset($menu->submenu)
                <ul class="hitech-submenu">
                   @foreach($menu->submenu as $submenu)
-                     @php
-                      // Submenu Role/Addon check
+                    @php
                       if(isset($submenu->addon) && !$addonService->isAddonEnabled($submenu->addon)) continue;
                       
-                      $subVisible = $isAdmin;
-                      if (!$subVisible) {
-                          $subRole = true;
-                          $subPerm = true;
-                          
-                          if (isset($submenu->roles)) {
-                              $reqSubRoles = array_map('strtolower', (array) $submenu->roles);
-                              if (in_array('employee', $reqSubRoles) && !in_array('field_employee', $reqSubRoles)) {
-                                  $reqSubRoles[] = 'field_employee';
-                              }
-                              $subRole = !empty(array_intersect($userRoles, $reqSubRoles));
-                          }
-                          
-                          if (isset($submenu->permission)) {
-                              $subPerm = $user->can($submenu->permission);
-                          }
-                          
-                          $subVisible = $subRole && $subPerm;
+                      $subVis = $isAdmin;
+                      if (!$subVis) {
+                          $sRole = isset($submenu->roles) ? $user->hasRole((array) $submenu->roles) : true;
+                          $sPerm = isset($submenu->permission) ? $user->can($submenu->permission) : true;
+                          $subVis = $sRole && $sPerm;
                       }
-                      
-                      if (!$subVisible) continue;
-                     @endphp
-                     <li class="hitech-submenu-item {{ Route::currentRouteName() === ($submenu->slug ?? '') ? 'active' : '' }}">
+                      if (!$subVis) continue;
+                    @endphp
+                    <li class="hitech-submenu-item {{ Route::currentRouteName() === ($submenu->slug ?? '') ? 'active' : '' }}">
                        <a href="{{ url($submenu->url) }}" class="hitech-submenu-link">
                           {{ __($submenu->name) }}
                        </a>
@@ -143,11 +99,9 @@
           </li>
         @endif
       @endforeach
-
     </ul>
   </div>
 
-  {{-- 3. FLOATING PROFILE CARD --}}
   <div class="hitech-profile-card">
       <div class="hitech-profile-info">
         <div class="hitech-avatar">
@@ -159,8 +113,8 @@
             </div>
           @endif
         </div>
-        <div class="hitech-user-meta">
-          <span class="hitech-user-name">{{ auth()->user() ? auth()->user()->name : 'User' }}</span>
+        <div class="hitech-user-meta text-truncate" style="flex: 1; min-width: 0;">
+          <span class="hitech-user-name fw-bold" style="display: block; font-size: 0.85rem;">{{ auth()->user() ? auth()->user()->name : 'User' }}</span>
           <a href="{{ route('employee.myProfile') }}" class="hitech-user-role-link">
             <span class="hitech-user-role text-muted small">{{ auth()->user() ? (auth()->user()->role_display_name) : 'Admin' }}</span>
           </a>
@@ -169,11 +123,10 @@
            <form id="logout-form" action="{{ route('auth.logout') }}" method="POST" style="display: none;">
              @csrf
            </form>
-           <a href="javascript:void(0);" onclick="event.preventDefault(); document.getElementById('logout-form').submit();" title="Logout">
-             <i class="bx bx-log-out"></i>
+           <a href="javascript:void(0);" onclick="event.preventDefault(); document.getElementById('logout-form').submit();" title="Logout" class="text-danger opacity-75 hover-opacity-100">
+             <i class="bx bx-log-out fs-5"></i>
            </a>
         </div>
       </div>
   </div>
-
 </aside>
