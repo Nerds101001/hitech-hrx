@@ -8,30 +8,57 @@
 @endsection
 @section('content')
 <div class="emp-hub-wrapper">
-  <!-- Welcome Section -->
-  <div class="emp-hero animate__animated animate__fadeIn">
-    <div class="emp-hero-text">
-      <div class="greeting">
-        Good {{ now()->hour < 12 ? 'Morning' : (now()->hour < 17 ? 'Afternoon' : 'Evening') }},
-        {{ auth()->user()->first_name }}! 👋
-      </div>
-      <div class="date-badge mt-2">
-        <i class="bx bx-calendar" style="font-size:0.85rem;"></i>
-        {{ now()->format('l, F jS') }}
+  <!-- Welcome & Daily Digest -->
+  <div class="row g-4 mb-4 animate__animated animate__fadeIn">
+    <div class="col-md-6">
+      <div class="emp-hero h-100 mb-0">
+        <div class="emp-hero-text">
+          <div class="greeting">
+            Good {{ now()->hour < 12 ? 'Morning' : (now()->hour < 17 ? 'Afternoon' : 'Evening') }},
+            {{ auth()->user()->first_name }}! 👋
+          </div>
+          <div class="date-badge mt-2">
+            <i class="bx bx-calendar" style="font-size:0.85rem;"></i>
+            {{ now()->format('l, F jS') }}
+          </div>
+        </div>
+        <div class="emp-hero-meta">
+          <div class="hero-quick-stat">
+            <div class="stat-value text-danger">{{ $pendingLeaveRequests }}</div>
+            <div class="stat-label">Pending Leaves</div>
+          </div>
+          <div class="hero-quick-stat">
+            <div class="stat-value text-warning">{{ $pendingExpenseRequests }}</div>
+            <div class="stat-label">Pending Expenses</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="emp-hero-meta">
-      <div class="hero-quick-stat">
-        <div class="stat-value text-danger">{{ $pendingLeaveRequests }}</div>
-        <div class="stat-label">Pending Leaves</div>
-      </div>
-      <div class="hero-quick-stat">
-        <div class="stat-value text-warning">{{ $pendingExpenseRequests }}</div>
-        <div class="stat-label">Pending Expenses</div>
-      </div>
-      <div class="hero-quick-stat">
-        <div class="stat-value">{{ $teamOutToday->count() }}</div>
-        <div class="stat-label">Team Out Today</div>
+    <div class="col-md-6">
+      <div class="hitech-card h-100" style="background: white; border: 1px solid #e2e8f0;">
+        <div class="hitech-card-header py-3 border-bottom">
+           <h6 class="mb-0 fw-bold text-dark"><i class="bx bx-pie-chart-alt-2 me-2 text-primary"></i>Daily Team Digest</h6>
+           <small class="text-muted">{{ $activeEmployees }} Total Staff</small>
+        </div>
+        <div class="card-body py-4">
+           <div class="d-flex justify-content-around text-center">
+              <div>
+                 <div class="stat-icon-wrap icon-teal mx-auto mb-2"><i class="bx bx-user-check"></i></div>
+                 <h4 class="mb-0 fw-extrabold">{{ $todayPresentUsers }}</h4>
+                 <small class="text-muted">Present</small>
+              </div>
+              <div>
+                 <div class="stat-icon-wrap icon-amber mx-auto mb-2"><i class="bx bx-plane-take-off"></i></div>
+                 <h4 class="mb-0 fw-extrabold">{{ $todayOnLeaveCount }}</h4>
+                 <small class="text-muted">On Leave</small>
+              </div>
+              <div>
+                 <div class="stat-icon-wrap icon-red mx-auto mb-2"><i class="bx bx-user-x"></i></div>
+                 <h4 class="mb-0 fw-extrabold">{{ $todayAbsentCount }}</h4>
+                 <small class="text-muted">Off-duty</small>
+              </div>
+           </div>
+        </div>
       </div>
     </div>
   </div>

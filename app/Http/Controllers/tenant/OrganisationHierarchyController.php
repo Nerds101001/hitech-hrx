@@ -29,8 +29,11 @@ class OrganisationHierarchyController extends Controller
     }
 
     $hierarchy = [];
+    $isStaffOnly = $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'manager']);
+    $maxDepth = $isStaffOnly ? 1 : null;
+
     foreach ($rootUsers as $root) {
-        $hierarchy[] = $this->formatUserNode($root, $users);
+        $hierarchy[] = $this->formatUserNode($root, $users, 0, $maxDepth);
     }
 
     return view('tenant.organisation-hierarchy.index', [
@@ -39,12 +42,16 @@ class OrganisationHierarchyController extends Controller
     ]);
   }
 
-  private function formatUserNode($user, $allUsers)
+  private function formatUserNode($user, $allUsers, $depth = 0, $maxDepth = null)
   {
     $children = [];
-    foreach ($allUsers as $u) {
-        if ($u->reporting_to_id == $user->id) {
-            $children[] = $this->formatUserNode($u, $allUsers);
+    
+    // If maxDepth is set, don't go beyond it
+    if ($maxDepth === null || $depth < $maxDepth) {
+        foreach ($allUsers as $u) {
+            if ($u->reporting_to_id == $user->id) {
+                $children[] = $this->formatUserNode($u, $allUsers, $depth + 1, $maxDepth);
+            }
         }
     }
 

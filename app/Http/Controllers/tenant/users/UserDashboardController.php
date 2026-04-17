@@ -198,11 +198,43 @@ class UserDashboardController extends Controller
 
         // 2. Manager Dashboard
         if ($isManager) {
+            $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+            
+            $teamMembers = User::whereIn('team_id', $managedTeamIds)
+                ->where('status', UserAccountStatus::ACTIVE)
+                ->get();
+            
+            $teamMemberIds = $teamMembers->pluck('id')->toArray();
+
+            // Scoped Pending Requests
+            $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
+                ->where('status', 'pending')
+                ->count();
+            $pendingExpenseRequests = ExpenseRequest::whereIn('user_id', $teamMemberIds)
+                ->where('status', 'pending')
+                ->count();
+
+            // Daily Digest Stats
+            $todayPresentCount = Attendance::whereIn('user_id', $teamMemberIds)
+                ->whereDate('check_in_time', now())
+                ->count();
+            
+            $todayOnLeaveCount = LeaveRequest::whereIn('user_id', $teamMemberIds)
+                ->whereDate('from_date', '<=', now())
+                ->whereDate('to_date', '>=', now())
+                ->where('status', LeaveRequestStatus::APPROVED)
+                ->count();
+            
+            $todayAbsentCount = count($teamMemberIds) - $todayPresentCount - $todayOnLeaveCount;
+            if ($todayAbsentCount < 0) $todayAbsentCount = 0;
+
             return view('tenant.users.dashboard.manager-index', [
                 'pendingLeaveRequests' => $pendingLeaveRequests,
                 'pendingExpenseRequests' => $pendingExpenseRequests,
-                'activeEmployees' => $active, // Total active for now
-                'todayPresentUsers' => $presentUsersCount,
+                'activeEmployees' => count($teamMemberIds),
+                'todayPresentUsers' => $todayPresentCount,
+                'todayOnLeaveCount' => $todayOnLeaveCount,
+                'todayAbsentCount' => $todayAbsentCount,
                 'myLeavesCount' => $myLeavesCount,
                 'myExpensesCount' => $myExpensesCount,
                 'mySOSCount' => $mySOSCount,
