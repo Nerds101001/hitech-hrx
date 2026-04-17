@@ -50,6 +50,14 @@ class UserDashboardController extends Controller
         $isFieldEmployee = $user->hasRole('employee');
         $isManager = $user->hasRole('manager');
 
+        // Data for Onboarding Modal in Dashboard (Shared across roles)
+        $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get();
+        $roles = \Spatie\Permission\Models\Role::all();
+        $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
+        $managers = \App\Models\User::whereHas('roles', function($q) {
+            $q->whereIn('name', ['admin', 'hr', 'manager']);
+        })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
+
         // Common Personal Stats
         $myLeavesCount = LeaveRequest::where('user_id', $user->id)->count();
         $myExpensesCount = ExpenseRequest::where('user_id', $user->id)->count();
@@ -137,19 +145,11 @@ class UserDashboardController extends Controller
                     return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
             });
 
-            $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
-                ->where('status', LeaveRequestStatus::APPROVED)
-                ->count();
+        $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
+            ->where('status', LeaveRequestStatus::APPROVED)
+            ->count();
 
-            // Data for Onboarding Modal in Dashboard
-            $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get();
-            $roles = \Spatie\Permission\Models\Role::all();
-            $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
-            $managers = \App\Models\User::whereHas('roles', function($q) {
-                $q->whereIn('name', ['admin', 'hr', 'manager']);
-            })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
-
-            return view('tenant.users.dashboard.hr-index', [
+        return view('tenant.users.dashboard.hr-index', [
                 'totalUser' => $totalUser,
                 'activeEmployees' => $active,
                 'active' => $active,
@@ -342,7 +342,11 @@ class UserDashboardController extends Controller
             'recentNotices' => $recentNotices,
             'teamOutToday' => $teamOutToday,
             'payrollTrend' => $payrollTrend,
-            'latestNetSalary' => $latestNetSalary
+            'latestNetSalary' => $latestNetSalary,
+            'departments' => $departments,
+            'roles' => $roles,
+            'designations' => $designations,
+            'managers' => $managers
         ]);
     }
 
