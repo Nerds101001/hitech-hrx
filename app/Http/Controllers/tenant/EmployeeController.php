@@ -2020,6 +2020,13 @@ class EmployeeController extends Controller
 
       DB::commit();
 
+      if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+          'status' => 'success',
+          'message' => 'Onboarding invitation sent successfully! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword,
+          'redirect' => route('tenant.dashboard')
+        ]);
+      }
       return redirect()->route('tenant.dashboard')->with('success', 'Onboarding invitation sent! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword);
 
     } catch (\Exception $e) {

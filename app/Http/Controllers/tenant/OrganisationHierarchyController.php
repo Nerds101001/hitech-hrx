@@ -20,11 +20,12 @@ class OrganisationHierarchyController extends Controller
     } else {
         $managerId = $user->reporting_to_id;
         if ($managerId) {
-            // Root is the reporting manager
+            // Root is the reporting manager (One level up)
             $rootUsers = $users->filter(fn($u) => $u->id === $managerId);
         } else {
-            // If no manager, user is the root
-            $rootUsers = $users->filter(fn($u) => $u->id === $user->id);
+            // If user has no senior, they see the whole company (All top-level roots)
+            // This satisfies "if he is the senior most then whole company"
+            $rootUsers = $users->filter(fn($u) => $u->reporting_to_id === null);
         }
     }
 

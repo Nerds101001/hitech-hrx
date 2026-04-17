@@ -168,6 +168,14 @@ Route::middleware([
       Route::delete('deletePayrollAdjustment/{id}', [SettingsController::class, 'deletePayrollAdjustment'])->name('deletePayrollAdjustment');
     });
 
+    // --- RE-ENABLING ACCESS FOR ALL AUTHENTICATED USERS ---
+    Route::group(['middleware' => ['auth']], function() {
+        // Organization Hierarchy
+        Route::prefix('organizationHierarchy')->name('organizationHierarchy.')->group(function () {
+          Route::get('', [OrganisationHierarchyController::class, 'index'])->name('index');
+        });
+    });
+
     // --- REPORTS ---
     Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
     Route::post('report/getAttendanceReport', [ReportController::class, 'getAttendanceReport'])->name('report.getAttendanceReport');
@@ -503,10 +511,7 @@ Route::middleware([
       Route::get('checkCodeValidationAjax', [TeamController::class, 'checkCodeValidationAjax'])->name('checkCodeValidationAjax');
     });
 
-    // Organization Hierarchy
-    Route::prefix('organizationHierarchy')->name('organizationHierarchy.')->group(function () {
-      Route::get('', [OrganisationHierarchyController::class, 'index'])->name('index');
-    });
+    // Organization Hierarchy already moved to universal group for accessibility
 
 
     // --- ASSETS ---

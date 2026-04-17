@@ -246,7 +246,7 @@ class UserDashboardController extends Controller
                 'activeEmployees' => count($teamMemberIds),
                 'todayPresentUsers' => $todayPresentCount,
                 'todayOnLeaveCount' => $todayOnLeaveCount,
-                'todayAbsentCount' => $todayAbsentCount,
+                'todayAbsentUsers' => $todayAbsentCount,
                 'myLeavesCount' => $myLeavesCount,
                 'myExpensesCount' => $myExpensesCount,
                 'mySOSCount' => $mySOSCount,
@@ -254,7 +254,13 @@ class UserDashboardController extends Controller
                 'recentNotices' => $recentNotices,
                 'teamOutToday' => $teamOutToday,
                 'payrollTrend' => $payrollTrend,
-                'latestNetSalary' => $latestNetSalary
+                'latestNetSalary' => $latestNetSalary,
+                'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),
+                'roles' => \Spatie\Permission\Models\Role::all(),
+                'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
+                'managers' => \App\Models\User::whereHas('roles', function($q) {
+                    $q->whereIn('name', ['admin', 'hr', 'manager']);
+                })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()
             ]);
         }
 
