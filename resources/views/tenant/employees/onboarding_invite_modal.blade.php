@@ -249,18 +249,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (response.ok) {
                     // Success
                     bootstrap.Modal.getInstance(document.getElementById('onboardingInviteModal')).hide();
-                    if (window.showSuccessSwal) {
-                        window.showSuccessSwal(data.message || 'Onboarding invitation sent successfully!');
-                    } else if (window.showSuccessToast) {
-                        window.showSuccessToast(data.message || 'Invitation sent!');
-                    } else {
-                        alert('Invitation sent successfully!');
-                    }
                     
-                    // Refresh if dashboard
-                    if (window.location.pathname.includes('dashboard')) {
-                        setTimeout(() => window.location.reload(), 2000);
-                    }
+                    // Populate Success Modal
+                    document.getElementById('successDetailsEmail').innerText = formData.get('email');
+                    document.getElementById('successDetailsPass').innerText = data.plain_password || '********';
+                    
+                    const successModal = new bootstrap.Modal(document.getElementById('onboardingSuccessDetailsModal'));
+                    successModal.show();
+                    
                 } else {
                     // Validation Errors
                     let errorMsg = data.message || 'Something went wrong. Please check your input.';
@@ -280,8 +276,8 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Fetch error:', error);
-                if (window.showErrorToast) {
-                    window.showErrorToast('Failed to connect to server. Please try again.');
+                if (window.showErrorSwal) {
+                    window.showErrorSwal('Failed to connect to server. Please try again.');
                 } else {
                     alert('Network error. Please try again.');
                 }
@@ -294,5 +290,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<!-- PREMIUM ONBOARDING SUCCESS MODAL -->
+<div class="modal fade" id="onboardingSuccessDetailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
+      <div class="modal-body p-0">
+        <div class="p-6 text-center" style="background: linear-gradient(135deg, #004D54 0%, #008080 100%);">
+            <div class="mb-4 animate__animated animate__bounceIn">
+                <i class="bx bx-check-circle text-white" style="font-size: 5rem;"></i>
+            </div>
+            <h3 class="text-white fw-bold mb-1">Invitation Sent!</h3>
+            <p class="text-white opacity-75 small mb-0">The candidate has been registered in the system.</p>
+        </div>
+        
+        <div class="p-6 bg-white">
+            <div class="mb-4">
+                <label class="text-uppercase small fw-bold text-muted mb-2 d-block">Login Credentials</label>
+                <div class="p-4 rounded-4" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                    <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-3">
+                        <span class="text-muted small">Username/Email</span>
+                        <span class="fw-bold text-dark" id="successDetailsEmail">---</span>
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-muted small">Temporary Password</span>
+                        <code class="fw-bold fs-5 text-primary" id="successDetailsPass" style="letter-spacing: 2px;">---</code>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="alert alert-info border-0 rounded-4 d-flex align-items-start gap-3 mb-0" style="background: rgba(0, 77, 84, 0.05);">
+                <i class="bx bx-info-circle fs-4 text-primary"></i>
+                <div class="small">
+                    <p class="mb-1 fw-bold text-primary">Important Task</p>
+                    <p class="mb-0 text-muted">Please copy these credentials or inform the employee. They will also receive an automated email invitation.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-4 border-top bg-light-soft d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bx bx-shield-quarter text-muted small"></i>
+                <span class="text-uppercase text-muted fw-bold" style="font-size: 9px; letter-spacing: 1px;">Protocol: SYSTEM_INVITATION_DEPLOYED</span>
+            </div>
+            <button type="button" class="btn btn-hitech px-6 rounded-pill" onclick="window.location.reload()">Great, Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 

@@ -15,23 +15,13 @@ class OrganisationHierarchyController extends Controller
     // entry point users
     $rootUsers = [];
 
-    if ($user->hasRole(['admin', 'hr'])) {
-        $rootUsers = $users->filter(fn($u) => $u->reporting_to_id === null);
-    } else {
-        $managerId = $user->reporting_to_id;
-        if ($managerId) {
-            // Root is the reporting manager (One level up)
-            $rootUsers = $users->filter(fn($u) => $u->id === $managerId);
-        } else {
-            // If user has no senior, they see the whole company (All top-level roots)
-            // This satisfies "if he is the senior most then whole company"
-            $rootUsers = $users->filter(fn($u) => $u->reporting_to_id === null);
-        }
-    }
+    // Show the whole company to everyone (All top-level roots)
+    // Satisfies "show all staff to all no restriction in hierarchy"
+    $rootUsers = $users->filter(fn($u) => $u->reporting_to_id === null);
 
     $hierarchy = [];
-    $isStaffOnly = $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'manager']);
-    $maxDepth = $isStaffOnly ? 1 : null;
+    // Removed maxDepth restriction for employees as requested: "no restriction in hierarchy show it to all"
+    $maxDepth = null; 
 
     foreach ($rootUsers as $root) {
         $hierarchy[] = $this->formatUserNode($root, $users, 0, $maxDepth);

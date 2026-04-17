@@ -1,6 +1,6 @@
 @extends('layouts/layoutMaster')
 
-@section('title', 'Team Manager Dashboard')
+@section('title', 'Team Manager Dashboard | Hi-Tech HR')
 
 @section('vendor-style')
 @vite([
@@ -8,242 +8,244 @@
   'resources/assets/vendor/scss/pages/hitech-portal.scss'
 ])
 <style>
-    .keka-manager-wrapper {
-        font-family: 'Plus Jakarta Sans', sans-serif;
+    :root {
+        --keka-primary: #004D54;
+        --keka-secondary: #008080;
+        --keka-bg: #f4f7f7;
     }
-    /* Hero Section */
-    .manager-hero {
-        background: linear-gradient(135deg, #004D54 0%, #008080 100%);
-        border-radius: 24px;
-        padding: 2.5rem;
+    .keka-wrapper {
+        font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+        background: var(--keka-bg);
+        margin: -1.5rem;
+        padding: 1.5rem;
+        min-height: 100vh;
+    }
+    /* Hero / Action Bar */
+    .keka-hero {
+        background: white;
+        border-radius: 16px;
+        padding: 2rem;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+    .keka-greeting {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #1e293b;
+        margin-bottom: 0.25rem;
+    }
+    /* Tab System */
+    .keka-tabs {
+        display: flex;
+        gap: 2rem;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 2rem;
+    }
+    .keka-tab {
+        padding: 0.75rem 0.25rem;
+        font-weight: 700;
+        color: #64748b;
+        cursor: pointer;
         position: relative;
-        overflow: hidden;
-        color: white;
-        box-shadow: 0 20px 40px rgba(0, 77, 84, 0.2);
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
     }
-    .manager-hero::after {
+    .keka-tab.active {
+        color: var(--keka-primary);
+    }
+    .keka-tab.active::after {
         content: '';
         position: absolute;
-        top: -50px;
-        right: -50px;
-        width: 200px;
-        height: 200px;
-        background: rgba(255,255,255,0.05);
-        border-radius: 50%;
+        bottom: -1px;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background: var(--keka-primary);
+        border-radius: 3px 3px 0 0;
     }
-    /* Team Stats Bar */
-    .team-stats-grid {
+
+    /* Grid Layout */
+    .keka-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-        gap: 1.5rem;
-        margin-top: -3rem;
-        padding: 0 1.5rem;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.25rem;
+        margin-bottom: 2rem;
     }
-    .keka-stat-card {
+    .keka-card-stat {
         background: white;
-        border-radius: 20px;
-        padding: 1.5rem;
-        border: 1px solid rgba(0, 77, 84, 0.05);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        text-align: left;
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
-    }
-    .keka-stat-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 25px 50px -12px rgba(0, 77, 84, 0.15);
-    }
-    .stat-icon {
-        width: 45px;
-        height: 45px;
         border-radius: 12px;
+        padding: 1.25rem;
+        border: 1px solid #e2e8f0;
         display: flex;
-        align-items: center;
+        flex-direction: column;
         justify-content: center;
-        font-size: 1.4rem;
-        margin-bottom: 1rem;
     }
-    .icon-team { background: rgba(0, 128, 128, 0.1); color: #008080; }
-    .icon-present { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-    .icon-leave { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-    .icon-absent { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+    .stat-val { font-size: 1.75rem; font-weight: 800; color: #1e293b; line-height: 1; }
+    .stat-tit { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; margin-top: 0.5rem; }
 
-    /* Approval Widgets */
-    .approval-widget {
+    /* Info Sections */
+    .keka-section-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: #334155;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .keka-panel {
         background: white;
-        border-radius: 20px;
-        border: 1px solid #f1f5f9;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
         overflow: hidden;
+        height: 100%;
     }
-    .approval-header {
-        padding: 1.25rem 1.5rem;
-        background: #f8fafc;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #f1f5f9;
-    }
-    .approval-item {
-        padding: 1rem 1.5rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-bottom: 1px solid #f8fafc;
-    }
-    .approval-count {
-        background: #004D54;
-        color: white;
-        font-size: 0.75rem;
-        font-weight: 700;
-        padding: 2px 10px;
-        border-radius: 10px;
-    }
+    
+    /* Hover Effects */
+    .hover-grow { transition: transform 0.2s ease; cursor: pointer; }
+    .hover-grow:hover { transform: scale(1.02); }
 
-    /* Birthday Widget */
-    .birthday-item {
+    /* Celebration Items */
+    .celeb-card {
+        padding: 1rem;
+        border-radius: 12px;
+        background: #f8fafc;
+        margin-bottom: 0.75rem;
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 12px 15px;
-        border-radius: 12px;
-        background: rgba(245, 158, 11, 0.05);
-        margin-bottom: 8px;
+        gap: 1rem;
+        border: 1px solid #f1f5f9;
+        transition: all 0.2s;
     }
+    .celeb-card:hover { background: white; border-color: #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .celeb-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 </style>
 @endsection
 
 @section('content')
-<div class="keka-manager-wrapper container-xxl">
+<div class="keka-wrapper">
     
-    <!-- Hero Section -->
-    <div class="row mb-5 animate__animated animate__fadeIn">
-        <div class="col-12">
-            <div class="manager-hero">
-                <div class="row align-items-center">
-                    <div class="col-lg-8">
-                        <span class="badge rounded-pill px-3 py-2 mb-3" style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);">
-                            SYSTEM CONTROL CENTER : MANAGER ACCESS
-                        </span>
-                        <h1 class="display-6 fw-bold text-white mb-2">Hello, {{ auth()->user()->first_name }}!</h1>
-                        <p class="fs-5 opacity-75 mb-4">Here is what your team, <b>{{ auth()->user()->team->name ?? 'Direct Reports' }}</b>, is up to today.</p>
-                        
-                        <div class="d-flex gap-3 mt-4">
-                            <a href="javascript:void(0)" class="btn btn-white rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal">
-                                <i class="bx bx-plus-circle me-1"></i> Invite Member
-                            </a>
-                            <a href="{{ route('leaveRequests.index') }}" class="btn btn-outline-white rounded-pill px-4 fw-bold">
-                                View Full Attendance
-                            </a>
-                        </div>
-                    </div>
-                    <div class="col-lg-4 d-none d-lg-block text-center">
-                        <img src="{{ asset('assets/img/illustrations/man-with-laptop-light.png') }}" width="200" class="animate__animated animate__pulse animate__infinite animate__slow">
-                    </div>
+    <!-- Hero / Top Bar -->
+    <div class="keka-hero d-flex align-items-center justify-content-between animate__animated animate__fadeIn">
+        <div>
+            <div class="keka-greeting">Good {{ now()->hour < 12 ? 'Morning' : (now()->hour < 17 ? 'Afternoon' : 'Evening') }}, {{ auth()->user()->first_name }}!</div>
+            <div class="text-muted fw-bold small"><i class="bx bx-calendar-event me-1"></i> Today is {{ now()->format('l, jS F Y') }}</div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary rounded-pill px-4 fw-bold" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal">
+                <i class="bx bx-user-plus me-1"></i> Add Member
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-icon rounded-circle" data-bs-toggle="dropdown"><i class="bx bx-dots-vertical-rounded"></i></button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <a class="dropdown-item" href="{{ route('reports.index') }}">Team Reports</a>
+                    <a class="dropdown-item" href="{{ route('settings.index') }}">Settings</a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Team Stats Bar -->
-    <div class="team-stats-grid mb-5 animate__animated animate__fadeInUp">
-        <div class="keka-stat-card">
-            <div class="stat-icon icon-team"><i class="bx bx-group"></i></div>
-            <h2 class="fw-extrabold text-dark mb-0">{{ $activeEmployees }}</h2>
-            <div class="text-muted small fw-bold text-uppercase">Total Team Staff</div>
+    <!-- Navigation Tabs -->
+    <div class="keka-tabs animate__animated animate__fadeIn">
+        <div class="keka-tab active">Overview</div>
+        <div class="keka-tab" onclick="window.location.href='{{ route('attendance.index') }}'">Team Tracker</div>
+        <div class="keka-tab" onclick="window.location.href='{{ route('approvals.index') }}'">Approvals <span class="badge bg-danger ms-1" style="font-size: 0.6rem;">{{ $pendingLeaveRequests + $pendingExpenseRequests }}</span></div>
+        <div class="keka-tab">Org Directory</div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="keka-grid animate__animated animate__fadeInUp">
+        <div class="keka-card-stat border-start border-4 border-info">
+            <div class="stat-val">{{ $activeEmployees }}</div>
+            <div class="stat-tit">Team Members</div>
         </div>
-        <div class="keka-stat-card">
-            <div class="stat-icon icon-present"><i class="bx bx-user-check"></i></div>
-            <h2 class="fw-extrabold text-dark mb-0">{{ $todayPresentUsers }}</h2>
-            <div class="text-muted small fw-bold text-uppercase">Present Today</div>
+        <div class="keka-card-stat border-start border-4 border-success">
+            <div class="stat-val text-success">{{ $todayPresentUsers }}</div>
+            <div class="stat-tit">Clocked In</div>
         </div>
-        <div class="keka-stat-card">
-            <div class="stat-icon icon-leave"><i class="bx bx-calendar-event"></i></div>
-            <h2 class="fw-extrabold text-dark mb-0">{{ $todayOnLeaveCount }}</h2>
-            <div class="text-muted small fw-bold text-uppercase">On Leave</div>
+        <div class="keka-card-stat border-start border-4 border-warning">
+            <div class="stat-val text-warning">{{ $todayOnLeaveCount }}</div>
+            <div class="stat-tit">On Leave</div>
         </div>
-        <div class="keka-stat-card">
-            <div class="stat-icon icon-absent"><i class="bx bx-user-x"></i></div>
-            <h2 class="fw-extrabold text-danger mb-0">{{ $todayAbsentUsers }}</h2>
-            <div class="text-muted small fw-bold text-uppercase">Absent / Unaccounted</div>
+        <div class="keka-card-stat border-start border-4 border-danger">
+            <div class="stat-val text-danger">{{ $todayAbsentUsers }}</div>
+            <div class="stat-tit">Not Logged In</div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Main Content (Left) -->
-        <div class="col-xl-8 col-lg-7">
+    <div class="row g-4 mb-5">
+        <!-- Main Column: Team Management -->
+        <div class="col-lg-8 animate__animated animate__fadeInLeft">
             
-            <!-- Pending Approvals Widget -->
-            <div class="approval-widget mb-4 animate__animated animate__fadeInLeft">
-                <div class="approval-header">
-                    <h6 class="mb-0 fw-bold"><i class="bx bx-check-shield me-2 text-primary"></i>Required Approvals</h6>
-                    <span class="small text-muted fw-bold">Action Required</span>
+            <!-- REQUIRED APPROVALS -->
+            <div class="keka-panel mb-4 shadow-sm border-0">
+                <div class="p-4 border-bottom d-flex align-items-center justify-content-between">
+                    <div class="keka-section-title mb-0"><i class="bx bx-check-shield text-primary"></i> Pending Approvals</div>
+                    <a href="{{ route('approvals.index') }}" class="small fw-bold text-primary">Manage All <i class="bx bx-right-arrow-alt"></i></a>
                 </div>
                 <div class="p-0">
-                    <a href="{{ route('leaveRequests.index') }}" class="approval-item text-decoration-none">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="stat-icon-wrap icon-teal" style="width:36px; height:36px;"><i class="bx bx-calendar"></i></div>
-                            <span class="fw-bold text-dark">Leave Requests</span>
-                        </div>
-                        <span class="approval-count">{{ $pendingLeaveRequests }}</span>
-                    </a>
-                    <a href="{{ route('expenseRequests.index') }}" class="approval-item text-decoration-none">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="stat-icon-wrap icon-amber" style="width:36px; height:36px;"><i class="bx bx-wallet"></i></div>
-                            <span class="fw-bold text-dark">Expense Invoices</span>
-                        </div>
-                        <span class="approval-count">{{ $pendingExpenseRequests }}</span>
-                    </a>
-                    <a href="{{ route('approvals.index') }}" class="approval-item text-decoration-none">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="stat-icon-wrap icon-primary" style="width:36px; height:36px;"><i class="bx bx-file"></i></div>
-                            <span class="fw-bold text-dark">Document Requests</span>
-                        </div>
-                        <span class="approval-count">{{ $pendingDocumentRequests }}</span>
-                    </a>
-                </div>
-                <div class="p-3 bg-light-soft text-center">
-                    <a href="{{ route('approvals.index') }}" class="small fw-bold text-teal text-decoration-none">VIEW ALL PENDING QUEUE <i class="bx bx-right-arrow-alt"></i></a>
+                    <div class="list-group list-group-flush">
+                        <a href="{{ route('leaveRequests.index') }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="stat-icon-wrap icon-teal" style="width:34px; height:34px;"><i class="bx bx-calendar"></i></div>
+                                <div>
+                                    <div class="fw-bold text-dark">Leave Requests</div>
+                                    <div class="small text-muted">Awaiting your approval</div>
+                                </div>
+                            </div>
+                            <span class="badge bg-teal rounded-pill px-3">{{ $pendingLeaveRequests }}</span>
+                        </a>
+                        <a href="{{ route('expenseRequests.index') }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="stat-icon-wrap icon-amber" style="width:34px; height:34px;"><i class="bx bx-wallet"></i></div>
+                                <div>
+                                    <div class="fw-bold text-dark">Expense Invoices</div>
+                                    <div class="small text-muted">Reimbursement claims</div>
+                                </div>
+                            </div>
+                            <span class="badge bg-warning rounded-pill px-3">{{ $pendingExpenseRequests }}</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 
-            <!-- Team Visibility Table -->
-            <div class="hitech-card animate__animated animate__fadeInUp">
-                <div class="hitech-card-header">
-                    <h6 class="title mb-0">Team Attendance Highlights</h6>
-                    <a href="{{ route('attendance.index') }}" class="btn btn-sm btn-link text-primary fw-bold">Full Log</a>
+            <!-- TEAM AT A GLANCE -->
+            <div class="keka-panel shadow-sm border-0">
+                <div class="p-4 border-bottom">
+                    <div class="keka-section-title mb-0"><i class="bx bx-group text-info"></i> Team At A Glance</div>
                 </div>
                 <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead class="bg-light-soft">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
                             <tr>
-                                <th class="text-uppercase small fw-bold">Team Member</th>
-                                <th class="text-uppercase small fw-bold">Department</th>
-                                <th class="text-uppercase small fw-bold text-end">Status</th>
+                                <th class="ps-4 text-muted small fw-bold">EMPLOYEE</th>
+                                <th class="text-muted small fw-bold">DESIGNATION</th>
+                                <th class="text-muted small fw-bold text-end pe-4">STATUS</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($teamOutToday->take(5) as $request)
+                            @forelse($teamOutToday as $req)
                             <tr>
-                                <td>
+                                <td class="ps-4">
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="avatar avatar-sm">
-                                            <span class="avatar-initial rounded-circle bg-label-teal">{{ $request->user->initials }}</span>
+                                            <span class="avatar-initial rounded-circle bg-label-teal">{{ $req->user->getInitials() }}</span>
                                         </div>
-                                        <div>
-                                            <div class="fw-bold text-dark">{{ $request->user->full_name }}</div>
-                                            <div class="small text-muted">{{ $request->user->designation->name ?? 'Staff' }}</div>
-                                        </div>
+                                        <div class="fw-bold text-dark">{{ $req->user->full_name }}</div>
                                     </div>
                                 </td>
-                                <td><span class="small fw-bold text-muted">{{ $request->user->department->name ?? 'General' }}</span></td>
-                                <td class="text-end">
+                                <td><span class="small fw-bold text-muted">{{ $req->user->designation->name ?? 'Staff' }}</span></td>
+                                <td class="text-end pe-4">
                                     <span class="badge bg-label-warning rounded-pill px-3">On Leave</span>
                                 </td>
                             </tr>
                             @empty
                             <tr>
                                 <td colspan="3" class="text-center py-5">
-                                    <i class="bx bx-cool fs-1 text-teal opacity-50 mb-2 d-block"></i>
-                                    <div class="text-muted fw-bold">Entire team is present and accounted for today!</div>
+                                    <img src="{{ asset('assets/img/illustrations/page-pricing-enterprise.png') }}" width="120" class="mb-3 opacity-25">
+                                    <div class="text-muted fw-bold">Your entire team is available today! 🚀</div>
                                 </td>
                             </tr>
                             @endforelse
@@ -254,49 +256,61 @@
 
         </div>
 
-        <!-- Sidebar Items (Right) -->
-        <div class="col-xl-4 col-lg-5">
+        <!-- Sidebar: Celebrations & Organization -->
+        <div class="col-lg-4 animate__animated animate__fadeInRight">
             
-            <!-- Holiday Widget -->
-            <div class="holiday-card mb-4 animate__animated animate__fadeInRight">
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <i class="bx bx-party fs-3 text-white"></i>
-                    <span class="badge bg-white text-teal rounded-pill fw-bold">CALENDAR</span>
+            <!-- WHOLE ORGANIZATION CELEBRATIONS -->
+            <div class="keka-panel shadow-sm border-0 mb-4">
+                <div class="p-4 border-bottom bg-primary bg-opacity-10">
+                    <div class="keka-section-title mb-0 text-primary"><i class="bx bx-cake"></i> Organization Hub</div>
+                    <small class="text-muted fw-bold">Birthdays & Anniversaries</small>
                 </div>
-                @if($nextHoliday)
-                    <h4 class="text-white fw-bold mb-1">{{ $nextHoliday->name }}</h4>
-                    <p class="text-white opacity-75 mb-3">{{ $nextHoliday->date->format('l, F d') }}</p>
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="flex-grow-1 bg-white bg-opacity-20 rounded-pill" style="height: 6px;">
-                            <div class="bg-white rounded-pill" style="height: 6px; width: 65%;"></div>
-                        </div>
-                        <span class="text-white small fw-bold">{{ now()->diffInDays($nextHoliday->date) }} Days Left</span>
-                    </div>
-                @else
-                    <p class="text-white opacity-75">No upcoming holidays scheduled.</p>
-                @endif
-            </div>
-
-            <!-- Team Birthdays -->
-            <div class="hitech-card animate__animated animate__fadeInRight" style="animation-delay: 0.1s">
-                <div class="hitech-card-header border-bottom">
-                    <h6 class="title mb-0">Team Celebrations</h6>
-                    <i class="bx bx-cake text-warning"></i>
-                </div>
-                <div class="card-body p-3">
-                    @forelse($teamBirthdays as $member)
-                    <div class="birthday-item">
-                        <div class="avatar avatar-sm">
-                            <span class="avatar-initial rounded-circle bg-label-warning">{{ $member->initials }}</span>
-                        </div>
+                <div class="p-4">
+                    <h6 class="text-uppercase small fw-extrabold text-muted mb-3 opacity-75">Upcoming Birthdays</h6>
+                    @forelse($orgBirthdays as $user)
+                    <div class="celeb-card">
+                        <div class="celeb-icon bg-label-warning"><i class="bx bx-party"></i></div>
                         <div class="flex-grow-1">
-                            <div class="fw-bold text-dark small">{{ $member->full_name }}</div>
-                            <div class="text-muted" style="font-size: 10px;">{{ \Carbon\Carbon::parse($member->dob)->format('d M') }} • Birthday</div>
+                            <div class="fw-bold text-dark small">{{ $user->full_name }}</div>
+                            <div class="small text-muted">{{ \Carbon\Carbon::parse($user->dob)->format('M d') }} ({{ $user->department->name ?? 'Admin' }})</div>
                         </div>
-                        <button class="btn btn-sm btn-icon rounded-pill bg-white shadow-sm border"><i class="bx bx-heart text-danger"></i></button>
+                        @if(\Carbon\Carbon::parse($user->dob)->format('md') == now()->format('md'))
+                            <span class="badge bg-danger pulse">TODAY</span>
+                        @endif
                     </div>
                     @empty
-                    <div class="text-center py-4 text-muted small">No upcoming celebrations in the next 30 days.</div>
+                    <div class="text-center py-3 text-muted small">No upcoming birthdays</div>
+                    @endforelse
+
+                    <h6 class="text-uppercase small fw-extrabold text-muted mb-3 mt-4 opacity-75">Work Anniversaries</h6>
+                    @forelse($orgAnniversaries as $user)
+                    <div class="celeb-card" style="background: rgba(0, 77, 84, 0.03);">
+                        <div class="celeb-icon bg-label-info"><i class="bx bx-award"></i></div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-dark small">{{ $user->full_name }}</div>
+                            <div class="small text-muted">{{ \Carbon\Carbon::parse($user->date_of_joining)->format('M d') }} • {{ now()->year - \Carbon\Carbon::parse($user->date_of_joining)->year }} Years</div>
+                        </div>
+                    </div>
+                    @empty
+                    <div class="text-center py-3 text-muted small">No upcoming anniversaries</div>
+                    @endforelse
+                </div>
+            </div>
+
+            <!-- ANNOUNCEMENTS -->
+            <div class="keka-panel shadow-sm border-0">
+                <div class="p-4 border-bottom">
+                    <div class="keka-section-title mb-0"><i class="bx bx-news"></i> Announcements</div>
+                </div>
+                <div class="p-4">
+                    @forelse($recentNotices as $notice)
+                        <div class="mb-4">
+                            <div class="fw-bold text-dark small">{{ $notice->title }}</div>
+                            <div class="small text-muted mb-2">{{ $notice->created_at?->diffForHumans() }}</div>
+                            <div class="small text-muted lh-base">{{ \Illuminate\Support\Str::limit($notice->description, 80) }}</div>
+                        </div>
+                    @empty
+                        <div class="text-center py-4 text-muted small">No recent announcements</div>
                     @endforelse
                 </div>
             </div>
