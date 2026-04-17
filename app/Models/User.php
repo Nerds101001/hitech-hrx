@@ -216,6 +216,11 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return strtoupper($first . $last);
   }
 
+  public function getInitialsAttribute(): string
+  {
+      return $this->getInitials();
+  }
+
   public function getProfilePicture()
   {
     if (!$this->profile_picture) {
@@ -605,5 +610,10 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   public function probationEvaluations()
   {
     return $this->hasMany(ProbationEvaluation::class, 'user_id');
+  }
+
+  public function team()
+  {
+    return $this->belongsTo(Team::class, 'team_id');
   }
 }

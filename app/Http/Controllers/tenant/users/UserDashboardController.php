@@ -243,15 +243,31 @@ class UserDashboardController extends Controller
             $todayAbsentCount = count($teamMemberIds) - $todayPresentCount - $todayOnLeaveCount;
             if ($todayAbsentCount < 0) $todayAbsentCount = 0;
 
-            // Optional: Team Present Users list (if used in view)
             $todayPresentUsersList = Attendance::whereIn('user_id', $teamMemberIds)
                 ->whereDate('check_in_time', now())
                 ->with('user')
                 ->get();
 
+            // Team Birthdays & Anniversaries (Next 30 days)
+            $teamBirthdays = User::whereIn('id', $teamMemberIds)
+                ->whereMonth('dob', '>=', now()->month)
+                ->orderByRaw('MONTH(dob), DAY(dob)')
+                ->limit(5)
+                ->get();
+            
+            $pendingDocumentRequests = DocumentRequest::whereIn('user_id', $teamMemberIds)
+                ->where('status', 'pending')
+                ->count();
+            
+            $pendingLoanRequests = LoanRequest::whereIn('user_id', $teamMemberIds)
+                ->where('status', 'pending')
+                ->count();
+
             return view('tenant.users.dashboard.manager-index', [
                 'pendingLeaveRequests' => $pendingLeaveRequests,
                 'pendingExpenseRequests' => $pendingExpenseRequests,
+                'pendingDocumentRequests' => $pendingDocumentRequests,
+                'pendingLoanRequests' => $pendingLoanRequests,
                 'activeEmployees' => $active,
                 'todayPresentUsers' => $todayPresentCount,
                 'todayOnLeaveCount' => $todayOnLeaveCount,
@@ -262,6 +278,7 @@ class UserDashboardController extends Controller
                 'nextHoliday' => $nextHoliday,
                 'recentNotices' => $recentNotices,
                 'teamOutToday' => $teamOutToday,
+                'teamBirthdays' => $teamBirthdays,
                 'payrollTrend' => $payrollTrend,
                 'latestNetSalary' => $latestNetSalary,
                 'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),

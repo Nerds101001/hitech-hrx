@@ -1,164 +1,174 @@
 @extends('layouts/layoutMaster')
 
-@section('title', 'My Assets')
+@section('title', 'My Assets | Hitech HR')
 
 @section('vendor-style')
-@vite(['resources/assets/vendor/libs/animate-css/animate.scss'])
+@vite([
+    'resources/assets/vendor/libs/animate-css/animate.scss',
+    'resources/assets/vendor/libs/datatables-bs5/datatables.bootstrap5.scss',
+    'resources/assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.scss',
+    'resources/assets/vendor/scss/pages/hitech-portal.scss'
+])
 @endsection
 
-@section('vendor-script')
-@vite(['resources/assets/vendor/libs/select2/select2.full.min.js'])
-@vite(['resources/assets/vendor/js/bootstrap.js'])
+@section('page-style')
+<style>
+    .asset-glass-card {
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 128, 128, 0.1);
+        border-radius: 20px;
+        transition: all 0.3s ease;
+    }
+    .asset-glass-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(0, 77, 84, 0.1);
+    }
+    .asset-icon-box {
+        width: 50px;
+        height: 50px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+</style>
 @endsection
 
 @section('content')
-<div class="content-wrapper">
-    <!-- Content -->
-    <div class="container-xxl flex-grow-1 container-p-y">
-        <div class="row">
-            <div class="col-md-12">
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">My Assets</h5>
-                        <div class="card-actions">
-                            <a href="{{ route('assets.index') }}" class="btn btn-secondary">
-                                <i class="bx bx-archive"></i> All Assets
-                            </a>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- My Assets Statistics -->
-                        <div class="row mb-4">
-                            <div class="col-lg-3 col-md-6 mb-3">
-                                <div class="card bg-label-primary">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar me-3">
-                                                <div class="avatar-initial bg-primary">
-                                                    <i class="bx bx-package"></i>
-                                                </div>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">{{ $stats['total'] }}</h6>
-                                                <p class="mb-0">Total Assets</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-3 col-md-6 mb-3">
-                                <div class="card bg-label-success">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar me-3">
-                                                <div class="avatar-initial bg-success">
-                                                    <i class="bx bx-check-circle"></i>
-                                                </div>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">{{ $stats['available'] }}</h6>
-                                                <p class="mb-0">Available</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-3 col-md-6 mb-3">
-                                <div class="card bg-label-info">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar me-3">
-                                                <div class="avatar-initial bg-info">
-                                                    <i class="bx bx-user"></i>
-                                                </div>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">{{ $stats['assigned'] }}</h6>
-                                                <p class="mb-0">Assigned to Me</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-3 col-md-6 mb-3">
-                                <div class="card bg-label-warning">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar me-3">
-                                                <div class="avatar-initial bg-warning">
-                                                    <i class="bx bx-tools"></i>
-                                                </div>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">{{ $stats['maintenance'] }}</h6>
-                                                <p class="mb-0">Under Maintenance</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-lg-3 col-md-6 mb-3">
-                                <div class="card bg-label-secondary">
-                                    <div class="card-body">
-                                        <div class="d-flex align-items-center">
-                                            <div class="avatar me-3">
-                                                <div class="avatar-initial bg-secondary">
-                                                    <i class="bx bx-x-circle"></i>
-                                                </div>
-                                            </div>
-                                            <div class="flex-grow-1">
-                                                <h6 class="mb-1">{{ $stats['retired'] }}</h6>
-                                                <p class="mb-0">Retired</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+<div class="px-4 animate__animated animate__fadeIn">
+    
+    <!-- Hero Banner -->
+    <div class="row mb-6">
+        <div class="col-12">
+            <x-hero-banner 
+                title="Resource Management" 
+                subtitle="Manage and maintain your assigned company assets and digital inventory."
+                icon="bx-briefcase-alt-2"
+                gradient="teal"
+            />
+        </div>
+    </div>
 
-                        <!-- My Assets Table -->
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="myAssetsTable">
-                                <thead>
-                                    <tr>
-                                        <th>Asset Code</th>
-                                        <th>Name</th>
-                                        <th>Category</th>
-                                        <th>Status</th>
-                                        <th>Assigned Date</th>
-                                        <th>Current Value</th>
-                                        <th>Warranty</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                            </table>
-                        </div>
-                    </div>
+    <!-- Quick Stats Hub -->
+    <div class="row g-4 mb-6">
+        <div class="col-lg-3 col-sm-6">
+            <div class="asset-glass-card p-4 d-flex align-items-center gap-3">
+                <div class="asset-icon-box bg-label-teal"><i class="bx bx-cube"></i></div>
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark">{{ $stats['total'] }}</h4>
+                    <small class="text-muted fw-bold">TOTAL INVENTORY</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="asset-glass-card p-4 d-flex align-items-center gap-3">
+                <div class="asset-icon-box bg-label-success"><i class="bx bx-check-shield"></i></div>
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark">{{ $stats['assigned'] }}</h4>
+                    <small class="text-muted fw-bold">ACTIVE ASSIGNED</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="asset-glass-card p-4 d-flex align-items-center gap-3">
+                <div class="asset-icon-box bg-label-warning"><i class="bx bx-wrench"></i></div>
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark">{{ $stats['maintenance'] }}</h4>
+                    <small class="text-muted fw-bold">UNDER SERVICE</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-sm-6">
+            <div class="asset-glass-card p-4 d-flex align-items-center gap-3">
+                <div class="asset-icon-box bg-label-info"><i class="bx bx-shopping-bag"></i></div>
+                <div>
+                    <h4 class="mb-0 fw-bold text-dark">{{ $stats['available'] }}</h4>
+                    <small class="text-muted fw-bold">READY TO CLAIM</small>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Inventory Asset Data -->
+    <div class="row mb-6">
+        <div class="col-12">
+            <div class="hitech-card animate__animated animate__fadeInUp">
+                <div class="hitech-card-header border-bottom d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <h5 class="title mb-0">My Active Inventory</h5>
+                        <span class="badge badge-hitech-primary">{{ $stats['assigned'] }} Assets Found</span>
+                    </div>
+                </div>
+                
+                <div class="card-datatable table-responsive p-0">
+                    <table class="table table-hover mb-0" id="myAssetsTable">
+                        <thead class="bg-light-soft">
+                            <tr>
+                                <th class="text-uppercase small fw-bold">Asset ID</th>
+                                <th class="text-uppercase small fw-bold">Inventory Name</th>
+                                <th class="text-uppercase small fw-bold">Category</th>
+                                <th class="text-uppercase small fw-bold">Current Status</th>
+                                <th class="text-uppercase small fw-bold">Acquired Date</th>
+                                <th class="text-uppercase small fw-bold">Estimated Value</th>
+                                <th class="text-uppercase small fw-bold text-end">Actions</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
+
+{{-- MODALS / SCRIPTS --}}
+@endsection
+
+@section('vendor-script')
+@vite([
+    'resources/assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js',
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.js'
+])
 @endsection
 
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize DataTable
+    // Premium DataTable Initialization
     $('#myAssetsTable').DataTable({
         processing: true,
         serverSide: true,
         ajax: '{{ route("myAssets.getListAjax") }}',
         columns: [
             { data: 'asset_code' },
-            { data: 'name' },
-            { data: 'category_name' },
-            { data: 'status_badge' },
+            { 
+               data: 'name',
+               render: function(data, type, row) {
+                   return `<div class="fw-bold text-dark">${data}</div><small class="text-muted">${row.category_name}</small>`;
+               }
+            },
+            { data: 'category_name', visible: false },
+            { 
+               data: 'status_badge',
+               render: function(data) {
+                   return `<div class="hitech-badge-wrap">${data}</div>`;
+               }
+            },
             { data: 'assigned_date' },
             { data: 'formatted_current_value' },
-            { data: 'warranty_status' },
-            { data: 'action', orderable: false }
+            { 
+                data: 'action', 
+                orderable: false,
+                className: 'text-end'
+            }
         ],
+        dom: '<"card-header p-4 border-bottom"<"d-flex justify-content-between align-items-center"fB>>t<"card-footer p-4 border-top"<"d-flex justify-content-between"ip>>',
+        language: {
+            sSearch: '',
+            searchPlaceholder: 'Search Inventory...'
+        },
         order: [[0, 'desc']]
     });
 });
@@ -168,25 +178,35 @@ function viewAssetDetails(id) {
 }
 
 function requestMaintenance(id) {
-    if (confirm('Do you want to request maintenance for this asset?')) {
-        $.ajax({
-            url: '{{ route("myAssets.requestMaintenance", "") }}/' + id,
-            type: 'POST',
-            data: {
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                if (response.success) {
-                    alert('Maintenance request submitted successfully!');
-                } else {
-                    alert('Failed to submit maintenance request.');
-                }
-            },
-            error: function() {
-                alert('An error occurred while submitting the request.');
+    if (window.showInfoSwal) {
+        window.showInfoSwal('Are you sure you want to request maintenance for this asset?').then((result) => {
+            if (result.isConfirmed) {
+                submitMaintenance(id);
             }
         });
+    } else {
+        if (confirm('Request maintenance for this asset?')) submitMaintenance(id);
     }
+}
+
+function submitMaintenance(id) {
+    $.ajax({
+        url: '{{ route("myAssets.requestMaintenance", "") }}/' + id,
+        type: 'POST',
+        data: { _token: '{{ csrf_token() }}' },
+        success: function(response) {
+            if (response.status === 'success') {
+                if (window.showSuccessSwal) {
+                    window.showSuccessSwal('Maintenance request submitted successfully!');
+                } else {
+                    alert('Success!');
+                }
+                $('#myAssetsTable').DataTable().ajax.reload();
+            } else {
+                if (window.showErrorSwal) window.showErrorSwal('Failed to submit request.');
+            }
+        }
+    });
 }
 </script>
 @endpush
