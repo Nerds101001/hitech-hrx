@@ -133,6 +133,9 @@ class DashboardController extends Controller
       // 7. Celebrations (Birthdays & Work Anniversaries - Next 6 Imminent)
       $todayMd = now()->format('md');
 
+      $upcomingBirthdays = User::whereNotNull('dob')
+        ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
+        ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
         ->take(15) // Get broad set
         ->get()
         ->unique('id')
