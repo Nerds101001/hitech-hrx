@@ -34,23 +34,45 @@
           // 1. Addon Check
           if(isset($menu->addon) && !$addonService->isAddonEnabled($menu->addon)) continue;
           
-          // 2. Role Check (Improved to handle case-insensitivity and SuperAdmin)
+          // 2. Identify User & Admin Status (Robust Check)
           $user = auth()->user();
-          $isAdmin = $user->hasRole(['Admin', 'admin', 'super_admin']);
-          if(isset($menu->roles) && !$isAdmin) {
-              // Convert both to lowercase for case-insensitive check
-              $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
-              $requiredRoles = array_map('strtolower', (array) $menu->roles);
-              if (empty(array_intersect($userRoles, $requiredRoles))) continue;
+          $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
+          $isAdmin = !empty(array_intersect($userRoles, ['admin', 'super_admin']));
+          
+          // 3. Visibility Check
+          $isVisible = $isAdmin; // Admins see everything by default
+          
+          if (!$isVisible) {
+              $hasRole = true;
+              $hasPermission = true;
+
+              // Check Roles
+              if (isset($menu->roles)) {
+                  $requiredRoles = array_map('strtolower', (array) $menu->roles);
+                  // Map 'employee' in JSON to 'field_employee' in DB if needed
+                  if (in_array('employee', $requiredRoles) && !in_array('field_employee', $requiredRoles)) {
+                      $requiredRoles[] = 'field_employee';
+                  }
+                  $hasRole = !empty(array_intersect($userRoles, $requiredRoles));
+              }
+
+              // Check Permissions
+              if (isset($menu->permission)) {
+                  $hasPermission = $user->can($menu->permission);
+              }
+
+              // Item is visible if it satisfies both if they are set
+              $isVisible = $hasRole && $hasPermission;
           }
 
-          // 3. Permission Check (Granular Module Access)
-          if(isset($menu->permission) && !$isAdmin) {
-              if (!$user->can($menu->permission)) continue;
-          }
+          if (!$isVisible) continue;
         @endphp
 
-        @if (!isset($menu->menuHeader))
+        @if (isset($menu->menuHeader))
+          <li class="menu-header small text-uppercase">
+            <span class="menu-header-text">{{ __($menu->menuHeader) }}</span>
+          </li>
+        @else
           @php
             $activeClass = '';
             $currentRouteName = Route::currentRouteName();
@@ -84,19 +106,33 @@
             @isset($menu->submenu)
                <ul class="hitech-submenu">
                   @foreach($menu->submenu as $submenu)
-                    @php
-                     // Submenu Role/Addon check
-                     if(isset($submenu->addon) && !$addonService->isAddonEnabled($submenu->addon)) continue;
-                     if(isset($submenu->roles) && !$isAdmin) {
-                         $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
-                         $requiredRoles = array_map('strtolower', (array) $submenu->roles);
-                         if (empty(array_intersect($userRoles, $requiredRoles))) continue;
-                     }
-                     if(isset($submenu->permission) && !$isAdmin) {
-                         if (!$user->can($submenu->permission)) continue;
-                     }
-                    @endphp
-                    <li class="hitech-submenu-item {{ Route::currentRouteName() === $submenu->slug ? 'active' : '' }}">
+                     @php
+                      // Submenu Role/Addon check
+                      if(isset($submenu->addon) && !$addonService->isAddonEnabled($submenu->addon)) continue;
+                      
+                      $subVisible = $isAdmin;
+                      if (!$subVisible) {
+                          $subRole = true;
+                          $subPerm = true;
+                          
+                          if (isset($submenu->roles)) {
+                              $reqSubRoles = array_map('strtolower', (array) $submenu->roles);
+                              if (in_array('employee', $reqSubRoles) && !in_array('field_employee', $reqSubRoles)) {
+                                  $reqSubRoles[] = 'field_employee';
+                              }
+                              $subRole = !empty(array_intersect($userRoles, $reqSubRoles));
+                          }
+                          
+                          if (isset($submenu->permission)) {
+                              $subPerm = $user->can($submenu->permission);
+                          }
+                          
+                          $subVisible = $subRole && $subPerm;
+                      }
+                      
+                      if (!$subVisible) continue;
+                     @endphp
+                     <li class="hitech-submenu-item {{ Route::currentRouteName() === ($submenu->slug ?? '') ? 'active' : '' }}">
                        <a href="{{ url($submenu->url) }}" class="hitech-submenu-link">
                           {{ __($submenu->name) }}
                        </a>
