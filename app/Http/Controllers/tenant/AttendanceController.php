@@ -21,27 +21,34 @@ class AttendanceController extends Controller
 {
   public function index()
   {
-    $activeUsersCount = User::where('status', UserAccountStatus::ACTIVE)->count();
+    $currentUser = auth()->user();
+    $scopedIds = $this->getScopedUserIds($currentUser);
+
+    $activeUsersCountQuery = User::where('status', UserAccountStatus::ACTIVE);
+    if ($scopedIds) $activeUsersCountQuery->whereIn('id', $scopedIds);
+    $activeUsersCount = $activeUsersCountQuery->count();
     
-    $todayPresentCount = Attendance::whereDate('check_in_time', today())
-      ->where('status', 'present')
-      ->count();
+    $todayPresentCountQuery = Attendance::whereDate('check_in_time', today())->where('status', 'present');
+    if ($scopedIds) $todayPresentCountQuery->whereIn('user_id', $scopedIds);
+    $todayPresentCount = $todayPresentCountQuery->count();
       
-    $todayAbsentCount = Attendance::whereDate('check_in_time', today())
-      ->where('status', 'absent')
-      ->count();
+    $todayAbsentCountQuery = Attendance::whereDate('check_in_time', today())->where('status', 'absent');
+    if ($scopedIds) $todayAbsentCountQuery->whereIn('user_id', $scopedIds);
+    $todayAbsentCount = $todayAbsentCountQuery->count();
       
-    $lateCount = Attendance::whereDate('check_in_time', today())
-      ->where('status', 'late')
-      ->count();
+    $lateCountQuery = Attendance::whereDate('check_in_time', today())->where('status', 'late');
+    if ($scopedIds) $lateCountQuery->whereIn('user_id', $scopedIds);
+    $lateCount = $lateCountQuery->count();
 
-    $onLeaveCount = \App\Models\LeaveRequest::where('status', \App\Enums\LeaveRequestStatus::APPROVED)
+    $onLeaveCountQuery = \App\Models\LeaveRequest::where('status', \App\Enums\LeaveRequestStatus::APPROVED)
         ->whereDate('from_date', '<=', today())
-        ->whereDate('to_date', '>=', today())
-        ->count();
+        ->whereDate('to_date', '>=', today());
+    if ($scopedIds) $onLeaveCountQuery->whereIn('user_id', $scopedIds);
+    $onLeaveCount = $onLeaveCountQuery->count();
 
-    $users = User::where('status', UserAccountStatus::ACTIVE)
-      ->get();
+    $usersQuery = User::where('status', UserAccountStatus::ACTIVE);
+    if ($scopedIds) $usersQuery->whereIn('id', $scopedIds);
+    $users = $usersQuery->get();
 
     $shifts = Shift::get();
     $teams = Team::get();
@@ -59,10 +66,37 @@ class AttendanceController extends Controller
     ]);
   }
 
+  /**
+   * Get IDs of users the current user is authorized to see/manage.
+   * Admin/HR: All users.
+   * Manager (Restricted): Direct reports + Self.
+   */
+  private function getScopedUserIds($user)
+  {
+      if ($user->hasRole(['admin', 'hr'])) {
+          return null; // All
+      }
+      
+      if ($user->hasRole('manager')) {
+          $ids = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+          $ids[] = $user->id;
+          return $ids;
+      }
+      
+      return [$user->id]; // Default to self
+  }
+
   public function indexAjax(Request $request)
   {
+    $currentUser = auth()->user();
+    $scopedIds = $this->getScopedUserIds($currentUser);
+
     $query = Attendance::query()
       ->with(['attendanceLogs', 'user', 'shift', 'updatedBy']);
+
+    if ($scopedIds) {
+        $query->whereIn('user_id', $scopedIds);
+    }
 
     // User filter
     if ($request->has('userId') && $request->input('userId')) {
@@ -237,8 +271,15 @@ class AttendanceController extends Controller
       $endOfMonth = $startOfMonth->copy()->endOfMonth();
       $daysInMonth = $startOfMonth->daysInMonth;
       
+      $currentUser = auth()->user();
+      $scopedIds = $this->getScopedUserIds($currentUser);
+
       // Get filtered users
       $usersQ = User::whereIn('status', [UserAccountStatus::ACTIVE, UserAccountStatus::ONBOARDING_SUBMITTED]);
+
+      if ($scopedIds) {
+          $usersQ->whereIn('id', $scopedIds);
+      }
       
       if ($request->userId) $usersQ->where('id', $request->userId);
       if ($request->shiftId) $usersQ->where('shift_id', $request->shiftId);
@@ -439,9 +480,13 @@ class AttendanceController extends Controller
         $presentData = [];
         $absentData = [];
 
+        $currentUser = auth()->user();
+        $scopedIds = $this->getScopedUserIds($currentUser);
+
         // Determine Total staff count for this filter to calculate absents
         // Matches registryAjax to include active and submitted onboarding staff
         $userCount = User::whereIn('status', [\App\Enums\UserAccountStatus::ACTIVE, \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED]);
+        if ($scopedIds) $userCount->whereIn('id', $scopedIds);
         if ($teamId) $userCount->where('team_id', $teamId);
         if ($userId) $userCount->where('id', $userId);
         if ($request->shiftId) $userCount->where('shift_id', $request->shiftId);
@@ -458,6 +503,7 @@ class AttendanceController extends Controller
         $attendancesByDate = Attendance::whereBetween('check_in_time', [$startDate, $endDate])
             ->selectRaw("DATE(check_in_time) as date, COUNT(*) as count")
             ->whereIn('status', ['present', 'late', 'work_from_home', 'Present', 'Late', 'Work From Home'])
+            ->when($scopedIds, fn($q) => $q->whereIn('user_id', $scopedIds))
             ->when($teamId, fn($q) => $q->whereHas('user', fn($u) => $u->where('team_id', $teamId)))
             ->when($userId, fn($q) => $q->where('user_id', $userId))
             ->when($request->shiftId, fn($q) => $q->where('shift_id', $request->shiftId))
