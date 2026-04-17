@@ -15,15 +15,24 @@ class ApprovalController extends Controller
 {
     public function index()
     {
-        $profileApprovals = ProfileUpdateApproval::where('status', 'pending')
-            ->with('user')
-            ->latest()
-            ->get();
+        $user = auth()->user();
+        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+        
+        $profileQuery = ProfileUpdateApproval::where('status', 'pending')->with('user');
+        $documentQuery = DocumentRequest::where('status', 'pending')->with(['user', 'documentType']);
 
-        $documentApprovals = DocumentRequest::where('status', 'pending')
-            ->with(['user', 'documentType'])
-            ->latest()
-            ->get();
+        if ($isManager) {
+            $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+            $profileQuery->whereHas('user', function($q) use ($managedTeamIds) {
+                $q->whereIn('team_id', $managedTeamIds);
+            });
+            $documentQuery->whereHas('user', function($q) use ($managedTeamIds) {
+                $q->whereIn('team_id', $managedTeamIds);
+            });
+        }
+
+        $profileApprovals = $profileQuery->latest()->get();
+        $documentApprovals = $documentQuery->latest()->get();
 
         return view('tenant.approvals.index', compact('profileApprovals', 'documentApprovals'));
     }

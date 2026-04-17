@@ -23,8 +23,22 @@ class LeaveController extends Controller
     $employees = User::all();
     $leaveTypes = LeaveType::all();
     
+    $user = auth()->user();
+    $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $managedTeamIds = [];
+    if($isManager) {
+        $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+    }
+
     // Optimized: Fetch all stats in one query using selectRaw
-    $stats = LeaveRequest::selectRaw("
+    $statsQuery = LeaveRequest::query();
+    if($isManager) {
+        $statsQuery->whereHas('user', function($q) use ($managedTeamIds) {
+            $q->whereIn('team_id', $managedTeamIds);
+        });
+    }
+
+    $stats = $statsQuery->selectRaw("
         SUM(CASE WHEN status = '" . LeaveRequestStatus::PENDING->value . "' THEN 1 ELSE 0 END) as pending_count,
         SUM(CASE WHEN status = '" . LeaveRequestStatus::APPROVED->value . "' AND DATE(updated_at) = '" . today()->toDateString() . "' THEN 1 ELSE 0 END) as approved_today,
         SUM(CASE WHEN status = '" . LeaveRequestStatus::APPROVED->value . "' AND DATE(from_date) <= '" . today()->toDateString() . "' AND DATE(to_date) >= '" . today()->toDateString() . "' THEN 1 ELSE 0 END) as on_leave_now,
@@ -64,13 +78,22 @@ class LeaveController extends Controller
     ]);
   }
 
-
   public function getListAjax(Request $request)
   {
     try {
+      $user = auth()->user();
+      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      
       $query = LeaveRequest::query()
         ->with(['user', 'leaveType', 'user.designation.department', 'approvedBy', 'updatedBy', 'createdBy'])
         ->select('leave_requests.*');
+
+      if ($isManager) {
+          $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+          $query->whereHas('user', function($q) use ($managedTeamIds) {
+              $q->whereIn('team_id', $managedTeamIds);
+          });
+      }
 
       // Apply Filters
       if ($request->has('employeeFilter') && !empty($request->input('employeeFilter'))) {

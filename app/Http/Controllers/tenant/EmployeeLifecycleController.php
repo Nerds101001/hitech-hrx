@@ -29,22 +29,37 @@ class EmployeeLifecycleController extends Controller
     public function index(): View
     {
         $user = Auth::user();
-        
+        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+        $managedTeamIds = [];
+        if ($isManager) {
+            $managedTeamIds = Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+        }
+
         // Get statistics
+        $statsQuery = function($model) use ($isManager, $managedTeamIds) {
+            $q = $model::query();
+            if ($isManager) {
+                $q->whereHas('user', function($qu) use ($managedTeamIds) {
+                    $qu->whereIn('team_id', $managedTeamIds);
+                });
+            }
+            return $q;
+        };
+
         $stats = [
-            'pending_promotions' => EmployeePromotion::pending()->count(),
-            'pending_transfers' => EmployeeTransfer::pending()->count(),
-            'active_warnings' => EmployeeWarning::active()->count(),
-            'pending_resignations' => EmployeeResignation::pending()->count(),
-            'open_complaints' => EmployeeComplaint::open()->count(),
-            'pending_trips' => EmployeeTrip::pending()->count(),
+            'pending_promotions' => $statsQuery(EmployeePromotion::class)->pending()->count(),
+            'pending_transfers' => $statsQuery(EmployeeTransfer::class)->pending()->count(),
+            'active_warnings' => $statsQuery(EmployeeWarning::class)->active()->count(),
+            'pending_resignations' => $statsQuery(EmployeeResignation::class)->pending()->count(),
+            'open_complaints' => $statsQuery(EmployeeComplaint::class)->open()->count(),
+            'pending_trips' => $statsQuery(EmployeeTrip::class)->pending()->count(),
             'active_announcements' => Announcement::current()->count(),
         ];
 
         // Get recent activities
-        $recentPromotions = EmployeePromotion::latest()->limit(5)->get();
-        $recentTransfers = EmployeeTransfer::latest()->limit(5)->get();
-        $recentWarnings = EmployeeWarning::latest()->limit(5)->get();
+        $recentPromotions = $statsQuery(EmployeePromotion::class)->latest()->limit(5)->get();
+        $recentTransfers = $statsQuery(EmployeeTransfer::class)->latest()->limit(5)->get();
+        $recentWarnings = $statsQuery(EmployeeWarning::class)->latest()->limit(5)->get();
 
         return view('tenant.employee-lifecycle.index', compact(
             'stats', 
@@ -59,9 +74,19 @@ class EmployeeLifecycleController extends Controller
      */
     public function promotions(): View
     {
-        $promotions = EmployeePromotion::with(['user', 'previousDesignation', 'newDesignation', 'approvedBy'])
-            ->latest()
-            ->paginate(15);
+        $user = Auth::user();
+        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+        
+        $query = EmployeePromotion::with(['user', 'previousDesignation', 'newDesignation', 'approvedBy']);
+        
+        if ($isManager) {
+            $managedTeamIds = Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+            $query->whereHas('user', function($q) use ($managedTeamIds) {
+                $q->whereIn('team_id', $managedTeamIds);
+            });
+        }
+
+        $promotions = $query->latest()->paginate(15);
 
         return view('tenant.employee-lifecycle.promotions', compact('promotions'));
     }

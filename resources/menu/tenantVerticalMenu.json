@@ -556,7 +556,8 @@
           "slug": "approvals.index",
           "roles": [
             "admin",
-            "hr"
+            "hr",
+            "manager"
           ]
         }
       ]

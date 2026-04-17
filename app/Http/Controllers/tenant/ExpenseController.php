@@ -22,15 +22,29 @@ class ExpenseController extends Controller
     $employees = User::all();
     $expenseTypes = ExpenseType::all();
     
-    $pendingRequests = ExpenseRequest::where('status', 'pending')->count();
-    $approvedToday = ExpenseRequest::where('status', 'approved')
+    $user = auth()->user();
+    $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $managedTeamIds = [];
+    if ($isManager) {
+        $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+    }
+
+    $baseQuery = ExpenseRequest::query();
+    if ($isManager) {
+        $baseQuery->whereHas('user', function($q) use ($managedTeamIds) {
+            $q->whereIn('team_id', $managedTeamIds);
+        });
+    }
+
+    $pendingRequests = (clone $baseQuery)->where('status', 'pending')->count();
+    $approvedToday = (clone $baseQuery)->where('status', 'approved')
         ->whereDate('updated_at', today())
         ->count();
-    $totalThisMonthAmount = ExpenseRequest::where('status', 'approved')
+    $totalThisMonthAmount = (clone $baseQuery)->where('status', 'approved')
         ->whereMonth('for_date', now()->month)
         ->whereYear('for_date', now()->year)
         ->sum('approved_amount');
-    $pendingAmount = ExpenseRequest::where('status', 'pending')->sum('amount');
+    $pendingAmount = (clone $baseQuery)->where('status', 'pending')->sum('amount');
 
     return view('tenant.expenses.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
@@ -42,13 +56,22 @@ class ExpenseController extends Controller
       'pendingAmount' => $pendingAmount
     ]);
   }
-
   public function indexAjax(Request $request)
   {
     try {
+      $user = auth()->user();
+      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+
       $query = ExpenseRequest::query()
         ->with(['user', 'expenseType', 'approvedBy', 'updatedBy'])
         ->select('expense_requests.*');
+
+      if ($isManager) {
+          $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+          $query->whereHas('user', function($q) use ($managedTeamIds) {
+              $q->whereIn('team_id', $managedTeamIds);
+          });
+      }
 
       // Filters
       if ($request->has('employeeFilter') && !empty($request->input('employeeFilter'))) {
