@@ -2507,6 +2507,14 @@ div.dtr-modal div.dtr-modal-content {
     border: 1px solid #e2e8f0 !important;
     border-radius: 12px !important;
     transition: all 0.3s ease !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+
+    .select2-container {
+        flex: 1 1 auto !important;
+        width: 1% !important;
+    }
 
     &:focus-within {
         border-color: #008080 !important;

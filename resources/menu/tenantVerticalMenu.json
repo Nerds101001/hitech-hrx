@@ -334,7 +334,6 @@
       "name": "Intelligent Vault",
       "icon": "menu-icon bx bx-library",
       "permission": "library.view",
-      "addon": "DisabledModule",
       "slug": [
         "library.index",
         "ai-training.index"

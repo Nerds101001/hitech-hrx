@@ -33,48 +33,64 @@ class DigitalLibraryController extends Controller
      */
     public function analyze(Request $request)
     {
-        $request->validate(['file' => 'required|max:20480']);
+        $request->validate(['file' => 'required|max:20480|mimes:pdf']);
         $file = $request->file('file');
         
-        $category = 'SDS';
-        $summary = "Processing...";
+        $originalName = $file->getClientOriginalName();
+        $duplicate = LibraryFile::where('title', $originalName)->first();
 
         try {
             $parser = new \Smalot\PdfParser\Parser();
             $pdf = $parser->parseFile($file->getPathname());
-            // Increase vision to 5000 chars for better context
-            $text = mb_substr($pdf->getText(), 0, 5000);
+            
+            // Extract text with clean encoding
+            $text = mb_convert_encoding($pdf->getText(), 'UTF-8', 'UTF-8');
+            $textSample = mb_substr($text, 0, 8000); // Increased for better accuracy
+
+            if (strlen(trim($textSample)) < 100) {
+                Log::warning("DIGITAL_LIBRARY_OCR_NEEDED: Small text extracted from " . $originalName);
+                // We'll try to let it pass if it's a valid file, but note it
+            }
 
             $factory = OpenAI::factory();
             $client = $factory->withApiKey(env('OPENAI_API_KEY'))
                               ->withBaseUri(env('OPENAI_BASE_URL', 'https://integrate.api.nvidia.com/v1'))
                               ->make();
 
+            // Request AI Audit
             $resp = $client->chat()->create([
                 'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
                 'messages' => [
                     ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
-                    Categories: TDS, SDS, MOM, LEARN.
+                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training).
                     
                     STRICT INSTRUCTIONS:
+                    - You MUST identify the document type.
+                    - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate MOM), do NOT reject it.
                     - Extract: CATEGORY|NAME|DATE|CRUX
                     - CRUX Rules (Must be 5-6 lines total, PLAIN TEXT ONLY):
-                      - NO markdown, NO asterisks (**), NO bolding, NO numbered lists.
-                      - Lines 1-3: Clear Product Description (What is it?).
+                      - NO markdown, NO asterisks, NO bolding, NO numbered lists.
+                      - Lines 1-3: Clear Product Description.
                       - Lines 4-5: Features & Key Applications.
-                      - Line 6: Technical/Chemical crux (Safety or Metric).
-                    - If invalid, reply ONLY 'INVALID'."],
-                    ['role' => 'user', 'content' => "Text Sample: " . $text],
+                      - Line 6: Technical crux (Safety/Metric).
+                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'."],
+                    ['role' => 'user', 'content' => "Text Sample: " . $textSample],
                 ],
             ]);
 
-            $aiResult = $resp->choices[0]->message->content ?? 'INVALID';
+            // Robust response handling
+            $respArray = json_decode(json_encode($resp), true);
             
-            // 🛡️ Strategic Logging: See exactly what the AI is thinking
-            Log::info("AI RAW AUDIT: " . $aiResult);
+            if (!isset($respArray['choices'][0]['message']['content'])) {
+                Log::error("DIGITALLIBRARY_AI_MALFORMED_RESPONSE: " . json_encode($respArray));
+                throw new \Exception("AI Guardian returned an unexpected response structure. Raw: " . mb_substr(json_encode($respArray), 0, 200));
+            }
+
+            $aiResult = $respArray['choices'][0]['message']['content'];
+            Log::info("AI RAW AUDIT [" . $originalName . "]: " . $aiResult);
 
             if (str_contains(strtoupper($aiResult), 'INVALID') && strlen($aiResult) < 20) {
-                return response()->json(['error' => 'AI Guardian: Could not verify document as technical asset.'], 422);
+                return response()->json(['error' => 'AI Guardian: Could not verify document as a valid technical asset. Please ensure the PDF is not scouted or image-only.'], 422);
             }
 
             // Robust Splitting
@@ -83,106 +99,70 @@ class DigitalLibraryController extends Controller
             return response()->json([
                 'success' => true,
                 'category' => trim($parts[0] ?? 'TDS'),
-                'name' => trim($parts[1] ?? $file->getClientOriginalName()),
+                'name' => trim($parts[1] ?? $originalName),
                 'date' => trim($parts[2] ?? date('Y-m-d')),
                 'summary' => trim($parts[3] ?? (count($parts) > 1 ? end($parts) : 'Technicial summary extracted.')),
-                'temp_name' => $file->getClientOriginalName()
+                'temp_name' => $originalName,
+                'is_duplicate' => !!$duplicate,
+                'duplicate_id' => $duplicate?->id
             ]);
         } catch (\Exception $e) {
-            Log::error("DIGITALLIBRARY_AUDIT_ERROR: " . $e->getMessage());
-            return response()->json(['error' => 'Audit Error: ' . $e->getMessage()], 500);
+            Log::error("DIGITALLIBRARY_AUDIT_ERROR [" . $originalName . "]: " . $e->getMessage());
+            return response()->json(['error' => 'Audit Error: The PDF might be encrypted or malformed. ' . $e->getMessage()], 500);
         }
     }
 
     public function store(Request $request)
     {
-        // 🔒 Explicitly handle validation for AJAX to avoid 302 redirects
         $validator = Validator::make($request->all(), [
             'file' => 'required_without:youtube_url|nullable|mimes:pdf,mp4,mov,avi|max:51200',
             'youtube_url' => 'required_without:file|nullable|url',
             'category' => 'nullable',
+            'overwrite' => 'nullable|boolean'
         ]);
 
         if ($validator->fails()) {
-            return ($request->ajax() || $request->wantsJson())
-                ? response()->json(['error' => 'Input Required: Either a file or a valid YouTube URL must be provided.'], 422)
-                : back()->withErrors($validator)->withInput();
+            return response()->json(['error' => 'Input Required: ' . $validator->errors()->first()], 422);
         }
 
         $file = $request->file('file');
+        $productName = $request->name ?? ($file ? $file->getClientOriginalName() : 'Hitech Asset');
+        
+        // --- Duplicate Check ---
+        $existing = LibraryFile::where('title', $productName)->first();
+        if ($existing && !$request->overwrite) {
+            return response()->json([
+                'error' => 'DUPLICATE_FOUND',
+                'message' => "A file named '{$productName}' already exists in the vault. Do you want to replace it?",
+                'id' => $existing->id
+            ], 409);
+        }
+
         $youtubeUrl = $request->youtube_url;
-        $productName = $request->title ?: ($request->title_yt ?: ($file ? $file->getClientOriginalName() : 'YouTube Digital Asset'));
-        $summary = "Processing strategic crux...";
+        $summary = $request->summary ?? "Processing strategic crux...";
         $category = $request->category ?? 'SDS';
         $path = null;
-        $mimeType = 'video/youtube';
-        $size = 0;
+        $mimeType = $file ? $file->getClientMimeType() : 'video/youtube';
+        $size = $file ? $file->getSize() : 0;
 
-        // --- Case 1: YouTube Video (No AI Audit) ---
         if ($youtubeUrl) {
             $category = 'Video';
             $summary = "YouTube Digital Asset: " . $youtubeUrl;
-            $mimeType = 'video/youtube';
-            $size = 0;
-        } 
-        // --- Case 2: File Upload ---
-        elseif ($file) {
-            $mimeType = $file->getClientMimeType();
-            $size = $file->getSize();
-
-            if ($mimeType === 'application/pdf') {
-                try {
-                    $parser = new \Smalot\PdfParser\Parser();
-                    $pdf = $parser->parseFile($file->getPathname());
-                    $text = mb_substr($pdf->getText(), 0, 4000);
-
-                    $factory = OpenAI::factory();
-                    $client = $factory->withApiKey(env('OPENAI_API_KEY'))
-                                      ->withBaseUri(env('OPENAI_BASE_URL', 'https://integrate.api.nvidia.com/v1'))
-                                      ->make();
-
-                    $verify = $client->chat()->create([
-                        'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
-                        'messages' => [
-                            ['role' => 'system', 'content' => "Industrial Auditor. Classify as SDS, TDS, MOM (Meeting Minutes), or LEARN (Training).
-                            Rules: If valid, reply only with the category key. If invalid, reply 'INVALID'."],
-                            ['role' => 'user', 'content' => "Text Sample: " . $text],
-                        ],
-                    ]);
-
-                    $aiResult = trim(strtoupper($verify->choices[0]->message->content));
-                    
-                    if ($aiResult === 'INVALID') {
-                        return response()->json(['error' => 'Rejected: Content does not match supported technical categories.'], 422);
-                    }
-
-                    $category = $aiResult;
-
-                    // Extract Strategic Summary
-                    $extract = $client->chat()->create([
-                        'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
-                        'messages' => [
-                            ['role' => 'system', 'content' => "Extract a 5-6 line summary CRUX. 
-                            STRICT RULES:
-                            - PLAIN TEXT ONLY. NO BOLDING, NO ASTERISKS (**), NO LISTS.
-                            - NO headers like 'Application:' or 'Description:'. Just the raw facts.
-                            - Start directly with the product description. 
-                            - Use only sentences, no numbering."],
-                            ['role' => 'user', 'content' => "Text Sample: " . $text],
-                        ],
-                    ]);
-                    $summary = $extract->choices[0]->message->content ?? "Technical crux extracted.";
-                } catch (\Exception $e) { $summary = "Crux extraction pending."; }
-            } else {
-                $category = 'Video';
-                $summary = "Direct video asset storage.";
-            }
-
-            // R2 Storage with ORIGINAL NAME
+        } elseif ($file) {
+            // R2 Storage
             try {
                 $filename = time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('digital-library', $filename, 'r2');
+                
+                // If overwriting, delete old one
+                if ($existing && $request->overwrite) {
+                    if ($existing->file_path) {
+                        Storage::disk('r2')->delete($existing->file_path);
+                    }
+                    $existing->delete();
+                }
             } catch (\Exception $e) {
+                Log::error("DIGITALLIBRARY_STORAGE_ERROR: " . $e->getMessage());
                 return response()->json(['error' => 'Vault Connection Failed: ' . $e->getMessage()], 500);
             }
         }
@@ -196,16 +176,12 @@ class DigitalLibraryController extends Controller
             'mime_type' => $mimeType,
             'size' => $size,
             'summary' => $summary,
-            'is_public' => $request->has('is_public'),
-            'tenant_id' => $request->header('X-Tenant-Id') ?? (auth()->check() ? auth()->user()->tenant_id : 1),
+            'is_public' => $request->has('is_public') || true,
+            'tenant_id' => auth()->user()->tenant_id ?? 1,
             'created_by_id' => auth()->id() ?? 1,
         ]);
 
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['success' => 'Document auto-categorized as ' . $category . ' and summarized.']);
-        }
-
-        return back()->with('success', 'Document auto-categorized as ' . $category . ' and summarized.');
+        return response()->json(['success' => 'Asset secured to Hitech Vault. Type: ' . $category]);
     }
 
     public function bulkStore(Request $request)

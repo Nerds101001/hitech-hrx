@@ -1,5 +1,76 @@
 <!-- Onboarding Invite Modal -->
-<div class="modal fade" id="onboardingInviteModal" tabindex="-1" aria-hidden="true">
+<style>
+  #onboardingInviteModal .hitech-input-group {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    padding-left: 10px !important;
+  }
+  #onboardingInviteModal .hitech-input-group .input-group-text {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 10px 0 0 !important;
+    flex-shrink: 0 !important;
+  }
+  #onboardingInviteModal .hitech-input-group .select2-container {
+    flex-grow: 1 !important;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+  #onboardingInviteModal .select2-selection--single {
+    border: none !important;
+    background: transparent !important;
+    height: 45px !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+  #onboardingInviteModal .select2-container--default .select2-selection--single .select2-selection__rendered {
+    padding-left: 0 !important;
+    line-height: normal !important;
+    color: #334155 !important;
+  }
+  #onboardingInviteModal .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 45px !important;
+  }
+
+  /* Select2 Dropdown Premium Styling */
+  .select2-container--open .select2-dropdown {
+    border: 1px solid rgba(0, 128, 128, 0.15) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+    overflow: hidden !important;
+    z-index: 10000 !important;
+    background: #fff !important;
+  }
+
+  .select2-results__option {
+    padding: 10px 15px !important;
+    font-size: 0.9rem !important;
+    color: #334155 !important;
+    background-color: #fff !important;
+  }
+
+  /* Fix: Force text color on hover/highlight */
+  .select2-container--default .select2-results__option--highlighted[aria-selected],
+  .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+    background-color: #008080 !important;
+    color: #ffffff !important;
+  }
+
+  .select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: rgba(0, 128, 128, 0.1) !important;
+    color: #008080 !important;
+    font-weight: 600 !important;
+  }
+
+  /* Search box styling */
+  .select2-search--dropdown .select2-search__field {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+  }
+</style>
+<div class="modal fade" id="onboardingInviteModal" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content modal-content-hitech">
       <div class="modal-header modal-header-hitech">
@@ -75,11 +146,13 @@
               <label class="form-label-hitech">Department <span class="text-danger">*</span></label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-buildings"></i></span>
-                <select name="teamId" class="form-select select2" required>
-                  <option value="">Select Team</option>
-                  @foreach($teams as $team)
-                    <option value="{{ $team->id }}">{{ $team->name }}</option>
-                  @endforeach
+                <select name="departmentId" class="form-select select2" required>
+                  <option value="">Select Department</option>
+                  @forelse($departments as $dept)
+                    <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                  @empty
+                    <option value="">No active departments in DB</option>
+                  @endforelse
                 </select>
               </div>
             </div>

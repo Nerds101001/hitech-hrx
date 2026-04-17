@@ -76,7 +76,7 @@
                     <div class="card-icon-wrapper" style="background: white; border-bottom: 1px solid #f0f0f0; height: 160px;">
                         @if($file->category == 'Video') <i class="ti ti-video text-warning" style="font-size: 4rem;"></i>
                         @elseif($file->mime_type == 'application/pdf') 
-                            <img src="{{ asset('assets/img/PDF ICON.PNG') }}" style="width: 80px; height: auto;" alt="PDF">
+                            <img src="{{ asset('assets/img/pdf icon.png') }}" style="width: 80px; height: auto;" alt="PDF">
                         @else <i class="ti ti-file text-secondary" style="font-size: 4rem;"></i> @endif
                     </div>
                     <div class="card-body p-4">
@@ -120,9 +120,29 @@
                                     </a>
                                 @endif
                                 
-                                <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="navigator.clipboard.writeText('{{ $file->youtube_url ?? route('library.access', $file->id) }}'); alert('Secure share link copied to clipboard!');">
-                                    <i class="ti ti-share me-1"></i> Share
-                                </button>
+                                <div class="dropdown">
+                                    <button class="btn btn-primary btn-sm rounded-pill px-3 dropdown-toggle hide-arrow" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="ti ti-send me-1"></i> Share
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="border-radius: 12px; min-width: 180px;">
+                                        <li>
+                                            <a class="dropdown-item d-flex align-items-center py-2" href="https://wa.me/?text={{ urlencode('Check out this technical document: ' . ($file->youtube_url ?? route('library.access', $file->id))) }}" target="_blank">
+                                                <i class="ti ti-brand-whatsapp text-success me-2 fs-4"></i> Share on WhatsApp
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item d-flex align-items-center py-2" href="mailto:?subject={{ urlencode('Hitech Library Asset: ' . $file->title) }}&body={{ urlencode('You can view the document at: ' . ($file->youtube_url ?? route('library.access', $file->id))) }}">
+                                                <i class="ti ti-mail text-danger me-2 fs-4"></i> Share via Email
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider opacity-50"></li>
+                                        <li>
+                                            <a class="dropdown-item d-flex align-items-center py-2" href="javascript:void(0);" onclick="copyLibraryLink('{{ $file->youtube_url ?? route('library.access', $file->id) }}')">
+                                                <i class="ti ti-copy text-primary me-2 fs-4"></i> Copy Direct Link
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -214,7 +234,8 @@
                     <div class="spinner-border spinner-border-sm me-1"></div> Examining technical crux...
                 </div>
                 <div id="action-${id}" class="text-end" style="display:none;">
-                    <button onclick="confirmIngestion('${id}')" class="btn btn-sm btn-success py-1">Secure to Sentinel</button>
+                    <button id="commit-btn-${id}" onclick="confirmIngestion('${id}')" class="btn btn-sm btn-success py-1 shadow-sm">Secure to Sentinel</button>
+                    <button id="replace-btn-${id}" onclick="confirmIngestion('${id}', true)" class="btn btn-sm btn-warning py-1 shadow-sm" style="display:none;">Secure & Replace</button>
                 </div>
             `;
             container.appendChild(item);
@@ -234,17 +255,36 @@
 
                 if (!response.ok) throw new Error(data.error || 'Audit Failed');
 
-                document.getElementById(`status-${id}`).textContent = data.category;
-                document.getElementById(`status-${id}`).className = 'badge bg-info';
-                document.getElementById(`summary-${id}`).innerHTML = `
+                const statusEl = document.getElementById(`status-${id}`);
+                const summaryEl = document.getElementById(`summary-${id}`);
+                const actionEl = document.getElementById(`action-${id}`);
+                const commitBtn = document.getElementById(`commit-btn-${id}`);
+                const replaceBtn = document.getElementById(`replace-btn-${id}`);
+
+                statusEl.textContent = data.category;
+                statusEl.className = data.is_duplicate ? 'badge bg-warning text-dark' : 'badge bg-info';
+                
+                if (data.is_duplicate) {
+                    statusEl.innerHTML = `<i class="ti ti-alert-triangle me-1"></i> DUPLICATE: ${data.category}`;
+                    commitBtn.style.display = 'none';
+                    replaceBtn.style.display = 'inline-block';
+                }
+
+                summaryEl.innerHTML = `
                     <div class="mb-2"><span class="text-white-50">Document:</span> <span class="text-white fw-bold">${data.name}</span></div>
                     <div class="mb-2"><span class="text-white-50">Asset Class:</span> <span class="badge bg-label-info">${data.category}</span></div>
-                    <div class="mb-2"><span class="text-white-50">Created/Revised:</span> <span class="text-white fw-bold">${data.date}</span></div>
                     <div><span class="text-white-50">Technical Crux:</span><br><span class="text-info">${data.summary}</span></div>
                 `;
-                document.getElementById(`action-${id}`).style.display = 'block';
+                actionEl.style.display = 'block';
                 
-                pendingFiles.push({ id, file, category: data.category, summary: data.summary, name: data.name });
+                pendingFiles.push({ 
+                    id, 
+                    file, 
+                    category: data.category, 
+                    summary: data.summary, 
+                    name: data.name,
+                    is_duplicate: data.is_duplicate 
+                });
                 
                 // Show the global commit button if any files are ready
                 const bulkBtn = document.getElementById('startBulkCommit');
@@ -257,23 +297,31 @@
                 document.getElementById(`status-${id}`).className = 'badge bg-danger';
                 document.getElementById(`summary-${id}`).className = 'text-xs text-danger ps-2 my-2';
                 document.getElementById(`summary-${id}`).innerHTML = `⚠️ ${err.message}`;
+                Log.error("CLIENT_AUDIT_ERROR: " + err.message);
             }
         });
     }
 
-    async function confirmIngestion(id) {
+    async function confirmIngestion(id, overwrite = false) {
         const item = document.getElementById(`file-${id}`);
         const actionArea = document.getElementById(`action-${id}`);
         const statusArea = document.getElementById(`status-${id}`);
         const entry = pendingFiles.find(f => f.id === id);
         if (!entry) return;
 
+        if (overwrite) {
+            if (!confirm(`Warning: This will overwrite the existing version of '${entry.name}'. Proceed?`)) return;
+        }
+
         actionArea.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Archiving...';
-        statusArea.textContent = 'Phase 2: Archiving';
+        statusArea.textContent = 'Vaulting...';
         
         const formData = new FormData();
         formData.append('file', entry.file);
         formData.append('category', entry.category);
+        formData.append('name', entry.name);
+        formData.append('summary', entry.summary);
+        if (overwrite) formData.append('overwrite', '1');
         formData.append('_token', '{{ csrf_token() }}');
 
         try {
@@ -283,22 +331,58 @@
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Archive Failed');
+            
+            if (response.status === 409) {
+                // Should not happen with check above but for safety
+                statusArea.textContent = 'DUPLICATE';
+                statusArea.className = 'badge bg-warning';
+                actionArea.innerHTML = `<button onclick="confirmIngestion('${id}', true)" class="btn btn-sm btn-warning py-1">Replace Existing</button>`;
+                return;
+            }
+
+            if (!response.ok) throw new Error(data.error || 'Vault Error');
 
             statusArea.textContent = 'SECURED';
             statusArea.className = 'badge bg-success';
             actionArea.innerHTML = '✅ Assets Finalized';
             item.style.borderColor = '#198754';
             
-            setTimeout(() => { 
-                if (document.querySelectorAll('.badge.bg-success').length === pendingFiles.length) {
-                    location.reload(); 
-                }
-            }, 1000);
+            checkAllDone();
         } catch (err) {
-            statusArea.textContent = 'STORAGE ERROR';
+            statusArea.textContent = 'ERROR';
             statusArea.className = 'badge bg-danger';
             actionArea.innerHTML = `<span class="text-danger text-xs italic">${err.message}</span>`;
+        }
+    }
+
+    async function copyLibraryLink(url) {
+        if (!navigator.clipboard) {
+            // Fallback for non-secure contexts or older browsers
+            const input = document.createElement('input');
+            input.value = url;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            alert('Share link copied to clipboard!');
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(url);
+            alert('Share link copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy: ', err);
+        }
+    }
+
+    function checkAllDone() {
+        const total = pendingFiles.length;
+        const secured = document.querySelectorAll('.badge.bg-success').length;
+        const rejected = document.querySelectorAll('.badge.bg-danger').length;
+        
+        if (secured + rejected === total && total > 0) {
+            setTimeout(() => { location.reload(); }, 1500);
         }
     }
 
@@ -307,17 +391,17 @@
         if (!btn || pendingFiles.length === 0) return;
         
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Finalizing Ingestion...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ingesting...';
 
-        // Process all files that aren't secured yet
         for (const entry of pendingFiles) {
-             const statusText = document.getElementById(`status-${entry.id}`).textContent;
-             if (statusText === 'SECURED' || statusText === 'REJECTED') continue;
+             const statusEl = document.getElementById(`status-${entry.id}`);
+             const statusText = statusEl.textContent;
+             if (statusText === 'SECURED' || statusText === 'REJECTED' || statusText.includes('DUPLICATE')) continue;
              await confirmIngestion(entry.id);
         }
         
         btn.innerText = 'Sync Completed';
-        setTimeout(() => location.reload(), 1500);
+        checkAllDone();
     }
 </script>
 @endsection

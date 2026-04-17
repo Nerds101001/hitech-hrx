@@ -31,7 +31,7 @@
   <!-- Canonical SEO -->
   <link rel="canonical" href="{{ config('variables.productPage') ? config('variables.productPage') : '' }}">
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="{{ asset('assets/img/Fav.png') }}" />
+  <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico') }}" />
 
   @if(config('custom.custom.isFirebaseEnabled'))
 

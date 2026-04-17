@@ -1134,6 +1134,10 @@ class EmployeeController extends Controller
       ->select('id', 'name', 'code')
       ->get();
 
+    $departments = \App\Models\Department::where('status', Status::ACTIVE)
+      ->select('id', 'name', 'code')
+      ->get();
+
     return view('tenant.employees.index', [
       'totalUser' => $active + $inactive + $relieved + $onboarding,
       'active' => $active,
@@ -1142,6 +1146,7 @@ class EmployeeController extends Controller
       'onboardingCount' => $onboarding,
       'roles' => $roles,
       'teams' => $teams,
+      'departments' => $departments,
       'designations' => $designations,
       'managers' => User::where('status', UserAccountStatus::ACTIVE)->get(),
       'users' => User::whereIn('status', [
@@ -1150,7 +1155,7 @@ class EmployeeController extends Controller
         UserAccountStatus::ONBOARDING_SUBMITTED,
         UserAccountStatus::ONBOARDING_REQUESTED,
         UserAccountStatus::INVITED
-      ])->with(['team', 'designation'])->orderBy('first_name', 'asc')->paginate(12)
+      ])->with(['team', 'designation', 'department'])->orderBy('first_name', 'asc')->paginate(12)
     ]);
   }
 
@@ -1955,7 +1960,7 @@ class EmployeeController extends Controller
       'phone' => 'required|string|max:10|unique:users,phone',
       'employeeCode' => 'nullable|string|max:50|unique:users,code',
       'role' => 'required|exists:roles,name',
-      'teamId' => 'required|exists:teams,id',
+      'departmentId' => 'required|exists:departments,id',
       'designationId' => 'required|exists:designations,id',
       'reportingToId' => 'required|exists:users,id',
       'siteId' => 'nullable|exists:sites,id',
@@ -1985,7 +1990,7 @@ class EmployeeController extends Controller
         'email' => $request->email,
         'phone' => $request->phone,
         'code' => $employeeCode,
-        'team_id' => $request->teamId,
+        'department_id' => $request->departmentId,
         'designation_id' => $request->designationId,
         'reporting_to_id' => $request->reportingToId,
         'site_id' => $request->siteId,
