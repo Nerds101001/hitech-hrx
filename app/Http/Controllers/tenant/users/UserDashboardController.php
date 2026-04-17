@@ -210,13 +210,16 @@ class UserDashboardController extends Controller
 
         // 2. Manager Dashboard
         if ($isManager) {
-            $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
-            
-            $teamMembers = User::whereIn('team_id', $managedTeamIds)
+            // Get Subordinates (Direct Reports)
+            $teamMembers = User::where('reporting_to_id', $user->id)
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->get();
             
             $teamMemberIds = $teamMembers->pluck('id')->toArray();
+
+            // Override global counts for the view to ensure "Team Only" view
+            $active = count($teamMemberIds);
+            $totalUser = $active;
 
             // Scoped Pending Requests
             $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
@@ -226,7 +229,7 @@ class UserDashboardController extends Controller
                 ->where('status', 'pending')
                 ->count();
 
-            // Daily Digest Stats
+            // Daily Digest Stats (Present/Absent/OnLeave)
             $todayPresentCount = Attendance::whereIn('user_id', $teamMemberIds)
                 ->whereDate('check_in_time', now())
                 ->count();
@@ -240,10 +243,16 @@ class UserDashboardController extends Controller
             $todayAbsentCount = count($teamMemberIds) - $todayPresentCount - $todayOnLeaveCount;
             if ($todayAbsentCount < 0) $todayAbsentCount = 0;
 
+            // Optional: Team Present Users list (if used in view)
+            $todayPresentUsersList = Attendance::whereIn('user_id', $teamMemberIds)
+                ->whereDate('check_in_time', now())
+                ->with('user')
+                ->get();
+
             return view('tenant.users.dashboard.manager-index', [
                 'pendingLeaveRequests' => $pendingLeaveRequests,
                 'pendingExpenseRequests' => $pendingExpenseRequests,
-                'activeEmployees' => count($teamMemberIds),
+                'activeEmployees' => $active,
                 'todayPresentUsers' => $todayPresentCount,
                 'todayOnLeaveCount' => $todayOnLeaveCount,
                 'todayAbsentUsers' => $todayAbsentCount,

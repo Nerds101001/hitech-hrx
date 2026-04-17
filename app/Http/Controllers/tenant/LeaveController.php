@@ -27,15 +27,15 @@ class LeaveController extends Controller
     $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
     $managedTeamIds = [];
     if($isManager) {
-        $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
+        // Use subordinate logic (reporting_to_id) as it matches Hierarchy and is more reliable for "Teams"
+        $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
     }
+
 
     // Optimized: Fetch all stats in one query using selectRaw
     $statsQuery = LeaveRequest::query();
     if($isManager) {
-        $statsQuery->whereHas('user', function($q) use ($managedTeamIds) {
-            $q->whereIn('team_id', $managedTeamIds);
-        });
+        $statsQuery->whereIn('user_id', $managedSubordinateIds);
     }
 
     $stats = $statsQuery->selectRaw("
@@ -89,10 +89,8 @@ class LeaveController extends Controller
         ->select('leave_requests.*');
 
       if ($isManager) {
-          $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
-          $query->whereHas('user', function($q) use ($managedTeamIds) {
-              $q->whereIn('team_id', $managedTeamIds);
-          });
+          $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+          $query->whereIn('user_id', $managedSubordinateIds);
       }
 
       // Apply Filters
