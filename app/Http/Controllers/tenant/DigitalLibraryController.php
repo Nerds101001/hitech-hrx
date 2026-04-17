@@ -13,11 +13,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 class DigitalLibraryController extends Controller
 {
-    public function __construct()
-    {
-        $this->middleware('role:admin|hr')->only(['store', 'bulkStore', 'analyze']);
-    }
-
     public function index(Request $request)
     {
         $category = $request->get('category');
