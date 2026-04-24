@@ -423,8 +423,8 @@
                     @if(!$canEditPersonal) <input type="hidden" name="gender" value="{{ $user->gender }}"> @endif
                   </div>
                   <div class="col-md-4">
-                    <label class="hitech-label">Blood Group</label>
-                    <select name="blood_group" class="hitech-input" {{ !$canEditPersonal ? 'disabled' : '' }}>
+                    <label class="hitech-label">Blood Group <span class="text-danger">*</span></label>
+                    <select name="blood_group" class="hitech-input" required {{ !$canEditPersonal ? 'disabled' : '' }}>
                       <option value="">Select</option>
                       @foreach(['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'] as $bg)
                         <option value="{{$bg}}" {{ $user->blood_group == $bg ? 'selected' : '' }}>{{$bg}}</option>

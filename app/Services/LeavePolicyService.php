@@ -20,7 +20,7 @@ class LeavePolicyService
      * @param  string $toDate     Y-m-d
      * @return string|null  Returns an error message string, or null if the request is valid.
      */
-    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate): ?string
+    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null): ?string
     {
         $from = Carbon::parse($fromDate);
         $to   = Carbon::parse($toDate);
@@ -107,6 +107,11 @@ class LeavePolicyService
                     return "You have reached the monthly short leave limit of {$rule->short_leave_per_month}.";
                 }
             }
+
+            if ($hours && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {
+                return "You can only apply for a maximum of {$rule->short_leave_hours} hours for this short leave.";
+            }
+
             return null;
         }
 

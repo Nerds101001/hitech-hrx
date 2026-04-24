@@ -299,6 +299,7 @@ Route::middleware([
       Route::get('chart-ajax', [AttendanceController::class, 'chartAjax'])->name('chart-ajax');
       Route::get('{id}/edit', [AttendanceController::class, 'editAjax'])->name('edit');
       Route::post('{id}/update', [AttendanceController::class, 'updateAjax'])->name('update');
+      Route::post('store-adjustment', [AttendanceController::class, 'storeAdjustmentAjax'])->name('store-adjustment');
 
       // Biometric Import Flow
       Route::get('biometric-import', [AttendanceImportController::class, 'showBiometricImport'])->name('biometric-import');

@@ -41,6 +41,7 @@ class AttendanceService implements IAttendance
         $attendance->shift_id = $user->shift_id;
         $attendance->status = $calc['status'];
         $attendance->is_policy_late = $calc['is_policy_late'] ?? false;
+        $attendance->leave_request_id = $calc['leave_request_id'] ?? null;
         $attendance->created_by_id = auth()->id();
         $attendance->tenant_id = $user->tenant_id;
         $attendance->save();
@@ -59,6 +60,7 @@ class AttendanceService implements IAttendance
             $calc = $this->calculateDayStatus($user, $now, $todayAttendance->check_in_time, $now);
             $todayAttendance->status = $calc['status'];
             $todayAttendance->is_policy_late = $calc['is_policy_late'] ?? false;
+            $todayAttendance->leave_request_id = $calc['leave_request_id'] ?? null;
 
             $todayAttendance->save();
           }
@@ -95,63 +97,87 @@ class AttendanceService implements IAttendance
         return ['status' => Attendance::STATUS_PRESENT, 'is_late' => false]; // weekends/holidays are always green if they log in
     }
 
+    $status = Attendance::STATUS_PRESENT;
+    $isHalfDay = false;
     $isLate = false;
     $isPolicyLate = false;
+    $approvedShortLeave = null;
 
     if ($user->shift && $checkIn) {
         $shift = $user->shift;
         $shiftStartTime = Carbon::parse($dateStr . ' ' . $shift->start_time);
-        
+        $shiftEndTime = Carbon::parse($dateStr . ' ' . $shift->end_time);
+        $totalShiftMinutes = $shiftStartTime->diffInMinutes($shiftEndTime);
+
+        // Standard Shift logic with 15 mins grace (Master setting)
         if ($shift->is_flexible && $shift->flex_end_time) {
             $flexEndTime = Carbon::parse($dateStr . ' ' . $shift->flex_end_time);
             if ($checkIn->gt($flexEndTime)) {
                 $isLate = true;
             }
         } else {
-            // Standard Shift logic with 15 mins grace (Master setting)
-            if ($checkIn->gt($shiftStartTime->addMinutes(15))) {
+            if ($checkIn->gt($shiftStartTime->copy()->addMinutes(15))) {
                 $isLate = true;
             }
         }
 
-        // --- Handle Short Leave Waiver ---
-        if ($isLate) {
-            $shortLeaveType = \App\Models\LeaveType::where('is_short_leave', true)->first();
-            
-            if ($shortLeaveType) {
-                // Only wave lateness IF the user has actively applied for a short leave and it is approved
-                $approvedShortLeave = \App\Models\LeaveRequest::where('user_id', $user->id)
-                    ->where('from_date', $dateStr)
-                    ->where('leave_type_id', $shortLeaveType->id)
-                    ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
-                    ->exists();
+        // --- Handle Short Leave Waiver & Required Hours ---
+        $shortLeaveType = \App\Models\LeaveType::where('is_short_leave', true)->first();
+        if ($shortLeaveType) {
+            $approvedShortLeave = \App\Models\LeaveRequest::where('user_id', $user->id)
+                ->where('from_date', $dateStr)
+                ->where('leave_type_id', $shortLeaveType->id)
+                ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
+                ->first();
 
-                if ($approvedShortLeave) {
-                    $isLate = false; 
+            if ($approvedShortLeave) {
+                if ($isLate) {
+                    $isLate = false;
                     $isPolicyLate = true; // Waved due to approved short leave
                 }
             }
         }
-    }
 
-    // --- Half Day / Minimum Hours Calculation ---
-    $isHalfDay = $isLate;
-    if ($checkIn && $checkOut) {
-        $minutesWorked = $checkIn->diffInMinutes($checkOut);
-        // 7 hours and 45 minutes = 465 minutes
-        $thresholdMinutes = 465; 
-        
-        if ($minutesWorked < $thresholdMinutes) {
-            $isHalfDay = true;
+        // --- Required Hours Calculation ---
+        if ($checkIn && $checkOut) {
+            $minutesWorked = $checkIn->diffInMinutes($checkOut);
+            $shortLeaveMinutes = $approvedShortLeave ? ($approvedShortLeave->duration_hours * 60) : 0;
+            $requiredMinutes = $totalShiftMinutes - $shortLeaveMinutes;
+
+            // If user doesn't complete the rest of the hours, mark as ABSENT
+            if ($minutesWorked < $requiredMinutes) {
+                $status = Attendance::STATUS_ABSENT;
+                
+                // Revert short leave consumption if marked absent
+                if ($approvedShortLeave) {
+                    // Logic to ensure it's not consumed: 
+                    // We can either set the leave request to REJECTED/CANCELLED or 
+                    // just note it. Since the booted() method handles balance on status change, 
+                    // we'll change status to REJECTED with a system note.
+                    $approvedShortLeave->status = \App\Enums\LeaveRequestStatus::REJECTED;
+                    $approvedShortLeave->approval_notes = "System: Short leave reverted because required working hours were not met.";
+                    $approvedShortLeave->save();
+                    
+                    $isPolicyLate = false; // Reset late waiver
+                    $isLate = true; // User is late again because short leave is voided
+                }
+            } else {
+                if ($minutesWorked >= 480) { // 8 hours (Full Day)
+                    $isHalfDay = false;
+                    $isLate = false;
+                } elseif ($minutesWorked < 465) {
+                    $isHalfDay = true;
+                }
+                $status = $isHalfDay ? Attendance::STATUS_HALF_DAY : Attendance::STATUS_PRESENT;
+            }
         }
     }
-
-    $status = $isHalfDay ? Attendance::STATUS_HALF_DAY : Attendance::STATUS_PRESENT;
 
     return [
         'status' => $status,
         'is_late' => $isLate,
-        'is_policy_late' => $isPolicyLate
+        'is_policy_late' => $isPolicyLate,
+        'leave_request_id' => $approvedShortLeave ? $approvedShortLeave->id : null
     ];
   }
 

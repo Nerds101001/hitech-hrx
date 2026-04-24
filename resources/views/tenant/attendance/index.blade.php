@@ -8,7 +8,9 @@
     'resources/assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.scss',
     'resources/assets/vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.scss',
     'resources/assets/vendor/libs/select2/select2.scss',
-    'resources/assets/vendor/libs/apex-charts/apex-charts.scss'
+    'resources/assets/vendor/libs/apex-charts/apex-charts.scss',
+    'resources/assets/vendor/libs/toastr/toastr.scss',
+    'resources/assets/vendor/libs/animate-css/animate.scss'
   ])
 @endsection
 
@@ -17,7 +19,8 @@
     'resources/assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js',
     'resources/assets/vendor/libs/moment/moment.js',
     'resources/assets/vendor/libs/select2/select2.js',
-    'resources/assets/vendor/libs/apex-charts/apexcharts.js'
+    'resources/assets/vendor/libs/apex-charts/apexcharts.js',
+    'resources/assets/vendor/libs/toastr/toastr.js'
   ])
 @endsection
 
@@ -284,7 +287,7 @@
 {{-- MODAL SECTION (Moved Inside Content) --}}
 
 {{-- Premium Day Details Modal --}}
-<div class="modal fade" id="dayDetailsModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="dayDetailsModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content modal-content-hitech">
       <div class="modal-header modal-header-hitech">
@@ -396,7 +399,7 @@
                     <textarea class="form-control rounded-3" id="editAdminReason" name="admin_reason" rows="2" placeholder="Explain the rationale for this adjustment..." required></textarea>
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-bold text-dark small text-uppercase ls-1">Proof of Adjustment (Optional)</label>
+                    <label class="form-label fw-bold text-dark small text-uppercase ls-1">Proof of Adjustment <span id="proofRequiredMarker" class="text-danger d-none">*</span></label>
                     <div class="input-group">
                         <span class="input-group-text bg-light border-end-0"><i class="bx bx-paperclip"></i></span>
                         <input type="file" class="form-control rounded-start-0" id="editAttachment" name="attachment" accept="image/*,.pdf">

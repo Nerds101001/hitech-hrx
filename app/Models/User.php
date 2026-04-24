@@ -234,6 +234,11 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
       return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
     }
 
+    // If it starts with 'uploads/', don't try to prefix it again with other folders
+    if (str_starts_with($path, 'uploads/')) {
+        return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
+    }
+
     // 2. Try prefixing with employee profile folder (Standard/Legacy)
     $profilePath = Constants::BaseFolderEmployeeProfileWithSlash . $path;
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($profilePath)) {

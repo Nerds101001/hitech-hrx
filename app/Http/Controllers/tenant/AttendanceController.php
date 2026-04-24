@@ -167,20 +167,23 @@ class AttendanceController extends Controller
       ->addColumn('status', function ($attendance) {
           $status = $attendance->status ?: 'Present';
           
-          // Dynamic enforcement of 7:45 rule for legacy records displaying in UI
-          if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
-              $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-              if ($mins < 465 && (strtolower($status) === 'present')) {
-                  $status = 'Half-Day';
-              }
-          }
+          // Dynamic enforcement of 8-hour (Full Day) rule
+           if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+               $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+               if ($mins >= 480) {
+                   $status = 'Present';
+               } elseif ($mins < 465 && (strtolower($status) === 'present')) {
+                   $status = 'Half-Day';
+               }
+           }
 
           $color = 'bg-teal';
           $icon = 'bx-check-circle';
           $s = strtolower($status);
           
           if($s == 'absent') { $color = 'bg-red'; $icon = 'bx-x-circle'; $status = 'Absent'; }
-          elseif($s == 'late' || $s == 'half-day') { $color = 'bg-orange'; $icon = 'bx-time'; $status = 'Late'; }
+          elseif($s == 'half-day') { $color = 'bg-orange'; $icon = 'bx-time'; $status = 'Half-Day'; }
+          elseif($s == 'late') { $color = 'bg-warning'; $icon = 'bx-time'; $status = 'Late'; }
           elseif($s == 'on_leave' || $s == 'leave') { $color = 'bg-purple-vibrant'; $icon = 'bx-calendar'; $status = 'Leave'; }
           elseif($s == 'work_from_home' || $s == 'wfh') { $color = 'bg-indigo-vibrant'; $icon = 'bx-home'; $status = 'WFH'; }
           else { $status = 'Present'; } // Default normalization
@@ -190,7 +193,12 @@ class AttendanceController extends Controller
               $editBadge = '<i class="bx bxs-edit-alt ms-1 text-white opacity-75" title="Manual Adjustment"></i>';
           }
 
-          return '<span class="badge '.$color.' border-0 px-3 py-2 rounded-2 fw-black text-uppercase ls-1 text-white shadow-sm" style="font-size:0.65rem; min-width:80px;"><i class="bx '.$icon.' me-1"></i>'.$status.$editBadge.'</span>';
+          $shortLeaveIcon = '';
+          if ($attendance->leave_request_id) {
+              $shortLeaveIcon = ' <i class="bx bxs-time-five ms-1 text-white opacity-75" title="Short Leave Applied"></i>';
+          }
+
+          return '<span class="badge '.$color.' border-0 px-3 py-2 rounded-2 fw-black text-uppercase ls-1 text-white shadow-sm" style="font-size:0.65rem; min-width:80px;"><i class="bx '.$icon.' me-1"></i>'.$status.$editBadge.$shortLeaveIcon.'</span>';
       })
       ->addColumn('actions', function ($attendance) {
           $editorData = '';
@@ -213,8 +221,9 @@ class AttendanceController extends Controller
         // Pass "Today" metrics or empty for now, Popup logic will handle it
         $clickAction = 'onclick="showEmployeeSummary(\''.$name.'\', \''.$code.'\', 0, 0, 0, 0, \'Current Filter\')"';
 
-        if ($attendance->user?->profile_picture) {
-          $profileOutput = '<img src="' . asset('storage/' . AppConstants::BaseFolderEmployeeProfileWithSlash . $attendance->user->profile_picture) . '"  alt="Avatar" class="avatar rounded-circle " />';
+        $profileUrl = $attendance->user?->getProfilePicture();
+        if ($profileUrl) {
+          $profileOutput = '<img src="' . $profileUrl . '"  alt="Avatar" class="avatar rounded-circle " />';
         } else {
           $profileOutput = '<span class="avatar-initial rounded-circle bg-label-teal fw-black">' . $initials . '</span>';
         }
@@ -339,7 +348,9 @@ class AttendanceController extends Controller
                   'in' => '--',
                   'out' => '--',
                   'hours' => '--',
-                  'class' => 'bg-light text-muted opacity-50'
+                  'class' => 'bg-light text-muted opacity-50',
+                  'user_id' => $user->id,
+                  'full_date' => $dateStr
               ];
               
               $holidayName = null;
@@ -364,22 +375,29 @@ class AttendanceController extends Controller
                   $dayData['editor_name'] = $attendance->updatedBy?->getFullName() ?? 'Admin';
                   $dayData['admin_reason'] = $attendance->admin_reason;
                   $dayData['attachment'] = $attendance->attachment ? asset('storage/' . $attendance->attachment) : null;
+                  $dayData['is_short_leave'] = !empty($attendance->leave_request_id);
+                  $dayData['user_id'] = $user->id;
+                  $dayData['full_date'] = $dateStr;
 
                   $s = strtolower($attendance->status);
                   
-                  // Dynamic enforcement of 7:45 rule for legacy records displaying in UI
-                  if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
-                      $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                      if ($mins < 465 && ($s === 'present')) {
-                          $s = 'half-day';
-                      }
-                  }
+                  // Dynamic enforcement of 8-hour (Full Day) rule
+                   if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+                       $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                       if ($mins >= 480) {
+                           $s = 'present';
+                       } elseif ($mins < 465 && ($s === 'present')) {
+                           $s = 'half-day';
+                       }
+                   }
 
-                  if ($s == 'present') {
-                      $dayData['status'] = 'Present'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
-                  } elseif ($s == 'late' || $s == 'half-day' || $s == 'half-Day') {
-                      $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['lates']++;
-                  } elseif ($s == 'absent') {
+                   if ($s == 'present') {
+                       $dayData['status'] = 'Present'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
+                   } elseif ($s == 'late') {
+                       $dayData['status'] = 'Late'; $dayData['class'] = 'bg-warning text-white'; $row['lates']++;
+                   } elseif ($s == 'half-day' || $s == 'half-Day') {
+                       $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['lates']++;
+                   } elseif ($s == 'absent') {
                       $dayData['status'] = 'Absent'; $dayData['class'] = 'bg-red text-white'; $row['absents']++;
                   } elseif ($s == 'on_leave' || $s == 'leave') {
                       $dayData['status'] = 'Leave'; $dayData['class'] = 'bg-purple-vibrant text-white';
@@ -396,13 +414,11 @@ class AttendanceController extends Controller
                   /** @var \App\Models\User $user */
                   $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $dateObj);
                   if ($leave) {
-                      $dayData = [
-                          'status' => 'Leave', 
-                          'in' => $leave->leaveType->name ?? 'Leave', 
-                          'out' => '--', 
-                          'hours' => $leave->leaveType->code ?? 'LV', 
-                          'class' => 'bg-purple-vibrant text-white border-0'
-                      ];
+                      $dayData['status'] = 'Leave';
+                      $dayData['in'] = $leave->leaveType->name ?? 'Leave';
+                      $dayData['out'] = '--';
+                      $dayData['hours'] = $leave->leaveType->code ?? 'LV';
+                      $dayData['class'] = 'bg-purple-vibrant text-white border-0';
                       $row['leaves']++;
                   } elseif (!$isWorkingDay) {
                       $dayData['status'] = 'OFF'; 
@@ -410,32 +426,26 @@ class AttendanceController extends Controller
                       $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
                   } elseif ($dateObj->isFuture() && !$dateObj->isToday()) {
                       // Future Dates: Scheduled
-                      $dayData = [
-                        'status' => 'Scheduled', 
-                        'in' => 'Upcoming', 
-                        'out' => '--', 
-                        'hours' => '--',
-                        'class' => 'bg-white border text-muted opacity-50'
-                      ];
+                      $dayData['status'] = 'Scheduled'; 
+                      $dayData['in'] = 'Upcoming'; 
+                      $dayData['out'] = '--'; 
+                      $dayData['hours'] = '--';
+                      $dayData['class'] = 'bg-white border text-muted opacity-50';
                   } elseif ($dateObj->isPast() && !$dateObj->isToday()) {
                       // It's a past day, not off, not holiday, no attendance, no leave => ABSENT
-                      $dayData = [
-                          'status' => 'Absent', 
-                          'in' => 'No Log', 
-                          'out' => '--', 
-                          'hours' => '--', 
-                          'class' => 'bg-red text-white'
-                      ];
+                      $dayData['status'] = 'Absent'; 
+                      $dayData['in'] = 'No Log'; 
+                      $dayData['out'] = '--'; 
+                      $dayData['hours'] = '--'; 
+                      $dayData['class'] = 'bg-red text-white';
                       $row['absents']++;
                   } else {
                       // Today: No log yet
-                      $dayData = [
-                          'status' => 'Today', 
-                          'in' => 'Today', 
-                          'out' => '--', 
-                          'hours' => '--', 
-                          'class' => 'bg-white border-primary border-dashed text-primary'
-                      ];
+                      $dayData['status'] = 'Today'; 
+                      $dayData['in'] = 'Today'; 
+                      $dayData['out'] = '--'; 
+                      $dayData['hours'] = '--'; 
+                      $dayData['class'] = 'bg-white border-primary border-dashed text-primary';
                   }
               }
               
@@ -557,6 +567,15 @@ class AttendanceController extends Controller
     {
         $attendance = Attendance::findOrFail($id);
         
+        // Validation: If marking as Full Day (Present) from an Absent state, proof is required
+        if ($request->status === 'present' && !$attendance->attachment && !$request->hasFile('attachment')) {
+            return response()->json(['success' => false, 'message' => 'Proof of adjustment (attachment) is required when marking as Full Day.'], 422);
+        }
+
+        if (empty($request->admin_reason)) {
+            return response()->json(['success' => false, 'message' => 'Adjustment reason is required.'], 422);
+        }
+
         $data = [
             'status' => $request->status,
             'admin_reason' => $request->admin_reason,
@@ -572,5 +591,37 @@ class AttendanceController extends Controller
         $attendance->update($data);
 
         return response()->json(['success' => true, 'message' => 'Attendance updated successfully.']);
+    }
+    public function storeAdjustmentAjax(Request $request)
+    {
+        // Validation: If marking as Full Day (Present), proof is required
+        if ($request->status === 'present' && !$request->hasFile('attachment')) {
+            return response()->json(['success' => false, 'message' => 'Proof of adjustment (attachment) is required when marking as Full Day.'], 422);
+        }
+
+        if (empty($request->admin_reason)) {
+            return response()->json(['success' => false, 'message' => 'Adjustment reason is required.'], 422);
+        }
+
+        $date = $request->date; // YYYY-MM-DD
+        $userId = $request->user_id;
+
+        $checkIn = \Carbon\Carbon::parse($date . ' ' . ($request->check_in_time ?: '09:00'));
+        $checkOut = \Carbon\Carbon::parse($date . ' ' . ($request->check_out_time ?: '18:00'));
+
+        $user = User::findOrFail($userId);
+
+        $attendance = Attendance::create([
+            'user_id' => $userId,
+            'shift_id' => $user->shift_id,
+            'check_in_time' => $checkIn,
+            'check_out_time' => $checkOut,
+            'status' => $request->status,
+            'admin_reason' => $request->admin_reason,
+            'updated_by_id' => auth()->id(),
+            'attachment' => $request->hasFile('attachment') ? $request->file('attachment')->store('attendance/attachments', 'public') : null
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Attendance created and adjusted successfully.']);
     }
 }

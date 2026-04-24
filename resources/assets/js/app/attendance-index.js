@@ -184,7 +184,7 @@ $(function () {
   }
 });
 
-function refreshChart() {
+window.refreshChart = function() {
   if (window.attendanceChart) {
     $.ajax({
       url: 'attendance/chart-ajax',
@@ -207,6 +207,28 @@ function refreshChart() {
       }
     });
   }
+}
+
+window.viewLogs = function(id) {
+    if (!id) return;
+    $.ajax({
+        url: `attendance/${id}/logs`,
+        method: 'GET',
+        success: function(resp) {
+            if (resp.html) {
+                Swal.fire({
+                    title: 'System Activity Logs',
+                    html: resp.html,
+                    width: '800px',
+                    customClass: { confirmButton: 'btn btn-primary' },
+                    buttonsStyling: false
+                });
+            } else {
+                alert('No logs found for this record.');
+            }
+        },
+        error: function() { alert('Failed to fetch logs.'); }
+    });
 }
 
 function loadMonthlyRegistry() {
@@ -269,7 +291,7 @@ function loadMonthlyRegistry() {
                 for(let i=1; i<=resp.daysInMonth; i++) {
                     const day = row['day_'+i];
                     // Pass 24h format if needed or original
-                    const clickAttr = `onclick="showDayDetails('${day.status}', '${day.in}', '${day.out}', '${day.hours}', '${safeName}', '${i} ${moment().month(resp.month - 1).format('MMM')}', ${day.id || 'null'}, ${day.is_edited || false}, '${day.editor_name || ''}', '${(day.admin_reason || '').replace(/'/g, "\\'")}', '${day.attachment || ''}')"`;
+                    const clickAttr = `onclick="showDayDetails('${day.status}', '${day.in}', '${day.out}', '${day.hours}', '${safeName}', '${i} ${moment().month(resp.month - 1).format('MMM')}', ${day.id || 'null'}, ${day.is_edited || false}, '${day.editor_name || ''}', '${(day.admin_reason || '').replace(/'/g, "\\'")}', '${day.attachment || ''}', ${day.user_id || 'null'}, '${day.full_date || ''}')"`;
                     
                     let inner = '<small class="text-muted" style="font-size:0.6rem;">--</small>';
                     if(day.status === 'Present') inner = '<i class="bx bx-check text-white"></i>';
@@ -283,6 +305,7 @@ function loadMonthlyRegistry() {
                     if(day.status === 'Today') inner = '<span class="animate__animated animate__pulse animate__infinite" style="font-size:0.5rem; font-weight:900;">TODAY</span>';
                     
                     if(day.is_edited) inner += '<i class="bx bxs-edit-alt text-white opacity-75 position-absolute top-0 end-0 p-1" style="font-size:0.55rem;" title="Manual Adjustment"></i>';
+                    if(day.is_short_leave) inner += '<i class="bx bxs-time-five text-white opacity-75 position-absolute top-0 start-0 p-1" style="font-size:0.55rem;" title="Short Leave Applied"></i>';
 
                     html += `<td class="text-center p-1" style="border: 1px solid #f1f3f5;">
                                 <div class="attendance-box ${day.class} rounded-2 cursor-pointer d-flex align-items-center justify-content-center shadow-sm position-relative" 
@@ -305,11 +328,14 @@ function loadMonthlyRegistry() {
     });
 }
 
-window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, id = null, isEdited = false, editorName = '', adminReason = '', attachment = '') {
+window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, id = null, isEdited = false, editorName = '', adminReason = '', attachment = '', userId = null, fullDate = '') {
     if (!registryModal) registryModal = new bootstrap.Modal(document.getElementById('dayDetailsModal'));
     
     currentEditId = id;
-    if (id) {
+    currentEditUserId = userId;
+    currentEditDate = fullDate;
+
+    if (id || status === 'Absent' || status === 'Missing' || status === 'Today') {
         $('#editActionWrapper').removeClass('d-none');
     } else {
         $('#editActionWrapper').addClass('d-none');
@@ -354,18 +380,42 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
 
 // Adjustment Logic
 let currentEditId = null;
+let currentEditUserId = null;
+let currentEditDate = null;
 
 window.openEditFromDetails = function() {
-    if (currentEditId) {
-        editRecord(currentEditId);
+    if (currentEditId || (currentEditUserId && currentEditDate)) {
+        editRecord(currentEditId, currentEditUserId, currentEditDate);
         if (registryModal) registryModal.hide();
     }
 }
 
-window.editRecord = function(id) {
+window.editRecord = function(id, userId = null, date = null) {
+    console.log('editRecord called', { id, userId, date });
     const editModalEl = document.getElementById('editAttendanceModal');
+    if (!editModalEl) {
+        console.error('editAttendanceModal element not found!');
+        return;
+    }
     let editModal = bootstrap.Modal.getInstance(editModalEl);
     if (!editModal) editModal = new bootstrap.Modal(editModalEl);
+
+    if (!id) {
+        // Create mode
+        $('#editAttendanceId').val('');
+        $('#editEmpName').text('New Adjustment');
+        $('#editInTime').val('09:00');
+        $('#editOutTime').val('18:00');
+        $('#editStatus').val('present').trigger('change');
+        $('#editAdminReason').val('');
+        
+        // Store user/date in hidden fields if needed or just use current vars
+        window.tempUserId = userId;
+        window.tempDate = date;
+        
+        editModal.show();
+        return;
+    }
 
     $.ajax({
         url: `attendance/${id}/edit`,
@@ -377,7 +427,7 @@ window.editRecord = function(id) {
                 $('#editEmpName').text(resp.user);
                 $('#editInTime').val(resp.attendance.check_in_time ? moment(resp.attendance.check_in_time).format('HH:mm') : '');
                 $('#editOutTime').val(resp.attendance.check_out_time ? moment(resp.attendance.check_out_time).format('HH:mm') : '');
-                $('#editStatus').val(resp.attendance.status.toLowerCase());
+                $('#editStatus').val(resp.attendance.status.toLowerCase()).trigger('change');
                 $('#editAdminReason').val(resp.attendance.admin_reason || '');
                 editModal.show();
             }
@@ -398,9 +448,16 @@ $(function() {
 
         const formData = new FormData(this);
         formData.append('_token', $('meta[name="csrf-token"]').attr('content'));
+        if (!id) {
+            formData.append('user_id', window.tempUserId);
+            formData.append('date', window.tempDate);
+            var url = `attendance/store-adjustment`;
+        } else {
+            var url = `attendance/${id}/update`;
+        }
 
         $.ajax({
-            url: `attendance/${id}/update`,
+            url: url,
             method: 'POST',
             data: formData,
             processData: false,
@@ -415,12 +472,28 @@ $(function() {
                     if (typeof loadMonthlyRegistry === 'function') loadMonthlyRegistry();
                     if (typeof refreshChart === 'function') refreshChart();
                     
-                    toastr.success('Record adjusted successfully!');
+                    if (window.toastr) toastr.success('Record adjusted successfully!');
+                    else alert('Record adjusted successfully!');
+                } else {
+                    if (window.toastr) toastr.error(resp.message || 'Update failed.');
+                    else alert(resp.message || 'Update failed.');
                 }
             },
-            error: function() { alert('Update failed. Please try again.'); },
+            error: function(xhr) { 
+                const msg = xhr.responseJSON ? xhr.responseJSON.message : 'Update failed. Please try again.';
+                if (window.toastr) toastr.error(msg);
+                else alert(msg);
+            },
             complete: function() { btn.html(oldHtml).prop('disabled', false); }
         });
+    });
+
+    $('#editStatus').on('change', function() {
+        if ($(this).val() === 'present') {
+            $('#proofRequiredMarker').removeClass('d-none');
+        } else {
+            $('#proofRequiredMarker').addClass('d-none');
+        }
     });
 });
 

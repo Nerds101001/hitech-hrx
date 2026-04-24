@@ -160,18 +160,26 @@ class LeaveController extends Controller
 
     $user = auth()->user();
 
+    $hours     = $request->duration_hours;
+    $startTime = $request->start_time;
+    $endTime   = $request->end_time;
+
     // Unit leave policy enforcement
-    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate);
+    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours);
     if ($policyError) {
       return Error::response($policyError);
     }
 
     $leaveRequest = LeaveRequest::create([
-      'from_date'     => $finalFromDate,
-      'to_date'       => $finalToDate,
-      'leave_type_id' => $leaveTypeId,
-      'user_notes'    => $remarks,
-      'user_id'       => $user->id,
+      'from_date'      => $finalFromDate,
+      'to_date'        => $finalToDate,
+      'leave_type_id'  => $leaveTypeId,
+      'user_notes'     => $remarks,
+      'user_id'        => $user->id,
+      'is_short_leave' => $leaveType->is_short_leave,
+      'duration_hours' => $hours,
+      'start_time'     => $startTime,
+      'end_time'       => $endTime,
     ]);
 
     NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));

@@ -34,6 +34,7 @@ class Attendance extends Model
     'admin_reason',
     'attachment',
     'is_policy_late',
+    'leave_request_id',
     'tenant_id',
   ];
 
@@ -48,6 +49,11 @@ class Attendance extends Model
   public function user()
   {
     return $this->belongsTo(User::class);
+  }
+
+  public function leaveRequest()
+  {
+    return $this->belongsTo(LeaveRequest::class);
   }
 
   public function shift()

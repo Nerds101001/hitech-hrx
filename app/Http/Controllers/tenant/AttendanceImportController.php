@@ -176,6 +176,7 @@ class AttendanceImportController extends Controller
                     'status' => $calc['status'],
                     'tenant_id' => auth()->user()->tenant_id,
                     'is_policy_late' => $calc['is_policy_late'] ?? false,
+                    'leave_request_id' => $calc['leave_request_id'] ?? null,
                 ]);
             } else {
                 $attendance = \App\Models\Attendance::create([
@@ -185,6 +186,7 @@ class AttendanceImportController extends Controller
                     'status' => $calc['status'],
                     'tenant_id' => auth()->user()->tenant_id,
                     'is_policy_late' => $calc['is_policy_late'] ?? false,
+                    'leave_request_id' => $calc['leave_request_id'] ?? null,
                 ]);
             }
 
