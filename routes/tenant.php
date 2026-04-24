@@ -482,7 +482,7 @@ Route::middleware([
       Route::get('', [DepartmentsController::class, 'index'])->name('index');
       Route::get('indexAjax', [DepartmentsController::class, 'indexAjax'])->name('indexAjax');
       Route::post('addOrUpdateDepartmentAjax', [DepartmentsController::class, 'addOrUpdateDepartmentAjax'])->name('addOrUpdateDepartmentAjax');
-      Route::get('getDepartmentListAjax', [DepartmentsController::class, 'getListAjax'])->name('getListAjax');
+      Route::get('getListAjax', [DepartmentsController::class, 'getListAjax'])->name('getListAjax');
       Route::get('getParentDepartments', [DepartmentsController::class, 'getParentDepartments'])->name('getParentDepartments');
       Route::get('getDepartmentAjax/{id}', [DepartmentsController::class, 'getDepartmentAjax'])->name('getDepartmentAjax');
       Route::get('getDepartmentUsersAjax/{id?}', [DepartmentsController::class, 'getDepartmentUsersAjax']);

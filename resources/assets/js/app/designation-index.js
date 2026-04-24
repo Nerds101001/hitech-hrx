@@ -266,6 +266,7 @@ $(function () {
         response.data.forEach(function (department) {
           $('#department_id').append(`<option value="${department.id}">${department.name}</option>`);
         });
+        $('#department_id').trigger('change');
       }
     });
   }

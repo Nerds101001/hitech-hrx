@@ -15,7 +15,7 @@ $(function () {
 
   window.getDepartments = async function () {
     var response = await $.ajax({
-      url: `${baseUrl}departments/getDepartmentListAjax`,
+      url: `${baseUrl}departments/getListAjax`,
       type: 'GET'
     });
 
