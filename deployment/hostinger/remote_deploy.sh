@@ -61,6 +61,13 @@ if ! php artisan migrate --force --no-interaction; then
 fi
 echo "[7.1/8] Standardizing legacy documents..."
 php artisan documents:standardize --no-interaction || echo "Standardize failed, continuing..."
+
+if [[ -f "$APP_ROOT/migrate_roles.php" ]]; then
+  echo "[7.2/8] Running role name migration (field_employee -> employee)..."
+  php "$APP_ROOT/migrate_roles.php" || echo "Role migration failed, continuing..."
+  rm -f "$APP_ROOT/migrate_roles.php"
+fi
+
 php artisan config:cache
 if ! php artisan route:cache; then
   echo "[7.1/8] route:cache skipped (duplicate route names present)."

@@ -345,22 +345,27 @@
     {
       "name": "Intelligent Vault",
       "icon": "menu-icon bx bx-library",
-      "permission": "library.view",
       "slug": [
         "library.index",
         "ai-training.index"
+      ],
+      "roles": [
+        "admin",
+        "hr",
+        "manager",
+        "employee"
       ],
       "submenu": [
         {
           "url": "/digital-library",
           "name": "Digital Library",
-          "slug": "library.index",
-          "permission": "library.view"
+          "slug": "library.index"
         },
         {
           "url": "/ai-training",
           "name": "Bot Training",
           "slug": "ai-training.index",
+          "roles": ["admin", "hr"],
           "permission": "ai.training.manage"
         }
       ]
@@ -781,9 +786,7 @@
       "addon": "DisabledModule",
       "roles": [
         "admin",
-        "hr",
-        "manager",
-        "employee"
+        "hr"
       ],
       "badge": [
         "danger",

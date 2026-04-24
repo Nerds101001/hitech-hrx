@@ -186,6 +186,32 @@ class UserDashboardController extends Controller
         // 2. Employee Dashboard
         if ($isFieldEmployee) {
             $settings = Settings::first();
+            
+            // Celebrations logic
+            $todayMd = now()->format('md');
+            
+            // Birthdays
+            $allBirthdays = User::whereNotNull('dob')
+                ->where('status', UserAccountStatus::ACTIVE)
+                ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
+                ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
+                ->take(10)
+                ->get();
+            
+            $todayBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') === $todayMd);
+            $upcomingBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') !== $todayMd)->take(3);
+
+            // Anniversaries
+            $allAnniversaries = User::whereNotNull('date_of_joining')
+                ->where('status', UserAccountStatus::ACTIVE)
+                ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
+                ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
+                ->take(10)
+                ->get();
+
+            $todayAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
+            $upcomingAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') !== $todayMd)->take(3);
+
             return view('tenant.users.dashboard.employee-index', compact(
                 'myLeavesCount',
                 'myExpensesCount',
@@ -195,9 +221,14 @@ class UserDashboardController extends Controller
                 'recentNotices',
                 'payrollTrend',
                 'latestNetSalary',
-                'settings'
+                'settings',
+                'todayBirthdays',
+                'upcomingBirthdays',
+                'todayAnniversaries',
+                'upcomingAnniversaries'
             ));
         }
+
 
         // Global Stats (Needed for Manager and HR)
         $totalUser = User::count();

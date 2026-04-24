@@ -357,6 +357,14 @@ Route::middleware([
 
 
     // --- HR & ORGANIZATION ---
+    Route::get('debug-onboarding-data', function() {
+        return [
+           'roles' => \App\Models\Role::get(),
+           'departments' => \App\Models\Department::get(),
+           'designations' => \App\Models\Designation::get(),
+           'auth_tenant' => auth()->user()->tenant_id ?? 'no auth'
+        ];
+    });
 
     // --- APPROVALS ---
     Route::middleware(['role:admin|hr'])->group(function () {
@@ -373,7 +381,9 @@ Route::middleware([
         Route::get('', [EmployeeController::class, 'index'])->name('index');
         Route::get('view/{id}', [EmployeeController::class, 'show'])->name('show');
         Route::match(['get', 'post'], 'indexAjax', [EmployeeController::class, 'userListAjax'])->name('indexAjax');
-        Route::post('resetPasswordAjax', [EmployeeController::class, 'resetPasswordAjax'])->name('resetPasswordAjax');
+        Route::post('reset-password', [EmployeeController::class, 'resetPasswordAjax'])->name('resetPasswordAjax');
+        Route::post('unlockSecurityAjax', [EmployeeController::class, 'unlockSecurityAjax'])->name('unlockSecurityAjax');
+        Route::get('delete', [EmployeeController::class, 'deleteEmployeeAjax'])->name('deleteAjax');
         Route::get('create', [EmployeeController::class, 'create'])->name('create');
         Route::get('getNewEmployeeCode/{locationId}', [EmployeeController::class, 'GetNewEmployeeCodeByLocationAjax'])->name('getNewEmployeeCode');
         Route::get('checkEmailValidationAjax', [EmployeeController::class, 'checkEmailValidationAjax'])->name('checkEmailValidationAjax');
@@ -554,24 +564,22 @@ Route::middleware([
     // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
     Route::middleware(['web', 'auth'])->group(function() {
 
-        // Digital Library - Viewable by all with permission
-        Route::middleware(['can:library.view'])->prefix('digital-library')->name('library.')->group(function() {
+        // Digital Library - Viewable by all authenticated users
+        Route::prefix('digital-library')->name('library.')->group(function() {
             Route::get('/', [DigitalLibraryController::class, 'index'])->name('index');
-            Route::get('access/{id}', [DigitalLibraryController::class, 'access'])->name('access');
+            Route::get('/access/{id}', [DigitalLibraryController::class, 'access'])->name('access');
             
-            // AI Chatbot - Visible to all with library access
-            Route::post('chat', [DigitalLibraryController::class, 'chat'])->name('chat')->middleware('can:bot.chat');
-
-            // Admin/HR Upload Routes
-            Route::middleware(['can:library.upload'])->group(function() {
-                Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
+            // AI Chat & Uploads (Admin/HR Only)
+            Route::middleware(['role:admin|hr'])->group(function() {
+                Route::post('chat', [DigitalLibraryController::class, 'chat'])->name('chat');
                 Route::post('store', [DigitalLibraryController::class, 'store'])->name('store');
-                Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulkStore');
+                Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
+                Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulk-store');
             });
         });
 
-        // AI Training (Admin Only by permission)
-        Route::middleware(['can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {
+        // AI Training (Admin/HR Only)
+        Route::middleware(['role:admin|hr', 'can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {
             Route::get('/', [AiTrainingController::class, 'index'])->name('index');
             Route::post('/store', [AiTrainingController::class, 'store'])->name('store');
             Route::post('/update-instructions', [AiTrainingController::class, 'updateInstructions'])->name('update-instructions');
@@ -684,8 +692,8 @@ Route::middleware([
       Route::post('/sos/resolve/{id}', [SOSController::class, 'markAsResolved'])->name('sos.resolve');
     });
 
-    // Chat
-    Route::get('/admin/chat', [\App\Http\Controllers\tenant\ChatController::class, 'index'])->name('chat.index');
+    // Admin Chat
+    Route::middleware(['role:admin|hr'])->get('/admin/chat', [\App\Http\Controllers\tenant\ChatController::class, 'index'])->name('chat.index');
 
     // Account Management
     Route::prefix('account')->name('account.')->group(function () {

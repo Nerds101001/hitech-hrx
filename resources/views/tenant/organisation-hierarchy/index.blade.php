@@ -11,7 +11,6 @@
 @endsection
 
 @section('content')
-@section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
     {{-- Standardized Header --}}
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4 py-2">
@@ -66,6 +65,16 @@
 
           {{-- Canvas Area --}}
           <div id="orgChartCanvas" class="flex-grow-1" style="cursor: grab; background-color: #f8fafc; overflow: hidden; position: relative;">
+            @if(empty($hierarchy))
+              <div class="d-flex flex-column align-items-center justify-content-center h-100 py-10">
+                <div class="bg-label-primary p-4 rounded-circle mb-3">
+                  <i class="bx bx-sitemap fs-1"></i>
+                </div>
+                <h4 class="fw-bold">No Staff Hierarchy Found</h4>
+                <p class="text-muted">Please assign 'Reporting To' relationships in the employee directory to build the map.</p>
+                <a href="{{ route('employees.index') }}" class="btn btn-primary rounded-pill px-5 mt-2">Go to Directory</a>
+              </div>
+            @endif
 
           {{-- Legend --}}
           <div class="chart-legend" style="position: absolute; bottom: 20px; left: 20px; z-index: 10;">

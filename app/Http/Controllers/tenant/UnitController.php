@@ -65,6 +65,10 @@ class UnitController extends Controller
             'is_auto_check_out_enabled' => $request->has('is_auto_check_out_enabled') ? 1 : 0,
             'auto_check_out_time' => $request->auto_check_out_time,
             'is_biometric_verification_enabled' => $request->has('is_biometric_verification_enabled') ? 1 : 0,
+            'latitude' => $request->latitude ?? 0.0,
+            'longitude' => $request->longitude ?? 0.0,
+            'radius' => 500,
+            'client_id' => $request->client_id ?? (\App\Models\Client::first()?->id),
         ];
 
         if ($id) {

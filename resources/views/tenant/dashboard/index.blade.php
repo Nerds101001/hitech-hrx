@@ -249,6 +249,52 @@
         </div>
       </div>
 
+      <!-- Celebrations (Birthdays) -->
+      @if(isset($upcomingBirthdays) && $upcomingBirthdays->count() > 0)
+      <div class="col-12">
+        <div class="hitech-card h-100 shadow-sm animate__animated animate__fadeInRight" style="animation-delay:0.08s; border-left: 4px solid #ff4d94;">
+          <div class="p-4">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="icon-wrap-sm bg-label-pink rounded-circle p-2"><i class="bx bx-cake text-pink fs-4"></i></div>
+              <h6 class="mb-0 fw-bold">Upcoming Birthdays</h6>
+            </div>
+            @foreach($upcomingBirthdays as $u)
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <img src="{{ $u->getProfilePicture() }}" class="rounded-circle border border-2 border-pink" width="40" height="40" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+                <div class="flex-grow-1">
+                  <div class="fw-bold text-dark small">{{ $u->name }}</div>
+                  <div class="text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }}</div>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      </div>
+      @endif
+
+      <!-- Celebrations (Anniversaries) -->
+      @if(isset($upcomingAnniversaries) && $upcomingAnniversaries->count() > 0)
+      <div class="col-12">
+        <div class="hitech-card h-100 shadow-sm animate__animated animate__fadeInRight" style="animation-delay:0.1s; border-left: 4px solid #7367f0;">
+          <div class="p-4">
+            <div class="d-flex align-items-center gap-3 mb-3">
+              <div class="icon-wrap-sm bg-label-primary rounded-circle p-2"><i class="bx bx-medal text-primary fs-4"></i></div>
+              <h6 class="mb-0 fw-bold">Work Anniversaries</h6>
+            </div>
+            @foreach($upcomingAnniversaries as $u)
+              <div class="d-flex align-items-center gap-3 mb-3">
+                <img src="{{ $u->getProfilePicture() }}" class="rounded-circle border border-2 border-primary" width="40" height="40" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+                <div class="flex-grow-1">
+                  <div class="fw-bold text-dark small">{{ $u->name }}</div>
+                  <div class="text-muted" style="font-size: 0.7rem;">{{ floor(\Carbon\Carbon::parse($u->date_of_joining)->diffInYears(now())) }} Years • {{ \Carbon\Carbon::parse($u->date_of_joining)->format('M d') }}</div>
+                </div>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      </div>
+      @endif
+
       {{-- Recent Activities --}}
       <div class="col-12">
         <div class="announce-card animate__animated animate__fadeInRight" style="animation-delay:0.12s">

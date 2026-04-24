@@ -14,6 +14,7 @@ use App\Enums\TerminationType;
 use App\Enums\UserAccountStatus;
 use App\Models\Asset;
 use App\Models\BankAccount;
+use App\Models\Department;
 use App\Models\Designation;
 use App\Models\DocumentType;
 use App\Models\DocumentRequest;
@@ -1109,6 +1110,7 @@ class EmployeeController extends Controller
 
   public function index()
   {
+    \Illuminate\Support\Facades\DB::enableQueryLog();
     $active = User::where('status', UserAccountStatus::ACTIVE)->count();
     $inactive = User::where('status', UserAccountStatus::INACTIVE)->count();
     $relieved = User::where('status', UserAccountStatus::RELIEVED)->count();
@@ -1119,24 +1121,26 @@ class EmployeeController extends Controller
       UserAccountStatus::INVITED
     ])->count();
 
-    $roles = Role::select('id', 'name')
-      ->get()
-      ->map(function ($role) {
-        $role->display_name = $role->display_name ?? $role->name;
-        return $role;
-      });
+    $roles = Role::get();
+    $teams = Team::withoutGlobalScopes()->select('name', 'id')->get();
+    $designations = Designation::withoutGlobalScopes()->select('name', 'id')->get();
+    $departments = Department::withoutGlobalScopes()->select('name', 'id')->get();
 
-    $teams = Team::where('status', Status::ACTIVE)
-      ->select('id', 'name', 'code')
-      ->get();
+    \Illuminate\Support\Facades\Log::info('Employee Index Loaded', [
+        'roles_count' => $roles->count(),
+        'teams_count' => $teams->count(),
+        'designations_count' => $designations->count(),
+        'departments_count' => $departments->count(),
+        'tenant_id' => auth()->user()->tenant_id ?? 'N/A'
+    ]);
 
-    $designations = Designation::where('status', Status::ACTIVE)
-      ->select('id', 'name', 'code')
-      ->get();
-
-    $departments = \App\Models\Department::where('status', Status::ACTIVE)
-      ->select('id', 'name', 'code')
-      ->get();
+    // \Illuminate\Support\Facades\Log::info('Onboarding Dropdown Counts:', [
+    //     'roles' => $roles->count(),
+    //     'teams' => $teams->count(),
+    //     'designations' => $designations->count(),
+    //     'departments' => $departments->count(),
+    // ]);
+    
 
     return view('tenant.employees.index', [
       'totalUser' => $active + $inactive + $relieved + $onboarding,
@@ -1148,7 +1152,9 @@ class EmployeeController extends Controller
       'teams' => $teams,
       'departments' => $departments,
       'designations' => $designations,
-      'managers' => User::where('status', UserAccountStatus::ACTIVE)->get(),
+      'managers' => User::withoutGlobalScopes()->whereHas('roles', function($q) {
+          $q->whereIn('name', ['admin', 'hr', 'manager', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
+      })->whereIn('status', [UserAccountStatus::ACTIVE, 'active', 'ACTIVE'])->get(),
       'users' => User::whereIn('status', [
         UserAccountStatus::ACTIVE,
         UserAccountStatus::ONBOARDING,
@@ -1299,6 +1305,7 @@ class EmployeeController extends Controller
             'profile_picture' => $user->getProfilePicture(),
             'personal_email' => $user->personal_email,
             'official_phone' => $user->official_phone,
+            'is_security_locked' => ($user->locked_until && \Carbon\Carbon::parse($user->locked_until)->isFuture()),
           ];
         })->toArray();
       }
@@ -1341,8 +1348,23 @@ class EmployeeController extends Controller
 
       return Success::response($msg);
     } catch (\Exception $e) {
-      Log::error('EmployeeController@deleteEmployeeAjax: ' . $e->getMessage());
-      return Error::response('Failed to delete user');
+      Log::error('EmployeeController@toggleStatusAjax: ' . $e->getMessage());
+      return Error::response('Failed to update status');
+    }
+  }
+
+  public function unlockSecurityAjax(Request $request)
+  {
+    try {
+      $user = User::findOrFail($request->id);
+      $user->update([
+        'locked_until' => null,
+        'login_attempts' => 0,
+        'otp_attempts' => 0
+      ]);
+      return Success::response('Security lock removed successfully');
+    } catch (\Exception $e) {
+      return Error::response($e->getMessage());
     }
   }
 
@@ -1350,9 +1372,16 @@ class EmployeeController extends Controller
   {
     try {
       $user = User::findOrFail($request->id);
-      $user->password = bcrypt('123456');
+      
+      // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
+      $firstName = trim($user->first_name) ?: 'User';
+      $phone = $user->official_phone ?: ($user->phone ?: '12345678');
+      $lastFour = substr($phone, -4);
+      $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
+
+      $user->password = bcrypt($newPassword);
       $user->save();
-      return Success::response('Password reset successfully to default (123456)');
+      return Success::response(['message' => "Password reset successfully. New Password: $newPassword", 'password' => $newPassword]);
     } catch (\Exception $e) {
       return Error::response($e->getMessage());
     }
@@ -1473,7 +1502,12 @@ class EmployeeController extends Controller
       $user->address = $request->input('address');
 
       if ($request->has('useDefaultPassword') && $request->input('useDefaultPassword') == 'on') {
-        $user->password = bcrypt(Settings::first()->default_password ?? 123456);
+        // Dynamic Default Password Rule: Ucfirst(Name[:4]) + Phone[-4]
+        $firstName = $request->input('firstName') ?: 'User';
+        $phone = $request->input('phone') ?: '12345678';
+        $lastFour = substr($phone, -4);
+        $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . $lastFour;
+        $user->password = bcrypt($newPassword);
       } else {
         $user->password = bcrypt($request->input('password'));
       }

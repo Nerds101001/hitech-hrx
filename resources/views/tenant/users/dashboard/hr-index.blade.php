@@ -44,31 +44,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 2. Department Distribution
   const deptData = {!! json_encode($departmentData) !!};
-  const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
-    series: deptData.map(d => d.count || 0),
-    chart: { type: 'donut', height: 280 },
-    labels: deptData.map(d => d.name),
-    colors: ['#004D4D', '#00897b', '#00D2D2', '#D1FAE5'],
-    legend: { position: 'bottom', horizontalAlign: 'center' },
-    plotOptions: {
-      pie: {
-        donut: {
-          size: '75%',
-          labels: {
-            show: true,
-            total: {
-              show: true,
-              label: 'UNITS',
-              formatter: () => '{{ $departmentData->count() }}',
-              fontSize: '14px',
-              fontWeight: 800
+  if (deptData && deptData.length > 0) {
+      const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
+        series: deptData.map(d => d.count || 0),
+        chart: { type: 'donut', height: 280 },
+        labels: deptData.map(d => d.name),
+        colors: ['#004D4D', '#00897b', '#00D2D2', '#D1FAE5'],
+        legend: { position: 'bottom', horizontalAlign: 'center' },
+        plotOptions: {
+          pie: {
+            donut: {
+              size: '75%',
+              labels: {
+                show: true,
+                total: {
+                  show: true,
+                  label: 'EMPLOYEES',
+                  color: '#4b4b4b',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  formatter: function (w) {
+                    return {!! count($departmentData) > 0 ? array_sum(array_column($departmentData->toArray(), 'count')) : 0 !!};
+                  }
+                }
+              }
             }
           }
         }
+      });
+      if(document.querySelector("#departmentChart")) departmentChart.render();
+  } else {
+      const chartEl = document.querySelector("#departmentChart");
+      if (chartEl) {
+          chartEl.innerHTML = '<div class="text-center py-5 text-muted"><i class="bx bx-sitemap fs-1 mb-2 opacity-25"></i><br><small>No departmental data available.</small></div>';
       }
-    }
-  });
-  if(document.querySelector("#departmentChart")) departmentChart.render();
+  }
 });
 </script>
 @endsection
@@ -171,7 +181,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="section-label small fw-bold text-uppercase text-pink mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Today</div>
             @foreach($todayBirthdays as $u)
             <div class="celeb-row d-flex align-items-center gap-3 mb-4 pulse-item">
-              <img src="{{ $u->getProfilePicture() ?? asset('assets/img/avatars/1.png') }}" class="rounded-circle border border-pink" width="45" height="45" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+              <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
               <div>
                 <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
                 <div class="date-sub-text" style="color: #ef4444;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }} • <span class="badge bg-label-pink rounded-pill p-1 px-2">HAPPY BIRTHDAY!</span></div>
@@ -188,7 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         @forelse($nextBirthdays as $u)
         <div class="celeb-row d-flex align-items-center gap-3 mb-4">
-          <img src="{{ $u->getProfilePicture() ?? asset('assets/img/avatars/1.png') }}" class="rounded-circle" width="45" height="45" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+          <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
           <div>
             <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
             <div class="date-sub-text">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }}</div>
@@ -222,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="section-label small fw-bold text-uppercase text-purple mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Today</div>
             @foreach($todayAnniversaries as $u)
             <div class="celeb-row d-flex align-items-center gap-3 mb-4 pulse-item">
-              <img src="{{ $u->getProfilePicture() ?? asset('assets/img/avatars/1.png') }}" class="rounded-circle border border-purple" width="45" height="45" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+              <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f3e8ff&color=7e22ce' }}" class="rounded-circle border border-purple" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f3e8ff&color=7e22ce'">
               <div>
                 <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
                 <div class="date-sub-text" style="color: #7c3aed;">
@@ -242,7 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         @forelse($nextAnniversaries as $u)
         <div class="celeb-row d-flex align-items-center gap-3 mb-4">
-          <img src="{{ $u->getProfilePicture() ?? asset('assets/img/avatars/1.png') }}" class="rounded-circle" width="45" height="45" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+          <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
           <div>
             <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
             <div class="date-sub-text">{{ floor(\Carbon\Carbon::parse($u->date_of_joining)->diffInYears(now())) }} YRS • {{ \Carbon\Carbon::parse($u->date_of_joining)->format('M d') }}</div>
@@ -270,10 +280,10 @@ document.addEventListener('DOMContentLoaded', function() {
         @forelse($pendingApprovals->take(5) as $approval)
         <div class="d-flex align-items-center justify-content-between mb-4">
           <div class="d-flex align-items-center gap-3">
-             <img src="{{ $approval['avatar'] }}" class="rounded-circle" width="45" height="45" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+             <img src="{{ $approval['avatar'] }}" class="rounded-circle" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($approval['user']) }}&background=004D4D&color=fff'">
              <div>
                <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $approval['user'] }} <span class="text-muted" style="font-size: 0.75rem;">(#{{ $approval['emp_id'] }})</span></h6>
-               <small class="text-muted text-uppercase d-block" style="font-size: 0.65rem; letter-spacing: 0.5px;">{{ $approval['type'] }} • {{ $approval['department'] }}</small>
+               <small class="text-muted text-uppercase d-block" style="font-size: 0.65rem; letter-spacing: 0.5px;">{{ $approval['time_ago'] }} • {{ $approval['type'] }} • {{ $approval['department'] }}</small>
                @if(isset($approval['days']))
                  <small class="text-teal fw-bold" style="font-size: 0.7rem;">{{ $approval['days'] }} Days Request</small>
                @endif
@@ -335,7 +345,7 @@ document.addEventListener('DOMContentLoaded', function() {
         @foreach($topCandidates as $candidate)
         <div class="d-flex align-items-center justify-content-between mb-4 pb-3 border-bottom border-light">
           <div class="d-flex align-items-center gap-3">
-            <img src="{{ asset('assets/img/avatars/'.rand(1, 10).'.png') }}" class="rounded-circle shadow-sm" width="40" height="40" onerror="this.src='{{ asset('assets/img/avatars/1.png') }}'">
+            <img src="{{ 'https://ui-avatars.com/api/?name='.urlencode($candidate->name).'&background=e0f2f2&color=004D4D' }}" class="rounded-circle shadow-sm" width="40" height="40" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($candidate->name) }}&background=e0f2f2&color=004D4D'">
             <div>
               <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 120px;">{{ $candidate->name }}</h6>
               <small class="text-muted text-truncate d-block" style="max-width: 120px;">{{ $candidate->jobs->title ?? 'New' }}</small>
@@ -440,7 +450,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <i class="bx bx-plus"></i>
   </button>
   <div class="fab-options-p" id="fabMenu">
-    <a href="javascript:void(0);" class="fab-btn-p" data-label="Onboarding" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal"><i class="bx bx-paper-plane"></i></a>
+    <a href="javascript:void(0);" class="fab-btn-p" data-label="Onboarding" data-bs-toggle="modal" data-bs-target="#onboardingInviteModalV2"><i class="bx bx-paper-plane"></i></a>
     <a href="{{ route('job-application.create') }}" class="fab-btn-p" data-label="Add Candidate"><i class="bx bx-user-plus"></i></a>
     <a href="{{ route('job.create') }}" class="fab-btn-p" data-label="Post Job"><i class="bx bx-briefcase-alt-2"></i></a>
     <a href="{{ route('holidays.index') }}" class="fab-btn-p" data-label="Holiday"><i class="bx bx-calendar-star"></i></a>

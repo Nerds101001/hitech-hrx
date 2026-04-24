@@ -140,10 +140,14 @@
               targets: 6, // Actions
               searchable: false, orderable: false,
               render: function (data, type, full, meta) {
+                var unlockBtn = full['is_security_locked'] 
+                  ? `<a class="icon-sophisticated unlock-security" data-id="${full['id']}" href="javascript:;" title="Remove Security Lock"><i class="bx bx-lock-open-alt text-success"></i></a>` 
+                  : '';
                 return `
                   <div class="d-flex align-items-center justify-content-center gap-2">
                     <a class="icon-sophisticated view" href="${employeeViewBase + full['id']}" title="View"><i class="bx bx-show"></i></a>
-                    <a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['phone']}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>
+                    ${unlockBtn}
+                    <a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['official_phone'] || full['phone'] || ''}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>
                   </div>`;
               }
             }
@@ -170,10 +174,11 @@
         const userName = $(this).data('name') || 'Employee';
         const userPhone = $(this).data('phone') || '';
         
-        // Formula: Ucfirst(Name[:4]) + Phone[-4] (Fallback for missing phone)
-        let firstName = userName.split(' ')[0] || 'User';
-        let lastFour = userPhone && userPhone !== 'N/A' ? String(userPhone).slice(-4) : '1234';
-        let passwordPreview = firstName.charAt(0).toUpperCase() + firstName.slice(1, 4).toLowerCase() + lastFour;
+        // Formula: Ucfirst(Name[:4]) + @ + Phone[-4] (Fallback for missing phone)
+        let firstName = userName.split(' ')[0].trim() || 'User';
+        let phoneToUse = userPhone && userPhone !== 'N/A' && userPhone !== 'null' && userPhone !== '' ? String(userPhone) : '12345678';
+        let lastFour = phoneToUse.slice(-4);
+        let passwordPreview = firstName.charAt(0).toUpperCase() + firstName.slice(1, 4).toLowerCase() + '@' + lastFour;
 
         $('#displayResetPassword').text(passwordPreview);
         $('#confirmResetBtn').data('id', user_id);
@@ -195,10 +200,13 @@
             $('#hitechResetPasswordModal').modal('hide');
             btn.prop('disabled', false).text('Confirm Reset');
             
+            // Handle AppData response format
+            const msg = (response.data && response.data.message) ? response.data.message : (response.message || 'Password reset successfully');
+
             Swal.fire({ 
               icon: 'success', 
               title: 'Success!', 
-              text: response.message, 
+              text: msg, 
               customClass: { confirmButton: 'btn btn-success' } 
             });
           },
@@ -211,6 +219,37 @@
               title: 'Error!', 
               text: 'Something went wrong.', 
               customClass: { confirmButton: 'btn btn-danger' } 
+            });
+          }
+        });
+      });
+
+      // Security Unlock Listener
+      $(document).on('click', '.unlock-security, .security-unlock', function(e) {
+        e.preventDefault();
+        const user_id = $(this).data('id');
+        
+        Swal.fire({
+          title: 'Remove Security Lock?',
+          text: "This will immediately restore access to the employee's account by clearing failed login attempts.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#008080',
+          cancelButtonColor: '#d33',
+          confirmButtonText: 'Yes, Unlock it!'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            $.ajax({
+              type: 'POST',
+              url: "{{ route('employees.unlockSecurityAjax') }}",
+              data: { id: user_id, _token: '{{ csrf_token() }}' },
+              success: function (response) {
+                Swal.fire('Unlocked!', response.message, 'success')
+                .then(() => { if (window.dt_user) window.dt_user.ajax.reload(); else window.location.reload(); });
+              },
+              error: function (error) {
+                Swal.fire('Error!', error.responseJSON?.message || 'Failed to remove lock.', 'error');
+              }
             });
           }
         });
@@ -238,7 +277,7 @@
             <span class="fw-bold">Onboarding & Bulk Action</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end dropdown-menu-hitech shadow-lg">
-            <li><a class="dropdown-item dropdown-item-hitech d-flex align-items-center gap-2 py-2" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal"><i class="bx bx-user-plus text-primary"></i>Invite Candidate</a></li>
+            <li><a class="dropdown-item dropdown-item-hitech d-flex align-items-center gap-2 py-2" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#onboardingInviteModalV2"><i class="bx bx-user-plus text-primary"></i>Invite Candidate</a></li>
             <li><a class="dropdown-item dropdown-item-hitech d-flex align-items-center gap-2 py-2" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#bulkImportModal"><i class="bx bx-upload text-success"></i>Bulk Import (CSV)</a></li>
             <li><a class="dropdown-item dropdown-item-hitech d-flex align-items-center gap-2 py-2" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#bulkExportModal"><i class="bx bx-download text-info"></i>Bulk Export</a></li>
             <li><hr class="dropdown-divider my-2"></li>
@@ -443,8 +482,12 @@
                       $isLocked = in_array($user->status->value, ['inactive', 'suspended', 'blocked']);
                       $lockLabel = $isLocked ? 'Unlock Account' : 'Lock Account';
                       $lockIcon = $isLocked ? 'bx-lock-open-alt' : 'bx-lock-alt';
+                      $isSecurityLocked = ($user->locked_until && $user->locked_until->isFuture());
                     @endphp
-                    <li><a class="dropdown-item dropdown-item-hitech reset-password" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}"><i class="bx bx-key me-2 text-warning"></i>Reset Password</a></li>
+                    <li><a class="dropdown-item dropdown-item-hitech reset-password" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->official_phone ?? $user->phone }}"><i class="bx bx-key me-2 text-warning"></i>Reset Password</a></li>
+                    @if($isSecurityLocked)
+                      <li><a class="dropdown-item dropdown-item-hitech security-unlock" href="javascript:;" data-id="{{ $user->id }}"><i class="bx bx-lock-open-alt me-2 text-success"></i>Unlock Security</a></li>
+                    @endif
                     <li><hr class="dropdown-divider mx-3"></li>
                     <li><a class="dropdown-item dropdown-item-hitech toggle-status-record" href="javascript:;" data-id="{{ $user->id }}"><i class="bx {{ $lockIcon }} me-2 text-danger"></i>{{ $lockLabel }}</a></li>
                   </ul>
@@ -496,7 +539,7 @@
 
             {{-- Action Buttons --}}
             <div class="card-action-bar">
-              <a href="javascript:;" class="btn-card-action btn-card-reset reset-password" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}">
+              <a href="javascript:;" class="btn-card-action btn-card-reset reset-password" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->official_phone ?? $user->phone }}">
                 <i class="bx bx-key fs-6"></i>Reset
               </a>
               <a href="{{ route('employees.show', $user->id) }}" class="btn-card-action btn-card-view">
@@ -540,7 +583,7 @@
             <div class="modal-body modal-body-hitech text-center py-6 px-5">
                 <div class="p-6 mb-6 border animate__animated animate__pulse" style="background: rgba(0, 128, 128, 0.06); border: 1px dashed rgba(0, 128, 128, 0.3) !important; border-radius: 2rem !important;">
                     <p class="text-muted mb-3 small fw-bold text-uppercase" style="letter-spacing: 1.5px; opacity: 0.8;">The New Password Will Be:</p>
-                    <h1 class="text-primary fw-extrabold mb-0" id="displayResetPassword" style="letter-spacing: 3px; font-size: 2.5rem; text-shadow: 0 2px 4px rgba(0,128,128,0.1);">Arch7850</h1>
+                    <h1 class="text-primary fw-extrabold mb-0" id="displayResetPassword" style="letter-spacing: 3px; font-size: 2.5rem; text-shadow: 0 2px 4px rgba(0,128,128,0.1);">---</h1>
                 </div>
                 <p class="text-muted small px-4">
                     <i class="bx bx-info-circle me-1"></i>

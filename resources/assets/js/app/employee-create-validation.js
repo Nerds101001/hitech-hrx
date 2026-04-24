@@ -116,13 +116,22 @@
               message: 'The Date of Birth is required'
             }
           }
+        },
+        role: {
+          validators: {
+            notEmpty: {
+              message: 'Please choose an access role'
+            }
+          }
         }
       },
       plugins: {
         trigger: new FormValidation.plugins.Trigger(),
         bootstrap5: new FormValidation.plugins.Bootstrap5({
           eleValidClass: '',
-          rowSelector: '.col-sm-6'
+          rowSelector: function (field, ele) {
+            return '.col-sm-12, .col-md-6, .col-sm-6, .col-12';
+          }
         }),
         autoFocus: new FormValidation.plugins.AutoFocus(),
         submitButton: new FormValidation.plugins.SubmitButton(),
@@ -203,7 +212,9 @@
         trigger: new FormValidation.plugins.Trigger(),
         bootstrap5: new FormValidation.plugins.Bootstrap5({
           eleValidClass: '',
-          rowSelector: '.col-sm-6'
+          rowSelector: function (field, ele) {
+            return '.col-sm-12, .col-md-6, .col-sm-6, .col-12';
+          }
         }),
         autoFocus: new FormValidation.plugins.AutoFocus(),
         submitButton: new FormValidation.plugins.SubmitButton()
@@ -227,7 +238,9 @@
         trigger: new FormValidation.plugins.Trigger(),
         bootstrap5: new FormValidation.plugins.Bootstrap5({
           eleValidClass: '',
-          rowSelector: '.col-sm-6'
+          rowSelector: function (field, ele) {
+            return '.col-sm-12, .col-md-6, .col-sm-6, .col-12';
+          }
         }),
         autoFocus: new FormValidation.plugins.AutoFocus(),
         submitButton: new FormValidation.plugins.SubmitButton()
@@ -286,8 +299,13 @@
             dropdownParent: $this.parent()
           })
           .on('change', function () {
-            /* // Revalidate the color field when an option is chosen
-             FormValidation2.revalidateField('formValidationCountry');*/
+            // Revalidate the field when an option is chosen
+            const fieldName = $(this).attr('name');
+            if (FormValidation1.getFields()[fieldName]) {
+              FormValidation1.revalidateField(fieldName);
+            } else if (FormValidation2.getFields()[fieldName]) {
+              FormValidation2.revalidateField(fieldName);
+            }
           });
       });
     }

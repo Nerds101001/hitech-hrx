@@ -77,6 +77,10 @@
 @section('page-script')
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // DEBUG: Track unit name changes
+      $('#unit-name').on('focusout change', function() {
+          console.log('Unit Name event:', event.type, 'Value:', $(this).val());
+      });
       const dt_table = $('.datatables-units');
       let dt_units;
 
@@ -127,7 +131,7 @@
       }
 
       // Add New — Reset Form
-      $('.add-new-unit').on('click', function() {
+      $('button.add-new-unit').on('click', function() {
         $('#unit_id').val('');
         $('#addNewUnitForm')[0].reset();
         $('#modalAddUnitLabel').html('Add Unit');

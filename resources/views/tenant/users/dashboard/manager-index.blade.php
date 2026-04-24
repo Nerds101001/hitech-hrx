@@ -265,7 +265,7 @@
                         @foreach($todayBirthdays as $user)
                             <div class="celeb-item today-pulse">
                                 <div class="avatar avatar-sm">
-                                    <img src="{{ $user->profile_picture ? asset('storage/'.$user->profile_picture) : asset('assets/img/avatars/1.png') }}" class="rounded-circle">
+                                    <img src="{{ $user->profile_picture ? asset('storage/'.$user->profile_picture) : 'https://ui-avatars.com/api/?name='.urlencode($user->full_name).'&background=fecdd3&color=be123c' }}" class="rounded-circle" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($user->full_name) }}&background=fecdd3&color=be123c'">
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="fw-bold text-dark small">{{ $user->full_name }}</div>
@@ -278,7 +278,7 @@
                         @foreach($upcomingBirthdays as $user)
                             <div class="celeb-item">
                                 <div class="avatar avatar-sm">
-                                    <img src="{{ $user->profile_picture ? asset('storage/'.$user->profile_picture) : asset('assets/img/avatars/1.png') }}" class="rounded-circle">
+                                    <img src="{{ $user->profile_picture ? asset('storage/'.$user->profile_picture) : 'https://ui-avatars.com/api/?name='.urlencode($user->full_name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($user->full_name) }}&background=f1f5f9&color=64748b'">
                                 </div>
                                 <div class="flex-grow-1">
                                     <div class="fw-bold text-dark small">{{ $user->full_name }}</div>

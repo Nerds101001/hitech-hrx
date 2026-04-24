@@ -461,168 +461,170 @@ if (typeof $ !== 'undefined') {
       };
 
       // Search API AJAX call
-      var searchData = $.ajax({
-        url: baseUrl + 'getSearchDataAjax', //? Use your own search api instead
+      $.ajax({
+        url: baseUrl + 'getSearchDataAjax',
         dataType: 'json',
-        async: false
-      }).responseJSON;
-      // Init typeahead on searchInput
-      searchInput.each(function () {
-        var $this = $(this);
-        searchInput
-          .typeahead(
-            {
-              hint: false,
-              classNames: {
-                menu: 'tt-menu navbar-search-suggestion',
-                cursor: 'active',
-                suggestion: 'suggestion d-flex justify-content-between px-3 py-2 w-100'
-              }
-            },
-            // ? Add/Update blocks as per need
-            // Pages
-            {
-              name: 'pages',
-              display: 'name',
-              limit: 5,
-              source: filterConfig(searchData.pages),
-              templates: {
-                header: '<h6 class="suggestions-header text-primary mb-0 mx-3 mt-3 pb-2">Pages</h6>',
-                suggestion: function ({ url, icon, name }) {
-                  return (
-                    '<a href="' +
-                    baseUrl +
-                    url +
-                    '">' +
-                    '<div>' +
-                    '<i class="bx ' +
-                    icon +
-                    ' me-2"></i>' +
-                    '<span class="align-middle">' +
-                    name +
-                    '</span>' +
-                    '</div>' +
-                    '</a>'
-                  );
-                },
-                notFound:
-                  '<div class="not-found px-3 py-2">' +
-                  '<h6 class="suggestions-header text-primary mb-2">Pages</h6>' +
-                  '<p class="py-2 mb-0"><i class="bx bx-error-circle bx-xs me-2"></i> No Results Found</p>' +
-                  '</div>'
-              }
-            },
-            // Members
-            {
-              name: 'members',
-              display: 'name',
-              limit: 4,
-              source: filterConfig(searchData.members),
-              templates: {
-                header: '<h6 class="suggestions-header text-primary mb-0 mx-3 mt-3 pb-2">Members</h6>',
-                suggestion: function ({ name, initial, src, subtitle, url }) {
-                  console.log(name, src, initial, subtitle, url);
-                  if (src) {
-                    return (
-                      '<a href="' +
-                      baseUrl +
-                      url +
-                      '">' +
-                      '<div class="d-flex align-items-center">' +
-                      '<img class="rounded-circle me-3" src="' +
-                      src +
-                      '" alt="' +
-                      name +
-                      '" height="32">' +
-                      '<div class="user-info">' +
-                      '<h6 class="mb-0">' +
-                      name +
-                      '</h6>' +
-                      '<small class="text-muted">' +
-                      subtitle +
-                      '</small>' +
-                      '</div>' +
-                      '</div>' +
-                      '</a>'
-                    );
-                  } else {
-                    return (
-                      '<a href="' +
-                      baseUrl +
-                      url +
-                      '">' +
-                      '<div class="d-flex align-items-center">' +
-                      '<div class="avatar-wrapper">' +
-                      '<div class="avatar avatar-sm me-4">' +
-                      '<span class="avatar-initial rounded-circle bg-label-primary">' +
-                      initial +
-                      '</span>' +
-                        '</div>'+
-                        '</div>'+
-                      '<div class="user-info">' +
-                      '<h6 class="mb-0">' +
-                      name +
-                      '</h6>' +
-                      '<small class="text-muted">' +
-                      subtitle +
-                      '</small>' +
-                      '</div>' +
-                      '</div>' +
-                      '</a>'
-                    );
+        async: true,
+        success: function (searchData) {
+          // Init typeahead on searchInput
+          searchInput.each(function () {
+            var $this = $(this);
+            $this
+              .typeahead(
+                {
+                  hint: false,
+                  classNames: {
+                    menu: 'tt-menu navbar-search-suggestion',
+                    cursor: 'active',
+                    suggestion: 'suggestion d-flex justify-content-between px-3 py-2 w-100'
                   }
                 },
-                notFound:
-                  '<div class="not-found px-3 py-2">' +
-                  '<h6 class="suggestions-header text-primary mb-2">Members</h6>' +
-                  '<p class="py-2 mb-0"><i class="bx bx-error-circle bx-xs me-2"></i> No Results Found</p>' +
-                  '</div>'
+                // ? Add/Update blocks as per need
+                // Pages
+                {
+                  name: 'pages',
+                  display: 'name',
+                  limit: 5,
+                  source: filterConfig(searchData.pages),
+                  templates: {
+                    header: '<h6 class="suggestions-header text-primary mb-0 mx-3 mt-3 pb-2">Pages</h6>',
+                    suggestion: function ({ url, icon, name }) {
+                      return (
+                        '<a href="' +
+                        baseUrl +
+                        url +
+                        '">' +
+                        '<div>' +
+                        '<i class="bx ' +
+                        icon +
+                        ' me-2"></i>' +
+                        '<span class="align-middle">' +
+                        name +
+                        '</span>' +
+                        '</div>' +
+                        '</a>'
+                      );
+                    },
+                    notFound:
+                      '<div class="not-found px-3 py-2">' +
+                      '<h6 class="suggestions-header text-primary mb-2">Pages</h6>' +
+                      '<p class="py-2 mb-0"><i class="bx bx-error-circle bx-xs me-2"></i> No Results Found</p>' +
+                      '</div>'
+                  }
+                },
+                // Members
+                {
+                  name: 'members',
+                  display: 'name',
+                  limit: 4,
+                  source: filterConfig(searchData.members),
+                  templates: {
+                    header: '<h6 class="suggestions-header text-primary mb-0 mx-3 mt-3 pb-2">Members</h6>',
+                    suggestion: function ({ name, initial, src, subtitle, url }) {
+                      if (src) {
+                        return (
+                          '<a href="' +
+                          baseUrl +
+                          url +
+                          '">' +
+                          '<div class="d-flex align-items-center">' +
+                          '<img class="rounded-circle me-3" src="' +
+                          src +
+                          '" alt="' +
+                          name +
+                          '" height="32">' +
+                          '<div class="user-info">' +
+                          '<h6 class="mb-0">' +
+                          name +
+                          '</h6>' +
+                          '<small class="text-muted">' +
+                          subtitle +
+                          '</small>' +
+                          '</div>' +
+                          '</div>' +
+                          '</a>'
+                        );
+                      } else {
+                        return (
+                          '<a href="' +
+                          baseUrl +
+                          url +
+                          '">' +
+                          '<div class="d-flex align-items-center">' +
+                          '<div class="avatar-wrapper">' +
+                          '<div class="avatar avatar-sm me-4">' +
+                          '<span class="avatar-initial rounded-circle bg-label-primary">' +
+                          initial +
+                          '</span>' +
+                          '</div>' +
+                          '</div>' +
+                          '<div class="user-info">' +
+                          '<h6 class="mb-0">' +
+                          name +
+                          '</h6>' +
+                          '<small class="text-muted">' +
+                          subtitle +
+                          '</small>' +
+                          '</div>' +
+                          '</div>' +
+                          '</a>'
+                        );
+                      }
+                    },
+                    notFound:
+                      '<div class="not-found px-3 py-2">' +
+                      '<h6 class="suggestions-header text-primary mb-2">Members</h6>' +
+                      '<p class="py-2 mb-0"><i class="bx bx-error-circle bx-xs me-2"></i> No Results Found</p>' +
+                      '</div>'
+                  }
+                }
+              )
+              //On typeahead result render.
+              .bind('typeahead:render', function () {
+                // Show content backdrop,
+                contentBackdrop.addClass('show').removeClass('fade');
+              })
+              // On typeahead select
+              .bind('typeahead:select', function (ev, suggestion) {
+                // Open selected page
+                if (suggestion.url !== 'javascript:;') {
+                  window.location = baseUrl + suggestion.url;
+                }
+              })
+              // On typeahead close
+              .bind('typeahead:close', function () {
+                // Clear search
+                searchInput.val('');
+                $this.typeahead('val', '');
+                // Hide search input wrapper
+                searchInputWrapper.addClass('d-none');
+                // Fade content backdrop
+                contentBackdrop.addClass('fade').removeClass('show');
+              });
+
+            // On searchInput keyup, Fade content backdrop if search input is blank
+            searchInput.on('keyup', function () {
+              if (searchInput.val() == '') {
+                contentBackdrop.addClass('fade').removeClass('show');
               }
-            }
-          )
-          //On typeahead result render.
-          .bind('typeahead:render', function () {
-            // Show content backdrop,
-            contentBackdrop.addClass('show').removeClass('fade');
-          })
-          // On typeahead select
-          .bind('typeahead:select', function (ev, suggestion) {
-            // Open selected page
-            if (suggestion.url !== 'javascript:;') {
-              window.location = baseUrl + suggestion.url;
-            }
-          })
-          // On typeahead close
-          .bind('typeahead:close', function () {
-            // Clear search
-            searchInput.val('');
-            $this.typeahead('val', '');
-            // Hide search input wrapper
-            searchInputWrapper.addClass('d-none');
-            // Fade content backdrop
-            contentBackdrop.addClass('fade').removeClass('show');
+            });
           });
 
-        // On searchInput keyup, Fade content backdrop if search input is blank
-        searchInput.on('keyup', function () {
-          if (searchInput.val() == '') {
-            contentBackdrop.addClass('fade').removeClass('show');
-          }
-        });
+          // Init PerfectScrollbar in search result
+          var psSearch;
+          $('.navbar-search-suggestion').each(function () {
+            psSearch = new PerfectScrollbar($(this)[0], {
+              wheelPropagation: false,
+              suppressScrollX: true
+            });
+          });
+
+          searchInput.on('keyup', function () {
+            psSearch.update();
+          });
+        }
       });
 
-      // Init PerfectScrollbar in search result
-      var psSearch;
-      $('.navbar-search-suggestion').each(function () {
-        psSearch = new PerfectScrollbar($(this)[0], {
-          wheelPropagation: false,
-          suppressScrollX: true
-        });
-      });
-
-      searchInput.on('keyup', function () {
-        psSearch.update();
-      });
     }
   });
 }

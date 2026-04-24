@@ -70,7 +70,7 @@ return Application::configure(basePath: dirname(__DIR__))
       }
     });
 
-    $exceptions->render(function (Throwable $e, Request $request) {
+    $exceptions->render(function (\Throwable $e, Request $request) {
       if ($e instanceof UnauthorizedException) {
         return response()->view("errors.403", [
           "exception" => $e

@@ -286,7 +286,7 @@
               </div>
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="gender">Gender <span class="text-danger">*</span></label>
-                <select class="selectpicker w-100 hitech-input-group" id="gender" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="gender" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="gender">
                   <option value="" selected disabled>Select Gender</option>
                   @foreach(Gender::cases() as $gender)
@@ -317,7 +317,7 @@
               </div>
               <div class="col-sm-12 col-md-6">
                 <label class="form-label-hitech" for="role">Access Role <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="role" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="role" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="role">
                   <option value="" selected disabled>Assign a Role</option>
                   @foreach ($roles as $role)
@@ -398,7 +398,7 @@
               </div>
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="designationId">Designation <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="designationId" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="designationId" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="designationId">
                   <option value="" selected disabled>Select Designation</option>
                   @foreach ($designations as $designation)
@@ -408,7 +408,7 @@
               </div>
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="teamId">Assigned Team <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="teamId" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="teamId" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="teamId">
                   <option value="" selected disabled>Select Team</option>
                   @foreach ($teams as $team)
@@ -418,7 +418,7 @@
               </div>
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="shiftId">Working Shift <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="shiftId" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="shiftId" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="shiftId">
                   <option value="" selected disabled>Select Shift</option>
                   @foreach ($shifts as $shift)
@@ -428,7 +428,7 @@
               </div>
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="reportingToId">Reporting Manager <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="reportingToId" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="reportingToId" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="reportingToId">
                   <option value="" selected disabled>Select Manager</option>
                   @foreach ($users as $user)
@@ -439,7 +439,7 @@
 
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="leavePolicyProfileId">Leave Policy Profile <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="leavePolicyProfileId" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="leavePolicyProfileId" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="leavePolicyProfileId">
                   <option value="" selected disabled>Select Leave Policy</option>
                   @foreach ($leavePolicyProfiles as $profile)
@@ -451,7 +451,7 @@
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="attendanceType">Tracking Method <span
                     class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="attendanceType" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="attendanceType" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="attendanceType">
                   <option value="open" selected>Open Gateway</option>
                   @if($addonService->isAddonEnabled(ModuleConstants::GEOFENCE))
@@ -475,7 +475,7 @@
 
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="work_type">Work Environment <span class="text-danger">*</span></label>
-                <select class="selectpicker select2 w-100 hitech-input-group" id="work_type" data-style="btn-default"
+                <select class="select2 w-100 hitech-input-group" id="work_type" data-style="btn-default"
                         data-icon-base="bx" data-tick-icon="bx-check text-success" name="work_type">
                   <option value="office" selected data-icon="bx-buildings">On Premise / Office</option>
                   <option value="field" data-icon="bx-map-pin">Field Job / Site</option>

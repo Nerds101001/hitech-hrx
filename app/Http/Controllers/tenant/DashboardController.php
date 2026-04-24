@@ -92,12 +92,17 @@ class DashboardController extends Controller
       }
 
       // 2. Department Distribution
-      $departmentData = Department::withCount('users')->get()->map(function ($dept) {
-        return [
-          'name' => $dept->name,
-          'count' => $dept->users_count
-        ];
-      });
+      $departmentData = Department::withCount('users')
+        ->whereHas('users') // Only show departments with actual staff
+        ->orderBy('users_count', 'desc')
+        ->take(10)
+        ->get()
+        ->map(function ($dept) {
+          return [
+            'name' => $dept->name,
+            'count' => $dept->users_count
+          ];
+        });
 
       // 3. Announcements
       $announcements = Announcement::where('is_active', true)
@@ -192,9 +197,10 @@ class DashboardController extends Controller
           'user' => $r->user?->name ?? 'N/A',
           'emp_id' => $r->user?->code ?? 'N/A',
           'department' => $r->user?->designation?->department?->name ?? 'HR',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : asset('assets/img/avatars/1.png'),
+          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
           'date' => $r->from_date ?Carbon::parse($r->from_date)->format('M d') : 'N/A',
           'raw_date' => $r->from_date ?Carbon::parse($r->from_date) : now(),
+          'time_ago' => $r->created_at ? $r->created_at->diffForHumans() : 'Recently',
           'details' => (optional($r->leaveType)->name ?? 'Request') . ' (' . $days . ' days)',
           'days' => $days,
           'id' => $r->id
@@ -207,9 +213,10 @@ class DashboardController extends Controller
           'user' => $r->user?->name ?? 'N/A',
           'emp_id' => $r->user?->code ?? 'N/A',
           'department' => $r->user?->designation?->department?->name ?? 'Finance',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : asset('assets/img/avatars/1.png'),
+          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
           'date' => Carbon::parse($r->created_at)->format('M d'),
           'raw_date' => Carbon::parse($r->created_at),
+          'time_ago' => $r->created_at->diffForHumans(),
           'details' => 'Amount: ' . number_format($r->amount ?? 0, 2),
           'id' => $r->id
         ]);
@@ -221,9 +228,10 @@ class DashboardController extends Controller
           'user' => $r->user?->name ?? 'N/A',
           'emp_id' => $r->user?->code ?? 'N/A',
           'department' => $r->user?->designation?->department?->name ?? 'Admin',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : asset('assets/img/avatars/1.png'),
+          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
           'date' => Carbon::parse($r->created_at)->format('M d'),
           'raw_date' => Carbon::parse($r->created_at),
+          'time_ago' => $r->created_at->diffForHumans(),
           'details' => 'Req: ' . (optional($r->documentType)->name ?? 'Document'),
           'id' => $r->id
         ]);
@@ -235,9 +243,10 @@ class DashboardController extends Controller
           'user' => $r->user?->name ?? 'N/A',
           'emp_id' => $r->user?->code ?? 'N/A',
           'department' => $r->user?->designation?->department?->name ?? 'Operations',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : asset('assets/img/avatars/1.png'),
+          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
           'date' => Carbon::parse($r->created_at)->format('M d'),
           'raw_date' => Carbon::parse($r->created_at),
+          'time_ago' => $r->created_at->diffForHumans(),
           'details' => 'Amt: ' . number_format($r->amount ?? 0, 2),
           'id' => $r->id
         ]);
@@ -245,13 +254,38 @@ class DashboardController extends Controller
 
       $pendingApprovals = $pendingApprovals->sortByDesc('raw_date');
 
-      // Trending dummy data for better visuals
+      // Improved Trends Calculation
+      $yesterday = now()->subDay()->toDateString();
+      $yesterdayPresent = Attendance::whereDate('check_in_time', $yesterday)->count();
+      $presentTrendValue = $yesterdayPresent > 0 ? (($presentUsersCount - $yesterdayPresent) / $yesterdayPresent) * 100 : ($presentUsersCount > 0 ? 100 : 0);
+      
+      $yesterdayLeaves = LeaveRequest::whereDate('from_date', '<=', $yesterday)
+        ->whereDate('to_date', '>=', $yesterday)
+        ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
+        ->count();
+      $leavesDiff = $onLeaveUsersCount - $yesterdayLeaves;
+
+      $newJobsThisWeek = Job::where('created_at', '>=', now()->subDays(7))->count();
+
       $trends = [
-        'totalStaff' => ['value' => '+4%', 'isUp' => true],
-        'present' => ['value' => '+12%', 'isUp' => true],
-        'leaves' => ['value' => '-2', 'isUp' => false],
-        'openings' => ['value' => '+3 New', 'isUp' => true]
+        'totalStaff' => [
+          'value' => ($newHiresThisMonth > 0 ? '+' : '') . $newHiresThisMonth . ' New', 
+          'isUp' => $newHiresThisMonth >= 0
+        ],
+        'present' => [
+          'value' => ($presentTrendValue >= 0 ? '+' : '') . round($presentTrendValue, 1) . '%', 
+          'isUp' => $presentTrendValue >= 0
+        ],
+        'leaves' => [
+          'value' => ($leavesDiff >= 0 ? '+' : '') . abs($leavesDiff) . ($leavesDiff >= 0 ? ' More' : ' Less'), 
+          'isUp' => $leavesDiff <= 0 
+        ],
+        'openings' => [
+          'value' => ($newJobsThisWeek > 0 ? '+' : '') . $newJobsThisWeek . ' New', 
+          'isUp' => true
+        ]
       ];
+
 
       // MANAGER SPECIFIC SCOPING FOR REVAMP
       if ($isManager) {
@@ -306,14 +340,48 @@ class DashboardController extends Controller
             'nextHoliday' => Holiday::where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
-            'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),
+            'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->get(),
             'roles' => \Spatie\Permission\Models\Role::all(),
-            'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
-            'managers' => \App\Models\User::whereHas('roles', function($q) {
+            'designations' => \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get(),
+            'managers' => \App\Models\User::withoutGlobalScopes()->whereHas('roles', function($q) {
                 $q->whereIn('name', ['admin', 'hr', 'manager']);
             })->where('status', UserAccountStatus::ACTIVE)->get()
         ]);
       }
+
+
+      $roles = \Spatie\Permission\Models\Role::all();
+      $departments = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
+      $teams = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
+      $designations = \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get();
+      $managers = User::withoutGlobalScopes()->whereHas('roles', function($q) {
+          $q->whereIn('name', ['admin', 'hr', 'manager']);
+      })->where('status', UserAccountStatus::ACTIVE)->get();
+
+      // Fallback: If no data found, try without status filter
+      if ($departments->isEmpty()) {
+          $departments = Department::withoutGlobalScopes()->get();
+      }
+      if ($designations->isEmpty()) {
+          $designations = \App\Models\Designation::withoutGlobalScopes()->get();
+      }
+      if ($managers->isEmpty()) {
+          $managers = User::withoutGlobalScopes()->where('status', UserAccountStatus::ACTIVE)->get();
+      }
+
+      // Debug logging for onboarding modal data
+      \Illuminate\Support\Facades\Log::info('Onboarding Modal Data Debug', [
+          'roles_count' => $roles->count(),
+          'departments_count' => $departments->count(),
+          'teams_count' => $teams->count(),
+          'designations_count' => $designations->count(),
+          'managers_count' => $managers->count(),
+          'tenant_id' => auth()->user()->tenant_id ?? 'N/A',
+          'roles_sample' => $roles->take(3)->pluck('name')->toArray(),
+          'departments_sample' => $departments->take(3)->pluck('name')->toArray(),
+          'designations_sample' => $designations->take(3)->pluck('name')->toArray(),
+          'managers_sample' => $managers->take(3)->pluck('name')->toArray()
+      ]);
 
       // Return HR dashboard view directly
       return view('tenant.users.dashboard.hr-index', [
@@ -347,15 +415,11 @@ class DashboardController extends Controller
         'upcomingHolidays' => Holiday::where('date', '>=', now()->toDateString())->orderBy('date', 'asc')->take(5)->get(),
         'absentCount' => $absentCount,
         'newHiresThisMonth' => $newHiresThisMonth,
-
-        'roles' => \Spatie\Permission\Models\Role::all(),
-        'departments' => Department::where('status', Status::ACTIVE)->get(),
-        'teams' => Team::where('status', Status::ACTIVE)->get(),
-        'designations' => \App\Models\Designation::where('status', Status::ACTIVE)->get(),
-        'managers' => User::whereHas('roles', function($q) {
-            $q->whereIn('name', ['admin', 'hr', 'manager']);
-        })->where('status', UserAccountStatus::ACTIVE)->get(),
-
+        'roles' => $roles,
+        'departments' => $departments,
+        'teams' => $teams,
+        'designations' => $designations,
+        'managers' => $managers,
         'myLeavesCount' => 0,
         'myExpensesCount' => 0,
         'mySOSCount' => 0,
@@ -432,6 +496,8 @@ class DashboardController extends Controller
       'onLeaveUsersCount' => $onLeaveUsersCount,
       'nextHoliday' => $nextHoliday,
       'teamOutToday' => $teamOutToday,
+      'upcomingBirthdays' => $upcomingBirthdaysFiltered,
+      'upcomingAnniversaries' => $upcomingAnniversariesFiltered,
     ]);
   }
 

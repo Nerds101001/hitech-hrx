@@ -1,0 +1,62 @@
+[
+    {
+        "query": "select count(*) as aggregate from `users` where `status` = ? and `users`.`deleted_at` is null",
+        "bindings": [
+            "active"
+        ],
+        "time": 2.16
+    },
+    {
+        "query": "select count(*) as aggregate from `users` where `status` = ? and `users`.`deleted_at` is null",
+        "bindings": [
+            "inactive"
+        ],
+        "time": 1.55
+    },
+    {
+        "query": "select count(*) as aggregate from `users` where `status` = ? and `users`.`deleted_at` is null",
+        "bindings": [
+            "relieved"
+        ],
+        "time": 1.31
+    },
+    {
+        "query": "select count(*) as aggregate from `users` where `status` in (?, ?, ?, ?) and `users`.`deleted_at` is null",
+        "bindings": [
+            "onboarding",
+            "onboarding_submitted",
+            "onboarding_requested",
+            "invited"
+        ],
+        "time": 1.9
+    },
+    {
+        "query": "select `name`, `id` from `roles`",
+        "bindings": [],
+        "time": 1.23
+    },
+    {
+        "query": "select `name`, `id` from `teams` where (`teams`.`tenant_id` = ? or `teams`.`tenant_id` is null or `teams`.`tenant_id` = ?) and `teams`.`deleted_at` is null",
+        "bindings": [
+            "1",
+            ""
+        ],
+        "time": 21.02
+    },
+    {
+        "query": "select `name`, `id` from `designations` where (`designations`.`tenant_id` = ? or `designations`.`tenant_id` is null or `designations`.`tenant_id` = ?) and `designations`.`deleted_at` is null",
+        "bindings": [
+            "1",
+            ""
+        ],
+        "time": 1.23
+    },
+    {
+        "query": "select `name`, `id` from `departments` where (`departments`.`tenant_id` = ? or `departments`.`tenant_id` is null or `departments`.`tenant_id` = ?) and `departments`.`deleted_at` is null",
+        "bindings": [
+            "1",
+            ""
+        ],
+        "time": 3.19
+    }
+]

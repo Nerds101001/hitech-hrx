@@ -28,9 +28,13 @@
     <div class="library-header d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold mb-1 text-white">AI Digital Library</h2>
-            <p class="text-white opacity-75 mb-0">Secure documents & intelligent assistant powered by Nerds Bot.</p>
+            @if(auth()->user()->hasRole(['admin', 'hr']))
+                <p class="text-white opacity-75 mb-0">Secure documents & intelligent assistant powered by Nerds Bot.</p>
+            @else
+                <p class="text-white opacity-75 mb-0">Secure technical documents and brand assets vault.</p>
+            @endif
         </div>
-        @can('library.upload')
+        @if(auth()->user()->can('library.upload') || auth()->user()->hasRole(['admin', 'hr']))
         <div class="d-flex gap-2">
             <button type="button" class="btn btn-outline-white rounded-pill px-4 border-2 text-white bg-transparent" data-bs-toggle="modal" data-bs-target="#bulkUploadModal" style="border-color: white !important; border-width: 2px !important;">
                <i class="ti ti-files me-1"></i> AI Bulk Upload
@@ -39,7 +43,7 @@
                 <i class="ti ti-plus me-1"></i> Add Document
             </button>
         </div>
-        @endcan
+        @endif
     </div>
 
     <!-- Category Filter & Search -->

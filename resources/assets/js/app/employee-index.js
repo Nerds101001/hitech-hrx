@@ -130,10 +130,15 @@ $(function () {
           targets: 6, // Actions
           searchable: false, orderable: false,
           render: function (data, type, full, meta) {
+            var unlockBtn = '';
+            if (full['is_security_locked']) {
+              unlockBtn = `<a class="icon-sophisticated security-unlock" data-id="${full['id']}" href="javascript:;" title="Unlock Security"><i class="bx bx-lock-open-alt text-success"></i></a>`;
+            }
             return (
               '<div class="d-flex align-items-center justify-content-center gap-2">' +
               `<a class="icon-sophisticated view" href="${employeeView + full['id']}" title="View"><i class="bx bx-show"></i></a>` +
               `<a class="icon-sophisticated edit edit-record" data-id="${full['id']}" href="javascript:;" title="Edit"><i class="bx bx-edit"></i></a>` +
+              unlockBtn +
               `<a class="icon-sophisticated toggle-status-record" data-id="${full['id']}" href="javascript:;" title="Toggle Account"><i class="bx bx-lock-alt"></i></a>` +
               '</div>'
             );
@@ -223,18 +228,18 @@ $(function () {
       }
     });
   });
-  // reset password
-  $(document).on('click', '.reset-password', function () {
+  // security unlock
+  $(document).on('click', '.security-unlock', function () {
     var user_id = $(this).data('id');
 
     Swal.fire({
-      title: 'Are you sure?',
-      text: "This will reset the user's password to the default: 123456",
-      icon: 'warning',
+      title: 'Remove Security Lock?',
+      text: "This will reset login attempts and unlock the user immediately.",
+      icon: 'info',
       showCancelButton: true,
-      confirmButtonText: 'Yes, reset it!',
+      confirmButtonText: 'Yes, Unlock!',
       customClass: {
-        confirmButton: 'btn btn-primary me-3',
+        confirmButton: 'btn btn-success me-3',
         cancelButton: 'btn btn-label-secondary'
       },
       buttonsStyling: false
@@ -242,7 +247,7 @@ $(function () {
       if (result.value) {
         $.ajax({
           type: 'POST',
-          url: `${baseUrl}employees/resetPasswordAjax`,
+          url: `${baseUrl}employees/unlockSecurityAjax`,
           data: {
             id: user_id,
             _token: $('meta[name="csrf-token"]').attr('content')
@@ -250,23 +255,14 @@ $(function () {
           success: function (response) {
             Swal.fire({
               icon: 'success',
-              title: 'Reset!',
-              text: 'Password has been reset successfully.',
+              title: 'Unlocked!',
+              text: 'Security lock removed successfully.',
               customClass: {
                 confirmButton: 'btn btn-success'
               }
             });
-          },
-          error: function (error) {
-            console.log(error);
-            Swal.fire({
-              icon: 'error',
-              title: 'Error!',
-              text: 'Something went wrong while resetting the password.',
-              customClass: {
-                confirmButton: 'btn btn-danger'
-              }
-            });
+            if (window.dt_user) window.dt_user.draw();
+            else window.location.reload();
           }
         });
       }

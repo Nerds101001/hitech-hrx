@@ -154,6 +154,79 @@
           @endif
         </div>
 
+        {{-- Celebrations Hub --}}
+        <div class="hitech-stat-card dashboard-variant card-teal animate__animated animate__fadeInRight" style="animation-delay:0.1s; padding: 1.5rem !important;">
+          <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="d-flex align-items-center gap-3">
+              <div class="icon-wrap-sm bg-pink-light text-pink"><i class="bx bx-cake"></i></div>
+              <h6 class="title mb-0 fw-bold">Company Celebrations</h6>
+            </div>
+          </div>
+
+          {{-- Birthdays --}}
+          <div class="mb-4">
+            <div class="section-label small fw-bold text-uppercase text-muted mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Upcoming Birthdays</div>
+            @forelse($todayBirthdays as $u)
+              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
+                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="35" height="45" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
+                <div>
+                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
+                  <div class="small text-danger fw-bold" style="font-size: 0.7rem;">Today 🎉</div>
+                </div>
+              </div>
+            @empty
+            @endforelse
+
+            @forelse($upcomingBirthdays as $u)
+              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
+                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="35" height="45" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
+                <div>
+                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
+                  <div class="small text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }}</div>
+                </div>
+              </div>
+            @empty
+                @if($todayBirthdays->isEmpty())
+                    <p class="text-muted small py-2">No imminent birthdays.</p>
+                @endif
+            @endforelse
+          </div>
+
+          {{-- Anniversaries --}}
+          <div>
+            <div class="section-label small fw-bold text-uppercase text-muted mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Work Anniversaries</div>
+            @forelse($todayAnniversaries as $u)
+              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
+                <div class="avatar avatar-sm">
+                    <span class="avatar-initial rounded-circle bg-label-info">{{ $u->getInitials() }}</span>
+                </div>
+                <div>
+                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
+                  <div class="small text-info fw-bold" style="font-size: 0.7rem;">Today 🎊</div>
+                </div>
+              </div>
+            @empty
+            @endforelse
+
+            @forelse($upcomingAnniversaries as $u)
+              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
+                <div class="avatar avatar-sm">
+                    <span class="avatar-initial rounded-circle bg-label-secondary">{{ $u->getInitials() }}</span>
+                </div>
+                <div>
+                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
+                  <div class="small text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->date_of_joining)->format('M d') }} • {{ now()->year - \Carbon\Carbon::parse($u->date_of_joining)->year }} Years</div>
+                </div>
+              </div>
+            @empty
+                @if($todayAnniversaries->isEmpty())
+                    <p class="text-muted small py-2">No upcoming anniversaries.</p>
+                @endif
+            @endforelse
+          </div>
+        </div>
+
+
         {{-- Announcements --}}
         <div class="announce-card animate__animated animate__fadeInRight" style="animation-delay:0.12s">
           <div class="announce-header">
