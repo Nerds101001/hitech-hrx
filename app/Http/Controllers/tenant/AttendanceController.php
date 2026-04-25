@@ -249,11 +249,11 @@ class AttendanceController extends Controller
           $stats = (clone $query)
               ->selectRaw("
                   COUNT(*) as total,
-                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND admin_reason IS NULL AND TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) < 465 THEN 1 ELSE 0 END) as half_days,
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND admin_reason IS NULL AND TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) < 480 THEN 1 ELSE 0 END) as half_days,
                   SUM(CASE WHEN LOWER(status) = 'absent' THEN 1 ELSE 0 END) as absents,
                   SUM(CASE WHEN LOWER(status) IN ('on_leave', 'leave', 'work_from_home', 'wfh') THEN 1 ELSE 0 END) as leaves,
                   SUM(CASE WHEN LOWER(status) = 'late' THEN 1 ELSE 0 END) as lates,
-                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND (admin_reason IS NOT NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 465) THEN 1 ELSE 0 END) as presents
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND (admin_reason IS NOT NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 480) THEN 1 ELSE 0 END) as presents
               ")
               ->first();
 
@@ -381,15 +381,15 @@ class AttendanceController extends Controller
 
                   $s = strtolower($attendance->status);
                   
-                  // Dynamic enforcement of 8-hour (Full Day) rule
-                   if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
-                       $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                       if ($mins >= 480) {
-                           $s = 'present';
-                       } elseif ($mins < 465 && ($s === 'present')) {
-                           $s = 'half-day';
-                       }
-                   }
+                    // Dynamic enforcement of 8-hour (Full Day) rule
+                    if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+                        $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                        if ($mins >= 480) {
+                            $s = 'present';
+                        } elseif ($mins < 480 && ($s === 'present')) {
+                            $s = 'half-day';
+                        }
+                    }
 
                    if ($s == 'present') {
                        $dayData['status'] = 'Present'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
