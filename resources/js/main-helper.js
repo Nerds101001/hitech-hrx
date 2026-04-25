@@ -1,5 +1,10 @@
 'use strict';
-$(function () {
+(function checkJQuery() {
+  if (typeof jQuery === 'undefined') {
+    setTimeout(checkJQuery, 10);
+    return;
+  }
+  $(function () {
   window.getRoles = async function () {
     var response = await $.ajax({
       url: `${baseUrl}account/getRolesAjax`,
@@ -221,4 +226,4 @@ $(function () {
       );
     }
   });
-});
+})();
