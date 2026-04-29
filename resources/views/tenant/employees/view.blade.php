@@ -68,13 +68,15 @@
         $kpiPerformance = $allPerformance->filter(fn($t) => !str_contains($t->description, 'Type: KRA'));
 
         // Helper to extract metric from description
-        function getMetric($desc)
-        {
-            if (preg_match('/Metric:\s*(.*?)\n/', $desc, $matches))
-                return $matches[1];
-            if (preg_match('/Metric:\s*(.*?)($|\|)/', $desc, $matches))
-                return $matches[1];
-            return 'Standard Target';
+        if (!function_exists('getMetric')) {
+            function getMetric($desc)
+            {
+                if (preg_match('/Metric:\s*(.*?)\n/', $desc, $matches))
+                    return $matches[1];
+                if (preg_match('/Metric:\s*(.*?)($|\|)/', $desc, $matches))
+                    return $matches[1];
+                return 'Standard Target';
+            }
         }
     @endphp
 
@@ -283,11 +285,11 @@
                                                     style="border-radius: 12px;">
                                                     <li><a class="dropdown-item py-2 rounded-2" href="javascript:void(0);"
                                                             data-bs-toggle="modal" data-bs-target="#confirmProbationModal"><i
-                                                                class="bx bx-check-circle me-2 text-success"></i>Confirm Success</a>
+                                                                 class="bx bx-check-circle me-2 text-success"></i>Confirm Success</a>
                                                     </li>
                                                     <li><a class="dropdown-item py-2 rounded-2" href="javascript:void(0);"
                                                             data-bs-toggle="modal" data-bs-target="#extendProbationModal"><i
-                                                                class="bx bx-calendar-plus me-2 text-warning"></i>Extend Period</a>
+                                                                 class="bx bx-calendar-plus me-2 text-warning"></i>Extend Period</a>
                                                     </li>
                                                     <li>
                                                         <hr class="dropdown-divider">
@@ -295,7 +297,7 @@
                                                     <li><a class="dropdown-item py-2 rounded-2 text-danger"
                                                             href="javascript:void(0);" data-bs-toggle="modal"
                                                             data-bs-target="#failProbationModal"><i
-                                                                class="bx bx-x-circle me-2"></i>Mark Failure</a></li>
+                                                                 class="bx bx-x-circle me-2"></i>Mark Failure</a></li>
                                                 </ul>
                                             </div>
                                         @endif
@@ -308,11 +310,17 @@
                                             style="font-size: 0.6rem;">{{ $user->probation_status_display }}</span>
                                     </div>
                                     @if($user->probation_end_date)
-                                        <div class="d-flex align-items-center justify-content-between">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
                                             <span class="smallest text-muted">Ends On</span>
                                             <span
                                                 class="fw-bold text-dark smallest">{{ Carbon::parse($user->probation_end_date)->format('d M Y') }}</span>
                                         </div>
+                                    @endif
+
+                                    @if($user->status === UserAccountStatus::ACTIVE && !$user->probation_confirmed_at && (auth()->id() === $user->reporting_to_id || auth()->user()->hasRole(['hr', 'admin', 'Admin', 'HR', 'Manager'])))
+                                        <a href="{{ route('probation.evaluate', $user->id) }}" class="btn btn-primary btn-sm w-100 rounded-pill shadow-sm">
+                                            <i class="bx bx-edit-alt me-1"></i> Fill Evaluation Form
+                                        </a>
                                     @endif
                                 </div>
 

@@ -126,7 +126,7 @@
       ]
     },
     {
-      "name": "Recruitment",
+      "name": "Recruitment & Onboarding",
       "icon": "menu-icon bx bx-user-plus",
       "slug": [
         "job.index",
@@ -135,12 +135,16 @@
         "custom-question.index",
         "interview-schedule.index",
         "job-category.index",
-        "job-stage.index"
+        "job-stage.index",
+        "training.portal",
+        "training.manage.index"
       ],
       "permission": "recruitment.view",
       "roles": [
         "admin",
-        "hr"
+        "hr",
+        "manager",
+        "employee"
       ],
       "submenu": [
         {
@@ -205,6 +209,17 @@
             "admin",
             "hr"
           ]
+        },
+        {
+          "url": "/training",
+          "name": "Training Portal",
+          "slug": "training.portal"
+        },
+        {
+          "url": "/training/manage",
+          "name": "Manage Training",
+          "slug": "training.manage.index",
+          "roles": ["admin", "hr", "manager"]
         }
       ]
     },

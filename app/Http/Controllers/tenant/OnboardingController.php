@@ -201,6 +201,10 @@ class OnboardingController extends Controller
 
             DB::commit();
 
+            if ($user->is_training_required) {
+                return redirect()->route('training.portal')->with('success', 'Your onboarding details have been submitted. Now, please complete your mandatory training.');
+            }
+
             return redirect()->route('onboarding.status')->with('success', 'Your onboarding details have been submitted for review.');
 
         } catch (\Exception $e) {

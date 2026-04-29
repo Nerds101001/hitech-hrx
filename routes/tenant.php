@@ -102,6 +102,26 @@ Route::middleware(['web'])->group(function () {
       Route::post('onboarding/auto-save', [\App\Http\Controllers\tenant\OnboardingController::class, 'autoSave'])->name('onboarding.autoSave');
       Route::post('onboarding/upload-file', [\App\Http\Controllers\tenant\OnboardingController::class, 'uploadFile'])->name('onboarding.uploadFile');
   });
+
+  // --- TRAINING PORTAL ROUTES ---
+  Route::middleware(['auth'])->prefix('training')->name('training.')->group(function () {
+      Route::get('/', [\App\Http\Controllers\tenant\TrainingController::class, 'index'])->name('portal');
+      Route::get('/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showModule'])->name('module.show');
+      Route::get('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'getAssessment'])->name('assessment.get');
+      Route::post('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'submitAssessment'])->name('assessment.submit');
+      
+      // HR/Manager Routes
+      Route::get('/report-card/{userId}', [\App\Http\Controllers\tenant\TrainingController::class, 'getReportCard'])->name('report-card');
+      Route::post('/approve/{userId}', [\App\Http\Controllers\tenant\TrainingController::class, 'approveTraining'])->name('approve');
+
+      // Management Routes (HR/Admin)
+      Route::get('/manage', [\App\Http\Controllers\tenant\TrainingController::class, 'managementIndex'])->name('manage.index');
+      Route::post('/manage/phase', [\App\Http\Controllers\tenant\TrainingController::class, 'storePhase'])->name('manage.phase.store');
+      Route::post('/manage/module', [\App\Http\Controllers\tenant\TrainingController::class, 'storeModule'])->name('manage.module.store');
+      Route::post('/manage/module/{id}/generate-ai-questions', [\App\Http\Controllers\tenant\TrainingController::class, 'generateAIQuestions'])->name('manage.module.ai-questions');
+      Route::post('/manage/question', [\App\Http\Controllers\tenant\TrainingController::class, 'storeQuestion'])->name('manage.question.store');
+      Route::delete('/manage/question/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyQuestion'])->name('manage.question.destroy');
+  });
 });
 
 // --- AUTHENTICATED TENANT ROUTES ---

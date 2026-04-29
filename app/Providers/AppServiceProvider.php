@@ -68,8 +68,10 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Ensure $settings is NEVER null for any view (Final defense)
+     * And provide global probation alerts for managers
      */
     \Illuminate\Support\Facades\View::composer('*', function ($view) {
+      // 1. App Settings
       if (!isset($view->settings) || is_null($view->settings)) {
           $s = \App\Models\Settings::first();
           if (!$s) {
@@ -80,6 +82,28 @@ class AppServiceProvider extends ServiceProvider
               $s->available_modules = json_encode([]);
           }
           $view->with('settings', $s);
+      }
+
+      // 2. Global Probation Alerts for Managers
+      if (auth()->check()) {
+          $user = auth()->user();
+          // Check if user has manager-like responsibilities
+          if ($user->hasRole(['admin', 'Admin', 'hr', 'manager', 'HR', 'Manager'])) {
+              $pendingProbations = \App\Models\User::where('reporting_to_id', $user->id)
+                  ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+                  ->whereNotNull('probation_end_date')
+                  ->whereNull('probation_confirmed_at')
+                  ->whereDate('probation_end_date', '<=', now()->toDateString())
+                  ->whereDoesntHave('probationEvaluations', function($q) {
+                      $q->where('hr_status', 'pending');
+                  })
+                  ->with('designation')
+                  ->get();
+              
+              if ($pendingProbations->isNotEmpty()) {
+                  $view->with('globalPendingProbations', $pendingProbations);
+              }
+          }
       }
     });
   }

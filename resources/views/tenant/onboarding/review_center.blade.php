@@ -412,6 +412,35 @@
                                 </h4>
                             </div>
                             <div class="flex flex-col gap-4">
+                                @if($selectedUser->is_training_required)
+                                    <div class="mb-6 p-6 bg-indigo-50 rounded-2xl border border-indigo-100">
+                                        <div class="flex items-center justify-between mb-4">
+                                            <h4 class="text-[11px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2">
+                                                <span class="material-symbols-outlined text-indigo-400 text-lg">school</span>
+                                                Training Performance
+                                            </h4>
+                                            <span class="bg-indigo-100 text-indigo-600 text-[9px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                                                {{ $selectedUser->training_status === 'completed' ? 'PASS' : 'In Progress' }}
+                                            </span>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <div class="flex justify-between text-[10px] font-bold text-indigo-600 uppercase mb-1">
+                                                <span>Journey Progress</span>
+                                                <span>{{ $selectedUser->getTrainingProgressPercentage() }}%</span>
+                                            </div>
+                                            <div class="w-full h-2 bg-indigo-100 rounded-full overflow-hidden">
+                                                <div class="h-full bg-indigo-500 rounded-full transition-all" style="width: {{ $selectedUser->getTrainingProgressPercentage() }}%"></div>
+                                            </div>
+                                        </div>
+
+                                        <a href="{{ route('training.report-card', $selectedUser->id) }}" class="w-full bg-white border border-indigo-200 text-indigo-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-2">
+                                            <span class="material-symbols-outlined text-sm">assignment</span>
+                                            View Report Card
+                                        </a>
+                                    </div>
+                                @endif
+
                                 <form method="POST" action="{{ route('employees.onboarding.approve', $selectedUser->id) }}">
                                     @csrf
                                     <button type="submit" class="w-full bg-primary text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20 hover:bg-deep-teal transition-all active:scale-95 flex items-center justify-center gap-3">

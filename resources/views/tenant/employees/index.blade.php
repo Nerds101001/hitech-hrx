@@ -140,8 +140,12 @@
               targets: 6, // Actions
               searchable: false, orderable: false,
               render: function (data, type, full, meta) {
+                let unlockBtn = full['is_security_locked'] 
+                  ? `<a class="icon-sophisticated unlock-security text-danger" data-id="${full['id']}" href="javascript:;" title="Unlock Security (Attempts/Lockout)"><i class="bx bx-lock-open-alt"></i></a>` 
+                  : '';
                 return `
                   <div class="d-flex align-items-center justify-content-center gap-2">
+                    ${unlockBtn}
                     <a class="icon-sophisticated view" href="${employeeViewBase + full['id']}" title="View"><i class="bx bx-show"></i></a>
                     <a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['phone']}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>
                   </div>`;
@@ -170,10 +174,11 @@
         const userName = $(this).data('name') || 'Employee';
         const userPhone = $(this).data('phone') || '';
         
-        // Formula: Ucfirst(Name[:4]) + Phone[-4] (Fallback for missing phone)
-        let firstName = userName.split(' ')[0] || 'User';
-        let lastFour = userPhone && userPhone !== 'N/A' ? String(userPhone).slice(-4) : '1234';
-        let passwordPreview = firstName.charAt(0).toUpperCase() + firstName.slice(1, 4).toLowerCase() + lastFour;
+        // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
+        let rawName = userName.split(' ')[0] || 'User';
+        let lastFourDigits = userPhone && userPhone !== 'N/A' ? String(userPhone).slice(-4) : '1234';
+        let namePart = rawName.substring(0, 1).toUpperCase() + rawName.substring(1, 4).toLowerCase();
+        let passwordPreview = namePart + '@' + lastFourDigits;
 
         $('#displayResetPassword').text(passwordPreview);
         $('#confirmResetBtn').data('id', user_id);
@@ -211,6 +216,33 @@
               title: 'Error!', 
               text: 'Something went wrong.', 
               customClass: { confirmButton: 'btn btn-danger' } 
+            });
+          }
+        });
+      });
+      
+      // NEW: Unlock Security Action
+      $(document).on('click', '.unlock-security', function() {
+        const user_id = $(this).data('id');
+        
+        Swal.fire({
+          title: 'Unlock Security?',
+          text: "This will clear all failed login attempts and remove any temporal lockout for this user.",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: 'Yes, unlock!',
+          customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-label-secondary' },
+          buttonsStyling: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            $.ajax({
+              type: 'POST',
+              url: "{{ route('employees.unlockSecurityAjax') }}",
+              data: { id: user_id, _token: '{{ csrf_token() }}' },
+              success: function (response) {
+                window.dt_user.ajax.reload();
+                Swal.fire({ icon: 'success', title: 'Unlocked!', text: response.message, customClass: { confirmButton: 'btn btn-success' } });
+              }
             });
           }
         });
@@ -440,10 +472,15 @@
                   </button>
                   <ul class="dropdown-menu dropdown-menu-hitech shadow-lg">
                     @php
-                      $isLocked = in_array($user->status->value, ['inactive', 'suspended', 'blocked']);
-                      $lockLabel = $isLocked ? 'Unlock Account' : 'Lock Account';
-                      $lockIcon = $isLocked ? 'bx-lock-open-alt' : 'bx-lock-alt';
+                      $isStatusLocked = in_array($user->status->value, ['inactive', 'suspended', 'blocked']);
+                      $lockLabel = $isStatusLocked ? 'Unlock Account' : 'Lock Account';
+                      $lockIcon = $isStatusLocked ? 'bx-lock-open-alt' : 'bx-lock-alt';
+                      
+                      $isSecurityLocked = $user->locked_until && $user->locked_until->isFuture();
                     @endphp
+                    @if($isSecurityLocked)
+                      <li><a class="dropdown-item dropdown-item-hitech unlock-security text-danger" href="javascript:;" data-id="{{ $user->id }}"><i class="bx bx-lock-open-alt me-2"></i>Security Unlock</a></li>
+                    @endif
                     <li><a class="dropdown-item dropdown-item-hitech reset-password" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}"><i class="bx bx-key me-2 text-warning"></i>Reset Password</a></li>
                     <li><hr class="dropdown-divider mx-3"></li>
                     <li><a class="dropdown-item dropdown-item-hitech toggle-status-record" href="javascript:;" data-id="{{ $user->id }}"><i class="bx {{ $lockIcon }} me-2 text-danger"></i>{{ $lockLabel }}</a></li>

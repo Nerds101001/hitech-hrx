@@ -145,6 +145,8 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     'biometric_id',
     'attendance_type',
     'work_type',
+    'is_training_required',
+    'training_status',
   ];
   /**
    * The attributes that should be hidden for serialization.
@@ -472,6 +474,7 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
       'status' => UserAccountStatus::class,
       'date_of_joining' => 'date',
       'anniversary_date' => 'date',
+      'is_training_required' => 'boolean',
     ];
   }
 
@@ -620,5 +623,19 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   public function team()
   {
     return $this->belongsTo(Team::class, 'team_id');
+  }
+
+  public function trainingProgress()
+  {
+    return $this->hasMany(UserTrainingProgress::class, 'user_id');
+  }
+
+  public function getTrainingProgressPercentage()
+  {
+    $totalModules = TrainingModule::count();
+    if ($totalModules === 0) return 0;
+    
+    $completedModules = $this->trainingProgress()->where('status', 'completed')->count();
+    return round(($completedModules / $totalModules) * 100);
   }
 }

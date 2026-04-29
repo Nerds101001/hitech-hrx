@@ -19,8 +19,8 @@ class ProbationController extends Controller
     {
         $employee = User::findOrFail($id);
         
-        // Ensure the logged-in user is the manager
-        if (Auth::id() !== $employee->reporting_to_id && !Auth::user()->hasRole('hr')) {
+        // Ensure the logged-in user is the manager, or has Admin/HR roles
+        if (Auth::id() !== $employee->reporting_to_id && !Auth::user()->hasRole(['hr', 'admin', 'Admin', 'HR'])) {
              return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized access to evaluation form.');
         }
 

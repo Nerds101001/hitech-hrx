@@ -13,4 +13,5 @@
 
 <!-- Global Notification Modal -->
 {{--@include('_partials._globalModals._notification')--}}
+@include('layouts.sections.probation_alert')
 <!-- /Global Notification Modal -->
