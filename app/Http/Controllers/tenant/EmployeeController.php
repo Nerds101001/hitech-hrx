@@ -419,17 +419,17 @@ class EmployeeController extends Controller
 
     $validated = $request->validate([
       'id' => 'required|exists:users,id',
-      'doj' => 'required|date',
+      'doj' => 'required|date|after:1900-01-01',
       'departmentId' => 'required|exists:departments,id',
       'designationId' => 'required|exists:designations,id',
       'role' => 'required|exists:roles,name',
       'reportingToId' => 'required|exists:users,id',
       'attendanceType' => 'required|in:open,geofence,ipAddress,staticqr,site,dynamicqr,face',
-      'geofenceGroupId' => 'required_if:attendanceType,geofence|exists:geofence_groups,id',
-      'ipGroupId' => 'required_if:attendanceType,ipAddress|exists:ip_address_groups,id',
-      'qrGroupId' => 'required_if:attendanceType,staticqr|exists:qr_groups,id',
-      'siteId' => 'required_if:attendanceType,site|exists:sites,id',
-      'dynamicQrId' => 'required_if:attendanceType,dynamicqr|exists:dynamic_qr_devices,id',
+      'geofenceGroupId' => 'required_if:attendanceType,geofence|nullable|exists:geofence_groups,id',
+      'ipGroupId' => 'required_if:attendanceType,ipAddress|nullable|exists:ip_address_groups,id',
+      'qrGroupId' => 'required_if:attendanceType,staticqr|nullable|exists:qr_groups,id',
+      'siteId' => 'nullable|exists:sites,id',
+      'dynamicQrId' => 'required_if:attendanceType,dynamicqr|nullable|exists:dynamic_qr_devices,id',
       'leavePolicyProfileId' => 'nullable|exists:leave_policy_profiles,id',
       'work_type' => 'nullable|string|max:50',
       'biometric_id' => 'nullable|string|max:255',
@@ -437,36 +437,17 @@ class EmployeeController extends Controller
 
     $user = User::findOrFail($validated['id']);
 
-    // Update Basic Work Info
+    // Map fields explicitly to ensure persistence
     $user->date_of_joining = $validated['doj'];
     $user->department_id = $validated['departmentId'];
     $user->designation_id = $validated['designationId'];
     $user->reporting_to_id = $validated['reportingToId'];
+    $user->leave_policy_profile_id = $validated['leavePolicyProfileId'] ?? $user->leave_policy_profile_id;
+    $user->work_type = $validated['work_type'] ?? $user->work_type;
+    $user->biometric_id = $validated['biometric_id'] ?? $user->biometric_id;
+    $user->site_id = $validated['siteId'] ?? $user->site_id;
 
-    if ($request->has('leavePolicyProfileId')) {
-      $user->leave_policy_profile_id = $validated['leavePolicyProfileId'];
-    }
-
-    if ($request->has('work_type')) {
-      $user->work_type = $validated['work_type'];
-    }
-
-    if ($request->has('biometric_id')) {
-      $user->biometric_id = $validated['biometric_id'];
-    }
-
-    // Role Sync
-    $user->syncRoles([$validated['role']]);
-
-    // Save User
-    $user->save();
-
-    // Initialize Leaves (Idempotent)
-    $leaveCount = 0;
-    if ($user->leave_policy_profile_id) {
-      $leaveCount = \App\Services\LeaveAccrualService::initializeForUser($user);
-    }
-
+    // Specific Attendance Strategy
     switch ($validated['attendanceType']) {
       case 'geofence':
         $user->attendance_type = 'geofence';
@@ -482,13 +463,18 @@ class EmployeeController extends Controller
         break;
       case 'site':
         $user->attendance_type = 'site';
-        $user->site_id = $validated['siteId'];
+        // Site ID is already mapped above, but we ensure it matches the attendance strategy
+        if ($validated['siteId']) {
+            $user->site_id = $validated['siteId'];
+        }
         break;
       case 'dynamicqr':
         $user->attendance_type = 'dynamic_qr';
         $user->dynamic_qr_device_id = $validated['dynamicQrId'];
-        DynamicQrDevice::where('id', $validated['dynamicQrId'])
-          ->update(['user_id' => $user->id, 'status' => 'in_use']);
+        if ($validated['dynamicQrId']) {
+            DynamicQrDevice::where('id', $validated['dynamicQrId'])
+                ->update(['user_id' => $user->id, 'status' => 'in_use']);
+        }
         break;
       case 'face':
         $user->attendance_type = 'face_recognition';
@@ -498,14 +484,17 @@ class EmployeeController extends Controller
         break;
     }
 
-
     $user->save();
+    
+    // Role Synchronization
+    $user->syncRoles([$validated['role']]);
 
-    // Update user role
-    $role = Role::where('name', $validated['role'])->first();
-    $user->roles()->sync([$role->id]);
+    // Initialize/Refresh Leaves if profile changed
+    if ($user->wasChanged('leave_policy_profile_id') && $user->leave_policy_profile_id) {
+        \App\Services\LeaveAccrualService::initializeForUser($user);
+    }
 
-    return redirect()->back()->with('success', 'Work information updated successfully');
+    return redirect()->route('employees.show', $user->id)->with('success', 'Employee work information has been updated and synchronized.');
   }
 
   public function updateCompensationInfo(Request $request)
@@ -1128,6 +1117,7 @@ class EmployeeController extends Controller
     $teams = Team::withoutGlobalScopes()->select('name', 'id')->get();
     $designations = Designation::withoutGlobalScopes()->select('name', 'id')->get();
     $departments = Department::withoutGlobalScopes()->select('name', 'id')->get();
+    $sites = Site::select('id', 'name')->orderBy('name')->get();
 
     \Illuminate\Support\Facades\Log::info('Employee Index Loaded', [
         'roles_count' => $roles->count(),
@@ -1155,6 +1145,7 @@ class EmployeeController extends Controller
       'teams' => $teams,
       'departments' => $departments,
       'designations' => $designations,
+      'sites' => $sites,
       'managers' => User::withoutGlobalScopes()->whereHas('roles', function($q) {
           $q->whereIn('name', ['admin', 'hr', 'manager', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
       })->whereIn('status', [UserAccountStatus::ACTIVE, 'active', 'ACTIVE'])->get(),
@@ -1249,7 +1240,7 @@ class EmployeeController extends Controller
         $dir = 'desc';
       }
 
-      $query = User::with(['team', 'designation', 'roles']);
+      $query = User::with(['team', 'designation', 'roles', 'site']);
 
       if ($request->has('roleFilter') && !empty($request->input('roleFilter'))) {
         $query->whereHas('roles', function ($q) use ($request) {
@@ -1267,6 +1258,10 @@ class EmployeeController extends Controller
 
       if ($request->has('statusFilter') && !empty($request->input('statusFilter'))) {
         $query->where('status', $request->input('statusFilter'));
+      }
+
+      if ($request->has('siteFilter') && !empty($request->input('siteFilter'))) {
+        $query->where('site_id', $request->input('siteFilter'));
       }
 
       if (!empty($request->input('search.value'))) {
@@ -1298,6 +1293,7 @@ class EmployeeController extends Controller
             'attendance_type' => $user->attendance_type,
             'team' => $user->team->name ?? null,
             'designation' => $user->designation->name ?? null,
+            'unit' => $user->site->name ?? null,
             'joined' => $user->date_of_joining,
             'email' => $user->email,
             'email_verified_at' => $user->email_verified_at,
@@ -1407,6 +1403,8 @@ class EmployeeController extends Controller
         'shift:id,name,code,start_time,end_time',
         'designation.department:id,name,code',
         'bankAccount:id,user_id,bank_name,bank_code,account_name,account_number,branch_name,branch_code,passbook_path',
+        'site:id,name',
+        'leavePolicyProfile:id,name',
         // Only fetch 10 most recent records for these heavy relationships
         'tasks' => fn($q) => $q->latest()->take(10),
         'documentRequests' => fn($q) => $q->with('documentType')->latest(),

@@ -836,7 +836,7 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <!-- Role -->
+                                        <!-- System Role -->
                                         <div class="col-md-4">
                                             <div class="emp-field-box">
                                                 <div class="d-flex align-items-center">
@@ -846,7 +846,7 @@
                                                     </div>
                                                     <div>
                                                         <p class="mb-0 text-muted small fw-bold text-uppercase"
-                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">Role</p>
+                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">System Role</p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
                                                             {{ $user->getRoleNames()->first() ?? 'Employee' }}</p>
                                                     </div>
@@ -871,7 +871,25 @@
                                                 </div>
                                             </div>
                                         </div>
-                                        <!-- Leave Policy Profile -->
+                                        <!-- Site / Unit -->
+                                        <div class="col-md-4">
+                                            <div class="emp-field-box">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center"
+                                                        style="width: 40px; height: 40px;">
+                                                        <i class="bx bx-map-pin text-muted fs-4"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="mb-0 text-muted small fw-bold text-uppercase"
+                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">Site / Unit
+                                                        </p>
+                                                        <p class="mb-0 fw-bold text-dark fs-6">
+                                                            {{ $user->site?->name ?? 'Not Assigned' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <!-- Leave Policy -->
                                         <div class="col-md-4">
                                             <div class="emp-field-box">
                                                 <div class="d-flex align-items-center">
@@ -881,12 +899,10 @@
                                                     </div>
                                                     <div>
                                                         <p class="mb-0 text-muted small fw-bold text-uppercase"
-                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">Leave Policy
-                                                            Profile</p>
+                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">Leave Policy</p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
                                                             @if($user->leavePolicyProfile)
-                                                                <span
-                                                                    class="badge bg-label-info">{{ $user->leavePolicyProfile->name }}</span>
+                                                                <span class="badge bg-label-success px-3">{{ $user->leavePolicyProfile->name }}</span>
                                                             @else
                                                                 <span class="text-muted small">Not Assigned</span>
                                                             @endif
@@ -2924,6 +2940,22 @@
             window.attendanceType = @json($user->attendance_type);
             window.terminateUrl = "{{ route('employees.terminate', $user->id) }}";
 
+            window.loadSelectList = function() {
+                window.getSites();
+                window.getGeofenceGroups();
+                window.getIpGroups();
+                window.getQrGroups();
+                window.getDynamicQrDevices();
+            };
+
+            // Re-open modal if validation failed
+            @if ($errors->any())
+                $(document).ready(function() {
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('offcanvasEditWorkInfo')).show();
+                    window.loadSelectList();
+                });
+            @endif
+
             // -------------------------------------------------------------
             // GLOBALLY ACCESSIBLE FUNCTIONS (Must be defined before any jQuery calls)
             // -------------------------------------------------------------
@@ -3158,7 +3190,7 @@
             }
 
             // AJAX Loaders for Dynamic Dropdowns
-            function getDynamicQrDevices() {
+            window.getDynamicQrDevices = function() {
                 var dynamicQrId = '{{ $user->dynamic_qr_device_id }}';
                 $.ajax({
                     url: '{{ route('employee.getDynamicQrDevices') }}',
@@ -3172,7 +3204,7 @@
                     }
                 });
             }
-            function getGeofenceGroups() {
+            window.getGeofenceGroups = function() {
                 var geofenceId = '{{ $user->geofence_group_id }}';
                 $.ajax({
                     url: '{{ route('employee.getGeofenceGroups') }}',
@@ -3186,7 +3218,7 @@
                     }
                 });
             }
-            function getIpGroups() {
+            window.getIpGroups = function() {
                 var ipGroupId = '{{ $user->ip_address_group_id }}';
                 $.ajax({
                     url: '{{ route('employee.getIpGroups') }}',
@@ -3200,7 +3232,7 @@
                     }
                 });
             }
-            function getQrGroups() {
+            window.getQrGroups = function() {
                 var qrGroupId = '{{ $user->qr_group_id }}';
                 $.ajax({
                     url: '{{ route('employee.getQrGroups') }}',
@@ -3214,7 +3246,7 @@
                     }
                 });
             }
-            function getSites() {
+            window.getSites = function() {
                 var siteId = '{{ $user->site_id }}';
                 $.ajax({
                     url: '{{ route('employee.getSites') }}',

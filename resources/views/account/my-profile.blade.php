@@ -658,45 +658,133 @@
 
                                 <div class="row g-4">
                                     <!-- Designation -->
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <div class="emp-field-box">
                                             <div class="d-flex align-items-center">
                                                 <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
                                                     <i class="bx bx-award text-muted fs-4"></i>
                                                 </div>
                                                 <div>
-                                                    <p class="mb-0 text-muted small fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Designation</p>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Designation</p>
                                                     <p class="mb-0 fw-bold text-dark fs-6">{{ $user->designation?->name ?? 'N/A' }}</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                     <!-- Department/Team -->
-                                    <div class="col-md-6">
+                                    <div class="col-md-4">
                                         <div class="emp-field-box">
                                             <div class="d-flex align-items-center">
                                                 <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
                                                     <i class="bx bx-group text-muted fs-4"></i>
                                                 </div>
                                                 <div>
-                                                    <p class="mb-0 text-muted small fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Department / Team</p>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Department / Team</p>
                                                     <p class="mb-0 fw-bold text-dark fs-6">{{ $user->team != null ? $user->team->name : 'N/A' }}</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div class="row g-6 mt-2">
-                                    <div class="col-md-6">
+                                    <!-- Role -->
+                                    <div class="col-md-4">
                                         <div class="emp-field-box">
-                                            <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Reporting Manager</p>
-                                            <p class="mb-0 fw-bold text-dark fs-6">{{ $user->reporting_to_id ? $user->getReportingToUserName() : 'N/A' }}</p>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-shield text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">System Role</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $role->name ?? 'Employee' }}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
+                                </div>
+                                <div class="row g-4 mt-2">
+                                    <!-- Site / Unit -->
+                                    <div class="col-md-4">
                                         <div class="emp-field-box">
-                                            <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Joining Date</p>
-                                            <p class="mb-0 fw-bold text-dark fs-6">{{ $user->joining_date ? Carbon::parse($user->joining_date)->format('d M Y') : 'N/A' }}</p>
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-map-pin text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Site / Unit</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->site?->name ?? 'Not Assigned' }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Leave Policy Profile -->
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-calendar-event text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Leave Policy Profile</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->leavePolicyProfile?->name ?? 'Not Assigned' }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Reporting Manager -->
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-user-voice text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Reporting Manager</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->reporting_to_id ? $user->getReportingToUserName() : 'N/A' }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-4 mt-2">
+                                    <!-- Joining Date -->
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-calendar text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Joining Date</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->joining_date ? Carbon\Carbon::parse($user->joining_date)->format('d M Y') : 'N/A' }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Attendance Type -->
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-check-shield text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Attendance Type</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ ucfirst($user->attendance_type ?? 'Open') }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Biometric ID -->
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-fingerprint text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Biometric ID</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->biometric_id ?? 'Not Mapped' }}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

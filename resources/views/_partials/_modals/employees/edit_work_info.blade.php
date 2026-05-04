@@ -20,6 +20,17 @@
           @csrf
           <input type="hidden" name="id" id="id" value="{{ $user->id }}">
 
+          @if ($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              <ul class="mb-0">
+                @foreach ($errors->all() as $error)
+                  <li>{{ $error }}</li>
+                @endforeach
+              </ul>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+          @endif
+
           <div class="row g-4">
             <div class="col-md-6">
               <label class="form-label-hitech" for="role">@lang('Role') <span class="text-danger">*</span></label>
@@ -35,6 +46,7 @@
                   </option>
                 @endforeach
               </select>
+              @error('role') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
@@ -47,6 +59,7 @@
                   </option>
                 @endforeach
               </select>
+              @error('departmentId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
@@ -59,6 +72,7 @@
                   </option>
                 @endforeach
               </select>
+              @error('leavePolicyProfileId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
@@ -71,6 +85,7 @@
                   </option>
                 @endforeach
               </select>
+              @error('reportingToId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
@@ -83,12 +98,24 @@
                   </option>
                 @endforeach
               </select>
+              @error('designationId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech" for="work_type">@lang('Work Type')</label>
+              <select name="work_type" id="work_type" class="form-select form-select-hitech">
+                <option value="on_site" {{ $user->work_type == 'on_site' ? 'selected' : '' }}>On-site</option>
+                <option value="remote" {{ $user->work_type == 'remote' ? 'selected' : '' }}>Remote</option>
+                <option value="hybrid" {{ $user->work_type == 'hybrid' ? 'selected' : '' }}>Hybrid</option>
+              </select>
+              @error('work_type') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
               <label class="form-label-hitech" for="doj">Date of Joining <span class="text-danger">*</span></label>
-              <input type="date" name="doj" id="doj" class="form-control form-control-hitech" required
+              <input type="date" name="doj" id="doj" class="form-control form-control-hitech" required min="1901-01-01"
                      value="{{ $user->date_of_joining != null ? \Carbon\Carbon::parse($user->date_of_joining)->format('Y-m-d') : '' }}"/>
+              @error('doj') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
             <div class="col-md-6">
@@ -109,32 +136,32 @@
                 <input type="text" name="biometric_id" id="biometric_id" class="form-control form-control-hitech" 
                        value="{{ $user->biometric_id }}" placeholder="e.g. 101" />
             </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech" for="siteId">@lang('Site / Unit')</label>
+              <select id="siteId" name="siteId" class="form-select form-select-hitech select2"></select>
+            </div>
           </div>
 
           <!-- Dynamic Attendance Settings Groups -->
           <div id="geofenceGroupDiv" class="mt-4" style="display:none;">
             <label class="form-label-hitech">Geofence Group</label>
-            <select id="geofenceGroupId" name="geofenceGroupId" class="form-select form-select-hitech"></select>
+            <select id="geofenceGroupId" name="geofenceGroupId" class="form-select form-select-hitech select2"></select>
           </div>
 
           <div id="ipGroupDiv" class="mt-4" style="display:none;">
             <label class="form-label-hitech">IP Group</label>
-            <select id="ipGroupId" name="ipGroupId" class="form-select form-select-hitech"></select>
+            <select id="ipGroupId" name="ipGroupId" class="form-select form-select-hitech select2"></select>
           </div>
 
           <div id="qrGroupDiv" class="mt-4" style="display:none;">
             <label class="form-label-hitech">QR Group</label>
-            <select id="qrGroupId" name="qrGroupId" class="form-select form-select-hitech"></select>
+            <select id="qrGroupId" name="qrGroupId" class="form-select form-select-hitech select2"></select>
           </div>
 
           <div id="dynamicQrDiv" class="mt-4" style="display:none;">
             <label class="form-label-hitech">QR Device</label>
-            <select id="dynamicQrId" name="dynamicQrId" class="form-select form-select-hitech"></select>
-          </div>
-
-          <div id="siteDiv" class="mt-4" style="display:none;">
-            <label class="form-label-hitech">Site</label>
-            <select id="siteId" name="siteId" class="form-select form-select-hitech"></select>
+            <select id="dynamicQrId" name="dynamicQrId" class="form-select form-select-hitech select2"></select>
           </div>
 
           <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">

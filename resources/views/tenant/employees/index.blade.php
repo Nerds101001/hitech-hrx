@@ -57,7 +57,7 @@
       };
 
       // Redraw on filter change
-      $('#roleFilter, #teamFilter, #designationFilter, #statusFilter').on('change', function () {
+      $('#roleFilter, #teamFilter, #designationFilter, #statusFilter, #siteFilter').on('change', function () {
         if (window.dt_user) window.dt_user.ajax.reload();
       });
 
@@ -74,6 +74,7 @@
               d.teamFilter = $('#teamFilter').val();
               d.designationFilter = $('#designationFilter').val();
               d.statusFilter = $('#statusFilter').val();
+              d.siteFilter = $('#siteFilter').val();
             }
           },
           columns: [
@@ -82,7 +83,7 @@
             { data: 'team' },
             { data: 'designation' },
             { data: 'status' },
-            { data: 'joined' },
+            { data: 'unit' },
             { data: '' }
           ],
           columnDefs: [
@@ -129,11 +130,11 @@
               }
             },
             {
-              targets: 5, // Joined
+              targets: 5, // Unit / Site
               render: function (data, type, full, meta) {
-                var date = full['joined'];
-                if (!date || date === 'N/A') return '<span class="text-body">N/A</span>';
-                return `<span class="text-body">${moment(date).format('DD MMM, YYYY')}</span>`;
+                var unit = full['unit'];
+                if (!unit) return '<span class="text-muted small">—</span>';
+                return `<span class="badge bg-teal-light text-teal rounded-pill px-3 py-1 fw-semibold" style="font-size:0.75rem;"><i class="bx bx-map-pin me-1"></i>${unit}</span>`;
               }
             },
             {
@@ -429,6 +430,15 @@
                 <option value="relieved">Relieved</option>
               </select>
             </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Unit / Site</label>
+              <select class="form-select select2" id="siteFilter">
+                <option value="">All Units</option>
+                @foreach($sites as $site)
+                  <option value="{{ $site->id }}">{{ $site->name }}</option>
+                @endforeach
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -447,7 +457,7 @@
             <th>Department</th>
             <th>Designation</th>
             <th>Employee Status</th>
-            <th>Joined</th>
+            <th>Unit / Site</th>
             <th class="text-center">Actions</th>
           </tr>
           </thead>

@@ -58,6 +58,7 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     'delete_request_reason',
     'team_id',
     'department_id',
+    'site_id',
     'code',
     'date_of_joining',
     'base_salary',

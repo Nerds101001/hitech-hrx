@@ -54,6 +54,10 @@ $(function() {
             case 'dynamic_qr': $('#dynamicQrDiv').show(); getDynamicQrDevices(); break;
         }
     }
+    // Always fetch sites if the dropdown exists (useful for organizational assignment)
+    if ($('#siteId').length) {
+        getSites();
+    }
 
     $('#attendanceType').on('change', function () {
         var value = this.value;
@@ -310,36 +314,36 @@ window.handleManualLeaveCreditSubmission = function(e, formElement) {
 };
 
 // Site management helpers
-function getGeofenceGroups() {
-    $.get(`${window.baseUrl}employee/getGeofenceGroups`, function(resp) {
+window.getGeofenceGroups = function() {
+    $.get(`${window.baseUrl}employees/getGeofenceGroups`, function(resp) {
         let options = '<option value="">Select Geofence Group</option>';
         resp.forEach(item => options += `<option value="${item.id}" ${window.user.geofence_group_id == item.id ? 'selected' : ''}>${item.name}</option>`);
         $('#geofenceGroupId').html(options);
     });
 }
-function getIpGroups() {
-    $.get(`${window.baseUrl}employee/getIpGroups`, function(resp) {
+window.getIpGroups = function() {
+    $.get(`${window.baseUrl}employees/getIpGroups`, function(resp) {
         let options = '<option value="">Select IP Group</option>';
         resp.forEach(item => options += `<option value="${item.id}" ${window.user.ip_address_group_id == item.id ? 'selected' : ''}>${item.name}</option>`);
         $('#ipGroupId').html(options);
     });
 }
-function getQrGroups() {
-    $.get(`${window.baseUrl}employee/getQrGroups`, function(resp) {
+window.getQrGroups = function() {
+    $.get(`${window.baseUrl}employees/getQrGroups`, function(resp) {
         let options = '<option value="">Select QR Group</option>';
         resp.forEach(item => options += `<option value="${item.id}" ${window.user.qr_group_id == item.id ? 'selected' : ''}>${item.name}</option>`);
         $('#qrGroupId').html(options);
     });
 }
-function getSites() {
-    $.get(`${window.baseUrl}employee/getSites`, function(resp) {
+window.getSites = function() {
+    $.get(`${window.baseUrl}employees/getSites`, function(resp) {
         let options = '<option value="">Select Site</option>';
         resp.forEach(item => options += `<option value="${item.id}" ${window.user.site_id == item.id ? 'selected' : ''}>${item.name}</option>`);
         $('#siteId').html(options);
     });
 }
-function getDynamicQrDevices() {
-    $.get(`${window.baseUrl}employee/getDynamicQrDevices`, function(resp) {
+window.getDynamicQrDevices = function() {
+    $.get(`${window.baseUrl}employees/getDynamicQrDevices`, function(resp) {
         let options = '<option value="">Select Dynamic QR Device</option>';
         resp.forEach(item => options += `<option value="${item.id}" ${window.user.dynamic_qr_device_id == item.id ? 'selected' : ''}>${item.name}</option>`);
         $('#dynamicQrId').html(options);

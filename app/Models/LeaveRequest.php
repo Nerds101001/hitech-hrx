@@ -69,11 +69,15 @@ class LeaveRequest extends Model implements AuditableContract
           if ($leaveRequest->wasChanged('status') && $leaveRequest->status === LeaveRequestStatus::APPROVED) {
               $user = $leaveRequest->user;
               $isPaidType = $leaveRequest->leaveType->is_paid;
+              $leaveTypeCode = $leaveRequest->leaveType->code;
               $plType = \App\Models\LeaveType::where('code', 'PL')->first();
               
-              // Find the balance record to use (defaults to PL for all paid types)
+              // Excluded from pool (must use their own balance)
+              $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+              
+              // Find the balance record to use (defaults to PL for all poolable paid types)
               $deductLeaveTypeId = $leaveRequest->leave_type_id;
-              if ($isPaidType && $plType) {
+              if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
                   $deductLeaveTypeId = $plType->id;
               }
 
@@ -94,7 +98,7 @@ class LeaveRequest extends Model implements AuditableContract
                       
                       // Handle Paid vs Unpaid split
                       if ($isPaidType) {
-                          $availableBalance = $balance->balance - $balance->used;
+                          $availableBalance = (float)$balance->balance - (float)$balance->used;
                           if ($availableBalance >= 1) {
                               $balance->used += 1;
                               $status = 'paid_leave';
@@ -130,15 +134,28 @@ class LeaveRequest extends Model implements AuditableContract
               $leaveRequest->getOriginal('status') === LeaveRequestStatus::APPROVED &&
               ($leaveRequest->status === LeaveRequestStatus::CANCELLED || $leaveRequest->status === LeaveRequestStatus::REJECTED)) {
               
+              $user = $leaveRequest->user;
+              $isPaidType = $leaveRequest->leaveType->is_paid;
+              $leaveTypeCode = $leaveRequest->leaveType->code;
+              $plType = \App\Models\LeaveType::where('code', 'PL')->first();
+              $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+
+              // Find which balance record was used during approval
+              $refundLeaveTypeId = $leaveRequest->leave_type_id;
+              if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
+                  $refundLeaveTypeId = $plType->id;
+              }
+
               $duration = 0;
               if ($leaveRequest->is_short_leave && $leaveRequest->duration_hours) {
+                  // Short leave refund logic (if applicable in future, though SHL is handled separately)
                   $duration = $leaveRequest->duration_hours / 8;
               } else {
-                  $duration = \App\Services\LeavePolicyService::calculateWorkingDays($leaveRequest->user, $leaveRequest->leave_type_id, $leaveRequest->from_date->toDateString(), $leaveRequest->to_date->toDateString());
+                  $duration = \App\Services\LeavePolicyService::calculateWorkingDays($user, $leaveRequest->leave_type_id, $leaveRequest->from_date->toDateString(), $leaveRequest->to_date->toDateString());
               }
               
               $balance = LeaveBalance::where('user_id', $leaveRequest->user_id)
-                  ->where('leave_type_id', $leaveRequest->leave_type_id)
+                  ->where('leave_type_id', $refundLeaveTypeId)
                   ->first();
               
               if ($balance) {
@@ -152,7 +169,7 @@ class LeaveRequest extends Model implements AuditableContract
                       $leaveRequest->from_date->startOfDay(), 
                       $leaveRequest->to_date->endOfDay()
                   ])
-                  ->whereIn('status', ['on_leave', 'work_from_home'])
+                  ->whereIn('status', ['paid_leave', 'unpaid_leave', 'on_leave'])
                   ->delete();
           }
       });
