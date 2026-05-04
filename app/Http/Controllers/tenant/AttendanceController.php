@@ -184,7 +184,8 @@ class AttendanceController extends Controller
           if($s == 'absent') { $color = 'bg-red'; $icon = 'bx-x-circle'; $status = 'Absent'; }
           elseif($s == 'half-day') { $color = 'bg-orange'; $icon = 'bx-time'; $status = 'Half-Day'; }
           elseif($s == 'late') { $color = 'bg-warning'; $icon = 'bx-time'; $status = 'Late'; }
-          elseif($s == 'on_leave' || $s == 'leave') { $color = 'bg-purple-vibrant'; $icon = 'bx-calendar'; $status = 'Leave'; }
+          elseif($s == 'paid_leave') { $color = 'bg-teal'; $icon = 'bx-calendar-check'; $status = 'Paid Leave'; }
+          elseif($s == 'unpaid_leave' || $s == 'on_leave' || $s == 'leave') { $color = 'bg-purple-vibrant'; $icon = 'bx-calendar-x'; $status = 'Unpaid Leave'; }
           elseif($s == 'work_from_home' || $s == 'wfh') { $color = 'bg-indigo-vibrant'; $icon = 'bx-home'; $status = 'WFH'; }
           else { $status = 'Present'; } // Default normalization
           
@@ -249,11 +250,11 @@ class AttendanceController extends Controller
           $stats = (clone $query)
               ->selectRaw("
                   COUNT(*) as total,
-                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND admin_reason IS NULL AND TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) < 480 THEN 1 ELSE 0 END) as half_days,
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL OR LOWER(status) = 'paid_leave') AND admin_reason IS NULL AND (LOWER(status) = 'paid_leave' OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) < 480) THEN 1 ELSE 0 END) as half_days,
                   SUM(CASE WHEN LOWER(status) = 'absent' THEN 1 ELSE 0 END) as absents,
-                  SUM(CASE WHEN LOWER(status) IN ('on_leave', 'leave', 'work_from_home', 'wfh') THEN 1 ELSE 0 END) as leaves,
+                  SUM(CASE WHEN LOWER(status) IN ('on_leave', 'leave', 'work_from_home', 'wfh', 'unpaid_leave') THEN 1 ELSE 0 END) as leaves,
                   SUM(CASE WHEN LOWER(status) = 'late' THEN 1 ELSE 0 END) as lates,
-                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL) AND (admin_reason IS NOT NULL OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 480) THEN 1 ELSE 0 END) as presents
+                  SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL OR LOWER(status) = 'paid_leave') AND (admin_reason IS NOT NULL OR LOWER(status) = 'paid_leave' OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 480) THEN 1 ELSE 0 END) as presents
               ")
               ->first();
 
@@ -399,8 +400,10 @@ class AttendanceController extends Controller
                        $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['lates']++;
                    } elseif ($s == 'absent') {
                       $dayData['status'] = 'Absent'; $dayData['class'] = 'bg-red text-white'; $row['absents']++;
-                  } elseif ($s == 'on_leave' || $s == 'leave') {
-                      $dayData['status'] = 'Leave'; $dayData['class'] = 'bg-purple-vibrant text-white';
+                  } elseif ($s == 'paid_leave') {
+                      $dayData['status'] = 'Paid Leave'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
+                  } elseif ($s == 'unpaid_leave' || $s == 'on_leave' || $s == 'leave') {
+                      $dayData['status'] = 'Unpaid Leave'; $dayData['class'] = 'bg-purple-vibrant text-white';
                   } elseif ($s == 'work_from_home' || $s == 'wfh') {
                       $dayData['status'] = 'WFH'; $dayData['class'] = 'bg-indigo-vibrant text-white';
                   }

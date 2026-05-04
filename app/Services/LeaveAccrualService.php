@@ -23,8 +23,9 @@ class LeaveAccrualService
 
             $rules = $profile->rules;
             foreach ($rules as $rule) {
-                // Only process monthly quota rules
-                if (!$rule->max_per_month) continue;
+                // Calculate monthly increment: use max_per_month if set, else max_per_year/12
+                $monthlyIncrement = $rule->max_per_month ?? ($rule->max_per_year ? ($rule->max_per_year / 12) : 0);
+                if ($monthlyIncrement <= 0) continue;
 
                 $balance = LeaveBalance::firstOrNew([
                     'user_id'       => $user->id,
@@ -34,12 +35,17 @@ class LeaveAccrualService
 
                 if ($rule->is_carry_forward) {
                     // Carry Forward: Increment the existing balance
-                    $balance->balance += $rule->max_per_month;
+                    $balance->balance += $monthlyIncrement;
+                    $balance->accrued_this_year += $monthlyIncrement;
+                    $balance->auditCustomMessage = "Monthly Accrual ({$rule->leaveType->name})";
                 } else {
-                    // Reset: Set balance specifically to the monthly quota
-                    // This handles 'Redeem in same month' behavior.
-                    $balance->balance = $rule->max_per_month;
-                    $balance->used    = 0; // Reset used count for new month
+                    // Reset: Set balance specifically to the monthly quota (non-cumulative)
+                    // Note: We still increment 'accrued_this_year' to track annual total
+                    $balance->balance = $monthlyIncrement;
+                    $balance->used    = 0; 
+                    $balance->accrued_this_year = $monthlyIncrement;
+                    $balance->carry_forward_last_year = 0;
+                    $balance->auditCustomMessage = "Monthly Reset & Grant ({$rule->leaveType->name})";
                 }
 
                 $balance->save();
@@ -51,7 +57,7 @@ class LeaveAccrualService
 
     /**
      * Apply yearly carry-forward caps (e.g., max 6 days for Paid Leave)
-     * Should be run on Jan 1st before the first accrual of the new year.
+     * Should be run on April 1st before the first accrual of the new fiscal year.
      */
     public static function resetYearlyCarryForward()
     {
@@ -63,8 +69,11 @@ class LeaveAccrualService
 
             $rules = $profile->rules;
             foreach ($rules as $rule) {
-                // Only process rules that have a carry forward cap
-                if (!$rule->is_carry_forward || $rule->carry_forward_max_days === null) continue;
+                // Only process rules that have carry forward enabled
+                if (!$rule->is_carry_forward) continue;
+
+                // Max 6 days can be carried forward as per user request, fallback if not set in rule
+                $cap = $rule->carry_forward_max_days !== null ? (float)$rule->carry_forward_max_days : 6.0;
 
                 $balance = LeaveBalance::where([
                     'user_id'       => $user->id,
@@ -72,17 +81,21 @@ class LeaveAccrualService
                     'tenant_id'     => $user->tenant_id,
                 ])->first();
 
-                if ($balance && $balance->balance > $rule->carry_forward_max_days) {
+                if ($balance) {
                     $oldBalance = $balance->balance;
-                    $balance->balance = (float)$rule->carry_forward_max_days;
+                    // On April 1st, the current balance (capped) becomes the 'Carry Forward Last Year'
+                    $balance->balance = ($oldBalance > $cap) ? $cap : $oldBalance;
+                    $balance->carry_forward_last_year = $balance->balance;
+                    $balance->accrued_this_year = 0; // Reset for new fiscal year
+                    $balance->auditCustomMessage = "Yearly Reset (April 1st) - Carry Forward Cap: {$cap}";
                     $balance->save();
                     
-                    Log::info("Capped carry-forward for User {$user->id}, LeaveType {$rule->leave_type_id}. Old: {$oldBalance}, New Cap: {$rule->carry_forward_max_days}");
+                    Log::info("April Reset for User {$user->id}, LeaveType {$rule->leave_type_id}. Carry Forward: {$balance->carry_forward_last_year}");
                 }
             }
         }
         
-        Log::info("Yearly carry-forward reset processed for " . count($users) . " users.");
+        Log::info("Yearly (April) carry-forward reset processed for " . count($users) . " users.");
     }
 
     public static function grantCoff(User $user, $amount = 1)
@@ -96,7 +109,9 @@ class LeaveAccrualService
             'tenant_id'     => $user->tenant_id,
         ]);
 
-        $balance->balance += $amount;
+        $balance->balance = ($balance->balance ?? 0) + $amount;
+        $balance->accrued_this_year = ($balance->accrued_this_year ?? 0) + $amount;
+        $balance->auditCustomMessage = "Comp Off Granted (Automated)";
         $balance->save();
         
         Log::info("Granted {$amount} COFF to user {$user->id}.");
@@ -126,6 +141,7 @@ class LeaveAccrualService
                 if ($startingBalance > 0) {
                     $balance->balance = $startingBalance;
                     $balance->used    = 0;
+                    $balance->accrued_this_year = $startingBalance;
                     $balance->save();
                     $count++;
                 }

@@ -176,32 +176,44 @@
 }
 </style>
 <script>
-$(document).ready(function() {
-    function formatRoleText(text) {
-        if (!text) return text;
-        return text.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    }
+(function() {
+    const initSelect2 = () => {
+        const $jq = window.jQuery;
+        if (!$jq) return;
 
-    $('#role').select2({
-        dropdownParent: $('#offcanvasEditWorkInfo'),
-        placeholder: 'Select Role',
-        templateResult: function(data) {
-            if (!data.id) return data.text;
-            return $('<span>' + formatRoleText(data.text) + '</span>');
-        },
-        templateSelection: function(data) {
-            if (!data.id) return data.text;
-            return formatRoleText(data.text);
+        function formatRoleText(text) {
+            if (!text) return text;
+            return text.replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         }
-    });
 
-    // Re-initialize on modal show just in case
-    $('#offcanvasEditWorkInfo').on('shown.bs.modal', function () {
-        $('#role').select2({
-            dropdownParent: $('#offcanvasEditWorkInfo'),
-            placeholder: 'Select Role'
+        $jq('#role').select2({
+            dropdownParent: $jq('#offcanvasEditWorkInfo'),
+            placeholder: 'Select Role',
+            templateResult: function(data) {
+                if (!data.id) return data.text;
+                return $jq('<span>' + formatRoleText(data.text) + '</span>');
+            },
+            templateSelection: function(data) {
+                if (!data.id) return data.text;
+                return formatRoleText(data.text);
+            }
         });
-    });
-});
+
+        // Re-initialize on modal show just in case
+        $jq('#offcanvasEditWorkInfo').on('shown.bs.modal', function () {
+            $jq('#role').select2({
+                dropdownParent: $jq('#offcanvasEditWorkInfo'),
+                placeholder: 'Select Role'
+            });
+        });
+    };
+
+    const timer = setInterval(() => {
+        if (window.jQuery && window.jQuery.fn && window.jQuery.fn.select2) {
+            clearInterval(timer);
+            initSelect2();
+        }
+    }, 100);
+})();
 </script>
 <!-- /Edit Work Information Modal -->

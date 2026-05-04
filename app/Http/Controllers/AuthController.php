@@ -161,6 +161,8 @@ class AuthController extends Controller
       } else {
         return redirect()->back()->with('error', __('User not found.'));
       }
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        throw $e;
     } catch (Exception $e) {
       Log::error("Login Error: " . $e->getMessage());
       return redirect()->back()->with('error', 'Oops! An error occurred during login.');

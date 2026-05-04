@@ -21,6 +21,8 @@ use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 use Spatie\Permission\Traits\HasRoles;
 use Tymon\JWTAuth\Contracts\JWTSubject;
+use App\Models\TrainingModule;
+use App\Models\HRPolicyAcknowledgment;
 
 class User extends Authenticatable implements JWTSubject, AuditableContract
 {
@@ -630,12 +632,17 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->hasMany(UserTrainingProgress::class, 'user_id');
   }
 
-  public function getTrainingProgressPercentage()
-  {
-    $totalModules = TrainingModule::count();
-    if ($totalModules === 0) return 0;
-    
-    $completedModules = $this->trainingProgress()->where('status', 'completed')->count();
-    return round(($completedModules / $totalModules) * 100);
-  }
+    public function getTrainingProgressPercentage()
+    {
+      $totalModules = TrainingModule::count();
+      if ($totalModules === 0) return 0;
+      
+      $completedModules = $this->trainingProgress()->where('status', 'completed')->count();
+      return round(($completedModules / $totalModules) * 100);
+    }
+
+    public function hrPolicyAcknowledgments()
+    {
+        return $this->hasMany(HRPolicyAcknowledgment::class);
+    }
 }

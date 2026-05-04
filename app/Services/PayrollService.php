@@ -147,7 +147,7 @@ class PayrollService
     {
         $workedDays = Attendance::where('user_id', $user->id)
             ->whereBetween('check_in_time', [$startDate, $endDate])
-            ->where('status', 'present')
+            ->whereIn('status', ['present', 'paid_leave'])
             ->count();
 
         // For now, simplify Holidays and Weekends

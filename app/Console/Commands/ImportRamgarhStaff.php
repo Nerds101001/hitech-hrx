@@ -85,17 +85,26 @@ class ImportRamgarhStaff extends Command
                 $dept = Department::where('name', 'like', "%$deptName%")->first();
                 $deptId = $dept ? $dept->id : null;
 
+                // Safely find or ignore designation
+                $actualDesignationId = null;
+                if (!empty($designationId)) {
+                    $designationExists = Designation::where('id', $designationId)->exists();
+                    if ($designationExists) {
+                        $actualDesignationId = $designationId;
+                    }
+                }
+
                 $user = User::create([
-                    'tenant_id' => 1, // Default tenant or detect?
+                    'tenant_id' => 1,
                     'first_name' => explode(' ', $name)[0],
                     'last_name' => count(explode(' ', $name)) > 1 ? implode(' ', array_slice(explode(' ', $name), 1)) : '',
                     'name' => $name,
                     'email' => $email,
                     'phone' => $mobile,
-                    'code' => $emCode,
+                    'code' => !empty($emCode) ? $emCode : 'TEMP-' . strtoupper(Str::random(6)),
                     'department_id' => $deptId,
-                    'designation_id' => $designationId,
-                    'reporting_to_id' => 1, // Fallback to admin/first user
+                    'designation_id' => $actualDesignationId,
+                    'reporting_to_id' => 1,
                     'site_id' => $unitId,
                     'date_of_joining' => $joiningDate,
                     'dob' => $birthDate,
@@ -117,7 +126,7 @@ class ImportRamgarhStaff extends Command
                 // Create Bank details if provided
                 if (!empty($accNo)) {
                     $user->bankAccount()->create([
-                        'bank_name' => $data[9] ?? 'N/A',
+                        'bank_name' => $data[10] ?? 'N/A', // Corrected index for BANK NAME in CSV is 10
                         'account_number' => $accNo,
                         'bank_code' => $ifsc,
                         'account_name' => $name,
@@ -125,17 +134,25 @@ class ImportRamgarhStaff extends Command
                     ]);
                 }
 
-                // Send Onboarding Email
-                $user->notify(new OnboardingInvite($user, $plainPassword));
-
                 DB::commit();
-                $this->info("Imported: $name ($email) - Password: $plainPassword");
+                $this->info("User Created: $name ($email)");
+
+                // Send Onboarding Email (Outside transaction so it doesn't roll back the user)
+                try {
+                    $user->notify(new OnboardingInvite($user, $plainPassword));
+                    $this->info("Invite Sent: $email");
+                } catch (\Exception $e) {
+                    $this->warn("Invite failed for $email: " . $e->getMessage());
+                }
+
                 $count++;
+                
+                // Sleep for 2 seconds to avoid Hostinger mail limit
+                sleep(2);
 
             } catch (\Exception $e) {
                 DB::rollBack();
                 $this->error("Failed to import $name: " . $e->getMessage());
-                Log::error("Import Error for $name: " . $e->getMessage());
             }
         }
 

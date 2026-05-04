@@ -55,6 +55,7 @@ use App\Http\Controllers\tenant\JobApplicationController;
 use App\Http\Controllers\tenant\CustomQuestionController;
 use App\Http\Controllers\tenant\InterviewScheduleController;
 use App\Http\Controllers\tenant\AiTrainingController;
+use App\Http\Controllers\tenant\HRPolicyController;
 use App\Constants\ModuleConstants;
 use App\Services\AddonService\IAddonService;
 use Illuminate\Support\Facades\Route;
@@ -146,13 +147,6 @@ Route::middleware([
     Route::get('getActivityAjax/{userId}/{date}/{attendanceLogId}', [DashboardController::class, 'getActivityAjax'])->name('getActivityAjax');
     Route::get('getDeviceLocationAjax/{userId}/{date}/{attendanceLogId}', [DashboardController::class, 'getDeviceLocationAjax'])->name('getDeviceLocationAjax');
 
-    // --- NOTIFICATIONS & LANG ---
-    Route::post('markAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsRead');
-    Route::post('notifications/markAsRead/{id}', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsReadById');
-    Route::get('notifications/marksAllAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.marksAllAsRead');
-    Route::get('notifications', [NotificationController::class, 'index'])->name('tenant.notifications.index');
-    Route::get('notifications/myNotifications', [NotificationController::class, 'myNotifications'])->name('tenant.notifications.myNotifications');
-    Route::get('getNotificationsAjax', [NotificationController::class, 'getNotificationsAjax'])->name('tenant.notifications.getNotificationsAjax');
     Route::get('/lang/{locale}', [LanguageController::class, 'swap']);
     Route::get('/getSearchDataAjax', [BaseController::class, 'getSearchDataAjax'])->name('search.Ajax');
 
@@ -585,6 +579,18 @@ Route::middleware([
     // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
     Route::middleware(['web', 'auth'])->group(function() {
 
+        // Notifications - Viewable by all authenticated users
+        Route::prefix('notifications')->name('tenant.notifications.')->group(function() {
+            Route::get('myNotifications', [NotificationController::class, 'myNotifications'])->name('myNotifications');
+            Route::get('index', [NotificationController::class, 'index'])->name('index');
+            Route::post('markAsRead/{id?}', [NotificationController::class, 'markAsRead'])->name('markAsRead');
+            Route::get('marksAllAsRead', [NotificationController::class, 'markAsRead'])->name('marksAllAsRead');
+            Route::get('getNotificationsAjax', [NotificationController::class, 'getNotificationsAjax'])->name('getNotificationsAjax');
+        });
+        // Compatibility route for legacy JS calls
+        Route::post('markAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsRead_legacy');
+
+
         // Digital Library - Viewable by all authenticated users
         Route::prefix('digital-library')->name('library.')->group(function() {
             Route::get('/', [DigitalLibraryController::class, 'index'])->name('index');
@@ -596,8 +602,27 @@ Route::middleware([
                 Route::post('store', [DigitalLibraryController::class, 'store'])->name('store');
                 Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
                 Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulk-store');
+                Route::post('reassign', [DigitalLibraryController::class, 'reassign'])->name('reassign');
+                
+                // Taxonomy Management
+                Route::post('taxonomy/add', [DigitalLibraryController::class, 'addTaxonomy'])->name('taxonomy.add');
+                Route::post('taxonomy/update/{id}', [DigitalLibraryController::class, 'updateTaxonomy'])->name('taxonomy.update');
+                Route::delete('taxonomy/delete/{id}', [DigitalLibraryController::class, 'deleteTaxonomy'])->name('taxonomy.delete');
             });
         });
+
+        Route::middleware(['role:admin|hr'])->prefix('hr-policies')->name('hr-policies.')->group(function() {
+            Route::get('/', [HRPolicyController::class, 'index'])->name('index');
+            Route::post('/', [HRPolicyController::class, 'store'])->name('store');
+            Route::delete('/{id}', [HRPolicyController::class, 'destroy'])->name('destroy');
+            Route::get('/acknowledgments/{id}', [HRPolicyController::class, 'acknowledgments'])->name('acknowledgments');
+        });
+
+        // HR Policies (All Authenticated Users)
+        Route::get('my-policies', [HRPolicyController::class, 'employeeIndex'])->name('hr-policies.employee.index');
+        Route::post('hr-policies/acknowledge/{id}', [HRPolicyController::class, 'acknowledge'])->name('hr-policies.acknowledge');
+        Route::get('hr-policies/view/{id}', [HRPolicyController::class, 'view'])->name('hr-policies.view');
+        Route::get('hr-policies/embed-url/{id}', [HRPolicyController::class, 'getEmbedUrl'])->name('hr-policies.embed-url');
 
         // AI Training (Admin/HR Only)
         Route::middleware(['role:admin|hr', 'can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {

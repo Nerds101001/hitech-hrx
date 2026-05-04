@@ -70,11 +70,14 @@ class EmployeeController extends Controller
 
     if ($balance) {
       $balance->balance = $validated['count'];
+      // When admin overrides, we assume the new balance is the new accrued total for the year
+      $balance->accrued_this_year = $validated['count']; 
       $balance->save();
     } else {
       $user->leaveBalances()->create([
         'leave_type_id' => $validated['leaveTypeId'],
         'balance' => $validated['count'],
+        'accrued_this_year' => $validated['count'],
         'used' => 0,
         'tenant_id' => $user->tenant_id,
       ]);
@@ -1376,7 +1379,10 @@ class EmployeeController extends Controller
       // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
       $firstName = trim($user->first_name) ?: 'User';
       $phone = $user->official_phone ?: ($user->phone ?: '12345678');
-      $lastFour = substr($phone, -4);
+      $lastFour = substr((string)$phone, -4);
+      if (!$user->official_phone && !$user->phone) {
+          $lastFour = '1234';
+      }
       $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
 
       $user->password = bcrypt($newPassword);
@@ -1410,7 +1416,11 @@ class EmployeeController extends Controller
       ])
       ->first();
 
-    $auditLogs = Audit::where('user_id', $id)->latest()->take(5)->get();
+    $auditLogs = Audit::where('user_id', $id)
+      ->whereIn('auditable_type', ['App\Models\User', 'App\Models\LeaveBalance'])
+      ->latest()
+      ->take(10)
+      ->get();
 
     $documentTypes = DocumentType::where('status', CommonStatus::ACTIVE)
       ->select('id', 'name', 'code') // Optimization: Select only needed fields
@@ -1439,6 +1449,8 @@ class EmployeeController extends Controller
       ->select('id', 'first_name', 'last_name')
       ->get();
 
+    $leaveHistory = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
+
     return view('tenant.employees.view', [
       'user' => $user,
       'documentTypes' => $documentTypes,
@@ -1450,7 +1462,8 @@ class EmployeeController extends Controller
       'roles' => $roles,
       'departments' => $departments,
       'designations' => $designations,
-      'allUsers' => $allUsers
+      'allUsers' => $allUsers,
+      'leaveHistory' => $leaveHistory
     ]);
   }
 
@@ -1504,9 +1517,9 @@ class EmployeeController extends Controller
       if ($request->has('useDefaultPassword') && $request->input('useDefaultPassword') == 'on') {
         // Dynamic Default Password Rule: Ucfirst(Name[:4]) + Phone[-4]
         $firstName = $request->input('firstName') ?: 'User';
-        $phone = $request->input('phone') ?: '12345678';
-        $lastFour = substr($phone, -4);
-        $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . $lastFour;
+        $phone = $request->input('phone') ?: '1234';
+        $lastFour = substr((string)$phone, -4);
+        $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
         $user->password = bcrypt($newPassword);
       } else {
         $user->password = bcrypt($request->input('password'));
@@ -1809,7 +1822,7 @@ class EmployeeController extends Controller
     $user = User::with([
       'userDevice',
       'team',
-      'userAvailableLeaves',
+      'leaveBalances.leaveType',
       'shift',
       'designation.department',
       'assets.category',
@@ -1823,7 +1836,7 @@ class EmployeeController extends Controller
     ])->findOrFail(auth()->id());
 
     $auditLogs = Audit::where('user_id', $user->id)
-      ->where('auditable_type', 'App\Models\User')
+      ->whereIn('auditable_type', ['App\Models\User', 'App\Models\LeaveBalance'])
       ->orderBy('created_at', 'desc')
       ->get();
 
@@ -1836,7 +1849,8 @@ class EmployeeController extends Controller
 
     $documentTypes = \App\Models\DocumentType::where('status', 'Active')->get();
 
-    return view('account.my-profile', compact('user', 'auditLogs', 'role', 'pendingApprovals', 'documentTypes'));
+    $leaveHistory = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
+    return view('account.my-profile', compact('user', 'auditLogs', 'role', 'pendingApprovals', 'documentTypes', 'leaveHistory'));
   }
 
   /**

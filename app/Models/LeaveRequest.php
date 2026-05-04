@@ -67,95 +67,62 @@ class LeaveRequest extends Model implements AuditableContract
       static::updated(function ($leaveRequest) {
           // If the status changed to APPROVED
           if ($leaveRequest->wasChanged('status') && $leaveRequest->status === LeaveRequestStatus::APPROVED) {
-              $duration = 0;
-              if ($leaveRequest->is_short_leave && $leaveRequest->duration_hours) {
-                  $duration = $leaveRequest->duration_hours / 8; // Assuming 8-hour workday for balance deduction
-              } else {
-                  $duration = \App\Services\LeavePolicyService::calculateWorkingDays($leaveRequest->user, $leaveRequest->leave_type_id, $leaveRequest->from_date->toDateString(), $leaveRequest->to_date->toDateString());
-              }
+              $user = $leaveRequest->user;
+              $isPaidType = $leaveRequest->leaveType->is_paid;
+              $plType = \App\Models\LeaveType::where('code', 'PL')->first();
               
+              // Find the balance record to use (defaults to PL for all paid types)
+              $deductLeaveTypeId = $leaveRequest->leave_type_id;
+              if ($isPaidType && $plType) {
+                  $deductLeaveTypeId = $plType->id;
+              }
+
               $balance = LeaveBalance::firstOrCreate([
-                  'user_id'       => $leaveRequest->user_id,
-                  'leave_type_id' => $leaveRequest->leave_type_id,
+                  'user_id'       => $user->id,
+                  'leave_type_id' => $deductLeaveTypeId,
                   'tenant_id'     => $leaveRequest->tenant_id,
               ]);
-              
-              $balance->used += $duration;
-              $balance->save();
 
-              // Create Attendance records for the leave period
               $tempDate = $leaveRequest->from_date->copy();
               $toDate = $leaveRequest->to_date;
               $workingDayCounter = 0;
-              $code = $leaveRequest->leaveType->code;
 
               while ($tempDate->lte($toDate)) {
-                  $isHoliday = \App\Models\Holiday::where(function($q) use ($leaveRequest) {
-                      $q->whereNull('site_id')
-                        ->orWhere('site_id', $leaveRequest->user->site_id);
-                  })->where('date', $tempDate->toDateString())->exists();
-
-                  // Check if it's weekend (assuming Saturday config is similar to calculateWorkingDays)
-                  // For simplicity, let's just use the counter for actual applied days.
-                  $status = 'on_leave';
-                  
-                  if (!$isHoliday) {
-                      $isOffDay = false;
-                      if ($tempDate->isSaturday()) {
-                          // Standardize Check
-                          $profile = $leaveRequest->user->leavePolicyProfile;
-                          $satConfig = $profile ? ($profile->saturday_off_config ?? []) : ($leaveRequest->user->site->saturday_off_config ?? []);
-                          if (in_array('all', (array)$satConfig)) {
-                              $isOffDay = true;
+                  // Only process working days for balance deduction
+                  if (\App\Services\LeavePolicyService::isWorkingDay($user, $tempDate)) {
+                      $status = 'on_leave'; // Default fallback
+                      
+                      // Handle Paid vs Unpaid split
+                      if ($isPaidType) {
+                          $availableBalance = $balance->balance - $balance->used;
+                          if ($availableBalance >= 1) {
+                              $balance->used += 1;
+                              $status = 'paid_leave';
                           } else {
-                              $occurrence = ceil($tempDate->day / 7);
-                              $isLast = ($tempDate->copy()->addWeek()->month != $tempDate->month);
-                              if (in_array((string)$occurrence, (array)$satConfig) || ($isLast && in_array('last', (array)$satConfig))) {
-                                  $isOffDay = true;
-                              }
-                          }
-                      } else if ($tempDate->isSunday()) {
-                          $isOffDay = true;
-                      }
-
-                      if (!$isOffDay) {
-                          $workingDayCounter++;
-
-                          if ($leaveRequest->leaveType->is_split_entitlement) {
-                              // Fetch the rule to determine the off_days_entitlement limit
-                              $rule = \App\Models\LeavePolicyProfileRule::where('profile_id', $leaveRequest->user->leave_policy_profile_id)
-                                  ->where('leave_type_id', $leaveRequest->leaveType->id)
-                                  ->first();
-                                  
-                              $offDaysLimit = $rule ? ($rule->off_days_entitlement ?? 0) : 0;
-
-                              if ($workingDayCounter > $offDaysLimit) {
-                                  $status = 'work_from_home';
-                              }
+                              $status = 'unpaid_leave';
                           }
                       } else {
-                          // Keep as 'on_leave' or Mark as 'Holiday/Weekend'?
-                          // Typically on_leave covers weekends as well if it's continuous.
+                          // For explicitly non-paid types, just mark as on_leave/unpaid
+                          $status = 'unpaid_leave';
                       }
-                  } else {
-                      // Holiday - let's stay 'on_leave' for continuous coverage or mark as holiday
-                      // For now, on_leave is fine.
-                  }
 
-                  Attendance::updateOrCreate(
-                      [
-                          'user_id' => $leaveRequest->user_id,
-                          'tenant_id' => $leaveRequest->tenant_id,
-                          'check_in_time' => $tempDate->startOfDay(),
-                      ],
-                      [
-                          'status' => $status,
-                          'shift_id' => $leaveRequest->user->shift_id,
-                          'created_by_id' => auth()->id() ?? $leaveRequest->user_id,
-                      ]
-                  );
+                      Attendance::updateOrCreate(
+                          [
+                              'user_id' => $leaveRequest->user_id,
+                              'tenant_id' => $leaveRequest->tenant_id,
+                              'check_in_time' => $tempDate->startOfDay(),
+                          ],
+                          [
+                              'status' => $status,
+                              'shift_id' => $user->shift_id,
+                              'leave_request_id' => $leaveRequest->id,
+                              'created_by_id' => auth()->id() ?? $user->id,
+                          ]
+                      );
+                  }
                   $tempDate->addDay();
               }
+              $balance->save();
           }
           
           // If status was approved but now is CANCELLED or REJECTED

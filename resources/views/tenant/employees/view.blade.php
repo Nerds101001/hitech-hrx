@@ -1013,23 +1013,36 @@
                                                 <thead class="bg-light">
                                                     <tr>
                                                         <th class="ps-4 py-2 small fw-bold text-uppercase">Leave Type</th>
+                                                        <th class="py-2 small fw-bold text-uppercase text-center">Carry Fwd</th>
+                                                        <th class="py-2 small fw-bold text-uppercase text-center">Accrued</th>
                                                         <th class="py-2 small fw-bold text-uppercase text-center">Allocated</th>
                                                         <th class="py-2 small fw-bold text-uppercase text-center">Used</th>
-                                                        <th class="pe-4 py-2 small fw-bold text-uppercase text-end">Available
-                                                        </th>
+                                                        <th class="pe-4 py-2 small fw-bold text-uppercase text-end">Available</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     @foreach($leaveBalances as $bal)
+                                                        @php
+                                                            $c_fwd = $bal->carry_forward_last_year ?? 0;
+                                                            $c_accrued = $bal->accrued_this_year ?? 0;
+                                                            // Fallback for existing data: if breakdown is missing but balance exists
+                                                            if ($bal->balance > 0 && $c_fwd == 0 && $c_accrued == 0) {
+                                                                $c_accrued = $bal->balance;
+                                                            }
+                                                        @endphp
                                                         <tr>
                                                             <td class="ps-4 py-3">
                                                                 <div class="d-flex align-items-center">
                                                                     <div class="bg-label-primary rounded p-1 me-2"><i
                                                                             class="bx bx-calendar-event"></i></div>
                                                                     <span
-                                                                        class="fw-bold text-dark">{{ $bal->leaveType->name ?? 'Unknown (' . ($bal->leave_type_id ?? 'N/A') . ')' }}</span>
+                                                                        class="fw-bold text-dark">{{ $bal->leaveType->name ?? 'Unknown' }}</span>
                                                                 </div>
                                                             </td>
+                                                            <td class="py-3 text-center text-muted">
+                                                                {{ number_format($c_fwd, 1) }}</td>
+                                                            <td class="py-3 text-center text-muted">
+                                                                {{ number_format($c_accrued, 1) }}</td>
                                                             <td class="py-3 text-center fw-bold">
                                                                 {{ number_format($bal->balance, 1) }}</td>
                                                             <td class="py-3 text-center text-danger">
@@ -1043,6 +1056,79 @@
                                             </table>
                                         </div>
                                     @endif
+
+                                    <!-- Transaction Ledger -->
+                                    <div class="mt-5 pt-4 border-top">
+                                        <h6 class="fw-bold mb-4 d-flex align-items-center" style="color: #1E293B;">
+                                            <div class="hitech-icon-wrap me-2" style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                                <i class="bx bx-history fs-5"></i>
+                                            </div>
+                                            Detailed Transaction Ledger
+                                        </h6>
+                                        <div class="table-responsive rounded-3 border bg-white">
+                                            <table class="table table-sm table-hover mb-0 align-middle">
+                                                <thead class="bg-light">
+                                                    <tr>
+                                                        <th class="ps-3 py-2 small fw-bold text-uppercase">Event</th>
+                                                        <th class="py-2 small fw-bold text-uppercase">Type</th>
+                                                        <th class="py-2 small fw-bold text-uppercase text-center">Amount</th>
+                                                        <th class="py-2 small fw-bold text-uppercase">Reason / Period</th>
+                                                        <th class="pe-3 py-2 small fw-bold text-uppercase text-end">Date</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody style="font-size: 0.85rem;">
+                                                    @forelse($leaveHistory as $item)
+                                                    <tr>
+                                                        <td class="ps-3 py-2">
+                                                            <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
+                                                        </td>
+                                                        <td class="py-2">
+                                                            @php
+                                                                $typeColor = 'secondary';
+                                                                $typeName = $item->type;
+                                                                if($typeName == 'Credit' || $typeName == 'Accrued' || $typeName == 'Carry Forward') $typeColor = 'success';
+                                                                elseif($typeName == 'Request') $typeColor = 'info';
+                                                                elseif($typeName == 'Deduction') $typeColor = 'danger';
+                                                            @endphp
+                                                            <span class="badge bg-label-{{ $typeColor }} py-0 px-2" style="font-size: 0.7rem;">{{ $typeName }}</span>
+                                                        </td>
+                                                        <td class="py-2 text-center fw-bold">
+                                                            @if($item->is_adjustment)
+                                                                <span class="{{ $item->amount > 0 ? 'text-success' : 'text-danger' }}">
+                                                                    {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }}
+                                                                </span>
+                                                            @else
+                                                                @php
+                                                                    $from = \Carbon\Carbon::parse($item->from_date);
+                                                                    $to = \Carbon\Carbon::parse($item->to_date);
+                                                                    $days = $from->diffInDays($to) + 1;
+                                                                @endphp
+                                                                <span class="text-info">-{{ number_format($days, 1) }}</span>
+                                                            @endif
+                                                        </td>
+                                                        <td class="py-2">
+                                                            <div class="text-muted small">
+                                                                @if($item->from_date)
+                                                                    {{ \Carbon\Carbon::parse($item->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($item->to_date)->format('d M') }}
+                                                                    @if($item->notes) <span class="mx-1">|</span> {{ \Illuminate\Support\Str::limit($item->notes, 30) }} @endif
+                                                                @else
+                                                                    {{ \Illuminate\Support\Str::limit($item->notes, 50) }}
+                                                                @endif
+                                                            </div>
+                                                        </td>
+                                                        <td class="pe-3 py-2 text-end text-muted">
+                                                            {{ $item->created_at->format('d M, Y') }}
+                                                        </td>
+                                                    </tr>
+                                                    @empty
+                                                    <tr>
+                                                        <td colspan="5" class="text-center py-4 text-muted small">No transactions recorded</td>
+                                                    </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

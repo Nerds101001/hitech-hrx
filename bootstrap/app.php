@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
   ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
     $schedule->command('payroll:auto-generate')->lastDayOfMonth('23:00');
     $schedule->command('leave:accrue')->monthlyOn(1, '00:00');
+    $schedule->command('leave:reset-yearly')->yearlyOn(4, 1, '00:00');
+    $schedule->command('leave:daily-digest')->dailyAt('09:00');
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);

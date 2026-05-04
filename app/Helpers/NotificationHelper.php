@@ -14,23 +14,20 @@ class NotificationHelper
     try {
       $authUser = auth()->user();
 
-      // Retrieve HR admins, HR managers, Admin and the user's reporting manager
-      $hrAdmins = User::with('roles')->whereHas('roles', function ($query) {
-        $query->where('name', 'hr')->orWhere('name', 'admin');
-      })->get();
-
-      $managers = User::with('roles')->whereHas('roles', function ($query) {
-        $query->where('name', 'manager');
-      })->get();
-
-      //Merge HR Admins and managers
-      $hrAdmins = $hrAdmins->merge($managers);
-
+      // Retrieve HR admins, HR managers, Admin
+      $hrAdmins = User::whereHas('roles', function ($query) {
+        $query->whereIn('name', ['hr', 'admin']);
+      })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
 
       $reportingTo = $authUser->reportingTo;
 
-      // Prepare list of users to notify
-      $notifiables = !$reportingTo ? $hrAdmins->merge([auth()->user()])->filter() : $hrAdmins->merge([$reportingTo, auth()->user()])->filter();
+      // Prepare list of users to notify: HR/Admins + Direct Manager
+      $notifiables = $hrAdmins;
+      if ($reportingTo) {
+          $notifiables = $notifiables->push($reportingTo);
+      }
+      
+      $notifiables = $notifiables->filter()->unique('id');
 
       if ($isExceptMe) {
         $notifiables = $notifiables->where('id', '!=', $authUser->id);

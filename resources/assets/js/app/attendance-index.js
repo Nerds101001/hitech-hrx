@@ -361,11 +361,11 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
     $('#detailName').text(name);
     
     let badgeClass = 'teal';
-    if(status === 'Present' || status === 'Full Day') badgeClass = 'teal';
+    if(status === 'Present' || status === 'Full Day' || status === 'Paid Leave') badgeClass = 'teal';
     if(status === 'Late' || status === 'Half Day') badgeClass = 'orange';
     if(status === 'Absent') badgeClass = 'danger';
     if(status === 'Holiday') badgeClass = 'info';
-    if(status === 'Leave') badgeClass = 'purple-vibrant';
+    if(status === 'Leave' || status === 'Unpaid Leave') badgeClass = 'purple-vibrant';
     if(status === 'WFH') badgeClass = 'indigo-vibrant';
     
     $('#detailStatus').html(`<span class="badge bg-label-${badgeClass} px-4 py-2 rounded-pill fw-black text-uppercase ls-1">${status}</span>`);

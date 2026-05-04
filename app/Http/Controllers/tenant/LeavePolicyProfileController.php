@@ -112,6 +112,13 @@ class LeavePolicyProfileController extends Controller
         }
 
         $balance->balance = ($balance->balance ?? 0) + $amount;
+        $balance->accrued_this_year = ($balance->accrued_this_year ?? 0) + $amount;
+        
+        // Custom metadata for audit to capture the reason
+        if ($balance instanceof \OwenIt\Auditing\Contracts\Auditable) {
+            $balance->auditCustomMessage = $reason;
+        }
+
         $balance->save();
 
         Log::info("Manual leave credit of {$amount} days for user {$userId} (leave_type={$leaveTypeId}). Reason: {$reason}");

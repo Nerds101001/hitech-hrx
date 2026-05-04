@@ -437,8 +437,13 @@ class UserDashboardController extends Controller
                 return true;
             });
 
-        $settings = Settings::first();
-        return view('tenant.users.leaves.index', compact('leaves', 'leaveTypes', 'settings'));
+        $leaveBalances = $user->leaveBalances()->with('leaveType')->get();
+        $settings = \App\Models\Settings::first();
+
+        // Use the centralized LeaveHistoryService for a unified history across all pages
+        $leaves = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
+
+        return view('tenant.users.leaves.index', compact('leaves', 'leaveTypes', 'settings', 'leaveBalances'));
     }
 
     public function leaveStore(Request $request)
@@ -498,6 +503,26 @@ class UserDashboardController extends Controller
         NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));
 
         return redirect()->back()->with('success', 'Leave request submitted successfully.');
+    }
+
+    public function leaveCheckAjax(Request $request)
+    {
+        $validated = $request->validate([
+            'leave_type_id' => 'required|exists:leave_types,id',
+            'from_date'     => 'required|date',
+            'to_date'       => 'required|date|after_or_equal:from_date',
+        ]);
+
+        $user = auth()->user();
+        
+        $conflicts = LeavePolicyService::checkConflicts($user, $validated['from_date'], $validated['to_date']);
+        $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date']);
+
+        return response()->json([
+            'success'   => true,
+            'conflicts' => $conflicts,
+            'impact'    => $impact,
+        ]);
     }
 
     public function expenseIndex()

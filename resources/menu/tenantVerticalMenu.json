@@ -325,11 +325,9 @@
       "name": "HR Policies",
       "icon": "menu-icon bx bx-book-content",
       "slug": [
-        "hrpolicies.policies.index",
-        "hrpolicies.policy-categories.index",
-        "hrpolicies.policy-acknowledgments.index"
+        "hr-policies.index",
+        "hr-policies.employee.index"
       ],
-      "addon": "HRPolicies",
       "roles": [
         "admin",
         "hr",
@@ -338,22 +336,17 @@
       ],
       "submenu": [
         {
-          "url": "/hr-policies/policies",
-          "name": "Policies",
+          "url": "/hr-policies",
+          "name": "Manage Policies",
           "icon": "menu-icon bx bx-file-blank",
-          "slug": "hrpolicies.policies.index"
+          "slug": "hr-policies.index",
+          "roles": ["admin", "hr"]
         },
         {
-          "url": "/hr-policies/policy-categories",
-          "name": "Categories",
-          "icon": "menu-icon bx bx-category",
-          "slug": "hrpolicies.policy-categories.index"
-        },
-        {
-          "url": "/hr-policies/policy-acknowledgments",
-          "name": "Acknowledgments",
-          "icon": "menu-icon bx bx-check-circle",
-          "slug": "hrpolicies.policy-acknowledgments.index"
+          "url": "/my-policies",
+          "name": "My Policies",
+          "icon": "menu-icon bx bx-user-check",
+          "slug": "hr-policies.employee.index"
         }
       ]
     },

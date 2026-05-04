@@ -1,0 +1,2 @@
+USE u561220093_app;
+ALTER TABLE classes ADD COLUMN class_type VARCHAR(191) DEFAULT 'Beginner';

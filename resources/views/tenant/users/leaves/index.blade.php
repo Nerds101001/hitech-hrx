@@ -28,33 +28,91 @@
     </div>
 
     {{-- STATS SECTION --}}
+    @php
+        // Find primary paid leave balance (PL, CL, or any paid type)
+        $plBalance = $leaveBalances->where('leaveType.is_paid', true)->first();
+        
+        $totalLeaves = $plBalance ? $plBalance->balance : 0;
+        $usedLeaves = $plBalance ? $plBalance->used : 0;
+        $remainingPL = $totalLeaves - $usedLeaves;
+        
+        $carryForward = $plBalance ? $plBalance->carry_forward_last_year : 0;
+        $accrued = $plBalance ? $plBalance->accrued_this_year : 0;
+
+        // Fallback for existing data
+        if ($totalLeaves > 0 && $carryForward == 0 && $accrued == 0) {
+            $accrued = $totalLeaves;
+        }
+    @endphp
     <div class="row g-4 mb-6">
         <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.05s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-teal"><i class="bx bx-calendar"></i></div>
-                <div class="stat-label">Available Balance</div>
-                <div class="stat-value">{{ auth()->user()->available_leave_count ?? 0 }}</div>
+                <div class="stat-label">Paid Leave Balance</div>
+                <div class="stat-value">{{ number_format($remainingPL, 1) }}</div>
             </div>
         </div>
         <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-blue"><i class="bx bx-list-ul"></i></div>
-                <div class="stat-label">Total Requests</div>
-                <div class="stat-value">{{ $leaves->count() }}</div>
+                <div class="stat-icon-wrap icon-red"><i class="bx bx-log-out-circle"></i></div>
+                <div class="stat-label">Leave Taken</div>
+                <div class="stat-value text-danger">{{ number_format($usedLeaves, 1) }}</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
+            <div class="hitech-stat-card">
+                <div class="stat-icon-wrap icon-blue"><i class="bx bx-list-ul"></i></div>
+                <div class="stat-label">Total Requests</div>
+                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->count() }}</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-amber"><i class="bx bx-time"></i></div>
                 <div class="stat-label">Pending Approval</div>
-                <div class="stat-value">{{ $leaves->where('status', 'pending')->count() }}</div>
+                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'pending')->count() }}</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.25s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-red"><i class="bx bx-x-circle"></i></div>
+                <div class="stat-icon-wrap icon-secondary"><i class="bx bx-x-circle"></i></div>
                 <div class="stat-label">Rejected</div>
-                <div class="stat-value">{{ $leaves->where('status', 'rejected')->count() }}</div>
+                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'rejected')->count() }}</div>
+            </div>
+        </div>
+    </div>
+
+    {{-- DETAILED BREAKDOWN SECTION --}}
+    <div class="card mb-6 hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.22s; border: none; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center mb-4">
+                <div class="hitech-icon-wrap me-3" style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
+                    <i class="bx bx-info-circle fs-4"></i>
+                </div>
+                <h6 class="mb-0 fw-bold" style="color: #1E293B;">Detailed Balance Breakdown (Paid Leave)</h6>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
+                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Carry Forward (Last Year)</div>
+                        <div class="h4 mb-0 fw-bold text-dark">{{ number_format($carryForward, 1) }}</div>
+                        <div class="smallest text-muted mt-1">Brought from prev. fiscal year</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
+                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Accrued (This Year)</div>
+                        <div class="h4 mb-0 fw-bold text-primary">{{ number_format($accrued, 1) }}</div>
+                        <div class="smallest text-muted mt-1">Accumulated in current cycle</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
+                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Net Available</div>
+                        <div class="h4 mb-0 fw-bold text-success">{{ number_format($remainingPL, 1) }}</div>
+                        <div class="smallest text-muted mt-1">After deducting {{ number_format($plBalance ? $plBalance->used : 0, 1) }} used days</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -88,39 +146,50 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($leaves as $leave)
+                        @foreach($leaves as $item)
                         <tr>
-                            <td>
+                            <td class="ps-4 py-3">
                                 <div class="d-flex align-items-center">
-                                    <div class="stat-icon-wrap icon-teal me-3 mb-0" style="width:32px; height:32px; font-size:0.9rem;">
-                                        <i class="bx bx-file"></i>
+                                    <div class="bg-label-primary rounded p-1 me-2">
+                                        <i class="bx {{ $item->is_adjustment ? 'bx-plus-circle' : 'bx-calendar-event' }}"></i>
                                     </div>
-                                    <span class="fw-bold text-dark">{{ $leave->leaveType->name }}</span>
+                                    <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
                                 </div>
                             </td>
                             <td>
                                 <div class="text-dark fw-semibold">
-                                    {{ \Carbon\Carbon::parse($leave->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($leave->to_date)->format('d M, Y') }}
+                                    @if($item->from_date)
+                                        {{ \Carbon\Carbon::parse($item->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($item->to_date)->format('d M, Y') }}
+                                    @else
+                                        <span class="text-muted small">N/A (Adjustment)</span>
+                                    @endif
                                 </div>
                             </td>
                             <td>
-                                @php
-                                    $from = \Carbon\Carbon::parse($leave->from_date);
-                                    $to = \Carbon\Carbon::parse($leave->to_date);
-                                    $days = $from->diffInDays($to) + 1;
-                                @endphp
-                                <span class="badge bg-label-info">{{ $days }} {{ \Illuminate\Support\Str::plural('Day', $days) }}</span>
+                                @if(!$item->is_adjustment)
+                                    @php
+                                        $from = \Carbon\Carbon::parse($item->from_date);
+                                        $to = \Carbon\Carbon::parse($item->to_date);
+                                        $days = $from->diffInDays($to) + 1;
+                                    @endphp
+                                    <span class="badge bg-label-info">{{ $days }} {{ \Illuminate\Support\Str::plural('Day', $days) }}</span>
+                                @else
+                                    <span class="badge {{ $item->amount > 0 ? 'bg-label-success' : 'bg-label-danger' }}">
+                                        {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }} Days
+                                    </span>
+                                @endif
                             </td>
                             <td>
-                                <span class="text-muted" title="{{ $leave->user_notes }}">{{ \Illuminate\Support\Str::limit($leave->user_notes, 25) }}</span>
+                                <span class="text-muted" title="{{ $item->notes }}">{{ \Illuminate\Support\Str::limit($item->notes, 40) }}</span>
                             </td>
-                        <td>
+                            <td>
                                 @php
                                     $statusColor = 'secondary';
-                                    $statusValue = $leave->status->value ?? $leave->status;
-                                    if($statusValue == 'approved') $statusColor = 'success';
+                                    $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : $item->status;
+                                    if($statusValue == 'approved' || $statusValue == 'Processed') $statusColor = 'success';
                                     elseif($statusValue == 'rejected') $statusColor = 'danger';
                                     elseif($statusValue == 'pending') $statusColor = 'warning';
+                                    elseif($statusValue == 'system') $statusColor = 'primary';
                                 @endphp
                                 <span class="badge badge-hitech bg-label-{{ $statusColor }}">
                                     <i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>
@@ -128,17 +197,18 @@
                                 </span>
                             </td>
                             <td>
-                                <small class="text-muted">{{ $leave->created_at->format('d M, H:i') }}</small>
+                                <small class="text-muted">{{ $item->created_at->format('d M, H:i') }}</small>
                             </td>
                         </tr>
-                        @empty
+                        @endforeach
+                        @if($leaves->isEmpty())
                         <tr>
                             <td colspan="6" class="text-center py-5 text-muted">
                                 <i class="bx bx-info-circle fs-2 d-block mb-2 opacity-50"></i>
                                 No leave records found.
                             </td>
                         </tr>
-                        @endforelse
+                        @endif
                     </tbody>
                 </table>
             </div>
@@ -209,6 +279,46 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Conflict and Impact Info (Dynamic) -->
+                        <div class="col-12 d-none" id="leaveImpactSection">
+                            <div class="p-4 rounded-4 border animate__animated animate__fadeIn" id="impactContainer" style="background: #F8FAFC;">
+                                <div class="d-flex align-items-center mb-3">
+                                    <i class="bx bx-analyse text-primary me-2 fs-4"></i>
+                                    <span class="fw-bold text-dark small text-uppercase">Leave Impact Analysis</span>
+                                </div>
+
+                                <!-- Conflicts -->
+                                <div id="conflictAlert" class="d-none mb-4">
+                                    <div class="d-flex align-items-start p-3 bg-label-danger rounded-3 border border-danger border-opacity-25">
+                                        <i class="bx bx-error-circle me-3 fs-3 mt-1"></i>
+                                        <div>
+                                            <div class="fw-bold text-danger mb-1">Team Availability Conflict</div>
+                                            <div class="small text-dark opacity-75" id="conflictText"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Impact Stats -->
+                                <div class="row g-3">
+                                    <div class="col-4 text-center border-end">
+                                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Paid Utilized</div>
+                                        <div class="h4 mb-0 fw-bold text-success" id="impact_paid">0</div>
+                                    </div>
+                                    <div class="col-4 text-center border-end">
+                                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Unpaid (LWP)</div>
+                                        <div class="h4 mb-0 fw-bold text-danger" id="impact_unpaid">0</div>
+                                    </div>
+                                    <div class="col-4 text-center">
+                                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Balance After</div>
+                                        <div class="h4 mb-0 fw-bold text-primary" id="impact_remaining">0</div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 pt-3 border-top text-center">
+                                    <small class="text-muted italic">System automatically calculates paid vs unpaid based on your current PL balance.</small>
+                                </div>
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <label for="from_date" class="form-label-hitech">Start Date</label>
                             <input type="date" id="from_date" name="from_date" class="form-control form-control-hitech" min="{{ date('Y-m-d') }}" required>
@@ -248,10 +358,59 @@ document.addEventListener('DOMContentLoaded', function() {
     const proofMsg = document.getElementById('proof_msg');
     const docInput = document.getElementById('document');
     
-    // Policy Entitlement Card Elements
-    const policyCard = document.getElementById('policyEntitlementCard');
-    const wfhLabel = document.getElementById('policy_wfh_days');
-    const offLabel = document.getElementById('policy_off_days');
+    // Impact Section Elements
+    const impactSection = document.getElementById('leaveImpactSection');
+    const conflictAlert = document.getElementById('conflictAlert');
+    const conflictText = document.getElementById('conflictText');
+    const impactPaid = document.getElementById('impact_paid');
+    const impactUnpaid = document.getElementById('impact_unpaid');
+    const impactRemaining = document.getElementById('impact_remaining');
+
+    async function checkLeaveImpact() {
+        const typeId = typeSelect.value;
+        const fromDate = fromDateInput.value;
+        const toDate = toDateInput.value;
+
+        if (typeId && fromDate && toDate) {
+            try {
+                const response = await fetch('{{ route("user.leaves.check_impact") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        leave_type_id: typeId,
+                        from_date: fromDate,
+                        to_date: toDate
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    impactSection.classList.remove('d-none');
+                    
+                    // Update Impact Stats
+                    impactPaid.innerText = data.impact.paid_utilized.toFixed(1);
+                    impactUnpaid.innerText = data.impact.unpaid_utilized.toFixed(1);
+                    impactRemaining.innerText = data.impact.remaining_balance.toFixed(1);
+
+                    // Update Conflicts
+                    if (data.conflicts.length > 0) {
+                        conflictAlert.classList.remove('d-none');
+                        const conflictList = data.conflicts.map(c => `<strong>${c.user_name}</strong> is on leave (${c.from} - ${c.to})`).join('<br>');
+                        conflictText.innerHTML = `Note: The following team members are already on leave during this period:<br>${conflictList}`;
+                    } else {
+                        conflictAlert.classList.add('d-none');
+                    }
+                }
+            } catch (error) {
+                console.error('Impact check failed:', error);
+            }
+        } else {
+            impactSection.classList.add('d-none');
+        }
+    }
 
     function updateLeaveDetails() {
         const typeId = typeSelect.value;
@@ -292,16 +451,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const mm = String(start.getMonth() + 1).padStart(2, '0');
                 const dd = String(start.getDate()).padStart(2, '0');
                 toDateInput.value = `${yyyy}-${mm}-${dd}`;
-                
-                // Show a helpful toast if window.showSuccessSwal is available
-                if (typeof window.showSuccessSwal === 'function') {
-                    window.showSuccessSwal('Duration Auto-filled', `Applied ${days} days for ${selectedType.code}.`);
-                }
             }
+            
+            // Trigger Impact Check
+            checkLeaveImpact();
         } else {
             proofStar.classList.add('d-none');
             docInput.removeAttribute('required');
             policyCard.classList.add('d-none');
+            impactSection.classList.add('d-none');
         }
     }
 
@@ -317,10 +475,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 toDateInput.value = this.value;
             }
         }
+        updateLeaveDetails();
     });
 
+    toDateInput.addEventListener('change', updateLeaveDetails);
+
     if (typeSelect) typeSelect.addEventListener('change', updateLeaveDetails);
-    fromDateInput.addEventListener('change', updateLeaveDetails);
 
     // Initial state
     if (typeSelect && typeSelect.value) {

@@ -65,6 +65,16 @@ return [
       'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
     ],
 
+    'gmail' => [
+      'transport' => 'smtp',
+      'host' => 'smtp.gmail.com',
+      'port' => 465,
+      'encryption' => 'ssl',
+      'username' => env('MAIL_GMAIL_USERNAME'),
+      'password' => env('MAIL_GMAIL_PASSWORD'),
+      'timeout' => null,
+    ],
+
     'log' => [
       'transport' => 'log',
       'channel' => env('MAIL_LOG_CHANNEL'),
@@ -78,6 +88,7 @@ return [
       'transport' => 'failover',
       'mailers' => [
         'smtp',
+        'gmail',
         'log',
       ],
     ],

@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class LeaveBalance extends Model
+class LeaveBalance extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     protected $fillable = [
         'user_id',
@@ -21,6 +23,14 @@ class LeaveBalance extends Model
         'balance' => 'float',
         'used'    => 'float',
     ];
+
+    public function transformAudit(array $data): array
+    {
+        if (isset($this->auditCustomMessage)) {
+            $data['user_agent'] = $this->auditCustomMessage;
+        }
+        return $data;
+    }
 
     public function user()
     {

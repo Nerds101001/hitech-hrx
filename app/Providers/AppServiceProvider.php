@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use App\Enums\UserAccountStatus;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -103,6 +104,20 @@ class AppServiceProvider extends ServiceProvider
               if ($pendingProbations->isNotEmpty()) {
                   $view->with('globalPendingProbations', $pendingProbations);
               }
+          }
+
+          // 3. Pending Mandatory HR Policies (For ACTIVE Users Only)
+          if ($user->status === \App\Enums\UserAccountStatus::ACTIVE) {
+            $pendingPolicies = \App\Models\HRPolicy::where('is_active', true)
+                ->where('show_as_popup', true)
+                ->whereDoesntHave('acknowledgments', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                })
+                ->get();
+            
+            if ($pendingPolicies->isNotEmpty()) {
+                $view->with('globalPendingPolicies', $pendingPolicies);
+            }
           }
       }
     });

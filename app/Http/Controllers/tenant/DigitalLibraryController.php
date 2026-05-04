@@ -18,13 +18,55 @@ class DigitalLibraryController extends Controller
         $category = $request->get('category');
         $query = LibraryFile::query();
 
-        if ($category) {
+        if ($category && $category != 'all') {
             $query->where('category', $category);
         }
 
-        $libraryFiles = $query->orderBy('created_at', 'desc')->paginate(12);
+        $allFiles = $query->orderBy('created_at', 'desc')->get();
+        
+        // Grouping logic for the Matrix View - Normalized to match taxonomy names
+        $groupedFiles = $allFiles->groupBy(fn($f) => strtolower($f->brand))->map(function ($brandFiles) {
+            return $brandFiles->groupBy('sub_category')->map(function ($subCatFiles) {
+                return $subCatFiles->groupBy('title');
+            });
+        });
 
-        return view('tenant.digital-library.index', compact('libraryFiles', 'category'));
+        // Fetch dynamic taxonomy from DB
+        $brands = \App\Models\LibraryTaxonomy::where('type', 'brand')->orderBy('order')->get();
+        $taxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->get()->groupBy('parent_id');
+
+        return view('tenant.digital-library.index', compact('groupedFiles', 'category', 'brands', 'taxonomies'));
+    }
+
+    public function addTaxonomy(Request $request)
+    {
+        $request->validate([
+            'type' => 'required|in:brand,category',
+            'name' => 'required|string|max:255',
+            'parent_id' => 'nullable|exists:library_taxonomies,id',
+            'color' => 'nullable|string',
+            'description' => 'nullable|string'
+        ]);
+
+        try {
+            $taxonomy = \App\Models\LibraryTaxonomy::create($request->all());
+            return response()->json(['message' => 'Archive structure updated.', 'data' => $taxonomy]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to add: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function updateTaxonomy(Request $request, $id)
+    {
+        $taxonomy = \App\Models\LibraryTaxonomy::findOrFail($id);
+        $taxonomy->update($request->only(['name', 'color', 'description', 'order']));
+        return response()->json(['message' => 'Archive updated.']);
+    }
+
+    public function deleteTaxonomy($id)
+    {
+        \App\Models\LibraryTaxonomy::findOrFail($id)->delete();
+        return response()->json(['message' => 'Archive pruned.']);
     }
 
     /**
@@ -53,21 +95,26 @@ class DigitalLibraryController extends Controller
             }
 
             $factory = OpenAI::factory();
-            $client = $factory->withApiKey(env('OPENAI_API_KEY'))
-                              ->withBaseUri(env('OPENAI_BASE_URL', 'https://integrate.api.nvidia.com/v1'))
+            $client = $factory->withApiKey(config('openai.api_key'))
+                              ->withBaseUri(config('openai.base_url'))
                               ->make();
 
             // Request AI Audit
             $resp = $client->chat()->create([
-                'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
+                'model' => config('openai.ai_model'),
                 'messages' => [
                     ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
                     Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training).
+                    Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
+                    Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
                     
                     STRICT INSTRUCTIONS:
                     - You MUST identify the document type.
+                    - Identify the BRAND from the list above. If not found, use 'HITECH'.
+                    - Identify the SUB-CATEGORY from the list above. If not explicitly found, categorize it into the most logical one.
                     - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate MOM), do NOT reject it.
-                    - Extract: CATEGORY|NAME|DATE|CRUX
+                    - Extract: BRAND|SUB_CATEGORY|CATEGORY|NAME|DATE|CRUX
+                    - CATEGORY MUST be one of (TDS, SDS, MOM, LEARN).
                     - CRUX Rules (Must be 5-6 lines total, PLAIN TEXT ONLY):
                       - NO markdown, NO asterisks, NO bolding, NO numbered lists.
                       - Lines 1-3: Clear Product Description.
@@ -98,10 +145,12 @@ class DigitalLibraryController extends Controller
             
             return response()->json([
                 'success' => true,
-                'category' => trim($parts[0] ?? 'TDS'),
-                'name' => trim($parts[1] ?? $originalName),
-                'date' => trim($parts[2] ?? date('Y-m-d')),
-                'summary' => trim($parts[3] ?? (count($parts) > 1 ? end($parts) : 'Technicial summary extracted.')),
+                'brand' => trim($parts[0] ?? 'HITECH'),
+                'sub_category' => trim($parts[1] ?? 'Industrial Assets'),
+                'category' => trim($parts[2] ?? 'TDS'),
+                'name' => trim($parts[3] ?? $originalName),
+                'date' => trim($parts[4] ?? date('Y-m-d')),
+                'summary' => trim($parts[5] ?? (count($parts) > 1 ? end($parts) : 'Technical summary extracted.')),
                 'temp_name' => $originalName,
                 'is_duplicate' => !!$duplicate,
                 'duplicate_id' => $duplicate?->id
@@ -168,8 +217,15 @@ class DigitalLibraryController extends Controller
         }
 
         // --- Final Persistence ---
+        $brandName = $request->brand ?? 'HITECH';
+        // Match existing taxonomy name case if possible
+        $taxBrand = \App\Models\LibraryTaxonomy::where('type', 'brand')->where('name', 'like', $brandName)->first();
+        if ($taxBrand) $brandName = $taxBrand->name;
+
         LibraryFile::create([
             'title' => $productName,
+            'brand' => $brandName,
+            'sub_category' => $request->sub_category ?? 'Industrial Assets',
             'file_path' => $path,
             'youtube_url' => $youtubeUrl,
             'category' => $category,
@@ -200,8 +256,8 @@ class DigitalLibraryController extends Controller
         $rejectedCount = 0;
 
         $factory = OpenAI::factory();
-        $client = $factory->withApiKey(env('OPENAI_API_KEY'))
-                          ->withBaseUri(env('OPENAI_BASE_URL', 'https://integrate.api.nvidia.com/v1'))
+        $client = $factory->withApiKey(config('openai.api_key'))
+                          ->withBaseUri(config('openai.base_url'))
                           ->make();
 
         foreach ($request->file('files') as $file) {
@@ -212,7 +268,7 @@ class DigitalLibraryController extends Controller
                     $text = mb_substr($pdf->getText(), 0, 3000);
 
                     $verify = $client->chat()->create([
-                        'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
+                        'model' => config('openai.ai_model'),
                         'messages' => [
                             ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/INVALID). Reply ONLY with the key."],
                             ['role' => 'user', 'content' => "Text: " . $text],
@@ -228,7 +284,7 @@ class DigitalLibraryController extends Controller
                         $path = $file->storeAs('digital-library', $filename, 'r2');
 
                         $extract = $client->chat()->create([
-                            'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
+                            'model' => config('openai.ai_model'),
                             'messages' => [
                                 ['role' => 'system', 'content' => "Extract 5-6 lines summary. PLAIN TEXT ONLY. NO BOLDING, NO ASTERISKS, NO LISTS.
                                 - Lines 1-4: Product Name & description (Detailed).
@@ -306,8 +362,8 @@ class DigitalLibraryController extends Controller
         try {
             // Force NVIDIA NIM Factory pattern to bypass any local OpenAI config conflicts
             $factory = OpenAI::factory();
-            $client = $factory->withApiKey(env('OPENAI_API_KEY'))
-                              ->withBaseUri(env('OPENAI_BASE_URL', 'https://integrate.api.nvidia.com/v1'))
+            $client = $factory->withApiKey(config('openai.api_key'))
+                              ->withBaseUri(config('openai.base_url'))
                               ->make();
 
             // Fetch any custom system instructions from the AI Training center
@@ -332,7 +388,7 @@ USER REQUEST:
 {$userInput}";
 
             $response = $client->chat()->create([
-                'model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
+                'model' => config('openai.ai_model'),
                 'messages' => [
                     ['role' => 'system', 'content' => $systemPrompt],
                     ['role' => 'user', 'content' => $userInput],
@@ -355,5 +411,30 @@ USER REQUEST:
         
         // 🔒 SECURITY FIX: Use signed temporary URLs for private R2 storage
         return redirect()->away(Storage::disk('r2')->temporaryUrl($file->file_path, now()->addMinutes(30)));
+    }
+
+    /**
+     * Administrative Reassignment
+     * Moves all files associated with a product title to a new Brand/Category.
+     */
+    public function reassign(Request $request)
+    {
+        $request->validate([
+            'current_title' => 'required',
+            'new_brand' => 'required',
+            'new_sub_category' => 'required'
+        ]);
+
+        try {
+            LibraryFile::where('title', $request->current_title)
+                ->update([
+                    'brand' => $request->new_brand,
+                    'sub_category' => $request->new_sub_category
+                ]);
+
+            return response()->json(['message' => 'Product successfully relocated within the vault.']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Reassignment failed: ' . $e->getMessage()], 500);
+        }
     }
 }

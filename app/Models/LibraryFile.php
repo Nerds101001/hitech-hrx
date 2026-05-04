@@ -12,6 +12,8 @@ class LibraryFile extends Model
 
     protected $fillable = [
         'title',
+        'brand',
+        'sub_category',
         'product_name',
         'category',
         'youtube_url',

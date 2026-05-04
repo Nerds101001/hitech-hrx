@@ -12,10 +12,11 @@ Route::middleware([
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
 
   // Leaves
-  Route::prefix('leaves')->name('leaves.')->group(function () {
-    Route::get('/', [UserDashboardController::class, 'leaveIndex'])->name('index');
-    Route::post('/store', [UserDashboardController::class, 'leaveStore'])->name('store');
-  });
+    Route::prefix('leaves')->name('leaves.')->group(function () {
+     Route::get('/', [UserDashboardController::class, 'leaveIndex'])->name('index');
+     Route::post('/store', [UserDashboardController::class, 'leaveStore'])->name('store');
+     Route::post('/check-impact', [UserDashboardController::class, 'leaveCheckAjax'])->name('check_impact');
+   });
 
   // Expenses
   Route::prefix('expenses')->name('expenses.')->group(function () {

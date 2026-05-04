@@ -46,4 +46,6 @@ return [
     */
 
     'request_timeout' => env('OPENAI_REQUEST_TIMEOUT', 30),
+
+    'ai_model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
 ];

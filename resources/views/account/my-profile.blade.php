@@ -239,6 +239,7 @@
                         <!-- Hidden File Input for Profile Picture Upload -->
                         <form id="profilePictureForm" action="{{ route('employee.changeEmployeeProfilePicture') }}" method="POST" enctype="multipart/form-data" style="display: none;">
                             @csrf
+                            <input type="hidden" name="userId" value="{{ $user->id }}">
                             <input type="file" id="file" name="file" accept="image/*" onchange="this.form.submit()">
                         </form>
                     </div>
@@ -704,38 +705,151 @@
 
                         <!-- Leave Balances Section -->
                         @php
-                            $leaveBalances = $user->userAvailableLeaves()->with('leaveType')->get();
-                            $totalLeaves = $leaveBalances->sum('total_leaves');
-                            $usedLeaves = $leaveBalances->sum('used_leaves');
-                            $remainingLeaves = $leaveBalances->sum('remaining_leaves');
+                            $leaveBalances = $user->leaveBalances;
+                            // Find primary paid leave balance (PL, CL, or any paid type)
+                            $plBalance = $leaveBalances->where('leaveType.is_paid', true)->first();
+                            
+                            $totalLeaves = $plBalance ? $plBalance->balance : 0;
+                            $usedLeaves = $plBalance ? $plBalance->used : 0;
+                            $remainingLeaves = $totalLeaves - $usedLeaves;
+                            
+                            $carryForwardLastYear = $plBalance ? $plBalance->carry_forward_last_year : 0;
+                            $accruedThisYear = $plBalance ? $plBalance->accrued_this_year : 0;
+                            
+                            // Fallback for existing data: if breakdown is 0 but balance > 0, assume it was all accrued this year
+                            if ($totalLeaves > 0 && $carryForwardLastYear == 0 && $accruedThisYear == 0) {
+                                $accruedThisYear = $totalLeaves;
+                            }
+                            
+                            // Monthly breakdown logic
+                            $currentMonthAccrual = 1.0; 
+                            $carryForwardThisYear = max(0, $accruedThisYear - $currentMonthAccrual - $usedLeaves);
                         @endphp
-                        <div class="card mb-4 emp-card border-0">
-                            <div class="card-body p-5">
-                                <div class="d-flex align-items-center mb-4">
+                        <div class="card mb-4 emp-card border-0 overflow-hidden" style="border-radius: 16px;">
+                            <div class="card-header border-0 pb-0 pt-4 px-5 bg-white">
+                                <div class="d-flex align-items-center">
                                     <div class="hitech-icon-wrap me-3" style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
                                         <i class="bx bx-calendar-check fs-4"></i>
                                     </div>
-                                    <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Leave Summary</h6>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Detailed Leave History</h6>
+                                        <small class="text-muted">Fiscal Cycle: April {{ now()->month < 4 ? now()->year - 1 : now()->year }} - March {{ now()->month < 4 ? now()->year : now()->year + 1 }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-5">
+                                <div class="row g-4">
+                                    <!-- Carry Forward Last Year -->
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded-4 text-center border h-100" style="background: #F1F5F9;">
+                                            <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Carry Forward</div>
+                                            <div class="h4 mb-0 fw-bold text-dark">{{ number_format($carryForwardLastYear, 1) }}</div>
+                                            <div class="smallest text-muted mt-1">From Last Year</div>
+                                        </div>
+                                    </div>
+                                    <!-- Accrued This Year -->
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded-4 text-center border h-100" style="background: #E0F2FE;">
+                                            <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Accrued</div>
+                                            <div class="h4 mb-0 fw-bold" style="color: #0369A1;">{{ number_format($accruedThisYear, 1) }}</div>
+                                            <div class="smallest text-muted mt-1">Earned This Year</div>
+                                        </div>
+                                    </div>
+                                    <!-- Used Leaves -->
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded-4 text-center border h-100" style="background: #FEF2F2;">
+                                            <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Leave Taken</div>
+                                            <div class="h4 mb-0 fw-bold text-danger">{{ number_format($usedLeaves, 1) }}</div>
+                                            <div class="smallest text-muted mt-1">Consumed to date</div>
+                                        </div>
+                                    </div>
+                                    <!-- Total Available -->
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded-4 text-center border h-100" style="background: #127464; color: white;">
+                                            <div class="smallest text-white bg-white bg-opacity-20 rounded-pill px-2 py-0 fw-bold text-uppercase mb-1 mx-auto d-inline-block" style="font-size: 0.55rem;">Available</div>
+                                            <div class="h4 mb-0 fw-bold text-white">{{ number_format($remainingLeaves, 1) }}</div>
+                                            <div class="smallest text-white text-opacity-75 mt-1">Combined Total</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Usage Bar -->
+                                <div class="mt-5">
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="small fw-bold text-dark">Leave Consumption Progress</span>
+                                        <span class="small fw-bold text-muted">{{ number_format($usedLeaves, 1) }} used out of {{ number_format($totalLeaves, 1) }} allocated</span>
+                                    </div>
+                                    <div class="progress" style="height: 10px; border-radius: 5px;">
+                                        <div class="progress-bar" role="progressbar" style="width: {{ $totalLeaves > 0 ? ($usedLeaves / $totalLeaves) * 100 : 0 }}%; background-color: #127464;" aria-valuenow="{{ $usedLeaves }}" aria-valuemin="0" aria-valuemax="{{ $totalLeaves }}"></div>
+                                    </div>
                                 </div>
 
-                                <div class="row g-6 mb-0">
-                                    <div class="col-md-4">
-                                        <div class="p-3 rounded-3" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
-                                            <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Total Allocated</p>
-                                            <h5 class="mb-0 fw-bold text-dark">{{ number_format($totalLeaves, 1) }}</h5>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="p-3 rounded-3" style="background: #FFF7ED; border: 1px solid #FED7AA;">
-                                            <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Total Used</p>
-                                            <h5 class="mb-0 fw-bold" style="color: #C2410C;">{{ number_format($usedLeaves, 1) }}</h5>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="p-3 rounded-3" style="background: #ECFDF3; border: 1px solid #BBF7D0;">
-                                            <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Available Balance</p>
-                                            <h5 class="mb-0 fw-bold" style="color: #15803D;">{{ number_format($remainingLeaves, 1) }}</h5>
-                                        </div>
+                                <!-- Transaction Log Table -->
+                                <div class="mt-5 pt-4 border-top">
+                                    <h6 class="fw-bold mb-4 d-flex align-items-center">
+                                        <i class="bx bx-list-ul me-2 text-teal"></i> Detailed Transaction Log
+                                    </h6>
+                                    <div class="table-responsive rounded-3 border">
+                                        <table class="table table-sm table-hover mb-0 align-middle">
+                                            <thead class="bg-light">
+                                                <tr>
+                                                    <th class="ps-3 py-2 small fw-bold text-uppercase">Event</th>
+                                                    <th class="py-2 small fw-bold text-uppercase">Type</th>
+                                                    <th class="py-2 small fw-bold text-uppercase text-center">Amount</th>
+                                                    <th class="py-2 small fw-bold text-uppercase">Reason / Period</th>
+                                                    <th class="pe-3 py-2 small fw-bold text-uppercase text-end">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody style="font-size: 0.85rem;">
+                                                @forelse($leaveHistory as $item)
+                                                <tr>
+                                                    <td class="ps-3 py-2">
+                                                        <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
+                                                    </td>
+                                                    <td class="py-2">
+                                                        @php
+                                                            $typeColor = 'secondary';
+                                                            if($item->type == 'Credit' || $item->type == 'Accrued' || $item->type == 'Carry Forward') $typeColor = 'success';
+                                                            elseif($item->type == 'Request') $typeColor = 'info';
+                                                            elseif($item->type == 'Deduction') $typeColor = 'danger';
+                                                        @endphp
+                                                        <span class="badge bg-label-{{ $typeColor }} py-0 px-2" style="font-size: 0.7rem;">{{ $item->type }}</span>
+                                                    </td>
+                                                    <td class="py-2 text-center fw-bold">
+                                                        @if($item->is_adjustment)
+                                                            <span class="{{ $item->amount > 0 ? 'text-success' : 'text-danger' }}">
+                                                                {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }}
+                                                            </span>
+                                                        @else
+                                                            @php
+                                                                $from = \Carbon\Carbon::parse($item->from_date);
+                                                                $to = \Carbon\Carbon::parse($item->to_date);
+                                                                $days = $from->diffInDays($to) + 1;
+                                                            @endphp
+                                                            <span class="text-info">-{{ number_format($days, 1) }}</span>
+                                                        @endif
+                                                    </td>
+                                                    <td class="py-2">
+                                                        <div class="text-muted small">
+                                                            @if($item->from_date)
+                                                                {{ \Carbon\Carbon::parse($item->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($item->to_date)->format('d M') }}
+                                                                @if($item->notes) <span class="mx-1">|</span> {{ \Illuminate\Support\Str::limit($item->notes, 30) }} @endif
+                                                            @else
+                                                                {{ \Illuminate\Support\Str::limit($item->notes, 50) }}
+                                                            @endif
+                                                        </div>
+                                                    </td>
+                                                    <td class="pe-3 py-2 text-end text-muted">
+                                                        {{ $item->created_at->format('d M, Y') }}
+                                                    </td>
+                                                </tr>
+                                                @empty
+                                                <tr>
+                                                    <td colspan="5" class="text-center py-4 text-muted small">No transactions recorded</td>
+                                                </tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
                             </div>
@@ -1589,24 +1703,33 @@
 
         function loadBankDetails() {
             const bank = user.bank_account || user.bankAccount;
-            if(!user || !bank) {
-                $('#bankName, #bankCode, #accountName, #accountNumber, #confirmAccountNumber, #branchName, #branchCode').val('');
+            const $jq = window.jQuery;
+            if(!user || !bank || !$jq) {
+                if ($jq) {
+                    $jq('#bankName, #bankCode, #accountName, #accountNumber, #confirmAccountNumber, #branchName, #branchCode').val('');
+                }
                 return;
             }
-            $('#bankName').val(bank.bank_name || '');
-            $('#bankCode').val(bank.bank_code || '');
-            $('#accountName').val(bank.account_name || '');
-            $('#accountNumber').val(bank.account_number || '');
-            $('#confirmAccountNumber').val(bank.account_number || '');
-            $('#branchName').val(bank.branch_name || '');
-            $('#branchCode').val(bank.branch_code || '');
+            $jq('#bankName').val(bank.bank_name || '');
+            $jq('#bankCode').val(bank.bank_code || '');
+            $jq('#accountName').val(bank.account_name || '');
+            $jq('#accountNumber').val(bank.account_number || '');
+            $jq('#confirmAccountNumber').val(bank.account_number || '');
+            $jq('#branchName').val(bank.branch_name || '');
+            $jq('#branchCode').val(bank.branch_code || '');
         }
 
         // Initialize on Load
         document.addEventListener('DOMContentLoaded', () => {
-            if ($('#editBankAccountModal').length) {
-                $('#editBankAccountModal').on('show.bs.modal', loadBankDetails);
-            }
+            const timer = setInterval(() => {
+                if (window.jQuery) {
+                    clearInterval(timer);
+                    const $jq = window.jQuery;
+                    if ($jq('#editBankAccountModal').length) {
+                        $jq('#editBankAccountModal').on('show.bs.modal', loadBankDetails);
+                    }
+                }
+            }, 100);
         });
     </script>
 @endsection

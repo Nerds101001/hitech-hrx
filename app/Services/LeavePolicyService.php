@@ -153,16 +153,27 @@ class LeavePolicyService
             return null;
         }
 
-        if ($isCarryForward) {
-            // Check Accrued Balance
+        // --- 4. Unified Paid Pool Logic ---
+        $isPaidType = $leaveType->is_paid;
+        $checkLeaveTypeId = $leaveTypeId;
+
+        if ($isPaidType) {
+            $plType = \App\Models\LeaveType::where('code', 'PL')->first();
+            if ($plType) {
+                $checkLeaveTypeId = $plType->id;
+            }
+        }
+
+        if ($isCarryForward || $isPaidType) {
+            // Check Accrued Balance from the unified pool (PL) if it's a paid type
             $balanceRecord = LeaveBalance::where('user_id', $user->id)
-                ->where('leave_type_id', $leaveTypeId)
+                ->where('leave_type_id', $checkLeaveTypeId)
                 ->first();
             $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
             
             // Subtract pending requests from available balance
             $pendingRequests = LeaveRequest::where('user_id', $user->id)
-                ->where('leave_type_id', $leaveTypeId)
+                ->where('leave_type_id', $leaveTypeId) // Original type for pending check
                 ->where('status', 'pending')
                 ->get();
             
@@ -170,12 +181,16 @@ class LeavePolicyService
             foreach ($pendingRequests as $pr) {
                 $p_from = $pr->from_date instanceof Carbon ? $pr->from_date : Carbon::parse($pr->from_date);
                 $p_to = $pr->to_date instanceof Carbon ? $pr->to_date : Carbon::parse($pr->to_date);
-
                 $pendingDays += self::calculateWorkingDays($user, $leaveTypeId, $p_from->toDateString(), $p_to->toDateString());
             }
             
-            if (($available - $pendingDays) < $workingDays) {
-                return "Insufficient leave balance. Available: " . ($available - $pendingDays) . " day(s).";
+            $netAvailable = $available - $pendingDays;
+
+            // Note: We allow submission even if balance is insufficient for Paid types, 
+            // because they will just be marked as "unpaid" during approval/payroll.
+            // But we still return a warning if it's explicitly a strict rule.
+            if ($netAvailable < $workingDays && !$isPaidType) {
+                 return "Insufficient leave balance. Available: " . $netAvailable . " day(s).";
             }
         } else {
             // Check Monthly/Yearly Quota (Non-carry forward)
@@ -194,14 +209,39 @@ class LeavePolicyService
             }
 
             if ($rule->max_per_year) {
-                $usedThisYear = (clone $base)->whereYear('from_date', $from->year)->count();
+                [$startOfYear, $endOfYear] = self::getLeaveYearRange($from);
+                $usedThisYear = (clone $base)
+                    ->where('from_date', '>=', $startOfYear->toDateString())
+                    ->where('from_date', '<=', $endOfYear->toDateString())
+                    ->count();
                 if (($usedThisYear + $workingDays) > $rule->max_per_year) {
-                    return "Annual limit exceeded. Yearly quota is {$rule->max_per_year}.";
+                    return "Annual limit exceeded. Yearly quota for the April-March cycle is {$rule->max_per_year}.";
                 }
             }
         }
 
         return null;
+    }
+
+    /**
+     * Get the start and end dates for the leave year (April to March).
+     */
+    public static function getLeaveYearRange($date = null): array
+    {
+        $date = $date ? Carbon::parse($date) : now();
+        $year = $date->year;
+        $month = $date->month;
+
+        // April (4) to March (3) cycle
+        if ($month < 4) {
+            $start = Carbon::createFromDate($year - 1, 4, 1)->startOfDay();
+            $end   = Carbon::createFromDate($year, 3, 31)->endOfDay();
+        } else {
+            $start = Carbon::createFromDate($year, 4, 1)->startOfDay();
+            $end   = Carbon::createFromDate($year + 1, 3, 31)->endOfDay();
+        }
+
+        return [$start, $end];
     }
 
     /**
@@ -280,42 +320,58 @@ class LeavePolicyService
         return true;
     }
 
-    /**
-     * Deduct short leave balance and create an audit log.
-     */
-    public static function deductShortLeave(User $user, $date): bool
+    public static function checkConflicts(User $user, string $fromDate, string $toDate): array
     {
-        $date = $date instanceof Carbon ? $date : Carbon::parse($date);
+        $conflicts = LeaveRequest::where('status', LeaveRequestStatus::APPROVED)
+            ->where('from_date', '<=', $toDate)
+            ->where('to_date', '>=', $fromDate)
+            ->whereHas('user', function($q) use ($user) {
+                $q->where('team_id', $user->team_id)
+                  ->where('id', '!=', $user->id);
+            })
+            ->with('user')
+            ->get();
+
+        return $conflicts->map(function($c) {
+            $from = $c->from_date instanceof Carbon ? $c->from_date : Carbon::parse($c->from_date);
+            $to = $c->to_date instanceof Carbon ? $c->to_date : Carbon::parse($c->to_date);
+            return [
+                'user_name' => $c->user->getFullName(),
+                'from' => $from->format('d M'),
+                'to' => $to->format('d M'),
+            ];
+        })->toArray();
+    }
+
+    public static function getBalanceImpact(User $user, int $leaveTypeId, string $fromDate, string $toDate): array
+    {
+        $leaveType = \App\Models\LeaveType::find($leaveTypeId);
+        $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate);
         
-        // 1. Find the Short Leave Type
-        $shortLeaveType = \App\Models\LeaveType::where('is_short_leave', true)->first();
-        if (!$shortLeaveType) {
-            \Illuminate\Support\Facades\Log::warning("No Short Leave type defined for tenant {$user->tenant_id}.");
-            return false;
-        }
-
-        // 2. Decrement Balance
-        $balance = \App\Models\LeaveBalance::where('user_id', $user->id)
-            ->where('leave_type_id', $shortLeaveType->id)
+        // Paid leaves consume from PL balance
+        $isPaidType = $leaveType ? $leaveType->is_paid : false;
+        
+        $plType = \App\Models\LeaveType::where('code', 'PL')->first();
+        $balanceRecord = LeaveBalance::where('user_id', $user->id)
+            ->where('leave_type_id', $plType->id)
             ->first();
-
-        if ($balance) {
-            $balance->used += 1; // Count as 1 occurrence
-            $balance->save();
+            
+        $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
+        
+        // Only paid types deduct from the paid pool
+        if ($isPaidType) {
+            $paidUtilized = min($workingDays, $available);
+            $unpaidUtilized = max(0, $workingDays - $available);
+        } else {
+            $paidUtilized = 0;
+            $unpaidUtilized = $workingDays;
         }
-
-        // 3. Create a phantom LeaveRequest for audit/tracking
-        \App\Models\LeaveRequest::create([
-            'user_id'       => $user->id,
-            'leave_type_id' => $shortLeaveType->id,
-            'from_date'     => $date->toDateString(),
-            'to_date'       => $date->toDateString(),
-            'reason'        => 'Auto-generated for Late Waiver (Short Leave Policy)',
-            'status'        => \App\Enums\LeaveRequestStatus::APPROVED,
-            'approved_by_id' => 1, // System Approved
-            'tenant_id'     => $user->tenant_id,
-        ]);
-
-        return true;
+        
+        return [
+            'total_days' => $workingDays,
+            'paid_utilized' => $paidUtilized,
+            'unpaid_utilized' => $unpaidUtilized,
+            'remaining_balance' => max(0, $available - $paidUtilized),
+        ];
     }
 }
