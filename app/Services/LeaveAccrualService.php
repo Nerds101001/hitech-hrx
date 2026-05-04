@@ -23,8 +23,11 @@ class LeaveAccrualService
 
             $rules = $profile->rules;
             foreach ($rules as $rule) {
-                // Calculate monthly increment: use max_per_month if set, else max_per_year/12
-                $monthlyIncrement = $rule->max_per_month ?? ($rule->max_per_year ? ($rule->max_per_year / 12) : 0);
+                // Calculate monthly increment: 
+                // 1. If it's a short leave, use short_leave_per_month
+                // 2. Else use max_per_month or max_per_year/12
+                $monthlyIncrement = $rule->short_leave_per_month ?? $rule->max_per_month ?? ($rule->max_per_year ? ($rule->max_per_year / 12) : 0);
+                
                 if ($monthlyIncrement <= 0) continue;
 
                 $balance = LeaveBalance::firstOrNew([

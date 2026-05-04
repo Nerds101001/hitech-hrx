@@ -16,12 +16,16 @@ class LeaveBalance extends Model implements AuditableContract
         'leave_type_id',
         'balance',
         'used',
+        'carry_forward_last_year',
+        'accrued_this_year',
         'tenant_id',
     ];
 
     protected $casts = [
         'balance' => 'float',
         'used'    => 'float',
+        'carry_forward_last_year' => 'float',
+        'accrued_this_year' => 'float',
     ];
 
     public function transformAudit(array $data): array

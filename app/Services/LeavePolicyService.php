@@ -96,19 +96,19 @@ class LeavePolicyService
 
         // Short Leave Check
         if ($leaveType && $leaveType->is_short_leave) {
-            if ($rule->short_leave_per_month) {
-                $usedThisMonth = LeaveRequest::where('user_id', $user->id)
-                    ->where('leave_type_id', $leaveTypeId)
-                    ->whereIn('status', ['pending', 'approved'])
-                    ->whereYear('from_date', $from->year)
-                    ->whereMonth('from_date', $from->month)
-                    ->count();
-                if ($usedThisMonth >= $rule->short_leave_per_month) {
-                    return "You have reached the monthly short leave limit of {$rule->short_leave_per_month}.";
-                }
+            $limit = ($rule && $rule->short_leave_per_month) ? $rule->short_leave_per_month : 1;
+            $usedThisMonth = LeaveRequest::where('user_id', $user->id)
+                ->where('leave_type_id', $leaveTypeId)
+                ->whereIn('status', ['pending', 'approved'])
+                ->whereYear('from_date', $from->year)
+                ->whereMonth('from_date', $from->month)
+                ->count();
+            
+            if ($usedThisMonth >= $limit) {
+                return "You have reached the monthly short leave limit of {$limit}.";
             }
 
-            if ($hours && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {
+            if ($hours && $rule && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {
                 return "You can only apply for a maximum of {$rule->short_leave_hours} hours for this short leave.";
             }
 
@@ -143,8 +143,8 @@ class LeavePolicyService
                 return "The total entitlement for this leave type is {$totalEntitlement} days ({$wfhEntitlement} WFH + {$offEntitlement} OFF). You are requesting {$workingDays} days.";
             }
 
-            // Exceptions like ML/PL_PAT often bypass standard monthly/yearly quotas
-            if (in_array($code, ['ML', 'PL_PAT'])) {
+            // Exceptions like ML/MAT/PL/PAT often bypass standard monthly/yearly quotas
+            if (in_array($code, ['ML', 'MAT', 'PL_PAT', 'PAT'])) {
                 return null;
             }
         }
@@ -155,42 +155,41 @@ class LeavePolicyService
 
         // --- 4. Unified Paid Pool Logic ---
         $isPaidType = $leaveType->is_paid;
-        $checkLeaveTypeId = $leaveTypeId;
+        $isMaternityPaternity = in_array($code, ['ML', 'MAT', 'PL_PAT', 'PAT']);
 
-        if ($isPaidType) {
-            $plType = \App\Models\LeaveType::where('code', 'PL')->first();
-            if ($plType) {
-                $checkLeaveTypeId = $plType->id;
-            }
-        }
-
-        if ($isCarryForward || $isPaidType) {
-            // Check Accrued Balance from the unified pool (PL) if it's a paid type
-            $balanceRecord = LeaveBalance::where('user_id', $user->id)
-                ->where('leave_type_id', $checkLeaveTypeId)
-                ->first();
-            $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
+        if ($isPaidType && !$isMaternityPaternity && $code !== 'SHL') {
+            // Check Accrued Balance from the unified pool
+            $available = self::getPoolBalance($user);
             
             // Subtract pending requests from available balance
             $pendingRequests = LeaveRequest::where('user_id', $user->id)
-                ->where('leave_type_id', $leaveTypeId) // Original type for pending check
+                ->whereHas('leaveType', function($q) {
+                    $q->where('is_paid', true)->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+                })
                 ->where('status', 'pending')
                 ->get();
             
             $pendingDays = 0;
             foreach ($pendingRequests as $pr) {
-                $p_from = $pr->from_date instanceof Carbon ? $pr->from_date : Carbon::parse($pr->from_date);
-                $p_to = $pr->to_date instanceof Carbon ? $pr->to_date : Carbon::parse($pr->to_date);
-                $pendingDays += self::calculateWorkingDays($user, $leaveTypeId, $p_from->toDateString(), $p_to->toDateString());
+                $pendingDays += self::calculateWorkingDays($user, $pr->leave_type_id, $pr->from_date, $pr->to_date);
             }
             
             $netAvailable = $available - $pendingDays;
 
-            // Note: We allow submission even if balance is insufficient for Paid types, 
-            // because they will just be marked as "unpaid" during approval/payroll.
-            // But we still return a warning if it's explicitly a strict rule.
-            if ($netAvailable < $workingDays && !$isPaidType) {
-                 return "Insufficient leave balance. Available: " . $netAvailable . " day(s).";
+            if ($netAvailable < $workingDays) {
+                 // Note: For paid types, we usually allow submission (will be LWP),
+                 // but we can return a warning or strict rejection if needed.
+                 // The requirement says "used from the pool", so we should check.
+                 // return "Insufficient pool balance. Net Available: " . $netAvailable . " day(s).";
+            }
+        } elseif ($isPaidType && $isMaternityPaternity) {
+            // Check individual balance for Maternity/Paternity
+            $balanceRecord = LeaveBalance::where('user_id', $user->id)
+                ->where('leave_type_id', $leaveTypeId)
+                ->first();
+            $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
+            if ($available < $workingDays && $leaveType->is_strict_rules) {
+                return "Insufficient balance for this category.";
             }
         } else {
             // Check Monthly/Yearly Quota (Non-carry forward)
@@ -343,22 +342,44 @@ class LeavePolicyService
         })->toArray();
     }
 
+    public static function getPoolBalance(User $user): float
+    {
+        // Poolable types are all paid types EXCEPT Maternity, Paternity, and Short Leave
+        $poolableBalances = LeaveBalance::where('user_id', $user->id)
+            ->whereHas('leaveType', function($q) {
+                $q->where('is_paid', true)
+                  ->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+            })
+            ->get();
+
+        $totalBalance = 0;
+        foreach ($poolableBalances as $bal) {
+            $totalBalance += ($bal->balance - $bal->used);
+        }
+
+        return (float)max(0, $totalBalance);
+    }
+
     public static function getBalanceImpact(User $user, int $leaveTypeId, string $fromDate, string $toDate): array
     {
         $leaveType = \App\Models\LeaveType::find($leaveTypeId);
         $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate);
         
-        // Paid leaves consume from PL balance
+        $isMaternityPaternity = $leaveType && in_array($leaveType->code, ['ML', 'MAT', 'PL_PAT', 'PAT']);
+        $isShortLeave = $leaveType && $leaveType->code === 'SHL';
         $isPaidType = $leaveType ? $leaveType->is_paid : false;
+
+        if ($isPaidType && !$isMaternityPaternity && !$isShortLeave) {
+            // Use Unified Pool
+            $available = self::getPoolBalance($user);
+        } else {
+            // Individual balance for exceptions or unpaid types
+            $balanceRecord = LeaveBalance::where('user_id', $user->id)
+                ->where('leave_type_id', $leaveTypeId)
+                ->first();
+            $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
+        }
         
-        $plType = \App\Models\LeaveType::where('code', 'PL')->first();
-        $balanceRecord = LeaveBalance::where('user_id', $user->id)
-            ->where('leave_type_id', $plType->id)
-            ->first();
-            
-        $available = $balanceRecord ? ($balanceRecord->balance - $balanceRecord->used) : 0;
-        
-        // Only paid types deduct from the paid pool
         if ($isPaidType) {
             $paidUtilized = min($workingDays, $available);
             $unpaidUtilized = max(0, $workingDays - $available);

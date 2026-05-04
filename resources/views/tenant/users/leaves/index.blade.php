@@ -29,15 +29,26 @@
 
     {{-- STATS SECTION --}}
     @php
-        // Find primary paid leave balance (PL, CL, or any paid type)
-        $plBalance = $leaveBalances->where('leaveType.is_paid', true)->first();
+        // Define exclusion codes for the unified pool
+        $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+
+        // Find poolable paid leave balances (summing them up)
+        $poolableBalances = $leaveBalances->filter(function($b) use ($excludedCodes) {
+            return $b->leaveType && $b->leaveType->is_paid && !in_array(strtoupper($b->leaveType->code), $excludedCodes);
+        });
         
-        $totalLeaves = $plBalance ? $plBalance->balance : 0;
-        $usedLeaves = $plBalance ? $plBalance->used : 0;
+        $totalLeaves = $poolableBalances->sum('balance');
+        $usedLeaves = $poolableBalances->sum('used');
         $remainingPL = $totalLeaves - $usedLeaves;
         
-        $carryForward = $plBalance ? $plBalance->carry_forward_last_year : 0;
-        $accrued = $plBalance ? $plBalance->accrued_this_year : 0;
+        $carryForward = $poolableBalances->sum('carry_forward_last_year');
+        $accrued = $poolableBalances->sum('accrued_this_year');
+
+        // Find short leave balance
+        $shortLeaveBalance = $leaveBalances->filter(function($b) {
+            return $b->leaveType && $b->leaveType->is_short_leave;
+        })->first();
+        $remainingShort = $shortLeaveBalance ? ($shortLeaveBalance->balance - $shortLeaveBalance->used) : 0;
 
         // Fallback for existing data
         if ($totalLeaves > 0 && $carryForward == 0 && $accrued == 0) {
@@ -45,14 +56,21 @@
         }
     @endphp
     <div class="row g-4 mb-6">
-        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.05s">
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.05s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-teal"><i class="bx bx-calendar"></i></div>
-                <div class="stat-label">Paid Leave Balance</div>
+                <div class="stat-label">Pool Leave</div>
                 <div class="stat-value">{{ number_format($remainingPL, 1) }}</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.08s">
+            <div class="hitech-stat-card">
+                <div class="stat-icon-wrap icon-blue"><i class="bx bx-time-five"></i></div>
+                <div class="stat-label">Short Leave</div>
+                <div class="stat-value">{{ number_format($remainingShort, 1) }}</div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.12s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-red"><i class="bx bx-log-out-circle"></i></div>
                 <div class="stat-label">Leave Taken</div>
@@ -61,7 +79,7 @@
         </div>
         <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-blue"><i class="bx bx-list-ul"></i></div>
+                <div class="stat-icon-wrap icon-secondary"><i class="bx bx-list-ul"></i></div>
                 <div class="stat-label">Total Requests</div>
                 <div class="stat-value">{{ $leaves->where('is_adjustment', false)->count() }}</div>
             </div>
@@ -69,13 +87,13 @@
         <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-amber"><i class="bx bx-time"></i></div>
-                <div class="stat-label">Pending Approval</div>
+                <div class="stat-label">Pending</div>
                 <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'pending')->count() }}</div>
             </div>
         </div>
         <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.25s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-secondary"><i class="bx bx-x-circle"></i></div>
+                <div class="stat-icon-wrap icon-dark"><i class="bx bx-x-circle"></i></div>
                 <div class="stat-label">Rejected</div>
                 <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'rejected')->count() }}</div>
             </div>
@@ -89,7 +107,7 @@
                 <div class="hitech-icon-wrap me-3" style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
                     <i class="bx bx-info-circle fs-4"></i>
                 </div>
-                <h6 class="mb-0 fw-bold" style="color: #1E293B;">Detailed Balance Breakdown (Paid Leave)</h6>
+                <h6 class="mb-0 fw-bold" style="color: #1E293B;">Detailed Balance Breakdown (Pool Leave)</h6>
             </div>
             <div class="row g-4">
                 <div class="col-md-4">
@@ -110,7 +128,7 @@
                     <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
                         <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Net Available</div>
                         <div class="h4 mb-0 fw-bold text-success">{{ number_format($remainingPL, 1) }}</div>
-                        <div class="smallest text-muted mt-1">After deducting {{ number_format($plBalance ? $plBalance->used : 0, 1) }} used days</div>
+                        <div class="smallest text-muted mt-1">After deducting {{ number_format($usedLeaves, 1) }} used days</div>
                     </div>
                 </div>
             </div>
@@ -242,7 +260,27 @@
                     </div>
                     <div class="row g-4">
                         <div class="col-12">
-                            <label for="leave_type_id" class="form-label-hitech">Leave Type</label>
+                            {{-- Default Balance Summary --}}
+                            <div class="row g-3 mb-5">
+                                <div class="col-6">
+                                    <div class="p-3 rounded-4 border bg-white shadow-sm text-center border-success" style="background: rgba(18, 116, 100, 0.05) !important;">
+                                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.65rem;">Pool Balance</div>
+                                        <div class="h5 mb-0 fw-bold text-success">{{ number_format($remainingPL, 1) }} <span class="small fw-normal">Days</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-3 rounded-4 border bg-white shadow-sm text-center border-primary" style="background: rgba(13, 110, 253, 0.05) !important;">
+                                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.65rem;">Short Leave</div>
+                                        <div class="h5 mb-0 fw-bold text-primary">{{ number_format($remainingShort, 1) }} <span class="small fw-normal">Left</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label for="leave_type_id" class="form-label-hitech">
+                                    Leave Type 
+                                    <span id="selected_type_balance" class="badge bg-success ms-2 d-none"></span>
+                                </label>
                             <select id="leave_type_id" name="leave_type_id" class="form-select form-select-hitech" required>
                                 <option value="">Choose leave type...</option>
                                 @foreach($leaveTypes as $type)
@@ -319,13 +357,17 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="from_date" class="form-label-hitech">Start Date</label>
-                            <input type="date" id="from_date" name="from_date" class="form-control form-control-hitech" min="{{ date('Y-m-d') }}" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="to_date" class="form-label-hitech">End Date</label>
-                            <input type="date" id="to_date" name="to_date" class="form-control form-control-hitech" min="{{ date('Y-m-d') }}" required>
+                        <div class="col-12">
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <label for="from_date" class="form-label-hitech">Start Date</label>
+                                    <input type="date" id="from_date" name="from_date" class="form-control form-control-hitech" required>
+                                </div>
+                                <div class="col-6">
+                                    <label for="to_date" class="form-label-hitech">End Date</label>
+                                    <input type="date" id="to_date" name="to_date" class="form-control form-control-hitech" required>
+                                </div>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label for="user_notes" class="form-label-hitech">Reason for Leave</label>
@@ -366,6 +408,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const impactUnpaid = document.getElementById('impact_unpaid');
     const impactRemaining = document.getElementById('impact_remaining');
 
+    // Policy Elements
+    const policyCard = document.getElementById('policyEntitlementCard');
+    const wfhLabel = document.getElementById('policy_wfh_days');
+    const offLabel = document.getElementById('policy_off_days');
+
     async function checkLeaveImpact() {
         const typeId = typeSelect.value;
         const fromDate = fromDateInput.value;
@@ -385,9 +432,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         to_date: toDate
                     })
                 });
-                const data = await response.json();
-
-                if (data.success) {
+                if (response.ok) {
+                    const data = await response.json();
+                    const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
+                    const selectedType = leaveTypesArr.find(t => t.id == typeId);
+                    const isShortLeave = selectedType && selectedType.code === 'SHL';
+                    
                     impactSection.classList.remove('d-none');
                     
                     // Update Impact Stats
@@ -414,7 +464,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateLeaveDetails() {
         const typeId = typeSelect.value;
-        const selectedType = leaveTypes.find(t => t.id == typeId);
+        const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
+        const selectedType = leaveTypesArr.find(t => t.id == typeId);
         const fromDate = fromDateInput.value;
 
         if (selectedType) {
@@ -441,6 +492,38 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 policyCard.classList.add('d-none');
             }
+            
+            // 3. Show Balance
+            const userBalances = @json($leaveBalances);
+            const userBalancesArr = Array.isArray(userBalances) ? userBalances : Object.values(userBalances);
+            const excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+            const isPoolable = selectedType.is_paid && !excludedCodes.includes(selectedType.code.toUpperCase());
+            const isSHL = selectedType.code.toUpperCase() === 'SHL';
+            
+            let availBalance = 0;
+            if (isPoolable) {
+                // Sum all poolable balances
+                availBalance = userBalancesArr.filter(b => {
+                    const bt = leaveTypesArr.find(t => t.id == b.leave_type_id);
+                    return bt && bt.is_paid && !excludedCodes.includes(bt.code.toUpperCase());
+                }).reduce((sum, b) => sum + (parseFloat(b.balance) - parseFloat(b.used)), 0);
+            } else {
+                const balanceData = userBalancesArr.find(b => b.leave_type_id == typeId);
+                availBalance = balanceData ? (parseFloat(balanceData.balance) - parseFloat(balanceData.used)) : 0;
+            }
+
+            const balFormatted = availBalance.toFixed(1);
+            
+            const balEl = document.getElementById('selected_type_balance');
+            if(balEl) {
+                // Only show badge if it's NOT poolable or SHL (since those are in the top summary)
+                if (!isPoolable && !isSHL) {
+                    balEl.innerText = 'Category Balance: ' + balFormatted;
+                    balEl.classList.remove('d-none');
+                } else {
+                    balEl.classList.add('d-none');
+                }
+            }
 
             // 3. Auto-Fill End Date Logic (If Start Date exists)
             if (fromDate && (isMAT || isPAT)) {
@@ -456,6 +539,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Trigger Impact Check
             checkLeaveImpact();
         } else {
+            const balEl = document.getElementById('selected_type_balance');
+            if(balEl) balEl.classList.add('d-none');
+            
             proofStar.classList.add('d-none');
             docInput.removeAttribute('required');
             policyCard.classList.add('d-none');

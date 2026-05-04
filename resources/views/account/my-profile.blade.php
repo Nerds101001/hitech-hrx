@@ -773,6 +773,22 @@
                                     </div>
                                 </div>
                                 
+                                @php
+                                    $shortLeaveBalance = $leaveBalances->where('leaveType.is_short_leave', true)->first();
+                                    $remainingShort = $shortLeaveBalance ? ($shortLeaveBalance->balance - $shortLeaveBalance->used) : 0;
+                                @endphp
+                                @if($shortLeaveBalance)
+                                <div class="row g-4 mt-2">
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded-4 text-center border h-100" style="background: #FFFBEB;">
+                                            <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Short Leave Quota</div>
+                                            <div class="h4 mb-0 fw-bold text-warning">{{ number_format($remainingShort, 1) }}</div>
+                                            <div class="smallest text-muted mt-1">Available this month</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                @endif
+                                
                                 <!-- Usage Bar -->
                                 <div class="mt-5">
                                     <div class="d-flex justify-content-between mb-2">

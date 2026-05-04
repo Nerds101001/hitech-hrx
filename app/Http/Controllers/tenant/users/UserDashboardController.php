@@ -425,17 +425,17 @@ class UserDashboardController extends Controller
                 $code = strtoupper($type->code);
                 
                 // Maternity - Only for Married Females
-                if ($code === 'MAT') {
+                if ($code === 'MAT' || $code === 'ML') {
                     return $isMarried && $gender === 'female';
                 }
                 
                 // Paternity - Only for Married Males
-                if ($code === 'PAT') {
+                if ($code === 'PAT' || $code === 'PL_PAT') {
                     return $isMarried && $gender === 'male';
                 }
                 
                 return true;
-            });
+            })->values();
 
         $leaveBalances = $user->leaveBalances()->with('leaveType')->get();
         $settings = \App\Models\Settings::first();
@@ -450,7 +450,7 @@ class UserDashboardController extends Controller
     {
         $validated = $request->validate([
             'leave_type_id' => 'required|exists:leave_types,id',
-            'from_date'     => 'required|date|after_or_equal:today',
+            'from_date'     => 'required|date',
             'to_date'       => 'required|date|after_or_equal:from_date',
             'user_notes'    => 'required|string|max:1000',
             'document'      => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
@@ -460,15 +460,16 @@ class UserDashboardController extends Controller
         $user = auth()->user();
 
         // 1. Gender Restriction Check
-        if ($leaveType->code === 'MAT' && strtolower($user->gender ?? '') !== 'female') {
+        $code = strtoupper($leaveType->code);
+        if (in_array($code, ['MAT', 'ML']) && strtolower($user->gender ?? '') !== 'female') {
             return redirect()->back()->withErrors(['policy' => 'Maternity leave is only applicable for female employees.'])->withInput();
         }
-        if ($leaveType->code === 'PAT' && strtolower($user->gender ?? '') !== 'male') {
+        if (in_array($code, ['PAT', 'PL_PAT']) && strtolower($user->gender ?? '') !== 'male') {
             return redirect()->back()->withErrors(['policy' => 'Paternity leave is only applicable for male employees.'])->withInput();
         }
 
         // 2. Evidence/Proof Requirement Check
-        if (($leaveType->is_proof_required || in_array($leaveType->code, ['MAT', 'PAT'])) && !$request->hasFile('document')) {
+        if (($leaveType->is_proof_required || in_array($code, ['MAT', 'ML', 'PAT', 'PL_PAT'])) && !$request->hasFile('document')) {
             return redirect()->back()->withErrors(['document' => 'Proof/Evidence document is required for this leave type.'])->withInput();
         }
 
