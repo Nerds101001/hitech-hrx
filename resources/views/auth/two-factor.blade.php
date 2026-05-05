@@ -143,6 +143,15 @@ $customizerHidden = 'customizer-hide';
               <input type="text" name="otp" class="otp-field" maxlength="6" placeholder="000000" autocomplete="one-time-code" required autofocus>
             </div>
 
+            <div class="mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="trust_device" id="trust_device">
+                <label class="form-check-label" for="trust_device" style="font-size: 13px; color: #64748b; font-weight: 600;">
+                  Trust this device for 7 days
+                </label>
+              </div>
+            </div>
+
             <button class="btn btn-primary d-flex align-items-center justify-content-center w-100 hitech-btn-admin" type="submit">
               <span class="btn-text">VERIFY & LOG IN</span>
               <i class="bx bx-check-double ms-2"></i>

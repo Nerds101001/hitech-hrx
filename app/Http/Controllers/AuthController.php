@@ -22,6 +22,8 @@ use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cookie;
+use App\Models\UserTrustedDevice;
 
 class AuthController extends Controller
 {
@@ -84,6 +86,24 @@ class AuthController extends Controller
             $user->update(['locked_until' => null]);
           }
           \Illuminate\Support\Facades\RateLimiter::clear($ipKey);
+
+          // --- TRUSTED DEVICE CHECK ---
+          $deviceToken = Cookie::get('hrx_device_token');
+          if ($deviceToken) {
+              $trusted = UserTrustedDevice::where('user_id', $user->id)
+                  ->where('device_token', hash('sha256', $deviceToken))
+                  ->where('expires_at', '>', now())
+                  ->first();
+
+              if ($trusted) {
+                  $trusted->update(['last_used_at' => now()]);
+                  Auth::login($user, $request->has('rememberMe') && $request->rememberMe === "on");
+                  Log::info("Login: OTP skipped for Trusted Device. User ID: {$user->id}");
+                  
+                  return $this->handlePostLoginRedirect($user);
+              }
+          }
+          // ----------------------------
 
           // Generate OTP
           $otp = rand(100000, 999999);
@@ -201,24 +221,35 @@ class AuthController extends Controller
             $user->save();
 
             Auth::login($user, session('auth_otp_remember'));
+            
+            // --- HANDLE TRUST DEVICE ---
+            if ($request->has('trust_device')) {
+                $rawToken = Str::random(64);
+                $expiry = now()->addDays(7);
+                
+                UserTrustedDevice::create([
+                    'user_id' => $user->id,
+                    'tenant_id' => $user->tenant_id,
+                    'device_token' => hash('sha256', $rawToken),
+                    'device_name' => $request->header('User-Agent'),
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent'),
+                    'expires_at' => $expiry,
+                    'last_used_at' => now(),
+                ]);
+
+                // Set secure cookie for 7 days
+                Cookie::queue('hrx_device_token', $rawToken, 60 * 24 * 7);
+            }
+            // ---------------------------
+
             session()->save(); // Force session persistence
             session()->forget(['auth_otp_user_id', 'auth_otp_remember']);
 
             $userStatus = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
             Log::info("OTP Verified: User ID {$user->id}, Status: {$userStatus}, Redirecting...");
 
-            if (in_array($userStatus, [
-              \App\Enums\UserAccountStatus::ONBOARDING->value,
-              \App\Enums\UserAccountStatus::ONBOARDING_REQUESTED->value
-            ])) {
-              return redirect()->route('onboarding.form');
-            }
-      
-            if ($user->hasRole(['admin', 'hr', 'manager'])) {
-              return redirect()->route('tenant.dashboard')->with('success', 'Welcome back!');
-            } else {
-              return redirect()->route('user.dashboard.index')->with('success', 'Welcome back!');
-            }
+            return $this->handlePostLoginRedirect($user);
         } else {
             // Failure
             $user->increment('otp_attempts');
@@ -553,5 +584,26 @@ class AuthController extends Controller
           }
       }
       abort(403, 'Unauthorized.');
+  }
+
+  /**
+   * Centralized redirection after login
+   */
+  private function handlePostLoginRedirect($user)
+  {
+      $userStatus = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
+      
+      if (in_array($userStatus, [
+          \App\Enums\UserAccountStatus::ONBOARDING->value,
+          \App\Enums\UserAccountStatus::ONBOARDING_REQUESTED->value
+      ])) {
+          return redirect()->route('onboarding.form');
+      }
+
+      if ($user->hasRole(['admin', 'hr', 'manager'])) {
+          return redirect()->route('tenant.dashboard')->with('success', 'Welcome back!');
+      } else {
+          return redirect()->route('user.dashboard.index')->with('success', 'Welcome back!');
+      }
   }
 }
