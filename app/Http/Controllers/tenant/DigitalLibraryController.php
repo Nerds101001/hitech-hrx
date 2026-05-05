@@ -156,88 +156,93 @@ class DigitalLibraryController extends Controller
                 'duplicate_id' => $duplicate?->id
             ]);
         } catch (\Exception $e) {
-            Log::error("DIGITALLIBRARY_AUDIT_ERROR [" . $originalName . "]: " . $e->getMessage());
-            return response()->json(['error' => 'Audit Error: The PDF might be encrypted or malformed. ' . $e->getMessage()], 500);
+            Log::error("DIGITALLIBRARY_AUDIT_ERROR [" . $originalName . "]: " . $e->getMessage(), [
+                'file' => $originalName,
+                'exception' => $e
+            ]);
+            return response()->json(['error' => 'Audit Error: ' . $e->getMessage()], 500);
         }
     }
 
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'file' => 'required_without:youtube_url|nullable|mimes:pdf,mp4,mov,avi|max:51200',
-            'youtube_url' => 'required_without:file|nullable|url',
-            'category' => 'nullable',
-            'overwrite' => 'nullable|boolean'
-        ]);
+        try {
+            $validator = Validator::make($request->all(), [
+                'file' => 'required_without:youtube_url|nullable|mimes:pdf,mp4,mov,avi|max:51200',
+                'youtube_url' => 'required_without:file|nullable|url',
+                'category' => 'nullable',
+                'overwrite' => 'nullable|boolean'
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json(['error' => 'Input Required: ' . $validator->errors()->first()], 422);
-        }
+            if ($validator->fails()) {
+                return response()->json(['error' => 'Input Required: ' . $validator->errors()->first()], 422);
+            }
 
-        $file = $request->file('file');
-        $productName = $request->name ?? ($file ? $file->getClientOriginalName() : 'Hitech Asset');
-        
-        // --- Duplicate Check ---
-        $existing = LibraryFile::where('title', $productName)->first();
-        if ($existing && !$request->overwrite) {
-            return response()->json([
-                'error' => 'DUPLICATE_FOUND',
-                'message' => "A file named '{$productName}' already exists in the vault. Do you want to replace it?",
-                'id' => $existing->id
-            ], 409);
-        }
+            $file = $request->file('file');
+            $productName = $request->name ?? ($file ? $file->getClientOriginalName() : 'Hitech Asset');
+            
+            // --- Duplicate Check ---
+            $existing = LibraryFile::where('title', $productName)->first();
+            if ($existing && !$request->overwrite) {
+                return response()->json([
+                    'error' => 'DUPLICATE_FOUND',
+                    'message' => "A file named '{$productName}' already exists in the vault. Do you want to replace it?",
+                    'id' => $existing->id
+                ], 409);
+            }
 
-        $youtubeUrl = $request->youtube_url;
-        $summary = $request->summary ?? "Processing strategic crux...";
-        $category = $request->category ?? 'SDS';
-        $path = null;
-        $mimeType = $file ? $file->getClientMimeType() : 'video/youtube';
-        $size = $file ? $file->getSize() : 0;
+            $youtubeUrl = $request->youtube_url;
+            $summary = $request->summary ?? "Processing strategic crux...";
+            $category = $request->category ?? 'SDS';
+            $path = null;
+            $mimeType = $file ? $file->getClientMimeType() : 'video/youtube';
+            $size = $file ? $file->getSize() : 0;
 
-        if ($youtubeUrl) {
-            $category = 'Video';
-            $summary = "YouTube Digital Asset: " . $youtubeUrl;
-        } elseif ($file) {
-            // R2 Storage
-            try {
+            if ($youtubeUrl) {
+                $category = 'Video';
+                $summary = "YouTube Digital Asset: " . $youtubeUrl;
+            } elseif ($file) {
+                // R2 Storage
                 $filename = time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('digital-library', $filename, 'r2');
                 
                 // If overwriting, delete old one
                 if ($existing && $request->overwrite) {
                     if ($existing->file_path) {
-                        Storage::disk('r2')->delete($existing->file_path);
+                        try {
+                            Storage::disk('r2')->delete($existing->file_path);
+                        } catch (\Exception $e) { Log::warning("Failed to delete old R2 file: " . $e->getMessage()); }
                     }
                     $existing->delete();
                 }
-            } catch (\Exception $e) {
-                Log::error("DIGITALLIBRARY_STORAGE_ERROR: " . $e->getMessage());
-                return response()->json(['error' => 'Vault Connection Failed: ' . $e->getMessage()], 500);
             }
+
+            // --- Final Persistence ---
+            $brandName = $request->brand ?? 'HITECH';
+            $taxBrand = \App\Models\LibraryTaxonomy::where('type', 'brand')->where('name', 'like', $brandName)->first();
+            if ($taxBrand) $brandName = $taxBrand->name;
+
+            LibraryFile::create([
+                'title' => $productName,
+                'brand' => $brandName,
+                'sub_category' => $request->sub_category ?? 'Industrial Assets',
+                'file_path' => $path,
+                'youtube_url' => $youtubeUrl,
+                'category' => $category,
+                'mime_type' => $mimeType,
+                'size' => $size,
+                'summary' => $summary,
+                'is_public' => true,
+                'tenant_id' => auth()->user()->tenant_id ?? 1,
+                'created_by_id' => auth()->id() ?? 1,
+            ]);
+
+            return response()->json(['success' => 'Asset secured to Hitech Vault. Type: ' . $category]);
+
+        } catch (\Exception $e) {
+            Log::error("DIGITALLIBRARY_STORE_ERROR: " . $e->getMessage());
+            return response()->json(['error' => 'Server Error: ' . $e->getMessage()], 500);
         }
-
-        // --- Final Persistence ---
-        $brandName = $request->brand ?? 'HITECH';
-        // Match existing taxonomy name case if possible
-        $taxBrand = \App\Models\LibraryTaxonomy::where('type', 'brand')->where('name', 'like', $brandName)->first();
-        if ($taxBrand) $brandName = $taxBrand->name;
-
-        LibraryFile::create([
-            'title' => $productName,
-            'brand' => $brandName,
-            'sub_category' => $request->sub_category ?? 'Industrial Assets',
-            'file_path' => $path,
-            'youtube_url' => $youtubeUrl,
-            'category' => $category,
-            'mime_type' => $mimeType,
-            'size' => $size,
-            'summary' => $summary,
-            'is_public' => $request->has('is_public') || true,
-            'tenant_id' => auth()->user()->tenant_id ?? 1,
-            'created_by_id' => auth()->id() ?? 1,
-        ]);
-
-        return response()->json(['success' => 'Asset secured to Hitech Vault. Type: ' . $category]);
     }
 
     public function bulkStore(Request $request)

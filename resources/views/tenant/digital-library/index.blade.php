@@ -479,13 +479,17 @@
     });
 
     // Finalize All Assets listener
-    document.getElementById('startBulkCommit')?.addEventListener('click', function() {
+    document.getElementById('startBulkCommit')?.addEventListener('click', async function() {
         const buttons = document.querySelectorAll('[id^="commit-"]');
-        buttons.forEach(btn => {
-            if (btn.offsetParent !== null) { // Only click visible buttons (not already committed)
-                btn.click();
+        for (const btn of buttons) {
+            if (btn.offsetParent !== null && !btn.disabled) { 
+                try {
+                    await btn.click();
+                    // Optional: add a small delay to prevent server hammering
+                    await new Promise(r => setTimeout(r, 100));
+                } catch (e) { console.error("Bulk step failed", e); }
             }
-        });
+        }
     });
 
     function handleFiles(files) {
@@ -590,18 +594,26 @@
 
                 const commitBtn = document.getElementById(`commit-${id}`);
                 if (commitBtn) {
-                    commitBtn.onclick = () => {
-                        const brandEl = document.getElementById(`brand-select-${id}`);
-                        const catEl = document.getElementById(`cat-input-${id}`);
-                        
-                        if (!brandEl || !catEl) {
-                            console.error(`UI Elements missing for ${id}`);
-                            return;
+                    commitBtn.onclick = async function() {
+                        try {
+                            const brandEl = document.getElementById(`brand-select-${id}`);
+                            const catEl = document.getElementById(`cat-input-${id}`);
+                            
+                            if (!brandEl || !catEl) {
+                                console.warn(`UI elements missing for file ${id}. Using suggested data.`);
+                                await finalizeIngestion(id, data, file);
+                                return;
+                            }
+                            
+                            const finalBrand = brandEl.value;
+                            const finalCat = catEl.value;
+                            commitBtn.disabled = true;
+                            commitBtn.innerHTML = '<i class="ti ti-loader-2 spin me-2"></i> Vaulting...';
+                            
+                            await finalizeIngestion(id, { ...data, brand: finalBrand, sub_category: finalCat }, file);
+                        } catch (err) {
+                            console.error("Manual commit error", err);
                         }
-                        
-                        const finalBrand = brandEl.value;
-                        const finalCat = catEl.value;
-                        finalizeIngestion(id, { ...data, brand: finalBrand, sub_category: finalCat }, file);
                     };
                 }
             } catch (err) {
@@ -659,18 +671,26 @@
             statusArea.textContent = isDuplicate ? 'DUPLICATE' : 'ERROR';
             statusArea.className = 'badge bg-danger';
             
+            // Re-enable commit button if it exists
+            const commitBtn = document.getElementById(`commit-${id}`);
+            if (commitBtn) {
+                commitBtn.disabled = false;
+                commitBtn.innerHTML = '<i class="ti ti-shield-check me-2"></i> Confirm & Secure to Vault';
+            }
+
             const sumEl = document.getElementById(`summary-${id}`);
             if (sumEl) {
                 if (isDuplicate) {
+                    // Pre-serialize data to avoid quote issues in HTML
+                    const safeData = btoa(JSON.stringify({ ...data, brand: data.brand, sub_category: data.sub_category }));
                     sumEl.innerHTML = `
                         <div class="alert alert-warning py-3 px-3 small border-0 mb-3" style="font-size: 0.75rem; border-radius: 12px; background: rgba(255, 152, 0, 0.1); color: #e65100;">
-                            <i class="ti ti-alert-triangle me-2 fs-5"></i> <strong>Duplicate Detected:</strong> ${data.name} already exists in the vault.
+                            <i class="ti ti-alert-triangle me-2 fs-5"></i> <strong>Duplicate Detected:</strong> Asset already exists in the vault.
                         </div>
-                        <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="finalizeIngestion('${id}', ${JSON.stringify(data).replace(/"/g, '&quot;')}, null, true)">
+                        <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="handleOverwrite('${id}', '${safeData}')">
                             <i class="ti ti-replace me-1"></i> Replace Existing File
                         </button>
                     `;
-                    // Hide the original commit button area if it exists
                     const actionArea = document.getElementById(`action-${id}`);
                     if (actionArea) actionArea.style.display = 'none';
                 } else {
@@ -679,6 +699,15 @@
                     </div>`;
                 }
             }
+        }
+    }
+
+    function handleOverwrite(id, encodedData) {
+        try {
+            const data = JSON.parse(atob(encodedData));
+            finalizeIngestion(id, data, null, true);
+        } catch (e) {
+            console.error("Overwrite handling failed", e);
         }
     }
     function updateCategoryDropdown(fileId, selectedCat = null) {
