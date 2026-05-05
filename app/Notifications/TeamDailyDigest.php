@@ -39,23 +39,14 @@ class TeamDailyDigest extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $date = Carbon::today()->format('d M, Y');
-        $mail = (new MailMessage)
+        return (new MailMessage)
             ->subject("Daily Team Out Today Digest - {$date}")
-            ->greeting("Hello {$notifiable->first_name},")
-            ->line("Here is your daily update on team availability for **{$this->teamName}** today, {$date}.");
-
-        if ($this->leavesToday->isEmpty()) {
-            $mail->line("Great news! Everyone in your team is available today.");
-        } else {
-            $mail->line("The following team members are on leave today:");
-            foreach ($this->leavesToday as $leave) {
-                $mail->line("• **{$leave->user->getFullName()}** ({$leave->leaveType->name})");
-            }
-        }
-
-        return $mail->line('Wishing you a productive day ahead!')
-            ->line('Regards,')
-            ->line('HRX Operations');
+            ->view('emails.team_daily_digest', [
+                'notifiable' => $notifiable,
+                'date' => $date,
+                'teamName' => $this->teamName,
+                'leavesToday' => $this->leavesToday
+            ]);
     }
 
     /**

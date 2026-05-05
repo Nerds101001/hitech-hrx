@@ -54,14 +54,17 @@ class NewLeaveRequest extends Notification
 
     $mail = (new MailMessage)
       ->subject('New Leave Application: ' . $employee->getFullName())
-      ->greeting('Hello ' . $notifiable->first_name . ',')
-      ->line($employee->getFullName() . ' has submitted a new leave application.')
-      ->line('**Leave Details:**')
-      ->line('• Type: ' . $leaveType)
-      ->line('• Period: ' . $fromDate . ' to ' . $toDate . ' (' . $duration . ' days)')
-      ->line('• Reason: ' . ($this->leaveRequest->user_notes ?: 'N/A'))
-      ->action('Review Application', url('/leaveRequests'))
-      ->line('Please review and take appropriate action in the portal.');
+      ->view('emails.new_leave_request', [
+        'notifiable' => $notifiable,
+        'employeeName' => $employee->getFullName(),
+        'employeeCode' => $employee->code,
+        'leaveType' => $leaveType,
+        'fromDate' => $fromDate,
+        'toDate' => $toDate,
+        'duration' => $duration,
+        'userNotes' => $this->leaveRequest->user_notes,
+        'isBackdated' => $this->leaveRequest->from_date->lt($this->leaveRequest->created_at->startOfDay())
+      ]);
 
     if (!$isRecipientHR && !empty($hrEmails)) {
         $mail->cc($hrEmails);

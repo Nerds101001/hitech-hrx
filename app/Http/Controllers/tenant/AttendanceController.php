@@ -184,7 +184,7 @@ class AttendanceController extends Controller
           if($s == 'absent') { $color = 'bg-red'; $icon = 'bx-x-circle'; $status = 'Absent'; }
           elseif($s == 'half-day') { $color = 'bg-orange'; $icon = 'bx-time'; $status = 'Half-Day'; }
           elseif($s == 'late') { $color = 'bg-warning'; $icon = 'bx-time'; $status = 'Late'; }
-          elseif($s == 'paid_leave') { $color = 'bg-teal'; $icon = 'bx-calendar-check'; $status = 'Paid Leave'; }
+          elseif($s == 'paid_leave' || ($s == 'leave' && $attendance->leaveRequest?->leaveType?->is_paid)) { $color = 'bg-teal'; $icon = 'bx-calendar-check'; $status = 'Paid Leave'; }
           elseif($s == 'unpaid_leave' || $s == 'on_leave' || $s == 'leave') { $color = 'bg-purple-vibrant'; $icon = 'bx-calendar-x'; $status = 'Unpaid Leave'; }
           elseif($s == 'work_from_home' || $s == 'wfh') { $color = 'bg-indigo-vibrant'; $icon = 'bx-home'; $status = 'WFH'; }
           else { $status = 'Present'; } // Default normalization
@@ -307,7 +307,9 @@ class AttendanceController extends Controller
 
       $users = $usersQ->with([
           'attendance' => function($q) use ($month, $year) {
-              $q->whereMonth('check_in_time', $month)->whereYear('check_in_time', $year)->with('updatedBy');
+              $q->whereMonth('check_in_time', $month)
+                ->whereYear('check_in_time', $year)
+                ->with(['updatedBy', 'leaveRequest.leaveType']);
           },
           'leaveRequests' => function($q) use ($startOfMonth, $endOfMonth) {
               $q->where('status', LeaveRequestStatus::APPROVED)
@@ -400,7 +402,7 @@ class AttendanceController extends Controller
                        $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['lates']++;
                    } elseif ($s == 'absent') {
                       $dayData['status'] = 'Absent'; $dayData['class'] = 'bg-red text-white'; $row['absents']++;
-                  } elseif ($s == 'paid_leave') {
+                  } elseif ($s == 'paid_leave' || ($s == 'leave' && $attendance->leaveRequest?->leaveType?->is_paid)) {
                       $dayData['status'] = 'Paid Leave'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
                   } elseif ($s == 'unpaid_leave' || $s == 'on_leave' || $s == 'leave') {
                       $dayData['status'] = 'Unpaid Leave'; $dayData['class'] = 'bg-purple-vibrant text-white';
@@ -417,11 +419,12 @@ class AttendanceController extends Controller
                   /** @var \App\Models\User $user */
                   $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $dateObj);
                   if ($leave) {
-                      $dayData['status'] = 'Leave';
+                      $isPaid = $leave->leaveType?->is_paid ?? false;
+                      $dayData['status'] = $isPaid ? 'Paid Leave' : 'Leave';
                       $dayData['in'] = $leave->leaveType->name ?? 'Leave';
                       $dayData['out'] = '--';
                       $dayData['hours'] = $leave->leaveType->code ?? 'LV';
-                      $dayData['class'] = 'bg-purple-vibrant text-white border-0';
+                      $dayData['class'] = ($isPaid ? 'bg-teal' : 'bg-purple-vibrant') . ' text-white border-0';
                       $row['leaves']++;
                   } elseif (!$isWorkingDay) {
                       $dayData['status'] = 'OFF'; 

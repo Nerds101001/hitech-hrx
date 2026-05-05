@@ -172,6 +172,13 @@
                                         <i class="bx {{ $item->is_adjustment ? 'bx-plus-circle' : 'bx-calendar-event' }}"></i>
                                     </div>
                                     <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
+                                    @php
+                                        $itemFromDate = $item->from_date ? \Carbon\Carbon::parse($item->from_date) : null;
+                                        $isBackdated = !$item->is_adjustment && $itemFromDate && $itemFromDate->lt($item->created_at->startOfDay());
+                                    @endphp
+                                    @if($isBackdated)
+                                        <span class="badge bg-label-warning ms-2" style="font-size: 0.6rem;">BACK DATED</span>
+                                    @endif
                                 </div>
                             </td>
                             <td>
@@ -314,6 +321,19 @@
                                 </div>
                                 <div class="mt-2 text-center">
                                     <small class="text-muted italic">This breakdown is based on the selected policy constraints.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Backdated Warning (Dynamic) -->
+                        <div class="col-12 d-none" id="backdatedWarning">
+                            <div class="p-3 rounded-4 bg-label-warning border border-warning border-opacity-25 mb-4 animate__animated animate__fadeIn">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="bx bx-error-circle text-warning me-2 fs-5"></i>
+                                    <span class="fw-bold text-dark small text-uppercase">Back-dated Leave Notice</span>
+                                </div>
+                                <div class="small text-dark opacity-75">
+                                    You are applying for a past date. Please ensure your reason/remarks are detailed and accurate.
                                 </div>
                             </div>
                         </div>
@@ -549,10 +569,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 3. Past Date Validation & Range Restriction
-    const today = new Date().toISOString().split('T')[0];
-    fromDateInput.setAttribute('min', today);
-    toDateInput.setAttribute('min', today);
+    // 3. Past Date Validation & Range Restriction (Allowed up to 7 days back)
+    const todayDate = new Date();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(todayDate.getDate() - 7);
+    const minDate = sevenDaysAgo.toISOString().split('T')[0];
+    
+    fromDateInput.setAttribute('min', minDate);
+    toDateInput.setAttribute('min', minDate);
+
+    const backdatedWarning = document.getElementById('backdatedWarning');
+
+    function checkBackdatedStatus() {
+        if (fromDateInput.value) {
+            const selectedDate = new Date(fromDateInput.value);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            selectedDate.setHours(0,0,0,0);
+
+            if (selectedDate < today) {
+                backdatedWarning.classList.remove('d-none');
+            } else {
+                backdatedWarning.classList.add('d-none');
+            }
+        } else {
+            backdatedWarning.classList.add('d-none');
+        }
+    }
 
     fromDateInput.addEventListener('change', function() {
         if (this.value) {
@@ -561,6 +604,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 toDateInput.value = this.value;
             }
         }
+        checkBackdatedStatus();
         updateLeaveDetails();
     });
 

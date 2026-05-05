@@ -333,7 +333,7 @@ $(function () {
           $('#userAvatarContainer').html(`<div class="avatar avatar-md"><span class="avatar-initial rounded-circle bg-label-primary shadow-sm">${data.userInitials || ''}</span></div>`);
         }
 
-        $('#leaveType').text(data.leaveType);
+        $('#leaveType').html(data.leaveType);
         $('#fromDate').text(data.fromDate);
         $('#toDate').text(data.toDate);
         $('#totalDays').text(data.days);

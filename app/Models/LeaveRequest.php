@@ -101,20 +101,19 @@ class LeaveRequest extends Model implements AuditableContract
                           $availableBalance = (float)$balance->balance - (float)$balance->used;
                           if ($availableBalance >= 1) {
                               $balance->used += 1;
-                              $status = 'paid_leave';
+                              $status = 'leave'; // Database only accepts 'leave'
                           } else {
-                              $status = 'unpaid_leave';
+                              $status = 'leave';
                           }
                       } else {
-                          // For explicitly non-paid types, just mark as on_leave/unpaid
-                          $status = 'unpaid_leave';
+                          $status = 'leave';
                       }
 
                       Attendance::updateOrCreate(
                           [
                               'user_id' => $leaveRequest->user_id,
                               'tenant_id' => $leaveRequest->tenant_id,
-                              'check_in_time' => $tempDate->startOfDay(),
+                              'check_in_time' => $tempDate->copy()->startOfDay(),
                           ],
                           [
                               'status' => $status,

@@ -142,7 +142,11 @@ class LeaveController extends Controller
                 : 'N/A';
         })
         ->addColumn('leave_type', function($leaveRequest) {
-            return $leaveRequest->leaveType->name ?? 'N/A';
+            $name = $leaveRequest->leaveType->name ?? 'N/A';
+            if ($leaveRequest->from_date && $leaveRequest->from_date->lt($leaveRequest->created_at->startOfDay())) {
+                return $name . ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>';
+            }
+            return $name;
         })
         ->addColumn('days', function($leaveRequest) {
             return $leaveRequest->from_date->diffInDays($leaveRequest->to_date) + 1;
@@ -190,6 +194,7 @@ class LeaveController extends Controller
         ->addColumn('document', function($leaveRequest) {
             return $leaveRequest->document ? asset('storage/'. \Constants::BaseFolderLeaveRequestDocument . $leaveRequest->document) : null;
         })
+        ->rawColumns(['leave_type'])
         ->make(true);
     } catch (\Exception $e) {
       \Log::error('LeaveRequest Yajra Error: ' . $e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
@@ -283,7 +288,7 @@ class LeaveController extends Controller
       'id' => $leaveRequest->id,
       'userName' => $leaveRequest->user->getFullName(),
       'userCode' => $leaveRequest->user->code,
-      'leaveType' => $leaveRequest->leaveType->name,
+      'leaveType' => $leaveRequest->leaveType->name . ($leaveRequest->from_date && $leaveRequest->from_date->lt($leaveRequest->created_at->startOfDay()) ? ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>' : ''),
       'fromDate' => $leaveRequest->from_date->format(Constants::DateFormat),
       'toDate' => $leaveRequest->to_date->format(Constants::DateFormat),
       'document' => $leaveRequest->document != null ? asset('storage/'.Constants::BaseFolderLeaveRequestDocument . $leaveRequest->document) : null,

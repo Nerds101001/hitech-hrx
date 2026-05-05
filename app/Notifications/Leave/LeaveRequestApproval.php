@@ -60,16 +60,17 @@ class LeaveRequestApproval extends Notification
 
     $mail = (new MailMessage)
       ->subject('Leave Request ' . $statusText . ': ' . $this->leaveRequest->user->getFullName())
-      ->greeting('Hello ' . $notifiable->first_name . ',')
-      ->line('Your leave request for ' . $leaveType . ' (' . $fromDate . ' to ' . $toDate . ') has been **' . $this->status . '**.')
-      ->line('**Request Details:**')
-      ->line('• Type: ' . $leaveType)
-      ->line('• Duration: ' . $duration . ' days')
-      ->line('• Dates: ' . $fromDate . ' - ' . $toDate)
-      ->line('• Admin Notes: ' . ($this->leaveRequest->approval_notes ?: 'N/A'))
-      ->action('View My Leaves', url('/user/leaves'))
-      ->line('Regards,')
-      ->line('HR Operations');
+      ->view('emails.leave_request_approval', [
+        'notifiable' => $notifiable,
+        'leaveType' => $leaveType,
+        'fromDate' => $fromDate,
+        'toDate' => $toDate,
+        'duration' => $duration,
+        'status' => $this->status,
+        'statusText' => $statusText,
+        'adminNotes' => $this->leaveRequest->approval_notes,
+        'isBackdated' => $this->leaveRequest->from_date->lt($this->leaveRequest->created_at->startOfDay())
+      ]);
 
     $cc = [];
     if (!$isRecipientHR) {

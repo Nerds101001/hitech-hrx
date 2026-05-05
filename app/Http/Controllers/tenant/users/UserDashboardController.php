@@ -409,7 +409,11 @@ class UserDashboardController extends Controller
     public function leaveIndex()
     {
         $user = auth()->user();
-        $leaves = LeaveRequest::where('user_id', $user->id)->with('leaveType')->orderBy('id', 'desc')->get();
+        $leaves = LeaveRequest::where('user_id', $user->id)
+            ->with('leaveType')
+            ->orderByRaw('CASE WHEN DATE(from_date) < DATE(created_at) THEN 0 ELSE 1 END')
+            ->orderBy('id', 'desc')
+            ->get();
         
         $gender = strtolower(trim($user->gender ?? ''));
         $maritalStatus = strtolower(trim($user->marital_status ?? ''));
@@ -471,6 +475,16 @@ class UserDashboardController extends Controller
         // 2. Evidence/Proof Requirement Check
         if (($leaveType->is_proof_required || in_array($code, ['MAT', 'ML', 'PAT', 'PL_PAT'])) && !$request->hasFile('document')) {
             return redirect()->back()->withErrors(['document' => 'Proof/Evidence document is required for this leave type.'])->withInput();
+        }
+
+        // 3. Backdated Check (Limit: 7 Days)
+        $fromDateObj = \Carbon\Carbon::parse($validated['from_date']);
+        $todayObj = \Carbon\Carbon::today();
+        if ($fromDateObj->lt($todayObj)) {
+            $daysBack = $fromDateObj->diffInDays($todayObj);
+            if ($daysBack > 7) {
+                return redirect()->back()->withErrors(['from_date' => 'You cannot apply for leave more than 7 days in the past.'])->withInput();
+            }
         }
 
         // Unit leave policy enforcement
