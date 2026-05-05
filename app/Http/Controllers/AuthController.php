@@ -92,6 +92,7 @@ class AuthController extends Controller
           if ($deviceToken) {
               $trusted = UserTrustedDevice::where('user_id', $user->id)
                   ->where('device_token', hash('sha256', $deviceToken))
+                  ->where('user_agent', $request->header('User-Agent'))
                   ->where('expires_at', '>', now())
                   ->first();
 
