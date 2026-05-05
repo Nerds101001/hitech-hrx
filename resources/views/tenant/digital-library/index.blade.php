@@ -348,6 +348,7 @@
     let currentView = 'grid';
     const libraryTaxonomy = @json($taxonomies);
     const pendingFiles = new Map();
+    const auditState = new Map();
 
     function switchView(view) {
         currentView = view;
@@ -625,14 +626,17 @@
     }
 
     async function finalizeIngestion(id, data, fileArg, overwrite = false) {
+        if (data) auditState.set(id, data);
+        const finalData = data || auditState.get(id);
+        
         const file = fileArg || pendingFiles.get(id);
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('brand', data.brand);
-        formData.append('sub_category', data.sub_category);
-        formData.append('category', data.category);
-        formData.append('name', data.name);
-        formData.append('summary', data.summary);
+        formData.append('brand', finalData.brand);
+        formData.append('sub_category', finalData.sub_category);
+        formData.append('category', finalData.category);
+        formData.append('name', finalData.name);
+        formData.append('summary', finalData.summary);
         if (overwrite) formData.append('overwrite', '1');
         formData.append('_token', '{{ csrf_token() }}');
 
@@ -681,13 +685,11 @@
             const sumEl = document.getElementById(`summary-${id}`);
             if (sumEl) {
                 if (isDuplicate) {
-                    // Pre-serialize data to avoid quote issues in HTML
-                    const safeData = btoa(JSON.stringify({ ...data, brand: data.brand, sub_category: data.sub_category }));
                     sumEl.innerHTML = `
                         <div class="alert alert-warning py-3 px-3 small border-0 mb-3" style="font-size: 0.75rem; border-radius: 12px; background: rgba(255, 152, 0, 0.1); color: #e65100;">
                             <i class="ti ti-alert-triangle me-2 fs-5"></i> <strong>Duplicate Detected:</strong> Asset already exists in the vault.
                         </div>
-                        <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="handleOverwrite('${id}', '${safeData}')">
+                        <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="finalizeIngestion('${id}', null, null, true)">
                             <i class="ti ti-replace me-1"></i> Replace Existing File
                         </button>
                     `;
@@ -702,14 +704,6 @@
         }
     }
 
-    function handleOverwrite(id, encodedData) {
-        try {
-            const data = JSON.parse(atob(encodedData));
-            finalizeIngestion(id, data, null, true);
-        } catch (e) {
-            console.error("Overwrite handling failed", e);
-        }
-    }
     function updateCategoryDropdown(fileId, selectedCat = null) {
         const brandSelect = document.getElementById(`brand-select-${fileId}`);
         const catSelect = document.getElementById(`cat-input-${fileId}`);
