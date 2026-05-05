@@ -347,6 +347,7 @@
 <script>
     let currentView = 'grid';
     const libraryTaxonomy = @json($taxonomies);
+    const pendingFiles = new Map();
 
     function switchView(view) {
         currentView = view;
@@ -493,6 +494,7 @@
         
         Array.from(files).forEach(async (file) => {
             const id = Math.random().toString(36).substr(2, 9);
+            pendingFiles.set(id, file);
             const item = document.createElement('div');
             item.className = 'p-0 overflow-hidden rounded-4 mb-4 border border-light shadow-sm bg-white';
             item.id = `file-${id}`;
@@ -586,11 +588,22 @@
                 const bulkCommitBtn = document.getElementById('startBulkCommit');
                 if (bulkCommitBtn) bulkCommitBtn.style.display = 'block';
 
-                document.getElementById(`commit-${id}`).onclick = () => {
-                    const finalBrand = document.getElementById(`brand-select-${id}`).value;
-                    const finalCat = document.getElementById(`cat-input-${id}`).value;
-                    finalizeIngestion(id, { ...data, brand: finalBrand, sub_category: finalCat }, file);
-                };
+                const commitBtn = document.getElementById(`commit-${id}`);
+                if (commitBtn) {
+                    commitBtn.onclick = () => {
+                        const brandEl = document.getElementById(`brand-select-${id}`);
+                        const catEl = document.getElementById(`cat-input-${id}`);
+                        
+                        if (!brandEl || !catEl) {
+                            console.error(`UI Elements missing for ${id}`);
+                            return;
+                        }
+                        
+                        const finalBrand = brandEl.value;
+                        const finalCat = catEl.value;
+                        finalizeIngestion(id, { ...data, brand: finalBrand, sub_category: finalCat }, file);
+                    };
+                }
             } catch (err) {
                 document.getElementById(`status-${id}`).textContent = 'Error';
                 document.getElementById(`status-${id}`).className = 'badge bg-danger';
@@ -599,7 +612,8 @@
         });
     }
 
-    async function finalizeIngestion(id, data, file) {
+    async function finalizeIngestion(id, data, fileArg, overwrite = false) {
+        const file = fileArg || pendingFiles.get(id);
         const formData = new FormData();
         formData.append('file', file);
         formData.append('brand', data.brand);
@@ -607,6 +621,7 @@
         formData.append('category', data.category);
         formData.append('name', data.name);
         formData.append('summary', data.summary);
+        if (overwrite) formData.append('overwrite', '1');
         formData.append('_token', '{{ csrf_token() }}');
 
         const statusArea = document.getElementById(`status-${id}`);
@@ -640,13 +655,29 @@
                 }
             }, 500);
         } catch (err) {
-            statusArea.textContent = err.message.includes('exists') ? 'DUPLICATE' : 'ERROR';
+            const isDuplicate = err.message.includes('DUPLICATE_FOUND') || err.message.includes('already exists');
+            statusArea.textContent = isDuplicate ? 'DUPLICATE' : 'ERROR';
             statusArea.className = 'badge bg-danger';
+            
             const sumEl = document.getElementById(`summary-${id}`);
             if (sumEl) {
-                sumEl.innerHTML = `<div class="alert alert-danger py-2 px-3 small border-0 mb-0" style="font-size: 0.7rem;">
-                    <i class="ti ti-alert-circle me-1"></i> ${err.message}
-                </div>`;
+                if (isDuplicate) {
+                    sumEl.innerHTML = `
+                        <div class="alert alert-warning py-3 px-3 small border-0 mb-3" style="font-size: 0.75rem; border-radius: 12px; background: rgba(255, 152, 0, 0.1); color: #e65100;">
+                            <i class="ti ti-alert-triangle me-2 fs-5"></i> <strong>Duplicate Detected:</strong> ${data.name} already exists in the vault.
+                        </div>
+                        <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="finalizeIngestion('${id}', ${JSON.stringify(data).replace(/"/g, '&quot;')}, null, true)">
+                            <i class="ti ti-replace me-1"></i> Replace Existing File
+                        </button>
+                    `;
+                    // Hide the original commit button area if it exists
+                    const actionArea = document.getElementById(`action-${id}`);
+                    if (actionArea) actionArea.style.display = 'none';
+                } else {
+                    sumEl.innerHTML = `<div class="alert alert-danger py-2 px-3 small border-0 mb-0" style="font-size: 0.7rem;">
+                        <i class="ti ti-alert-circle me-1"></i> ${err.message}
+                    </div>`;
+                }
             }
         }
     }
