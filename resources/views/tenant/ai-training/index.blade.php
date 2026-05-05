@@ -289,19 +289,32 @@
 @endsection
 
 @section('page-script')
+<!-- Load marked.js for markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
     const simInput = document.getElementById('sim-input');
     const simBody = document.getElementById('sim-chat-body');
 
+    // Configure marked options
+    marked.setOptions({
+        breaks: true,
+        gfm: true,
+        headerIds: false,
+        mangle: false
+    });
+
     function appendMsg(text, role) {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const div = document.createElement('div');
-        div.className = `d-flex align-items-end gap-3 justify-content-${role === 'user' ? 'end' : 'start'} animate__animated animate__fadeInUp`;
+        div.className = `d-flex align-items-end gap-3 justify-content-${role === 'user' ? 'end' : 'start'} animate__animated animate__fadeInUp mb-4`;
         
+        // Parse markdown only for bot messages
+        const processedText = role === 'bot' ? marked.parse(text) : text;
+
         if (role === 'user') {
             div.innerHTML = `
                 <div class="text-end" style="max-width: 85%;">
-                    <div class="sim-bubble user">${text}</div>
+                    <div class="sim-bubble user">${processedText}</div>
                     <div class="sim-meta me-1">${time} • YOU</div>
                 </div>
             `;
@@ -311,7 +324,7 @@
                     <i class="bx bx-bot"></i>
                 </div>
                 <div style="max-width: 85%;">
-                    <div class="sim-bubble bot">${text}</div>
+                    <div class="sim-bubble bot markdown-content">${processedText}</div>
                     <div class="sim-meta ms-1">${time} • SENTINEL</div>
                 </div>
             `;
@@ -331,7 +344,7 @@
         const thinkingId = 'thinking-' + Date.now();
         const thinking = document.createElement('div');
         thinking.id = thinkingId;
-        thinking.className = 'd-flex align-items-center gap-2 text-muted small ms-5 animate__animated animate__fadeIn';
+        thinking.className = 'd-flex align-items-center gap-2 text-muted small ms-5 animate__animated animate__fadeIn mb-4';
         thinking.innerHTML = `
             <div class="spinner-grow spinner-grow-sm text-primary" role="status"></div>
             <span class="fw-bold text-uppercase" style="font-size: 10px; letter-spacing: 1px;">Sentinel is synthesizing...</span>
@@ -367,4 +380,49 @@
         }
     });
 </script>
+
+<style>
+    /* Styling for markdown content in chat bubbles */
+    .markdown-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1rem;
+        font-size: 0.85rem;
+    }
+    .markdown-content table th, .markdown-content table td {
+        border: 1px solid #e2e8f0;
+        padding: 8px 12px;
+        text-align: left;
+    }
+    .markdown-content table th {
+        background-color: #f8fafc;
+        font-weight: 700;
+    }
+    .markdown-content p:last-child {
+        margin-bottom: 0;
+    }
+    .markdown-content a {
+        color: var(--sentinel-teal);
+        text-decoration: underline;
+        font-weight: 600;
+    }
+    .sentinel-download-btn {
+        display: inline-flex;
+        align-items: center;
+        background: var(--sentinel-teal);
+        color: white !important;
+        padding: 6px 16px;
+        border-radius: 8px;
+        text-decoration: none !important;
+        font-size: 0.8rem;
+        font-weight: 700;
+        transition: all 0.2s;
+        box-shadow: 0 4px 10px rgba(13, 92, 99, 0.2);
+    }
+    .sentinel-download-btn:hover {
+        background: #0a484e;
+        transform: translateY(-1px);
+        box-shadow: 0 6px 15px rgba(13, 92, 99, 0.3);
+    }
+</style>
 @endsection
