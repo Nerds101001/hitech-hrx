@@ -267,23 +267,18 @@ function loadMonthlyRegistry() {
     let month = moment().month() + 1;
     let year = moment().year();
     
-    // Improved month detection from qp filter
-    if (qp === 'last_month') {
+    const regVal = $('#registryMonth').val();
+    if (regVal && qp === 'custom') {
+        const m = moment(regVal, 'YYYY-MM');
+        month = m.month() + 1;
+        year = m.year();
+    } else if (qp === 'last_month') {
         const lastMonth = moment().subtract(1, 'months');
         month = lastMonth.month() + 1;
         year = lastMonth.year();
     } else if (qp === 'today' || qp === 'yesterday' || qp === '7days') {
-        // If they use a quick period, we usually show current month
-        // UNLESS they have explicitly changed the registryMonth picker
-        const regVal = $('#registryMonth').val();
-        if (regVal) {
-            const m = moment(regVal, 'YYYY-MM');
-            month = m.month() + 1;
-            year = m.year();
-        } else {
-            month = moment().month() + 1;
-            year = moment().year();
-        }
+        month = moment().month() + 1;
+        year = moment().year();
     }
 
     $.ajax({
