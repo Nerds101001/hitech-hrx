@@ -112,15 +112,36 @@ $(function () {
 
   $('#quickPeriod').on('change', function () {
     const val = $(this).val();
+    const isRegistry = $('#registry-view-tab').hasClass('active');
+    
     if (val === 'custom') {
-      $('#dateFilterWrapper').show('fast');
-      $('#registryMonthWrapper').show('fast');
+      if (isRegistry) {
+        $('#dateFilterWrapper').hide();
+        $('#registryMonthWrapper').show('fast');
+      } else {
+        $('#dateFilterWrapper').show('fast');
+        $('#registryMonthWrapper').hide();
+      }
     } else {
       $('#dateFilterWrapper').hide('fast');
       $('#registryMonthWrapper').hide('fast');
     }
     dataTable.draw();
     reloadRegistryIfActive();
+  });
+
+  // Handle Tab Changes to switch pickers
+  $('#log-view-tab, #registry-view-tab').on('shown.bs.tab', function () {
+    const qp = $('#quickPeriod').val();
+    if (qp === 'custom') {
+      if (this.id === 'registry-view-tab') {
+        $('#dateFilterWrapper').hide();
+        $('#registryMonthWrapper').show('fast');
+      } else {
+        $('#dateFilterWrapper').show('fast');
+        $('#registryMonthWrapper').hide();
+      }
+    }
   });
 
   $('#userId, #date, #shiftId, #teamId, #siteId').on('change', function () {
