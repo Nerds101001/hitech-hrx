@@ -665,7 +665,7 @@
                         <div class="text-center py-3">
                             <i class="ti ti-circle-check fs-2 text-success mb-2"></i>
                             <div class="fw-bold text-success">Asset Secured to Vault</div>
-                            <div class="text-muted small">${data.name}</div>
+                            <div class="text-muted small">${finalData.name}</div>
                         </div>
                     `;
                 }
