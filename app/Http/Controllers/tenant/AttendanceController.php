@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Shift;
 use App\Models\Holiday;
 use App\Models\Team;
+use App\Models\Site;
 use App\Constants\Constants as AppConstants;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -62,7 +63,8 @@ class AttendanceController extends Controller
       'todayAbsentCount' => $todayAbsentCount,
       'onLeaveCount' => $onLeaveCount,
       'lateCount' => $lateCount,
-      'activeUsersCount' => $activeUsersCount
+      'activeUsersCount' => $activeUsersCount,
+      'sites' => Site::all()
     ]);
   }
 
@@ -104,9 +106,17 @@ class AttendanceController extends Controller
     }
 
     // Shift filter
-    if ($request->has('shiftId') && $request->input('shiftId')) {
-        $query->where('shift_id', $request->input('shiftId'));
+    if ($request->has('shiftId') && $request->shiftId) {
+      $query->where('shift_id', $request->shiftId);
     }
+
+    if ($request->has('siteId') && $request->siteId) {
+      $query->whereHas('user', function($q) use ($request) {
+        $q->where('site_id', $request->siteId);
+      });
+    }
+
+    $query->orderBy('check_in_time', 'desc');
 
     // Team Filter
     if ($request->has('teamId') && $request->input('teamId')) {
@@ -295,6 +305,7 @@ class AttendanceController extends Controller
       if ($request->shiftId) $usersQ->where('shift_id', $request->shiftId);
       if ($request->teamId) $usersQ->where('team_id', $request->teamId);
       if ($request->departmentId) $usersQ->where('department_id', $request->departmentId);
+      if ($request->siteId) $usersQ->where('site_id', $request->siteId);
       
       if ($request->searchTerm) {
           $term = $request->searchTerm;
@@ -506,6 +517,7 @@ class AttendanceController extends Controller
         if ($teamId) $userCount->where('team_id', $teamId);
         if ($userId) $userCount->where('id', $userId);
         if ($request->shiftId) $userCount->where('shift_id', $request->shiftId);
+        if ($request->siteId) $userCount->where('site_id', $request->siteId);
         if ($request->searchTerm) {
             $term = $request->searchTerm;
             $userCount->where(function($q) use ($term) {
@@ -523,6 +535,7 @@ class AttendanceController extends Controller
             ->when($teamId, fn($q) => $q->whereHas('user', fn($u) => $u->where('team_id', $teamId)))
             ->when($userId, fn($q) => $q->where('user_id', $userId))
             ->when($request->shiftId, fn($q) => $q->where('shift_id', $request->shiftId))
+            ->when($request->siteId, fn($q) => $q->whereHas('user', fn($u) => $u->where('site_id', $request->siteId)))
             ->when($request->searchTerm, function($q) use ($request) {
                 $term = $request->searchTerm;
                 $q->whereHas('user', function($u) use ($term) {

@@ -133,6 +133,22 @@
                    value="{{ request()->get('date', now()->format('Y-m-d')) }}">
           </div>
 
+          {{-- Month/Year Filter (for Registry) --}}
+          <div class="compact-select" id="registryMonthWrapper" style="min-width: 160px; display: none;">
+              <input type="month" id="registryMonth" class="form-control filter-item-hitech" 
+                     value="{{ now()->format('Y-m') }}">
+          </div>
+
+          {{-- Site/Unit --}}
+          <div class="compact-select" style="min-width: 140px;">
+              <select id="siteId" name="siteId" class="form-select select2 filter-item-hitech">
+                <option value="">Unit: All</option>
+                @foreach($sites as $site)
+                  <option value="{{ $site->id }}">{{ $site->name }}</option>
+                @endforeach
+              </select>
+          </div>
+
           {{-- Department --}}
           <div class="compact-select">
               <select id="teamId" name="teamId" class="form-select select2 filter-item-hitech">

@@ -18,6 +18,7 @@ $(function () {
         d.userId = $('#userId').val();
         d.shiftId = $('#shiftId').val();
         d.teamId = $('#teamId').val();
+        d.siteId = $('#siteId').val();
         d.searchTerm = $('#customSearchInput').val();
 
         const quickPeriod = $('#quickPeriod').val();
@@ -101,7 +102,7 @@ $(function () {
     }
   });
 
-  $('#userId, #shiftId, #teamId').select2();
+  $('#userId, #shiftId, #teamId, #siteId').select2();
 
   const reloadRegistryIfActive = () => {
     if ($('#registry-view-tab').hasClass('active')) {
@@ -113,17 +114,23 @@ $(function () {
     const val = $(this).val();
     if (val === 'custom') {
       $('#dateFilterWrapper').show('fast');
+      $('#registryMonthWrapper').show('fast');
     } else {
       $('#dateFilterWrapper').hide('fast');
+      $('#registryMonthWrapper').hide('fast');
     }
     dataTable.draw();
     reloadRegistryIfActive();
   });
 
-  $('#userId, #date, #shiftId, #teamId').on('change', function () {
+  $('#userId, #date, #shiftId, #teamId, #siteId').on('change', function () {
     dataTable.draw();
     reloadRegistryIfActive();
     refreshChart(); // Real-time sync to graph
+  });
+
+  $('#registryMonth').on('change', function() {
+    reloadRegistryIfActive();
   });
 
   $('#customSearchBtn').on('click', function () {
@@ -193,6 +200,7 @@ window.refreshChart = function() {
         period: $('#chartPeriod').val(),
         teamId: $('#chartTeamFilter').val(),
         userId: $('#chartUserFilter').val(),
+        siteId: $('#siteId').val(),
         shiftId: $('#shiftId').val(),
         searchTerm: $('#customSearchInput').val()
       },
@@ -244,8 +252,17 @@ function loadMonthlyRegistry() {
         month = lastMonth.month() + 1;
         year = lastMonth.year();
     } else if (qp === 'today' || qp === 'yesterday' || qp === '7days') {
-        month = moment().month() + 1;
-        year = moment().year();
+        // If they use a quick period, we usually show current month
+        // UNLESS they have explicitly changed the registryMonth picker
+        const regVal = $('#registryMonth').val();
+        if (regVal) {
+            const m = moment(regVal, 'YYYY-MM');
+            month = m.month() + 1;
+            year = m.year();
+        } else {
+            month = moment().month() + 1;
+            year = moment().year();
+        }
     }
 
     $.ajax({
@@ -257,6 +274,7 @@ function loadMonthlyRegistry() {
             userId: $('#userId').val(),
             shiftId: $('#shiftId').val(),
             teamId: $('#teamId').val(),
+            siteId: $('#siteId').val(),
             searchTerm: $('#customSearchInput').val()
         },
         beforeSend: function() {
