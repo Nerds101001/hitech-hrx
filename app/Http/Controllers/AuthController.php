@@ -213,7 +213,7 @@ class AuthController extends Controller
         }
 
         $isLocalBypass = (app()->isLocal() && $request->otp == '123456');
-        if (($user->otp_code == $request->otp || $isLocalBypass) && now()->lt($user->otp_expires_at)) {
+        if (($user->otp_code == $request->otp || $isLocalBypass) && $user->otp_expires_at && now()->lt($user->otp_expires_at)) {
             // Success
             $user->otp_code = null;
             $user->otp_expires_at = null;
