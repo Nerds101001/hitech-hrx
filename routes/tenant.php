@@ -84,6 +84,12 @@ Route::middleware(['web'])->group(function () {
         ]
     ) ? "Created" : "Failed";
   });
+  Route::get('/clear-cache', function() {
+      \Illuminate\Support\Facades\Artisan::call('view:clear');
+      \Illuminate\Support\Facades\Artisan::call('cache:clear');
+      \Illuminate\Support\Facades\Artisan::call('config:clear');
+      return "Cache Cleared!";
+  });
   Route::get('/auth/login', [AuthController::class, 'login'])->name('auth.login');
   Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
   Route::get('/accessDenied', [BaseController::class, 'accessDenied'])->name('accessDenied');
