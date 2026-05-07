@@ -84,16 +84,6 @@ Route::middleware(['web'])->group(function () {
         ]
     ) ? "Created" : "Failed";
   });
-  Route::get('/debug-users', function() {
-      $users = \App\Models\User::role(['manager', 'Manager'])->get(['id', 'email', 'department_id']);
-      $roles = \Spatie\Permission\Models\Role::all(['name']);
-      return response()->json([
-          'manager_users_count' => $users->count(),
-          'manager_users' => $users,
-          'all_roles' => $roles
-      ]);
-  });
-
   Route::get('/auth/login', [AuthController::class, 'login'])->name('auth.login');
   Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
 

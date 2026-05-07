@@ -114,10 +114,8 @@ class LeavePolicyProfileController extends Controller
         $balance->balance = ($balance->balance ?? 0) + $amount;
         $balance->accrued_this_year = ($balance->accrued_this_year ?? 0) + $amount;
         
-        // Custom metadata for audit to capture the reason
-        if ($balance instanceof \OwenIt\Auditing\Contracts\Auditable) {
-            $balance->auditCustomMessage = $reason;
-        }
+        // Store reason for audit via static context (avoids polluting Eloquent attributes)
+        LeaveBalance::$auditReason = $reason;
 
         $balance->save();
 

@@ -28,10 +28,16 @@ class LeaveBalance extends Model implements AuditableContract
         'accrued_this_year' => 'float',
     ];
 
+    /**
+     * Static reason store for audit trail - avoids Eloquent including it in INSERT queries.
+     */
+    public static ?string $auditReason = null;
+
     public function transformAudit(array $data): array
     {
-        if (isset($this->auditCustomMessage)) {
-            $data['user_agent'] = $this->auditCustomMessage;
+        if (static::$auditReason) {
+            $data['user_agent'] = static::$auditReason;
+            static::$auditReason = null; // reset after use
         }
         return $data;
     }
