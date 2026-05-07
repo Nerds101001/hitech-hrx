@@ -34,6 +34,7 @@ return new class extends Migration
             'first_name'            => 'Sidharth',
             'last_name'             => 'Sareen',
             'email'                 => 'Sid@rustx.com',
+            'code'                  => 'SID001',
             'password'              => Hash::make('HiTech@123'),
             'phone'                 => '9915715000',
             'designation_id'        => $designationId,
