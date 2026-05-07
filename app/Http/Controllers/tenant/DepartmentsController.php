@@ -86,10 +86,9 @@ class DepartmentsController extends Controller
           $nestedData['notes'] = $department->notes;
           $nestedData['status'] = $department->status;
           $allottedManagers = $department->managers;
-          $designatedManagers = User::whereHas('designation', function($q) use ($department) {
-              $q->where('department_id', $department->id)
-                ->where('name', 'like', '%Manager%');
-          })->get();
+          $designatedManagers = User::role(['manager', 'Manager'])
+            ->where('department_id', $department->id)
+            ->get();
 
           $combined = $allottedManagers->merge($designatedManagers)->unique('id');
           
@@ -191,10 +190,10 @@ class DepartmentsController extends Controller
       }
 
       $currentManagerIds = $department->managers->pluck('id')->toArray();
-      $availableManagers = User::whereHas('designation', function($q) use ($id) {
-          $q->where('department_id', $id);
-      })->orWhereIn('id', $currentManagerIds)
-      ->get(['id', 'first_name', 'last_name']);
+      $availableManagers = User::role(['manager', 'Manager'])
+        ->where('department_id', $id)
+        ->orWhereIn('id', $currentManagerIds)
+        ->get(['id', 'first_name', 'last_name']);
 
       $response = [
         'id' => $department->id,
@@ -208,7 +207,7 @@ class DepartmentsController extends Controller
             return [
                 'id' => (string)$user->id,
                 'first_name' => $user->first_name,
-                'last_name' => $user->last_name
+                'last_name' => $user->last_name ?? ''
             ];
         })
       ];
@@ -225,9 +224,7 @@ class DepartmentsController extends Controller
       if ($id) {
         $department = Department::findOrFail($id);
         // Get users via designations
-        $users = User::whereHas('designation', function($q) use ($id) {
-            $q->where('department_id', $id);
-        })->get(['id', 'first_name', 'last_name']);
+        $users = User::role(['manager', 'Manager'])->where('department_id', $id)->get(['id', 'first_name', 'last_name']);
       } else {
         // Fallback or for new departments, maybe show all or empty? 
         // User said "show ONLY that department users". For a new one, maybe show all to pick from?
@@ -238,7 +235,7 @@ class DepartmentsController extends Controller
           return [
               'id' => (string)$user->id,
               'first_name' => $user->first_name,
-              'last_name' => $user->last_name
+              'last_name' => $user->last_name ?? ''
           ];
       }));
     } catch (Exception $e) {

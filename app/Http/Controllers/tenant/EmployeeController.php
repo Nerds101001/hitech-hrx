@@ -1320,7 +1320,7 @@ class EmployeeController extends Controller
             'id' => $user->id,
             'name' => $user->full_name,
             'attendance_type' => $user->attendance_type,
-            'team' => $user->team->name ?? null,
+            'team' => $user->department->name ?? ($user->team->name ?? null),
             'designation' => $user->designation->name ?? null,
             'unit' => $user->site->name ?? null,
             'joined' => $user->date_of_joining,
