@@ -1,14 +1,21 @@
 <?php
-require __DIR__.'/vendor/autoload.php';
-$app = require_once __DIR__.'/bootstrap/app.php';
+require 'vendor/autoload.php';
+$app = require_once 'bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
+use App\Models\Department;
 use App\Models\User;
-use App\Enums\UserAccountStatus;
 
-$managers = User::whereIn('status', [UserAccountStatus::ACTIVE, UserAccountStatus::ONBOARDING])->get();
-echo "Total Managers: " . $managers->count() . "\n";
-foreach($managers as $m) {
-    echo "ID: {$m->id}, Name: {$m->name}, Status: " . $m->status->value . ", Tenant: [{$m->tenant_id}]\n";
+echo "--- DEPARTMENT MANAGER AUDIT (Role-based) ---\n";
+foreach(Department::all() as $d) {
+    $managers = User::role(['manager', 'Manager'])->where('department_id', $d->id)->get();
+    echo "Dept: " . $d->name . " (ID: " . $d->id . ")\n";
+    if ($managers->isEmpty()) {
+        echo "  -> No role-based managers found.\n";
+    } else {
+        foreach ($managers as $m) {
+            echo "  -> [Manager] " . $m->first_name . " " . $m->last_name . " (ID: " . $m->id . ")\n";
+        }
+    }
 }

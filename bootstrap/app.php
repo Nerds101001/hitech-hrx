@@ -51,12 +51,24 @@ return Application::configure(basePath: dirname(__DIR__))
   ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->reportable(function (\Throwable $e) {
             if (app()->environment('production')) {
-                 \Illuminate\Support\Facades\Log::channel('mail_errors')->error($e->getMessage(), [
-                     'exception' => $e,
-                     'url' => request()->fullUrl(),
-                     'user' => auth()->id(),
-                     'ip' => request()->ip()
-                 ]);
+                try {
+                    \Illuminate\Support\Facades\Mail::send([], [], function ($message) use ($e) {
+                        $message->to('csenerds@gmail.com')
+                            ->subject('[HRX] Production Error: ' . substr($e->getMessage(), 0, 50))
+                            ->from(config('mail.from.address'), config('mail.from.name'))
+                            ->html(
+                                "<h3>Production Error Report</h3>" .
+                                "<p><strong>Message:</strong> " . $e->getMessage() . "</p>" .
+                                "<p><strong>URL:</strong> " . request()->fullUrl() . "</p>" .
+                                "<p><strong>User ID:</strong> " . (auth()->id() ?: 'Guest') . "</p>" .
+                                "<p><strong>IP:</strong> " . request()->ip() . "</p>" .
+                                "<p><strong>File:</strong> " . $e->getFile() . " (Line: " . $e->getLine() . ")</p>" .
+                                "<pre style='background:#f4f4f4;padding:10px;border:1px solid #ddd;'>" . $e->getTraceAsString() . "</pre>"
+                            );
+                    });
+                } catch (\Exception $mailEx) {
+                    \Illuminate\Support\Facades\Log::channel('single')->error("Failed to send error email: " . $mailEx->getMessage());
+                }
             }
         });
 
