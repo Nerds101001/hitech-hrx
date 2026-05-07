@@ -91,8 +91,7 @@ class AuthController extends Controller
           $deviceToken = Cookie::get('hrx_device_token');
           if ($deviceToken) {
               $trusted = UserTrustedDevice::where('user_id', $user->id)
-                  ->where('device_token', hash('sha256', $deviceToken))
-                  ->where('user_agent', $request->header('User-Agent'))
+                  ->where('device_token', hash('sha256', (string)$deviceToken))
                   ->where('expires_at', '>', now())
                   ->first();
 

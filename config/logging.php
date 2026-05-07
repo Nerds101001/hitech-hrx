@@ -55,7 +55,7 @@ return [
 
     'stack' => [
       'driver' => 'stack',
-      'channels' => explode(',', env('LOG_STACK', 'single')),
+      'channels' => array_filter(explode(',', env('LOG_STACK', 'single,mail_errors'))),
       'ignore_exceptions' => false,
     ],
 

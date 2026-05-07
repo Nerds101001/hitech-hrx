@@ -1105,14 +1105,8 @@ class EmployeeController extends Controller
 
   private function getScopedUserIds($user)
   {
-      if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
+      if ($user->hasRole(['admin', 'hr', 'Admin', 'HR', 'manager'])) {
           return null; // All
-      }
-      
-      if ($user->hasRole('manager')) {
-          $ids = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
-          $ids[] = $user->id;
-          return $ids;
       }
       
       return [$user->id]; // Default to self

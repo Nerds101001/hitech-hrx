@@ -49,6 +49,17 @@ return Application::configure(basePath: dirname(__DIR__))
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {
+        $exceptions->reportable(function (\Throwable $e) {
+            if (app()->environment('production')) {
+                 \Illuminate\Support\Facades\Log::channel('mail_errors')->error($e->getMessage(), [
+                     'exception' => $e,
+                     'url' => request()->fullUrl(),
+                     'user' => auth()->id(),
+                     'ip' => request()->ip()
+                 ]);
+            }
+        });
+
     $exceptions->render(function (AuthenticationException $e, Request $request) {
       if ($request->is('api/*')) {
         return response()->json([
