@@ -338,28 +338,31 @@ Route::middleware([
       Route::get('getByIdAjax/{id}', [LeaveController::class, 'getByIdAjax'])->name('getByIdAjax');
     });
 
-    // Expense Requests
-    Route::prefix('expenseRequests')->name('expenseRequests.')->group(function () {
-      Route::get('', [ExpenseController::class, 'index'])->name('index');
-      Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');
-      Route::get('getByIdAjax/{id}', [ExpenseController::class, 'getByIdAjax'])->name('getByIdAjax');
-      Route::post('actionAjax', [ExpenseController::class, 'actionAjax'])->name('actionAjax');
-    });
+    // Restricted Operations (Admin/HR only)
+    Route::middleware(['role:admin|hr'])->group(function () {
+      // Expense Requests
+      Route::prefix('expenseRequests')->name('expenseRequests.')->group(function () {
+        Route::get('', [ExpenseController::class, 'index'])->name('index');
+        Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');
+        Route::get('getByIdAjax/{id}', [ExpenseController::class, 'getByIdAjax'])->name('getByIdAjax');
+        Route::post('actionAjax', [ExpenseController::class, 'actionAjax'])->name('actionAjax');
+      });
 
-    // Document Management
-    Route::prefix('documentmanagement')->name('documentmanagement.')->group(function () {
-      Route::get('', [DocumentRequestController::class, 'index'])->name('index');
-      Route::get('getListAjax', [DocumentRequestController::class, 'getListAjax'])->name('getListAjax');
-      Route::post('actionAjax', [DocumentRequestController::class, 'actionAjax'])->name('actionAjax');
-      Route::get('getByIdAjax/{id}', [DocumentRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
-    });
+      // Document Management
+      Route::prefix('documentmanagement')->name('documentmanagement.')->group(function () {
+        Route::get('', [DocumentRequestController::class, 'index'])->name('index');
+        Route::get('getListAjax', [DocumentRequestController::class, 'getListAjax'])->name('getListAjax');
+        Route::post('actionAjax', [DocumentRequestController::class, 'actionAjax'])->name('actionAjax');
+        Route::get('getByIdAjax/{id}', [DocumentRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
+      });
 
-    // Loan Requests
-    Route::prefix('loan')->name('loan.')->group(function () {
-      Route::get('', [LoanRequestController::class, 'index'])->name('index');
-      Route::get('getListAjax', [LoanRequestController::class, 'getListAjax'])->name('getListAjax');
-      Route::post('actionAjax', [LoanRequestController::class, 'actionAjax'])->name('actionAjax');
-      Route::get('getByIdAjax/{id}', [LoanRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
+      // Loan Requests
+      Route::prefix('loan')->name('loan.')->group(function () {
+        Route::get('', [LoanRequestController::class, 'index'])->name('index');
+        Route::get('getListAjax', [LoanRequestController::class, 'getListAjax'])->name('getListAjax');
+        Route::post('actionAjax', [LoanRequestController::class, 'actionAjax'])->name('actionAjax');
+        Route::get('getByIdAjax/{id}', [LoanRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
+      });
     });
 
     // Task Management

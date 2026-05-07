@@ -110,14 +110,9 @@
     <!-- Hero Section -->
     <div class="manager-hero animate__animated animate__fadeIn">
         <div class="row align-items-center">
-            <div class="col-md-8">
+            <div class="col-md-12">
                 <h2 class="text-white fw-extrabold mb-1">Good {{ now()->hour < 12 ? 'Morning' : (now()->hour < 17 ? 'Afternoon' : 'Evening') }}, {{ auth()->user()->first_name }}!</h2>
                 <p class="text-white text-opacity-75 mb-0">Managing {{ $activeEmployees }} team members across global operations.</p>
-            </div>
-            <div class="col-md-4 text-md-end">
-                <button class="btn btn-white text-primary fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#onboardingInviteModal">
-                    <i class="bx bx-plus-circle me-1"></i> Add Member
-                </button>
             </div>
         </div>
     </div>
@@ -126,7 +121,6 @@
     <div class="theme-tabs animate__animated animate__fadeIn">
         <div class="theme-tab active">Team Overview</div>
         <div class="theme-tab" onclick="window.location.href='{{ route('attendance.index') }}'">Attendance logs</div>
-        <div class="theme-tab" onclick="window.location.href='{{ route('approvals.index') }}'">Pending Approvals</div>
     </div>
 
     <!-- Core Metrics -->
@@ -176,26 +170,31 @@
                 </div>
                 <div class="p-0">
                     <div class="list-group list-group-flush">
-                        <a href="{{ route('leaveRequests.index') }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-4">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="icon-wrap-sm bg-teal-light p-2"><i class="bx bx-calendar"></i></div>
-                                <div>
-                                    <h6 class="mb-0 fw-bold">Leave Requests</h6>
-                                    <small class="text-muted">Awaiting your validation</small>
+                        @forelse($teamPendingLeaveRequests as $req)
+                            <a href="{{ route('leaveRequests.index', ['id' => $req->id]) }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="avatar avatar-sm">
+                                        <span class="avatar-initial rounded-circle bg-label-primary">{{ $req->user->getInitials() }}</span>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">{{ $req->user->full_name }}</h6>
+                                        <small class="text-muted">{{ $req->leaveType->name ?? 'Leave' }} • {{ $req->from_date?->format('M d') }} to {{ $req->to_date?->format('M d') }}</small>
+                                    </div>
                                 </div>
-                            </div>
-                            <span class="badge bg-primary rounded-pill">{{ $pendingLeaveRequests }}</span>
-                        </a>
-                        <a href="{{ route('expenseRequests.index') }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-4">
-                            <div class="d-flex align-items-center gap-3">
-                                <div class="icon-wrap-sm bg-purple-light p-2"><i class="bx bx-receipt"></i></div>
-                                <div>
-                                    <h6 class="mb-0 fw-bold">Expense Claims</h6>
-                                    <small class="text-muted">Financial reimbursements</small>
+                                <span class="badge bg-label-warning rounded-pill">Pending</span>
+                            </a>
+                        @empty
+                            <a href="{{ route('leaveRequests.index') }}" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between p-4">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="icon-wrap-sm bg-teal-light p-2"><i class="bx bx-calendar"></i></div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold">Leave Requests</h6>
+                                        <small class="text-muted">No pending requests from your team</small>
+                                    </div>
                                 </div>
-                            </div>
-                            <span class="badge bg-primary rounded-pill">{{ $pendingExpenseRequests }}</span>
-                        </a>
+                                <span class="badge bg-primary rounded-pill">0</span>
+                            </a>
+                        @endforelse
                     </div>
                 </div>
             </div>

@@ -24,16 +24,11 @@ class ExpenseController extends Controller
     
     $user = auth()->user();
     $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
-    $managedTeamIds = [];
-    if ($isManager) {
-        $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
-    }
 
     $baseQuery = ExpenseRequest::query();
     if ($isManager) {
-        $baseQuery->whereHas('user', function($q) use ($managedTeamIds) {
-            $q->whereIn('team_id', $managedTeamIds);
-        });
+        // Managers can only see their own expenses, not their team's as per new policy
+        $baseQuery->where('user_id', $user->id);
     }
 
     $pendingRequests = (clone $baseQuery)->where('status', 'pending')->count();
@@ -67,10 +62,8 @@ class ExpenseController extends Controller
         ->select('expense_requests.*');
 
       if ($isManager) {
-          $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
-          $query->whereHas('user', function($q) use ($managedTeamIds) {
-              $q->whereIn('team_id', $managedTeamIds);
-          });
+          // Scoping to self only for managers
+          $query->where('user_id', $user->id);
       }
 
       // Filters
@@ -149,6 +142,9 @@ class ExpenseController extends Controller
 
   public function actionAjax(Request $request)
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return back()->with('error', 'Managers are not authorized to perform expense approvals.');
+    }
 
     $validated = $request->validate([
       'id' => 'required|exists:expense_requests,id',
@@ -190,10 +186,15 @@ class ExpenseController extends Controller
 
   public function getByIdAjax($id)
   {
-    $expenseRequest = ExpenseRequest::findOrFail($id);
+    $expenseRequest = ExpenseRequest::with('user')->findOrFail($id);
 
     if (!$expenseRequest) {
       return Error::response('Expense request not found.');
+    }
+
+    $user = auth()->user();
+    if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr', 'Admin', 'HR']) && $expenseRequest->user_id != $user->id) {
+        return Error::response('Managers are not authorized to view expense details of other employees.');
     }
 
     $response = [

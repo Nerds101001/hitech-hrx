@@ -27,8 +27,8 @@ class LeaveController extends Controller
     $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
     $managedTeamIds = [];
     if($isManager) {
-        // Use subordinate logic (reporting_to_id) as it matches Hierarchy and is more reliable for "Teams"
         $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+        $scopedUserIds = array_merge($managedSubordinateIds, [$user->id]);
     }
 
 
@@ -90,7 +90,8 @@ class LeaveController extends Controller
 
       if ($isManager) {
           $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
-          $query->whereIn('user_id', $managedSubordinateIds);
+          $scopedUserIds = array_merge($managedSubordinateIds, [$user->id]);
+          $query->whereIn('user_id', $scopedUserIds);
       }
 
       // Apply Filters

@@ -250,6 +250,9 @@ class EmployeeController extends Controller
 
   public function create()
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return redirect()->route('tenant.dashboard')->with('error', 'Managers are not authorized to add new members.');
+    }
 
     if (User::count() >= Settings::first()->employees_limit) {
       return redirect()->back()->with('error', 'You have reached the maximum limit of employees');
@@ -1100,18 +1103,48 @@ class EmployeeController extends Controller
 
 
 
+  private function getScopedUserIds($user)
+  {
+      if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
+          return null; // All
+      }
+      
+      if ($user->hasRole('manager')) {
+          $ids = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+          $ids[] = $user->id;
+          return $ids;
+      }
+      
+      return [$user->id]; // Default to self
+  }
+
   public function index()
   {
+    $currentUser = auth()->user();
+    $scopedIds = $this->getScopedUserIds($currentUser);
+
     \Illuminate\Support\Facades\DB::enableQueryLog();
-    $active = User::where('status', UserAccountStatus::ACTIVE)->count();
-    $inactive = User::where('status', UserAccountStatus::INACTIVE)->count();
-    $relieved = User::where('status', UserAccountStatus::RELIEVED)->count();
-    $onboarding = User::whereIn('status', [
+    
+    $activeQuery = User::where('status', UserAccountStatus::ACTIVE);
+    if ($scopedIds) $activeQuery->whereIn('id', $scopedIds);
+    $active = $activeQuery->count();
+
+    $inactiveQuery = User::where('status', UserAccountStatus::INACTIVE);
+    if ($scopedIds) $inactiveQuery->whereIn('id', $scopedIds);
+    $inactive = $inactiveQuery->count();
+
+    $relievedQuery = User::where('status', UserAccountStatus::RELIEVED);
+    if ($scopedIds) $relievedQuery->whereIn('id', $scopedIds);
+    $relieved = $relievedQuery->count();
+
+    $onboardingQuery = User::whereIn('status', [
       UserAccountStatus::ONBOARDING,
       UserAccountStatus::ONBOARDING_SUBMITTED,
       UserAccountStatus::ONBOARDING_REQUESTED,
       UserAccountStatus::INVITED
-    ])->count();
+    ]);
+    if ($scopedIds) $onboardingQuery->whereIn('id', $scopedIds);
+    $onboarding = $onboardingQuery->count();
 
     $roles = Role::get();
     $teams = Team::withoutGlobalScopes()->select('name', 'id')->get();
@@ -1127,14 +1160,16 @@ class EmployeeController extends Controller
         'tenant_id' => auth()->user()->tenant_id ?? 'N/A'
     ]);
 
-    // \Illuminate\Support\Facades\Log::info('Onboarding Dropdown Counts:', [
-    //     'roles' => $roles->count(),
-    //     'teams' => $teams->count(),
-    //     'designations' => $designations->count(),
-    //     'departments' => $departments->count(),
-    // ]);
+    $usersQuery = User::whereIn('status', [
+        UserAccountStatus::ACTIVE,
+        UserAccountStatus::ONBOARDING,
+        UserAccountStatus::ONBOARDING_SUBMITTED,
+        UserAccountStatus::ONBOARDING_REQUESTED,
+        UserAccountStatus::INVITED
+      ])->with(['team', 'designation', 'department'])->orderBy('first_name', 'asc');
     
-
+    if ($scopedIds) $usersQuery->whereIn('id', $scopedIds);
+    
     return view('tenant.employees.index', [
       'totalUser' => $active + $inactive + $relieved + $onboarding,
       'active' => $active,
@@ -1149,13 +1184,7 @@ class EmployeeController extends Controller
       'managers' => User::withoutGlobalScopes()->whereHas('roles', function($q) {
           $q->whereIn('name', ['admin', 'hr', 'manager', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
       })->whereIn('status', [UserAccountStatus::ACTIVE, 'active', 'ACTIVE'])->get(),
-      'users' => User::whereIn('status', [
-        UserAccountStatus::ACTIVE,
-        UserAccountStatus::ONBOARDING,
-        UserAccountStatus::ONBOARDING_SUBMITTED,
-        UserAccountStatus::ONBOARDING_REQUESTED,
-        UserAccountStatus::INVITED
-      ])->with(['team', 'designation', 'department'])->orderBy('first_name', 'asc')->paginate(12)
+      'users' => $usersQuery->paginate(12)
     ]);
   }
 
@@ -1214,6 +1243,9 @@ class EmployeeController extends Controller
   public function userListAjax(Request $request)
   {
     try {
+      $currentUser = auth()->user();
+      $scopedIds = $this->getScopedUserIds($currentUser);
+
       // Map DataTables column indexes to actual DB columns (only real columns).
       $columns = [
         0 => 'first_name', // Column 0 in JS
@@ -1227,7 +1259,9 @@ class EmployeeController extends Controller
 
       $search = [];
 
-      $totalData = User::count();
+      $totalDataQuery = User::query();
+      if ($scopedIds) $totalDataQuery->whereIn('id', $scopedIds);
+      $totalData = $totalDataQuery->count();
 
       $totalFiltered = $totalData;
 
@@ -1241,6 +1275,7 @@ class EmployeeController extends Controller
       }
 
       $query = User::with(['team', 'designation', 'roles', 'site']);
+      if ($scopedIds) $query->whereIn('id', $scopedIds);
 
       if ($request->has('roleFilter') && !empty($request->input('roleFilter'))) {
         $query->whereHas('roles', function ($q) use ($request) {
@@ -1467,6 +1502,10 @@ class EmployeeController extends Controller
 
   public function store(Request $request)
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return redirect()->route('tenant.dashboard')->with('error', 'Managers are not authorized to add new members.');
+    }
+
     $request->validate([
       'firstName' => 'required|string|max:255',
       'lastName' => 'required|string|max:255',
@@ -1999,6 +2038,10 @@ class EmployeeController extends Controller
    */
   public function initiateOnboarding(Request $request)
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return response()->json(['status' => 'error', 'message' => 'Managers are not authorized to initiate onboarding.'], 403);
+    }
+
     $validator = Validator::make($request->all(), [
       'firstName' => 'required|string|max:255',
       'lastName' => 'required|string|max:255',
@@ -2087,6 +2130,10 @@ class EmployeeController extends Controller
    */
   public function validateBulkImport(Request $request)
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return response()->json(['success' => false, 'message' => 'Managers are not authorized for bulk operations.'], 403);
+    }
+
     $request->validate(['file' => 'required|mimes:csv,txt|max:5120']);
     $file = $request->file('file');
     $handle = fopen($file->getRealPath(), 'r');
@@ -2239,6 +2286,10 @@ class EmployeeController extends Controller
    */
   public function processBulkImport(Request $request)
   {
+    if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        return response()->json(['success' => false, 'message' => 'Managers are not authorized for bulk operations.'], 403);
+    }
+
     $data = $request->input('candidates', []);
     $count = 0;
 

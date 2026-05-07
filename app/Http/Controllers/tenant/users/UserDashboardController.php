@@ -575,7 +575,7 @@ class UserDashboardController extends Controller
 
         $expenseRequest->save();
 
-        NotificationHelper::notifyAdminHR(new NewExpenseRequest($expenseRequest));
+        NotificationHelper::notifyHRAndAdminOnly(new NewExpenseRequest($expenseRequest));
 
         return redirect()->back()->with('success', 'Expense request submitted successfully.');
     }

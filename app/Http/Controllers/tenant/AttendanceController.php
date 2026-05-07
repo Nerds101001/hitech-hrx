@@ -219,10 +219,15 @@ class AttendanceController extends Controller
               $editorData = "data-editor='{$editorName}' data-reason='{$reason}'";
           }
 
-          return '<div class="d-flex align-items-center gap-2">'.
-                 '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="viewLogs('.$attendance->id.')" title="View Logs"><i class="bx bx-list-ul"></i></button>'.
-                 '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="editRecord('.$attendance->id.')" title="Edit" '.$editorData.'><i class="bx bx-edit"></i></button>'.
-                 '</div>';
+          $actions = '<div class="d-flex align-items-center gap-2">'.
+                     '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="viewLogs('.$attendance->id.')" title="View Logs"><i class="bx bx-list-ul"></i></button>';
+          
+          if (auth()->user()->hasRole(['admin', 'hr'])) {
+              $actions .= '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="editRecord('.$attendance->id.')" title="Edit" '.$editorData.'><i class="bx bx-edit"></i></button>';
+          }
+          
+          $actions .= '</div>';
+          return $actions;
       })
       ->addColumn('user', function ($attendance) {
         $name = $attendance->user ? addslashes($attendance->user->getFullName()) : 'Unknown';
@@ -389,7 +394,7 @@ class AttendanceController extends Controller
                   $dayData['editor_name'] = $attendance->updatedBy?->getFullName() ?? 'Admin';
                   $dayData['admin_reason'] = $attendance->admin_reason;
                   $dayData['attachment'] = $attendance->attachment ? asset('storage/' . $attendance->attachment) : null;
-                  $dayData['is_short_leave'] = !empty($attendance->leave_request_id);
+                  $dayData['is_short_leave'] = $attendance->leaveRequest?->leaveType?->is_short_leave ?? false;
                   $dayData['user_id'] = $user->id;
                   $dayData['full_date'] = $dateStr;
 
@@ -398,9 +403,16 @@ class AttendanceController extends Controller
                     // Dynamic enforcement of 8-hour (Full Day) rule
                     if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
                         $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                        if ($mins >= 480) {
+                        $requiredMins = 480; // Standard 8 hours
+                        
+                        // Deduct short leave duration if applicable
+                        if ($attendance->leaveRequest && $attendance->leaveRequest->leaveType?->is_short_leave) {
+                            $requiredMins -= ($attendance->leaveRequest->duration_hours * 60);
+                        }
+
+                        if ($mins >= $requiredMins) {
                             $s = 'present';
-                        } elseif ($mins < 480 && ($s === 'present')) {
+                        } elseif ($mins < $requiredMins && ($s === 'present' || $s === 'late')) {
                             $s = 'half-day';
                         }
                     }
@@ -574,6 +586,9 @@ class AttendanceController extends Controller
 
     public function editAjax($id)
     {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
         $attendance = Attendance::with('user')->findOrFail($id);
         return response()->json([
             'success' => true,
@@ -584,6 +599,9 @@ class AttendanceController extends Controller
 
     public function updateAjax(Request $request, $id)
     {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+            return response()->json(['success' => false, 'message' => 'Managers are not authorized to edit attendance records.'], 403);
+        }
         $attendance = Attendance::findOrFail($id);
         
         // Validation: If marking as Full Day (Present) from an Absent state, proof is required
@@ -613,6 +631,9 @@ class AttendanceController extends Controller
     }
     public function storeAdjustmentAjax(Request $request)
     {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+            return response()->json(['success' => false, 'message' => 'Managers are not authorized to create attendance adjustments.'], 403);
+        }
         // Validation: If marking as Full Day (Present), proof is required
         if ($request->status === 'present' && !$request->hasFile('attachment')) {
             return response()->json(['success' => false, 'message' => 'Proof of adjustment (attachment) is required when marking as Full Day.'], 422);

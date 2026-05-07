@@ -41,8 +41,8 @@
 (function checkJQuery() {
   if (typeof jQuery !== 'undefined' && typeof $.fn.dataTable !== 'undefined') {
     $(function () {
-      const dt_user_table = $('#directoryTable');
       const employeeViewBase = "{{ route('employees.show', '') }}/";
+      const isAdminOrHR = {{ auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']) ? 'true' : 'false' }};
 
       const statusObj = {
         active: { title: 'Active', class: 'bg-label-success' },
@@ -61,6 +61,8 @@
         if (window.dt_user) window.dt_user.ajax.reload();
       });
 
+      const dt_user_table = $('#directoryTable');
+      
       // DataTable Init
       if (dt_user_table.length) {
         window.dt_user = dt_user_table.DataTable({
@@ -139,17 +141,17 @@
             },
             {
               targets: 6, // Actions
-              searchable: false, orderable: false,
               render: function (data, type, full, meta) {
-                let unlockBtn = full['is_security_locked'] 
-                  ? `<a class="icon-sophisticated unlock-security text-danger" data-id="${full['id']}" href="javascript:;" title="Unlock Security (Attempts/Lockout)"><i class="bx bx-lock-open-alt"></i></a>` 
-                  : '';
-                return `
-                  <div class="d-flex align-items-center justify-content-center gap-2">
-                    ${unlockBtn}
-                    <a class="icon-sophisticated view" href="${employeeViewBase + full['id']}" title="View"><i class="bx bx-show"></i></a>
-                    <a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['phone']}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>
-                  </div>`;
+                let actionBtns = `<a class="icon-sophisticated view" href="${employeeViewBase + full['id']}" title="View"><i class="bx bx-show"></i></a>`;
+                
+                if (isAdminOrHR) {
+                    if (full['is_security_locked']) {
+                        actionBtns = `<a class="icon-sophisticated unlock-security text-danger" data-id="${full['id']}" href="javascript:;" title="Unlock Security (Attempts/Lockout)"><i class="bx bx-lock-open-alt"></i></a>` + actionBtns;
+                    }
+                    actionBtns += `<a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['phone']}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>`;
+                }
+                
+                return `<div class="d-flex align-items-center justify-content-center gap-2">${actionBtns}</div>`;
               }
             }
           ],
@@ -264,7 +266,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
     <h3 class="fw-extrabold mb-0 text-dark">Employee Directory</h3>
     <div class="d-flex gap-3 flex-wrap">
-      @if(auth()->user()->can('user-create') || auth()->user()->hasRole('hr'))
+      @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']))
         <div class="dropdown">
           <button class="btn btn-hitech shadow-sm rounded-pill px-5 dropdown-toggle hide-arrow d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bx bx-paper-plane"></i>
@@ -482,18 +484,22 @@
                   </button>
                   <ul class="dropdown-menu dropdown-menu-hitech shadow-lg">
                     @php
+                      $isAdminOrHR = auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']);
                       $isStatusLocked = in_array($user->status->value, ['inactive', 'suspended', 'blocked']);
                       $lockLabel = $isStatusLocked ? 'Unlock Account' : 'Lock Account';
                       $lockIcon = $isStatusLocked ? 'bx-lock-open-alt' : 'bx-lock-alt';
                       
                       $isSecurityLocked = $user->locked_until && $user->locked_until->isFuture();
                     @endphp
-                    @if($isSecurityLocked)
-                      <li><a class="dropdown-item dropdown-item-hitech unlock-security text-danger" href="javascript:;" data-id="{{ $user->id }}"><i class="bx bx-lock-open-alt me-2"></i>Security Unlock</a></li>
+                    @if($isAdminOrHR)
+                      @if($isSecurityLocked)
+                        <li><a class="dropdown-item dropdown-item-hitech unlock-security text-danger" href="javascript:;" data-id="{{ $user->id }}"><i class="bx bx-lock-open-alt me-2"></i>Security Unlock</a></li>
+                      @endif
+                      <li><a class="dropdown-item dropdown-item-hitech reset-password" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}"><i class="bx bx-key me-2 text-warning"></i>Reset Password</a></li>
+                      <li><hr class="dropdown-divider mx-3"></li>
+                      <li><a class="dropdown-item dropdown-item-hitech toggle-status-record" href="javascript:;" data-id="{{ $user->id }}"><i class="bx {{ $lockIcon }} me-2 text-danger"></i>{{ $lockLabel }}</a></li>
                     @endif
-                    <li><a class="dropdown-item dropdown-item-hitech reset-password" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}"><i class="bx bx-key me-2 text-warning"></i>Reset Password</a></li>
-                    <li><hr class="dropdown-divider mx-3"></li>
-                    <li><a class="dropdown-item dropdown-item-hitech toggle-status-record" href="javascript:;" data-id="{{ $user->id }}"><i class="bx {{ $lockIcon }} me-2 text-danger"></i>{{ $lockLabel }}</a></li>
+                    <li><a class="dropdown-item dropdown-item-hitech" href="{{ route('employees.show', $user->id) }}"><i class="bx bx-show me-2 text-info"></i>View Profile</a></li>
                   </ul>
                 </div>
             </div>
@@ -543,9 +549,11 @@
 
             {{-- Action Buttons --}}
             <div class="card-action-bar">
+              @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']))
               <a href="javascript:;" class="btn-card-action btn-card-reset reset-password" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}">
                 <i class="bx bx-key fs-6"></i>Reset
               </a>
+              @endif
               <a href="{{ route('employees.show', $user->id) }}" class="btn-card-action btn-card-view">
                 <i class="bx bx-show fs-6"></i>View
               </a>

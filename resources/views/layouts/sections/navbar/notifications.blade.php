@@ -29,7 +29,7 @@
             $title = $data['title'] ?? ($data['type'] ?? 'Notification');
             $message = $data['message'] ?? ($data['data'] ?? 'No message content');
           @endphp
-          <li class="list-group-item list-group-item-action dropdown-notifications-item">
+          <a href="{{ $data['action_url'] ?? 'javascript:void(0);' }}" class="list-group-item list-group-item-action dropdown-notifications-item">
             <div class="d-flex align-items-start">
               <div class="flex-shrink-0 me-3">
                 <div class="avatar">
@@ -47,7 +47,7 @@
                 <div class="unread-dot-indicator"></div>
               </div>
             </div>
-          </li>
+          </a>
         @empty
           <li class="list-group-item text-center py-5">
             <i class="bx bx-bell-off fs-1 text-muted mb-2"></i>

@@ -308,13 +308,16 @@ $(function () {
   });
 
   // leave request details
-  $(document).on('click', '.leave-request-details', function () {
-    var id = $(this).data('id');
+  window.openLeaveDetails = function (id) {
     // Reset modal state
     $('#statusInput').val('');
     $('#adminNotes').val('');
     $('#remarksRequired').hide();
     $('#adminNotes').css('border-color', '');
+
+    // Show loading state in modal if already open or just open it
+    $('#modalLeaveRequestDetails').modal('show');
+    $('#userAvatarContainer').html('<div class="spinner-border text-primary" role="status"></div>');
 
     // get data
     $.get(`${baseUrl}leaveRequests/getByIdAjax/${id}`, function (response) {
@@ -387,7 +390,21 @@ $(function () {
         }
       }
     });
+  };
+
+  $(document).on('click', '.leave-request-details', function () {
+    var id = $(this).data('id');
+    window.openLeaveDetails(id);
   });
+
+  // Deep Link Handling
+  const urlParams = new URLSearchParams(window.location.search);
+  const leaveId = urlParams.get('id');
+  if (leaveId) {
+    setTimeout(() => {
+      window.openLeaveDetails(leaveId);
+    }, 800);
+  }
 
   // Global submitDecision function
   window.submitDecision = function (status) {

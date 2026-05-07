@@ -202,11 +202,13 @@
             <i class="bx bx-download fs-5"></i>
           </button>
 
+          @if(auth()->user()->hasRole(['admin', 'hr']))
           {{-- Bulk Import Button --}}
           <button type="button" class="btn btn-hitech-export shadow-sm" data-bs-toggle="modal" data-bs-target="#importAttendanceModal">
             <i class="bx bx-upload fs-5 me-2"></i>
             <span>Bulk Import</span>
           </button>
+          @endif
         </div>
       </div>
 
@@ -361,11 +363,13 @@
                 </div>
             </div>
 
+            @if(auth()->user()->hasRole(['admin', 'hr']))
             <div id="editActionWrapper" class="col-12 mt-4 d-none">
                 <button type="button" class="btn btn-teal w-100 rounded-4 py-3 fw-black text-uppercase ls-1 shadow-sm hitech-btn" onclick="openEditFromDetails()">
                     <i class="bx bx-edit-alt me-1"></i> Edit This Record
                 </button>
             </div>
+            @endif
         </div>
       </div>
       <div class="modal-footer border-0 p-4 pt-0">

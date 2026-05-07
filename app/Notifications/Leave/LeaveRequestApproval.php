@@ -51,7 +51,10 @@ class LeaveRequestApproval extends Notification
     $duration = $this->leaveRequest->from_date->diffInDays($this->leaveRequest->to_date) + 1;
     $statusText = ucfirst($this->status);
 
-    $hrEmails = User::role('hr')->pluck('email')->toArray();
+    $hrEmails = User::whereHas('roles', function ($query) {
+        $query->where('name', 'hr');
+      })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->pluck('email')->toArray();
+      
     $manager = $this->leaveRequest->user->reportingTo;
     $managerEmail = $manager?->email;
     

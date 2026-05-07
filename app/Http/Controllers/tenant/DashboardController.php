@@ -311,7 +311,13 @@ class DashboardController extends Controller
             ->get();
         
         $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
-        $pendingExpenseRequests = ExpenseRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
+
+        $teamPendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
+            ->where('status', 'pending')
+            ->with(['user', 'leaveType'])
+            ->latest()
+            ->take(5)
+            ->get();
 
         return view('tenant.users.dashboard.manager-index', [
             'totalUser' => $totalUser,
@@ -322,7 +328,8 @@ class DashboardController extends Controller
             'todayOnLeaveCount' => $onLeaveUsersCount,
             'todayAbsentUsers' => $todayAbsentUsers,
             'pendingLeaveRequests' => $pendingLeaveRequests,
-            'pendingExpenseRequests' => $pendingExpenseRequests,
+            'teamPendingLeaveRequests' => $teamPendingLeaveRequests,
+            'pendingExpenseRequests' => 0,
             'pendingDocumentRequests' => DocumentRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
             'pendingLoanRequests' => LoanRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
             'teamOutToday' => $teamOutToday,

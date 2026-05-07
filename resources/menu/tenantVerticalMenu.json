@@ -551,8 +551,7 @@
           "slug": "expenseRequests.index",
           "roles": [
             "admin",
-            "hr",
-            "manager"
+            "hr"
           ]
         },
         {
@@ -561,8 +560,7 @@
           "slug": "documentmanagement.index",
           "roles": [
             "admin",
-            "hr",
-            "manager"
+            "hr"
           ]
         },
         {
@@ -571,8 +569,7 @@
           "slug": "loan.index",
           "roles": [
             "admin",
-            "hr",
-            "manager"
+            "hr"
           ]
         },
         {
@@ -581,8 +578,7 @@
           "slug": "approvals.index",
           "roles": [
             "admin",
-            "hr",
-            "manager"
+            "hr"
           ]
         }
       ]

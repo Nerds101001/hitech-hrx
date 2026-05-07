@@ -49,10 +49,7 @@ class NewLeaveRequest extends Notification
     $toDate = $this->leaveRequest->to_date->format('d M, Y');
     $duration = $this->leaveRequest->from_date->diffInDays($this->leaveRequest->to_date) + 1;
 
-    $hrEmails = User::role('hr')->pluck('email')->toArray();
-    $isRecipientHR = $notifiable->hasRole('hr');
-
-    $mail = (new MailMessage)
+    return (new MailMessage)
       ->subject('New Leave Application: ' . $employee->getFullName())
       ->view('emails.new_leave_request', [
         'notifiable' => $notifiable,
@@ -65,12 +62,6 @@ class NewLeaveRequest extends Notification
         'userNotes' => $this->leaveRequest->user_notes,
         'isBackdated' => $this->leaveRequest->from_date->lt($this->leaveRequest->created_at->startOfDay())
       ]);
-
-    if (!$isRecipientHR && !empty($hrEmails)) {
-        $mail->cc($hrEmails);
-    }
-
-    return $mail;
   }
 
   /**
@@ -90,7 +81,8 @@ class NewLeaveRequest extends Notification
     return [
       'title' => $this->title,
       'message' => $this->message,
-      'request' => $this->leaveRequest
+      'request' => $this->leaveRequest,
+      'action_url' => url('/leaveRequests?id=' . $this->leaveRequest->id)
     ];
   }
 

@@ -22,13 +22,9 @@ class ApprovalController extends Controller
         $documentQuery = DocumentRequest::where('status', 'pending')->with(['user', 'documentType']);
 
         if ($isManager) {
-            $managedTeamIds = \App\Models\Team::where('team_head_id', $user->id)->pluck('id')->toArray();
-            $profileQuery->whereHas('user', function($q) use ($managedTeamIds) {
-                $q->whereIn('team_id', $managedTeamIds);
-            });
-            $documentQuery->whereHas('user', function($q) use ($managedTeamIds) {
-                $q->whereIn('team_id', $managedTeamIds);
-            });
+            $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+            $profileQuery->whereIn('user_id', $managedSubordinateIds);
+            $documentQuery->whereIn('user_id', $managedSubordinateIds);
         }
 
         $profileApprovals = $profileQuery->latest()->get();
@@ -40,22 +36,28 @@ class ApprovalController extends Controller
     public function approveProfile(Request $request, $id)
     {
         $approval = ProfileUpdateApproval::findOrFail($id);
+        $user = auth()->user();
+        
+        if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
+            if ($approval->user->reporting_to_id !== $user->id) {
+                return redirect()->back()->with('error', 'Unauthorized: You can only approve profile updates for your direct reports.');
+            }
+        }
         
         DB::beginTransaction();
         try {
-            $user = $approval->user;
+            $targetUser = $approval->user;
             $data = $approval->requested_data;
 
             if ($approval->type === 'bank_details') {
-                $bank = BankAccount::where('user_id', $user->id)->first();
+                $bank = BankAccount::where('user_id', $targetUser->id)->first();
                 if ($bank) {
                     $bank->update($data);
                 } else {
-                    $user->bankAccount()->create($data);
+                    $targetUser->bankAccount()->create($data);
                 }
             } else {
-                // Handle generic profile updates if we add more types later
-                $user->update($data);
+                $targetUser->update($data);
             }
 
             $approval->update([
@@ -77,6 +79,13 @@ class ApprovalController extends Controller
     public function rejectProfile(Request $request, $id)
     {
         $approval = ProfileUpdateApproval::findOrFail($id);
+        $user = auth()->user();
+
+        if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
+            if ($approval->user->reporting_to_id !== $user->id) {
+                return redirect()->back()->with('error', 'Unauthorized: You can only reject profile updates for your direct reports.');
+            }
+        }
         
         $approval->update([
             'status' => 'rejected',
@@ -91,6 +100,13 @@ class ApprovalController extends Controller
     public function approveDocument(Request $request, $id)
     {
         $docRequest = DocumentRequest::findOrFail($id);
+        $user = auth()->user();
+
+        if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
+            if ($docRequest->user->reporting_to_id !== $user->id) {
+                return redirect()->back()->with('error', 'Unauthorized: You can only approve documents for your direct reports.');
+            }
+        }
         
         $docRequest->update([
             'status' => 'approved',
@@ -103,6 +119,13 @@ class ApprovalController extends Controller
     public function rejectDocument(Request $request, $id)
     {
         $docRequest = DocumentRequest::findOrFail($id);
+        $user = auth()->user();
+
+        if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
+            if ($docRequest->user->reporting_to_id !== $user->id) {
+                return redirect()->back()->with('error', 'Unauthorized: You can only reject documents for your direct reports.');
+            }
+        }
         
         $docRequest->update([
             'status' => 'rejected',
