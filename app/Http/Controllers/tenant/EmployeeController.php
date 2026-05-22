@@ -1273,7 +1273,7 @@ class EmployeeController extends Controller
       $columns = [
         0 => 'users.first_name', // Column 0 in JS
         1 => 'users.code',       // Column 1 in JS
-        2 => \DB::raw('COALESCE(departments.name, teams.name)'), // Column 2
+        2 => 'dept_name_coalesce', // Column 2 - special handled below
         3 => 'designations.name', // Column 3
         4 => 'users.status',      // Column 4
         5 => 'sites.name', // Column 5
@@ -1346,10 +1346,18 @@ class EmployeeController extends Controller
 
       $totalFiltered = $query->count();
 
-      $users = $query->offset($start)
-        ->limit($limit)
-        ->orderBy($order, $dir)
-        ->get();
+      // Apply ordering - use orderByRaw for COALESCE (department fallback to team)
+      if ($order === 'dept_name_coalesce') {
+        $users = $query->offset($start)
+          ->limit($limit)
+          ->orderByRaw('COALESCE(departments.name, teams.name) ' . $dir)
+          ->get();
+      } else {
+        $users = $query->offset($start)
+          ->limit($limit)
+          ->orderBy($order, $dir)
+          ->get();
+      }
 
       $data = [];
 
