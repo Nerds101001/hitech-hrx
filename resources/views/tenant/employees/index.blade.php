@@ -42,7 +42,7 @@
   if (typeof jQuery !== 'undefined' && typeof $.fn.dataTable !== 'undefined') {
     $(function () {
       const employeeViewBase = "{{ route('employees.show', '') }}/";
-      const isAdminOrHR = {{ auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']) ? 'true' : 'false' }};
+      const isAdminOrHR = {{ auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR', 'accounts']) ? 'true' : 'false' }};
 
       const statusObj = {
         active: { title: 'Active', class: 'bg-label-success' },
@@ -266,7 +266,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
     <h3 class="fw-extrabold mb-0 text-dark">Employee Directory</h3>
     <div class="d-flex gap-3 flex-wrap">
-      @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']))
+      @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR', 'accounts']))
         <div class="dropdown">
           <button class="btn btn-hitech shadow-sm rounded-pill px-5 dropdown-toggle hide-arrow d-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bx bx-paper-plane"></i>
@@ -484,7 +484,7 @@
                   </button>
                   <ul class="dropdown-menu dropdown-menu-hitech shadow-lg">
                     @php
-                      $isAdminOrHR = auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']);
+                      $isAdminOrHR = auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR', 'accounts']);
                       $isStatusLocked = in_array($user->status->value, ['inactive', 'suspended', 'blocked']);
                       $lockLabel = $isStatusLocked ? 'Unlock Account' : 'Lock Account';
                       $lockIcon = $isStatusLocked ? 'bx-lock-open-alt' : 'bx-lock-alt';
@@ -549,7 +549,7 @@
 
             {{-- Action Buttons --}}
             <div class="card-action-bar">
-              @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR']))
+              @if(auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR', 'accounts']))
               <a href="javascript:;" class="btn-card-action btn-card-reset reset-password" data-id="{{ $user->id }}" data-name="{{ $user->name }}" data-phone="{{ $user->phone }}">
                 <i class="bx bx-key fs-6"></i>Reset
               </a>

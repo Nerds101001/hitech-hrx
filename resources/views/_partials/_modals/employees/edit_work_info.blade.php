@@ -88,6 +88,18 @@
               @error('reportingToId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
+            <div class="col-md-6" id="ccAgentEditDiv" style="display: none;">
+              <label class="form-label-hitech" for="cc_agent_id">@lang('Assign CC Agent') <i class="bx bx-info-circle text-muted" title="Only for Sales Dept"></i></label>
+              <select class="form-select form-select-hitech select2" id="cc_agent_id" name="cc_agent_id">
+                <option value="">Select CC Agent (Optional)</option>
+                @foreach($ccUsers ?? [] as $cc)
+                  <option value="{{ $cc->id }}" {{ ($currentCcMapping->cc_user_id ?? null) == $cc->id ? 'selected' : '' }}>
+                    {{ $cc->first_name }} {{ $cc->last_name }}
+                  </option>
+                @endforeach
+              </select>
+            </div>
+
             <div class="col-md-6">
               <label class="form-label-hitech" for="designationId">@lang('Designation') <span class="text-danger">*</span></label>
               <select class="form-select form-select-hitech select2" id="designationId" name="designationId" required>
@@ -241,6 +253,36 @@
             initSelect2();
         }
     }, 100);
+
+    function toggleCcAgentEdit() {
+        var deptSelect = document.getElementById('departmentId');
+        var ccDiv = document.getElementById('ccAgentEditDiv');
+        if(!deptSelect) return;
+        var deptText = deptSelect.options[deptSelect.selectedIndex]?.text.toLowerCase().trim() || '';
+        
+        var allowedDepts = ['sales', 'sale', 'sale department', 'sales department'];
+        if (allowedDepts.includes(deptText)) {
+            ccDiv.style.display = 'block';
+        } else {
+            ccDiv.style.display = 'none';
+            var ccSelect = window.jQuery ? window.jQuery('#cc_agent_id') : null;
+            if(ccSelect) {
+                ccSelect.val('').trigger('change');
+            } else {
+                document.getElementById('cc_agent_id').value = '';
+            }
+        }
+    }
+
+    if (window.jQuery) {
+        window.jQuery('#departmentId').on('change', toggleCcAgentEdit);
+    } else {
+        document.getElementById('departmentId').addEventListener('change', toggleCcAgentEdit);
+    }
+    
+    // Initial check
+    setTimeout(toggleCcAgentEdit, 500);
+
 })();
 </script>
 <!-- /Edit Work Information Modal -->

@@ -130,10 +130,10 @@
 
             <!-- Job Info Section -->
             <div class="col-md-6">
-              <label class="form-label-hitech">Assigned Role <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Assigned Role</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-shield-quarter"></i></span>
-                <select name="role" class="form-select select2" required>
+                <select name="role" class="form-select select2">
                   <option value="">Select Role</option>
                   @foreach($roles as $role)
                     <option value="{{ $role->name }}">{{ ucwords(str_replace(['_', '-'], ' ', $role->name)) }}</option>
@@ -143,10 +143,10 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech">Department <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Department</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-buildings"></i></span>
-                <select name="departmentId" class="form-select select2" required>
+                <select name="departmentId" class="form-select select2">
                   <option value="">Select Department</option>
                   @forelse($departments as $dept)
                     <option value="{{ $dept->id }}">{{ $dept->name }}</option>
@@ -158,10 +158,10 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech">Designation <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Designation</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-briefcase"></i></span>
-                <select name="designationId" class="form-select select2" required>
+                <select name="designationId" class="form-select select2">
                   <option value="">Select Designation</option>
                   @foreach($designations as $designation)
                     <option value="{{ $designation->id }}">{{ $designation->name }}</option>
@@ -171,10 +171,10 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech">Reporting Manager <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Reporting Manager</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-user-voice"></i></span>
-                <select name="reportingToId" class="form-select select2" required>
+                <select name="reportingToId" class="form-select select2">
                   <option value="">Select Manager</option>
                   @foreach($managers as $manager)
                     <option value="{{ $manager->id }}">{{ $manager->name }} ({{ $manager->code }})</option>
@@ -184,10 +184,10 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech">Joining Date <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Joining Date</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-calendar"></i></span>
-                <input type="date" name="doj" class="form-control form-control-hitech" id="onboarding_doj" required>
+                <input type="date" name="doj" class="form-control form-control-hitech" id="onboarding_doj">
               </div>
             </div>
 
@@ -200,10 +200,21 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech">Probation Period (Months) <span class="text-danger">*</span></label>
+              <label class="form-label-hitech">Probation Period (Months)</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-time-five"></i></span>
-                <input type="number" name="probationPeriodMonths" class="form-control form-control-hitech" value="6" required min="0" max="24">
+                <input type="number" name="probationPeriodMonths" class="form-control form-control-hitech" value="6" min="0" max="24">
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech">Mandatory Training</label>
+              <div class="input-group input-group-merge hitech-input-group">
+                <span class="input-group-text"><i class="bx bx-book-open"></i></span>
+                <select name="is_training_required" class="form-select select2">
+                  <option value="1" selected>Yes - Require Training</option>
+                  <option value="0">No - Skip Training</option>
+                </select>
               </div>
             </div>
           </div>

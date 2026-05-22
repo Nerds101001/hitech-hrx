@@ -437,6 +437,17 @@
                 </select>
               </div>
 
+              <div class="col-sm-6" id="ccAgentDiv" style="display: none;">
+                <label class="form-label-hitech" for="cc_agent_id">Assign CC Agent <i class="bx bx-info-circle text-muted" title="Only for Sales Dept"></i></label>
+                <select class="select2 w-100 hitech-input-group" id="cc_agent_id" data-style="btn-default"
+                        data-icon-base="bx" data-tick-icon="bx-check text-success" name="cc_agent_id">
+                  <option value="" selected>Select CC Agent (Optional)</option>
+                  @foreach ($ccUsers as $cc)
+                    <option value="{{$cc->id}}">{{$cc->first_name.' '.$cc->last_name}}</option>
+                  @endforeach
+                </select>
+              </div>
+
               <div class="col-sm-6">
                 <label class="form-label-hitech" for="leavePolicyProfileId">Leave Policy Profile <span class="text-danger">*</span></label>
                 <select class="select2 w-100 hitech-input-group" id="leavePolicyProfileId" data-style="btn-default"
@@ -574,5 +585,40 @@
   </div>
 
 @endsection
+
+@push('page-script')
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function toggleCcAgent() {
+        var deptSelect = document.getElementById('departmentId');
+        var ccDiv = document.getElementById('ccAgentDiv');
+        if(!deptSelect) return;
+        var deptText = deptSelect.options[deptSelect.selectedIndex]?.text.toLowerCase().trim() || '';
+        
+        var allowedDepts = ['sales', 'sale', 'sale department', 'sales department'];
+        if (allowedDepts.includes(deptText)) {
+            ccDiv.style.display = 'block';
+        } else {
+            ccDiv.style.display = 'none';
+            var ccSelect = window.jQuery ? window.jQuery('#cc_agent_id') : null;
+            if(ccSelect) {
+                ccSelect.val('').trigger('change');
+            } else {
+                document.getElementById('cc_agent_id').value = '';
+            }
+        }
+    }
+
+    if (window.jQuery) {
+        window.jQuery('#departmentId').on('change', toggleCcAgent);
+    } else {
+        document.getElementById('departmentId').addEventListener('change', toggleCcAgent);
+    }
+    
+    // Initial check
+    setTimeout(toggleCcAgent, 500);
+});
+</script>
+@endpush
 
 

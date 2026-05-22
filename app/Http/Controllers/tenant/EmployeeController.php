@@ -144,11 +144,11 @@ class EmployeeController extends Controller
     ]);
 
     // Security check: Only allow users to update their own bank account unless they are admin/hr/manager
-    if ($validated['userId'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if ($validated['userId'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
-    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
+    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']);
 
     if ($isEmployee) {
       // Check for existing pending request for bank_details
@@ -270,7 +270,10 @@ class EmployeeController extends Controller
       ->select('id', 'name', 'code')
       ->get();
 
-    $users = User::where('status', UserAccountStatus::ACTIVE)
+    $users = User::whereHas('roles', function($q) {
+        $q->whereIn(DB::raw('LOWER(name)'), ['admin', 'hr', 'manager', 'accounts']);
+      })
+      ->where('status', UserAccountStatus::ACTIVE)
       ->select('id', 'first_name', 'last_name', 'code')
       ->get();
 
@@ -410,7 +413,10 @@ class EmployeeController extends Controller
 
   public function getReportingToUsersAjax()
   {
-    $users = User::where('status', UserAccountStatus::ACTIVE)
+    $users = User::whereHas('roles', function($q) {
+        $q->whereIn(DB::raw('LOWER(name)'), ['admin', 'hr', 'manager', 'accounts']);
+      })
+      ->where('status', UserAccountStatus::ACTIVE)
       ->select('id', 'first_name', 'last_name', 'code')
       ->get();
 
@@ -427,6 +433,7 @@ class EmployeeController extends Controller
       'designationId' => 'required|exists:designations,id',
       'role' => 'required|exists:roles,name',
       'reportingToId' => 'required|exists:users,id',
+      'cc_agent_id' => 'nullable|exists:users,id',
       'attendanceType' => 'required|in:open,geofence,ipAddress,staticqr,site,dynamicqr,face',
       'geofenceGroupId' => 'required_if:attendanceType,geofence|nullable|exists:geofence_groups,id',
       'ipGroupId' => 'required_if:attendanceType,ipAddress|nullable|exists:ip_address_groups,id',
@@ -492,6 +499,19 @@ class EmployeeController extends Controller
     // Role Synchronization
     $user->syncRoles([$validated['role']]);
 
+    // CC Agent Assignment for Sales/New Biz
+    if ($request->has('cc_agent_id')) {
+        $ccAgentId = $request->input('cc_agent_id');
+        if (empty($ccAgentId)) {
+            \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)->delete();
+        } else {
+            \App\Models\CcSalespersonMap::updateOrCreate(
+                ['sales_user_id' => $user->id],
+                ['cc_user_id' => $ccAgentId]
+            );
+        }
+    }
+
     // Initialize/Refresh Leaves if profile changed
     if ($user->wasChanged('leave_policy_profile_id') && $user->leave_policy_profile_id) {
         \App\Services\LeaveAccrualService::initializeForUser($user);
@@ -547,11 +567,11 @@ class EmployeeController extends Controller
     ]);
 
     // Security check: Only allow users to upload their own document unless they are admin/hr/manager
-    if ($request->userId != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if ($request->userId != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
-    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
+    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']);
 
     try {
       $user = User::findOrFail($request->userId);
@@ -704,12 +724,12 @@ class EmployeeController extends Controller
     ]);
 
     // Security check: Only allow users to update their own records unless they are admin/hr/manager
-    if ($validated['id'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if ($validated['id'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
     $user = User::find($validated['id']);
-    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
+    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']);
 
     // ONLY update fields that are actually in the request AND non-empty to prevent wiping out data
     if ($request->filled('phone'))
@@ -1105,7 +1125,7 @@ class EmployeeController extends Controller
 
   private function getScopedUserIds($user)
   {
-      if ($user->hasRole(['admin', 'hr', 'Admin', 'HR', 'manager'])) {
+      if ($user->hasRole(['admin', 'hr', 'Admin', 'HR', 'manager', 'accounts'])) {
           return null; // All
       }
       
@@ -1176,8 +1196,12 @@ class EmployeeController extends Controller
       'designations' => $designations,
       'sites' => $sites,
       'managers' => User::withoutGlobalScopes()->whereHas('roles', function($q) {
-          $q->whereIn('name', ['admin', 'hr', 'manager', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
+          $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
       })->whereIn('status', [UserAccountStatus::ACTIVE, 'active', 'ACTIVE'])->get(),
+      'ccUsers' => User::with(['designation', 'department'])
+          ->whereHas('department', function($q) {
+              $q->where('name', 'like', '%CCARE%')->orWhere('name', 'like', '%Customer Care%');
+          })->orderBy('first_name')->get(),
       'users' => $usersQuery->paginate(12)
     ]);
   }
@@ -1192,7 +1216,7 @@ class EmployeeController extends Controller
     $validatedData = $request->validate($rules);
 
     // Security check: Only allow users to change their own picture unless they are admin/hr/manager
-    if ($validatedData['userId'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if ($validatedData['userId'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
@@ -1403,9 +1427,9 @@ class EmployeeController extends Controller
       
       // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
       $firstName = trim($user->first_name) ?: 'User';
-      $phone = $user->official_phone ?: ($user->phone ?: '12345678');
+      $phone = $user->phone ?: ($user->official_phone ?: '12345678');
       $lastFour = substr((string)$phone, -4);
-      if (!$user->official_phone && !$user->phone) {
+      if (!$user->phone && !$user->official_phone) {
           $lastFour = '1234';
       }
       $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
@@ -1443,8 +1467,19 @@ class EmployeeController extends Controller
       ])
       ->first();
 
-    $auditLogs = Audit::where('user_id', $id)
-      ->whereIn('auditable_type', ['App\Models\User', 'App\Models\LeaveBalance'])
+    $leaveBalanceIds = \App\Models\LeaveBalance::where('user_id', $id)->pluck('id')->toArray();
+    $auditLogs = Audit::where(function($query) use ($id, $leaveBalanceIds) {
+        $query->where(function($q) use ($id) {
+            $q->where('auditable_type', 'App\Models\User')
+              ->where('auditable_id', $id);
+        });
+        if (!empty($leaveBalanceIds)) {
+            $query->orWhere(function($q) use ($leaveBalanceIds) {
+                $q->where('auditable_type', 'App\Models\LeaveBalance')
+                  ->whereIn('auditable_id', $leaveBalanceIds);
+            });
+        }
+      })
       ->latest()
       ->take(10)
       ->get();
@@ -1471,12 +1506,27 @@ class EmployeeController extends Controller
     $roles = \Spatie\Permission\Models\Role::select('id', 'name')->get();
     $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
     $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
-    $allUsers = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
+    $allUsers = User::where(function($query) use ($id, $user) {
+        $query->whereHas('roles', function($q) {
+          $q->whereIn(DB::raw('LOWER(name)'), ['admin', 'hr', 'manager', 'accounts']);
+        });
+        if ($user->reporting_to_id) {
+          $query->orWhere('id', $user->reporting_to_id);
+        }
+      })
+      ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
       ->where('id', '!=', $id)
       ->select('id', 'first_name', 'last_name')
       ->get();
 
     $leaveHistory = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
+
+    $ccUsers = User::with(['designation', 'department'])
+        ->whereHas('department', function($q) {
+            $q->where('name', 'like', '%CCARE%')->orWhere('name', 'like', '%Customer Care%');
+        })->orderBy('first_name')->get();
+
+    $currentCcMapping = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)->first();
 
     return view('tenant.employees.view', [
       'user' => $user,
@@ -1490,7 +1540,9 @@ class EmployeeController extends Controller
       'departments' => $departments,
       'designations' => $designations,
       'allUsers' => $allUsers,
-      'leaveHistory' => $leaveHistory
+      'leaveHistory' => $leaveHistory,
+      'ccUsers' => $ccUsers,
+      'currentCcMapping' => $currentCcMapping
     ]);
   }
 
@@ -1619,6 +1671,14 @@ class EmployeeController extends Controller
       $user->save();
 
       $user->assignRole($request->input('role'));
+
+      // CC Agent Assignment for Sales/New Biz
+      if ($request->filled('cc_agent_id')) {
+          \App\Models\CcSalespersonMap::updateOrCreate(
+              ['sales_user_id' => $user->id],
+              ['cc_user_id' => $request->input('cc_agent_id')]
+          );
+      }
 
       if ($user->leave_policy_profile_id) {
         \App\Services\LeaveAccrualService::initializeForUser($user);
@@ -2037,18 +2097,19 @@ class EmployeeController extends Controller
     }
 
     $validator = Validator::make($request->all(), [
-      'firstName' => 'required|string|max:255',
-      'lastName' => 'required|string|max:255',
-      'email' => 'required|email|unique:users,email',
-      'phone' => 'required|string|max:10|unique:users,phone',
-      'employeeCode' => 'nullable|string|max:50|unique:users,code',
-      'role' => 'required|exists:roles,name',
-      'departmentId' => 'required|exists:departments,id',
-      'designationId' => 'required|exists:designations,id',
-      'reportingToId' => 'required|exists:users,id',
-      'siteId' => 'nullable|exists:sites,id',
-      'doj' => 'required|date',
-      'baseSalary' => 'nullable|numeric',
+      'firstName'            => 'required|string|max:255',
+      'lastName'             => 'required|string|max:255',
+      'email'                => 'required|email|unique:users,email',
+      'phone'                => 'required|string|max:10|unique:users,phone',
+      'employeeCode'         => 'nullable|string|max:50|unique:users,code',
+      'role'                 => 'nullable|exists:roles,name',
+      'departmentId'         => 'nullable|exists:departments,id',
+      'designationId'        => 'nullable|exists:designations,id',
+      'reportingToId'        => 'nullable|exists:users,id',
+      'siteId'               => 'nullable|exists:sites,id',
+      'doj'                  => 'nullable|date',
+      'baseSalary'           => 'nullable|numeric',
+      'is_training_required' => 'nullable|boolean',
     ]);
 
     if ($validator->fails()) {
@@ -2072,31 +2133,38 @@ class EmployeeController extends Controller
       // Create temporary user with Onboarding status
       $plainPassword = \Illuminate\Support\Str::random(10);
       $employeeCode = $request->employeeCode ? strtoupper(trim($request->employeeCode)) : $this->generateEmployeeCode($authenticatedUser->tenant_id);
+      
+      $isTrainingRequired = $request->has('is_training_required') && $request->is_training_required == '1';
+
       $user = User::create([
-        'tenant_id' => $authenticatedUser->tenant_id,
-        'first_name' => $request->firstName,
-        'last_name' => $request->lastName,
-        'name' => $request->firstName . ' ' . $request->lastName,
-        'email' => $request->email,
-        'phone' => $request->phone,
-        'code' => $employeeCode,
-        'department_id' => $request->departmentId,
-        'designation_id' => $request->designationId,
-        'reporting_to_id' => $request->reportingToId,
-        'site_id' => $request->siteId,
-        'date_of_joining' => $request->doj,
-        'base_salary' => $request->baseSalary,
-        'status' => UserAccountStatus::ONBOARDING,
-        'onboarding_at' => now(),
-        'onboarding_deadline' => now()->addDays(3),
-        'probation_period_months' => $request->probationPeriodMonths ?? 6,
-        'created_by_id' => $authenticatedUser->id,
-        'password' => bcrypt($plainPassword),
+        'tenant_id'              => $authenticatedUser->tenant_id,
+        'first_name'             => $request->firstName,
+        'last_name'              => $request->lastName,
+        'name'                   => $request->firstName . ' ' . $request->lastName,
+        'email'                  => $request->email,
+        'phone'                  => $request->phone,
+        'code'                   => $employeeCode,
+        'department_id'          => $request->departmentId ?: null,
+        'designation_id'         => $request->designationId ?: null,
+        'reporting_to_id'        => $request->reportingToId ?: null,
+        'site_id'                => $request->siteId ?: null,
+        'date_of_joining'        => $request->doj ?: null,
+        'base_salary'            => $request->baseSalary ?: null,
+        'status'                 => UserAccountStatus::ONBOARDING,
+        'onboarding_at'          => now(),
+        'onboarding_deadline'    => now()->addDays(3),
+        'probation_period_months'=> $request->probationPeriodMonths ?? 6,
+        'created_by_id'          => $authenticatedUser->id,
+        'password'               => bcrypt($plainPassword),
+        'is_training_required'   => $isTrainingRequired,
+        'training_status'        => $isTrainingRequired ? 'not_started' : 'completed',
       ]);
 
-      // Assign Role
-      $role = \Spatie\Permission\Models\Role::where('name', $request->role)->first();
-      $user->roles()->sync([$role->id]);
+      // Assign Role (optional)
+      if ($request->role) {
+          $role = \Spatie\Permission\Models\Role::where('name', $request->role)->first();
+          if ($role) $user->roles()->sync([$role->id]);
+      }
 
       // Send Invitation Notification (with password)
       $user->notify(new OnboardingInvite($user, $plainPassword));
@@ -2105,9 +2173,10 @@ class EmployeeController extends Controller
 
       if ($request->ajax() || $request->wantsJson()) {
         return response()->json([
-          'status' => 'success',
-          'message' => 'Onboarding invitation sent successfully! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword,
-          'redirect' => route('tenant.dashboard')
+          'status'         => 'success',
+          'message'        => 'Onboarding invitation sent successfully!',
+          'plain_password' => $plainPassword,
+          'redirect'       => route('tenant.dashboard')
         ]);
       }
       return redirect()->route('tenant.dashboard')->with('success', 'Onboarding invitation sent! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword);
@@ -2115,6 +2184,12 @@ class EmployeeController extends Controller
     } catch (\Exception $e) {
       DB::rollBack();
       Log::error('Onboarding Initiation Error: ' . $e->getMessage());
+      if ($request->ajax() || $request->wantsJson()) {
+        return response()->json([
+          'status'  => 'error',
+          'message' => 'Failed to initiate onboarding: ' . $e->getMessage()
+        ], 500);
+      }
       return redirect()->back()->with('error', 'Failed to initiate onboarding: ' . $e->getMessage());
     }
   }
@@ -2299,11 +2374,13 @@ class EmployeeController extends Controller
         // Handle Terminated User cleanup
         $existEmail = User::where('email', $email)->first();
         if ($existEmail && $existEmail->status === UserAccountStatus::TERMINATED) {
-          $existEmail->update(['email' => $existEmail->email . '_term_' . time()]);
+          $suffix = '_T' . $existEmail->id;
+          $existEmail->update(['email' => substr($existEmail->email, 0, 100 - strlen($suffix)) . $suffix]);
         }
         $existPhone = User::where('phone', $phone)->first();
         if ($existPhone && $existPhone->status === UserAccountStatus::TERMINATED) {
-          $existPhone->update(['phone' => $existPhone->phone . '_term_' . time()]);
+          $suffix = '_T' . $existPhone->id;
+          $existPhone->update(['phone' => substr($existPhone->phone, 0, 20 - strlen($suffix)) . $suffix]);
         }
 
         $plainPassword = \Illuminate\Support\Str::random(10);
@@ -2544,7 +2621,7 @@ class EmployeeController extends Controller
       $prefix .= '-';
     }
 
-    $lastCodeQuery = User::where('code', 'like', $prefix . '%');
+    $lastCodeQuery = User::withoutGlobalScopes()->where('code', 'like', $prefix . '%');
     if ($tenantId) {
       $lastCodeQuery->where('tenant_id', $tenantId);
     }
@@ -2558,7 +2635,7 @@ class EmployeeController extends Controller
     }
 
     $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
-    while (User::where('code', $code)->exists()) {
+    while (User::withoutGlobalScopes()->where('code', $code)->exists()) {
       $nextNumber++;
       $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
     }

@@ -4,7 +4,7 @@
     use App\Services\AddonService\IAddonService;
     use Carbon\Carbon;
     use App\Helpers\StaticDataHelpers;
-    $role = $user->roles()->first()->name ?? '';
+    $role = $user->roles()->first()?->name ?? '';
     $addonService = app(IAddonService::class);
 @endphp
 @extends('layouts.layoutMaster')
@@ -317,7 +317,7 @@
                                         </div>
                                     @endif
 
-                                    @if($user->status === UserAccountStatus::ACTIVE && !$user->probation_confirmed_at && (auth()->id() === $user->reporting_to_id || auth()->user()->hasRole(['hr', 'admin', 'Admin', 'HR', 'Manager'])))
+                                    @if($user->status === UserAccountStatus::ACTIVE && !$user->probation_confirmed_at && (auth()->id() === $user->reporting_to_id || auth()->user()->hasRole(['hr', 'admin', 'Admin', 'HR', 'Manager', 'accounts'])))
                                         <a href="{{ route('probation.evaluate', $user->id) }}" class="btn btn-primary btn-sm w-100 rounded-pill shadow-sm">
                                             <i class="bx bx-edit-alt me-1"></i> Fill Evaluation Form
                                         </a>
@@ -871,6 +871,32 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        @php
+                                            $deptName = strtolower(trim($user->department?->name ?? ''));
+                                            $allowedDepts = ['sales', 'sale', 'sale department', 'sales department'];
+                                        @endphp
+                                        @if(in_array($deptName, $allowedDepts) || isset($currentCcMapping))
+                                        <!-- CC Agent -->
+                                        <div class="col-md-4">
+                                            <div class="emp-field-box">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center"
+                                                        style="width: 40px; height: 40px;">
+                                                        <i class="bx bx-headphone text-muted fs-4"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="mb-0 text-muted small fw-bold text-uppercase"
+                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">Assigned CC Agent
+                                                        </p>
+                                                        <p class="mb-0 fw-bold text-dark fs-6">
+                                                            {{ isset($currentCcMapping) && $currentCcMapping->ccUser ? $currentCcMapping->ccUser->first_name . ' ' . $currentCcMapping->ccUser->last_name : 'Not Assigned' }}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        @endif
                                         <!-- Site / Unit -->
                                         <div class="col-md-4">
                                             <div class="emp-field-box">
@@ -972,10 +998,20 @@
 
                             <!-- Leave Balances Section -->
                             @php
+                                $excludedLeaveCodes = ['ML', 'MAT', 'PL_PAT', 'PAT'];
                                 $leaveBalances = $user->leaveBalances()->with('leaveType')->get();
-                                $totalLeaves = $leaveBalances->sum('balance');
-                                $usedLeaves = $leaveBalances->sum('used');
-                                $remainingLeaves = $totalLeaves - $usedLeaves;
+
+                                // Poolable balances (exclude ML/PAT/SHL)
+                                $poolBalances = $leaveBalances->filter(fn($b) =>
+                                    $b->leaveType && !in_array(strtoupper($b->leaveType->code), array_merge($excludedLeaveCodes, ['SHL']))
+                                );
+                                $totalAllocated  = $poolBalances->sum('balance') + $poolBalances->sum('used');
+                                $totalUsed       = $poolBalances->sum('used');
+                                $availableBalance = $poolBalances->sum('balance');
+
+                                // Short leave
+                                $shlBalance = $leaveBalances->first(fn($b) => $b->leaveType && strtoupper($b->leaveType->code) === 'SHL');
+                                $shortLeaveAvailable = $shlBalance ? ($shlBalance->balance - $shlBalance->used) : 0;
                             @endphp
                             <div class="card mb-4 emp-card">
                                 <div class="card-body p-5">
@@ -994,84 +1030,37 @@
                                         </button>
                                     </div>
 
-                                    <div class="row g-6 mb-5">
-                                        <div class="col-md-4">
-                                            <div class="p-3 rounded-3"
-                                                style="background: #F8FAFC; border: 1px solid #E2E8F0;">
-                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase"
-                                                    style="font-size: 0.65rem;">Total Allocated</p>
-                                                <h5 class="mb-0 fw-bold text-dark">{{ number_format($totalLeaves, 1) }}</h5>
+                                    {{-- 4 Summary Cards --}}
+                                    <div class="row g-4 mb-2">
+                                        <div class="col-6 col-md-3">
+                                            <div class="p-3 rounded-3" style="background: #F8FAFC; border: 1px solid #E2E8F0;">
+                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Total Allocated</p>
+                                                <h5 class="mb-0 fw-bold text-dark">{{ number_format($totalAllocated, 1) }}</h5>
+                                                <small class="text-muted">Days this cycle</small>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="p-3 rounded-3"
-                                                style="background: #FFF7ED; border: 1px solid #FED7AA;">
-                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase"
-                                                    style="font-size: 0.65rem;">Total Used</p>
-                                                <h5 class="mb-0 fw-bold" style="color: #C2410C;">
-                                                    {{ number_format($usedLeaves, 1) }}</h5>
+                                        <div class="col-6 col-md-3">
+                                            <div class="p-3 rounded-3" style="background: #FFF7ED; border: 1px solid #FED7AA;">
+                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Total Used</p>
+                                                <h5 class="mb-0 fw-bold" style="color: #C2410C;">{{ number_format($totalUsed, 1) }}</h5>
+                                                <small class="text-muted">Days consumed</small>
                                             </div>
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="p-3 rounded-3"
-                                                style="background: #ECFDF3; border: 1px solid #BBF7D0;">
-                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase"
-                                                    style="font-size: 0.65rem;">Available Balance</p>
-                                                <h5 class="mb-0 fw-bold" style="color: #15803D;">
-                                                    {{ number_format($remainingLeaves, 1) }}</h5>
+                                        <div class="col-6 col-md-3">
+                                            <div class="p-3 rounded-3" style="background: #ECFDF3; border: 1px solid #BBF7D0;">
+                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Available Balance</p>
+                                                <h5 class="mb-0 fw-bold" style="color: #15803D;">{{ number_format($availableBalance, 1) }}</h5>
+                                                <small class="text-muted">Days remaining</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <div class="p-3 rounded-3" style="background: #EFF6FF; border: 1px solid #BFDBFE;">
+                                                <p class="mb-1 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem;">Short Leave</p>
+                                                <h5 class="mb-0 fw-bold" style="color: #1D4ED8;">{{ number_format($shortLeaveAvailable, 1) }}</h5>
+                                                <small class="text-muted">Hours remaining</small>
                                             </div>
                                         </div>
                                     </div>
-
-                                    @if($leaveBalances->count() > 0)
-                                        <div class="table-responsive rounded-3 border">
-                                            <table class="table table-hover mb-0 align-middle">
-                                                <thead class="bg-light">
-                                                    <tr>
-                                                        <th class="ps-4 py-2 small fw-bold text-uppercase">Leave Type</th>
-                                                        <th class="py-2 small fw-bold text-uppercase text-center">Carry Fwd</th>
-                                                        <th class="py-2 small fw-bold text-uppercase text-center">Accrued</th>
-                                                        <th class="py-2 small fw-bold text-uppercase text-center">Allocated</th>
-                                                        <th class="py-2 small fw-bold text-uppercase text-center">Used</th>
-                                                        <th class="pe-4 py-2 small fw-bold text-uppercase text-end">Available</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach($leaveBalances as $bal)
-                                                        @php
-                                                            $c_fwd = $bal->carry_forward_last_year ?? 0;
-                                                            $c_accrued = $bal->accrued_this_year ?? 0;
-                                                            // Fallback for existing data: if breakdown is missing but balance exists
-                                                            if ($bal->balance > 0 && $c_fwd == 0 && $c_accrued == 0) {
-                                                                $c_accrued = $bal->balance;
-                                                            }
-                                                        @endphp
-                                                        <tr>
-                                                            <td class="ps-4 py-3">
-                                                                <div class="d-flex align-items-center">
-                                                                    <div class="bg-label-primary rounded p-1 me-2"><i
-                                                                            class="bx bx-calendar-event"></i></div>
-                                                                    <span
-                                                                        class="fw-bold text-dark">{{ $bal->leaveType->name ?? 'Unknown' }}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td class="py-3 text-center text-muted">
-                                                                {{ number_format($c_fwd, 1) }}</td>
-                                                            <td class="py-3 text-center text-muted">
-                                                                {{ number_format($c_accrued, 1) }}</td>
-                                                            <td class="py-3 text-center fw-bold">
-                                                                {{ number_format($bal->balance, 1) }}</td>
-                                                            <td class="py-3 text-center text-danger">
-                                                                {{ number_format($bal->used, 1) }}</td>
-                                                            <td class="pe-4 py-3 text-end"><span
-                                                                    class="badge bg-label-success">{{ number_format($bal->balance - $bal->used, 1) }}</span>
-                                                            </td>
-                                                        </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    @endif
 
                                     <!-- Transaction Ledger -->
                                     <div class="mt-5 pt-4 border-top">
@@ -1085,52 +1074,59 @@
                                             <table class="table table-sm table-hover mb-0 align-middle">
                                                 <thead class="bg-light">
                                                     <tr>
-                                                        <th class="ps-3 py-2 small fw-bold text-uppercase">Event</th>
-                                                        <th class="py-2 small fw-bold text-uppercase">Type</th>
+                                                        <th class="ps-3 py-2 small fw-bold text-uppercase">Type</th>
                                                         <th class="py-2 small fw-bold text-uppercase text-center">Amount</th>
-                                                        <th class="py-2 small fw-bold text-uppercase">Reason / Period</th>
+                                                        <th class="py-2 small fw-bold text-uppercase">Reason</th>
                                                         <th class="pe-3 py-2 small fw-bold text-uppercase text-end">Date</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody style="font-size: 0.85rem;">
                                                     @forelse($leaveHistory as $item)
+                                                    @php
+                                                        // Determine type label and color
+                                                        if (!$item->is_adjustment) {
+                                                            $typeLabel = 'Leave Deducted';
+                                                            $typeColor = 'danger';
+                                                            $amountVal = null; // calculated from dates
+                                                            $from = \Carbon\Carbon::parse($item->from_date);
+                                                            $to   = \Carbon\Carbon::parse($item->to_date);
+                                                            $days = $from->diffInDays($to) + 1;
+                                                            $amountDisplay = '-' . number_format($days, 1);
+                                                            $amountClass = 'text-danger';
+                                                            $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
+                                                            if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
+                                                        } else {
+                                                            $amt = (float)$item->amount;
+                                                            $notes = $item->notes ?? '';
+                                                            // Detect carry forward
+                                                            $isCarryFwd = stripos($notes, 'carry forward') !== false || stripos($notes, 'Carry Forward') !== false || $item->type === 'Carry Forward';
+                                                            // Detect earned/accrual
+                                                            $isEarned = stripos($notes, 'Earned for') !== false || stripos($notes, 'Monthly Accrual') !== false || stripos($notes, 'Initial') !== false;
+
+                                                            if ($isCarryFwd) {
+                                                                $typeLabel = 'Carry Forward';
+                                                                $typeColor = 'primary';
+                                                            } elseif ($amt > 0) {
+                                                                $typeLabel = 'Leave Credited';
+                                                                $typeColor = 'success';
+                                                            } else {
+                                                                $typeLabel = 'Leave Deducted';
+                                                                $typeColor = 'danger';
+                                                            }
+                                                            $amountDisplay = ($amt > 0 ? '+' : '') . number_format($amt, 1);
+                                                            $amountClass = $amt > 0 ? 'text-success' : 'text-danger';
+                                                            $reason = $notes ?: 'System Adjustment';
+                                                        }
+                                                    @endphp
                                                     <tr>
                                                         <td class="ps-3 py-2">
-                                                            <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
-                                                        </td>
-                                                        <td class="py-2">
-                                                            @php
-                                                                $typeColor = 'secondary';
-                                                                $typeName = $item->type;
-                                                                if($typeName == 'Credit' || $typeName == 'Accrued' || $typeName == 'Carry Forward') $typeColor = 'success';
-                                                                elseif($typeName == 'Request') $typeColor = 'info';
-                                                                elseif($typeName == 'Deduction') $typeColor = 'danger';
-                                                            @endphp
-                                                            <span class="badge bg-label-{{ $typeColor }} py-0 px-2" style="font-size: 0.7rem;">{{ $typeName }}</span>
+                                                            <span class="badge bg-label-{{ $typeColor }} py-0 px-2" style="font-size: 0.7rem;">{{ $typeLabel }}</span>
                                                         </td>
                                                         <td class="py-2 text-center fw-bold">
-                                                            @if($item->is_adjustment)
-                                                                <span class="{{ $item->amount > 0 ? 'text-success' : 'text-danger' }}">
-                                                                    {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }}
-                                                                </span>
-                                                            @else
-                                                                @php
-                                                                    $from = \Carbon\Carbon::parse($item->from_date);
-                                                                    $to = \Carbon\Carbon::parse($item->to_date);
-                                                                    $days = $from->diffInDays($to) + 1;
-                                                                @endphp
-                                                                <span class="text-info">-{{ number_format($days, 1) }}</span>
-                                                            @endif
+                                                            <span class="{{ $amountClass }}">{{ $amountDisplay }}</span>
                                                         </td>
                                                         <td class="py-2">
-                                                            <div class="text-muted small">
-                                                                @if($item->from_date)
-                                                                    {{ \Carbon\Carbon::parse($item->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($item->to_date)->format('d M') }}
-                                                                    @if($item->notes) <span class="mx-1">|</span> {{ \Illuminate\Support\Str::limit($item->notes, 30) }} @endif
-                                                                @else
-                                                                    {{ \Illuminate\Support\Str::limit($item->notes, 50) }}
-                                                                @endif
-                                                            </div>
+                                                            <div class="text-muted small">{{ $reason }}</div>
                                                         </td>
                                                         <td class="pe-3 py-2 text-end text-muted">
                                                             {{ $item->created_at->format('d M, Y') }}
@@ -1138,12 +1134,13 @@
                                                     </tr>
                                                     @empty
                                                     <tr>
-                                                        <td colspan="5" class="text-center py-4 text-muted small">No transactions recorded</td>
+                                                        <td colspan="4" class="text-center py-4 text-muted small">No transactions recorded</td>
                                                     </tr>
                                                     @endforelse
                                                 </tbody>
                                             </table>
                                         </div>
+
                                     </div>
                                 </div>
                             </div>
@@ -2126,7 +2123,7 @@
                                             </h6>
                                         </div>
                                         <div class="d-flex gap-2">
-                                            @if(auth()->user()->hasRole(['admin', 'Admin', 'hr', 'manager', 'super_admin']) || auth()->user()->can('user-edit'))
+                                            @if(auth()->user()->hasRole(['admin', 'Admin', 'hr', 'manager', 'accounts', 'super_admin']) || auth()->user()->can('user-edit'))
                                                 <button class="btn btn-hitech px-4 rounded-pill shadow-sm"
                                                     data-bs-toggle="modal" data-bs-target="#modalAddKpi" onclick="openAddKpi()">
                                                     <i class="bx bx-plus-circle me-1"></i> Add KRA Objective
@@ -2189,7 +2186,7 @@
                                                                     onclick="editKpi({{ $task->id }}, '{{ getMetric($task->description) }}', 'KRA', 'Standard', {{ $task->target_amount }}, '{{ $task->incentive_type->value }}', '{{ addslashes($task->description) }}')">
                                                                     <i class="bx bx-show-alt"></i>
                                                                 </button>
-                                                                @if(auth()->user()->can('user-edit') || auth()->user()->hasRole('hr'))
+                                                                @if(auth()->user()->can('user-edit') || auth()->user()->hasRole(['hr', 'accounts']))
                                                                     <button
                                                                         class="btn btn-sm btn-icon rounded-circle btn-hitech-alert"
                                                                         title="Delete" onclick="deleteKpi({{ $task->id }})">
@@ -2230,7 +2227,7 @@
                                             <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Strategic Performance
                                                 (KPIs)</h6>
                                         </div>
-                                        @if(auth()->user()->hasRole(['admin', 'hr', 'manager', 'super_admin']))
+                                        @if(auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts', 'super_admin']))
                                             <button class="btn btn-hitech px-4 rounded-pill shadow-sm" onclick="openAddKpi()">
                                                 <i class="bx bx-plus me-1"></i> Add KPI Target
                                             </button>
@@ -2271,7 +2268,7 @@
                                             </div>
                                         </div>
                                     </div>
-                                    @if(auth()->user()->can('user-edit') || auth()->user()->hasRole('hr'))
+                                    @if(auth()->user()->can('user-edit') || auth()->user()->hasRole(['hr', 'accounts']))
                                         <button class="btn btn-hitech-secondary px-4 rounded-pill shadow-sm"
                                             data-bs-toggle="modal" data-bs-target="#modalAddTask" onclick="resetKraModal()">
                                             <i class="bx bx-plus me-1"></i> Create Strategic KRA
@@ -2388,9 +2385,44 @@
                                                 <p class="mb-0 text-muted smallest">Performed by:
                                                     {{ $log->user ? $log->user->getFullName() : 'System' }}</p>
                                                 @if(!empty($log->old_values) || !empty($log->new_values))
-                                                    <div class="mt-2 text-warning smallest bg-light p-2 rounded-3"
-                                                        style="font-family: monospace;">
-                                                        <i class="bx bx-info-circle me-1"></i> Data update logged securely.
+                                                    <div class="mt-2 p-3 bg-light rounded-3" style="font-size: 0.75rem; border: 1px solid #E2E8F0;">
+                                                        @if($log->event === 'created')
+                                                            <div class="text-muted">
+                                                                <i class="bx bx-plus-circle text-success me-1"></i> Created new record.
+                                                                <ul class="mb-0 mt-1 ps-3">
+                                                                    @foreach($log->new_values as $key => $value)
+                                                                        @php
+                                                                            if (in_array($key, ['password', 'remember_token', 'updated_at', 'created_at', 'deleted_at', 'tenant_id'])) continue;
+                                                                            $fieldName = ucwords(str_replace('_', ' ', $key));
+                                                                        @endphp
+                                                                        @if($value !== null && $value !== '')
+                                                                            <li><strong>{{ $fieldName }}:</strong> <span class="text-dark">{{ is_array($value) ? json_encode($value) : $value }}</span></li>
+                                                                        @endif
+                                                                    @endforeach
+                                                                </ul>
+                                                            </div>
+                                                        @else
+                                                            <div class="text-muted">
+                                                                <i class="bx bx-edit text-warning me-1"></i> Modified fields:
+                                                                <ul class="mb-0 mt-1 ps-3">
+                                                                    @foreach($log->new_values as $key => $value)
+                                                                        @php
+                                                                            if (in_array($key, ['password', 'remember_token', 'updated_at', 'created_at', 'deleted_at'])) continue;
+                                                                            $oldValue = $log->old_values[$key] ?? 'N/A';
+                                                                            $newValue = $value ?? 'N/A';
+                                                                            if ($oldValue === $newValue) continue;
+                                                                            $fieldName = ucwords(str_replace('_', ' ', $key));
+                                                                        @endphp
+                                                                        <li>
+                                                                            <strong>{{ $fieldName }}:</strong>
+                                                                            <span class="text-danger"><del>{{ is_array($oldValue) ? json_encode($oldValue) : $oldValue }}</del></span>
+                                                                            <span class="mx-1">➜</span>
+                                                                            <span class="text-success">{{ is_array($newValue) ? json_encode($newValue) : $newValue }}</span>
+                                                                        </li>
+                                                                    @endforeach
+                                                                </ul>
+                                                            </div>
+                                                        @endif
                                                     </div>
                                                 @endif
                                             </div>
