@@ -179,15 +179,4 @@ Route::middleware('auth:web')->group(function () {
   });
 });
 
-Route::get('list-depts-temp', function() {
-    $depts = \App\Models\Department::with(['users' => function($q) { $q->where('status', 'active'); }])->get();
-    $out = "";
-    foreach($depts as $d) {
-        $out .= "### " . $d->name . " (" . $d->users->count() . " active users)\n";
-        foreach($d->users as $u) {
-            $out .= "- " . $u->first_name . " " . $u->last_name . " (" . $u->email . ")\n";
-        }
-        $out .= "\n";
-    }
-    return response($out)->header('Content-Type', 'text/plain');
-});
+

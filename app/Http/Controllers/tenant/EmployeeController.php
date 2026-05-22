@@ -1574,7 +1574,9 @@ class EmployeeController extends Controller
       'leaveHistory' => $leaveHistory,
       'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
       'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
-      'currentCcMapping' => $currentCcMapping
+      'currentCcMapping' => $currentMappings,
+      'currentCcareId' => $currentCcareId,
+      'currentNewbizId' => $currentNewbizId,
     ]);
   }
 
