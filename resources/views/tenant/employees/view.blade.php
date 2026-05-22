@@ -879,7 +879,7 @@
                                         @if(in_array($deptName, $allowedDepts) || $currentCcareId || $currentNewbizId)
                                         <!-- CC Agent -->
                                         <div class="col-md-4">
-                                            <div class="emp-field-box mb-2">
+                                            <div class="emp-field-box">
                                                 <div class="d-flex align-items-center">
                                                     <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center"
                                                         style="width: 40px; height: 40px;">
@@ -898,6 +898,8 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                        </div>
+                                        <div class="col-md-4">
                                             <div class="emp-field-box">
                                                 <div class="d-flex align-items-center">
                                                     <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center"
