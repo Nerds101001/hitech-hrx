@@ -281,10 +281,7 @@ class EmployeeController extends Controller
 
     $leavePolicyProfiles = \App\Models\LeavePolicyProfile::all();
 
-    $ccUsers = User::with(['designation', 'department'])
-        ->whereHas('department', function($q) {
-            $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']);
-        })->where('status', UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+
 
     return view('tenant.employees.create', [
       'shifts' => $shifts,
@@ -293,7 +290,8 @@ class EmployeeController extends Controller
       'users' => $users,
       'roles' => $roles,
       'leavePolicyProfiles' => $leavePolicyProfiles,
-      'ccUsers' => $ccUsers,
+      'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
+      'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
     ]);
   }
 
@@ -439,7 +437,8 @@ class EmployeeController extends Controller
       'designationId' => 'required|exists:designations,id',
       'role' => 'required|exists:roles,name',
       'reportingToId' => 'required|exists:users,id',
-      'cc_agent_id' => 'nullable|exists:users,id',
+      'ccare_agent_id' => 'nullable|exists:users,id',
+        'newbiz_agent_id' => 'nullable|exists:users,id',
       'attendanceType' => 'required|in:open,geofence,ipAddress,staticqr,site,dynamicqr,face',
       'geofenceGroupId' => 'required_if:attendanceType,geofence|nullable|exists:geofence_groups,id',
       'ipGroupId' => 'required_if:attendanceType,ipAddress|nullable|exists:ip_address_groups,id',
@@ -1527,12 +1526,20 @@ class EmployeeController extends Controller
 
     $leaveHistory = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
 
-    $ccUsers = User::with(['designation', 'department'])
-        ->whereHas('department', function($q) {
-            $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']);
-        })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
-
-    $currentCcMapping = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)->first();
+    $ccareUsers = User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+    $newbizUsers = User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+    
+    $currentMappings = \App\Models\CcSalespersonMap::with('ccUser.department')->where('sales_user_id', $user->id)->get();
+    $currentCcareId = null;
+    $currentNewbizId = null;
+    foreach ($currentMappings as $map) {
+        $dName = strtolower($map->ccUser->department->name ?? '');
+        if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
+            $currentCcareId = $map->cc_user_id;
+        } elseif (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
+            $currentNewbizId = $map->cc_user_id;
+        }
+    }
 
     return view('tenant.employees.view', [
       'user' => $user,
@@ -1547,7 +1554,8 @@ class EmployeeController extends Controller
       'designations' => $designations,
       'allUsers' => $allUsers,
       'leaveHistory' => $leaveHistory,
-      'ccUsers' => $ccUsers,
+      'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
+      'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
       'currentCcMapping' => $currentCcMapping
     ]);
   }
@@ -1679,11 +1687,11 @@ class EmployeeController extends Controller
       $user->assignRole($request->input('role'));
 
       // CC Agent Assignment for Sales/New Biz
-      if ($request->filled('cc_agent_id')) {
-          \App\Models\CcSalespersonMap::updateOrCreate(
-              ['sales_user_id' => $user->id],
-              ['cc_user_id' => $request->input('cc_agent_id')]
-          );
+      if ($request->filled('ccare_agent_id')) {
+          \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $request->input('ccare_agent_id')]);
+      }
+      if ($request->filled('newbiz_agent_id')) {
+          \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $request->input('newbiz_agent_id')]);
       }
 
       if ($user->leave_policy_profile_id) {
