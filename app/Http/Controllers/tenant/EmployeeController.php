@@ -504,16 +504,43 @@ class EmployeeController extends Controller
     // Role Synchronization
     $user->syncRoles([$validated['role']]);
 
-    // CC Agent Assignment for Sales/New Biz
-    if ($request->has('cc_agent_id')) {
-        $ccAgentId = $request->input('cc_agent_id');
-        if (empty($ccAgentId)) {
-            \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)->delete();
-        } else {
-            \App\Models\CcSalespersonMap::updateOrCreate(
-                ['sales_user_id' => $user->id],
-                ['cc_user_id' => $ccAgentId]
-            );
+    // CCARE Agent Assignment
+    if ($request->has('ccare_agent_id')) {
+        $ccareAgentId = $request->input('ccare_agent_id');
+        // Remove any existing CCARE mapping for this salesperson
+        $existingCcare = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+            ->whereHas('ccUser', function($q) {
+                $q->whereHas('department', function($dq) {
+                    $dq->whereIn('name', ['CCARE', 'Customer Care']);
+                });
+            })->first();
+        if ($existingCcare) $existingCcare->delete();
+
+        if (!empty($ccareAgentId)) {
+            \App\Models\CcSalespersonMap::create([
+                'sales_user_id' => $user->id,
+                'cc_user_id' => $ccareAgentId,
+            ]);
+        }
+    }
+
+    // New Biz Agent Assignment
+    if ($request->has('newbiz_agent_id')) {
+        $newbizAgentId = $request->input('newbiz_agent_id');
+        // Remove any existing New Biz mapping for this salesperson
+        $existingNewbiz = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+            ->whereHas('ccUser', function($q) {
+                $q->whereHas('department', function($dq) {
+                    $dq->whereIn('name', ['New Biz', 'New Business Department']);
+                });
+            })->first();
+        if ($existingNewbiz) $existingNewbiz->delete();
+
+        if (!empty($newbizAgentId)) {
+            \App\Models\CcSalespersonMap::create([
+                'sales_user_id' => $user->id,
+                'cc_user_id' => $newbizAgentId,
+            ]);
         }
     }
 
