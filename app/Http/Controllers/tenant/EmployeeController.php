@@ -281,6 +281,11 @@ class EmployeeController extends Controller
 
     $leavePolicyProfiles = \App\Models\LeavePolicyProfile::all();
 
+    $ccUsers = User::with(['designation', 'department'])
+        ->whereHas('department', function($q) {
+            $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']);
+        })->where('status', UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+
     return view('tenant.employees.create', [
       'shifts' => $shifts,
       'teams' => $teams,
@@ -288,6 +293,7 @@ class EmployeeController extends Controller
       'users' => $users,
       'roles' => $roles,
       'leavePolicyProfiles' => $leavePolicyProfiles,
+      'ccUsers' => $ccUsers,
     ]);
   }
 
@@ -1523,8 +1529,8 @@ class EmployeeController extends Controller
 
     $ccUsers = User::with(['designation', 'department'])
         ->whereHas('department', function($q) {
-            $q->where('name', 'like', '%CCARE%')->orWhere('name', 'like', '%Customer Care%');
-        })->orderBy('first_name')->get();
+            $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']);
+        })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
 
     $currentCcMapping = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)->first();
 
