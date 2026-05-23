@@ -100,13 +100,8 @@ class HRPolicyController extends Controller
             );
 
             // Send simple confirmation email (Instant background task)
-            dispatch(function () use ($user, $acknowledgment) {
-                try {
-                    $user->notify(new PolicyAcknowledgedNotification($acknowledgment));
-                } catch (\Exception $e) {
-                    Log::error("Policy email failed: " . $e->getMessage());
-                }
-            })->afterResponse();
+            \App\Jobs\SendPolicyAcknowledgmentEmail::dispatch($user, $acknowledgment)->afterResponse();
+
 
             return response()->json(['success' => 'Policy acknowledged successfully.']);
 

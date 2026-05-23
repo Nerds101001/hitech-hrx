@@ -67,16 +67,25 @@ function runAccountsRoleSetup() {
     echo "  Accounts role synced with " . count($permsToSync) . " permissions.\n";
 
     // Find the accounts department and assign the role to those users
-    $accountsDept = Department::where('name', 'Accounts')->first();
-    if ($accountsDept) {
-        $designations = Designation::where('department_id', $accountsDept->id)->pluck('id');
-        $users = User::whereIn('designation_id', $designations)->get();
-        foreach ($users as $user) {
-            $user->assignRole($accountsRole);
-            echo "  Assigned accounts role to: {$user->email}\n";
+    $accountsDept = Department::where('name', 'like', '%Accounts%')->first();
+    $deptId = $accountsDept ? $accountsDept->id : null;
+    $designations = $deptId ? Designation::where('department_id', $deptId)->pluck('id') : collect();
+    
+    $users = User::where(function($q) use ($deptId, $designations) {
+        if ($deptId) {
+            $q->where('department_id', $deptId)
+              ->orWhereIn('designation_id', $designations);
         }
-    } else {
-        echo "  Accounts department not found.\n";
+        $q->orWhere('email', 'like', 'accounts%');
+    })->get();
+    
+    foreach ($users as $user) {
+        $user->assignRole($accountsRole);
+        echo "  Assigned accounts role to: {$user->email}\n";
+    }
+    
+    if (!$accountsDept) {
+        echo "  Accounts department not found, but assigned role to matching email users.\n";
     }
 
     // Clear Cache

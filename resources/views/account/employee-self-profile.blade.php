@@ -4,7 +4,7 @@
     use App\Services\AddonService\IAddonService;
     use Carbon\Carbon;
     use App\Helpers\StaticDataHelpers;
-    $role = $user->roles()->first()->name ?? '';
+    $role = $user->roles()->first()?->name ?? '';
     $addonService = app(IAddonService::class);
 @endphp
 @extends('layouts.layoutMaster')

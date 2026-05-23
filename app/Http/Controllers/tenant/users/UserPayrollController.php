@@ -23,8 +23,14 @@ class UserPayrollController extends Controller
 
     public function showAjax($id)
     {
-        $data = $this->preparePayslipData($id);
-        return view('tenant.users.payroll.show_ajax', $data);
+        try {
+            $data = $this->preparePayslipData($id);
+            $html = view('tenant.users.payroll.show_ajax', $data)->render();
+            return response()->json(['success' => true, 'html' => $html]);
+        } catch (\Exception $e) {
+            \Log::error('Payslip Preview Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
     }
 
     public function download($id)
@@ -44,10 +50,14 @@ class UserPayrollController extends Controller
 
     private function preparePayslipData($id)
     {
-        $payslip = Payslip::with(['user.designation', 'user.team', 'user.bankAccount'])
-            ->where('id', $id)
-            ->where('user_id', auth()->id())
-            ->firstOrFail();
+        $payslipQuery = Payslip::with(['user.designation', 'user.team', 'user.bankAccount'])
+            ->where('id', $id);
+            
+        if (!auth()->user()->hasRole(['accounts', 'Accounts'])) {
+            $payslipQuery->where('user_id', auth()->id());
+        }
+        
+        $payslip = $payslipQuery->firstOrFail();
 
         $user = $payslip->user;
         $settings = \App\Models\Settings::first();
@@ -82,37 +92,84 @@ class UserPayrollController extends Controller
         
         $totalDaysInMonth = 31; // Fallback or dynamic
         
-        // Financials (Dynamic Attendance Based)
-        $ctcAnnum = $user?->ctc_offered ?? ($payslip->net_salary * 12);
-        $fixedMonthlyCTC = $ctcAnnum / 12;
-        
-        // Calculate Earned Gross based on Attendance
-        $earnedGross = ($fixedMonthlyCTC / $totalDays) * $workedDays;
+        // Financials & Breakdown
+        $userBaseSalary = $user->base_salary ?? 0;
+        $fixedMonthlyCTC = $userBaseSalary;
         
         $symbol = $settings->currency_symbol ?? '₹';
 
-        // Synchronized Breakdown Logic (Compliance Friendly) - Applied to EARNED GROSS
-        $basicMonth = $earnedGross * 0.5;
-        $hraMonth = $earnedGross * 0.25;
-        $medicalMonth = 2500; 
-        $eduMonth = 200;
-        $ltaMonth = 2500;
-        
-        $sumA = $basicMonth + $hraMonth + $medicalMonth + $eduMonth + $ltaMonth;
-        $specialAllowance = max(0, $earnedGross - $sumA);
-        
-        $profTax = 200; 
-        
-        $pfAmount = min($basicMonth * 0.12, 1800); 
-        
-        $deductions = $profTax + $pfAmount;
-        $netSalary = $earnedGross - $deductions;
+        // Retrieve Salary Policy
+        $policy = $user->salaryPolicy;
+        if (!$policy && $user->site_id) {
+            $policy = \App\Models\SalaryPolicy::where('site_id', $user->site_id)->first();
+        }
+        if (!$policy) {
+            $policy = \App\Models\SalaryPolicy::first();
+        }
+
+        // Full Structure values (un-pro-rated)
+        $fullBasic = $user->custom_basic !== null ? $user->custom_basic : ($policy ? ($fixedMonthlyCTC * ($policy->basic_percentage / 100)) : ($fixedMonthlyCTC * 0.50));
+        $fullHra = $user->custom_hra !== null ? $user->custom_hra : ($policy ? ($fixedMonthlyCTC * ($policy->hra_percentage / 100)) : ($fixedMonthlyCTC * 0.25));
+        $fullCa = $user->custom_ca !== null ? $user->custom_ca : ($policy ? $policy->ca_fixed : 0.00);
+        $fullMedical = $user->custom_medical !== null ? $user->custom_medical : ($policy ? $policy->medical_fixed : 0.00);
+        $fullEdu = $user->custom_edu !== null ? $user->custom_edu : ($policy ? $policy->edu_fixed : 0.00);
+        $fullSpecialAllowance = $user->custom_special_allowance !== null ? $user->custom_special_allowance : max(0.00, $fixedMonthlyCTC - ($fullBasic + $fullHra + $fullCa + $fullMedical + $fullEdu));
+
+        if ($payslip->hra !== null && ($payslip->hra > 0 || $payslip->basic_salary > 0)) {
+            $basicMonth = $payslip->basic_salary;
+            $hraMonth = $payslip->hra;
+            $medicalMonth = $payslip->medical;
+            $eduMonth = $payslip->edu;
+            $ltaMonth = $payslip->ca; // CA is Conveyance / LTA
+            $specialAllowance = $payslip->special_allowance;
+            
+            $profTax = $payslip->pt ?? 0.00;
+            $pfAmount = $payslip->epf ?? 0.00;
+            $esiAmount = $payslip->esic ?? 0.00;
+            $earnedGross = $basicMonth + $hraMonth + $medicalMonth + $eduMonth + $ltaMonth + $specialAllowance;
+            
+            // Adjustments & other deductions (e.g. loan, TDS, other adjustments)
+            $deductions = $payslip->total_deductions;
+            $otherDeductions = max(0.00, $deductions - ($profTax + $pfAmount + $esiAmount));
+            $netSalary = $payslip->net_salary;
+        } else {
+            // Legacy/fallback calculation
+            $ctcAnnum = $user?->ctc_offered ?? ($payslip->net_salary * 12);
+            $fixedMonthlyCTC = $ctcAnnum / 12;
+            
+            // Calculate Earned Gross based on Attendance
+            $earnedGross = ($fixedMonthlyCTC / $totalDays) * $workedDays;
+            
+            $basicMonth = $earnedGross * 0.5;
+            $hraMonth = $earnedGross * 0.25;
+            $medicalMonth = 2500; 
+            $eduMonth = 200;
+            $ltaMonth = 2500;
+            
+            $sumA = $basicMonth + $hraMonth + $medicalMonth + $eduMonth + $ltaMonth;
+            $specialAllowance = max(0, $earnedGross - $sumA);
+            
+            $profTax = 200; 
+            $pfAmount = min($basicMonth * 0.12, 1800); 
+            $esiAmount = 0.00;
+            $otherDeductions = 0.00;
+            
+            $deductions = $profTax + $pfAmount;
+            $netSalary = $earnedGross - $deductions;
+        }
 
         return [
             'payslip' => $payslip,
             'user' => $user,
             'settings' => $settings,
+            'policy' => $policy,
             'fixedMonthlyCTC' => $fixedMonthlyCTC,
+            'fullBasic' => $fullBasic,
+            'fullHra' => $fullHra,
+            'fullCa' => $fullCa,
+            'fullMedical' => $fullMedical,
+            'fullEdu' => $fullEdu,
+            'fullSpecialAllowance' => $fullSpecialAllowance,
             'basicMonth' => $basicMonth,
             'hraMonth' => $hraMonth,
             'medicalMonth' => $medicalMonth,
@@ -121,6 +178,8 @@ class UserPayrollController extends Controller
             'specialAllowance' => $specialAllowance,
             'profTax' => $profTax,
             'pfAmount' => $pfAmount,
+            'esiAmount' => $esiAmount,
+            'otherDeductions' => $otherDeductions,
             'netEarned' => $earnedGross,
             'netSalary' => $netSalary,
             'currencySymbol' => $symbol,

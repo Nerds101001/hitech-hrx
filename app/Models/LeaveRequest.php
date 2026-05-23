@@ -29,21 +29,28 @@ class LeaveRequest extends Model implements AuditableContract
     'approved_at',
     'rejected_at',
     'status',
+    'is_lwp',
+    'lwp_days',
     'approval_notes',
     'notes',
     'created_by_id',
     'updated_by_id',
     'tenant_id',
     'cancel_reason',
-    'cancelled_at'
+    'cancelled_at',
+    'is_half_day',
+    'half_day_session'
   ];
 
   protected $casts = [
-    'status' => LeaveRequestStatus::class,
-    'from_date' => 'date:d-m-Y',
-    'to_date' => 'date:d-m-Y',
-    'approved_at' => 'datetime',
-    'rejected_at' => 'datetime',
+    'status'       => LeaveRequestStatus::class,
+    'is_lwp'       => 'boolean',
+    'is_half_day'  => 'boolean',
+    'lwp_days'     => 'float',
+    'from_date'    => 'date:d-m-Y',
+    'to_date'      => 'date:d-m-Y',
+    'approved_at'  => 'datetime',
+    'rejected_at'  => 'datetime',
     'cancelled_at' => 'datetime'
   ];
 
@@ -65,17 +72,18 @@ class LeaveRequest extends Model implements AuditableContract
   protected static function booted()
   {
       static::updated(function ($leaveRequest) {
-          // If the status changed to APPROVED
+
+          // ---------------------------------------------------------------
+          // ON APPROVAL: deduct balance + create attendance records
+          // ---------------------------------------------------------------
           if ($leaveRequest->wasChanged('status') && $leaveRequest->status === LeaveRequestStatus::APPROVED) {
-              $user = $leaveRequest->user;
-              $isPaidType = $leaveRequest->leaveType->is_paid;
+              $user        = $leaveRequest->user;
+              $isPaidType  = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
-              $plType = \App\Models\LeaveType::where('code', 'PL')->first();
-              
-              // Excluded from pool (must use their own balance)
+              $plType      = \App\Models\LeaveType::where('code', 'PL')->first();
               $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
-              
-              // Find the balance record to use (defaults to PL for all poolable paid types)
+
+              // Determine which balance record to deduct from
               $deductLeaveTypeId = $leaveRequest->leave_type_id;
               if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
                   $deductLeaveTypeId = $plType->id;
@@ -87,88 +95,108 @@ class LeaveRequest extends Model implements AuditableContract
                   'tenant_id'     => $leaveRequest->tenant_id,
               ]);
 
-              $tempDate = $leaveRequest->from_date->copy();
-              $toDate = $leaveRequest->to_date;
-              $workingDayCounter = 0;
+              $tempDate  = $leaveRequest->from_date->copy();
+              $toDate    = $leaveRequest->to_date;
+              $lwpDays   = 0.0;
+              $paidDays  = 0.0;
+              $decrement = $leaveRequest->is_half_day ? 0.5 : 1.0;
 
               while ($tempDate->lte($toDate)) {
-                  // Only process working days for balance deduction
                   if (\App\Services\LeavePolicyService::isWorkingDay($user, $tempDate)) {
-                      $status = 'on_leave'; // Default fallback
-                      
-                      // Handle Paid vs Unpaid split
-                      if ($isPaidType) {
-                          $availableBalance = (float)$balance->balance - (float)$balance->used;
-                          if ($availableBalance >= 1) {
-                              $balance->used += 1;
-                              $status = 'leave'; // Database only accepts 'leave'
+
+                      $availableBalance = (float)$balance->balance - (float)$balance->used;
+
+                      if ($isPaidType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
+                          if ($availableBalance >= $decrement) {
+                              // Paid day — deduct from balance
+                              $balance->used += $decrement;
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'leave'; // paid leave
                           } else {
-                              $status = 'leave';
+                              // No balance left — LWP day
+                              $lwpDays += $decrement;
+                              $attendanceStatus = 'unpaid_leave';
                           }
                       } else {
-                          $status = 'leave';
+                          // Non-paid type (SL, CL etc.) or excluded — just mark leave
+                          $attendanceStatus = 'leave';
                       }
 
                       Attendance::updateOrCreate(
                           [
-                              'user_id' => $leaveRequest->user_id,
-                              'tenant_id' => $leaveRequest->tenant_id,
-                              'check_in_time' => $tempDate->copy()->startOfDay(),
+                              'user_id'        => $leaveRequest->user_id,
+                              'tenant_id'      => $leaveRequest->tenant_id,
+                              'check_in_time'  => $tempDate->copy()->startOfDay(),
                           ],
                           [
-                              'status' => $status,
-                              'shift_id' => $user->shift_id,
+                              'status'           => $attendanceStatus,
+                              'shift_id'         => $user->shift_id,
                               'leave_request_id' => $leaveRequest->id,
-                              'created_by_id' => auth()->id() ?? $user->id,
+                              'created_by_id'    => auth()->id() ?? $user->id,
                           ]
                       );
                   }
                   $tempDate->addDay();
               }
+
               $balance->save();
+
+              // Update LWP flag on the leave request itself
+              if ($lwpDays > 0) {
+                  $leaveRequest->withoutEvents(function () use ($leaveRequest, $lwpDays) {
+                      $leaveRequest->updateQuietly([
+                          'is_lwp'   => true,
+                          'lwp_days' => $lwpDays,
+                      ]);
+                  });
+              }
           }
-          
-          // If status was approved but now is CANCELLED or REJECTED
-          if ($leaveRequest->wasChanged('status') && 
+
+          // ---------------------------------------------------------------
+          // ON CANCELLATION (post-approval): reverse balance + delete attendance
+          // ---------------------------------------------------------------
+          if ($leaveRequest->wasChanged('status') &&
               $leaveRequest->getOriginal('status') === LeaveRequestStatus::APPROVED &&
               ($leaveRequest->status === LeaveRequestStatus::CANCELLED || $leaveRequest->status === LeaveRequestStatus::REJECTED)) {
-              
-              $user = $leaveRequest->user;
-              $isPaidType = $leaveRequest->leaveType->is_paid;
+
+              $user          = $leaveRequest->user;
+              $isPaidType    = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
-              $plType = \App\Models\LeaveType::where('code', 'PL')->first();
+              $plType        = \App\Models\LeaveType::where('code', 'PL')->first();
               $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
 
-              // Find which balance record was used during approval
               $refundLeaveTypeId = $leaveRequest->leave_type_id;
               if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
                   $refundLeaveTypeId = $plType->id;
               }
 
-              $duration = 0;
-              if ($leaveRequest->is_short_leave && $leaveRequest->duration_hours) {
-                  // Short leave refund logic (if applicable in future, though SHL is handled separately)
-                  $duration = $leaveRequest->duration_hours / 8;
-              } else {
-                  $duration = \App\Services\LeavePolicyService::calculateWorkingDays($user, $leaveRequest->leave_type_id, $leaveRequest->from_date->toDateString(), $leaveRequest->to_date->toDateString());
-              }
-              
-              $balance = LeaveBalance::where('user_id', $leaveRequest->user_id)
-                  ->where('leave_type_id', $refundLeaveTypeId)
-                  ->first();
-              
-              if ($balance) {
-                  $balance->used = max(0, $balance->used - $duration);
-                  $balance->save();
+              // Only refund the PAID days (not LWP days)
+              $paidDaysToRefund = \App\Services\LeavePolicyService::calculateWorkingDays(
+                  $user,
+                  $leaveRequest->leave_type_id,
+                  $leaveRequest->from_date->toDateString(),
+                  $leaveRequest->to_date->toDateString(),
+                  (bool)$leaveRequest->is_half_day
+              ) - (float)($leaveRequest->lwp_days ?? 0);
+
+              if ($paidDaysToRefund > 0) {
+                  $balance = LeaveBalance::where('user_id', $leaveRequest->user_id)
+                      ->where('leave_type_id', $refundLeaveTypeId)
+                      ->first();
+
+                  if ($balance) {
+                      $balance->used = max(0, $balance->used - $paidDaysToRefund);
+                      $balance->save();
+                  }
               }
 
-              // Delete auto-created Attendance records
+              // Delete auto-created attendance records for those dates
               Attendance::where('user_id', $leaveRequest->user_id)
                   ->whereBetween('check_in_time', [
-                      $leaveRequest->from_date->startOfDay(), 
+                      $leaveRequest->from_date->startOfDay(),
                       $leaveRequest->to_date->endOfDay()
                   ])
-                  ->whereIn('status', ['paid_leave', 'unpaid_leave', 'on_leave'])
+                  ->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave'])
                   ->delete();
           }
       });

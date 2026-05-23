@@ -29,25 +29,37 @@ class AttendanceService implements IAttendance
         ->whereDate('check_in_time', Carbon::today())
         ->first();
 
-      if (!$todayAttendance) {
+      $attendanceLog = $todayAttendance ? AttendanceLog::where('attendance_id', $todayAttendance->id)->latest()->first() : null;
+
+      if (!$todayAttendance || !$attendanceLog) {
         $now = now();
-        // Calculate status using central logic
         $calc = $this->calculateDayStatus($user, $now, $now, null);
 
-        //Fresh check in for the day
-        $attendance = new Attendance();
-        $attendance->user_id = $userId;
-        $attendance->check_in_time = $now;
-        $attendance->shift_id = $user->shift_id;
-        $attendance->status = $calc['status'];
-        $attendance->is_policy_late = $calc['is_policy_late'] ?? false;
-        $attendance->leave_request_id = $calc['leave_request_id'] ?? null;
-        $attendance->created_by_id = auth()->id();
-        $attendance->tenant_id = $user->tenant_id;
-        $attendance->save();
+        if ($todayAttendance) {
+          // Update the leave-created attendance record with actual check-in time
+          $todayAttendance->check_in_time = $now;
+          $todayAttendance->status = $calc['status'];
+          $todayAttendance->is_policy_late = $calc['is_policy_late'] ?? false;
+          $todayAttendance->save();
 
-        $this->takeAttendanceLog($attendance->id, AttendanceLogType::CHECK_IN, $data);
-        return Success::response('Checked In');
+          $this->takeAttendanceLog($todayAttendance->id, AttendanceLogType::CHECK_IN, $data);
+          return Success::response('Checked In');
+        } else {
+          //Fresh check in for the day
+          $attendance = new Attendance();
+          $attendance->user_id = $userId;
+          $attendance->check_in_time = $now;
+          $attendance->shift_id = $user->shift_id;
+          $attendance->status = $calc['status'];
+          $attendance->is_policy_late = $calc['is_policy_late'] ?? false;
+          $attendance->leave_request_id = $calc['leave_request_id'] ?? null;
+          $attendance->created_by_id = auth()->id();
+          $attendance->tenant_id = $user->tenant_id;
+          $attendance->save();
+
+          $this->takeAttendanceLog($attendance->id, AttendanceLogType::CHECK_IN, $data);
+          return Success::response('Checked In');
+        }
       } else {
         $attendanceLog = AttendanceLog::where('attendance_id', $todayAttendance->id)->latest()->first();
         if ($attendanceLog->type == AttendanceLogType::CHECK_IN) {
@@ -60,6 +72,10 @@ class AttendanceService implements IAttendance
             $calc = $this->calculateDayStatus($user, $now, $todayAttendance->check_in_time, $now);
             $todayAttendance->status = $calc['status'];
             $todayAttendance->is_policy_late = $calc['is_policy_late'] ?? false;
+            
+            if ($todayAttendance->leave_request_id) {
+                $calc['leave_request_id'] = $todayAttendance->leave_request_id;
+            }
             $todayAttendance->leave_request_id = $calc['leave_request_id'] ?? null;
 
             $todayAttendance->save();
@@ -103,21 +119,56 @@ class AttendanceService implements IAttendance
     $isPolicyLate = false;
     $approvedShortLeave = null;
 
+    // Check for approved half-day leave
+    $approvedHalfDayLeave = \App\Models\LeaveRequest::where('user_id', $user->id)
+        ->whereDate('from_date', $dateStr)
+        ->where('is_half_day', true)
+        ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
+        ->first();
+
     if ($user->shift && $checkIn) {
         $shift = $user->shift;
-        $shiftStartTime = Carbon::parse($dateStr . ' ' . $shift->start_time);
-        $shiftEndTime = Carbon::parse($dateStr . ' ' . $shift->end_time);
-        $totalShiftMinutes = $shiftStartTime->diffInMinutes($shiftEndTime);
+        $shiftStartStr = Carbon::parse($shift->start_time)->toTimeString();
+        $shiftEndStr = Carbon::parse($shift->end_time)->toTimeString();
+        $shiftStartTime = Carbon::parse($dateStr . ' ' . $shiftStartStr);
+        $shiftEndTime = Carbon::parse($dateStr . ' ' . $shiftEndStr);
+        $originalShiftMinutes = $shiftStartTime->diffInMinutes($shiftEndTime);
+        $totalShiftMinutes = $originalShiftMinutes;
 
-        // Standard Shift logic with 15 mins grace (Master setting)
-        if ($shift->is_flexible && $shift->flex_end_time) {
-            $flexEndTime = Carbon::parse($dateStr . ' ' . $shift->flex_end_time);
-            if ($checkIn->gt($flexEndTime)) {
-                $isLate = true;
+        if ($approvedHalfDayLeave) {
+            $totalShiftMinutes = $originalShiftMinutes / 2;
+            if ($approvedHalfDayLeave->half_day_session === 'first_half') {
+                // Morning session leave, late if afternoon check-in is past midpoint + 15 mins
+                $midpointTime = $shiftStartTime->copy()->addMinutes($originalShiftMinutes / 2);
+                if ($checkIn->gt($midpointTime->copy()->addMinutes(15))) {
+                    $isLate = true;
+                }
+            } else {
+                // Afternoon session leave, morning check-in is normal
+                if ($shift->is_flexible && $shift->flex_end_time) {
+                    $flexEndStr = Carbon::parse($shift->flex_end_time)->toTimeString();
+                    $flexEndTime = Carbon::parse($dateStr . ' ' . $flexEndStr);
+                    if ($checkIn->gt($flexEndTime)) {
+                        $isLate = true;
+                    }
+                } else {
+                    if ($checkIn->gt($shiftStartTime->copy()->addMinutes(15))) {
+                        $isLate = true;
+                    }
+                }
             }
         } else {
-            if ($checkIn->gt($shiftStartTime->copy()->addMinutes(15))) {
-                $isLate = true;
+            // Standard Shift logic with 15 mins grace (Master setting)
+            if ($shift->is_flexible && $shift->flex_end_time) {
+                $flexEndStr = Carbon::parse($shift->flex_end_time)->toTimeString();
+                $flexEndTime = Carbon::parse($dateStr . ' ' . $flexEndStr);
+                if ($checkIn->gt($flexEndTime)) {
+                    $isLate = true;
+                }
+            } else {
+                if ($checkIn->gt($shiftStartTime->copy()->addMinutes(15))) {
+                    $isLate = true;
+                }
             }
         }
 
@@ -150,10 +201,6 @@ class AttendanceService implements IAttendance
                 
                 // Revert short leave consumption if marked absent
                 if ($approvedShortLeave) {
-                    // Logic to ensure it's not consumed: 
-                    // We can either set the leave request to REJECTED/CANCELLED or 
-                    // just note it. Since the booted() method handles balance on status change, 
-                    // we'll change status to REJECTED with a system note.
                     $approvedShortLeave->status = \App\Enums\LeaveRequestStatus::REJECTED;
                     $approvedShortLeave->approval_notes = "System: Short leave reverted because required working hours were not met.";
                     $approvedShortLeave->save();
@@ -162,11 +209,16 @@ class AttendanceService implements IAttendance
                     $isLate = true; // User is late again because short leave is voided
                 }
             } else {
-                if ($minutesWorked >= 480) { // 8 hours (Full Day)
+                if ($approvedHalfDayLeave) {
                     $isHalfDay = false;
                     $isLate = false;
-                } elseif ($minutesWorked < 465) {
-                    $isHalfDay = true;
+                } else {
+                    if ($minutesWorked >= 480) { // 8 hours (Full Day)
+                        $isHalfDay = false;
+                        $isLate = false;
+                    } elseif ($minutesWorked < 465) {
+                        $isHalfDay = true;
+                    }
                 }
                 $status = $isHalfDay ? Attendance::STATUS_HALF_DAY : Attendance::STATUS_PRESENT;
             }

@@ -65,6 +65,7 @@ class DemoAccountsSeeder extends Seeder
             );
 
             // Assign role (sync so it doesn't duplicate)
+            \Spatie\Permission\Models\Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
             $user->syncRoles([$role]);
 
             $this->command->info("✅ {$user->email} ({$role}) ready.");

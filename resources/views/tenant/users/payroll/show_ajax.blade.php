@@ -140,11 +140,11 @@
                 </div>
                 <div class="card-body-premium">
                     <div class="data-row">
-                        <span class="row-label">Basic Salary <small>(50% of Gross)</small></span>
+                        <span class="row-label">Basic Salary <small>({{ $policy ? number_format($policy->basic_percentage, 0) : '50' }}% of Gross)</small></span>
                         <span class="row-value">{{ $currencySymbol }}{{ number_format($basicMonth, 2) }}</span>
                     </div>
                     <div class="data-row">
-                        <span class="row-label">HRA <small>(25% of Gross)</small></span>
+                        <span class="row-label">HRA <small>({{ $policy ? number_format($policy->hra_percentage, 0) : '25' }}% of Gross)</small></span>
                         <span class="row-value">{{ $currencySymbol }}{{ number_format($hraMonth, 2) }}</span>
                     </div>
                     <div class="data-row">
@@ -172,26 +172,31 @@
                     <i class="bx bx-trending-down me-2"></i> DEDUCTIONS
                 </div>
                 <div class="card-body-premium">
-                    <div class="data-row">
+                    <div class="data-row {{ $pfAmount > 0 ? '' : 'opacity-25' }}">
                         <span class="row-label">Provident Fund (EPF)</span>
                         <span class="row-value text-danger">-{{ $currencySymbol }}{{ number_format($pfAmount, 2) }}</span>
                     </div>
-                    <div class="data-row">
+                    <div class="data-row {{ $profTax > 0 ? '' : 'opacity-25' }}">
                         <span class="row-label">Professional Tax (PT)</span>
                         <span class="row-value text-danger">-{{ $currencySymbol }}{{ number_format($profTax, 2) }}</span>
                     </div>
-                    <div class="data-row opacity-25">
+                    <div class="data-row {{ $esiAmount > 0 ? '' : 'opacity-25' }}">
                         <span class="row-label">ESI Contribution</span>
-                        <span class="row-value">₹0.00</span>
+                        <span class="row-value text-danger">-{{ $currencySymbol }}{{ number_format($esiAmount, 2) }}</span>
                     </div>
+                    @if($otherDeductions > 0)
+                    <div class="data-row">
+                        <span class="row-label">Other Deductions (Loans/Penalties)</span>
+                        <span class="row-value text-danger">-{{ $currencySymbol }}{{ number_format($otherDeductions, 2) }}</span>
+                    </div>
+                    @endif
                     <div class="data-row opacity-25">
                         <span class="row-label">Income Tax / TDS</span>
                         <span class="row-value">₹0.00</span>
                     </div>
-                    <div class="data-row">&nbsp;</div>
                     <div class="data-footer mt-3">
                         <span class="footer-label">TOTAL DEDUCTIONS</span>
-                        <span class="footer-value text-danger">{{ $currencySymbol }}{{ number_format($profTax + $pfAmount, 2) }}</span>
+                        <span class="footer-value text-danger">{{ $currencySymbol }}{{ number_format($payslip->total_deductions, 2) }}</span>
                     </div>
                 </div>
             </div>

@@ -34,6 +34,9 @@
   @vite(['resources/assets/js/app/leave-requests-index.js'])
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css"/>
   <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
+  <script>
+    window.isAccountsRole = {{ auth()->user()->hasRole('accounts') ? 'true' : 'false' }};
+  </script>
 @endsection
 
 @section('content')
@@ -97,6 +100,7 @@
                 <h5 class="title mb-0">Leave Management</h5>
                 
                 {{-- Hitech Segmented Toggle --}}
+                @if(!auth()->user()->hasRole('accounts'))
                 <div class="hitech-segmented-control bg-light-soft rounded-pill p-1 d-flex" style="border: 1px solid rgba(0, 90, 90, 0.1);">
                     <button type="button" class="btn btn-sm rounded-pill px-4 status-toggle-btn active" data-status="pending">
                         <i class="bx bx-time-five me-1"></i>Pending
@@ -105,7 +109,15 @@
                         <i class="bx bx-check-double me-1"></i>Approved
                     </button>
                 </div>
+                @else
+                <div class="hitech-segmented-control bg-light-soft rounded-pill p-1 d-flex" style="border: 1px solid rgba(0, 90, 90, 0.1);">
+                    <button type="button" class="btn btn-sm rounded-pill px-4 status-toggle-btn active" data-status="approved">
+                        <i class="bx bx-check-double me-1"></i>Approved Leaves Only
+                    </button>
+                </div>
+                @endif
             </div>
+            @if(!auth()->user()->hasRole('accounts'))
             <div class="d-flex gap-2">
               <button type="button" class="btn btn-sm btn-hitech" onclick="approveSelected()">
                 <i class="bx bx-check me-1"></i>Approve Selected
@@ -114,6 +126,7 @@
                 <i class="bx bx-x me-1"></i>Reject Selected
               </button>
             </div>
+            @endif
           </div>
         </div>
 
@@ -132,7 +145,27 @@
 
             {{-- Date Filter --}}
             <div style="width: 160px;">
-              <input type="date" id="dateFilter" name="dateFilter" class="form-control filter-item-hitech">
+              <input type="date" id="dateFilter" name="dateFilter" class="form-control filter-item-hitech" title="Daily Filter">
+            </div>
+
+            {{-- Month Filter --}}
+            <div class="compact-select" style="min-width: 120px;">
+              <select id="monthFilter" name="monthFilter" class="form-select select2 filter-item-hitech">
+                <option value="">Month: All</option>
+                @for($m=1; $m<=12; $m++)
+                  <option value="{{ $m }}">{{ date('F', mktime(0, 0, 0, $m, 1)) }}</option>
+                @endfor
+              </select>
+            </div>
+
+            {{-- Year Filter --}}
+            <div class="compact-select" style="min-width: 100px;">
+              <select id="yearFilter" name="yearFilter" class="form-select select2 filter-item-hitech">
+                <option value="">Year: All</option>
+                @for($y=date('Y'); $y>=date('Y')-5; $y--)
+                  <option value="{{ $y }}">{{ $y }}</option>
+                @endfor
+              </select>
             </div>
 
             {{-- Employee Filter --}}
@@ -156,7 +189,7 @@
             </div>
 
             {{-- Hidden Status Filter (Controlled by toggle) --}}
-            <input type="hidden" id="statusFilter" value="pending">
+            <input type="hidden" id="statusFilter" value="{{ auth()->user()->hasRole('accounts') ? 'approved' : 'pending' }}">
 
             {{-- Spacer --}}
             <div class="flex-grow-1"></div>
@@ -177,7 +210,11 @@
           <table class="datatables-leaveRequests table table-hover border-top mb-0">
             <thead>
               <tr>
+                @if(!auth()->user()->hasRole('accounts'))
                 <th><input type="checkbox" id="selectAll" class="form-check-input"></th>
+                @else
+                <th>ID</th>
+                @endif
                 <th>Employee</th>
                 <th>Department</th>
                 <th>Leave Type</th>

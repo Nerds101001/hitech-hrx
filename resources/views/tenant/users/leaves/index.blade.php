@@ -29,108 +29,64 @@
 
     {{-- STATS SECTION --}}
     @php
-        // Define exclusion codes for the unified pool
         $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
 
-        // Find poolable paid leave balances (summing them up)
         $poolableBalances = $leaveBalances->filter(function($b) use ($excludedCodes) {
             return $b->leaveType && $b->leaveType->is_paid && !in_array(strtoupper($b->leaveType->code), $excludedCodes);
         });
-        
-        $totalLeaves = $poolableBalances->sum('balance');
-        $usedLeaves = $poolableBalances->sum('used');
-        $remainingPL = $totalLeaves - $usedLeaves;
-        
-        $carryForward = $poolableBalances->sum('carry_forward_last_year');
-        $accrued = $poolableBalances->sum('accrued_this_year');
 
-        // Find short leave balance
+        $totalAllocated = $poolableBalances->sum('balance') + $poolableBalances->sum('used');
+        $totalUsed      = $poolableBalances->sum('used');
+        $available      = $poolableBalances->sum('balance');
+
+        // Keep these for the modal
+        $remainingPL    = $available;
+        $usedLeaves     = $totalUsed;
+
+        $carryForward   = $poolableBalances->sum('carry_forward_last_year');
+        $accrued        = $poolableBalances->sum('accrued_this_year');
+
         $shortLeaveBalance = $leaveBalances->filter(function($b) {
             return $b->leaveType && $b->leaveType->is_short_leave;
         })->first();
         $remainingShort = $shortLeaveBalance ? ($shortLeaveBalance->balance - $shortLeaveBalance->used) : 0;
 
-        // Fallback for existing data
-        if ($totalLeaves > 0 && $carryForward == 0 && $accrued == 0) {
-            $accrued = $totalLeaves;
+        if ($totalAllocated > 0 && $carryForward == 0 && $accrued == 0) {
+            $accrued = $totalAllocated;
         }
     @endphp
+
     <div class="row g-4 mb-6">
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.05s">
+        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.05s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-teal"><i class="bx bx-calendar"></i></div>
-                <div class="stat-label">Pool Leave</div>
-                <div class="stat-value">{{ number_format($remainingPL, 1) }}</div>
+                <div class="stat-icon-wrap icon-teal"><i class="bx bx-calendar-check"></i></div>
+                <div class="stat-label">Total Allocated</div>
+                <div class="stat-value">{{ number_format($totalAllocated, 1) }}</div>
+                <div class="stat-sub text-muted small">Days this cycle</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.08s">
-            <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-blue"><i class="bx bx-time-five"></i></div>
-                <div class="stat-label">Short Leave</div>
-                <div class="stat-value">{{ number_format($remainingShort, 1) }}</div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.12s">
+        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.08s">
             <div class="hitech-stat-card">
                 <div class="stat-icon-wrap icon-red"><i class="bx bx-log-out-circle"></i></div>
-                <div class="stat-label">Leave Taken</div>
-                <div class="stat-value text-danger">{{ number_format($usedLeaves, 1) }}</div>
+                <div class="stat-label">Total Used</div>
+                <div class="stat-value text-danger">{{ number_format($totalUsed, 1) }}</div>
+                <div class="stat-sub text-muted small">Days consumed</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
+        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.12s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-secondary"><i class="bx bx-list-ul"></i></div>
-                <div class="stat-label">Total Requests</div>
-                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->count() }}</div>
+                <div class="stat-icon-wrap icon-blue"><i class="bx bx-wallet"></i></div>
+                <div class="stat-label">Available Balance</div>
+                <div class="stat-value text-success">{{ number_format($available, 1) }}</div>
+                <div class="stat-sub text-muted small">Days remaining</div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
+        <div class="col-sm-6 col-lg-3 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
             <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-amber"><i class="bx bx-time"></i></div>
-                <div class="stat-label">Pending</div>
-                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'pending')->count() }}</div>
-            </div>
-        </div>
-        <div class="col-sm-6 col-lg-2 animate__animated animate__fadeInUp" style="animation-delay: 0.25s">
-            <div class="hitech-stat-card">
-                <div class="stat-icon-wrap icon-dark"><i class="bx bx-x-circle"></i></div>
-                <div class="stat-label">Rejected</div>
-                <div class="stat-value">{{ $leaves->where('is_adjustment', false)->where('status', 'rejected')->count() }}</div>
-            </div>
-        </div>
-    </div>
-
-    {{-- DETAILED BREAKDOWN SECTION --}}
-    <div class="card mb-6 hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.22s; border: none; background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);">
-        <div class="card-body p-4">
-            <div class="d-flex align-items-center mb-4">
-                <div class="hitech-icon-wrap me-3" style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
-                    <i class="bx bx-info-circle fs-4"></i>
-                </div>
-                <h6 class="mb-0 fw-bold" style="color: #1E293B;">Detailed Balance Breakdown (Pool Leave)</h6>
-            </div>
-            <div class="row g-4">
-                <div class="col-md-4">
-                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
-                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Carry Forward (Last Year)</div>
-                        <div class="h4 mb-0 fw-bold text-dark">{{ number_format($carryForward, 1) }}</div>
-                        <div class="smallest text-muted mt-1">Brought from prev. fiscal year</div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
-                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Accrued (This Year)</div>
-                        <div class="h4 mb-0 fw-bold text-primary">{{ number_format($accrued, 1) }}</div>
-                        <div class="smallest text-muted mt-1">Accumulated in current cycle</div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="p-3 rounded-4 border bg-white shadow-sm h-100">
-                        <div class="smallest text-muted fw-bold text-uppercase mb-1" style="font-size: 0.6rem;">Net Available</div>
-                        <div class="h4 mb-0 fw-bold text-success">{{ number_format($remainingPL, 1) }}</div>
-                        <div class="smallest text-muted mt-1">After deducting {{ number_format($usedLeaves, 1) }} used days</div>
-                    </div>
-                </div>
+                <div class="stat-icon-wrap icon-amber"><i class="bx bx-time-five"></i></div>
+                <div class="stat-label">Short Leave</div>
+                <div class="stat-value">{{ number_format($remainingShort, 1) }}</div>
+                <div class="stat-sub text-muted small">Hours remaining</div>
             </div>
         </div>
     </div>
@@ -155,80 +111,83 @@
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th>Leave Type</th>
-                            <th>Duration (From - To)</th>
-                            <th>Total Days</th>
+                            <th>Type</th>
+                            <th>Amount</th>
                             <th>Reason</th>
                             <th>Status</th>
-                            <th>Submitted</th>
+                            <th>Date</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($leaves as $item)
+                        @php
+                            if (!$item->is_adjustment) {
+                                $typeLabel = 'Leave Deducted';
+                                $typeColor = 'danger';
+                                $from = \Carbon\Carbon::parse($item->from_date);
+                                $to   = \Carbon\Carbon::parse($item->to_date);
+                                $days = $from->diffInDays($to) + 1;
+                                $amountDisplay = '-' . number_format($days, 1);
+                                $amountClass   = 'text-danger';
+                                $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
+                                if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
+                                $isBackdated = $item->from_date && \Carbon\Carbon::parse($item->from_date)->lt($item->created_at->startOfDay());
+                            } else {
+                                $amt    = (float)$item->amount;
+                                $notes  = $item->notes ?? '';
+                                $isCarryFwd = stripos($notes, 'carry forward') !== false || $item->type === 'Carry Forward';
+                                if ($isCarryFwd) {
+                                    $typeLabel = 'Carry Forward';
+                                    $typeColor = 'primary';
+                                } elseif ($amt > 0) {
+                                    $typeLabel = 'Leave Credited';
+                                    $typeColor = 'success';
+                                } else {
+                                    $typeLabel = 'Leave Deducted';
+                                    $typeColor = 'danger';
+                                }
+                                $amountDisplay = ($amt > 0 ? '+' : '') . number_format($amt, 1);
+                                $amountClass   = $amt > 0 ? 'text-success' : 'text-danger';
+                                $reason = $notes ?: 'System Adjustment';
+                                $isBackdated = false;
+                            }
+                            $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : ($item->status ?? 'Processed');
+                            $statusColor = match($statusValue) {
+                                'approved', 'Processed', 'system' => 'success',
+                                'rejected' => 'danger',
+                                'pending'  => 'warning',
+                                default    => 'secondary'
+                            };
+                        @endphp
                         <tr>
                             <td class="ps-4 py-3">
-                                <div class="d-flex align-items-center">
-                                    <div class="bg-label-primary rounded p-1 me-2">
-                                        <i class="bx {{ $item->is_adjustment ? 'bx-plus-circle' : 'bx-calendar-event' }}"></i>
-                                    </div>
-                                    <span class="fw-bold text-dark">{{ $item->leave_type }}</span>
-                                    @php
-                                        $itemFromDate = $item->from_date ? \Carbon\Carbon::parse($item->from_date) : null;
-                                        $isBackdated = !$item->is_adjustment && $itemFromDate && $itemFromDate->lt($item->created_at->startOfDay());
-                                    @endphp
-                                    @if($isBackdated)
-                                        <span class="badge bg-label-warning ms-2" style="font-size: 0.6rem;">BACK DATED</span>
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge bg-label-{{ $typeColor }}">{{ $typeLabel }}</span>
+                                    @if($isBackdated ?? false)
+                                        <span class="badge bg-label-warning" style="font-size: 0.6rem;">BACK DATED</span>
                                     @endif
                                 </div>
                             </td>
-                            <td>
-                                <div class="text-dark fw-semibold">
-                                    @if($item->from_date)
-                                        {{ \Carbon\Carbon::parse($item->from_date)->format('d M') }} - {{ \Carbon\Carbon::parse($item->to_date)->format('d M, Y') }}
-                                    @else
-                                        <span class="text-muted small">N/A (Adjustment)</span>
-                                    @endif
-                                </div>
+                            <td class="py-3">
+                                <span class="fw-bold {{ $amountClass }}">{{ $amountDisplay }}</span>
                             </td>
-                            <td>
-                                @if(!$item->is_adjustment)
-                                    @php
-                                        $from = \Carbon\Carbon::parse($item->from_date);
-                                        $to = \Carbon\Carbon::parse($item->to_date);
-                                        $days = $from->diffInDays($to) + 1;
-                                    @endphp
-                                    <span class="badge bg-label-info">{{ $days }} {{ \Illuminate\Support\Str::plural('Day', $days) }}</span>
-                                @else
-                                    <span class="badge {{ $item->amount > 0 ? 'bg-label-success' : 'bg-label-danger' }}">
-                                        {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }} Days
-                                    </span>
-                                @endif
+                            <td class="py-3">
+                                <span class="text-muted small" title="{{ $reason }}">{{ \Illuminate\Support\Str::limit($reason, 50) }}</span>
                             </td>
-                            <td>
-                                <span class="text-muted" title="{{ $item->notes }}">{{ \Illuminate\Support\Str::limit($item->notes, 40) }}</span>
-                            </td>
-                            <td>
-                                @php
-                                    $statusColor = 'secondary';
-                                    $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : $item->status;
-                                    if($statusValue == 'approved' || $statusValue == 'Processed') $statusColor = 'success';
-                                    elseif($statusValue == 'rejected') $statusColor = 'danger';
-                                    elseif($statusValue == 'pending') $statusColor = 'warning';
-                                    elseif($statusValue == 'system') $statusColor = 'primary';
-                                @endphp
+                            <td class="py-3">
                                 <span class="badge badge-hitech bg-label-{{ $statusColor }}">
                                     <i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>
                                     {{ ucfirst($statusValue) }}
                                 </span>
                             </td>
-                            <td>
-                                <small class="text-muted">{{ $item->created_at->format('d M, H:i') }}</small>
+                            <td class="py-3">
+                                <small class="text-muted">{{ $item->created_at->format('d M, Y') }}</small>
                             </td>
                         </tr>
                         @endforeach
                         @if($leaves->isEmpty())
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
+                            <td colspan="5" class="text-center py-5 text-muted">
                                 <i class="bx bx-info-circle fs-2 d-block mb-2 opacity-50"></i>
                                 No leave records found.
                             </td>
@@ -379,15 +338,28 @@
                         </div>
                         <div class="col-12">
                             <div class="row g-3">
-                                <div class="col-6">
+                                <div class="col-6" id="from_date_container">
                                     <label for="from_date" class="form-label-hitech">Start Date</label>
                                     <input type="date" id="from_date" name="from_date" class="form-control form-control-hitech" required>
                                 </div>
-                                <div class="col-6">
+                                <div class="col-6" id="to_date_container">
                                     <label for="to_date" class="form-label-hitech">End Date</label>
                                     <input type="date" id="to_date" name="to_date" class="form-control form-control-hitech" required>
                                 </div>
                             </div>
+                        </div>
+                        <div class="col-12" id="half_day_toggle_container">
+                            <div class="form-check form-switch mt-1">
+                                <input class="form-check-input" type="checkbox" id="is_half_day" name="is_half_day" value="1">
+                                <label class="form-check-label form-label-hitech ms-2" for="is_half_day">Apply for Half Day</label>
+                            </div>
+                        </div>
+                        <div class="col-12 d-none" id="half_day_session_container">
+                            <label for="half_day_session" class="form-label-hitech">Half Day Session</label>
+                            <select id="half_day_session" name="half_day_session" class="form-select form-select-hitech">
+                                <option value="first_half">First Half (Morning)</option>
+                                <option value="second_half">Second Half (Afternoon)</option>
+                            </select>
                         </div>
                         <div class="col-12">
                             <label for="user_notes" class="form-label-hitech">Reason for Leave</label>
@@ -420,6 +392,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const proofMsg = document.getElementById('proof_msg');
     const docInput = document.getElementById('document');
     
+    // Half Day Elements
+    const isHalfDayCheckbox = document.getElementById('is_half_day');
+    const halfDayToggleContainer = document.getElementById('half_day_toggle_container');
+    const halfDaySessionContainer = document.getElementById('half_day_session_container');
+    const halfDaySessionSelect = document.getElementById('half_day_session');
+    const fromDateContainer = document.getElementById('from_date_container');
+    const toDateContainer = document.getElementById('to_date_container');
+    
     // Impact Section Elements
     const impactSection = document.getElementById('leaveImpactSection');
     const conflictAlert = document.getElementById('conflictAlert');
@@ -449,7 +429,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     body: JSON.stringify({
                         leave_type_id: typeId,
                         from_date: fromDate,
-                        to_date: toDate
+                        to_date: toDate,
+                        is_half_day: isHalfDayCheckbox.checked ? 1 : 0,
+                        half_day_session: halfDaySessionSelect.value
                     })
                 });
                 if (response.ok) {
@@ -482,6 +464,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function handleHalfDayToggle() {
+        if (isHalfDayCheckbox.checked) {
+            halfDaySessionContainer.classList.remove('d-none');
+            toDateContainer.classList.add('d-none');
+            fromDateContainer.className = 'col-12';
+            toDateInput.value = fromDateInput.value;
+        } else {
+            halfDaySessionContainer.classList.add('d-none');
+            toDateContainer.classList.remove('d-none');
+            fromDateContainer.className = 'col-6';
+        }
+        checkLeaveImpact();
+    }
+
+    isHalfDayCheckbox.addEventListener('change', handleHalfDayToggle);
+    halfDaySessionSelect.addEventListener('change', checkLeaveImpact);
+
     function updateLeaveDetails() {
         const typeId = typeSelect.value;
         const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
@@ -492,6 +491,16 @@ document.addEventListener('DOMContentLoaded', function() {
             const isMAT = selectedType.code === 'MAT';
             const isPAT = selectedType.code === 'PAT';
             const isSpecial = isMAT || isPAT;
+            const isSHL = selectedType.code.toUpperCase() === 'SHL';
+
+            // Half day configuration
+            if (isSHL) {
+                halfDayToggleContainer.classList.add('d-none');
+                isHalfDayCheckbox.checked = false;
+                handleHalfDayToggle();
+            } else {
+                halfDayToggleContainer.classList.remove('d-none');
+            }
 
             // 1. Proof Logic
             if (selectedType.is_proof_required || isSpecial) {
@@ -599,9 +608,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fromDateInput.addEventListener('change', function() {
         if (this.value) {
-            toDateInput.setAttribute('min', this.value);
-            if (toDateInput.value && toDateInput.value < this.value) {
+            if (isHalfDayCheckbox.checked) {
                 toDateInput.value = this.value;
+            } else {
+                toDateInput.setAttribute('min', this.value);
+                if (toDateInput.value && toDateInput.value < this.value) {
+                    toDateInput.value = this.value;
+                }
             }
         }
         checkBackdatedStatus();

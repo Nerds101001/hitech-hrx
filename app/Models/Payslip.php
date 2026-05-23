@@ -37,6 +37,15 @@ class Payslip extends Model implements AuditableContract
     'tenant_id',
     'created_by_id',
     'updated_by_id',
+    'hra',
+    'ca',
+    'medical',
+    'edu',
+    'special_allowance',
+    'pt',
+    'epf',
+    'esic',
+    'month_calculation_mode',
   ];
 
   protected $casts = [
@@ -53,6 +62,14 @@ class Payslip extends Model implements AuditableContract
     'total_holidays' => 'integer',
     'total_weekends' => 'integer',
     'total_working_days' => 'integer',
+    'hra' => 'float',
+    'ca' => 'float',
+    'medical' => 'float',
+    'edu' => 'float',
+    'special_allowance' => 'float',
+    'pt' => 'float',
+    'epf' => 'float',
+    'esic' => 'float',
   ];
 
   public function user()

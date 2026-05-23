@@ -198,6 +198,10 @@
                                         <span class="status-badge status-in_progress">
                                             <i class="ti ti-rotate"></i>
                                         </span>
+                                    @elseif($status === 'failed')
+                                        <span class="status-badge bg-label-danger text-danger">
+                                            <i class="ti ti-x"></i> Failed (Reattempt)
+                                        </span>
                                     @endif
                                 </a>
                             @endforeach

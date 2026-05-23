@@ -156,7 +156,7 @@
                     </div>
                     <div class="switch-content d-none d-md-flex">
                         <span class="name">{{ Auth::user() ? Auth::user()->getFullName() : 'Demo User' }}</span>
-                        <span class="role">{{ Auth::user() ? Auth::user()->roles()->first()->name : 'Employee' }}</span>
+                        <span class="role">{{ Auth::user() ? (Auth::user()->roles()->first()?->name ?? 'Employee') : 'Employee' }}</span>
                     </div>
                   </div>
                 </a>
@@ -172,7 +172,7 @@
                         </div>
                         <div class="user-info">
                             <span class="name">{{ Auth::user() ? Auth::user()->getFullName() : 'Demo User' }}</span>
-                            <span class="role">{{ Auth::user() ? Auth::user()->roles()->first()->name : 'Employee' }}</span>
+                            <span class="role">{{ Auth::user() ? (Auth::user()->roles()->first()?->name ?? 'Employee') : 'Employee' }}</span>
                         </div>
                     </div>
                   </li>

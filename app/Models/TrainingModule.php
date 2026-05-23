@@ -14,7 +14,14 @@ class TrainingModule extends Model
         'phase_id', 'title', 'description', 'content_type', 
         'content_body', 'content_url', 'estimated_time_minutes', 
         'order', 'is_assessment_required', 'passing_percentage',
-        'questions_per_test', 'show_all_at_once', 'tenant_id'
+        'questions_per_test', 'show_all_at_once', 'tenant_id',
+        'video_chapters', 'video_milestones'
+    ];
+
+    protected $casts = [
+        'video_chapters' => 'array',
+        'video_milestones' => 'array',
+        'show_all_at_once' => 'boolean',
     ];
 
     public function phase()

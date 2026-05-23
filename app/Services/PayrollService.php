@@ -241,6 +241,7 @@ class PayrollService
                 'net_salary' => $netSalary,
                 'status' => $status,
                 'total_worked_days' => $workedDays,
+                'total_absent_days' => $attendanceData['absents'],
                 'total_working_days' => $daysInMonth,
                 'total_holidays' => $attendanceData['holidays'],
                 'total_weekends' => $attendanceData['weekends'],
@@ -274,47 +275,84 @@ class PayrollService
 
         $hasAttendance = $attendances->count() > 0;
         $workedDays    = 0.0;
+        $absents       = 0.0;
 
         foreach ($attendances as $att) {
             $status = strtolower($att->status);
             
             if ($status === 'present') {
                 if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
-                    // Half day work + half day leave
                     $workedDays += 0.5;
                     if (!$att->leaveRequest->is_lwp) {
                         $workedDays += 0.5;
+                    } else {
+                        $absents += 0.5;
                     }
                 } else {
                     $workedDays += 1.0;
                 }
             } elseif ($status === 'half-day') {
                 $workedDays += 0.5;
-            } elseif ($status === 'leave') {
+                $absents += 0.5;
+            } elseif ($status === 'leave' || $status === 'paid_leave' || str_contains($status, 'paid')) {
+                // If Paid Leave, it counts as worked day equivalent for payroll
                 if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
                     $workedDays += 0.5;
+                    $absents += 0.5;
                 } else {
                     $workedDays += 1.0;
                 }
+            } elseif ($status === 'unpaid_leave' || str_contains($status, 'unpaid')) {
+                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
+                    $absents += 0.5;
+                } else {
+                    $absents += 1.0;
+                }
+            } elseif ($status === 'wfh' || str_contains($status, 'work_from_home')) {
+                $workedDays += 1.0;
+            } elseif ($status === 'absent') {
+                $absents += 1.0;
             }
-            // 'absent' status records count as 0 worked days (no addition)
         }
 
         // Count weekends in the period
         $weekends = 0;
+        $holidays = 0;
         $tempDate = clone $startDate;
+        
+        // Fetch holidays from DB (assuming App\Models\Holiday exists)
+        $holidayDates = \App\Models\Holiday::whereBetween('date', [$startDate, $endDate])->pluck('date')->map(function($date) {
+            return \Carbon\Carbon::parse($date)->toDateString();
+        })->toArray();
+
         while ($tempDate->lte($endDate)) {
-            if ($tempDate->isWeekend()) {
+            $dateString = $tempDate->toDateString();
+            if (in_array($dateString, $holidayDates)) {
+                $holidays++;
+            } elseif ($tempDate->isWeekend()) {
                 $weekends++;
             }
             $tempDate->addDay();
         }
 
+        $totalDaysInPeriod = $startDate->diffInDays($endDate) + 1;
+        $expectedWorkingDays = $totalDaysInPeriod - $holidays - $weekends;
+        
+        // Absents should be any expected working days that were not worked.
+        // But since we already tracked $absents from explicit records (like half days or unpaid leaves),
+        // we can just ensure total recorded (worked + absents) matches expected working days.
+        $unrecordedDays = $expectedWorkingDays - ($workedDays + $absents);
+        
+        if ($unrecordedDays > 0) {
+            $absents += $unrecordedDays;
+        }
+
         return [
-            'worked_days'   => $workedDays,
+            'worked_days'    => $workedDays,
             'has_attendance' => $hasAttendance,
-            'holidays'      => 0,
-            'weekends'      => $weekends,
+            'holidays'       => $holidays,
+            'weekends'       => $weekends,
+            'absents'        => $absents,
         ];
     }
 

@@ -162,11 +162,83 @@
     <div class="row g-4">
         <!-- Main Content -->
         <div class="col-lg-8">
+            @if(isset($todayVisits) && $todayVisits->isNotEmpty())
+            {{-- My Today's Visits & Trials --}}
+            <div class="hitech-card mb-4 animate__animated animate__fadeIn border-start border-4" style="border-left-color: #0d9488 !important;">
+                <div class="p-4 border-bottom d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0 fw-extrabold d-flex align-items-center gap-2" style="color: #005a5a;">
+                        <i class="bx bx-map-pin fs-4 animate__pulse" style="animation-iteration-count: infinite; animation-duration: 2s; color: #0d9488;"></i>
+                        <span>My Today's Visits & Trials</span>
+                    </h5>
+                    <span class="badge bg-label-teal rounded-pill fw-bold">{{ $todayVisits->count() }} Active</span>
+                </div>
+                <div class="p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Client / Contact</th>
+                                    <th style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Visit Type</th>
+                                    <th style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Scheduled Time</th>
+                                    <th style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">City</th>
+                                    <th class="text-end pe-4" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($todayVisits as $visit)
+                                    <tr>
+                                        <td class="ps-4">
+                                            <div class="d-flex flex-column">
+                                                <span class="fw-bold text-dark">{{ $visit->client->name }}</span>
+                                                <small class="text-muted">{{ $visit->client->contact_person ?: 'No contact person' }} • {{ $visit->client->phone }}</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            @php
+                                                $emoji = match($visit->visit_type) {
+                                                    'client_visit' => '🤝',
+                                                    'product_trial' => '🧪',
+                                                    'order_collection' => '📦',
+                                                    'service_call' => '🔧',
+                                                    default => '📍'
+                                                };
+                                            @endphp
+                                            <span class="badge bg-label-info py-2 px-3 fw-semibold">
+                                                {{ $emoji }} {{ \App\Models\SalesVisit::visitTypeLabel($visit->visit_type) }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="fw-semibold text-primary"><i class="bx bx-time-five me-1"></i>{{ $visit->scheduled_at->format('h:i A') }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-body">{{ $visit->client->city ?: 'N/A' }}</span>
+                                        </td>
+                                        <td class="text-end pe-4">
+                                            <div class="d-flex justify-content-end gap-2">
+                                                <a href="{{ route('sales-visits.show', $visit->id) }}" class="btn btn-sm btn-icon btn-label-teal rounded-pill" title="View Details">
+                                                    <i class="bx bx-show fs-5"></i>
+                                                </a>
+                                                @if(auth()->id() == $visit->salesperson_id && $visit->status == 'pending')
+                                                    <a href="{{ route('sales-visits.show', $visit->id) }}?mark_complete=1" class="btn btn-sm btn-teal rounded-pill px-3">
+                                                        <i class="bx bx-check me-1"></i> Complete
+                                                    </a>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @endif
+
             <!-- Pending Approvals Widget -->
             <div class="hitech-card mb-4">
                 <div class="p-4 border-bottom d-flex align-items-center justify-content-between">
                     <h5 class="mb-0 fw-extrabold"><i class="bx bx-task text-primary me-2"></i> Action Required</h5>
-                    <a href="{{ route('approvals.index') }}" class="text-primary small fw-bold">View Ledger <i class="bx bx-right-arrow-alt"></i></a>
+                    <a href="{{ route('leaveRequests.index') }}" class="text-primary small fw-bold">View Ledger <i class="bx bx-right-arrow-alt"></i></a>
                 </div>
                 <div class="p-0">
                     <div class="list-group list-group-flush">

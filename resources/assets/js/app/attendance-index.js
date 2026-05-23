@@ -305,11 +305,12 @@ function loadMonthlyRegistry() {
             let html = '<table class="table table-bordered mb-0 hitech-registry-table">';
             html += '<thead class="bg-light"><tr><th class="sticky-col bg-light shadow-sm" style="left:0; z-index:10; min-width:180px;">MANAGER / EMPLOYEE</th>';
             for(let i=1; i<=resp.daysInMonth; i++) {
-                html += '<th class="text-center" style="min-width:45px;"><small class="d-block text-muted text-uppercase" style="font-size:0.6rem;">' + i + '</small><small>' + moment().month(resp.month-1).format('MMM') + '</small></th>';
+                const dayName = moment().year(resp.year).month(resp.month-1).date(i).format('ddd');
+                html += '<th class="text-center" style="min-width:45px;"><small class="d-block text-muted text-uppercase fw-bold" style="font-size:0.55rem;">' + dayName + '</small><small class="d-block text-muted text-uppercase" style="font-size:0.6rem;">' + i + ' ' + moment().month(resp.month-1).format('MMM') + '</small></th>';
             }
-            html += '<th class="text-center bg-light">P</th><th class="text-center bg-light">A</th><th class="text-center bg-light">L</th></tr></thead><tbody>';
+            html += '<th class="text-center bg-light" title="Present">P</th><th class="text-center bg-light" title="Absent">A</th><th class="text-center bg-light" title="OFF / Holiday">OFF</th><th class="text-center bg-light" title="Late">L</th></tr></thead><tbody>';
 
-            resp.data.forEach(row => {
+            resp.data.forEach((row, rowIndex) => {
                 const safeName = row.employee.replace(/'/g, "\\'");
                 const periodStr = moment().month(resp.month - 1).year(resp.year).format('MMMM YYYY');
                 const summaryClick = `onclick="showEmployeeSummary('${safeName}', '${row.code}', '${row.presents}', '${row.absents}', '${row.lates}', '${row.leaves}', '${periodStr}')"`;
@@ -323,6 +324,21 @@ function loadMonthlyRegistry() {
                         '</td>';
                 
                 for(let i=1; i<=resp.daysInMonth; i++) {
+                    const dayName = moment().year(resp.year).month(resp.month-1).date(i).format('ddd');
+                    const isSunday = dayName === 'Sun';
+
+                    if (isSunday) {
+                        if (rowIndex === 0) {
+                            let repeatCount = Math.max(1, Math.floor(resp.data.length / 2));
+                            let sundayText = Array(repeatCount).fill('SUNDAY').join('&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
+                            
+                            html += `<td rowspan="${resp.data.length}" class="text-center align-middle" style="background-color: #f8f9fa; border-right: 1px solid #dee2e6; border-left: 1px solid #dee2e6; width: 32px; padding: 0; overflow: hidden;">
+                                        <div style="writing-mode: vertical-rl; transform: rotate(180deg); margin: auto; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.5;" class="text-secondary fw-black ls-2">${sundayText}</div>
+                                     </td>`;
+                        }
+                        continue;
+                    }
+
                     const day = row['day_'+i];
                     // Pass 24h format if needed or original
                     const clickAttr = `onclick="showDayDetails('${day.status}', '${day.in}', '${day.out}', '${day.hours}', '${safeName}', '${i} ${moment().month(resp.month - 1).format('MMM')}', ${day.id || 'null'}, ${day.is_edited || false}, '${day.editor_name || ''}', '${(day.admin_reason || '').replace(/'/g, "\\'")}', '${day.attachment || ''}', ${day.user_id || 'null'}, '${day.full_date || ''}')"`;
@@ -330,10 +346,10 @@ function loadMonthlyRegistry() {
                     let inner = '<small class="text-muted" style="font-size:0.6rem;">--</small>';
                     if(day.status === 'Present') inner = '<i class="bx bx-check text-white"></i>';
                     if(day.status === 'Half Day') inner = '<i class="bx bx-time text-white"></i>';
-                    if(day.status === 'Absent') inner = '<i class="bx bx-x text-white"></i>';
+                    if(day.status === 'Absent') inner = '<small class="fw-bold text-white" style="font-size:0.5rem;">ABS</small>';
                     if(day.status === 'Holiday') inner = '<small class="fw-bold text-info" style="font-size:0.55rem;">HOL</small>';
                     if(day.status === 'OFF') inner = '<small class="fw-bold text-muted" style="font-size:0.55rem;">OFF</small>';
-                    if(day.status === 'Leave') inner = `<small class="fw-bold text-white" style="font-size:0.45rem;">${day.hours}</small>`;
+                    if(day.status === 'Leave' || day.status === 'Paid Leave' || day.status === 'Unpaid Leave') inner = `<small class="fw-bold text-white" style="font-size:0.45rem;">${day.hours}</small>`;
                     if(day.status === 'WFH') inner = '<small class="fw-bold text-white" style="font-size:0.45rem;">WFH</small>';
                     if(day.status === 'Scheduled') inner = '<i class="bx bx-calendar-event opacity-25"></i>';
                     if(day.status === 'Today') inner = '<span class="animate__animated animate__pulse animate__infinite" style="font-size:0.5rem; font-weight:900;">TODAY</span>';
@@ -352,6 +368,7 @@ function loadMonthlyRegistry() {
                 
                 html += '<td class="text-center text-success fw-bold">' + row.presents + '</td>';
                 html += '<td class="text-center text-danger fw-bold">' + row.absents + '</td>';
+                html += '<td class="text-center text-secondary fw-bold">' + (row.offs || 0) + '</td>';
                 html += '<td class="text-center text-warning fw-bold">' + row.lates + '</td>'; 
                 html += '</tr>';
             });
@@ -404,9 +421,18 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
     
     $('#detailStatus').html(`<span class="badge bg-label-${badgeClass} px-4 py-2 rounded-pill fw-black text-uppercase ls-1">${status}</span>`);
     
-    const isSpecial = ['Holiday', 'OFF', 'Leave'].includes(status);
-    $('#detailCheckIn').text(isSpecial ? (status === 'Leave' ? checkIn : status) : checkIn);
-    $('#detailCheckOut').text(isSpecial ? (status === 'Leave' ? checkIn : status) : checkOut);
+    const isSpecial = ['Holiday', 'OFF', 'Leave', 'Paid Leave', 'Unpaid Leave', 'Absent'].includes(status);
+    
+    if (isSpecial) {
+        $('#detailCheckIn').closest('.col-6').hide();
+        $('#detailCheckOut').closest('.col-6').hide();
+    } else {
+        $('#detailCheckIn').closest('.col-6').show();
+        $('#detailCheckOut').closest('.col-6').show();
+        $('#detailCheckIn').text(checkIn);
+        $('#detailCheckOut').text(checkOut);
+    }
+    
     $('#detailHours').text(hours);
     
     registryModal.show();

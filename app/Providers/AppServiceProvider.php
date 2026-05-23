@@ -29,6 +29,15 @@ class AppServiceProvider extends ServiceProvider
         return $user->hasRole(['admin', 'Admin', 'super_admin']) ? true : null;
     });
 
+    \Illuminate\Support\Facades\Gate::define('access-sales-ops', function ($user) {
+        if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
+            return true;
+        }
+        return \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
+            ->orWhere('sales_user_id', $user->id)
+            ->exists();
+    });
+
     Paginator::useBootstrapFive();
 
     Vite::useStyleTagAttributes(function (?string $src, string $url, ?array $chunk, ?array $manifest) {

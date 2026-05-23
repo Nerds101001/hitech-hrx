@@ -49,6 +49,8 @@ class MenuPermissionMiddleware
             $permissions = $this->getHRPermissions();
         } elseif ($user->hasRole('manager')) {
             $permissions = $this->getManagerPermissions();
+        } elseif ($user->hasRole('accounts')) {
+            $permissions = $this->getAccountsPermissions();
         } elseif ($user->hasRole('employee') || $user->hasRole('office_employee')) {
             $permissions = $this->getEmployeePermissions();
         }
@@ -145,6 +147,21 @@ class MenuPermissionMiddleware
             'sos' => true,
             'visits' => true,
             'profile' => true,
+        ];
+    }
+
+    /**
+     * Get Accounts permissions
+     */
+    private function getAccountsPermissions()
+    {
+        return [
+            'dashboard' => true,
+            'employees' => true,
+            'attendance' => true,
+            'leaves' => true,
+            'payroll' => true,
+            'reports' => true,
         ];
     }
 

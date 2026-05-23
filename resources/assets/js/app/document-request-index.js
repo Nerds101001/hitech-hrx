@@ -81,10 +81,10 @@ $(function () {
                     // Status
                     targets: 2,
                     render: function (data, type, full, meta) {
-                        var $status = data;
-                        if ($status === 'Approved') {
+                        var $status = (data || '').toLowerCase();
+                        if ($status === 'approved') {
                             return '<span class="badge badge-hitech bg-label-success"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Approved</span>';
-                        } else if ($status === 'Rejected') {
+                        } else if ($status === 'rejected') {
                             return '<span class="badge badge-hitech bg-label-danger"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Rejected</span>';
                         } else {
                             return '<span class="badge badge-hitech bg-label-warning"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Pending</span>';
@@ -108,7 +108,8 @@ $(function () {
                         var actionsHtml = '<div class="d-flex align-items-center justify-content-center gap-2">';
                         actionsHtml += `<button class="btn btn-sm btn-icon hitech-action-icon edit-record shadow-sm" data-id="${full['id']}" data-bs-toggle="modal" data-bs-target="#actionModal" title="Review" style="width:32px; height:32px;"><i class="bx bx-show fs-5"></i></button>`;
 
-                        if (full['status'] === 'Pending') {
+                        var currentStatus = (full['status'] || '').toLowerCase();
+                        if (currentStatus === 'pending') {
                             actionsHtml += `<button class="btn btn-sm btn-icon hitech-action-icon text-success quick-approve shadow-sm" data-id="${full['id']}" title="Quick Approve" style="width:32px; height:32px;"><i class="bx bx-check fs-5"></i></button>`;
                             actionsHtml += `<button class="btn btn-sm btn-icon hitech-action-icon text-danger quick-reject shadow-sm" data-id="${full['id']}" title="Quick Reject" style="width:32px; height:32px;"><i class="bx bx-x fs-5"></i></button>`;
                         }
@@ -153,8 +154,9 @@ $(function () {
 
                 // Reset and set status radios
                 $('input[name="status"]').prop('checked', false);
-                if (data.status === 'Approved') $('#statusApproved').prop('checked', true);
-                else if (data.status === 'Rejected') $('#statusRejected').prop('checked', true);
+                var reqStatus = (data.status || '').toLowerCase();
+                if (reqStatus === 'approved') $('#statusApproved').prop('checked', true);
+                else if (reqStatus === 'rejected') $('#statusRejected').prop('checked', true);
                 else $('#statusPending').prop('checked', true);
 
                 $('#adminRemarks').val(data.admin_remarks || '');

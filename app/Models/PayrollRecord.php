@@ -27,6 +27,15 @@ class PayrollRecord extends Model implements AuditableContract
     'tenant_id',
     'created_by_id',
     'updated_by_id',
+    'hra',
+    'ca',
+    'medical',
+    'edu',
+    'special_allowance',
+    'pt',
+    'epf',
+    'esic',
+    'month_calculation_mode',
   ];
 
 
@@ -35,6 +44,14 @@ class PayrollRecord extends Model implements AuditableContract
     'gross_salary' => 'float',
     'net_salary' => 'float',
     'tax_amount' => 'float',
+    'hra' => 'float',
+    'ca' => 'float',
+    'medical' => 'float',
+    'edu' => 'float',
+    'special_allowance' => 'float',
+    'pt' => 'float',
+    'epf' => 'float',
+    'esic' => 'float',
   ];
 
   public function payrollCycle()

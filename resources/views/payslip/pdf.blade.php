@@ -123,47 +123,47 @@
         <tbody>
             <tr>
                 <td>Basic Salary</td>
-                <td class="text-end">{{ number_format($fixedMonthlyCTC * 0.5, 2) }}</td>
+                <td class="text-end">{{ number_format($fullBasic ?? ($fixedMonthlyCTC * 0.5), 2) }}</td>
                 <td class="text-end">{{ number_format($basicMonth, 2) }}</td>
                 <td></td>
-                <td></td>
+                <td class="text-end">@if($profTax > 0) PRO. TAX: {{ number_format($profTax, 2) }} @endif</td>
             </tr>
             <tr>
                 <td>HRA</td>
-                <td class="text-end">{{ number_format($fixedMonthlyCTC * 0.25, 2) }}</td>
+                <td class="text-end">{{ number_format($fullHra ?? ($fixedMonthlyCTC * 0.25), 2) }}</td>
                 <td class="text-end">{{ number_format($hraMonth, 2) }}</td>
                 <td></td>
-                <td></td>
+                <td class="text-end">@if($pfAmount > 0) EPF: {{ number_format($pfAmount, 2) }} @endif</td>
             </tr>
             <tr>
                 <td>MEDICAL AL</td>
-                <td class="text-end">{{ number_format(2500, 2) }}</td>
+                <td class="text-end">{{ number_format($fullMedical ?? 2500, 2) }}</td>
                 <td class="text-end">{{ number_format($medicalMonth, 2) }}</td>
                 <td></td>
-                <td></td>
+                <td class="text-end">@if($esiAmount > 0) ESIC: {{ number_format($esiAmount, 2) }} @endif</td>
             </tr>
             <tr>
                 <td>EDU ALL</td>
-                <td class="text-end">{{ number_format(200, 2) }}</td>
+                <td class="text-end">{{ number_format($fullEdu ?? 200, 2) }}</td>
                 <td class="text-end">{{ number_format($eduMonth, 2) }}</td>
                 <td></td>
-                <td></td>
+                <td class="text-end">@if($otherDeductions > 0) OTHER DED: {{ number_format($otherDeductions, 2) }} @endif</td>
             </tr>
             <tr>
                 <td>SPL. ALL</td>
-                <td class="text-end">{{ number_format($fixedMonthlyCTC - ($fixedMonthlyCTC * 0.75 + 5200), 2) }}</td>
+                <td class="text-end">{{ number_format($fullSpecialAllowance ?? ($fixedMonthlyCTC - ($fixedMonthlyCTC * 0.75 + 5200)), 2) }}</td>
                 <td class="text-end">{{ number_format($specialAllowance, 2) }}</td>
                 <td></td>
-                <td class="text-end">PRO. TAX: {{ number_format($profTax, 2) }}</td>
+                <td></td>
             </tr>
             <tr>
                 <td>LTA</td>
-                <td class="text-end">{{ number_format(2500, 2) }}</td>
+                <td class="text-end">{{ number_format($fullCa ?? 2500, 2) }}</td>
                 <td class="text-end">{{ number_format($ltaMonth, 2) }}</td>
                 <td></td>
-                <td class="text-end">EPF: {{ number_format($pfAmount, 2) }}</td>
+                <td></td>
             </tr>
-            @for($i=0; $i<8; $i++)
+            @for($i=0; $i<6; $i++)
             <tr>
                 <td>&nbsp;</td><td></td><td></td><td></td><td></td>
             </tr>
@@ -171,7 +171,7 @@
             <tr class="fw-bold">
                 <td colspan="3" class="text-end">Total Earnings</td>
                 <td class="text-end">{{ number_format($netEarned, 2) }}</td>
-                <td class="text-end">Deductions: {{ number_format($profTax + $pfAmount, 2) }}</td>
+                <td class="text-end">Deductions: {{ number_format($payslip->total_deductions, 2) }}</td>
             </tr>
         </tbody>
     </table>

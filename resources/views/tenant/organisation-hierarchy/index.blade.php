@@ -226,7 +226,7 @@
                 .on("mouseenter", (e, d) => showUserCard(e, d.data))
                 .on("mouseleave", hideUserCard);
 
-            // Card
+            // Card — clean white card for all nodes
             nodeEnter.append("rect")
                 .attr("x", -nodeWidth / 2)
                 .attr("y", -nodeHeight / 2)
@@ -265,7 +265,7 @@
                 .attr("clip-path", "url(#avatarCircle)")
                 .on("error", function() { d3.select(this).style("display", "none"); });
 
-            // Text Area
+            // Name text
             nodeEnter.append("text")
                 .attr("x", -nodeWidth / 2 + 75)
                 .attr("y", -nodeHeight / 2 + 35)
@@ -274,6 +274,7 @@
                 .attr("fill", "#1e293b")
                 .text(d => d.data.name);
 
+            // Designation text
             nodeEnter.append("text")
                 .attr("x", -nodeWidth / 2 + 75)
                 .attr("y", -nodeHeight / 2 + 55)

@@ -10,7 +10,7 @@ class OrganisationHierarchyController extends Controller
   public function index()
   {
     $user = auth()->user();
-    $users = User::with(['reportingTo', 'designation.department'])->get();
+    $users = User::with(['reportingTo', 'department', 'designation'])->get();
 
     // entry point users
     $rootUsers = [];
@@ -37,27 +37,33 @@ class OrganisationHierarchyController extends Controller
   {
     $children = [];
     
-    // If maxDepth is set, don't go beyond it
     if ($maxDepth === null || $depth < $maxDepth) {
         foreach ($allUsers as $u) {
             if ($u->reporting_to_id == $user->id) {
                 $children[] = $this->formatUserNode($u, $allUsers, $depth + 1, $maxDepth);
             }
         }
+
+        // Sort by department first, then by name — keeps same-dept people adjacent
+        usort($children, function($a, $b) {
+            $deptCompare = strcmp($a['department'], $b['department']);
+            if ($deptCompare !== 0) return $deptCompare;
+            return strcmp($a['name'], $b['name']);
+        });
     }
 
     return [
-      'id' => $user->id,
-      'name' => $user->getFullName(),
-      'code' => $user->code ?? 'N/A',
-      'designation' => $user->designation?->name ?? 'Staff Member',
-      'department' => $user->designation?->department?->name ?? 'General Department',
-      'email' => $user->email,
-      'phone' => $user->phone ?? 'N/A',
+      'id'              => $user->id,
+      'name'            => $user->getFullName(),
+      'code'            => $user->code ?? 'N/A',
+      'designation'     => $user->designation?->name ?? 'Staff Member',
+      'department'      => $this->getDepartmentName($user),
+      'email'           => $user->email,
+      'phone'           => $user->phone ?? 'N/A',
       'profile_picture' => $user->getProfilePicture(),
-      'initials' => $user->getInitials(),
-      'status' => 'online',
-      'children' => $children,
+      'initials'        => $user->getInitials(),
+      'status'          => 'online',
+      'children'        => $children,
     ];
   }
 
@@ -69,7 +75,7 @@ class OrganisationHierarchyController extends Controller
         $children = $this->buildHierarchy($users, $user->id);
         
         $designation = $user->designation?->name ?? 'Staff Member';
-        $department = $user->designation?->department?->name ?? 'General Department';
+        $department = $this->getDepartmentName($user);
         
         $result[] = [
           'id' => $user->id,
@@ -87,6 +93,12 @@ class OrganisationHierarchyController extends Controller
       }
     }
     return $result;
+  }
+
+  private function getDepartmentName($user): string
+  {
+    return $user->department?->name
+      ?? 'No Department Assigned';
   }
 
 }

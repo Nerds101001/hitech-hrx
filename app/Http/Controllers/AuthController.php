@@ -378,7 +378,7 @@ class AuthController extends Controller
       }
 
       $isOwner = str_contains($path, '/' . $user->id . '/') || str_contains($path, '_' . $user->id . '_');
-      $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager']);
+      $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager', 'accounts']);
 
       if (!$isProfilePicture && !$isOwner && !$isAdminOrHR) {
           Log::warning('Secure Document: Access Denied for user ' . $user->id . ' to path: ' . $path);
@@ -572,7 +572,7 @@ class AuthController extends Controller
    */
   private function disabledRunDbPatch()
   {
-      if (Auth::check() && Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+      if (Auth::check() && Auth::user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
           try {
               Log::info('Initiating DB Patch (Migrate) from Admin UI');
               \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
@@ -600,7 +600,7 @@ class AuthController extends Controller
           return redirect()->route('onboarding.form');
       }
 
-      if ($user->hasRole(['admin', 'hr', 'manager'])) {
+      if ($user->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
           return redirect()->route('tenant.dashboard')->with('success', 'Welcome back!');
       } else {
           return redirect()->route('user.dashboard.index')->with('success', 'Welcome back!');

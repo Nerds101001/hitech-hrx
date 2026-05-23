@@ -27,7 +27,7 @@ class TrainingController extends Controller
         $user = User::findOrFail($userId);
 
         // Security: Employees can only view their own portal
-        if (auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']) && $user->id !== auth()->id()) {
+        if (auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && $user->id !== auth()->id()) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -50,7 +50,7 @@ class TrainingController extends Controller
     {
         $user = User::with(['trainingProgress.module.phase'])->findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
             abort(403);
         }
 
@@ -76,7 +76,7 @@ class TrainingController extends Controller
     {
         $user = User::findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -128,11 +128,43 @@ class TrainingController extends Controller
             return redirect()->route('training.portal')->with('error', 'This module is currently locked.');
         }
 
-        if ($progress->status === 'available') {
+        if ($progress->status === 'available' || $progress->status === 'failed') {
             $progress->update([
                 'status' => 'in_progress',
                 'started_at' => now()
             ]);
+        }
+
+        // PDF text-caching fallback
+        if ($module->content_type === 'catalog' && !empty($module->content_url)) {
+            $cachePath = storage_path('app/training_pdf_cache/' . $module->id . '.json');
+            if (!file_exists($cachePath)) {
+                try {
+                    $relativePath = str_replace(asset('storage/'), '', $module->content_url);
+                    $fullPath = storage_path('app/public/' . $relativePath);
+                    
+                    if (!file_exists($fullPath) && str_contains($module->content_url, '/storage/')) {
+                        $parts = explode('/storage/', $module->content_url);
+                        $fullPath = storage_path('app/public/' . end($parts));
+                    }
+                    
+                    if (file_exists($fullPath)) {
+                        $parser = new \Smalot\PdfParser\Parser();
+                        $pdf = $parser->parseFile($fullPath);
+                        $pages = $pdf->getPages();
+                        $pageTexts = [];
+                        foreach ($pages as $idx => $page) {
+                            $pageTexts[$idx + 1] = mb_convert_encoding($page->getText(), 'UTF-8', 'UTF-8');
+                        }
+                        if (!file_exists(dirname($cachePath))) {
+                            mkdir(dirname($cachePath), 0755, true);
+                        }
+                        file_put_contents($cachePath, json_encode($pageTexts, JSON_UNESCAPED_UNICODE));
+                    }
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error("Failed to generate PDF text cache in showModule: " . $e->getMessage());
+                }
+            }
         }
 
         return view('tenant.training.reader', [
@@ -196,15 +228,24 @@ class TrainingController extends Controller
             ->where('module_id', $module->id)
             ->first();
 
+        $newAttempts = ($progress->attempts ?? 0) + 1;
+
         if ($passed) {
             $progress->update([
                 'status' => 'completed',
                 'assessment_score' => $score,
+                'attempts' => $newAttempts,
                 'completed_at' => now()
             ]);
 
             // Unlock next module
             $this->unlockNextModule($module);
+        } else {
+            $progress->update([
+                'status' => 'failed',
+                'assessment_score' => $score,
+                'attempts' => $newAttempts
+            ]);
         }
 
         return response()->json([
@@ -253,7 +294,7 @@ class TrainingController extends Controller
      */
     public function managementIndex()
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
             abort(403);
         }
 
@@ -303,12 +344,34 @@ class TrainingController extends Controller
             'pdf_file' => 'nullable|file|mimes:pdf|max:20480', // 20MB Max
             'passing_percentage' => 'required|integer|min:0|max:100',
             'questions_per_test' => 'required|integer|min:1',
-            'show_all_at_once' => 'nullable|boolean'
+            'show_all_at_once' => 'nullable|boolean',
+            'video_chapters' => 'nullable|string',
+            'video_milestones' => 'nullable|string'
         ]);
 
         $data = $validated;
         unset($data['pdf_file']);
         $data['show_all_at_once'] = $request->has('show_all_at_once');
+
+        if ($request->filled('video_chapters')) {
+            $decoded = json_decode($request->video_chapters, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return redirect()->back()->withErrors(['video_chapters' => 'Chapters must be a valid JSON array.'])->withInput();
+            }
+            $data['video_chapters'] = $decoded;
+        } else {
+            $data['video_chapters'] = null;
+        }
+
+        if ($request->filled('video_milestones')) {
+            $decoded = json_decode($request->video_milestones, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return redirect()->back()->withErrors(['video_milestones' => 'Milestones must be a valid JSON array.'])->withInput();
+            }
+            $data['video_milestones'] = $decoded;
+        } else {
+            $data['video_milestones'] = null;
+        }
 
         if ($request->hasFile('pdf_file')) {
             $path = $request->file('pdf_file')->store('training', 'public');
@@ -423,5 +486,165 @@ class TrainingController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'AI Error: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Chat / Ask the Document feature for PDF Catalogues.
+     */
+    public function chatWithDocument(Request $request, $id)
+    {
+        $request->validate([
+            'message' => 'required|string|max:1000'
+        ]);
+
+        $module = TrainingModule::findOrFail($id);
+
+        if ($module->content_type !== 'catalog') {
+            return response()->json(['success' => false, 'message' => 'AI study assistant is only available for PDF catalogs.'], 400);
+        }
+
+        $cachePath = storage_path('app/training_pdf_cache/' . $module->id . '.json');
+
+        if (!file_exists($cachePath)) {
+            try {
+                $relativePath = str_replace(asset('storage/'), '', $module->content_url);
+                $fullPath = storage_path('app/public/' . $relativePath);
+                if (!file_exists($fullPath) && str_contains($module->content_url, '/storage/')) {
+                    $parts = explode('/storage/', $module->content_url);
+                    $fullPath = storage_path('app/public/' . end($parts));
+                }
+                
+                if (file_exists($fullPath)) {
+                    $parser = new \Smalot\PdfParser\Parser();
+                    $pdf = $parser->parseFile($fullPath);
+                    $pages = $pdf->getPages();
+                    $pageTexts = [];
+                    foreach ($pages as $idx => $page) {
+                        $pageTexts[$idx + 1] = mb_convert_encoding($page->getText(), 'UTF-8', 'UTF-8');
+                    }
+                    if (!file_exists(dirname($cachePath))) {
+                        mkdir(dirname($cachePath), 0755, true);
+                    }
+                    file_put_contents($cachePath, json_encode($pageTexts, JSON_UNESCAPED_UNICODE));
+                } else {
+                    return response()->json(['success' => false, 'message' => 'Catalogue file not found on disk.'], 404);
+                }
+            } catch (\Exception $e) {
+                return response()->json(['success' => false, 'message' => 'Failed to parse PDF catalog: ' . $e->getMessage()], 500);
+            }
+        }
+
+        $pageTexts = json_decode(file_get_contents($cachePath), true);
+        if (empty($pageTexts)) {
+            return response()->json(['success' => false, 'message' => 'No text could be extracted from this PDF catalog.'], 400);
+        }
+
+        // --- RETRIEVAL SCORING (RAG) ---
+        $query = strtolower($request->input('message'));
+        $terms = preg_split('/[\s,\.\?\!\-\/]+/', $query);
+        $stopwords = ['is', 'the', 'a', 'an', 'and', 'or', 'for', 'with', 'to', 'in', 'on', 'at', 'by', 'of', 'about', 'does', 'do', 'what', 'how', 'why', 'can', 'you', 'i', 'we', 'they', 'our'];
+        $terms = array_filter($terms, function($t) use ($stopwords) {
+            return strlen($t) > 2 && !in_array($t, $stopwords);
+        });
+
+        $scores = [];
+        foreach ($pageTexts as $pageNum => $text) {
+            $textLower = strtolower($text);
+            $score = 0;
+            foreach ($terms as $term) {
+                $score += substr_count($textLower, $term) * 2;
+                if (str_contains($textLower, $term)) {
+                    $score += 1;
+                }
+            }
+            if ($score > 0) {
+                $scores[$pageNum] = $score;
+            }
+        }
+
+        arsort($scores);
+        $topPages = array_slice(array_keys($scores), 0, 3, true);
+
+        if (empty($topPages)) {
+            $topPages = array_slice(array_keys($pageTexts), 0, 3);
+        }
+
+        $context = "";
+        foreach ($topPages as $pNum) {
+            $context .= "--- PAGE {$pNum} ---\n" . $pageTexts[$pNum] . "\n\n";
+        }
+
+        try {
+            $factory = \OpenAI::factory();
+            $client = $factory->withApiKey(config('openai.api_key'))
+                              ->withBaseUri(config('openai.base_url'))
+                              ->make();
+
+            $systemPrompt = "You are the Hitech AI Book Assistant for the catalog: '{$module->title}'.
+            Your job is to answer user questions using the provided catalog content page snippets.
+            
+            RULES:
+            1. Be concise, extremely professional, and helpful.
+            2. ALWAYS cite which page the information is from (e.g., 'According to Page X...' or '(Page X)').
+            3. Answer using ONLY the facts found in the context below. If the context does not contain enough information to answer the question, state: 'I could not find the exact information for this in the catalog.'
+            4. Use markdown formatting (bolding, lists) to present data clearly.
+            
+            CONTEXT CHUNKS:
+            {$context}";
+
+            $resp = $client->chat()->create([
+                'model' => config('openai.ai_model'),
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user', 'content' => $request->input('message')]
+                ],
+                'max_tokens' => 600
+            ]);
+
+            $answer = $resp->choices[0]->message->content;
+            return response()->json([
+                'success' => true,
+                'message' => $answer,
+                'cited_pages' => $topPages
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'AI study assistant currently unavailable: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Delete a training phase and all its modules.
+     */
+    public function destroyPhase($id)
+    {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+            abort(403);
+        }
+
+        $phase = TrainingPhase::findOrFail($id);
+        
+        // Soft delete all child modules
+        $phase->modules()->delete();
+        
+        // Soft delete the phase itself
+        $phase->delete();
+
+        return redirect()->back()->with('success', 'Phase and all its modules deleted successfully.');
+    }
+
+    /**
+     * Delete a training module.
+     */
+    public function destroyModule($id)
+    {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+            abort(403);
+        }
+
+        $module = TrainingModule::findOrFail($id);
+        $module->delete();
+
+        return redirect()->back()->with('success', 'Module deleted successfully.');
     }
 }

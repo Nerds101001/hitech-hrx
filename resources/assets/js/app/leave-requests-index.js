@@ -1,5 +1,6 @@
 $(function () {
   var date = $('#dateFilter').val();
+  var initialStatus = $('#statusFilter').val() || 'pending';
 
   var dtTable = $('.datatables-leaveRequests');
 
@@ -10,10 +11,10 @@ $(function () {
     dtLeaveRequests.draw();
   });
 
-  $('#leaveTypeFilter').select2();
+  $('#leaveTypeFilter, #monthFilter, #yearFilter').select2();
 
-  $('#leaveTypeFilter').on('change', function () {
-    dtLeaveRequests.draw();
+  $('#employeeFilter, #leaveTypeFilter, #monthFilter, #yearFilter').on('change', function () {
+    if (typeof dtLeaveRequests !== 'undefined') dtLeaveRequests.draw();
   });
 
   // Status Toggle Logic
@@ -26,18 +27,18 @@ $(function () {
 
     // Dynamic Column Visibility based on status
     if (status === 'approved') {
-      dtLeaveRequests.column(10).visible(false); // Status
-      dtLeaveRequests.column(12).visible(false); // Actions
-      dtLeaveRequests.column(13).visible(true);  // Approved By
-      dtLeaveRequests.column(14).visible(true);  // Approved At
+      dtLeaveRequests.column(7).visible(false);  // Status
+      dtLeaveRequests.column(9).visible(false);  // Actions
+      dtLeaveRequests.column(10).visible(true);  // Approved By
+      dtLeaveRequests.column(11).visible(true);  // Approved At
 
       $('.status-col, .action-col').hide();
       $('.approved-by-col, .approved-at-col').show();
     } else {
-      dtLeaveRequests.column(10).visible(true);
-      dtLeaveRequests.column(12).visible(true);
-      dtLeaveRequests.column(13).visible(false);
-      dtLeaveRequests.column(14).visible(false);
+      dtLeaveRequests.column(7).visible(true);
+      dtLeaveRequests.column(9).visible(true);
+      dtLeaveRequests.column(10).visible(false);
+      dtLeaveRequests.column(11).visible(false);
 
       $('.status-col, .action-col').show();
       $('.approved-by-col, .approved-at-col').hide();
@@ -66,6 +67,8 @@ $(function () {
           d.employeeFilter = $('#employeeFilter').val();
           d.leaveTypeFilter = $('#leaveTypeFilter').val();
           d.statusFilter = $('#statusFilter').val();
+          d.monthFilter = $('#monthFilter').val();
+          d.yearFilter = $('#yearFilter').val();
           d.searchTerm = $('#customSearchInput').val(); // Integrated Search
         },
         error: function (xhr, error, code) {
@@ -84,7 +87,9 @@ $(function () {
         { data: 'reason' },                     // 6: Reason
         { data: 'status' },                     // 7: Status
         { data: 'document' },                   // 8: Attachment
-        { data: null, defaultContent: '' }      // 9: Actions
+        { data: null, defaultContent: '' },     // 9: Actions
+        { data: 'approved_by_name', defaultContent: 'N/A' }, // 10: Approved By
+        { data: 'approved_at_formatted', defaultContent: 'N/A' } // 11: Approved At
       ],
       columnDefs: [
         {
@@ -178,17 +183,19 @@ $(function () {
         {
           // Status
           targets: 7,
+          visible: (initialStatus !== 'approved'),
           className: 'text-start',
           render: function (data, type, full, meta) {
             var $status = full['status'];
+            var lwpBadge = full['is_lwp'] ? ' <span class="badge bg-label-danger ms-1" style="font-size:0.6rem;" title="' + (full['lwp_days'] || 0) + ' day(s) Leave Without Pay">⚠️ LWP</span>' : '';
             if ($status === 'approved') {
-              return '<span class="badge badge-hitech bg-label-success"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Approved</span>';
+              return '<span class="badge badge-hitech bg-label-success"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Approved</span>' + lwpBadge;
             } else if ($status === 'rejected') {
-              return '<span class="badge badge-hitech bg-label-danger"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Rejected</span>';
+              return '<span class="badge badge-hitech bg-label-danger"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Rejected</span>' + lwpBadge;
             } else if ($status === 'cancelled') {
-              return '<span class="badge badge-hitech bg-label-secondary"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Cancelled</span>';
+              return '<span class="badge badge-hitech bg-label-secondary"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Cancelled</span>' + lwpBadge;
             } else {
-              return '<span class="badge badge-hitech bg-label-warning"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Pending</span>';
+              return '<span class="badge badge-hitech bg-label-warning"><i class="bx bxs-circle me-1" style="font-size:0.5rem;"></i>Pending</span>' + lwpBadge;
             }
           }
         },
@@ -221,6 +228,7 @@ $(function () {
         {
           // Actions
           targets: 9,
+          visible: (initialStatus !== 'approved'),
           searchable: false,
           orderable: false,
           className: 'text-center',
@@ -229,13 +237,31 @@ $(function () {
             // Medium icons for Hitech feel
             actionsHtml += `<button class="btn btn-icon btn-hitech leave-request-details shadow-sm" data-id="${full['id']}" data-bs-toggle="modal" data-bs-target="#modalLeaveRequestDetails" title="Review Request"><i class="bx bx-show fs-5"></i></button>`;
 
-            if (full['status'] === 'pending') {
+            if (full['status'] === 'pending' && !window.isAccountsRole) {
               actionsHtml += `<button class="btn btn-icon btn-hitech-success quick-leave-approve shadow-sm" data-id="${full['id']}" title="Approve"><i class="bx bx-check fs-5"></i></button>`;
               actionsHtml += `<button class="btn btn-icon btn-hitech-danger quick-leave-reject shadow-sm" data-id="${full['id']}" title="Reject"><i class="bx bx-x fs-5"></i></button>`;
             }
 
             actionsHtml += '</div>';
             return actionsHtml;
+          }
+        },
+        {
+          // Approved By
+          targets: 10,
+          visible: (initialStatus === 'approved'),
+          className: 'text-start',
+          render: function (data, type, full, meta) {
+            return full['approved_by_name'] || 'N/A';
+          }
+        },
+        {
+          // Approved At
+          targets: 11,
+          visible: (initialStatus === 'approved'),
+          className: 'text-start',
+          render: function (data, type, full, meta) {
+            return full['approved_at_formatted'] || 'N/A';
           }
         }
       ],
@@ -255,7 +281,7 @@ $(function () {
     });
 
     // Integrated Filter Listeners
-    $('#employeeFilter, #leaveTypeFilter, #statusFilter, #dateFilter').on('change', function () {
+    $('#employeeFilter, #leaveTypeFilter, #statusFilter, #dateFilter, #monthFilter, #yearFilter').on('change', function () {
       dtLeaveRequests.draw();
       refreshLeaveChart();
     });
@@ -344,25 +370,45 @@ $(function () {
         $('#createdAt').text(data.createdAt);
         $('#userNotes').text(data.userNotes || 'N/A');
 
+        if (data.is_half_day) {
+            $('#halfDaySessionBlock').removeClass('d-none');
+            var sessionText = data.half_day_session === 'first_half' ? 'First Half (Morning)' : 'Second Half (Afternoon)';
+            $('#halfDaySessionLabel').text(sessionText);
+        } else {
+            $('#halfDaySessionBlock').addClass('d-none');
+        }
+
         $('#leaveRequestForm').hide();
         $('#alreadyRespondedNotice').hide();
 
         if (data.status === 'approved') {
           statusDiv.html('<span class="badge bg-label-success px-3 py-2"><i class="bx bx-check-circle me-1"></i>Approved</span>');
-          $('#leaveRequestForm').show();
-          $('#btnApprove').hide();
-          $('#btnReject').html('REVOKE').show();
+          if (!window.isAccountsRole) {
+              $('#leaveRequestForm').show();
+              $('#btnApprove').hide();
+              $('#btnReject').html('REVOKE').show();
+          } else {
+              $('#leaveRequestForm').hide();
+          }
         } else if (data.status === 'rejected') {
           statusDiv.html('<span class="badge bg-label-danger px-3 py-2"><i class="bx bx-x-circle me-1"></i>Rejected</span>');
           $('#alreadyRespondedNotice').show();
+          $('#leaveRequestForm').hide();
         } else if (data.status === 'cancelled') {
           statusDiv.html('<span class="badge bg-label-secondary px-3 py-2"><i class="bx bx-minus-circle me-1"></i>Cancelled</span>');
           $('#alreadyRespondedNotice').show();
+          $('#leaveRequestForm').hide();
         } else {
           statusDiv.html('<span class="badge bg-label-warning px-3 py-2"><i class="bx bx-time me-1"></i>Pending Review</span>');
-          $('#btnApprove').show();
-          $('#btnReject').html('REJECT').show();
-          $('#leaveRequestForm').show();
+          if (!window.isAccountsRole) {
+              $('#btnApprove').show();
+              $('#btnReject').html('REJECT').show();
+              $('#leaveRequestForm').show();
+          } else {
+              $('#btnApprove').hide();
+              $('#btnReject').hide();
+              $('#leaveRequestForm').hide();
+          }
         }
 
         if (data.document !== null && data.document !== 'N/A') {

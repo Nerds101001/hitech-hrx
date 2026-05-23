@@ -136,6 +136,25 @@
                 <div class="step-icon"><i class="bx bx-check"></i></div>
                 <div class="step-text">Onboarding forms successfully submitted.</div>
             </div>
+            @if(auth()->user()->is_training_required)
+                <div class="step-item">
+                    <div class="step-icon">
+                        @if(auth()->user()->training_status === 'completed')
+                            <i class="bx bx-check"></i>
+                        @else
+                            <i class="bx bx-loader-circle bx-spin text-info"></i>
+                        @endif
+                    </div>
+                    <div class="step-text">
+                        Mandatory Training: 
+                        @if(auth()->user()->training_status === 'completed')
+                            Completed (100%)
+                        @else
+                            In Progress ({{ auth()->user()->getTrainingProgressPercentage() }}%)
+                        @endif
+                    </div>
+                </div>
+            @endif
             <div class="step-item">
                 <div class="step-icon"><i class="bx bx-loader-circle bx-spin"></i></div>
                 <div class="step-text">Verification in progress by HR administrator.</div>
@@ -145,6 +164,33 @@
                 <div class="step-text">Full portal access will be granted once approved.</div>
             </div>
         </div>
+
+        @if(auth()->user()->is_training_required)
+            <div class="training-card mb-4" style="background: rgba(6, 237, 249, 0.05); border: 1px solid rgba(6, 237, 249, 0.2); border-radius: 16px; padding: 1.5rem; text-align: left;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h4 class="mb-1 text-white fw-bold" style="font-size: 1.1rem;"><i class="bx bx-run text-info me-2 animate__animated animate__pulse animate__infinite"></i>Mandatory Training</h4>
+                        <p class="text-muted small mb-0" style="font-size: 0.8rem;">Please complete all training modules and pass assessments.</p>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-info text-dark fw-bold" style="font-size: 0.75rem;">{{ auth()->user()->getTrainingProgressPercentage() }}% Done</span>
+                    </div>
+                </div>
+                <div class="progress mb-3" style="height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px;">
+                    <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" role="progressbar" style="width: {{ auth()->user()->getTrainingProgressPercentage() }}%"></div>
+                </div>
+                @if(auth()->user()->training_status === 'completed')
+                    <div class="alert alert-success d-flex align-items-center bg-transparent border-0 p-0 text-success m-0" role="alert" style="font-size: 0.85rem;">
+                        <i class="bx bx-check-circle me-2 fs-5"></i>
+                        <div>Training completed successfully! Under HR review.</div>
+                    </div>
+                @else
+                    <a href="{{ route('training.portal') }}" class="btn w-100 fw-bold py-2 mt-2 btn-hitech-support" style="background: linear-gradient(135deg, #06edf9 0%, #00acc1 100%); border: none; color: #0f172a; display: flex; justify-content: center; align-items: center; text-decoration: none;">
+                        <i class="bx bx-graduation me-2"></i> Go to Training Portal
+                    </a>
+                @endif
+            </div>
+        @endif
 
         <div class="d-flex flex-column gap-3">
             <a href="mailto:hr@hitechgroup.in" class="btn-hitech-support">

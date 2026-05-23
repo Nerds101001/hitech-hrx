@@ -50,7 +50,7 @@
             <!-- /Search -->
         @endif
 
-        @if (auth()->user()->roles()->first()->name != 'super_admin')
+        @if (auth()->user() && auth()->user()->roles()->first()?->name != 'super_admin')
             @if ($addonService->isAddonEnabled(ModuleConstants::SOS, true))
                 <!-- SOS Requests -->
                 <li class="nav-item dropdown dropdown-sos me-2 me-xl-0">
@@ -271,7 +271,7 @@
         <!-- Quick links -->
 
         <!-- Notification -->
-        @if ($configData['displayNotification'] == true && auth()->user()->roles()->first()->name != 'super_admin')
+        @if ($configData['displayNotification'] == true && auth()->user() && auth()->user()->roles()->first()?->name != 'super_admin')
             @include('layouts.sections.navbar.notifications')
         @endif
         <!--/ Notification -->
@@ -288,7 +288,7 @@
                     </div>
                     <div class="switch-content d-none d-md-flex">
                         <span class="name">{{ Auth::user() ? Auth::user()->getFullName() : 'Demo User' }}</span>
-                        <span class="role">{{ Auth::user() ? Auth::user()->roles()->first()->name : 'Employee' }}</span>
+                        <span class="role">{{ Auth::user() ? (Auth::user()->roles()->first()?->name ?? 'Employee') : 'Employee' }}</span>
                     </div>
                     <i class="bx bx-chevron-down hitech-user-chevron"></i>
                 </div>
@@ -305,7 +305,7 @@
                       </div>
                       <div class="user-info">
                           <span class="name">{{ Auth::user()->getFullName() }}</span>
-                          <span class="role">{{ Auth::user()->roles()->first()->name }}</span>
+                          <span class="role">{{ Auth::user()->roles()->first()?->name ?? 'Employee' }}</span>
                       </div>
                   </div>
                 </li>

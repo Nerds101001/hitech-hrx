@@ -104,7 +104,7 @@ $activeClass = in_array($currentRouteName, $activeRoutes) ? 'active' : '';
                       <h6 class="mb-0">
                         {{Auth::user()->getFullName()}}
                       </h6>
-                      <small class="text-muted">{{Auth::user()->roles()->first()->name}}</small>
+                      <small class="text-muted">{{Auth::user()->roles()->first()?->name ?? 'Employee'}}</small>
                     </div>
                   </div>
                 </a>

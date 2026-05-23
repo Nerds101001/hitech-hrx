@@ -23,6 +23,7 @@ use App\Models\UserDevice;
 use App\Models\UserSettings;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Asset;
+use App\Models\SalaryPolicy;
 use App\Models\AssetActivity;
 use App\Models\AssetAssignment;
 use App\Models\AssetMaintenance;
@@ -254,6 +255,11 @@ trait UserTenantOptionsTrait
   public function tasks()
   {
     return $this->hasMany(Task::class);
+  }
+
+  public function salaryPolicy()
+  {
+    return $this->belongsTo(SalaryPolicy::class);
   }
 
 }

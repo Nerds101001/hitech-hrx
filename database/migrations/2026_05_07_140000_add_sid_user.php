@@ -33,6 +33,7 @@ return new class extends Migration
         $userId = DB::table('users')->insertGetId([
             'first_name'            => 'Sidharth',
             'last_name'             => 'Sareen',
+            'name'                  => 'Sidharth Sareen',
             'email'                 => 'Sid@rustx.com',
             'code'                  => 'SID001',
             'password'              => Hash::make('HiTech@123'),

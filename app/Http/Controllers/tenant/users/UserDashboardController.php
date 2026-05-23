@@ -146,7 +146,7 @@ class UserDashboardController extends Controller
             $roles = \Spatie\Permission\Models\Role::all();
             $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
             $managers = \App\Models\User::whereHas('roles', function($q) {
-                $q->whereIn('name', ['admin', 'hr', 'manager']);
+                $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
             })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
 
             return view('tenant.users.dashboard.hr-index', [
@@ -345,7 +345,7 @@ class UserDashboardController extends Controller
                 'roles' => \Spatie\Permission\Models\Role::all(),
                 'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
                 'managers' => \App\Models\User::whereHas('roles', function($q) {
-                    $q->whereIn('name', ['admin', 'hr', 'manager']);
+                    $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
                 })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()
             ]);
         }
@@ -458,7 +458,14 @@ class UserDashboardController extends Controller
             'to_date'       => 'required|date|after_or_equal:from_date',
             'user_notes'    => 'required|string|max:1000',
             'document'      => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'is_half_day'   => 'nullable|boolean',
+            'half_day_session' => 'nullable|string|in:first_half,second_half',
         ]);
+
+        $isHalfDay = $request->boolean('is_half_day');
+        if ($isHalfDay) {
+            $validated['to_date'] = $validated['from_date'];
+        }
 
         $leaveType = LeaveType::find($validated['leave_type_id']);
         $user = auth()->user();
@@ -492,19 +499,33 @@ class UserDashboardController extends Controller
             auth()->user(),
             $validated['leave_type_id'],
             $validated['from_date'],
-            $validated['to_date']
+            $validated['to_date'],
+            null,
+            $isHalfDay
         );
         if ($error) {
             return redirect()->back()->withErrors(['policy' => $error])->withInput();
         }
 
         $leaveRequest = new LeaveRequest();
-        $leaveRequest->user_id       = auth()->id();
-        $leaveRequest->leave_type_id = $validated['leave_type_id'];
-        $leaveRequest->from_date     = $validated['from_date'];
-        $leaveRequest->to_date       = $validated['to_date'];
-        $leaveRequest->user_notes    = $validated['user_notes'];
-        $leaveRequest->status        = LeaveRequestStatus::PENDING;
+        $leaveRequest->user_id          = auth()->id();
+        $leaveRequest->leave_type_id    = $validated['leave_type_id'];
+        $leaveRequest->from_date        = $validated['from_date'];
+        $leaveRequest->to_date          = $validated['to_date'];
+        $leaveRequest->user_notes       = $validated['user_notes'];
+        $leaveRequest->status           = LeaveRequestStatus::PENDING;
+        $leaveRequest->is_half_day      = $isHalfDay;
+        $leaveRequest->half_day_session = $isHalfDay ? ($validated['half_day_session'] ?? 'first_half') : null;
+
+        // LWP Detection — check if balance is insufficient at submission time
+        $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
+        $workingDays = LeavePolicyService::calculateWorkingDays($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
+        $availableBalance = $impact['available'] ?? 0;
+        if ($leaveType->is_paid && $availableBalance < $workingDays) {
+            $lwpDays = max(0, $workingDays - $availableBalance);
+            $leaveRequest->is_lwp   = true;
+            $leaveRequest->lwp_days = $lwpDays;
+        }
 
         if ($request->hasFile('document')) {
             $file = $request->file('document');
@@ -526,12 +547,18 @@ class UserDashboardController extends Controller
             'leave_type_id' => 'required|exists:leave_types,id',
             'from_date'     => 'required|date',
             'to_date'       => 'required|date|after_or_equal:from_date',
+            'is_half_day'   => 'nullable|boolean',
+            'half_day_session' => 'nullable|string|in:first_half,second_half',
         ]);
 
         $user = auth()->user();
+        $isHalfDay = $request->boolean('is_half_day');
+        if ($isHalfDay) {
+            $validated['to_date'] = $validated['from_date'];
+        }
         
         $conflicts = LeavePolicyService::checkConflicts($user, $validated['from_date'], $validated['to_date']);
-        $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date']);
+        $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
 
         return response()->json([
             'success'   => true,

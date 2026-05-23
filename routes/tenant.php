@@ -33,6 +33,7 @@ use App\Http\Controllers\tenant\LoanRequestController;
 use App\Http\Controllers\tenant\MyAssetsController;
 use App\Http\Controllers\tenant\OrganisationHierarchyController;
 use App\Http\Controllers\tenant\PayrollController;
+use App\Http\Controllers\tenant\SalaryImportController;
 use App\Http\Controllers\tenant\PermissionController;
 use App\Http\Controllers\tenant\DigitalLibraryController;
 use App\Http\Controllers\tenant\ProbationController;
@@ -56,6 +57,7 @@ use App\Http\Controllers\tenant\CustomQuestionController;
 use App\Http\Controllers\tenant\InterviewScheduleController;
 use App\Http\Controllers\tenant\AiTrainingController;
 use App\Http\Controllers\tenant\HRPolicyController;
+use App\Http\Controllers\tenant\DebugController;
 use App\Constants\ModuleConstants;
 use App\Services\AddonService\IAddonService;
 use Illuminate\Support\Facades\Route;
@@ -70,20 +72,7 @@ require __DIR__ . '/user.php';
 
 // --- GUEST ROUTES ---
 Route::middleware(['web'])->group(function () {
-  Route::get('/create-test-user', function() {
-    return \App\Models\User::updateOrCreate(
-        ['email' => 'onboarding_test@example.com'],
-        [
-            'name' => 'Trial User',
-            'first_name' => 'Trial',
-            'last_name' => 'User',
-            'personal_email' => 'onboarding_test@example.com',
-            'password' => \Illuminate\Support\Facades\Hash::make('password123'),
-            'status' => \App\Enums\UserAccountStatus::ONBOARDING,
-            'role' => 'employee'
-        ]
-    ) ? "Created" : "Failed";
-  });
+  Route::get('/create-test-user', [DebugController::class, 'createTestUser']);
   Route::get('/auth/login', [AuthController::class, 'login'])->name('auth.login');
   Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
 
@@ -110,6 +99,7 @@ Route::middleware(['web'])->group(function () {
       Route::get('/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showModule'])->name('module.show');
       Route::get('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'getAssessment'])->name('assessment.get');
       Route::post('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'submitAssessment'])->name('assessment.submit');
+      Route::post('/module/{id}/chat', [\App\Http\Controllers\tenant\TrainingController::class, 'chatWithDocument'])->name('module.chat');
       
       // HR/Manager Routes
       Route::get('/report-card/{userId}', [\App\Http\Controllers\tenant\TrainingController::class, 'getReportCard'])->name('report-card');
@@ -118,22 +108,25 @@ Route::middleware(['web'])->group(function () {
       // Management Routes (HR/Admin)
       Route::get('/manage', [\App\Http\Controllers\tenant\TrainingController::class, 'managementIndex'])->name('manage.index');
       Route::post('/manage/phase', [\App\Http\Controllers\tenant\TrainingController::class, 'storePhase'])->name('manage.phase.store');
+      Route::delete('/manage/phase/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyPhase'])->name('manage.phase.destroy');
       Route::post('/manage/module', [\App\Http\Controllers\tenant\TrainingController::class, 'storeModule'])->name('manage.module.store');
+      Route::delete('/manage/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyModule'])->name('manage.module.destroy');
       Route::post('/manage/module/{id}/generate-ai-questions', [\App\Http\Controllers\tenant\TrainingController::class, 'generateAIQuestions'])->name('manage.module.ai-questions');
       Route::post('/manage/question', [\App\Http\Controllers\tenant\TrainingController::class, 'storeQuestion'])->name('manage.question.store');
       Route::delete('/manage/question/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyQuestion'])->name('manage.question.destroy');
   });
 });
 
-// --- AUTHENTICATED TENANT ROUTES ---
 Route::middleware([
   'web',
   'auth',
-  'role:Admin|Admin|admin|hr|manager'
+  'role:Admin|admin|hr|manager|accounts'
 ])->group(function () {
 
     // --- DASHBOARD & GENERAL ---
     Route::get('/', [DashboardController::class, 'index'])->name('tenant.dashboard');
+
+
     Route::get('liveLocation', [DashboardController::class, 'liveLocationView'])->name('liveLocationView');
     Route::get('liveLocationAjax', [DashboardController::class, 'liveLocationAjax'])->name('liveLocationAjax');
     Route::get('cardView', [DashboardController::class, 'cardView'])->name('cardView');
@@ -193,11 +186,18 @@ Route::middleware([
     Route::post('reports/getProductOrderReport', [ReportController::class, 'getProductOrderReport'])->name('report.getProductOrderReport');
 
     // --- PAYROLL MANAGEMENT ---
-    Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
-    Route::get('payroll/indexAjax', [PayrollController::class, 'indexAjax'])->name('payroll.indexAjax');
-    Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
-    Route::post('payroll/bulkApprove', [PayrollController::class, 'bulkApprove'])->name('payroll.bulkApprove');
-    Route::delete('payroll/destroyAjax/{id}', [PayrollController::class, 'destroyAjax'])->name('payroll.destroyAjax');
+    Route::middleware(['role:accounts'])->group(function () {
+      Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
+      Route::get('payroll/indexAjax', [PayrollController::class, 'indexAjax'])->name('payroll.indexAjax');
+      Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
+      Route::post('payroll/bulkApprove', [PayrollController::class, 'bulkApprove'])->name('payroll.bulkApprove');
+      Route::delete('payroll/destroyAjax/{id}', [PayrollController::class, 'destroyAjax'])->name('payroll.destroyAjax');
+      
+      // Salary Breakup Import
+      Route::post('payroll/salary-import/preview', [SalaryImportController::class, 'preview'])->name('payroll.salary-import.preview');
+      Route::post('payroll/salary-import/store', [SalaryImportController::class, 'store'])->name('payroll.salary-import.store');
+      Route::get('payroll/salary-import/download-sample', [SalaryImportController::class, 'downloadSample'])->name('payroll.salary-import.download-sample');
+    });
 
     // --- MASTERS ---
 
@@ -375,14 +375,7 @@ Route::middleware([
 
 
     // --- HR & ORGANIZATION ---
-    Route::get('debug-onboarding-data', function() {
-        return [
-           'roles' => \App\Models\Role::get(),
-           'departments' => \App\Models\Department::get(),
-           'designations' => \App\Models\Designation::get(),
-           'auth_tenant' => auth()->user()->tenant_id ?? 'no auth'
-        ];
-    });
+    Route::get('debug-onboarding-data', [DebugController::class, 'debugOnboardingData']);
 
     // --- APPROVALS ---
     Route::middleware(['role:admin|hr'])->group(function () {
@@ -581,6 +574,21 @@ Route::middleware([
 
     // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
     Route::middleware(['web', 'auth'])->group(function() {
+
+        // --- SALES FIELD OPERATIONS & CRM ---
+        Route::prefix('sales-visits')->name('sales-visits.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\tenant\SalesVisitController::class, 'create'])->name('create');
+            Route::post('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'store'])->name('store');
+            Route::get('/reports', [\App\Http\Controllers\tenant\SalesVisitController::class, 'reportSummary'])->name('reports');
+            Route::get('/clients', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientIndex'])->name('clients.index');
+            Route::post('/clients', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientStore'])->name('clients.store');
+            Route::delete('/clients/{id}', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientDestroy'])->name('clients.destroy');
+            Route::get('/{id}', [\App\Http\Controllers\tenant\SalesVisitController::class, 'show'])->name('show');
+            Route::patch('/{id}/cancel', [\App\Http\Controllers\tenant\SalesVisitController::class, 'cancel'])->name('cancel');
+            Route::post('/{id}/complete', [\App\Http\Controllers\tenant\SalesVisitController::class, 'complete'])->name('complete');
+            Route::patch('/{id}/verify', [\App\Http\Controllers\tenant\SalesVisitController::class, 'verify'])->name('verify');
+        });
 
         // Notifications - Viewable by all authenticated users
         Route::prefix('notifications')->name('tenant.notifications.')->group(function() {

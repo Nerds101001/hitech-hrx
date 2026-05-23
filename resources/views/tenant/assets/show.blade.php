@@ -34,7 +34,7 @@
                                 <i class="bx bx-left-arrow-alt fs-5"></i>
                                 <span>Back</span>
                             </a>
-                            @if(auth()->user()->hasRole(['admin', 'hr']))
+                            @if(auth()->user()->hasRole(['admin', 'hr', 'accounts']))
                                 <a href="{{ route('assets.edit', $asset->id) }}" class="btn btn-primary btn-sm btn-hitech px-3" style="background: linear-gradient(135deg, #005a5a 0%, #008a8a 100%); border:none; border-radius:8px;">
                                     <i class="bx bx-edit me-1"></i> Edit
                                 </a>

@@ -25,6 +25,7 @@ class LeaveController extends Controller
     
     $user = auth()->user();
     $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
     $managedTeamIds = [];
     if($isManager) {
         $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
@@ -36,6 +37,10 @@ class LeaveController extends Controller
     $statsQuery = LeaveRequest::query();
     if($isManager) {
         $statsQuery->whereIn('user_id', $managedSubordinateIds);
+    }
+
+    if($isAccounts) {
+        $statsQuery->where('status', LeaveRequestStatus::APPROVED);
     }
 
     $stats = $statsQuery->selectRaw("
@@ -83,6 +88,7 @@ class LeaveController extends Controller
     try {
       $user = auth()->user();
       $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+      $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
       
       $query = LeaveRequest::query()
         ->with(['user', 'leaveType', 'user.designation.department', 'approvedBy', 'updatedBy', 'createdBy'])
@@ -94,6 +100,10 @@ class LeaveController extends Controller
           $query->whereIn('user_id', $scopedUserIds);
       }
 
+      if ($isAccounts) {
+          $query->where('status', LeaveRequestStatus::APPROVED);
+      }
+
       // Apply Filters
       if ($request->has('employeeFilter') && !empty($request->input('employeeFilter'))) {
         $query->where('user_id', $request->input('employeeFilter'));
@@ -103,6 +113,12 @@ class LeaveController extends Controller
       }
       if ($request->has('dateFilter') && !empty($request->input('dateFilter'))) {
         $query->whereDate('created_at', $request->input('dateFilter'));
+      }
+      if ($request->has('monthFilter') && !empty($request->input('monthFilter'))) {
+        $query->whereMonth('created_at', $request->input('monthFilter'));
+      }
+      if ($request->has('yearFilter') && !empty($request->input('yearFilter'))) {
+        $query->whereYear('created_at', $request->input('yearFilter'));
       }
       if ($request->has('statusFilter') && !empty($request->input('statusFilter'))) {
         $query->where('status', $request->input('statusFilter'));
@@ -150,7 +166,7 @@ class LeaveController extends Controller
             return $name;
         })
         ->addColumn('days', function($leaveRequest) {
-            return $leaveRequest->from_date->diffInDays($leaveRequest->to_date) + 1;
+            return $leaveRequest->is_half_day ? 0.5 : ($leaveRequest->from_date->diffInDays($leaveRequest->to_date) + 1);
         })
         ->addColumn('reason', function($leaveRequest) {
             return $leaveRequest->user_notes ?? 'N/A';
@@ -192,6 +208,8 @@ class LeaveController extends Controller
             // Return raw value for JS renderer
             return $leaveRequest->status->value ?? $leaveRequest->status;
         })
+        ->addColumn('is_lwp', fn($r) => (bool)$r->is_lwp)
+        ->addColumn('lwp_days', fn($r) => (float)($r->lwp_days ?? 0))
         ->addColumn('document', function($leaveRequest) {
             return $leaveRequest->document ? asset('storage/'. \Constants::BaseFolderLeaveRequestDocument . $leaveRequest->document) : null;
         })
@@ -205,6 +223,9 @@ class LeaveController extends Controller
 
   public function actionAjax(Request $request)
   {
+    if (auth()->user()->hasRole('accounts')) {
+        return response()->json(['status' => 'error', 'message' => 'Unauthorized: Accounts role cannot perform this action.']);
+    }
 
     $validated = $request->validate([
       'id' => 'required|exists:leave_requests,id',
@@ -243,6 +264,9 @@ class LeaveController extends Controller
 
   public function bulkActionAjax(Request $request)
   {
+    if (auth()->user()->hasRole('accounts')) {
+        return response()->json(['status' => 'error', 'message' => 'Unauthorized: Accounts role cannot perform this action.']);
+    }
     $validated = $request->validate([
       'ids' => 'required|array',
       'ids.*' => 'exists:leave_requests,id',
@@ -296,7 +320,9 @@ class LeaveController extends Controller
       'status' => $leaveRequest->status,
       'createdAt' => $leaveRequest->created_at->format(Constants::DateTimeFormat),
       'userNotes' => $leaveRequest->user_notes,
-      'days' => $leaveRequest->from_date->diffInDays($leaveRequest->to_date) + 1,
+      'days' => $leaveRequest->is_half_day ? 0.5 : ($leaveRequest->from_date->diffInDays($leaveRequest->to_date) + 1),
+      'isHalfDay' => (bool)$leaveRequest->is_half_day,
+      'halfDaySession' => $leaveRequest->half_day_session,
       'userInitials' => $leaveRequest->user->getInitials()
     ];
 

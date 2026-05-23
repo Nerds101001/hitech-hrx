@@ -44,9 +44,10 @@ class DashboardController extends Controller
   {
     // Check if user is HR and return HR dashboard directly
     $user = auth()->user();
-    $isManager = $user->hasRole('manager');
+    $todayVisits = $user ? $user->todayVisits()->get() : collect();
+    $isManager = $user ? $user->hasRole('manager') : false;
 
-    if ($user && ($user->hasRole(['admin', 'hr']) || $isManager)) {
+    if ($user && ($user->hasRole(['admin', 'hr', 'accounts']) || $isManager)) {
         // ... (existing admin/hr logic below or manager specific logic)
       // Calculate base HR stats
       $totalUser = User::count();
@@ -320,6 +321,7 @@ class DashboardController extends Controller
             ->get();
 
         return view('tenant.users.dashboard.manager-index', [
+            'todayVisits' => $todayVisits,
             'totalUser' => $totalUser,
             'activeEmployees' => $active,
             'active' => $active,
@@ -351,7 +353,7 @@ class DashboardController extends Controller
             'roles' => \Spatie\Permission\Models\Role::all(),
             'designations' => \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get(),
             'managers' => \App\Models\User::withoutGlobalScopes()->whereHas('roles', function($q) {
-                $q->whereIn('name', ['admin', 'hr', 'manager']);
+                $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
             })->where('status', UserAccountStatus::ACTIVE)->get()
         ]);
       }
@@ -362,7 +364,7 @@ class DashboardController extends Controller
       $teams = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
       $designations = \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get();
       $managers = User::withoutGlobalScopes()->whereHas('roles', function($q) {
-          $q->whereIn('name', ['admin', 'hr', 'manager']);
+          $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
       })->where('status', UserAccountStatus::ACTIVE)->get();
 
       // Fallback: If no data found, try without status filter
@@ -392,6 +394,7 @@ class DashboardController extends Controller
 
       // Return HR dashboard view directly
       return view('tenant.users.dashboard.hr-index', [
+        'todayVisits' => $todayVisits,
         'pageConfigs' => ['contentLayout' => 'wide'],
         'totalUser' => $totalUser,
         'activeEmployees' => $active,
@@ -483,6 +486,7 @@ class DashboardController extends Controller
       ->get();
 
     return view('tenant.dashboard.index', [
+      'todayVisits' => $todayVisits,
       'pageConfigs' => ['contentLayout' => 'wide'],
       'totalUser' => $totalUser,
       'activeEmployees' => $active,

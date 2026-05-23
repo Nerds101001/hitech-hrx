@@ -75,7 +75,7 @@ class AttendanceController extends Controller
    */
   private function getScopedUserIds($user)
   {
-      if ($user->hasRole(['admin', 'hr'])) {
+      if ($user->hasRole(['admin', 'hr', 'accounts'])) {
           return null; // All
       }
       
@@ -222,7 +222,7 @@ class AttendanceController extends Controller
           $actions = '<div class="d-flex align-items-center gap-2">'.
                      '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="viewLogs('.$attendance->id.')" title="View Logs"><i class="bx bx-list-ul"></i></button>';
           
-          if (auth()->user()->hasRole(['admin', 'hr'])) {
+          if (auth()->user()->hasRole(['admin', 'hr', 'accounts'])) {
               $actions .= '<button class="btn btn-sm btn-icon hitech-action-icon" onclick="editRecord('.$attendance->id.')" title="Edit" '.$editorData.'><i class="bx bx-edit"></i></button>';
           }
           
@@ -271,6 +271,8 @@ class AttendanceController extends Controller
                   SUM(CASE WHEN LOWER(status) = 'late' THEN 1 ELSE 0 END) as lates,
                   SUM(CASE WHEN (LOWER(status) = 'present' OR status IS NULL OR LOWER(status) = 'paid_leave') AND (admin_reason IS NOT NULL OR LOWER(status) = 'paid_leave' OR TIMESTAMPDIFF(MINUTE, check_in_time, check_out_time) >= 480) THEN 1 ELSE 0 END) as presents
               ")
+              ->reorder()
+              ->get()
               ->first();
 
           $totalCount = max($stats->total, 1);
@@ -348,10 +350,11 @@ class AttendanceController extends Controller
           $row = [
               'employee' => $user->getFullName(),
               'code' => $user->code,
-              'presents' => 0,
-              'absents' => 0,
+              'presents' => 0.0,
+              'absents' => 0.0,
               'lates' => 0,
-              'leaves' => 0
+              'leaves' => 0,
+              'offs' => 0
           ];
 
           for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -377,11 +380,21 @@ class AttendanceController extends Controller
                   if (Carbon::parse($hDate)->toDateString() == $dateStr) { $holidayName = $hName; break; }
               }
 
+              /** @var \App\Models\User $user */
+              $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $dateObj);
+
               if ($holidayName) {
                   $dayData = ['status' => 'Holiday', 'in' => $holidayName, 'out' => '--', 'hours' => 'HOL', 'class' => 'bg-info bg-opacity-25 text-info border-info border-opacity-50'];
+                  $row['offs']++;
+              } elseif (!$isWorkingDay && (!$attendance || ($attendance->status == 'Absent' && empty($attendance->check_in_time)))) {
+                  // It's an OFF day. Only override if they actually have a valid attendance punch.
+                  $dayData['status'] = 'OFF'; 
+                  $dayData['hours'] = 'OFF'; 
+                  $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
+                  $row['offs']++;
               } elseif ($attendance) {
                   $dayData['id'] = $attendance->id;
-                  $dayData['in'] = $attendance->check_in_time->format('H:i');
+                  $dayData['in'] = $attendance->check_in_time ? $attendance->check_in_time->format('H:i') : '--';
                   $dayData['out'] = $attendance->check_out_time ? $attendance->check_out_time->format('H:i') : '--';
                   
                   if ($attendance->check_in_time && $attendance->check_out_time) {
@@ -418,19 +431,21 @@ class AttendanceController extends Controller
                     }
 
                    if ($s == 'present') {
-                       $dayData['status'] = 'Present'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
+                       $dayData['status'] = 'Present'; $dayData['class'] = 'bg-teal text-white'; $row['presents'] += 1;
                    } elseif ($s == 'late') {
-                       $dayData['status'] = 'Late'; $dayData['class'] = 'bg-warning text-white'; $row['lates']++;
+                       $dayData['status'] = 'Late'; $dayData['class'] = 'bg-warning text-white'; $row['presents'] += 1; $row['lates'] += 1;
                    } elseif ($s == 'half-day' || $s == 'half-Day') {
-                       $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['lates']++;
+                       $dayData['status'] = 'Half Day'; $dayData['class'] = 'bg-orange text-white'; $row['presents'] += 0.5; $row['absents'] += 0.5;
                    } elseif ($s == 'absent') {
-                      $dayData['status'] = 'Absent'; $dayData['class'] = 'bg-red text-white'; $row['absents']++;
+                      $dayData['status'] = 'Absent'; $dayData['class'] = 'bg-red text-white'; $row['absents'] += 1;
                   } elseif ($s == 'paid_leave' || ($s == 'leave' && $attendance->leaveRequest?->leaveType?->is_paid)) {
-                      $dayData['status'] = 'Paid Leave'; $dayData['class'] = 'bg-teal text-white'; $row['presents']++;
+                      $dayData['status'] = 'Paid Leave'; $dayData['class'] = 'bg-teal text-white'; $row['presents'] += 1; $row['leaves'] += 1;
+                      $dayData['hours'] = 'PL';
                   } elseif ($s == 'unpaid_leave' || $s == 'on_leave' || $s == 'leave') {
-                      $dayData['status'] = 'Unpaid Leave'; $dayData['class'] = 'bg-purple-vibrant text-white';
+                      $dayData['status'] = 'Unpaid Leave'; $dayData['class'] = 'bg-orange text-white'; $row['absents'] += 1; $row['leaves'] += 1;
+                      $dayData['hours'] = 'NPL';
                   } elseif ($s == 'work_from_home' || $s == 'wfh') {
-                      $dayData['status'] = 'WFH'; $dayData['class'] = 'bg-indigo-vibrant text-white';
+                      $dayData['status'] = 'WFH'; $dayData['class'] = 'bg-indigo-vibrant text-white'; $row['presents'] += 1;
                   }
               } else {
                   // No attendance log. Check for approved leaves
@@ -439,20 +454,19 @@ class AttendanceController extends Controller
                              Carbon::parse($l->to_date)->toDateString() >= $dateStr;
                   });
 
-                  /** @var \App\Models\User $user */
-                  $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $dateObj);
                   if ($leave) {
                       $isPaid = $leave->leaveType?->is_paid ?? false;
-                      $dayData['status'] = $isPaid ? 'Paid Leave' : 'Leave';
-                      $dayData['in'] = $leave->leaveType->name ?? 'Leave';
+                      $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
+                      $dayData['in'] = $isPaid ? 'Paid Leave' : 'Non Paid Leave';
                       $dayData['out'] = '--';
-                      $dayData['hours'] = $leave->leaveType->code ?? 'LV';
-                      $dayData['class'] = ($isPaid ? 'bg-teal' : 'bg-purple-vibrant') . ' text-white border-0';
-                      $row['leaves']++;
-                  } elseif (!$isWorkingDay) {
-                      $dayData['status'] = 'OFF'; 
-                      $dayData['hours'] = 'OFF'; 
-                      $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
+                      $dayData['hours'] = $isPaid ? 'PL' : 'NPL';
+                      $dayData['class'] = ($isPaid ? 'bg-teal' : 'bg-orange') . ' text-white border-0';
+                      $row['leaves'] += 1;
+                      if ($isPaid) {
+                          $row['presents'] += 1;
+                      } else {
+                          $row['absents'] += 1;
+                      }
                   } elseif ($dateObj->isFuture() && !$dateObj->isToday()) {
                       // Future Dates: Scheduled
                       $dayData['status'] = 'Scheduled'; 
@@ -467,7 +481,7 @@ class AttendanceController extends Controller
                       $dayData['out'] = '--'; 
                       $dayData['hours'] = '--'; 
                       $dayData['class'] = 'bg-red text-white';
-                      $row['absents']++;
+                      $row['absents'] += 1;
                   } else {
                       // Today: No log yet
                       $dayData['status'] = 'Today'; 
@@ -586,7 +600,7 @@ class AttendanceController extends Controller
 
     public function editAjax($id)
     {
-        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr', 'accounts'])) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
         $attendance = Attendance::with('user')->findOrFail($id);
@@ -599,7 +613,7 @@ class AttendanceController extends Controller
 
     public function updateAjax(Request $request, $id)
     {
-        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr', 'accounts'])) {
             return response()->json(['success' => false, 'message' => 'Managers are not authorized to edit attendance records.'], 403);
         }
         $attendance = Attendance::findOrFail($id);
@@ -631,7 +645,7 @@ class AttendanceController extends Controller
     }
     public function storeAdjustmentAjax(Request $request)
     {
-        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr'])) {
+        if (auth()->user()->hasRole('manager') && !auth()->user()->hasRole(['admin', 'hr', 'accounts'])) {
             return response()->json(['success' => false, 'message' => 'Managers are not authorized to create attendance adjustments.'], 403);
         }
         // Validation: If marking as Full Day (Present), proof is required

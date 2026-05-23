@@ -100,6 +100,8 @@ class LeaveHistoryService
 
                 // 1. Carry Forward Entry (if part of opening balance)
                 if ($cfAmount > 0) {
+                    $cfDate = $bal->created_at ? $bal->created_at->copy()->startOfYear() : Carbon::create(now()->year, 4, 1);
+                    $prevMonth = $cfDate->copy()->subMonth()->format('F Y');
                     $history->push((object)[
                         'id'         => 'SYS-CF-' . $bal->id,
                         'type'       => 'Carry Forward',
@@ -107,25 +109,30 @@ class LeaveHistoryService
                         'from_date'  => null,
                         'to_date'    => null,
                         'amount'     => $cfAmount,
-                        'status'     => 'System',
-                        'notes'      => "Brought forward from previous fiscal year",
-                        'created_at' => $bal->created_at ? $bal->created_at->copy()->startOfYear() : Carbon::create(now()->year, 4, 1),
+                        'status'     => 'Processed',
+                        'notes'      => "Carry Forward of {$prevMonth} earned leave",
+                        'created_at' => $cfDate,
                         'is_adjustment' => true
                     ]);
                 }
 
                 // 2. Initial Allotment / Accrued Entry
                 if (abs($accruedAmount) > 0.001) {
+                    // Try to derive a month label from the balance creation date
+                    $createdAt = $bal->created_at ?? Carbon::create(now()->year, 4, 1);
+                    $monthLabel = $createdAt->format('F Y');
+                    $earnedNote = "Earned for {$monthLabel}";
+
                     $history->push((object)[
                         'id'         => 'SYS-OPEN-' . $bal->id,
-                        'type'       => 'Initial Allotment',
+                        'type'       => 'Credit',
                         'leave_type' => $bal->leaveType->name ?? 'Unknown',
                         'from_date'  => null,
                         'to_date'    => null,
                         'amount'     => $accruedAmount,
-                        'status'     => 'System',
-                        'notes'      => "Initial Balance / Monthly Accruals / Comp Offs",
-                        'created_at' => $bal->created_at ? $bal->created_at->copy()->startOfDay() : Carbon::create(now()->year, 4, 1),
+                        'status'     => 'Processed',
+                        'notes'      => $earnedNote,
+                        'created_at' => $createdAt->copy()->startOfDay(),
                         'is_adjustment' => true
                     ]);
                 }

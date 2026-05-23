@@ -52,6 +52,11 @@
                             </div>
                         </div>
 
+                        <div class="mb-4 d-none" id="halfDaySessionBlock">
+                            <label class="form-label-hitech">HALF-DAY SESSION</label>
+                            <div class="card border-0 shadow-sm p-3 mt-2 text-center fw-bold text-dark fs-6" style="border-radius: 12px; background: #fff; color: #4f46e5 !important;" id="halfDaySessionLabel">...</div>
+                        </div>
+
                         <div class="mb-2">
                             <label class="form-label-hitech">REASON FOR LEAVE</label>
                             <div class="card border-0 shadow-sm p-3 mt-2 text-dark" style="border-radius: 12px; background: #fff; min-height: 80px; font-size: 0.95rem; line-height: 1.5;" id="userNotes">...</div>

@@ -20,7 +20,7 @@ class LeavePolicyService
      * @param  string $toDate     Y-m-d
      * @return string|null  Returns an error message string, or null if the request is valid.
      */
-    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null): ?string
+    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null, bool $isHalfDay = false): ?string
     {
         $from = Carbon::parse($fromDate);
         $to   = Carbon::parse($toDate);
@@ -29,7 +29,7 @@ class LeavePolicyService
         $code = $leaveType ? $leaveType->code : '';
 
         $profile = $user->leavePolicyProfile;
-        $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate);
+        $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate, $isHalfDay);
 
         if ($workingDays <= 0) {
             return 'The selected period contains only off-days or holidays.';
@@ -171,7 +171,7 @@ class LeavePolicyService
             
             $pendingDays = 0;
             foreach ($pendingRequests as $pr) {
-                $pendingDays += self::calculateWorkingDays($user, $pr->leave_type_id, $pr->from_date, $pr->to_date);
+                $pendingDays += self::calculateWorkingDays($user, $pr->leave_type_id, $pr->from_date, $pr->to_date, (bool)$pr->is_half_day);
             }
             
             $netAvailable = $available - $pendingDays;
@@ -246,12 +246,12 @@ class LeavePolicyService
     /**
      * Helper to calculate working days (excluding holidays and Saturdays).
      */
-    public static function calculateWorkingDays(User $user, int $leaveTypeId, string $fromDate, string $toDate): int
+    public static function calculateWorkingDays(User $user, int $leaveTypeId, string $fromDate, string $toDate, bool $isHalfDay = false): float
     {
         $from = Carbon::parse($fromDate);
         $to   = Carbon::parse($toDate);
         
-        $workingDays = 0;
+        $workingDays = 0.0;
         $tempDate = $from->copy();
         
         $leaveType = \App\Models\LeaveType::find($leaveTypeId);
@@ -259,12 +259,12 @@ class LeavePolicyService
 
         while ($tempDate->lte($to)) {
             if (self::isWorkingDay($user, $tempDate)) {
-                $workingDays++;
+                $workingDays += $isHalfDay ? 0.5 : 1.0;
             }
             $tempDate->addDay();
         }
 
-        return (int)$workingDays;
+        return (float)$workingDays;
     }
 
     /**
@@ -360,10 +360,10 @@ class LeavePolicyService
         return (float)max(0, $totalBalance);
     }
 
-    public static function getBalanceImpact(User $user, int $leaveTypeId, string $fromDate, string $toDate): array
+    public static function getBalanceImpact(User $user, int $leaveTypeId, string $fromDate, string $toDate, bool $isHalfDay = false): array
     {
         $leaveType = \App\Models\LeaveType::find($leaveTypeId);
-        $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate);
+        $workingDays = self::calculateWorkingDays($user, $leaveTypeId, $fromDate, $toDate, $isHalfDay);
         
         $isMaternityPaternity = $leaveType && in_array($leaveType->code, ['ML', 'MAT', 'PL_PAT', 'PAT']);
         $isShortLeave = $leaveType && $leaveType->code === 'SHL';

@@ -140,10 +140,8 @@ class LeaveController extends Controller
     $toDate      = $request->toDate;
     $leaveTypeId = $request->leaveType;
     $remarks     = $request->comments;
-
-    if ($fromDate > $toDate) {
-      return Error::response('From date cannot be greater than to date');
-    }
+    $isHalfDay   = $request->boolean('is_half_day', false);
+    $halfDaySession = $request->input('half_day_session');
 
     if ($leaveTypeId == null) {
       return Error::response('Leave type is required');
@@ -156,7 +154,11 @@ class LeaveController extends Controller
     }
 
     $finalFromDate = date('Y-m-d', strtotime($fromDate));
-    $finalToDate   = date('Y-m-d', strtotime($toDate));
+    $finalToDate   = $isHalfDay ? $finalFromDate : date('Y-m-d', strtotime($toDate));
+
+    if ($finalFromDate > $finalToDate) {
+      return Error::response('From date cannot be greater than to date');
+    }
 
     $user = auth()->user();
 
@@ -165,22 +167,35 @@ class LeaveController extends Controller
     $endTime   = $request->end_time;
 
     // Unit leave policy enforcement
-    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours);
+    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours, $isHalfDay);
     if ($policyError) {
       return Error::response($policyError);
     }
 
     $leaveRequest = LeaveRequest::create([
-      'from_date'      => $finalFromDate,
-      'to_date'        => $finalToDate,
-      'leave_type_id'  => $leaveTypeId,
-      'user_notes'     => $remarks,
-      'user_id'        => $user->id,
-      'is_short_leave' => $leaveType->is_short_leave,
-      'duration_hours' => $hours,
-      'start_time'     => $startTime,
-      'end_time'       => $endTime,
+      'from_date'        => $finalFromDate,
+      'to_date'          => $finalToDate,
+      'leave_type_id'    => $leaveTypeId,
+      'user_notes'       => $remarks,
+      'user_id'          => $user->id,
+      'is_short_leave'   => $leaveType->is_short_leave,
+      'duration_hours'   => $hours,
+      'start_time'       => $startTime,
+      'end_time'         => $endTime,
+      'is_half_day'      => $isHalfDay,
+      'half_day_session' => $isHalfDay ? ($halfDaySession ?? 'first_half') : null,
     ]);
+
+    // LWP Detection at submission time
+    $impact = LeavePolicyService::getBalanceImpact($user, $leaveTypeId, $finalFromDate, $finalToDate, $isHalfDay);
+    $workingDays = LeavePolicyService::calculateWorkingDays($user, $leaveTypeId, $finalFromDate, $finalToDate, $isHalfDay);
+    $availableBalance = $impact['available'] ?? 0;
+    if ($leaveType->is_paid && $availableBalance < $workingDays) {
+        $lwpDays = max(0, $workingDays - $availableBalance);
+        $leaveRequest->is_lwp   = true;
+        $leaveRequest->lwp_days = $lwpDays;
+        $leaveRequest->saveQuietly();
+    }
 
     NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));
 

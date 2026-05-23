@@ -197,6 +197,14 @@ class OnboardingController extends Controller
             $user->consent_accepted_at = now();
             $user->onboarding_resubmission_notes = null;
             $user->onboarding_rejected_sections = null;
+            
+            // Keep the is_training_required flag set during candidate invitation.
+            // If training is NOT required, set the training_status to 'completed'.
+            if (!$user->is_training_required) {
+                $user->training_status = 'completed';
+            } else {
+                $user->training_status = 'not_started';
+            }
             $user->save();
 
             DB::commit();

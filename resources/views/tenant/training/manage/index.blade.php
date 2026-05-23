@@ -105,13 +105,20 @@
                 <span class="badge bg-label-primary rounded-pill mb-1">Phase {{ $phase->order }}</span>
                 <h3 class="fw-bold mb-0" style="color: var(--hrx-primary);">{{ $phase->title }}</h3>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 align-items-center">
                 <button class="btn btn-teal rounded-pill px-3" onclick="addModule({{ $phase->id }})">
                     <i class="ti ti-plus me-1"></i> Add Module
                 </button>
-                <button class="btn btn-outline-secondary btn-icon rounded-pill" onclick="editPhase({{ $phase }})">
+                <button class="btn btn-outline-secondary btn-icon rounded-pill" onclick="editPhase({{ $phase }})" title="Edit Phase">
                     <i class="ti ti-edit"></i>
                 </button>
+                <form action="{{ route('training.manage.phase.destroy', $phase->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to delete this phase and all its modules?')" class="m-0 p-0 d-inline">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn btn-outline-danger btn-icon rounded-pill" title="Delete Phase">
+                        <i class="ti ti-trash"></i>
+                    </button>
+                </form>
             </div>
         </div>
 
@@ -142,13 +149,20 @@
                             <span class="stat-pill"><i class="ti ti-help me-1"></i>{{ $module->questions->count() }} Qs</span>
                         </div>
 
-                        <div class="d-flex gap-2 border-top pt-3">
+                        <div class="d-flex gap-2 border-top pt-3 flex-wrap">
                             <button class="btn btn-outline-teal btn-sm flex-grow-1 rounded-pill" onclick="editModule({{ $module }})">
                                 <i class="ti ti-edit me-1"></i> Edit
                             </button>
                             <button class="btn btn-teal btn-sm flex-grow-1 rounded-pill" onclick="manageQuestions({{ $module->id }}, {{ $module->questions }})">
                                 <i class="ti ti-help me-1"></i> Questions
                             </button>
+                            <form action="{{ route('training.manage.module.destroy', $module->id) }}" method="POST" onsubmit="return confirm('Delete this module? This cannot be undone.')" class="m-0 p-0 d-inline">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3" title="Delete Module">
+                                    <i class="ti ti-trash"></i>
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -250,6 +264,23 @@
                 <div id="url_content_area" class="mb-3" style="display: none;">
                     <label class="form-label fw-bold">Direct Video Link (MP4 or YouTube)</label>
                     <input type="text" name="content_url" id="module_url" class="form-control" placeholder="https://youtube.com/watch?v=...">
+                </div>
+
+                <div id="video_settings_area" class="mb-3" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold d-flex justify-content-between">
+                            Video Chapters (JSON)
+                            <small class="text-muted">Format: [{"title": "Intro", "time": 0}, {"title": "Topic", "time": 120}]</small>
+                        </label>
+                        <textarea name="video_chapters" id="module_video_chapters" class="form-control font-monospace" rows="3" placeholder='[{"title": "Introduction", "time": 0}]'></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold d-flex justify-content-between">
+                            Video Milestones / Pop-up Quizzes (JSON)
+                            <small class="text-muted">Format: [{"time": 60, "question": "...", "options": ["A", "B"], "correct": 0}]</small>
+                        </label>
+                        <textarea name="video_milestones" id="module_video_milestones" class="form-control font-monospace" rows="3" placeholder='[{"time": 45, "question": "What is 2+2?", "options": ["3", "4", "5"], "correct": 1}]'></textarea>
+                    </div>
                 </div>
 
                 <div class="row">
@@ -363,6 +394,8 @@
         document.getElementById('module_description').value = '';
         document.getElementById('module_body').value = '';
         document.getElementById('module_url').value = '';
+        document.getElementById('module_video_chapters').value = '';
+        document.getElementById('module_video_milestones').value = '';
         document.getElementById('module_passing').value = 80;
         document.getElementById('module_q_count').value = 5;
         document.getElementById('module_show_all').checked = false;
@@ -378,6 +411,8 @@
         document.getElementById('module_type').value = module.content_type;
         document.getElementById('module_body').value = module.content_body || '';
         document.getElementById('module_url').value = module.content_url || '';
+        document.getElementById('module_video_chapters').value = module.video_chapters ? JSON.stringify(module.video_chapters, null, 2) : '';
+        document.getElementById('module_video_milestones').value = module.video_milestones ? JSON.stringify(module.video_milestones, null, 2) : '';
         document.getElementById('module_time').value = module.estimated_time_minutes;
         document.getElementById('module_order').value = module.order;
         document.getElementById('module_passing').value = module.passing_percentage || 80;
@@ -402,6 +437,7 @@
         document.getElementById('text_content_area').style.display = type === 'policy' ? 'block' : 'none';
         document.getElementById('pdf_content_area').style.display = type === 'catalog' ? 'block' : 'none';
         document.getElementById('url_content_area').style.display = type === 'video' ? 'block' : 'none';
+        document.getElementById('video_settings_area').style.display = type === 'video' ? 'block' : 'none';
     }
 
     function manageQuestions(moduleId, questions) {
