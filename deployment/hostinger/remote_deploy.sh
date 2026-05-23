@@ -18,6 +18,11 @@ trap 'chmod -R u+w "$TMP_DIR" 2>/dev/null || true; rm -rf "$TMP_DIR" 2>/dev/null
 echo "[2/8] Extracting release archive..."
 tar --warning=no-unknown-keyword --no-same-permissions --delay-directory-restore --overwrite -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
 
+echo "[2.5/8] Obfuscating PHP source code..."
+if [[ -f "$TMP_DIR/deployment/hostinger/obfuscate.php" ]]; then
+  php "$TMP_DIR/deployment/hostinger/obfuscate.php" "$TMP_DIR"
+fi
+
 echo "[3/8] Syncing release files (preserving runtime dirs and .env)..."
 # Do not preserve source permission bits from Windows-packed archives.
 rsync -rltD --delete \
@@ -59,6 +64,7 @@ php artisan optimize:clear
 if ! php artisan migrate --force --no-interaction; then
   echo "[7.0/8] migrate skipped due existing schema conflict; continuing deployment."
 fi
+
 echo "[7.1/8] Standardizing legacy documents..."
 php artisan documents:standardize --no-interaction || echo "Standardize failed, continuing..."
 
@@ -67,6 +73,19 @@ if [[ -f "$APP_ROOT/migrate_roles.php" ]]; then
   php "$APP_ROOT/migrate_roles.php" || echo "Role migration failed, continuing..."
   rm -f "$APP_ROOT/migrate_roles.php"
 fi
+
+if [[ -f "$APP_ROOT/fix_manager_perms.php" ]]; then
+  echo "[7.3/8] Running manager permission updates..."
+  php "$APP_ROOT/fix_manager_perms.php" || echo "Manager permissions update failed, continuing..."
+  rm -f "$APP_ROOT/fix_manager_perms.php"
+fi
+
+if [[ -f "$APP_ROOT/setup_accounts_role.php" ]]; then
+  echo "[7.4/8] Running accounts permission updates..."
+  php "$APP_ROOT/setup_accounts_role.php" || echo "Accounts permissions update failed, continuing..."
+  rm -f "$APP_ROOT/setup_accounts_role.php"
+fi
+
 
 php artisan config:cache
 if ! php artisan route:cache; then
