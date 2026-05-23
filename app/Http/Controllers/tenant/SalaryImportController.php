@@ -55,7 +55,7 @@ class SalaryImportController extends Controller
                 ->first();
 
             $baseSalary = $this->getMappedValue($row, $mapping, 'base_salary');
-            $policyId = $this->getMappedValue($row, $mapping, 'salary_policy_id');
+            $policyRaw  = $this->getMappedValue($row, $mapping, 'salary_policy_id');
             $customBasic = $this->getMappedValue($row, $mapping, 'custom_basic');
             $customHra = $this->getMappedValue($row, $mapping, 'custom_hra');
             $customCa = $this->getMappedValue($row, $mapping, 'custom_ca');
@@ -74,35 +74,40 @@ class SalaryImportController extends Controller
                 $errorMsg = 'Employee not found';
             }
 
+            // Resolve policy — only numeric IDs are attempted; text values are ignored
+            $policyId = null;
             $salaryPolicyName = 'Keep Existing';
-            if ($policyId !== null) {
+            if ($policyRaw !== null && is_numeric($policyRaw) && intval($policyRaw) > 0) {
+                $policyId = intval($policyRaw);
                 $policyObj = SalaryPolicy::find($policyId);
                 if ($policyObj) {
                     $salaryPolicyName = $policyObj->name;
                 } else {
-                    $status = 'Error';
-                    $errorMsg = 'Salary policy ID ' . $policyId . ' not found';
+                    // ID not found — just keep existing, don't block import
+                    $policyId = null;
+                    $salaryPolicyName = 'Keep Existing (ID not found)';
                 }
             }
+            // Non-numeric text in policy column (e.g. policy name text) is silently ignored
 
             $record = [
-                'identifier' => $searchVal,
+                'identifier'    => $searchVal,
                 'employee_name' => $user ? $user->getFullName() : 'Unknown',
-                'user_id' => $user ? $user->id : null,
-                'old_base_salary' => $user ? $user->base_salary : 0,
-                'base_salary' => $baseSalary !== null ? floatval($baseSalary) : ($user ? $user->base_salary : 0),
-                'salary_policy_id' => $policyId !== null ? intval($policyId) : ($user ? $user->salary_policy_id : null),
+                'user_id'       => $user ? $user->id : null,
+                'old_base_salary' => $user ? ($user->base_salary ?? 0) : 0,
+                'base_salary'   => $baseSalary !== null ? floatval($baseSalary) : ($user ? ($user->base_salary ?? 0) : 0),
+                'salary_policy_id'   => $policyId,
                 'salary_policy_name' => $salaryPolicyName,
-                'custom_basic' => $customBasic !== null ? floatval($customBasic) : null,
-                'custom_hra' => $customHra !== null ? floatval($customHra) : null,
-                'custom_ca' => $customCa !== null ? floatval($customCa) : null,
+                'custom_basic'   => $customBasic !== null ? floatval($customBasic) : null,
+                'custom_hra'     => $customHra !== null ? floatval($customHra) : null,
+                'custom_ca'      => $customCa !== null ? floatval($customCa) : null,
                 'custom_medical' => $customMedical !== null ? floatval($customMedical) : null,
-                'custom_edu' => $customEdu !== null ? floatval($customEdu) : null,
+                'custom_edu'     => $customEdu !== null ? floatval($customEdu) : null,
                 'custom_special_allowance' => $customSpecialAllowance !== null ? floatval($customSpecialAllowance) : null,
-                'custom_pt' => $customPt !== null ? floatval($customPt) : null,
-                'custom_epf' => $customEpf !== null ? floatval($customEpf) : null,
+                'custom_pt'   => $customPt !== null ? floatval($customPt) : null,
+                'custom_epf'  => $customEpf !== null ? floatval($customEpf) : null,
                 'custom_esic' => $customEsic !== null ? floatval($customEsic) : null,
-                'status' => $status,
+                'status'        => $status,
                 'error_message' => $errorMsg
             ];
 
