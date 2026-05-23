@@ -559,25 +559,29 @@ class EmployeeController extends Controller
       'baseSalary' => 'nullable|numeric|min:0',
       'ctcOffered' => 'nullable|numeric|min:0',
       'availableLeaveCount' => 'nullable|numeric|min:0',
-      'leavePolicyProfileId' => 'nullable|exists:leave_policy_profiles,id',
     ]);
 
     $user = User::find($validated['id']);
 
-    if ($user->base_salary != ($validated['baseSalary'] ?? 0)) {
-      $user->base_salary = $validated['baseSalary'];
+    $baseSalary         = $validated['baseSalary'] ?? null;
+    $ctcOffered         = $validated['ctcOffered'] ?? null;
+    $availableLeaveCount = $validated['availableLeaveCount'] ?? null;
+    $leavePolicyProfileId = $validated['leavePolicyProfileId'] ?? null;
+
+    if ($user->base_salary != ($baseSalary ?? 0)) {
+      $user->base_salary = $baseSalary;
     }
 
-    if ($user->ctc_offered != ($validated['ctcOffered'] ?? 0)) {
-      $user->ctc_offered = $validated['ctcOffered'];
+    if ($user->ctc_offered != ($ctcOffered ?? 0)) {
+      $user->ctc_offered = $ctcOffered;
     }
 
-    if ($user->available_leave_count != ($validated['availableLeaveCount'] ?? 0)) {
-      $user->available_leave_count = $validated['availableLeaveCount'];
+    if ($user->available_leave_count != ($availableLeaveCount ?? 0)) {
+      $user->available_leave_count = $availableLeaveCount;
     }
 
-    if ($user->leave_policy_profile_id != ($validated['leavePolicyProfileId'] ?? null)) {
-      $user->leave_policy_profile_id = $validated['leavePolicyProfileId'];
+    if ($user->leave_policy_profile_id != $leavePolicyProfileId) {
+      $user->leave_policy_profile_id = $leavePolicyProfileId;
     }
 
     $user->save();
