@@ -81,27 +81,131 @@ class PayrollService
                 $cycleId = $cycle->id;
             }
             
-            // 1. Calculate Attendance Pro-rata
+            // 1. Calculate Attendance Stats
             $attendanceData = $this->calculateAttendanceStats($user, $startDate, $endDate);
-            $workedDays = $attendanceData['worked_days'];
+            $workedDays     = $attendanceData['worked_days'];
+            $hasAttendance  = $attendanceData['has_attendance']; // true if ANY record exists
             
-            // Salary calculation: (Base Salary / Total Days) * Worked Days
-            // We'll consider Worked Days + Holidays + Weekends as "Paid Days"
-            $paidDays = $workedDays + $attendanceData['holidays'] + $attendanceData['weekends'];
-            if ($paidDays > $daysInMonth) $paidDays = $daysInMonth;
+            // If NO attendance records exist for this month, employee is assumed to be
+            // working the full month (manual/non-biometric staff). Full salary paid.
+            if (!$hasAttendance) {
+                $paidDays = $daysInMonth; // full month
+            } else {
+                // We consider Worked Days + Holidays + Weekends as "Paid Days"
+                $paidDays = $workedDays + $attendanceData['holidays'] + $attendanceData['weekends'];
+                if ($paidDays > $daysInMonth) $paidDays = $daysInMonth;
+            }
+
+            // Retrieve Salary Policy
+            $policy = $user->salaryPolicy;
+            if (!$policy && $user->site_id) {
+                $policy = \App\Models\SalaryPolicy::where('site_id', $user->site_id)->first();
+            }
+            if (!$policy) {
+                $policy = \App\Models\SalaryPolicy::first();
+            }
+
+            // Month calculation mode & dynamic divisor / paid days
+            $mode = $policy ? $policy->month_calculation_mode : 'actual_calendar_days';
+            $divisor = $daysInMonth;
+            $effectivePaidDays = $paidDays;
+
+            if ($mode === 'fixed_30_days') {
+                $divisor = 30;
+                $absentDays = $daysInMonth - $paidDays;
+                $effectivePaidDays = max(0, 30 - $absentDays);
+            }
+
+            // Calculate Full Month values for components
+            $fullBasic = $user->custom_basic !== null ? $user->custom_basic : ($policy ? ($baseSalary * ($policy->basic_percentage / 100)) : ($baseSalary * 0.50));
+            $fullHra = $user->custom_hra !== null ? $user->custom_hra : ($policy ? ($baseSalary * ($policy->hra_percentage / 100)) : ($baseSalary * 0.25));
+            $fullCa = $user->custom_ca !== null ? $user->custom_ca : ($policy ? $policy->ca_fixed : 0.00);
+            $fullMedical = $user->custom_medical !== null ? $user->custom_medical : ($policy ? $policy->medical_fixed : 0.00);
+            $fullEdu = $user->custom_edu !== null ? $user->custom_edu : ($policy ? $policy->edu_fixed : 0.00);
             
-            $proRataSalary = ($daysInMonth > 0) ? ($baseSalary / $daysInMonth) * $paidDays : 0;
+            // Special Allowance is the balancing figure for the full month
+            $fullSpecialAllowance = $user->custom_special_allowance !== null ? $user->custom_special_allowance : max(0.00, $baseSalary - ($fullBasic + $fullHra + $fullCa + $fullMedical + $fullEdu));
+
+            // Pro-rata ratio based on attendance
+            $ratio = $divisor > 0 ? ($effectivePaidDays / $divisor) : 0;
+
+            // Actual Payable Components
+            $payableBasic = round($fullBasic * $ratio, 2);
+            $payableHra = round($fullHra * $ratio, 2);
+            $payableCa = round($fullCa * $ratio, 2);
+            $payableMedical = round($fullMedical * $ratio, 2);
+            $payableEdu = round($fullEdu * $ratio, 2);
+            $payableSpecialAllowance = round($fullSpecialAllowance * $ratio, 2);
+
+            // Actual Gross Pay from components
+            $actualGross = $payableBasic + $payableHra + $payableCa + $payableMedical + $payableEdu + $payableSpecialAllowance;
+
+            // Calculate Professional Tax (PT) - Fixed, not pro-rated
+            $ptThreshold = $policy ? $policy->pt_threshold : 20833.00;
+            $ptAmount    = $policy ? $policy->pt_amount    : 200.00;
+            
+            $isPtApplicable = false;
+            if ($user->custom_pt !== null) {
+                $isPtApplicable = true;
+            } elseif ($policy && $policy->is_pt_applicable) {
+                $isPtApplicable = true;
+            } elseif ($user->site) {
+                $siteName = strtolower($user->site->name);
+                if (str_contains($siteName, 'ramgarh') || str_contains($siteName, 'rmagarh')) {
+                    $isPtApplicable = true;
+                }
+            }
+
+            $actualPt = 0.00;
+            if ($isPtApplicable) {
+                if ($user->custom_pt !== null) {
+                    // Custom PT is a fixed monthly amount — apply fully only if any salary is paid
+                    $actualPt = ($ratio > 0) ? $user->custom_pt : 0.00;
+                } else {
+                    if ($fullBasic < $ptThreshold) {
+                        $actualPt = $ptAmount;
+                    }
+                }
+            }
+
+            // Calculate EPF - custom_epf is the fixed monthly amount from import
+            // Policy-based EPF is calculated on payable (pro-rated) basic
+            $actualEpf = 0.00;
+            if ($user->custom_epf !== null) {
+                // Fixed monthly amount from salary import — apply fully only if salary is paid this month
+                $actualEpf = ($ratio > 0) ? $user->custom_epf : 0.00;
+            } elseif ($policy && $policy->is_epf_applicable) {
+                $epfRate   = $policy->epf_rate ?? 12.00;
+                $actualEpf = round(($payableBasic * $epfRate) / 100, 2);
+            }
+
+            // Calculate ESIC - custom_esic is the fixed monthly amount from import
+            $actualEsic = 0.00;
+            if ($user->custom_esic !== null) {
+                // Fixed monthly amount from salary import — apply fully only if salary is paid
+                $actualEsic = ($ratio > 0) ? $user->custom_esic : 0.00;
+            } elseif ($policy && $policy->is_esic_applicable) {
+                $esicThreshold = $policy->esic_threshold ?? 21000.00;
+                $esicRate      = $policy->esic_rate      ?? 0.75;
+                if ($actualGross <= $esicThreshold) {
+                    $actualEsic = round(($actualGross * $esicRate) / 100, 2);
+                }
+            }
 
             // 2. Fetch Adjustments (Benefits & Deductions)
             $adjustments = $this->getAdjustments($user, $baseSalary);
             $totalBenefits = $adjustments['benefits_total'];
             $totalDeductions = $adjustments['deductions_total'];
 
+            // Add Professional Tax, EPF, and ESIC to deductions
+            $totalDeductions += $actualPt + $actualEpf + $actualEsic;
+
             // 3. Auto Loan Deduction
             $loanDeduction = $this->calculateLoanDeduction($user);
             $totalDeductions += $loanDeduction;
 
-            $grossSalary = $proRataSalary + $totalBenefits;
+            // Final Gross and Net Salary
+            $grossSalary = $actualGross + $totalBenefits;
             $netSalary = $grossSalary - $totalDeductions;
 
             // 4. Create Payroll Record
@@ -115,6 +219,15 @@ class PayrollService
                 'status' => $status,
                 'tenant_id' => $user->tenant_id,
                 'created_by_id' => auth()->id() ?? $user->id,
+                'hra' => $payableHra,
+                'ca' => $payableCa,
+                'medical' => $payableMedical,
+                'edu' => $payableEdu,
+                'special_allowance' => $payableSpecialAllowance,
+                'pt' => $actualPt,
+                'epf' => $actualEpf,
+                'esic' => $actualEsic,
+                'month_calculation_mode' => $mode,
             ]);
 
             // 5. Create Payslip
@@ -122,7 +235,7 @@ class PayrollService
                 'user_id' => $user->id,
                 'payroll_record_id' => $record->id,
                 'code' => 'PS-' . strtoupper(Str::random(10)),
-                'basic_salary' => $proRataSalary, // Store pro-rata as the effective basic for that month
+                'basic_salary' => $payableBasic,
                 'total_deductions' => $totalDeductions,
                 'total_benefits' => $totalBenefits,
                 'net_salary' => $netSalary,
@@ -134,6 +247,15 @@ class PayrollService
                 'tenant_id' => $user->tenant_id,
                 'created_by_id' => auth()->id() ?? $user->id,
                 'notes' => $loanDeduction > 0 ? "Includes Loan Deduction: " . $loanDeduction : null,
+                'hra' => $payableHra,
+                'ca' => $payableCa,
+                'medical' => $payableMedical,
+                'edu' => $payableEdu,
+                'special_allowance' => $payableSpecialAllowance,
+                'pt' => $actualPt,
+                'epf' => $actualEpf,
+                'esic' => $actualEsic,
+                'month_calculation_mode' => $mode,
             ]);
 
             return $record;
@@ -145,14 +267,40 @@ class PayrollService
      */
     private function calculateAttendanceStats($user, $startDate, $endDate)
     {
-        $workedDays = Attendance::where('user_id', $user->id)
+        $attendances = Attendance::where('user_id', $user->id)
             ->whereBetween('check_in_time', [$startDate, $endDate])
-            ->whereIn('status', ['present', 'paid_leave'])
-            ->count();
+            ->with('leaveRequest')
+            ->get();
 
-        // For now, simplify Holidays and Weekends
-        // In a real system, you'd check the Holiday table and user's Shift schedule
-        // Here we'll default to a standard 5-day week for calculation if no shift data is complex
+        $hasAttendance = $attendances->count() > 0;
+        $workedDays    = 0.0;
+
+        foreach ($attendances as $att) {
+            $status = strtolower($att->status);
+            
+            if ($status === 'present') {
+                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
+                    // Half day work + half day leave
+                    $workedDays += 0.5;
+                    if (!$att->leaveRequest->is_lwp) {
+                        $workedDays += 0.5;
+                    }
+                } else {
+                    $workedDays += 1.0;
+                }
+            } elseif ($status === 'half-day') {
+                $workedDays += 0.5;
+            } elseif ($status === 'leave') {
+                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
+                    $workedDays += 0.5;
+                } else {
+                    $workedDays += 1.0;
+                }
+            }
+            // 'absent' status records count as 0 worked days (no addition)
+        }
+
+        // Count weekends in the period
         $weekends = 0;
         $tempDate = clone $startDate;
         while ($tempDate->lte($endDate)) {
@@ -163,9 +311,10 @@ class PayrollService
         }
 
         return [
-            'worked_days' => $workedDays,
-            'holidays' => 0, // Placeholder
-            'weekends' => $weekends
+            'worked_days'   => $workedDays,
+            'has_attendance' => $hasAttendance,
+            'holidays'      => 0,
+            'weekends'      => $weekends,
         ];
     }
 
