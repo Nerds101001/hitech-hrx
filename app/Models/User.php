@@ -28,6 +28,50 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
 {
   use UserTenantOptionsTrait, HasFactory, HasApiTokens, Notifiable, HasRoles, Auditable, UserActionsTrait, SoftDeletes;
 
+  protected static function boot()
+  {
+    parent::boot();
+
+    static::updating(function ($user) {
+      if ($user->isDirty('status')) {
+        $newStatus = $user->status;
+        $statusVal = $newStatus instanceof UserAccountStatus ? $newStatus->value : $newStatus;
+
+        $leftStatuses = [
+          UserAccountStatus::TERMINATED->value,
+          UserAccountStatus::RELIEVED->value,
+          UserAccountStatus::RETIRED->value,
+          UserAccountStatus::PROBATION_FAILED->value,
+          UserAccountStatus::DELETED->value,
+        ];
+
+        $suffix = '_T' . $user->id;
+
+        if (in_array($statusVal, $leftStatuses)) {
+          if ($user->email && !str_contains($user->email, '_T')) {
+            $user->email = substr($user->email, 0, 100 - strlen($suffix)) . $suffix;
+          }
+          if ($user->phone && !str_contains($user->phone, '_T')) {
+            $user->phone = substr($user->phone, 0, 20 - strlen($suffix)) . $suffix;
+          }
+        }
+      }
+    });
+
+    static::deleting(function ($user) {
+      if (method_exists($user, 'isForceDeleting') && !$user->isForceDeleting()) {
+        $suffix = '_T' . $user->id;
+        if ($user->email && !str_contains($user->email, '_T')) {
+          $user->email = substr($user->email, 0, 100 - strlen($suffix)) . $suffix;
+        }
+        if ($user->phone && !str_contains($user->phone, '_T')) {
+          $user->phone = substr($user->phone, 0, 20 - strlen($suffix)) . $suffix;
+        }
+        $user->saveQuietly();
+      }
+    });
+  }
+
   /**
    * The attributes that are mass assignable.
    *
@@ -150,6 +194,16 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     'work_type',
     'is_training_required',
     'training_status',
+    'salary_policy_id',
+    'custom_basic',
+    'custom_hra',
+    'custom_ca',
+    'custom_medical',
+    'custom_edu',
+    'custom_special_allowance',
+    'custom_pt',
+    'custom_epf',
+    'custom_esic',
   ];
   /**
    * The attributes that should be hidden for serialization.
@@ -598,6 +652,11 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->belongsTo(LeavePolicyProfile::class, 'leave_policy_profile_id');
   }
 
+  public function salaryPolicy()
+  {
+    return $this->belongsTo(SalaryPolicy::class, 'salary_policy_id');
+  }
+
   public function leaveBalances()
   {
     return $this->hasMany(LeaveBalance::class, 'user_id');
@@ -646,4 +705,30 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     {
         return $this->hasMany(HRPolicyAcknowledgment::class);
     }
+
+    /** Sales Visit CRM relationships */
+    public function mappedSalespersons()
+    {
+        return $this->hasMany(\App\Models\CcSalespersonMap::class, 'cc_user_id');
+    }
+
+    public function assignedVisits()
+    {
+        return $this->hasMany(\App\Models\SalesVisit::class, 'salesperson_id');
+    }
+
+    public function bookedVisits()
+    {
+        return $this->hasMany(\App\Models\SalesVisit::class, 'cc_user_id');
+    }
+
+    public function todayVisits()
+    {
+        return $this->assignedVisits()
+            ->whereDate('scheduled_at', now()->toDateString())
+            ->whereIn('status', ['pending', 'confirmed'])
+            ->with('client')
+            ->orderBy('scheduled_at');
+    }
 }
+

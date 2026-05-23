@@ -1665,7 +1665,7 @@
                                         <div>
                                             <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Salary Structure Breakdown
                                             </h6>
-                                            <p class="mb-0 text-muted smallest italic">Click to view detailed components</p>
+                                                            <p class="mb-0 text-muted smallest italic">Click to view detailed components</p>
                                         </div>
                                     </div>
                                     <i class="bx bx-chevron-down fs-3 text-muted"></i>
@@ -1674,61 +1674,146 @@
                                     <div class="card-body p-0">
                                         <div class="table-responsive">
                                             @php
-                                                $ctcAnnum = $user->ctc_offered ?? 0;
-                                                $ctcMonth = $ctcAnnum / 12;
-                                                $basicMonth = $ctcMonth * 0.5;
-                                                $hraMonth = $ctcMonth * 0.25;
-                                                $medicalMonth = 2500;
-                                                $eduMonth = 200;
-                                                $ltaMonth = 2500;
-                                                $sumA = $basicMonth + $hraMonth + $medicalMonth + $eduMonth + $ltaMonth;
-                                                $specialAllowance = max(0, $ctcMonth - $sumA);
-                                                $profTax = 200;
-                                                $pfAmount = 1800;
-                                                $deductions = $profTax + $pfAmount;
-                                                $netSalary = $ctcMonth - $deductions;
+                                                // --- Source: use custom imported values if available, else fall back to policy, else formula ---
+                                                $baseSal = $user->base_salary ?? 0;
+                                                $policy  = $user->salaryPolicy ?? null;
+
+                                                // Credits
+                                                if ($user->custom_basic !== null) {
+                                                    $sbBasic   = $user->custom_basic;
+                                                    $sbHra     = $user->custom_hra ?? 0;
+                                                    $sbCa      = $user->custom_ca ?? 0;
+                                                    $sbMedical = $user->custom_medical ?? 0;
+                                                    $sbEdu     = $user->custom_edu ?? 0;
+                                                    $sbSpecial = $user->custom_special_allowance ?? 0;
+                                                    // Deductions
+                                                    $sbPt   = $user->custom_pt ?? 0;
+                                                    $sbEpf  = $user->custom_epf ?? 0;
+                                                    $sbEsic = $user->custom_esic ?? 0;
+                                                    $sbSource = 'imported';
+                                                } elseif ($policy) {
+                                                    $sbBasic   = $baseSal * ($policy->basic_percentage / 100);
+                                                    $sbHra     = $sbBasic * ($policy->hra_percentage / 100);
+                                                    $sbCa      = $policy->ca_fixed ?? 0;
+                                                    $sbMedical = $policy->medical_fixed ?? 0;
+                                                    $sbEdu     = $policy->edu_fixed ?? 0;
+                                                    $sbSpecial = max(0, $baseSal - $sbBasic - $sbHra - $sbCa - $sbMedical - $sbEdu);
+                                                    // Deductions from policy
+                                                    $sbPt   = ($policy->is_pt_applicable && $baseSal >= ($policy->pt_threshold ?? 0)) ? ($policy->pt_amount ?? 0) : 0;
+                                                    $grossForEpf = $sbBasic;
+                                                    $sbEpf  = $policy->is_epf_applicable ? round($grossForEpf * (($policy->epf_rate ?? 12) / 100)) : 0;
+                                                    $gross  = $sbBasic + $sbHra + $sbCa + $sbMedical + $sbEdu + $sbSpecial;
+                                                    $sbEsic = ($policy->is_esic_applicable && $gross <= ($policy->esic_threshold ?? 21000)) ? round($gross * (($policy->esic_rate ?? 0.75) / 100)) : 0;
+                                                    $sbSource = 'policy';
+                                                } else {
+                                                    // Minimal fallback
+                                                    $sbBasic   = round($baseSal * 0.50);
+                                                    $sbHra     = round($baseSal * 0.20);
+                                                    $sbCa      = 0; $sbMedical = 0; $sbEdu = 0;
+                                                    $sbSpecial = max(0, $baseSal - $sbBasic - $sbHra);
+                                                    $sbPt = 0; $sbEpf = 0; $sbEsic = 0;
+                                                    $sbSource = 'formula';
+                                                }
+
+                                                $totalCredits    = $sbBasic + $sbHra + $sbCa + $sbMedical + $sbEdu + $sbSpecial;
+                                                $totalDeductions = $sbPt + $sbEpf + $sbEsic;
+                                                $netTakeHome     = $totalCredits - $totalDeductions;
                                             @endphp
+
+                                            {{-- Source badge --}}
+                                            <div class="px-4 pt-3 pb-1 d-flex align-items-center gap-2">
+                                                @if($sbSource === 'imported')
+                                                    <span class="badge rounded-pill" style="background:#e6f4f1;color:#127464;font-size:0.7rem;"><i class="bx bx-import me-1"></i>Imported Values</span>
+                                                @elseif($sbSource === 'policy')
+                                                    <span class="badge rounded-pill bg-label-info" style="font-size:0.7rem;"><i class="bx bx-cog me-1"></i>From Policy: {{ $policy->name }}</span>
+                                                @else
+                                                    <span class="badge rounded-pill bg-label-secondary" style="font-size:0.7rem;"><i class="bx bx-calculator me-1"></i>Auto Estimate (no breakup imported)</span>
+                                                @endif
+                                            </div>
+
                                             <table class="table table-hover mb-0 align-middle">
                                                 <thead class="bg-light">
                                                     <tr>
-                                                        <th class="ps-4 py-3 text-muted smallest fw-bold text-uppercase">
-                                                            Component</th>
-                                                        <th
-                                                            class="text-end py-3 text-muted smallest fw-bold text-uppercase">
-                                                            Per Month</th>
-                                                        <th
-                                                            class="pe-4 text-end py-3 text-muted smallest fw-bold text-uppercase">
-                                                            Per Annum</th>
+                                                        <th class="ps-4 py-3 text-muted smallest fw-bold text-uppercase">Component</th>
+                                                        <th class="text-end py-3 text-muted smallest fw-bold text-uppercase">Per Month</th>
+                                                        <th class="pe-4 text-end py-3 text-muted smallest fw-bold text-uppercase">Per Annum</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    <tr>
-                                                        <td class="ps-4 py-3 fw-semibold text-dark">Basic Salary</td>
-                                                        <td class="text-end py-3">₹{{ number_format($basicMonth, 2) }}</td>
-                                                        <td class="pe-4 text-end py-3 text-muted">
-                                                            ₹{{ number_format($basicMonth * 12, 2) }}</td>
+                                                    {{-- Credits --}}
+                                                    <tr class="table-light">
+                                                        <td colspan="3" class="ps-4 py-2 text-uppercase fw-bold smallest" style="color:#127464;letter-spacing:0.08em;font-size:0.65rem;">
+                                                            <i class="bx bx-trending-up me-1"></i> EARNINGS (CREDITS)
+                                                        </td>
                                                     </tr>
                                                     <tr>
-                                                        <td class="ps-4 py-3 fw-semibold text-dark">HRA</td>
-                                                        <td class="text-end py-3">₹{{ number_format($hraMonth, 2) }}</td>
-                                                        <td class="pe-4 text-end py-3 text-muted">
-                                                            ₹{{ number_format($hraMonth * 12, 2) }}</td>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">Basic Salary</td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbBasic, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbBasic * 12, 2) }}</td>
                                                     </tr>
-                                                    <tr class="bg-light bg-opacity-50">
-                                                        <td class="ps-4 py-2 text-muted small italic">Total Monthly CTC</td>
-                                                        <td class="text-end py-2 fw-bold text-dark fs-6">
-                                                            ₹{{ number_format($ctcMonth, 2) }}</td>
-                                                        <td class="pe-4 text-end py-2 fw-bold text-dark">
-                                                            ₹{{ number_format($ctcAnnum, 2) }}</td>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">HRA <span class="text-muted small fw-normal">(House Rent)</span></td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbHra, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbHra * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">CA <span class="text-muted small fw-normal">(Conveyance)</span></td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbCa, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbCa * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">Medical Allowance</td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbMedical, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbMedical * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">Education Allowance</td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbEdu, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbEdu * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">Special Allowance</td>
+                                                        <td class="text-end py-2 text-success fw-semibold">₹{{ number_format($sbSpecial, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbSpecial * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr class="bg-light">
+                                                        <td class="ps-4 py-2 fw-bold text-dark">Total Earnings</td>
+                                                        <td class="text-end py-2 fw-bold text-dark">₹{{ number_format($totalCredits, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 fw-bold text-dark">₹{{ number_format($totalCredits * 12, 2) }}</td>
+                                                    </tr>
+
+                                                    {{-- Deductions --}}
+                                                    <tr class="table-light">
+                                                        <td colspan="3" class="ps-4 py-2 text-uppercase fw-bold smallest" style="color:#dc3545;letter-spacing:0.08em;font-size:0.65rem;">
+                                                            <i class="bx bx-trending-down me-1"></i> DEDUCTIONS
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">PT <span class="text-muted small fw-normal">(Professional Tax)</span></td>
+                                                        <td class="text-end py-2 text-danger fw-semibold">₹{{ number_format($sbPt, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbPt * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">EPF <span class="text-muted small fw-normal">(Employee PF)</span></td>
+                                                        <td class="text-end py-2 text-danger fw-semibold">₹{{ number_format($sbEpf, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbEpf * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="ps-4 py-2 fw-semibold text-dark">ESIC</td>
+                                                        <td class="text-end py-2 text-danger fw-semibold">₹{{ number_format($sbEsic, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 text-muted">₹{{ number_format($sbEsic * 12, 2) }}</td>
+                                                    </tr>
+                                                    <tr class="bg-light">
+                                                        <td class="ps-4 py-2 fw-bold text-danger">Total Deductions</td>
+                                                        <td class="text-end py-2 fw-bold text-danger">₹{{ number_format($totalDeductions, 2) }}</td>
+                                                        <td class="pe-4 text-end py-2 fw-bold text-danger">₹{{ number_format($totalDeductions * 12, 2) }}</td>
                                                     </tr>
                                                 </tbody>
                                                 <tfoot style="background: #127464; color: #fff;">
                                                     <tr>
                                                         <td class="ps-4 py-3 fw-bold">NET TAKE HOME</td>
-                                                        <td class="text-end py-3 fw-bold fs-5 text-white">
-                                                            ₹{{ number_format($netSalary, 2) }}</td>
-                                                        <td class="pe-4 text-end py-3 fw-bold text-white">
-                                                            ₹{{ number_format($netSalary * 12, 2) }}</td>
+                                                        <td class="text-end py-3 fw-bold fs-5 text-white">₹{{ number_format($netTakeHome, 2) }}</td>
+                                                        <td class="pe-4 text-end py-3 fw-bold text-white">₹{{ number_format($netTakeHome * 12, 2) }}</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -1736,8 +1821,9 @@
                                     </div>
                                 </div>
                             </div>
+                            {{-- /Salary Structure Breakdown --}}
 
-                            <!-- Allowances & Deductions section -->
+                            {{-- Allowances & Deductions section --}}
                             <div class="card mb-4 emp-card shadow-sm border-0" style="border-radius: 12px;">
                                 <div class="card-body p-5">
                                     <div class="d-flex align-items-center justify-content-between mb-4">
