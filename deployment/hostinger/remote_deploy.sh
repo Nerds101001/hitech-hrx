@@ -95,7 +95,7 @@ fi
 php artisan view:cache
 
 echo "[7.5/8] Seeding Short Leave (SHL) for all active users..."
-php artisan leave:grant-short-leave --seed || echo "SHL seed failed, continuing..."
+php artisan leave:grant-short-leave || echo "SHL seed skipped (already granted this month or command unavailable)."
 # Use shell symlink because `php artisan storage:link` can fail when exec() is disabled.
 rm -rf "$APP_ROOT/public/storage" || true
 ln -sfn "$APP_ROOT/storage/app/public" "$APP_ROOT/public/storage" || true
