@@ -2012,12 +2012,12 @@
                                                 } elseif (str_contains($doc['name'], '12th') && $user->getInterUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getInterUrl();
+                                                } elseif (str_contains($doc['name'], 'Post Graduation') && $user->getMasterUrl()) {
+                                                    $isSubmitted = true;
+                                                    $docFileUrl = $user->getMasterUrl();
                                                 } elseif (str_contains($doc['name'], 'Graduation') && $user->getBachelorUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getBachelorUrl();
-                                                } elseif (str_contains($doc['name'], 'Post') && $user->getMasterUrl()) {
-                                                    $isSubmitted = true;
-                                                    $docFileUrl = $user->getMasterUrl();
                                                 } elseif (str_contains($doc['name'], 'Experience') && $user->getExperienceUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getExperienceUrl();
