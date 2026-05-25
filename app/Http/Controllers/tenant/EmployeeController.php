@@ -2985,12 +2985,34 @@ class EmployeeController extends Controller
 
     DB::beginTransaction();
     try {
-      // 1. Delete physical file(s)
-      $folder  = \Constants::BaseFolderOnboardingDocuments . $user->id;
-      $files   = Storage::disk('public')->files($folder);
       $deleted = 0;
+
+      // 1a. Find DocumentRequest(s) for this doc type and delete their stored files directly
+      //     This is more reliable than prefix-scanning because it uses the exact stored path.
+      $docType = \App\Models\DocumentType::withoutGlobalScopes()
+        ->where('code', $meta['code'])->first();
+      if ($docType) {
+        $docRequests = \App\Models\DocumentRequest::withTrashed()
+          ->where('user_id', $user->id)
+          ->where('document_type_id', $docType->id)
+          ->get();
+        foreach ($docRequests as $docReq) {
+          if ($docReq->generated_file && Storage::disk('public')->exists($docReq->generated_file)) {
+            Storage::disk('public')->delete($docReq->generated_file);
+            $deleted++;
+          }
+          // Hard-delete the record so it never re-appears
+          $docReq->forceDelete();
+        }
+      }
+
+      // 1b. Also scan the folder by prefix as a fallback (catches files uploaded via older paths
+      //     or files that were not recorded in DocumentRequests).
+      $folder = \Constants::BaseFolderOnboardingDocuments . $user->id;
+      $files  = Storage::disk('public')->files($folder);
       foreach ($files as $file) {
-        if (str_starts_with(basename($file), $meta['prefix'])) {
+        // Case-insensitive prefix match to handle any upload naming variations
+        if (str_starts_with(strtolower(basename($file)), $meta['prefix'])) {
           Storage::disk('public')->delete($file);
           $deleted++;
         }
@@ -3000,15 +3022,6 @@ class EmployeeController extends Controller
       if (!empty($meta['field'])) {
         $user->{$meta['field']} = null;
         $user->save();
-      }
-
-      // 3. Delete DocumentRequest record entirely
-      $docType = \App\Models\DocumentType::withoutGlobalScopes()
-        ->where('code', $meta['code'])->first();
-      if ($docType) {
-        \App\Models\DocumentRequest::where('user_id', $user->id)
-          ->where('document_type_id', $docType->id)
-          ->delete();
       }
 
       DB::commit();
@@ -3021,7 +3034,7 @@ class EmployeeController extends Controller
     } catch (\Exception $e) {
       DB::rollBack();
       Log::error('Document Delete Error for user ' . $userId . ': ' . $e->getMessage());
-      return response()->json(['success' => false, 'message' => 'Failed to delete document.'], 500);
+      return response()->json(['success' => false, 'message' => 'Failed to delete document. Error: ' . $e->getMessage()], 500);
     }
   }
 
@@ -3042,12 +3055,13 @@ class EmployeeController extends Controller
 
     DB::beginTransaction();
     try {
-      // Delete physical file if present
+      // Delete physical file if present (hard delete from storage)
       if ($docReq->generated_file && Storage::disk('public')->exists($docReq->generated_file)) {
         Storage::disk('public')->delete($docReq->generated_file);
       }
 
-      $docReq->delete();
+      // Hard-delete so the record cannot re-appear via soft-delete scope issues
+      $docReq->forceDelete();
 
       DB::commit();
 
