@@ -2259,54 +2259,6 @@
                         </div>
 
 
-                        <!-- ═══════════════════════════════════════════════════════
-                             DOCUMENT REJECTION MODAL (Admin / HR only)
-                             ═══════════════════════════════════════════════════════ -->
-                        <div class="modal fade" id="modalRejectDocument" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; overflow: hidden;">
-                                    <div class="modal-header px-4 py-3" style="background: linear-gradient(135deg,#7f1d1d,#b91c1c); border-bottom: none;">
-                                        <div>
-                                            <h5 class="modal-title text-white fw-bold mb-0">
-                                                <i class="bx bx-x-circle me-2"></i>Reject Document
-                                            </h5>
-                                            <p class="text-white small mb-0 opacity-75" id="rejectDocSubtitle" style="font-size: 0.75rem;"></p>
-                                        </div>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body p-4">
-                                        <div class="alert alert-danger d-flex align-items-start gap-2 rounded-3 mb-3" style="border: 1px solid #fecaca; background: #fef2f2;">
-                                            <i class="bx bxs-error-circle fs-5 mt-1 text-danger"></i>
-                                            <div class="small">
-                                                <strong>This action will:</strong><br>
-                                                Delete the uploaded file &bull; Clear the document record &bull;
-                                                Revert the employee to <strong>Onboarding status</strong> &bull;
-                                                Send them an email notification.
-                                            </div>
-                                        </div>
-                                        <input type="hidden" id="rejectDocKey" value="">
-                                        <div class="mb-3">
-                                            <label class="form-label fw-semibold small text-dark">Rejection Reason <span class="text-danger">*</span></label>
-                                            <textarea id="rejectDocRemarks" class="form-control rounded-3" rows="4"
-                                                placeholder="Explain why this document is being rejected (e.g., blurry image, expired document, mismatched details)..."
-                                                style="border-color: #e2e8f0; font-size: 0.875rem;"></textarea>
-                                            <div class="form-text text-muted">Minimum 10 characters. This will be sent to the employee via email.</div>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
-                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                                        <button type="button" class="btn rounded-pill px-4 fw-bold text-white"
-                                            style="background: linear-gradient(135deg,#991b1b,#b91c1c);"
-                                            id="btnConfirmRejectDoc"
-                                            onclick="submitDocumentRejection()">
-                                            <i class="bx bx-x-circle me-1"></i> Reject &amp; Notify Employee
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- /DOCUMENT REJECTION MODAL -->
-
                         <!-- KRAs (Key Result Areas) Tab -->
                         <div class="tab-pane fade" id="tasks-tab">
                             <div class="card border-0 shadow-sm rounded-3 mb-4">
@@ -2663,6 +2615,52 @@
 
 
 
+
+        {{-- Document Rejection Modal (Admin / HR only) — placed at body level to avoid stacking-context backdrop conflicts --}}
+        <div class="modal fade" id="modalRejectDocument" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; overflow: hidden;">
+                    <div class="modal-header px-4 py-3" style="background: linear-gradient(135deg,#7f1d1d,#b91c1c); border-bottom: none;">
+                        <div>
+                            <h5 class="modal-title text-white fw-bold mb-0">
+                                <i class="bx bx-x-circle me-2"></i>Reject Document
+                            </h5>
+                            <p class="text-white small mb-0 opacity-75" id="rejectDocSubtitle" style="font-size: 0.75rem;"></p>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <div class="alert alert-danger d-flex align-items-start gap-2 rounded-3 mb-3" style="border: 1px solid #fecaca; background: #fef2f2;">
+                            <i class="bx bxs-error-circle fs-5 mt-1 text-danger"></i>
+                            <div class="small">
+                                <strong>This action will:</strong><br>
+                                Delete the uploaded file &bull; Clear the document record &bull;
+                                Revert the employee to <strong>Onboarding status</strong> &bull;
+                                Send them an email notification.
+                            </div>
+                        </div>
+                        <input type="hidden" id="rejectDocKey" value="">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small text-dark">Rejection Reason <span class="text-danger">*</span></label>
+                            <textarea id="rejectDocRemarks" class="form-control rounded-3" rows="4"
+                                placeholder="Explain why this document is being rejected (e.g., blurry image, expired document, mismatched details)..."
+                                style="border-color: #e2e8f0; font-size: 0.875rem;"></textarea>
+                            <div class="form-text text-muted">Minimum 10 characters. This will be sent to the employee via email.</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
+                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn rounded-pill px-4 fw-bold text-white"
+                            style="background: linear-gradient(135deg,#991b1b,#b91c1c);"
+                            id="btnConfirmRejectDoc"
+                            onclick="submitDocumentRejection()">
+                            <i class="bx bx-x-circle me-1"></i> Reject &amp; Notify Employee
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{-- /Document Rejection Modal --}}
 
         {{-- NEW: Add Document Modal --}}
         <div class="modal fade" id="modalAddUserDocument" tabindex="-1" aria-hidden="true">
@@ -3282,39 +3280,48 @@
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
 
-                $.ajax({
-                    url: baseUrl + 'employees/' + window.user.id + '/reject-document',
-                    method: 'POST',
-                    data: {
-                        _token: $('meta[name="csrf-token"]').attr('content'),
-                        document_key: docKey,
-                        admin_remarks: remarks
-                    },
-                    success: function(resp) {
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
-                        if (resp.success) {
-                            Swal.fire({
-                                icon: 'success',
-                                title: 'Document Rejected',
-                                text: resp.message,
-                                customClass: { confirmButton: 'btn btn-primary rounded-pill px-5' }
-                            }).then(() => location.reload());
-                        } else {
-                            Swal.fire('Error', resp.message || 'Failed to reject document.', 'error');
-                            btn.disabled = false;
-                            btn.innerHTML = '<i class="bx bx-x-circle me-1"></i> Reject & Notify Employee';
-                        }
-                    },
-                    error: function(xhr) {
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
-                        Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
+                docPostFetch(baseUrl + 'employees/' + window.user.id + '/reject-document', {
+                    document_key: docKey,
+                    admin_remarks: remarks
+                }).then(function(resp) {
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
+                    if (resp.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Document Rejected',
+                            text: resp.message,
+                            customClass: { confirmButton: 'btn btn-primary rounded-pill px-5' }
+                        }).then(function() { location.reload(); });
+                    } else {
+                        Swal.fire('Error', resp.message || 'Failed to reject document.', 'error');
                         btn.disabled = false;
                         btn.innerHTML = '<i class="bx bx-x-circle me-1"></i> Reject & Notify Employee';
                     }
+                }).catch(function(err) {
+                    console.error('rejectDocument error:', err);
+                    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
+                    Swal.fire('Error', 'An unexpected error occurred. Please try again.', 'error');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bx bx-x-circle me-1"></i> Reject & Notify Employee';
                 });
             };
 
             // Delete an additional (non-mandatory) DocumentRequest record by its ID
+            // Shared fetch helper — no jQuery dependency, works regardless of jQuery load order
+            function docPostFetch(url, bodyData) {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                return fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'Accept': 'application/json' },
+                    body: JSON.stringify(bodyData)
+                }).then(function(res) {
+                    if (!res.ok) {
+                        return res.json().catch(function() { return { success: false, message: 'Server error (HTTP ' + res.status + ').' }; });
+                    }
+                    return res.json();
+                });
+            }
+
             window.confirmDeleteDocRequest = function(docRequestId, docName) {
                 Swal.fire({
                     title: 'Delete ' + docName + '?',
@@ -3327,25 +3334,19 @@
                     customClass: { confirmButton: 'btn rounded-pill px-4 fw-bold', cancelButton: 'btn btn-light rounded-pill px-4' }
                 }).then(function(result) {
                     if (!result.isConfirmed) return;
-                    $.ajax({
-                        url: baseUrl + 'employees/' + window.user.id + '/delete-document-request',
-                        method: 'POST',
-                        data: {
-                            _token: $('meta[name="csrf-token"]').attr('content'),
-                            document_request_id: docRequestId
-                        },
-                        success: function(resp) {
+                    docPostFetch(baseUrl + 'employees/' + window.user.id + '/delete-document-request', { document_request_id: docRequestId })
+                        .then(function(resp) {
                             if (resp.success) {
                                 Swal.fire({ icon: 'success', title: 'Deleted', text: resp.message, timer: 1800, showConfirmButton: false })
-                                    .then(() => location.reload());
+                                    .then(function() { location.reload(); });
                             } else {
                                 Swal.fire('Error', resp.message || 'Could not delete document.', 'error');
                             }
-                        },
-                        error: function(xhr) {
-                            Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
-                        }
-                    });
+                        })
+                        .catch(function(err) {
+                            console.error('deleteDocRequest error:', err);
+                            Swal.fire('Error', 'An unexpected error occurred. Please try again.', 'error');
+                        });
                 });
             };
 
@@ -3361,30 +3362,19 @@
                     customClass: { confirmButton: 'btn rounded-pill px-4 fw-bold', cancelButton: 'btn btn-light rounded-pill px-4' }
                 }).then(function(result) {
                     if (!result.isConfirmed) return;
-                    $.ajax({
-                        url: baseUrl + 'employees/' + window.user.id + '/delete-document',
-                        method: 'POST',
-                        data: {
-                            _token: $('meta[name="csrf-token"]').attr('content'),
-                            document_key: docKey
-                        },
-                        success: function(resp) {
+                    docPostFetch(baseUrl + 'employees/' + window.user.id + '/delete-document', { document_key: docKey })
+                        .then(function(resp) {
                             if (resp.success) {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Deleted',
-                                    text: resp.message,
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                }).then(() => location.reload());
+                                Swal.fire({ icon: 'success', title: 'Deleted', text: resp.message, timer: 2000, showConfirmButton: false })
+                                    .then(function() { location.reload(); });
                             } else {
                                 Swal.fire('Error', resp.message || 'Could not delete document.', 'error');
                             }
-                        },
-                        error: function(xhr) {
-                            Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
-                        }
-                    });
+                        })
+                        .catch(function(err) {
+                            console.error('deleteDocument error:', err);
+                            Swal.fire('Error', 'An unexpected error occurred. Please try again.', 'error');
+                        });
                 });
             };
 
