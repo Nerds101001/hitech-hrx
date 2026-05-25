@@ -1999,26 +1999,26 @@
                                                     $docNumber = (string) $user->{$doc['key']};
                                                 }
 
-                                                // 2. Check Standard User Model URL Methods
-                                                if ($doc['name'] == 'Aadhaar Card' && $user->getAadhaarUrl()) {
+                                                // 2. Check Standard User Model URL Methods (use doc_key for exact matching — name substrings overlap, e.g. "Graduation" matches "Post Graduation Marksheet")
+                                                if ($doc['doc_key'] === 'aadhaar' && $user->getAadhaarUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getAadhaarUrl();
-                                                } elseif ($doc['name'] == 'PAN Card' && $user->getPanUrl()) {
+                                                } elseif ($doc['doc_key'] === 'pan' && $user->getPanUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getPanUrl();
-                                                } elseif (str_contains($doc['name'], '10th') && $user->getMatricUrl()) {
+                                                } elseif ($doc['doc_key'] === 'matric' && $user->getMatricUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getMatricUrl();
-                                                } elseif (str_contains($doc['name'], '12th') && $user->getInterUrl()) {
+                                                } elseif ($doc['doc_key'] === 'inter' && $user->getInterUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getInterUrl();
-                                                } elseif (str_contains($doc['name'], 'Post Graduation') && $user->getMasterUrl()) {
+                                                } elseif ($doc['doc_key'] === 'master' && $user->getMasterUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getMasterUrl();
-                                                } elseif (str_contains($doc['name'], 'Graduation') && $user->getBachelorUrl()) {
+                                                } elseif ($doc['doc_key'] === 'graduation' && $user->getBachelorUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getBachelorUrl();
-                                                } elseif (str_contains($doc['name'], 'Experience') && $user->getExperienceUrl()) {
+                                                } elseif ($doc['doc_key'] === 'experience' && $user->getExperienceUrl()) {
                                                     $isSubmitted = true;
                                                     $docFileUrl = $user->getExperienceUrl();
                                                 }
