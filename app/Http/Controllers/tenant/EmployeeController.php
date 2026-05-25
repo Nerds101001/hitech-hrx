@@ -2904,11 +2904,11 @@ class EmployeeController extends Controller
 
     DB::beginTransaction();
     try {
-      // 1. Delete physical file(s) from storage
+      // 1. Delete physical file(s) from storage (case-insensitive prefix scan)
       $folder = \Constants::BaseFolderOnboardingDocuments . $user->id;
       $files  = Storage::disk('public')->files($folder);
       foreach ($files as $file) {
-        if (str_starts_with(basename($file), $meta['prefix'])) {
+        if (str_starts_with(strtolower(basename($file)), $meta['prefix'])) {
           Storage::disk('public')->delete($file);
         }
       }
@@ -2918,12 +2918,13 @@ class EmployeeController extends Controller
         $user->{$meta['field']} = null;
       }
 
-      // 3. Mark DocumentRequest as rejected
-      $docType = \App\Models\DocumentType::withoutGlobalScopes()
-        ->where('code', $meta['code'])->first();
-      if ($docType) {
-        \App\Models\DocumentRequest::where('user_id', $user->id)
-          ->where('document_type_id', $docType->id)
+      // 3. Mark DocumentRequests as rejected across ALL known codes for this doc type
+      $docTypeIds = \App\Models\DocumentType::withoutGlobalScopes()
+        ->whereIn('code', $meta['codes'])->pluck('id');
+      if ($docTypeIds->isNotEmpty()) {
+        \App\Models\DocumentRequest::withoutGlobalScopes()
+          ->where('user_id', $user->id)
+          ->whereIn('document_type_id', $docTypeIds)
           ->update([
             'status'             => 'rejected',
             'admin_remarks'      => $request->admin_remarks,
@@ -2987,21 +2988,22 @@ class EmployeeController extends Controller
     try {
       $deleted = 0;
 
-      // 1a. Find DocumentRequest(s) for this doc type and delete their stored files directly
-      //     This is more reliable than prefix-scanning because it uses the exact stored path.
-      $docType = \App\Models\DocumentType::withoutGlobalScopes()
-        ->where('code', $meta['code'])->first();
-      if ($docType) {
-        $docRequests = \App\Models\DocumentRequest::withTrashed()
+      // 1a. Find DocumentRequest(s) across ALL known codes for this doc type
+      //     (DB has duplicate DocumentType records created at different times)
+      $docTypeIds = \App\Models\DocumentType::withoutGlobalScopes()
+        ->whereIn('code', $meta['codes'])
+        ->pluck('id');
+      if ($docTypeIds->isNotEmpty()) {
+        $docRequests = \App\Models\DocumentRequest::withoutGlobalScopes()->withTrashed()
           ->where('user_id', $user->id)
-          ->where('document_type_id', $docType->id)
+          ->whereIn('document_type_id', $docTypeIds)
           ->get();
         foreach ($docRequests as $docReq) {
           if ($docReq->generated_file && Storage::disk('public')->exists($docReq->generated_file)) {
             Storage::disk('public')->delete($docReq->generated_file);
             $deleted++;
           }
-          // Hard-delete the record so it never re-appears
+          // Hard-delete so record never re-appears
           $docReq->forceDelete();
         }
       }
@@ -3082,14 +3084,16 @@ class EmployeeController extends Controller
    */
   private function documentKeyMap(): array
   {
+    // 'codes' lists ALL document_type codes that may appear in document_requests
+    // for this document — the DB has duplicate type records created at different times.
     return [
-      'aadhaar'    => ['prefix' => 'aadhaar_card',           'field' => 'aadhaar_no',                'code' => 'AADHAAR_CARD',           'name' => 'Aadhaar Card'],
-      'pan'        => ['prefix' => 'pan_card',               'field' => 'pan_no',                    'code' => 'PAN_CARD',               'name' => 'PAN Card'],
-      'matric'     => ['prefix' => 'matric_certificate',     'field' => 'matric_marksheet_no',       'code' => 'MATRIC_CERTIFICATE',     'name' => '10th Marksheet (Matric)'],
-      'inter'      => ['prefix' => 'inter_certificate',      'field' => 'inter_marksheet_no',        'code' => 'INTER_CERTIFICATE',      'name' => '12th Marksheet (Intermediate)'],
-      'graduation' => ['prefix' => 'graduation_certificate', 'field' => 'bachelor_marksheet_no',     'code' => 'GRADUATION_CERTIFICATE', 'name' => 'Graduation Marksheet'],
-      'master'     => ['prefix' => 'master_certificate',     'field' => 'master_marksheet_no',       'code' => 'MASTER_CERTIFICATE',     'name' => 'Post Graduation Marksheet'],
-      'experience' => ['prefix' => 'experience_certificate', 'field' => 'experience_certificate_no', 'code' => 'EXPERIENCE_CERTIFICATE', 'name' => 'Experience Certificate'],
+      'aadhaar'    => ['prefix' => 'aadhaar_card',           'field' => 'aadhaar_no',                'codes' => ['AADHAAR_CARD'],                                                                    'name' => 'Aadhaar Card'],
+      'pan'        => ['prefix' => 'pan_card',               'field' => 'pan_no',                    'codes' => ['PAN_CARD'],                                                                        'name' => 'PAN Card'],
+      'matric'     => ['prefix' => 'matric_certificate',     'field' => 'matric_marksheet_no',       'codes' => ['MATRIC_CERTIFICATE', '10TH_MARKSHEET_MATRIC', '10TH_MARKSHEET_(MATRIC)'],          'name' => '10th Marksheet (Matric)'],
+      'inter'      => ['prefix' => 'inter_certificate',      'field' => 'inter_marksheet_no',        'codes' => ['INTER_CERTIFICATE',  '12TH_MARKSHEET_INTERMEDIATE', '12TH_MARKSHEET_(INTERMEDIATE)'], 'name' => '12th Marksheet (Intermediate)'],
+      'graduation' => ['prefix' => 'graduation_certificate', 'field' => 'bachelor_marksheet_no',     'codes' => ['GRADUATION_CERTIFICATE', 'GRADUATION_MARKSHEET'],                                  'name' => 'Graduation Marksheet'],
+      'master'     => ['prefix' => 'master_certificate',     'field' => 'master_marksheet_no',       'codes' => ['POST_GRADUATION_MARKSHEET', 'MASTER_CERTIFICATE'],                                 'name' => 'Post Graduation Marksheet'],
+      'experience' => ['prefix' => 'experience_certificate', 'field' => 'experience_certificate_no', 'codes' => ['EXPERIENCE_CERTIFICATE'],                                                          'name' => 'Experience Certificate'],
     ];
   }
 
