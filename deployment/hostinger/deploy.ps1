@@ -1,14 +1,14 @@
 param(
-  [string]$ServerHost = "89.117.188.10",
-  [int]$Port = 65002,
-  [string]$User = "u989061032",
-  [Parameter(Mandatory = $true)][string]$SshPassword,
-  [string]$AppRoot = "/home/u989061032/domains/hitechgroup.in/public_html/hrx",
+  [string]$ServerHost  = "89.117.188.10",
+  [int]$Port           = 65002,
+  [string]$User        = "u989061032",
+  [string]$SshPassword = "Diplo@6589#",
+  [string]$AppRoot     = "/home/u989061032/domains/hitechgroup.in/public_html/hrx",
   [switch]$ImportDatabase,
-  [string]$SqlFile = "",
-  [string]$DbName = "u989061032_hrx",
-  [string]$DbUser = "u989061032_hrx",
-  [string]$DbPassword = ""
+  [string]$SqlFile     = "",
+  [string]$DbName      = "u989061032_hrx",
+  [string]$DbUser      = "u989061032_hrx",
+  [string]$DbPassword  = ""
 )
 
 $ErrorActionPreference = "Stop"
