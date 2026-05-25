@@ -25,6 +25,10 @@ Artisan::command('leave:accrue', function () {
   $this->call('leave:accrue');
 })->describe('Accrue monthly leave quotas')->monthly();
 
+Artisan::command('leave:grant-short-leave', function () {
+  $this->call('leave:grant-short-leave');
+})->describe('Grant/refresh 1 Short Leave (SHL) for every active user')->monthlyOn(1, '00:05');
+
 Artisan::command('leave:auto-reject-expired', function () {
     $this->call('leave:auto-reject-expired');
 })->describe('Auto-reject leave requests pending for more than 48 hours')->daily();

@@ -8,6 +8,13 @@
 @vite(['resources/assets/vendor/scss/pages/hitech-portal.scss'])
 @endsection
 
+@section('page-style')
+<style>
+.half-day-btn { user-select:none; transition: border .18s, background .18s, box-shadow .18s; }
+.half-day-btn:hover { box-shadow: 0 2px 8px rgba(99,102,241,.15); }
+</style>
+@endsection
+
 @section('content')
 
 
@@ -336,6 +343,43 @@
                                 </div>
                             </div>
                         </div>
+                        {{-- Half Day Toggle — shown ABOVE dates so users notice it first --}}
+                        <div class="col-12" id="half_day_toggle_container">
+                            <label class="form-label-hitech d-block mb-2">Leave Duration</label>
+                            <div class="d-flex gap-2">
+                                <label id="btn-full-day" class="half-day-btn active" for="duration_full_day" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
+                                    <input type="radio" name="_duration" id="duration_full_day" value="full" class="d-none" checked>
+                                    <i class="bx bx-sun d-block fs-4 mb-1" style="color:#f59e0b;"></i>
+                                    <div class="fw-semibold" style="font-size:0.8rem;">Full Day</div>
+                                </label>
+                                <label id="btn-half-day" class="half-day-btn" for="duration_half_day" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
+                                    <input type="radio" name="_duration" id="duration_half_day" value="half" class="d-none">
+                                    <i class="bx bx-moon d-block fs-4 mb-1" style="color:#6366f1;"></i>
+                                    <div class="fw-semibold" style="font-size:0.8rem;">Half Day</div>
+                                </label>
+                            </div>
+                            {{-- Hidden real checkbox that the backend reads --}}
+                            <input type="hidden" name="is_half_day" id="is_half_day" value="0">
+                        </div>
+
+                        <div class="col-12 d-none" id="half_day_session_container">
+                            <label for="half_day_session" class="form-label-hitech">Which Half?</label>
+                            <div class="d-flex gap-2">
+                                <label id="btn-first-half" class="half-day-btn active" for="sess_first_half" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
+                                    <input type="radio" name="half_day_session" id="sess_first_half" value="first_half" class="d-none" checked>
+                                    <i class="bx bx-alarm d-block fs-4 mb-1" style="color:#10b981;"></i>
+                                    <div class="fw-semibold" style="font-size:0.8rem;">First Half</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Morning</div>
+                                </label>
+                                <label id="btn-second-half" class="half-day-btn" for="sess_second_half" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
+                                    <input type="radio" name="half_day_session" id="sess_second_half" value="second_half" class="d-none">
+                                    <i class="bx bx-moon d-block fs-4 mb-1" style="color:#6366f1;"></i>
+                                    <div class="fw-semibold" style="font-size:0.8rem;">Second Half</div>
+                                    <div class="text-muted" style="font-size:0.7rem;">Afternoon</div>
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="col-12">
                             <div class="row g-3">
                                 <div class="col-6" id="from_date_container">
@@ -347,19 +391,6 @@
                                     <input type="date" id="to_date" name="to_date" class="form-control form-control-hitech" required>
                                 </div>
                             </div>
-                        </div>
-                        <div class="col-12" id="half_day_toggle_container">
-                            <div class="form-check form-switch mt-1">
-                                <input class="form-check-input" type="checkbox" id="is_half_day" name="is_half_day" value="1">
-                                <label class="form-check-label form-label-hitech ms-2" for="is_half_day">Apply for Half Day</label>
-                            </div>
-                        </div>
-                        <div class="col-12 d-none" id="half_day_session_container">
-                            <label for="half_day_session" class="form-label-hitech">Half Day Session</label>
-                            <select id="half_day_session" name="half_day_session" class="form-select form-select-hitech">
-                                <option value="first_half">First Half (Morning)</option>
-                                <option value="second_half">Second Half (Afternoon)</option>
-                            </select>
                         </div>
                         <div class="col-12">
                             <label for="user_notes" class="form-label-hitech">Reason for Leave</label>
@@ -393,12 +424,62 @@ document.addEventListener('DOMContentLoaded', function() {
     const docInput = document.getElementById('document');
     
     // Half Day Elements
-    const isHalfDayCheckbox = document.getElementById('is_half_day');
+    const isHalfDayInput = document.getElementById('is_half_day'); // hidden input
     const halfDayToggleContainer = document.getElementById('half_day_toggle_container');
     const halfDaySessionContainer = document.getElementById('half_day_session_container');
-    const halfDaySessionSelect = document.getElementById('half_day_session');
     const fromDateContainer = document.getElementById('from_date_container');
     const toDateContainer = document.getElementById('to_date_container');
+
+    // Duration button helpers
+    const btnFullDay  = document.getElementById('btn-full-day');
+    const btnHalfDay  = document.getElementById('btn-half-day');
+    const rdFullDay   = document.getElementById('duration_full_day');
+    const rdHalfDay   = document.getElementById('duration_half_day');
+    const btnFirstHalf  = document.getElementById('btn-first-half');
+    const btnSecondHalf = document.getElementById('btn-second-half');
+    const rdFirstHalf   = document.getElementById('sess_first_half');
+    const rdSecondHalf  = document.getElementById('sess_second_half');
+
+    function isHalfDaySelected() { return rdHalfDay && rdHalfDay.checked; }
+    function getHalfDaySession()  { return rdSecondHalf && rdSecondHalf.checked ? 'second_half' : 'first_half'; }
+
+    function updateDurationBtnStyles() {
+        const half = isHalfDaySelected();
+        if (btnFullDay)  { btnFullDay.style.border  = half ? '2px solid #e0e0e0' : '2px solid #6366f1'; btnFullDay.style.background  = half ? '#fff' : '#f5f3ff'; }
+        if (btnHalfDay)  { btnHalfDay.style.border  = half ? '2px solid #6366f1' : '2px solid #e0e0e0'; btnHalfDay.style.background  = half ? '#f5f3ff' : '#fff'; }
+    }
+
+    function updateSessionBtnStyles() {
+        const second = rdSecondHalf && rdSecondHalf.checked;
+        if (btnFirstHalf)  { btnFirstHalf.style.border  = second ? '2px solid #e0e0e0' : '2px solid #10b981'; btnFirstHalf.style.background  = second ? '#fff' : '#f0fdf4'; }
+        if (btnSecondHalf) { btnSecondHalf.style.border = second ? '2px solid #6366f1' : '2px solid #e0e0e0'; btnSecondHalf.style.background = second ? '#f5f3ff' : '#fff'; }
+    }
+
+    // Wire duration buttons
+    [btnFullDay, btnHalfDay].forEach(btn => {
+        if (btn) btn.addEventListener('click', function() {
+            const isHalf = this === btnHalfDay;
+            rdFullDay.checked = !isHalf;
+            rdHalfDay.checked = isHalf;
+            isHalfDayInput.value = isHalf ? '1' : '0';
+            updateDurationBtnStyles();
+            handleHalfDayToggle();
+        });
+    });
+
+    // Wire session buttons
+    [btnFirstHalf, btnSecondHalf].forEach(btn => {
+        if (btn) btn.addEventListener('click', function() {
+            const isSecond = this === btnSecondHalf;
+            rdFirstHalf.checked  = !isSecond;
+            rdSecondHalf.checked = isSecond;
+            updateSessionBtnStyles();
+            checkLeaveImpact();
+        });
+    });
+
+    updateDurationBtnStyles();
+    updateSessionBtnStyles();
     
     // Impact Section Elements
     const impactSection = document.getElementById('leaveImpactSection');
@@ -430,8 +511,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         leave_type_id: typeId,
                         from_date: fromDate,
                         to_date: toDate,
-                        is_half_day: isHalfDayCheckbox.checked ? 1 : 0,
-                        half_day_session: halfDaySessionSelect.value
+                        is_half_day: isHalfDaySelected() ? 1 : 0,
+                        half_day_session: getHalfDaySession()
                     })
                 });
                 if (response.ok) {
@@ -465,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleHalfDayToggle() {
-        if (isHalfDayCheckbox.checked) {
+        if (isHalfDaySelected()) {
             halfDaySessionContainer.classList.remove('d-none');
             toDateContainer.classList.add('d-none');
             fromDateContainer.className = 'col-12';
@@ -477,9 +558,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         checkLeaveImpact();
     }
-
-    isHalfDayCheckbox.addEventListener('change', handleHalfDayToggle);
-    halfDaySessionSelect.addEventListener('change', checkLeaveImpact);
 
     function updateLeaveDetails() {
         const typeId = typeSelect.value;
@@ -496,7 +574,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Half day configuration
             if (isSHL) {
                 halfDayToggleContainer.classList.add('d-none');
-                isHalfDayCheckbox.checked = false;
+                // Reset to full day silently
+                if (rdFullDay) { rdFullDay.checked = true; rdHalfDay.checked = false; }
+                if (isHalfDayInput) isHalfDayInput.value = '0';
+                updateDurationBtnStyles();
                 handleHalfDayToggle();
             } else {
                 halfDayToggleContainer.classList.remove('d-none');
