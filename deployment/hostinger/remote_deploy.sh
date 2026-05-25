@@ -94,7 +94,10 @@ if ! php artisan route:cache; then
 fi
 php artisan view:cache
 
-echo "[7.5/8] Seeding Short Leave (SHL) for all active users..."
+echo "[7.5/8] Ensuring Half Day Leave type exists..."
+php artisan leave:ensure-half-day-type || echo "HDL type seed failed, continuing..."
+
+echo "[7.6/8] Seeding Short Leave (SHL) for all active users..."
 php artisan leave:grant-short-leave || echo "SHL seed skipped (already granted this month or command unavailable)."
 # Use shell symlink because `php artisan storage:link` can fail when exec() is disabled.
 rm -rf "$APP_ROOT/public/storage" || true

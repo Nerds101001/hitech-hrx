@@ -358,21 +358,8 @@
                             </div>
                         </div>
                         {{-- Half Day Toggle — shown ABOVE dates so users notice it first --}}
-                        {{-- Duration picker: plain divs with onclick, no radio/label conflicts --}}
-                        <div class="col-12" id="half_day_toggle_container">
-                            <label class="form-label-hitech d-block mb-2">Leave Duration</label>
-                            <div class="d-flex gap-2">
-                                <div class="hdpick-opt hdpick-active" id="hdpick-full" onclick="selectDuration('full')">
-                                    <i class="bx bx-sun d-block fs-4 mb-1" style="color:#f59e0b;"></i>
-                                    <div class="fw-semibold" style="font-size:0.85rem;">Full Day</div>
-                                </div>
-                                <div class="hdpick-opt" id="hdpick-half" onclick="selectDuration('half')">
-                                    <i class="bx bx-adjust d-block fs-4 mb-1" style="color:#6366f1;"></i>
-                                    <div class="fw-semibold" style="font-size:0.85rem;">Half Day</div>
-                                </div>
-                            </div>
-                            <input type="hidden" name="is_half_day" id="is_half_day" value="0">
-                        </div>
+                        {{-- Session picker: only visible when HDL (Half Day Leave) is selected --}}
+                        <input type="hidden" name="is_half_day" id="is_half_day" value="0">
 
                         <div class="col-12 d-none" id="half_day_session_container">
                             <label class="form-label-hitech d-block mb-2">Which Half?</label>
@@ -389,6 +376,11 @@
                                 </div>
                             </div>
                             <input type="hidden" name="half_day_session" id="half_day_session" value="first_half">
+                            {{-- Attendance warning shown when other-half attendance is missing --}}
+                            <div id="att_warning" class="d-none mt-2 p-2 rounded-3 border border-warning bg-label-warning" style="font-size:0.8rem;">
+                                <i class="bx bx-error-circle me-1 text-warning"></i>
+                                <span id="att_warning_text"></span>
+                            </div>
                         </div>
 
                         <div class="col-12">
@@ -435,7 +427,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const docInput = document.getElementById('document');
     
     // Half Day Elements
-    const halfDayToggleContainer  = document.getElementById('half_day_toggle_container');
     const halfDaySessionContainer = document.getElementById('half_day_session_container');
     const fromDateContainer = document.getElementById('from_date_container');
     const toDateContainer   = document.getElementById('to_date_container');
@@ -449,22 +440,34 @@ document.addEventListener('DOMContentLoaded', function() {
         return inp ? inp.value : 'first_half';
     }
 
-    // Called from onclick on the duration divs
-    window.selectDuration = function(val) {
-        const isHalf = val === 'half';
-        document.getElementById('is_half_day').value = isHalf ? '1' : '0';
-        document.getElementById('hdpick-full').classList.toggle('hdpick-active', !isHalf);
-        document.getElementById('hdpick-half').classList.toggle('hdpick-active',  isHalf);
-        handleHalfDayToggle();
-    };
-
     // Called from onclick on the session divs
     window.selectSession = function(val) {
         document.getElementById('half_day_session').value = val;
         document.getElementById('hdpick-first').classList.toggle('hdpick-active',  val === 'first_half');
         document.getElementById('hdpick-second').classList.toggle('hdpick-active', val === 'second_half');
+        checkAttendance();
         checkLeaveImpact();
     };
+
+    // Check attendance for the "other" half when HDL date/session changes
+    async function checkAttendance() {
+        const date    = fromDateInput.value;
+        const session = getHalfDaySession();
+        const warnEl  = document.getElementById('att_warning');
+        const warnTxt = document.getElementById('att_warning_text');
+        if (!date || !isHalfDaySelected() || !warnEl) return;
+        try {
+            const res = await fetch('{{ route("user.leaves.check_attendance") }}?date=' + date + '&session=' + session);
+            if (!res.ok) return;
+            const d = await res.json();
+            if (d.warning) {
+                warnTxt.textContent = d.warning;
+                warnEl.classList.remove('d-none');
+            } else {
+                warnEl.classList.add('d-none');
+            }
+        } catch(e) { /* silent */ }
+    }
     
     // Impact Section Elements
     const impactSection = document.getElementById('leaveImpactSection');
@@ -536,10 +539,13 @@ document.addEventListener('DOMContentLoaded', function() {
             toDateContainer.classList.add('d-none');
             fromDateContainer.className = 'col-12';
             toDateInput.value = fromDateInput.value;
+            checkAttendance();
         } else {
             halfDaySessionContainer.classList.add('d-none');
             toDateContainer.classList.remove('d-none');
             fromDateContainer.className = 'col-6';
+            const warnEl = document.getElementById('att_warning');
+            if (warnEl) warnEl.classList.add('d-none');
         }
         checkLeaveImpact();
     }
@@ -551,17 +557,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const fromDate = fromDateInput.value;
 
         if (selectedType) {
-            const isMAT = selectedType.code === 'MAT';
-            const isPAT = selectedType.code === 'PAT';
+            const code      = selectedType.code.toUpperCase();
+            const isMAT     = code === 'MAT';
+            const isPAT     = code === 'PAT';
             const isSpecial = isMAT || isPAT;
-            const isSHL = selectedType.code.toUpperCase() === 'SHL';
+            const isSHL     = code === 'SHL';
+            const isHDL     = code === 'HDL';  // Half Day Leave — always 0.5 days
 
             // Half day configuration
-            if (isSHL) {
-                halfDayToggleContainer.classList.add('d-none');
-                selectDuration('full'); // reset to full day silently
+            if (isHDL) {
+                // HDL: force half-day, show session picker, hide end date
+                document.getElementById('is_half_day').value = '1';
+                handleHalfDayToggle();
+                // Reset session picker to First Half by default
+                selectSession('first_half');
             } else {
-                halfDayToggleContainer.classList.remove('d-none');
+                // All other types: full day, reset half-day state
+                document.getElementById('is_half_day').value = '0';
+                handleHalfDayToggle();
             }
 
             // 1. Proof Logic
@@ -583,13 +596,13 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 policyCard.classList.add('d-none');
             }
-            
+
             // 3. Show Balance
             const userBalances = @json($leaveBalances);
             const userBalancesArr = Array.isArray(userBalances) ? userBalances : Object.values(userBalances);
+            // HDL deducts from PL pool (same as regular paid leave but 0.5 days)
             const excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
-            const isPoolable = selectedType.is_paid && !excludedCodes.includes(selectedType.code.toUpperCase());
-            const isSHL = selectedType.code.toUpperCase() === 'SHL';
+            const isPoolable = selectedType.is_paid && !excludedCodes.includes(code);
             
             let availBalance = 0;
             if (isPoolable) {
@@ -670,8 +683,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fromDateInput.addEventListener('change', function() {
         if (this.value) {
-            if (isHalfDayCheckbox.checked) {
+            if (isHalfDaySelected()) {
                 toDateInput.value = this.value;
+                checkAttendance();
             } else {
                 toDateInput.setAttribute('min', this.value);
                 if (toDateInput.value && toDateInput.value < this.value) {

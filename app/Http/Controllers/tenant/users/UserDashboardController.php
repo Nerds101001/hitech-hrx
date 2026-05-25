@@ -466,12 +466,20 @@ class UserDashboardController extends Controller
             'half_day_session' => 'nullable|string|in:first_half,second_half',
         ]);
 
-        $isHalfDay = $request->boolean('is_half_day');
+        $leaveType = LeaveType::find($validated['leave_type_id']);
+
+        // HDL (Half Day Leave) always forces half-day regardless of form value
+        $isHdl     = $leaveType && strtoupper($leaveType->code) === 'HDL';
+        $isHalfDay = $isHdl ? true : $request->boolean('is_half_day');
+
         if ($isHalfDay) {
             $validated['to_date'] = $validated['from_date'];
         }
 
-        $leaveType = LeaveType::find($validated['leave_type_id']);
+        // HDL must have a session; default to first_half if omitted
+        if ($isHdl && empty($validated['half_day_session'])) {
+            $validated['half_day_session'] = 'first_half';
+        }
         $user = auth()->user();
 
         // 1. Gender Restriction Check
@@ -543,6 +551,54 @@ class UserDashboardController extends Controller
         NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));
 
         return redirect()->back()->with('success', 'Leave request submitted successfully.');
+    }
+
+    /**
+     * Check if the user has an attendance record for the given date.
+     * Used by the Half Day Leave (HDL) form to warn if the other half isn't covered.
+     */
+    public function leaveAttendanceCheck(Request $request)
+    {
+        $request->validate([
+            'date'    => 'required|date',
+            'session' => 'required|in:first_half,second_half',
+        ]);
+
+        $user    = auth()->user();
+        $date    = $request->input('date');
+        $session = $request->input('session');
+
+        $attendance = \App\Models\Attendance::where('user_id', $user->id)
+            ->whereDate('check_in_time', $date)
+            ->first();
+
+        if (!$attendance) {
+            return response()->json([
+                'present'  => false,
+                'warning'  => 'No attendance record found for this date. If you were absent the entire day, please apply for a full-day leave instead.',
+            ]);
+        }
+
+        $checkIn  = $attendance->check_in_time;
+        $noon     = \Carbon\Carbon::parse($date)->setTime(13, 0); // 1 PM cutoff
+
+        if ($session === 'second_half') {
+            // Taking afternoon off — check if they came in the morning
+            $presentMorning = $checkIn && $checkIn->lt($noon);
+            return response()->json([
+                'present' => $presentMorning,
+                'warning' => $presentMorning ? null
+                    : 'You don\'t appear to have a morning check-in on this date. Please verify before submitting.',
+            ]);
+        } else {
+            // Taking morning off — they should have checked in this afternoon
+            $presentAfternoon = $checkIn && $checkIn->gte($noon);
+            return response()->json([
+                'present' => $presentAfternoon,
+                'warning' => $presentAfternoon ? null
+                    : 'No afternoon check-in found. If you were absent all day, consider a full-day leave.',
+            ]);
+        }
     }
 
     public function leaveCheckAjax(Request $request)
