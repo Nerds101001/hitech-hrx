@@ -10,8 +10,22 @@
 
 @section('page-style')
 <style>
-.half-day-btn { user-select:none; transition: border .18s, background .18s, box-shadow .18s; }
-.half-day-btn:hover { box-shadow: 0 2px 8px rgba(99,102,241,.15); }
+.hdpick-opt {
+    flex: 1;
+    cursor: pointer;
+    border: 2px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+    transition: border .18s, background .18s, box-shadow .18s;
+    background: #fff;
+    user-select: none;
+}
+.hdpick-opt:hover { box-shadow: 0 2px 8px rgba(99,102,241,.15); }
+.hdpick-active {
+    border-color: #6366f1 !important;
+    background: #f5f3ff !important;
+}
 </style>
 @endsection
 
@@ -344,40 +358,37 @@
                             </div>
                         </div>
                         {{-- Half Day Toggle — shown ABOVE dates so users notice it first --}}
+                        {{-- Duration picker: plain divs with onclick, no radio/label conflicts --}}
                         <div class="col-12" id="half_day_toggle_container">
                             <label class="form-label-hitech d-block mb-2">Leave Duration</label>
                             <div class="d-flex gap-2">
-                                <label id="btn-full-day" class="half-day-btn active" for="duration_full_day" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
-                                    <input type="radio" name="_duration" id="duration_full_day" value="full" class="d-none" checked>
+                                <div class="hdpick-opt hdpick-active" id="hdpick-full" onclick="selectDuration('full')">
                                     <i class="bx bx-sun d-block fs-4 mb-1" style="color:#f59e0b;"></i>
-                                    <div class="fw-semibold" style="font-size:0.8rem;">Full Day</div>
-                                </label>
-                                <label id="btn-half-day" class="half-day-btn" for="duration_half_day" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
-                                    <input type="radio" name="_duration" id="duration_half_day" value="half" class="d-none">
-                                    <i class="bx bx-moon d-block fs-4 mb-1" style="color:#6366f1;"></i>
-                                    <div class="fw-semibold" style="font-size:0.8rem;">Half Day</div>
-                                </label>
+                                    <div class="fw-semibold" style="font-size:0.85rem;">Full Day</div>
+                                </div>
+                                <div class="hdpick-opt" id="hdpick-half" onclick="selectDuration('half')">
+                                    <i class="bx bx-adjust d-block fs-4 mb-1" style="color:#6366f1;"></i>
+                                    <div class="fw-semibold" style="font-size:0.85rem;">Half Day</div>
+                                </div>
                             </div>
-                            {{-- Hidden real checkbox that the backend reads --}}
                             <input type="hidden" name="is_half_day" id="is_half_day" value="0">
                         </div>
 
                         <div class="col-12 d-none" id="half_day_session_container">
-                            <label for="half_day_session" class="form-label-hitech">Which Half?</label>
+                            <label class="form-label-hitech d-block mb-2">Which Half?</label>
                             <div class="d-flex gap-2">
-                                <label id="btn-first-half" class="half-day-btn active" for="sess_first_half" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
-                                    <input type="radio" name="half_day_session" id="sess_first_half" value="first_half" class="d-none" checked>
-                                    <i class="bx bx-alarm d-block fs-4 mb-1" style="color:#10b981;"></i>
-                                    <div class="fw-semibold" style="font-size:0.8rem;">First Half</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Morning</div>
-                                </label>
-                                <label id="btn-second-half" class="half-day-btn" for="sess_second_half" style="flex:1;cursor:pointer;border:2px solid #e0e0e0;border-radius:10px;padding:10px 12px;text-align:center;transition:all .2s;background:#fff;">
-                                    <input type="radio" name="half_day_session" id="sess_second_half" value="second_half" class="d-none">
+                                <div class="hdpick-opt hdpick-active" id="hdpick-first" onclick="selectSession('first_half')">
+                                    <i class="bx bx-sun d-block fs-4 mb-1" style="color:#10b981;"></i>
+                                    <div class="fw-semibold" style="font-size:0.85rem;">First Half</div>
+                                    <div class="text-muted" style="font-size:0.72rem;">Morning</div>
+                                </div>
+                                <div class="hdpick-opt" id="hdpick-second" onclick="selectSession('second_half')">
                                     <i class="bx bx-moon d-block fs-4 mb-1" style="color:#6366f1;"></i>
-                                    <div class="fw-semibold" style="font-size:0.8rem;">Second Half</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">Afternoon</div>
-                                </label>
+                                    <div class="fw-semibold" style="font-size:0.85rem;">Second Half</div>
+                                    <div class="text-muted" style="font-size:0.72rem;">Afternoon</div>
+                                </div>
                             </div>
+                            <input type="hidden" name="half_day_session" id="half_day_session" value="first_half">
                         </div>
 
                         <div class="col-12">
@@ -424,62 +435,36 @@ document.addEventListener('DOMContentLoaded', function() {
     const docInput = document.getElementById('document');
     
     // Half Day Elements
-    const isHalfDayInput = document.getElementById('is_half_day'); // hidden input
-    const halfDayToggleContainer = document.getElementById('half_day_toggle_container');
+    const halfDayToggleContainer  = document.getElementById('half_day_toggle_container');
     const halfDaySessionContainer = document.getElementById('half_day_session_container');
     const fromDateContainer = document.getElementById('from_date_container');
-    const toDateContainer = document.getElementById('to_date_container');
+    const toDateContainer   = document.getElementById('to_date_container');
 
-    // Duration button helpers
-    const btnFullDay  = document.getElementById('btn-full-day');
-    const btnHalfDay  = document.getElementById('btn-half-day');
-    const rdFullDay   = document.getElementById('duration_full_day');
-    const rdHalfDay   = document.getElementById('duration_half_day');
-    const btnFirstHalf  = document.getElementById('btn-first-half');
-    const btnSecondHalf = document.getElementById('btn-second-half');
-    const rdFirstHalf   = document.getElementById('sess_first_half');
-    const rdSecondHalf  = document.getElementById('sess_second_half');
-
-    function isHalfDaySelected() { return rdHalfDay && rdHalfDay.checked; }
-    function getHalfDaySession()  { return rdSecondHalf && rdSecondHalf.checked ? 'second_half' : 'first_half'; }
-
-    function updateDurationBtnStyles() {
-        const half = isHalfDaySelected();
-        if (btnFullDay)  { btnFullDay.style.border  = half ? '2px solid #e0e0e0' : '2px solid #6366f1'; btnFullDay.style.background  = half ? '#fff' : '#f5f3ff'; }
-        if (btnHalfDay)  { btnHalfDay.style.border  = half ? '2px solid #6366f1' : '2px solid #e0e0e0'; btnHalfDay.style.background  = half ? '#f5f3ff' : '#fff'; }
+    function isHalfDaySelected() {
+        const inp = document.getElementById('is_half_day');
+        return inp && inp.value === '1';
+    }
+    function getHalfDaySession() {
+        const inp = document.getElementById('half_day_session');
+        return inp ? inp.value : 'first_half';
     }
 
-    function updateSessionBtnStyles() {
-        const second = rdSecondHalf && rdSecondHalf.checked;
-        if (btnFirstHalf)  { btnFirstHalf.style.border  = second ? '2px solid #e0e0e0' : '2px solid #10b981'; btnFirstHalf.style.background  = second ? '#fff' : '#f0fdf4'; }
-        if (btnSecondHalf) { btnSecondHalf.style.border = second ? '2px solid #6366f1' : '2px solid #e0e0e0'; btnSecondHalf.style.background = second ? '#f5f3ff' : '#fff'; }
-    }
+    // Called from onclick on the duration divs
+    window.selectDuration = function(val) {
+        const isHalf = val === 'half';
+        document.getElementById('is_half_day').value = isHalf ? '1' : '0';
+        document.getElementById('hdpick-full').classList.toggle('hdpick-active', !isHalf);
+        document.getElementById('hdpick-half').classList.toggle('hdpick-active',  isHalf);
+        handleHalfDayToggle();
+    };
 
-    // Wire duration buttons
-    [btnFullDay, btnHalfDay].forEach(btn => {
-        if (btn) btn.addEventListener('click', function() {
-            const isHalf = this === btnHalfDay;
-            rdFullDay.checked = !isHalf;
-            rdHalfDay.checked = isHalf;
-            isHalfDayInput.value = isHalf ? '1' : '0';
-            updateDurationBtnStyles();
-            handleHalfDayToggle();
-        });
-    });
-
-    // Wire session buttons
-    [btnFirstHalf, btnSecondHalf].forEach(btn => {
-        if (btn) btn.addEventListener('click', function() {
-            const isSecond = this === btnSecondHalf;
-            rdFirstHalf.checked  = !isSecond;
-            rdSecondHalf.checked = isSecond;
-            updateSessionBtnStyles();
-            checkLeaveImpact();
-        });
-    });
-
-    updateDurationBtnStyles();
-    updateSessionBtnStyles();
+    // Called from onclick on the session divs
+    window.selectSession = function(val) {
+        document.getElementById('half_day_session').value = val;
+        document.getElementById('hdpick-first').classList.toggle('hdpick-active',  val === 'first_half');
+        document.getElementById('hdpick-second').classList.toggle('hdpick-active', val === 'second_half');
+        checkLeaveImpact();
+    };
     
     // Impact Section Elements
     const impactSection = document.getElementById('leaveImpactSection');
@@ -574,11 +559,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Half day configuration
             if (isSHL) {
                 halfDayToggleContainer.classList.add('d-none');
-                // Reset to full day silently
-                if (rdFullDay) { rdFullDay.checked = true; rdHalfDay.checked = false; }
-                if (isHalfDayInput) isHalfDayInput.value = '0';
-                updateDurationBtnStyles();
-                handleHalfDayToggle();
+                selectDuration('full'); // reset to full day silently
             } else {
                 halfDayToggleContainer.classList.remove('d-none');
             }

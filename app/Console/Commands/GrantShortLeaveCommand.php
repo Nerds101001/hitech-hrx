@@ -67,7 +67,9 @@ class GrantShortLeaveCommand extends Command
             $balance->used                 = 0;
             $balance->accrued_this_year    = ($balance->accrued_this_year ?? 0) + 1;
             $balance->carry_forward_last_year = 0;
-            $balance->auditCustomMessage   = $isSeed
+
+            // Use the model's static audit reason (avoids Eloquent inserting it as a column)
+            LeaveBalance::$auditReason = $isSeed
                 ? 'Short Leave Seed Grant (One-time)'
                 : 'Monthly Short Leave Grant (Automated)';
 
