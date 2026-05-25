@@ -46,7 +46,7 @@
             align-items: center;
             position: relative;
             z-index: 10;
-            overflow: hidden;
+            overflow: visible;
         }
         .rosemary-tab-arrow {
             position: absolute;
@@ -65,8 +65,12 @@
             cursor: pointer;
             transition: all 0.2s ease;
             z-index: 12;
+            flex-shrink: 0;
         }
+        .rosemary-tab-arrow.left  { left: 4px; }
+        .rosemary-tab-arrow.right { right: 4px; }
         .rosemary-tab-arrow:hover { transform: translateY(-50%) scale(1.05); }
+        .rosemary-tab-arrow.hidden { opacity: 0; pointer-events: none; }
 
         .rosemary-nav-tabs {
             display: flex;
@@ -1739,16 +1743,68 @@
         var attendanceType = @json($user->attendance_type);
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Tab scroll logic
-            const tabsWrapper = document.querySelector('.rosemary-nav-tabs-wrapper');
-            const nav = document.querySelector('.rosemary-nav-tabs');
-            if (tabsWrapper && nav) {
-                tabsWrapper.querySelectorAll('.rosemary-tab-arrow').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const dir = parseInt(btn.dataset.dir);
-                        nav.scrollBy({ left: 300 * dir, behavior: 'smooth' });
+            const nav      = document.querySelector('.rosemary-nav-tabs');
+            const btnLeft  = document.querySelector('.rosemary-tab-arrow.left');
+            const btnRight = document.querySelector('.rosemary-tab-arrow.right');
+
+            function updateArrows() {
+                if (!nav) return;
+                const atStart = nav.scrollLeft <= 4;
+                const atEnd   = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 4;
+                btnLeft  && btnLeft.classList.toggle('hidden', atStart);
+                btnRight && btnRight.classList.toggle('hidden', atEnd);
+            }
+
+            function scrollToShowTab(tab) {
+                if (!nav || !tab) return;
+                const allTabs = Array.from(nav.querySelectorAll('.nav-link'));
+                const idx     = allTabs.indexOf(tab);
+                const next    = allTabs[idx + 1];
+                const prev    = allTabs[idx - 1];
+
+                // Use offsetLeft (relative to scroll container) — reliable inside overflow:auto
+                const tabStart = tab.offsetLeft;
+                const tabEnd   = tab.offsetLeft + tab.offsetWidth;
+
+                // If next tab exists and is beyond the right edge — scroll to reveal it
+                if (next) {
+                    const nextEnd = next.offsetLeft + next.offsetWidth;
+                    if (nextEnd > nav.scrollLeft + nav.clientWidth - 10) {
+                        nav.scrollTo({ left: nextEnd - nav.clientWidth + 20, behavior: 'smooth' });
+                        return;
+                    }
+                }
+
+                // If current tab itself is beyond the right edge
+                if (tabEnd > nav.scrollLeft + nav.clientWidth - 10) {
+                    nav.scrollTo({ left: tabEnd - nav.clientWidth + 20, behavior: 'smooth' });
+                    return;
+                }
+
+                // If current tab is hidden to the left — scroll back
+                if (tabStart < nav.scrollLeft + 10) {
+                    const peekStart = prev ? prev.offsetLeft : tabStart;
+                    nav.scrollTo({ left: peekStart - 10, behavior: 'smooth' });
+                }
+            }
+
+            if (nav) {
+                btnLeft  && btnLeft.addEventListener('click',  () => { nav.scrollBy({ left: -200, behavior: 'smooth' }); });
+                btnRight && btnRight.addEventListener('click', () => { nav.scrollBy({ left:  200, behavior: 'smooth' }); });
+
+                // Wire every tab — on click, auto-reveal the next tab
+                nav.querySelectorAll('.nav-link').forEach(function(tab) {
+                    tab.addEventListener('click', function() {
+                        setTimeout(function() { scrollToShowTab(tab); }, 30);
                     });
                 });
+
+                // On load — scroll active tab into view
+                const active = nav.querySelector('.nav-link.active');
+                if (active) setTimeout(function() { scrollToShowTab(active); }, 150);
+
+                nav.addEventListener('scroll', updateArrows, { passive: true });
+                updateArrows();
             }
         });
 

@@ -6,6 +6,7 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\Payslip;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
@@ -62,6 +63,11 @@ class PayrollRecord extends Model implements AuditableContract
   public function user()
   {
     return $this->belongsTo(User::class, 'user_id');
+  }
+
+  public function payslips()
+  {
+    return $this->hasMany(Payslip::class, 'payroll_record_id');
   }
 
   public function payrollAdjustments()

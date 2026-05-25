@@ -16,6 +16,15 @@
             ]
         },
         {
+            "url": "/user/dashboard",
+            "name": "Dashboard",
+            "icon": "menu-icon bx bx-home",
+            "slug": "user.dashboard.index",
+            "roles": [
+                "employee"
+            ]
+        },
+        {
             "icon": "menu-icon bx bx-bullseye",
             "name": "Monitoring",
             "slug": [

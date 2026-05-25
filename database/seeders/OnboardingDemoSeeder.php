@@ -40,7 +40,7 @@ class OnboardingDemoSeeder extends Seeder
                 'onboarding_deadline' => now()->addDays(3),
             ]
         );
-        $user1->syncRoles(['field_employee']);
+        $user1->syncRoles(['employee']);
 
         // 2. User: Resubmission Requested
         $user2 = User::updateOrCreate(
@@ -64,7 +64,7 @@ class OnboardingDemoSeeder extends Seeder
                 'blood_group' => 'B+',
             ]
         );
-        $user2->syncRoles(['field_employee']);
+        $user2->syncRoles(['employee']);
 
         // 3. User: Submitted (Under Review)
         $user3 = User::updateOrCreate(
@@ -97,7 +97,7 @@ class OnboardingDemoSeeder extends Seeder
                 'consent_accepted_at' => now()->subHours(5),
             ]
         );
-        $user3->syncRoles(['field_employee']);
+        $user3->syncRoles(['employee']);
 
         // Bank Account for User 3
         BankAccount::updateOrCreate(

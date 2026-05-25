@@ -47,9 +47,11 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Enum;
+use App\Mail\DocumentRejectedMail;
 use App\Notifications\Onboarding\OnboardingInvite;
 use App\Notifications\Onboarding\OnboardingStatusChanged;
 use App\Services\LeaveAccrualService;
+use Illuminate\Support\Facades\Mail;
 use OwenIt\Auditing\Models\Audit;
 
 
@@ -2870,6 +2872,212 @@ class EmployeeController extends Controller
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   // KPI / SALES TARGET METHODS
   // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DOCUMENT REJECTION / DELETION (Admin / HR)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Reject a specific document for an active employee.
+   * - Deletes the physical file from storage
+   * - Clears the user model field
+   * - Marks DocumentRequest as rejected with admin_remarks
+   * - Reverts employee status to ONBOARDING so they must re-upload
+   * - Sends DocumentRejectedMail to the employee
+   */
+  public function rejectDocument(Request $request, $userId)
+  {
+    $request->validate([
+      'document_key'  => 'required|string',
+      'admin_remarks' => 'required|string|min:5|max:500',
+    ]);
+
+    $user  = User::findOrFail($userId);
+    $admin = Auth::user();
+
+    $docMap = $this->documentKeyMap();
+    $key = $request->document_key;
+    if (!isset($docMap[$key])) {
+      return response()->json(['success' => false, 'message' => 'Unknown document key.'], 422);
+    }
+    $meta = $docMap[$key];
+
+    DB::beginTransaction();
+    try {
+      // 1. Delete physical file(s) from storage
+      $folder = \Constants::BaseFolderOnboardingDocuments . $user->id;
+      $files  = Storage::disk('public')->files($folder);
+      foreach ($files as $file) {
+        if (str_starts_with(basename($file), $meta['prefix'])) {
+          Storage::disk('public')->delete($file);
+        }
+      }
+
+      // 2. Clear user model field
+      if (!empty($meta['field'])) {
+        $user->{$meta['field']} = null;
+      }
+
+      // 3. Mark DocumentRequest as rejected
+      $docType = \App\Models\DocumentType::withoutGlobalScopes()
+        ->where('code', $meta['code'])->first();
+      if ($docType) {
+        \App\Models\DocumentRequest::where('user_id', $user->id)
+          ->where('document_type_id', $docType->id)
+          ->update([
+            'status'             => 'rejected',
+            'admin_remarks'      => $request->admin_remarks,
+            'generated_file'     => null,
+            'action_taken_by_id' => $admin->id,
+            'action_taken_at'    => now(),
+          ]);
+      }
+
+      // 4. Revert employee status to ONBOARDING
+      $user->status = UserAccountStatus::ONBOARDING;
+      $user->onboarding_resubmission_notes = 'One or more documents were rejected by HR. Please re-upload the required documents.';
+      $user->save();
+
+      DB::commit();
+
+      // 5. Send email notification (non-fatal if mail fails)
+      try {
+        Mail::to($user->email)->send(new DocumentRejectedMail(
+          $user,
+          $meta['name'],
+          $request->admin_remarks,
+          $admin->name
+        ));
+      } catch (\Exception $mailEx) {
+        Log::error('DocumentRejectedMail send failed: ' . $mailEx->getMessage());
+      }
+
+      return response()->json([
+        'success' => true,
+        'message' => $meta['name'] . ' rejected. Employee notified and profile reverted to onboarding.',
+      ]);
+
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('Document Rejection Error for user ' . $userId . ': ' . $e->getMessage());
+      return response()->json(['success' => false, 'message' => 'Failed to reject document. Please try again.'], 500);
+    }
+  }
+
+  /**
+   * Delete a specific document file for an employee WITHOUT reverting status.
+   * Use this to simply purge an invalid/duplicate file from the record.
+   */
+  public function deleteDocument(Request $request, $userId)
+  {
+    $request->validate([
+      'document_key' => 'required|string',
+    ]);
+
+    $user = User::findOrFail($userId);
+
+    $docMap = $this->documentKeyMap();
+    $key = $request->document_key;
+    if (!isset($docMap[$key])) {
+      return response()->json(['success' => false, 'message' => 'Unknown document key.'], 422);
+    }
+    $meta = $docMap[$key];
+
+    DB::beginTransaction();
+    try {
+      // 1. Delete physical file(s)
+      $folder  = \Constants::BaseFolderOnboardingDocuments . $user->id;
+      $files   = Storage::disk('public')->files($folder);
+      $deleted = 0;
+      foreach ($files as $file) {
+        if (str_starts_with(basename($file), $meta['prefix'])) {
+          Storage::disk('public')->delete($file);
+          $deleted++;
+        }
+      }
+
+      // 2. Clear user field
+      if (!empty($meta['field'])) {
+        $user->{$meta['field']} = null;
+        $user->save();
+      }
+
+      // 3. Delete DocumentRequest record entirely
+      $docType = \App\Models\DocumentType::withoutGlobalScopes()
+        ->where('code', $meta['code'])->first();
+      if ($docType) {
+        \App\Models\DocumentRequest::where('user_id', $user->id)
+          ->where('document_type_id', $docType->id)
+          ->delete();
+      }
+
+      DB::commit();
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Document deleted successfully (' . $deleted . ' file(s) removed).',
+      ]);
+
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('Document Delete Error for user ' . $userId . ': ' . $e->getMessage());
+      return response()->json(['success' => false, 'message' => 'Failed to delete document.'], 500);
+    }
+  }
+
+  /**
+   * Delete an additional (non-mandatory) DocumentRequest record by its ID.
+   * Removes the physical file and deletes the DB record.
+   */
+  public function deleteDocumentRequest(Request $request, $userId)
+  {
+    $request->validate([
+      'document_request_id' => 'required|integer|exists:document_requests,id',
+    ]);
+
+    $user    = User::findOrFail($userId);
+    $docReq  = \App\Models\DocumentRequest::where('id', $request->document_request_id)
+      ->where('user_id', $user->id)
+      ->firstOrFail();
+
+    DB::beginTransaction();
+    try {
+      // Delete physical file if present
+      if ($docReq->generated_file && Storage::disk('public')->exists($docReq->generated_file)) {
+        Storage::disk('public')->delete($docReq->generated_file);
+      }
+
+      $docReq->delete();
+
+      DB::commit();
+
+      return response()->json([
+        'success' => true,
+        'message' => 'Document record deleted successfully.',
+      ]);
+
+    } catch (\Exception $e) {
+      DB::rollBack();
+      Log::error('deleteDocumentRequest Error for user ' . $userId . ': ' . $e->getMessage());
+      return response()->json(['success' => false, 'message' => 'Failed to delete document record.'], 500);
+    }
+  }
+
+  /**
+   * Shared map of document keys used by reject/delete methods.
+   */
+  private function documentKeyMap(): array
+  {
+    return [
+      'aadhaar'    => ['prefix' => 'aadhaar_card',           'field' => 'aadhaar_no',                'code' => 'AADHAAR_CARD',           'name' => 'Aadhaar Card'],
+      'pan'        => ['prefix' => 'pan_card',               'field' => 'pan_no',                    'code' => 'PAN_CARD',               'name' => 'PAN Card'],
+      'matric'     => ['prefix' => 'matric_certificate',     'field' => 'matric_marksheet_no',       'code' => 'MATRIC_CERTIFICATE',     'name' => '10th Marksheet (Matric)'],
+      'inter'      => ['prefix' => 'inter_certificate',      'field' => 'inter_marksheet_no',        'code' => 'INTER_CERTIFICATE',      'name' => '12th Marksheet (Intermediate)'],
+      'graduation' => ['prefix' => 'graduation_certificate', 'field' => 'bachelor_marksheet_no',     'code' => 'GRADUATION_CERTIFICATE', 'name' => 'Graduation Marksheet'],
+      'master'     => ['prefix' => 'master_certificate',     'field' => 'master_marksheet_no',       'code' => 'MASTER_CERTIFICATE',     'name' => 'Post Graduation Marksheet'],
+      'experience' => ['prefix' => 'experience_certificate', 'field' => 'experience_certificate_no', 'code' => 'EXPERIENCE_CERTIFICATE', 'name' => 'Experience Certificate'],
+    ];
+  }
 
   /**
    * Get a single KPI target by ID (AJAX).

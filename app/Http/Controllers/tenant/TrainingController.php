@@ -23,6 +23,11 @@ class TrainingController extends Controller
      */
     public function index(Request $request)
     {
+        // Admin/HR with no specific user_id → send to activity dashboard
+        if (!$request->has('user_id') && auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+            return redirect()->route('training.activity');
+        }
+
         $userId = $request->query('user_id', auth()->id());
         $user = User::findOrFail($userId);
 
@@ -289,6 +294,103 @@ class TrainingController extends Controller
             Auth::user()->update(['training_status' => 'completed']);
         }
     }
+    /**
+     * Admin/HR Training Activity Dashboard
+     */
+    public function activityDashboard()
+    {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+            abort(403);
+        }
+
+        $phases = TrainingPhase::with(['modules'])->orderBy('order')->get();
+        $totalModules = TrainingModule::count();
+
+        // All users with any training activity or who require training
+        $users = User::where(function($q) {
+                $q->whereHas('trainingProgress')
+                  ->orWhere('is_training_required', true);
+            })
+            ->with(['trainingProgress.module.phase'])
+            ->get();
+
+        $totalEnrolled  = $users->count();
+        $totalCompleted = $users->where('training_status', 'completed')->count();
+        $inProgress     = $users->filter(fn($u) => $u->trainingProgress->count() > 0 && $u->training_status !== 'completed')->count();
+        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
+
+        // Phase-wise completion (how many users finished ALL modules in each phase)
+        $phaseStats = $phases->map(function ($phase) use ($users) {
+            if ($phase->modules->isEmpty()) {
+                return ['phase' => $phase, 'completed_count' => 0, 'total' => $users->count(), 'pct' => 0];
+            }
+            $completedCount = $users->filter(function ($user) use ($phase) {
+                foreach ($phase->modules as $module) {
+                    $done = $user->trainingProgress
+                        ->where('module_id', $module->id)
+                        ->where('status', 'completed')
+                        ->isNotEmpty();
+                    if (!$done) return false;
+                }
+                return true;
+            })->count();
+
+            return [
+                'phase'           => $phase,
+                'completed_count' => $completedCount,
+                'total'           => $users->count(),
+                'pct'             => $users->count() > 0 ? round($completedCount / $users->count() * 100) : 0,
+            ];
+        });
+
+        // Per-user summary row
+        $userStats = $users->map(function ($user) use ($phases, $totalModules) {
+            $progress       = $user->trainingProgress;
+            $completedCount = $progress->where('status', 'completed')->count();
+            $avgScore       = round($progress->where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
+            $lastActivity   = $progress->sortByDesc('updated_at')->first()?->updated_at;
+
+            // Highest phase with any activity
+            $currentPhase = null;
+            foreach ($phases->sortByDesc('order') as $phase) {
+                $ids = $phase->modules->pluck('id')->toArray();
+                if ($progress->whereIn('module_id', $ids)->isNotEmpty()) {
+                    $currentPhase = $phase;
+                    break;
+                }
+            }
+
+            return [
+                'user'          => $user,
+                'completed'     => $completedCount,
+                'total'         => $totalModules,
+                'pct'           => $totalModules > 0 ? round($completedCount / $totalModules * 100) : 0,
+                'avg_score'     => $avgScore,
+                'last_activity' => $lastActivity,
+                'current_phase' => $currentPhase,
+                'status'        => $user->training_status ?? 'in_progress',
+                'failed_count'  => $progress->where('status', 'failed')->count(),
+            ];
+        })->sortByDesc('pct')->values();
+
+        // Top 5 hardest modules (most failures)
+        $moduleStats = TrainingModule::with('phase')
+            ->withCount([
+                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed']),
+                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed'),
+                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed'),
+            ])
+            ->having('total_attempts', '>', 0)
+            ->orderByDesc('fail_count')
+            ->limit(6)
+            ->get();
+
+        return view('tenant.training.activity', compact(
+            'phases', 'totalEnrolled', 'totalCompleted', 'inProgress',
+            'avgScore', 'phaseStats', 'userStats', 'moduleStats', 'totalModules'
+        ));
+    }
+
     /**
      * Display the Management Interface for HR/Admin
      */

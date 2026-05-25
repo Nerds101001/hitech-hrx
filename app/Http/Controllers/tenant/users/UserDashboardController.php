@@ -41,13 +41,17 @@ class UserDashboardController extends Controller
             return redirect()->route('onboarding.form');
         }
 
-        // Show Restricted View if status is Submitted (Review Required)
+        // Show Training Portal if submitted + training required + training not yet completed
         if ($userStatus === UserAccountStatus::ONBOARDING_SUBMITTED->value) {
+            if ($user->is_training_required && $user->training_status !== 'completed') {
+                return redirect()->route('training.portal');
+            }
+            // Otherwise show the "Under Review" waiting screen
             return view('tenant.users.dashboard.review-restricted');
         }
 
         $isHR = $user->hasRole('hr');
-        $isFieldEmployee = $user->hasRole('employee');
+        $isFieldEmployee = $user->hasRole('employee') || $user->hasRole('office_employee');
         $isManager = $user->hasRole('manager');
 
         // Common Personal Stats

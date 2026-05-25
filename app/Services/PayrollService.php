@@ -43,12 +43,20 @@ class PayrollService
         $count = 0;
 
         foreach ($users as $user) {
-            // Check if already processed
-            $exists = PayrollRecord::where('user_id', $user->id)
+            // Check if a payroll already exists for this user + period
+            $existing = PayrollRecord::where('user_id', $user->id)
                 ->where('period', $periodName)
-                ->exists();
+                ->first();
 
-            if ($exists) continue;
+            if ($existing) {
+                // Never overwrite an approved or paid payroll — it is locked
+                if (in_array($existing->status, ['approved', 'paid'])) {
+                    continue;
+                }
+                // Draft ('generated') → delete old records so we regenerate fresh
+                Payslip::where('payroll_record_id', $existing->id)->forceDelete();
+                $existing->forceDelete();
+            }
 
             $this->processForUser($user, $startDate, $endDate, $periodName, $daysInMonth, $status, $cycle->id);
             $count++;

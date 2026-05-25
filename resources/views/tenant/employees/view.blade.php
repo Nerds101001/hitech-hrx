@@ -1972,14 +1972,15 @@
 
                                     @php
                                         $mandatoryDocs = [
-                                            ['name' => 'Aadhaar Card', 'key' => 'aadhaar_no', 'icon' => 'bx-id-card'],
-                                            ['name' => 'PAN Card', 'key' => 'pan_no', 'icon' => 'bx-credit-card-front'],
-                                            ['name' => '10th Marksheet (Matric)', 'key' => 'matric_marksheet_no', 'icon' => 'bx-certification'],
-                                            ['name' => '12th Marksheet (Intermediate)', 'key' => 'inter_marksheet_no', 'icon' => 'bx-graduation'],
-                                            ['name' => 'Graduation Marksheet', 'key' => 'bachelor_marksheet_no', 'icon' => 'bx-certification'],
-                                            ['name' => 'Post Graduation Marksheet', 'key' => 'master_marksheet_no', 'icon' => 'bx-certification'],
-                                            ['name' => 'Experience Certificate', 'key' => 'experience_certificate_no', 'icon' => 'bx-briefcase'],
+                                            ['name' => 'Aadhaar Card',                  'key' => 'aadhaar_no',                'icon' => 'bx-id-card',            'doc_key' => 'aadhaar'],
+                                            ['name' => 'PAN Card',                      'key' => 'pan_no',                    'icon' => 'bx-credit-card-front',  'doc_key' => 'pan'],
+                                            ['name' => '10th Marksheet (Matric)',        'key' => 'matric_marksheet_no',       'icon' => 'bx-certification',      'doc_key' => 'matric'],
+                                            ['name' => '12th Marksheet (Intermediate)', 'key' => 'inter_marksheet_no',        'icon' => 'bx-graduation',         'doc_key' => 'inter'],
+                                            ['name' => 'Graduation Marksheet',          'key' => 'bachelor_marksheet_no',     'icon' => 'bx-certification',      'doc_key' => 'graduation'],
+                                            ['name' => 'Post Graduation Marksheet',     'key' => 'master_marksheet_no',       'icon' => 'bx-certification',      'doc_key' => 'master'],
+                                            ['name' => 'Experience Certificate',        'key' => 'experience_certificate_no', 'icon' => 'bx-briefcase',          'doc_key' => 'experience'],
                                         ];
+                                        $canManageDocs = auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR', 'super_admin']);
                                     @endphp
 
                                     <h6 class="fw-bold mb-3 small text-muted text-uppercase"
@@ -2062,14 +2063,14 @@
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div class="d-flex gap-2">
+                                                    <div class="d-flex gap-1 flex-wrap justify-content-end">
                                                         @if($isSubmitted)
                                                             @if($docFileUrl)
                                                                 <a href="javascript:void(0)"
                                                                     class="btn btn-hitech-secondary btn-xs rounded-pill px-3"
                                                                     style="font-size: 0.65rem;"
                                                                     onclick="viewDocumentPopup('{{ $docFileUrl }}', '{{ $doc['name'] }}', '{{ $docNumber }}')"><i
-                                                                        class="bx bx-show me-1"></i>View File</a>
+                                                                        class="bx bx-show me-1"></i>View</a>
                                                             @elseif($docNumber && $docNumber !== 'N/A')
                                                                 <a href="javascript:void(0)"
                                                                     class="btn btn-hitech-secondary btn-xs rounded-pill px-3"
@@ -2081,11 +2082,27 @@
                                                                 style="font-size: 0.65rem;" data-bs-toggle="modal"
                                                                 data-bs-target="#modalAddUserDocument"
                                                                 onclick="setDocModal('{{ $doc['name'] }}', '{{ $docNumber }}')">Update</button>
+                                                            @if($canManageDocs)
+                                                                <button class="btn btn-xs rounded-pill px-2"
+                                                                    style="font-size: 0.65rem; background:#fff1f2; color:#dc2626; border:1px solid #fecaca;"
+                                                                    onclick="openRejectDocModal('{{ $doc['doc_key'] }}', '{{ addslashes($doc['name']) }}')">
+                                                                    <i class="bx bx-x-circle me-1"></i>Reject</button>
+                                                                <button class="btn btn-xs rounded-pill px-2"
+                                                                    style="font-size: 0.65rem; background:#fff7ed; color:#ea580c; border:1px solid #fed7aa;"
+                                                                    onclick="confirmDeleteDocument('{{ $doc['doc_key'] }}', '{{ addslashes($doc['name']) }}')">
+                                                                    <i class="bx bx-trash me-1"></i>Delete</button>
+                                                            @endif
                                                         @else
                                                             <button class="btn btn-xs btn-hitech rounded-pill px-3"
                                                                 style="font-size: 0.65rem; background-color: #127464; color: #fff;"
                                                                 data-bs-toggle="modal" data-bs-target="#modalAddUserDocument"
                                                                 onclick="setDocModal('{{ $doc['name'] }}', '')">Upload</button>
+                                                            @if($canManageDocs && $doc['doc_key'])
+                                                                <button class="btn btn-xs rounded-pill px-2"
+                                                                    style="font-size: 0.65rem; background:#fff7ed; color:#ea580c; border:1px solid #fed7aa;"
+                                                                    onclick="confirmDeleteDocument('{{ $doc['doc_key'] }}', '{{ addslashes($doc['name']) }}')">
+                                                                    <i class="bx bx-trash me-1"></i>Delete</button>
+                                                            @endif
                                                         @endif
                                                     </div>
                                                 </div>
@@ -2122,17 +2139,7 @@
                                                     </div>
                                                 </div>
                                             @endif
-                                            @if($user->documentRequests->where('status', 'approved')->count() > 0)
-                                                <div class="col-md-4">
-                                                    <div class="emp-field-box">
-                                                        <p class="mb-1 text-muted small fw-bold text-uppercase"
-                                                            style="font-size: 0.6rem;">Additional Docs</p>
-                                                        <span class="badge"
-                                                            style="background:#127464;color:#fff;">{{ $user->documentRequests->where('status', 'approved')->count() }}
-                                                            Added</span>
-                                                    </div>
-                                                </div>
-                                            @endif
+                                            {{-- Additional docs count is shown in the section below --}}
                                             @if($user->visa_type || $user->frro_registration)
                                                 <div class="col-12 mt-2 pt-3 border-top">
                                                     <div class="row g-4">
@@ -2174,50 +2181,131 @@
 
                                     @php
                                         $handledDocTypes = collect($mandatoryDocs)->pluck('name')->map(fn($n) => strtolower($n))->toArray();
-                                        $otherDocs = $user->documentRequests->where('status', 'approved')->filter(function ($r) use ($handledDocTypes) {
-                                            return $r->documentType && !in_array(strtolower($r->documentType->name), $handledDocTypes);
+                                        // Also include code-based matches (e.g. AADHAAR_CARD → already shown above)
+                                        $handledDocCodes = ['AADHAAR_CARD','PAN_CARD','MATRIC_CERTIFICATE','INTER_CERTIFICATE','GRADUATION_CERTIFICATE','MASTER_CERTIFICATE','EXPERIENCE_CERTIFICATE'];
+                                        $otherDocs = $user->documentRequests->whereIn('status', ['approved','pending'])->filter(function ($r) use ($handledDocTypes, $handledDocCodes) {
+                                            return $r->documentType
+                                                && !in_array(strtolower($r->documentType->name), $handledDocTypes)
+                                                && !in_array($r->documentType->code, $handledDocCodes);
                                         });
                                     @endphp
 
-                                    @if($otherDocs->count() > 0)
-                                        <div class="col-12 mt-4 pt-4 border-top">
-                                            <h6 class="fw-bold mb-3 small text-muted text-uppercase"
-                                                style="letter-spacing: 1px; font-size: 0.7rem;">Additional Corporate Documents
+                                    <div class="mt-4 pt-4 border-top">
+                                        <div class="d-flex align-items-center justify-content-between mb-3">
+                                            <h6 class="fw-bold mb-0 small text-muted text-uppercase"
+                                                style="letter-spacing: 1px; font-size: 0.7rem;">
+                                                Additional Corporate Documents
+                                                @if($otherDocs->count() > 0)
+                                                    <span class="badge ms-2" style="background:#127464;color:#fff;font-size:0.55rem;">{{ $otherDocs->count() }}</span>
+                                                @endif
                                             </h6>
+                                            <button class="btn btn-hitech-primary btn-xs rounded-pill px-3 shadow-sm"
+                                                style="font-size: 0.65rem;"
+                                                data-bs-toggle="modal" data-bs-target="#modalAddUserDocument"
+                                                onclick="setDocModal('Other Document', '')">
+                                                <i class="bx bx-plus me-1"></i> Add Document
+                                            </button>
+                                        </div>
+
+                                        @if($otherDocs->count() > 0)
                                             <div class="row g-3">
                                                 @foreach($otherDocs as $docReq)
-                                                    <div class="col-md-4">
-                                                        <div class="p-3 rounded-3 d-flex align-items-center justify-content-between"
+                                                    <div class="col-md-6 col-lg-4">
+                                                        <div class="p-3 rounded-3 d-flex align-items-center justify-content-between gap-2"
                                                             style="background-color: #F8FAFC; border: 1px solid #E2E8F0;">
-                                                            <div class="d-flex align-items-center overflow-hidden">
+                                                            <div class="d-flex align-items-center overflow-hidden flex-grow-1">
                                                                 <div class="rounded-3 p-2 me-3 d-flex align-items-center justify-content-center flex-shrink-0"
-                                                                    style="background-color: #E6F4F1; width: 44px; height: 44px; border: 1px solid #A7D9CF;">
-                                                                    <i class="bx bx-file text-success fs-4"></i>
+                                                                    style="background-color: #E6F4F1; width: 40px; height: 40px; border: 1px solid #A7D9CF;">
+                                                                    <i class="bx bx-file-blank text-success fs-5"></i>
                                                                 </div>
                                                                 <div class="overflow-hidden">
                                                                     <p class="mb-0 fw-bold text-dark small text-truncate"
-                                                                        style="line-height: 1.2;">{{ $docReq->documentType->name }}
-                                                                    </p>
+                                                                        style="line-height: 1.2; max-width: 130px;">{{ $docReq->documentType->name }}</p>
                                                                     <span class="badge mt-1"
-                                                                        style="font-size: 0.5rem; background:#127464; color:#fff;">VERIFIED</span>
+                                                                        style="font-size: 0.5rem; background: {{ $docReq->status === 'approved' ? '#127464' : '#94a3b8' }}; color:#fff;">
+                                                                        {{ strtoupper($docReq->status) }}
+                                                                    </span>
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                class="btn btn-hitech-secondary btn-xs rounded-pill px-3 shadow-sm"
-                                                                style="font-size: 0.65rem;"
-                                                                onclick="viewDocumentPopup('{{ $docReq->getSecureUrl() }}', '{{ $docReq->documentType->name }}', '{{ $docReq->remarks ?? '' }}')">
-                                                                <i class="bx bx-show-alt me-1"></i>View
-                                                            </button>
+                                                            <div class="d-flex flex-column gap-1 flex-shrink-0">
+                                                                @if($docReq->generated_file)
+                                                                    <button class="btn btn-hitech-secondary btn-xs rounded-pill px-2"
+                                                                        style="font-size: 0.6rem;"
+                                                                        onclick="viewDocumentPopup('{{ $docReq->getSecureUrl() }}', '{{ addslashes($docReq->documentType->name) }}', '{{ addslashes($docReq->remarks ?? '') }}')">
+                                                                        <i class="bx bx-show me-1"></i>View
+                                                                    </button>
+                                                                @endif
+                                                                @if($canManageDocs)
+                                                                    <button class="btn btn-xs rounded-pill px-2"
+                                                                        style="font-size: 0.6rem; background:#fff7ed; color:#ea580c; border:1px solid #fed7aa;"
+                                                                        onclick="confirmDeleteDocRequest({{ $docReq->id }}, '{{ addslashes($docReq->documentType->name) }}')">
+                                                                        <i class="bx bx-trash me-1"></i>Delete
+                                                                    </button>
+                                                                @endif
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 @endforeach
                                             </div>
-                                        </div>
-                                    @endif
+                                        @else
+                                            <div class="text-center py-4 rounded-3" style="background:#F8FAFC; border:1px dashed #E2E8F0;">
+                                                <i class="bx bx-folder-open fs-3 text-muted mb-2"></i>
+                                                <p class="text-muted small mb-0">No additional documents uploaded yet.</p>
+                                            </div>
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
+
+                        <!-- ═══════════════════════════════════════════════════════
+                             DOCUMENT REJECTION MODAL (Admin / HR only)
+                             ═══════════════════════════════════════════════════════ -->
+                        <div class="modal fade" id="modalRejectDocument" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content border-0 shadow-lg" style="border-radius: 18px; overflow: hidden;">
+                                    <div class="modal-header px-4 py-3" style="background: linear-gradient(135deg,#7f1d1d,#b91c1c); border-bottom: none;">
+                                        <div>
+                                            <h5 class="modal-title text-white fw-bold mb-0">
+                                                <i class="bx bx-x-circle me-2"></i>Reject Document
+                                            </h5>
+                                            <p class="text-white small mb-0 opacity-75" id="rejectDocSubtitle" style="font-size: 0.75rem;"></p>
+                                        </div>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body p-4">
+                                        <div class="alert alert-danger d-flex align-items-start gap-2 rounded-3 mb-3" style="border: 1px solid #fecaca; background: #fef2f2;">
+                                            <i class="bx bxs-error-circle fs-5 mt-1 text-danger"></i>
+                                            <div class="small">
+                                                <strong>This action will:</strong><br>
+                                                Delete the uploaded file &bull; Clear the document record &bull;
+                                                Revert the employee to <strong>Onboarding status</strong> &bull;
+                                                Send them an email notification.
+                                            </div>
+                                        </div>
+                                        <input type="hidden" id="rejectDocKey" value="">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-semibold small text-dark">Rejection Reason <span class="text-danger">*</span></label>
+                                            <textarea id="rejectDocRemarks" class="form-control rounded-3" rows="4"
+                                                placeholder="Explain why this document is being rejected (e.g., blurry image, expired document, mismatched details)..."
+                                                style="border-color: #e2e8f0; font-size: 0.875rem;"></textarea>
+                                            <div class="form-text text-muted">Minimum 10 characters. This will be sent to the employee via email.</div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-0 px-4 pb-4 pt-0 gap-2">
+                                        <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="button" class="btn rounded-pill px-4 fw-bold text-white"
+                                            style="background: linear-gradient(135deg,#991b1b,#b91c1c);"
+                                            id="btnConfirmRejectDoc"
+                                            onclick="submitDocumentRejection()">
+                                            <i class="bx bx-x-circle me-1"></i> Reject &amp; Notify Employee
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- /DOCUMENT REJECTION MODAL -->
 
                         <!-- KRAs (Key Result Areas) Tab -->
                         <div class="tab-pane fade" id="tasks-tab">
@@ -3169,6 +3257,135 @@
                 `;
 
                 modal.show();
+            };
+
+            // -------------------------------------------------------------
+            // DOCUMENT REJECTION / DELETE HANDLERS
+            // -------------------------------------------------------------
+
+            window.openRejectDocModal = function(docKey, docName) {
+                document.getElementById('rejectDocKey').value = docKey;
+                document.getElementById('rejectDocSubtitle').textContent = docName;
+                document.getElementById('rejectDocRemarks').value = '';
+                const modalEl = document.getElementById('modalRejectDocument');
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            };
+
+            window.submitDocumentRejection = function() {
+                const docKey  = document.getElementById('rejectDocKey').value;
+                const remarks = document.getElementById('rejectDocRemarks').value.trim();
+                if (!remarks || remarks.length < 10) {
+                    Swal.fire({ icon: 'warning', title: 'Remarks Required', text: 'Please provide at least 10 characters explaining the rejection reason.' });
+                    return;
+                }
+                const btn = document.getElementById('btnConfirmRejectDoc');
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+
+                $.ajax({
+                    url: baseUrl + 'employees/' + window.user.id + '/reject-document',
+                    method: 'POST',
+                    data: {
+                        _token: $('meta[name="csrf-token"]').attr('content'),
+                        document_key: docKey,
+                        admin_remarks: remarks
+                    },
+                    success: function(resp) {
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
+                        if (resp.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Document Rejected',
+                                text: resp.message,
+                                customClass: { confirmButton: 'btn btn-primary rounded-pill px-5' }
+                            }).then(() => location.reload());
+                        } else {
+                            Swal.fire('Error', resp.message || 'Failed to reject document.', 'error');
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="bx bx-x-circle me-1"></i> Reject & Notify Employee';
+                        }
+                    },
+                    error: function(xhr) {
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalRejectDocument')).hide();
+                        Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bx bx-x-circle me-1"></i> Reject & Notify Employee';
+                    }
+                });
+            };
+
+            // Delete an additional (non-mandatory) DocumentRequest record by its ID
+            window.confirmDeleteDocRequest = function(docRequestId, docName) {
+                Swal.fire({
+                    title: 'Delete ' + docName + '?',
+                    html: 'This will permanently remove the document record and its file.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Delete',
+                    confirmButtonColor: '#ea580c',
+                    cancelButtonText: 'Cancel',
+                    customClass: { confirmButton: 'btn rounded-pill px-4 fw-bold', cancelButton: 'btn btn-light rounded-pill px-4' }
+                }).then(function(result) {
+                    if (!result.isConfirmed) return;
+                    $.ajax({
+                        url: baseUrl + 'employees/' + window.user.id + '/delete-document-request',
+                        method: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content'),
+                            document_request_id: docRequestId
+                        },
+                        success: function(resp) {
+                            if (resp.success) {
+                                Swal.fire({ icon: 'success', title: 'Deleted', text: resp.message, timer: 1800, showConfirmButton: false })
+                                    .then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', resp.message || 'Could not delete document.', 'error');
+                            }
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
+                        }
+                    });
+                });
+            };
+
+            window.confirmDeleteDocument = function(docKey, docName) {
+                Swal.fire({
+                    title: 'Delete ' + docName + '?',
+                    html: 'This will permanently delete the file and clear the document record.<br><small class="text-muted">The employee\'s account status will <strong>not</strong> be changed.</small>',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, Delete',
+                    confirmButtonColor: '#ea580c',
+                    cancelButtonText: 'Cancel',
+                    customClass: { confirmButton: 'btn rounded-pill px-4 fw-bold', cancelButton: 'btn btn-light rounded-pill px-4' }
+                }).then(function(result) {
+                    if (!result.isConfirmed) return;
+                    $.ajax({
+                        url: baseUrl + 'employees/' + window.user.id + '/delete-document',
+                        method: 'POST',
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr('content'),
+                            document_key: docKey
+                        },
+                        success: function(resp) {
+                            if (resp.success) {
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Deleted',
+                                    text: resp.message,
+                                    timer: 2000,
+                                    showConfirmButton: false
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire('Error', resp.message || 'Could not delete document.', 'error');
+                            }
+                        },
+                        error: function(xhr) {
+                            Swal.fire('Error', xhr.responseJSON?.message || 'An error occurred.', 'error');
+                        }
+                    });
+                });
             };
 
             // -------------------------------------------------------------

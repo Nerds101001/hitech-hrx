@@ -131,9 +131,12 @@
         </div>
         <div class="hitech-user-meta">
           <span class="hitech-user-name">{{ auth()->user() ? auth()->user()->name : 'User' }}</span>
-          <a href="{{ route('employee.myProfile') }}" class="hitech-user-role-link">
-            <span class="hitech-user-role text-muted small">{{ auth()->user() ? (auth()->user()->roles->first()?->display_name ?: auth()->user()->roles->first()?->name ?: 'No Role') : 'Employee' }}</span>
-          </a>
+          @php
+            $roleLabels = ['admin'=>'Administrator','hr'=>'HR Manager','manager'=>'Manager','employee'=>'Employee','office_employee'=>'Employee','accounts'=>'Accounts'];
+            $rawRole = auth()->user()?->roles->first()?->name ?? 'employee';
+            $roleLabel = $roleLabels[strtolower($rawRole)] ?? ucwords(str_replace('_',' ',$rawRole));
+          @endphp
+          <span class="hitech-user-role text-muted small">{{ $roleLabel }}</span>
         </div>
         <div class="hitech-profile-actions">
            <form id="logout-form" action="{{ route('auth.logout') }}" method="POST" style="display: none;">

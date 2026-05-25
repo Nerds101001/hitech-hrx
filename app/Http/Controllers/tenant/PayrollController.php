@@ -158,9 +158,15 @@ class PayrollController extends Controller
                        '</div>';
             })
             ->addColumn('actions', function ($item) {
+                $status  = $item->status ?? 'generated';
+                $publish = '';
+                if ($status === 'generated') {
+                    $publish = '<button class="btn btn-sm btn-icon hitech-action-icon-sm" onclick="publishSingle(' . $item->id . ')" title="Publish to Employee" style="background:#f0fdf4;border-color:#bbf7d0;"><i class="bx bx-send" style="color:#16a34a;"></i></button>';
+                }
                 return '<div class="d-flex align-items-center gap-1">' .
                     '<button class="btn btn-sm btn-icon hitech-action-icon-sm" onclick="viewPayslip(' . $item->id . ')" title="View"><i class="bx bx-show text-primary"></i></button>' .
                     '<button class="btn btn-sm btn-icon hitech-action-icon-sm" onclick="downloadPayslip(' . $item->id . ')" title="Download"><i class="bx bx-download text-success"></i></button>' .
+                    $publish .
                     '<button class="btn btn-sm btn-icon hitech-action-icon-sm" onclick="deletePayroll(' . $item->id . ')" title="Delete"><i class="bx bx-trash text-danger"></i></button>' .
                     '</div>';
             })
@@ -220,6 +226,35 @@ class PayrollController extends Controller
             return Success::response(null, count($request->ids) . " payroll records approved and published.");
         } catch (\Exception $e) {
             return Error::response("Failed to approve records: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Publish (approve) a single payslip/payroll record.
+     * Makes it visible to the employee.
+     */
+    public function publishSingle($id)
+    {
+        try {
+            $payslip = Payslip::findOrFail($id);
+
+            if (in_array($payslip->status, ['approved', 'paid'])) {
+                return Error::response("This payslip is already published.", 400);
+            }
+
+            DB::transaction(function () use ($payslip) {
+                $payslip->status = 'approved';
+                $payslip->save();
+
+                if ($payslip->payrollRecord) {
+                    $payslip->payrollRecord->status = 'approved';
+                    $payslip->payrollRecord->save();
+                }
+            });
+
+            return Success::response(null, "Payslip published. The employee can now view it.");
+        } catch (\Exception $e) {
+            return Error::response("Failed to publish: " . $e->getMessage());
         }
     }
 

@@ -41,7 +41,7 @@ class DemoAccountsSeeder extends Seeder
                 'password'          => Hash::make('password'),
                 'status'            => UserAccountStatus::ACTIVE,
                 'email_verified_at' => Carbon::now(),
-                'role'              => 'field_employee',
+                'role'              => 'employee',
             ],
             [
                 'first_name'        => 'Demo',

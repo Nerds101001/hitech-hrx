@@ -1,9 +1,9 @@
 @php
-  use App\Models\SuperAdmin\SaSettings;
+  use App\Models\Settings;
   use App\Services\AddonService\IAddonService;
   use App\Models\PayrollAdjustment;
   $addonService = app(IAddonService::class);
-  $settings = SaSettings::first();
+  $settings = Settings::first();
   $payrollAdjustments = PayrollAdjustment::all();
 @endphp
 @extends('layouts/layoutMaster')

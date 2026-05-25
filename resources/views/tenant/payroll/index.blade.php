@@ -260,6 +260,35 @@
       });
     }
 
+    function publishSingle(id) {
+      Swal.fire({
+        title: 'Publish Payslip?',
+        html: 'This will make this payslip <strong>visible to the employee</strong>.<br><small class="text-muted">This action cannot be undone.</small>',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bx bx-send me-1"></i> Yes, Publish',
+        confirmButtonColor: '#16a34a',
+        cancelButtonText: 'Cancel',
+        customClass: { confirmButton: 'btn rounded-pill px-4', cancelButton: 'btn btn-light rounded-pill px-4' }
+      }).then(function(result) {
+        if (!result.isConfirmed) return;
+        jQuery.ajax({
+          url: "{{ url('payroll/publishSingle') }}/" + id,
+          type: 'POST',
+          data: { _token: "{{ csrf_token() }}" },
+          success: function(response) {
+            if (response.success) {
+              jQuery('.datatables-payroll').DataTable().ajax.reload();
+              Swal.fire({ icon: 'success', title: 'Published!', text: response.message, timer: 2000, showConfirmButton: false });
+            } else {
+              Swal.fire('Error', response.message, 'error');
+            }
+          },
+          error: function() { Swal.fire('Error', 'Failed to publish payslip.', 'error'); }
+        });
+      });
+    }
+
     function bulkApprove(ids) {
       Swal.fire({
         title: 'Approve & Publish?',

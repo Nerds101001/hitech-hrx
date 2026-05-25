@@ -101,6 +101,9 @@ Route::middleware(['web'])->group(function () {
       Route::post('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'submitAssessment'])->name('assessment.submit');
       Route::post('/module/{id}/chat', [\App\Http\Controllers\tenant\TrainingController::class, 'chatWithDocument'])->name('module.chat');
       
+      // HR/Admin Activity Dashboard
+      Route::get('/activity', [\App\Http\Controllers\tenant\TrainingController::class, 'activityDashboard'])->name('activity');
+
       // HR/Manager Routes
       Route::get('/report-card/{userId}', [\App\Http\Controllers\tenant\TrainingController::class, 'getReportCard'])->name('report-card');
       Route::post('/approve/{userId}', [\App\Http\Controllers\tenant\TrainingController::class, 'approveTraining'])->name('approve');
@@ -191,6 +194,7 @@ Route::middleware([
       Route::get('payroll/indexAjax', [PayrollController::class, 'indexAjax'])->name('payroll.indexAjax');
       Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
       Route::post('payroll/bulkApprove', [PayrollController::class, 'bulkApprove'])->name('payroll.bulkApprove');
+      Route::post('payroll/publishSingle/{id}', [PayrollController::class, 'publishSingle'])->name('payroll.publishSingle');
       Route::delete('payroll/destroyAjax/{id}', [PayrollController::class, 'destroyAjax'])->name('payroll.destroyAjax');
       
       // Salary Breakup Import
@@ -447,6 +451,13 @@ Route::middleware([
           Route::get('review/{id}', [EmployeeController::class, 'reviewOnboarding'])->name('review');
           Route::post('approve/{id}', [EmployeeController::class, 'approveOnboarding'])->name('approve');
           Route::post('resubmit/{id}', [EmployeeController::class, 'requestResubmission'])->name('resubmit');
+      });
+
+      // Document Reject / Delete (Admin / HR only)
+      Route::middleware(['role:hr|Admin|admin'])->group(function () {
+          Route::post('{userId}/reject-document', [EmployeeController::class, 'rejectDocument'])->name('rejectDocument');
+          Route::post('{userId}/delete-document', [EmployeeController::class, 'deleteDocument'])->name('deleteDocument');
+          Route::post('{userId}/delete-document-request', [EmployeeController::class, 'deleteDocumentRequest'])->name('deleteDocumentRequest');
       });
 
       });

@@ -730,9 +730,23 @@
                         <div class="invalid-feedback" id="account_number_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Account numbers do not match.</div>
                     </div>
                     <div class="col-md-6">
-                        <label class="hitech-label">IFSC / Routing Number <span class="text-danger">*</span></label>
-                        <input type="text" name="ifsc_code" id="ifsc_code" class="hitech-input" value="{{ optional($user->bankAccount)->bank_code }}" placeholder="11 character code (e.g. SBIN0012345)" required {{ !$canEditBanking ? 'readonly' : '' }}>
-                        <div class="invalid-feedback" id="ifsc_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid IFSC format (e.g. SBIN0123456).</div>
+                        <label class="hitech-label">IFSC Code <span class="text-danger">*</span></label>
+                        <div class="position-relative">
+                            <input type="text" name="ifsc_code" id="ifsc_code" class="hitech-input" value="{{ optional($user->bankAccount)->bank_code }}"
+                                placeholder="e.g. SBIN0012345" maxlength="11" required {{ !$canEditBanking ? 'readonly' : '' }}
+                                style="text-transform:uppercase;padding-right:2.5rem;">
+                            <span id="ifsc-spinner" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.5" stroke-linecap="round" style="animation:spin-ifsc 0.8s linear infinite;"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                            </span>
+                        </div>
+                        <div id="ifsc_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;"></div>
+                        <div id="ifsc_success" style="display:none; margin-top:6px; padding:8px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; font-size:11px; color:#15803d; font-weight:600; line-height:1.5;"></div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="hitech-label">Branch Name</label>
+                        <input type="text" name="branch_name" id="branch_name" class="hitech-input"
+                            value="{{ optional($user->bankAccount)->branch_name != 'N/A' ? optional($user->bankAccount)->branch_name : '' }}"
+                            placeholder="Auto-filled from IFSC" {{ !$canEditBanking ? 'readonly' : '' }}>
                     </div>
                     <div class="col-md-12 mt-2">
                         <label class="hitech-label">Upload Bank Cheque / Passbook <span class="text-danger">*</span></label>
@@ -768,7 +782,34 @@
                     </div>
                   </div>
                 @endif
-                
+
+                @php
+                  // Build a map of rejected document codes → admin remarks for inline highlighting
+                  $rejectedDocMap = [];
+                  foreach ($user->documentRequests->where('status', 'rejected') as $rdr) {
+                    if ($rdr->documentType) {
+                      $rejectedDocMap[$rdr->documentType->code] = $rdr->admin_remarks ?? '';
+                    }
+                  }
+                @endphp
+
+                @if(count($rejectedDocMap) > 0)
+                  <div class="alert d-flex align-items-start mb-4" style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:14px; padding:1.25rem 1.5rem;">
+                    <i class="bx bxs-error-circle text-danger fs-4 me-3 mt-1"></i>
+                    <div>
+                      <h6 class="fw-bold mb-1" style="color:#991b1b;">Document(s) Rejected by HR</h6>
+                      <ul class="mb-0 small" style="color:#7f1d1d; padding-left:1.2rem;">
+                        @foreach($rejectedDocMap as $code => $remarks)
+                          <li><strong>{{ ucwords(strtolower(str_replace('_', ' ', $code))) }}</strong>
+                            @if($remarks) — {{ $remarks }} @endif
+                          </li>
+                        @endforeach
+                      </ul>
+                      <p class="mb-0 mt-2 small" style="color:#6b7280;">Please re-upload the correct document(s) highlighted below.</p>
+                    </div>
+                  </div>
+                @endif
+
                 <h4 class="section-title">Profile Photo</h4>
                 <div class="row g-4 mb-4">
                     <div class="col-md-6">
@@ -792,7 +833,14 @@
 
                 <h4 class="section-title">National Identity</h4>
                 <div class="row g-4 mb-4">
-                    <div class="col-md-6">
+                    <div class="col-md-6 @if(isset($rejectedDocMap['AADHAAR_CARD'])) p-3 rounded-3 @endif"
+                         style="@if(isset($rejectedDocMap['AADHAAR_CARD'])) background:#fef2f2; border:1px solid #fca5a5; @endif">
+                        @if(isset($rejectedDocMap['AADHAAR_CARD']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['AADHAAR_CARD'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['AADHAAR_CARD'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label">Aadhaar Card Number <span class="text-danger">*</span></label>
                         <input type="text" name="aadhaar_no" id="aadhaar_no" class="hitech-input mb-2" value="{{ $user->aadhaar_no }}" placeholder="12-digit number" required {{ !$canEditDocs ? 'readonly' : '' }}>
                         <div class="invalid-feedback" id="aadhaar_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Aadhaar must be exactly 12 digits.</div>
@@ -805,7 +853,14 @@
                            <p class="text-muted small mt-1">PDF, JPG, PNG only. Max 300KB.</p>
                         @endif
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-6 @if(isset($rejectedDocMap['PAN_CARD'])) p-3 rounded-3 @endif"
+                         style="@if(isset($rejectedDocMap['PAN_CARD'])) background:#fef2f2; border:1px solid #fca5a5; @endif">
+                        @if(isset($rejectedDocMap['PAN_CARD']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['PAN_CARD'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['PAN_CARD'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label">PAN Card Number <span class="text-danger">*</span></label>
                         <input type="text" name="pan_no" id="pan_no" class="hitech-input mb-2" value="{{ $user->pan_no }}" placeholder="10-digit number (e.g. ABCDE1234F)" required {{ !$canEditDocs ? 'readonly' : '' }}>
                         <div class="invalid-feedback" id="pan_error" style="display:none; font-size: 10px; color: #ef4444; font-weight: 700; margin-top: 4px;">Invalid PAN format or details.</div>
@@ -823,7 +878,14 @@
                 <h4 class="section-title">Educational Documents</h4>
                 <div class="row g-4 mb-4">
                    <!-- Matric -->
-                    <div class="col-md-6 border-bottom pb-4">
+                    <div class="col-md-6 border-bottom pb-4 @if(isset($rejectedDocMap['MATRIC_CERTIFICATE'])) rounded-3 @endif"
+                         style="@if(isset($rejectedDocMap['MATRIC_CERTIFICATE'])) background:#fef2f2; border:1px solid #fca5a5 !important; padding:1rem; @endif">
+                        @if(isset($rejectedDocMap['MATRIC_CERTIFICATE']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['MATRIC_CERTIFICATE'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['MATRIC_CERTIFICATE'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label fw-bold">10th Marksheet (Matric) <span class="text-muted small italic">(Optional Details)</span></label>
                         <input type="text" name="matric_university" id="matric_university" class="hitech-input mb-2" value="{{ $user->matric_university }}" placeholder="Board / University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
                         <input type="text" name="matric_marksheet_no" id="matric_marksheet_no" class="hitech-input mb-2" value="{{ $user->matric_marksheet_no }}" placeholder="Marksheet / Serial Number" {{ !$canEditDocs ? 'readonly' : '' }}>
@@ -838,7 +900,14 @@
                         @endif
                    </div>
                    <!-- Intermediate -->
-                   <div class="col-md-6 border-bottom pb-4">
+                   <div class="col-md-6 border-bottom pb-4 @if(isset($rejectedDocMap['INTER_CERTIFICATE'])) rounded-3 @endif"
+                        style="@if(isset($rejectedDocMap['INTER_CERTIFICATE'])) background:#fef2f2; border:1px solid #fca5a5 !important; padding:1rem; @endif">
+                        @if(isset($rejectedDocMap['INTER_CERTIFICATE']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['INTER_CERTIFICATE'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['INTER_CERTIFICATE'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label fw-bold">12th Marksheet (Intermediate) <span class="text-muted small italic">(Optional Details)</span></label>
                         <input type="text" name="inter_university" id="inter_university" class="hitech-input mb-2" value="{{ $user->inter_university }}" placeholder="Board / University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
                         <input type="text" name="inter_marksheet_no" id="inter_marksheet_no" class="hitech-input mb-2" value="{{ $user->inter_marksheet_no }}" placeholder="Marksheet / Serial Number" {{ !$canEditDocs ? 'readonly' : '' }}>
@@ -850,7 +919,14 @@
                         @endif
                    </div>
                     <!-- Bachelor -->
-                   <div class="col-md-6">
+                   <div class="col-md-6 @if(isset($rejectedDocMap['GRADUATION_CERTIFICATE'])) p-3 rounded-3 @endif"
+                        style="@if(isset($rejectedDocMap['GRADUATION_CERTIFICATE'])) background:#fef2f2; border:1px solid #fca5a5; @endif">
+                        @if(isset($rejectedDocMap['GRADUATION_CERTIFICATE']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['GRADUATION_CERTIFICATE'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['GRADUATION_CERTIFICATE'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label fw-bold">Graduation Marksheet <span class="text-muted small italic">(Optional Details)</span></label>
                         <input type="text" name="bachelor_university" id="bachelor_university" class="hitech-input mb-2" value="{{ $user->bachelor_university }}" placeholder="University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
                         <input type="text" name="bachelor_marksheet_no" id="bachelor_marksheet_no" class="hitech-input mb-2" value="{{ $user->bachelor_marksheet_no }}" placeholder="Degree / Marksheet Number" {{ !$canEditDocs ? 'readonly' : '' }}>
@@ -862,7 +938,14 @@
                         @endif
                    </div>
                    <!-- Master -->
-                   <div class="col-md-6">
+                   <div class="col-md-6 @if(isset($rejectedDocMap['MASTER_CERTIFICATE'])) p-3 rounded-3 @endif"
+                        style="@if(isset($rejectedDocMap['MASTER_CERTIFICATE'])) background:#fef2f2; border:1px solid #fca5a5; @endif">
+                        @if(isset($rejectedDocMap['MASTER_CERTIFICATE']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['MASTER_CERTIFICATE'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['MASTER_CERTIFICATE'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label fw-bold">Post Graduation Marksheet</label>
                         <input type="text" name="master_university" class="hitech-input mb-2" value="{{ $user->master_university }}" placeholder="University Name" {{ !$canEditDocs ? 'readonly' : '' }}>
                         <input type="text" name="master_marksheet_no" class="hitech-input mb-2" value="{{ $user->master_marksheet_no }}" placeholder="Degree / Marksheet Number" {{ !$canEditDocs ? 'readonly' : '' }}>
@@ -871,7 +954,14 @@
                            <p class="text-muted small mt-1">Max 300KB.</p>
                         @endif
                       <!-- Experience Certificate -->
-                   <div class="col-md-12 mt-4 pt-4 border-top">
+                   <div class="col-md-12 mt-4 pt-4 border-top @if(isset($rejectedDocMap['EXPERIENCE_CERTIFICATE'])) p-3 rounded-3 @endif"
+                        style="@if(isset($rejectedDocMap['EXPERIENCE_CERTIFICATE'])) background:#fef2f2; border:1px solid #fca5a5 !important; @endif">
+                        @if(isset($rejectedDocMap['EXPERIENCE_CERTIFICATE']))
+                          <div class="d-flex align-items-center gap-2 mb-2 small fw-bold" style="color:#991b1b;">
+                            <i class="bx bx-x-circle"></i> Rejected — re-upload required
+                            @if($rejectedDocMap['EXPERIENCE_CERTIFICATE'])<span class="text-muted fw-normal">: {{ $rejectedDocMap['EXPERIENCE_CERTIFICATE'] }}</span>@endif
+                          </div>
+                        @endif
                         <label class="hitech-label fw-bold">Experience Certificate</label>
                         <input type="text" name="experience_certificate_no" id="experience_certificate_no" class="hitech-input mb-2" value="{{ $user->experience_certificate_no }}" placeholder="Experience Certificate / Relieving Letter Number" {{ !$canEditDocs ? 'readonly' : '' }}>
                         @if($existingExperience)
@@ -1947,6 +2037,115 @@ document.addEventListener('DOMContentLoaded', function () {
         return v;
     }
 
+    /* ── IFSC API Validation (Razorpay IFSC API — free, no key) ── */
+    let ifscApiDebounce = null;
+    let ifscVerified = false;
+
+    @if($canEditBanking)
+    (function initIfscLookup() {
+        const input      = document.getElementById('ifsc_code');
+        const spinner    = document.getElementById('ifsc-spinner');
+        const errDiv     = document.getElementById('ifsc_error');
+        const okDiv      = document.getElementById('ifsc_success');
+        const bankSel    = document.querySelector('select[name="bank_name"]');
+        const branchInp  = document.getElementById('branch_name');
+        if (!input) return;
+
+        // Auto-uppercase on every keystroke
+        input.addEventListener('input', function () {
+            const raw = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            this.value = raw;
+            errDiv.style.display = 'none';
+            okDiv.style.display  = 'none';
+            ifscVerified = false;
+
+            clearTimeout(ifscApiDebounce);
+            if (raw.length < 11) return;
+
+            // Format check first — show error only for wrong format
+            if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(raw)) {
+                errDiv.textContent = 'Invalid format — 4 letters + 0 + 6 alphanumeric (e.g. SBIN0012345).';
+                errDiv.style.display = 'block';
+                return;
+            }
+
+            // Debounce API call by 400ms
+            ifscApiDebounce = setTimeout(() => lookupIfsc(raw), 400);
+        });
+
+        async function lookupIfsc(code) {
+            spinner.style.display = 'inline-block';
+            errDiv.style.display  = 'none';
+            okDiv.style.display   = 'none';
+            try {
+                const res = await fetch('https://ifsc.razorpay.com/' + code);
+                spinner.style.display = 'none';
+
+                // Not found or bad response — silently leave fields blank
+                if (!res.ok) { ifscVerified = true; return; }
+                const d = await res.json();
+                if (!d || typeof d !== 'object' || !d.BANK) { ifscVerified = true; return; }
+
+                ifscVerified = true;
+
+                // ── Auto-fill Branch Name ──
+                if (branchInp) {
+                    const branch = [d.BRANCH, d.CITY, d.STATE].filter(Boolean).join(', ');
+                    branchInp.value = branch;
+                }
+
+                // ── Auto-select Bank in dropdown ──
+                if (bankSel && d.BANK) {
+                    const bankUpper = d.BANK.toUpperCase();
+                    let matched = false;
+                    // Exact-ish match: first + last significant word both present
+                    for (const opt of bankSel.options) {
+                        const ov = opt.value.toUpperCase();
+                        const words = bankUpper.split(' ').filter(w => w.length > 2);
+                        if (words.length >= 2 && ov.includes(words[0]) && ov.includes(words[words.length - 1])) {
+                            bankSel.value = opt.value; matched = true; break;
+                        }
+                    }
+                    // Broader match — any significant word
+                    if (!matched) {
+                        const words = bankUpper.split(' ').filter(w => w.length > 3);
+                        for (const opt of bankSel.options) {
+                            if (words.some(w => opt.value.toUpperCase().includes(w))) {
+                                bankSel.value = opt.value; break;
+                            }
+                        }
+                    }
+                }
+
+                // ── Show confirmation badge ──
+                okDiv.innerHTML = '&#10003; <strong>' + d.BANK + '</strong> &mdash; ' +
+                    [d.BRANCH, d.CITY, d.STATE].filter(Boolean).join(', ');
+                okDiv.style.display = 'block';
+
+            } catch (e) {
+                // Network failure — silently allow, don't block
+                spinner.style.display = 'none';
+                ifscVerified = true;
+            }
+        }
+
+        // Pre-filled IFSC on resubmission — verify on load
+        const existing = input.value.trim().toUpperCase();
+        if (existing.length === 11 && /^[A-Z]{4}0[A-Z0-9]{6}$/.test(existing)) {
+            lookupIfsc(existing);
+        }
+    })();
+    @endif
+
+    /* ── Spinner keyframe ── */
+    (function() {
+        if (document.getElementById('ifsc-spin-style')) return;
+        const s = document.createElement('style');
+        s.id = 'ifsc-spin-style';
+        s.textContent = '@keyframes spin-ifsc { to { transform: rotate(360deg); } }';
+        document.head.appendChild(s);
+    })();
+
     function validateBankingStep() {
         let v = true;
         const acct = document.getElementById('account_number');
@@ -1957,12 +2156,15 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if(conf) showError(conf, false, 'account_number_error');
 
         const ifsc = document.getElementById('ifsc_code');
+        const errDiv = document.getElementById('ifsc_error');
         if (ifsc) {
             ifsc.value = ifsc.value.toUpperCase();
             if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc.value)) {
-                showError(ifsc, true, 'ifsc_error');
+                if (errDiv) { errDiv.textContent = 'Invalid IFSC format (e.g. SBIN0012345).'; errDiv.style.display = 'block'; }
                 v = false;
-            } else showError(ifsc, false, 'ifsc_error');
+            } else {
+                if (errDiv) errDiv.style.display = 'none';
+            }
         }
 
         const cheque = document.getElementById('cheque_file');

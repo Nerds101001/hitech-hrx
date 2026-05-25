@@ -44,19 +44,24 @@ $(function() {
         }
     });
 
-    // Attendance Type switching
-    if (window.attendanceType && window.attendanceType !== 'open') {
-        switch (window.attendanceType) {
-            case 'geofence': $('#geofenceGroupDiv').show(); getGeofenceGroups(); break;
-            case 'ip_address': $('#ipGroupDiv').show(); getIpGroups(); break;
-            case 'qr_code': $('#qrGroupDiv').show(); getQrGroups(); break;
-            case 'site': $('#siteDiv').show(); getSites(); break;
-            case 'dynamic_qr': $('#dynamicQrDiv').show(); getDynamicQrDevices(); break;
+    // Attendance Type switching — admin/HR/manager only (employees don't have edit rights)
+    const _adminRoles = ['admin', 'hr', 'manager'];
+    const _isPrivileged = window.role && _adminRoles.includes((window.role.name || '').toLowerCase());
+
+    if (_isPrivileged) {
+        if (window.attendanceType && window.attendanceType !== 'open') {
+            switch (window.attendanceType) {
+                case 'geofence': $('#geofenceGroupDiv').show(); getGeofenceGroups(); break;
+                case 'ip_address': $('#ipGroupDiv').show(); getIpGroups(); break;
+                case 'qr_code': $('#qrGroupDiv').show(); getQrGroups(); break;
+                case 'site': $('#siteDiv').show(); getSites(); break;
+                case 'dynamic_qr': $('#dynamicQrDiv').show(); getDynamicQrDevices(); break;
+            }
         }
-    }
-    // Always fetch sites if the dropdown exists (useful for organizational assignment)
-    if ($('#siteId').length) {
-        getSites();
+        // Fetch sites for organisational assignment dropdown
+        if ($('#siteId').length) {
+            getSites();
+        }
     }
 
     $('#attendanceType').on('change', function () {
