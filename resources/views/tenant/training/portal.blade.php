@@ -491,7 +491,22 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
             <span class="d-none d-sm-inline">Activity</span>
         </a>
         @endif
-        <div class="nav-avatar">{{ strtoupper(substr($user->first_name ?? $user->name, 0, 2)) }}</div>
+        <div class="dropdown">
+            <div class="nav-avatar" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;" title="Account options">
+                {{ strtoupper(substr($user->first_name ?? $user->name, 0, 2)) }}
+            </div>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="border-radius:12px; margin-top:8px; min-width:160px;">
+                <li><span class="dropdown-item-text text-muted small px-3 pt-2 pb-1 d-block">{{ $user->first_name ?? $user->name }}</span></li>
+                <li><hr class="dropdown-divider my-1"></li>
+                <li>
+                    <a class="dropdown-item text-danger fw-semibold d-flex align-items-center gap-2" href="{{ route('auth.logout') }}"
+                       onclick="event.preventDefault(); document.getElementById('training-logout-form').submit();">
+                        <i class="ti ti-logout"></i> Logout
+                    </a>
+                </li>
+            </ul>
+            <form id="training-logout-form" method="POST" action="{{ route('auth.logout') }}" style="display:none;">@csrf</form>
+        </div>
     </div>
 </nav>
 
