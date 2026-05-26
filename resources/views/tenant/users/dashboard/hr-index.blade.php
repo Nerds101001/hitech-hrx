@@ -578,6 +578,20 @@ document.addEventListener('DOMContentLoaded', function() {
     border-radius: 6px; font-size: 0.65rem; white-space: nowrap; opacity: 0; transition: opacity 0.3s;
   }
   .fab-btn-p:hover::before { opacity: 1; }
+
+  /* APEXCHARTS TOOLTIP CONTRAST FIX */
+  body .apexcharts-tooltip.apexcharts-theme-dark {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+  }
+  body .apexcharts-tooltip.apexcharts-theme-dark .apexcharts-tooltip-title {
+    background: #0f172a !important;
+    border-bottom: 1px solid #334155 !important;
+    color: #ffffff !important;
+  }
+  body .apexcharts-tooltip.apexcharts-theme-dark * {
+    color: #ffffff !important;
+  }
 </style>
 
 @endsection
