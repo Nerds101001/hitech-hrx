@@ -241,7 +241,7 @@ class OnboardingController extends Controller
             // Validate incoming data
             $rules = [
                 'personal_email' => 'nullable|email|max:255',
-                'phone' => 'nullable|string|max:15',
+                'phone' => ['nullable', 'string', 'max:15', \Illuminate\Validation\Rule::unique('users', 'phone')->ignore($user->id)->whereNull('deleted_at')],
                 'official_phone' => 'nullable|string|max:15',
                 'perm_zip' => 'nullable|string|max:10',
                 'temp_zip' => 'nullable|string|max:10',
@@ -252,7 +252,9 @@ class OnboardingController extends Controller
                 'last_name' => 'nullable|string|max:255',
             ];
             
-            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules);
+            $validator = \Illuminate\Support\Facades\Validator::make($request->all(), $rules, [
+                'phone.unique' => 'This phone number is already registered to another employee. Please enter the correct number.',
+            ]);
             if ($validator->fails()) {
                 return response()->json(['success' => false, 'message' => $validator->errors()->first()], 422);
             }
@@ -288,9 +290,26 @@ class OnboardingController extends Controller
             Log::info('Onboarding Auto-Save Success for User: ' . $user->id);
             return response()->json(['success' => true, 'message' => 'Progress saved.']);
 
+        } catch (\Illuminate\Database\QueryException $e) {
+            Log::error('Onboarding Auto-Save DB Error User ' . ($user->id ?? 'unknown') . ': ' . $e->getMessage());
+            // Duplicate entry (unique constraint violation)
+            if ($e->getCode() === '23000') {
+                $friendly = 'Failed to save progress: A value you entered is already registered to another employee.';
+                // Detect which field caused the conflict
+                $msg = $e->getMessage();
+                if (str_contains($msg, 'users_phone_unique') || str_contains($msg, "'phone'")) {
+                    $friendly = 'The phone number you entered is already registered to another employee. Please double-check and enter the correct number.';
+                } elseif (str_contains($msg, 'personal_email') || str_contains($msg, 'users_personal_email_unique')) {
+                    $friendly = 'The personal email address you entered is already registered to another employee.';
+                } elseif (str_contains($msg, 'aadhaar') || str_contains($msg, 'pan_no')) {
+                    $friendly = 'The Aadhaar or PAN number you entered is already registered to another employee.';
+                }
+                return response()->json(['success' => false, 'message' => $friendly], 422);
+            }
+            return response()->json(['success' => false, 'message' => 'Failed to save progress. Please try again or contact HR.'], 500);
         } catch (\Exception $e) {
             Log::error('Onboarding Auto-Save Error User ' . ($user->id ?? 'unknown') . ': ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to save progress: ' . $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to save progress. Please try again or contact HR.'], 500);
         }
     }
 
