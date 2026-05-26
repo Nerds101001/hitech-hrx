@@ -928,8 +928,9 @@ Auto-saved as you type."></textarea>
             <div class="result-title" id="result-title"></div>
             <div class="result-msg" id="result-msg"></div>
             <div class="result-btns">
-                <a href="{{ route('training.portal') }}" class="res-btn primary"><i class="ti ti-arrow-left"></i> Back to Portal</a>
+                <a href="{{ route('training.portal') }}" class="res-btn" id="result-portal-btn"><i class="ti ti-layout-dashboard"></i> Portal</a>
                 <button class="res-btn" id="result-retry" style="display:none;" onclick="retakeQuiz()"><i class="ti ti-refresh"></i> Retake</button>
+                <a href="#" class="res-btn primary" id="result-next-btn" style="display:none;"><i class="ti ti-arrow-right"></i> Next Module</a>
             </div>
         </div>
     </div>
@@ -958,10 +959,12 @@ const EST_MINS     = {{ $module->estimated_time_minutes ?? 5 }};
 const VID_CHAPTERS = {!! json_encode($module->video_chapters ?? []) !!};
 const VID_MILES    = {!! json_encode($module->video_milestones ?? []) !!};
 const CSRF         = "{{ csrf_token() }}";
-const ASSESS_URL   = "{{ route('training.assessment.get', $module->id) }}";
-const SUBMIT_URL   = "{{ route('training.assessment.submit', $module->id) }}";
-const AI_URL       = "{{ url('/training/module') }}/" + MOD_ID + "/chat";
-const NOTES_KEY    = "lms_notes_" + MOD_ID;
+const ASSESS_URL        = "{{ route('training.assessment.get', $module->id) }}";
+const SUBMIT_URL        = "{{ route('training.assessment.submit', $module->id) }}";
+const AI_URL            = "{{ url('/training/module') }}/" + MOD_ID + "/chat";
+const NOTES_KEY         = "lms_notes_" + MOD_ID;
+const NEXT_MODULE_URL   = @json($nextModule ? route('training.module.show', $nextModule->id) : null);
+const NEXT_MODULE_TITLE = @json($nextModule ? $nextModule->title : null);
 
 /* ══════════════════════════════════════════
    TIMER
@@ -996,7 +999,7 @@ function onTimerDone() {
     if (disp) disp.textContent = 'Done!';
     if (icon) icon.className = 'ti ti-check';
     if (CTYPE === 'catalog') { checkCatalogReady(); }
-    else { showAssessBtn(); showReadComplete(); }
+    else { showAssessBtn(); showReadComplete(); setTimeout(() => openQuiz(), 1200); }
 }
 function showAssessBtn() {
     const btn = document.getElementById('assess-btn');
@@ -1351,7 +1354,30 @@ function showResult(d) {
         : `You scored <strong style="color:#f85149;">${sc}%</strong>. You need <strong>${d.passing_percentage}%</strong> to pass. Review the material and try again.`;
     const retry = document.getElementById('result-retry');
     if (retry) retry.style.display = d.passed ? 'none' : 'inline-flex';
-    if (d.passed) confetti({particleCount:180,spread:90,origin:{y:0.55},colors:['#3fb950','#58a6ff','#f0883e']});
+    const nextBtn   = document.getElementById('result-next-btn');
+    const portalBtn = document.getElementById('result-portal-btn');
+    if (d.passed) {
+        confetti({particleCount:180,spread:90,origin:{y:0.55},colors:['#3fb950','#58a6ff','#f0883e']});
+        if (NEXT_MODULE_URL && nextBtn) {
+            nextBtn.href = NEXT_MODULE_URL;
+            nextBtn.innerHTML = `<i class="ti ti-arrow-right" style="font-size:0.85rem;"></i> ${NEXT_MODULE_TITLE || 'Next Module'}`;
+            nextBtn.style.display = 'inline-flex';
+            if (portalBtn) portalBtn.classList.remove('primary'); // demote portal btn
+            // Auto-navigate after 4 seconds
+            let countdown = 4;
+            const countEl = document.createElement('div');
+            countEl.style.cssText = 'font-size:0.72rem;color:#484f58;margin-top:10px;';
+            countEl.textContent = `Auto-opening next module in ${countdown}s…`;
+            nextBtn.parentElement.after(countEl);
+            const autoNav = setInterval(() => {
+                countdown--;
+                countEl.textContent = countdown > 0 ? `Auto-opening next module in ${countdown}s…` : 'Opening…';
+                if (countdown <= 0) { clearInterval(autoNav); window.location.href = NEXT_MODULE_URL; }
+            }, 1000);
+            // Cancel auto-nav if user clicks portal btn
+            if (portalBtn) portalBtn.addEventListener('click', () => clearInterval(autoNav));
+        }
+    }
 }
 function retakeQuiz() { qAnswers={}; qIdx=0; document.getElementById('quiz-result').style.display='none'; document.getElementById('quiz-card').style.display='block'; buildDots(); if(showAll){renderAll();}else{renderQ();} }
 
