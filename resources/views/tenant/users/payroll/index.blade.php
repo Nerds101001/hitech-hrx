@@ -75,7 +75,7 @@
             </div>
             <div class="col-sm-6 col-lg-4 animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
                 <div class="hitech-stat-card">
-                    <div class="stat-icon-wrap icon-blue"><i class="bx bx-layer"></i></div>
+                    <div class="stat-icon-wrap icon-blue"><img src="{{ asset('assets/img/logo.png') }}" alt="Hi Tech HRX" style="height: 24px; width: auto; object-fit: contain;"></div>
                     <div class="stat-label">Total Earnings (YTD)</div>
                     <div class="stat-value text-heading">{!! $rupeeSvg !!}{{ number_format($totalNetPaid, 2) }}</div>
                 </div>

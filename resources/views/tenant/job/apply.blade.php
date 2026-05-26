@@ -38,10 +38,7 @@
   {{-- Unified Header --}}
   <div class="hitech-header">
     <div class="brand-logo-area">
-        <div class="brand-icon-box">
-            <i class="bx bx-layer"></i>
-        </div>
-        <h1 class="brand-text">HI TECH <span>HRX</span></h1>
+        <img src="{{ asset('assets/img/logo.png') }}" alt="Hi Tech HRX" style="height: 42px; width: auto; object-fit: contain;">
     </div>
     <div class="header-actions">
       <a href="{{ route('job.requirement', [$job->code, $currantLang]) }}" class="btn btn-label-secondary btn-sm rounded-pill px-4">

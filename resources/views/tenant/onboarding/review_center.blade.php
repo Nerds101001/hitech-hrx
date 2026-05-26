@@ -677,8 +677,8 @@
         <div class="modal-content border-0">
             <div class="modal-header border-bottom bg-white" style="height: 70px;">
                 <div class="d-flex align-items-center gap-3">
-                    <div class="brand-icon-box" style="width: 32px; height: 32px; background: var(--primary-teal); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white;">
-                        <i class="bx bx-layer"></i>
+                    <div class="brand-icon-box" style="width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
+                        <img src="{{ asset('assets/img/logo.png') }}" alt="Hi Tech HRX" style="height: 28px; width: auto; object-fit: contain;">
                     </div>
                     <h5 class="modal-title fw-black uppercase tracking-widest text-xs mb-0">Audit Proceeding: {{ $selectedUser->getFullName() }}</h5>
                 </div>
