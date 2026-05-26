@@ -1013,7 +1013,8 @@ function onTimerDone() {
     if (chip) { chip.classList.remove('active','warning'); chip.classList.add('done'); }
     if (disp) disp.textContent = 'Done!';
     if (icon) icon.className = 'ti ti-check';
-    if (CTYPE === 'catalog') { checkCatalogReady(); }
+    // catalog WITH a PDF → wait for pdfReached; catalog without URL OR text → treat like text
+    if (CTYPE === 'catalog' && CURL) { checkCatalogReady(); }
     else { showAssessBtn(); showReadComplete(); if (!IS_COMPLETED) setTimeout(() => openQuiz(), 1200); }
 }
 function showAssessBtn() {
@@ -1254,7 +1255,7 @@ function openQuiz() {
         Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
         return;
     }
-    if (CTYPE === 'catalog' && !pdfReached) {
+    if (CTYPE === 'catalog' && CURL && !pdfReached) {
         Swal.fire({title:'Read the full catalog',text:'Scroll through all pages before taking the quiz.',icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
         return;
     }
@@ -1457,6 +1458,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
         } else { initLocalVideo(); }
     } else {
+        // text modules AND catalog-without-URL both use startTimer()
+        // startTimer() already handles IS_COMPLETED → markCompletedUI()
         startTimer();
     }
 });
