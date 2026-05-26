@@ -965,14 +965,29 @@ const AI_URL            = "{{ url('/training/module') }}/" + MOD_ID + "/chat";
 const NOTES_KEY         = "lms_notes_" + MOD_ID;
 const NEXT_MODULE_URL   = @json($nextModule ? route('training.module.show', $nextModule->id) : null);
 const NEXT_MODULE_TITLE = @json($nextModule ? $nextModule->title : null);
+const IS_COMPLETED      = {{ $progress->status === 'completed' ? 'true' : 'false' }};
 
 /* ══════════════════════════════════════════
    TIMER
 ══════════════════════════════════════════ */
 let timerSecs = EST_MINS * 60, timerElapsed = 0, timerDone = false, timerInterval = null;
 
+function markCompletedUI() {
+    timerDone = true;
+    const chip = document.getElementById('timer-chip');
+    const disp = document.getElementById('timer-display');
+    const icon = document.getElementById('timer-icon');
+    if (chip) { chip.classList.remove('active','warning'); chip.classList.add('done'); }
+    if (icon) icon.className = 'ti ti-rosette-discount-check';
+    if (disp) disp.textContent = 'Completed';
+    showAssessBtn();
+    // Change "Take Quiz" to "Review Quiz"
+    const btn = document.getElementById('assess-btn');
+    if (btn) { btn.querySelector('span') && (btn.querySelector('span').textContent = 'Review Quiz'); }
+}
 function startTimer() {
     if (CTYPE === 'video') return;
+    if (IS_COMPLETED) { markCompletedUI(); return; } // already done — skip timer
     const chip = document.getElementById('timer-chip');
     const disp = document.getElementById('timer-display');
     const icon = document.getElementById('timer-icon');
@@ -999,7 +1014,7 @@ function onTimerDone() {
     if (disp) disp.textContent = 'Done!';
     if (icon) icon.className = 'ti ti-check';
     if (CTYPE === 'catalog') { checkCatalogReady(); }
-    else { showAssessBtn(); showReadComplete(); setTimeout(() => openQuiz(), 1200); }
+    else { showAssessBtn(); showReadComplete(); if (!IS_COMPLETED) setTimeout(() => openQuiz(), 1200); }
 }
 function showAssessBtn() {
     const btn = document.getElementById('assess-btn');
@@ -1108,7 +1123,7 @@ async function renderPdfPage(n) {
     pdfRendering = false;
 }
 function checkCatalogReady() {
-    if (pdfReached && timerDone) showAssessBtn();
+    if (IS_COMPLETED || (pdfReached && timerDone)) showAssessBtn();
 }
 
 /* ══════════════════════════════════════════
@@ -1434,9 +1449,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Init by type
-    if (CTYPE === 'catalog' && CURL) { initPdf(); initAi(); startTimer(); }
+    if (CTYPE === 'catalog' && CURL) { initPdf(); initAi(); if (IS_COMPLETED) { markCompletedUI(); } else { startTimer(); } }
     else if (CTYPE === 'video') {
         initChapters();
+        if (IS_COMPLETED) { markCompletedUI(); showAssessBtn(); }
         if (CURL.includes('youtube.com') || CURL.includes('youtu.be')) {
             const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
         } else { initLocalVideo(); }
