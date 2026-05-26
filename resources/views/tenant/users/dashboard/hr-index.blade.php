@@ -42,32 +42,89 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   if(document.querySelector("#hiringTrendsChart")) hiringTrendsChart.render();
 
-  // 2. Department Distribution
+  // 2. Department Distribution (Awesome Bar Chart)
   const deptData = {!! json_encode($departmentData) !!};
   if (deptData && deptData.length > 0) {
       const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
-        series: deptData.map(d => d.count || 0),
-        chart: { type: 'donut', height: 280 },
-        labels: deptData.map(d => d.name),
-        colors: ['#004D4D', '#00897b', '#00D2D2', '#D1FAE5'],
-        legend: { position: 'bottom', horizontalAlign: 'center' },
+        series: [{
+          name: 'Employees',
+          data: deptData.map(d => d.count || 0)
+        }],
+        chart: { 
+          type: 'bar', 
+          height: 380,
+          toolbar: { show: false },
+          parentHeightOffset: 0
+        },
         plotOptions: {
-          pie: {
-            donut: {
-              size: '75%',
-              labels: {
-                show: true,
-                total: {
-                  show: true,
-                  label: 'EMPLOYEES',
-                  color: '#4b4b4b',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  formatter: function (w) {
-                    return {!! count($departmentData) > 0 ? array_sum(array_column($departmentData->toArray(), 'count')) : 0 !!};
-                  }
-                }
-              }
+          bar: {
+            horizontal: true,
+            barHeight: '65%',
+            borderRadius: 5,
+            distributed: true,
+            dataLabels: {
+              position: 'end'
+            }
+          }
+        },
+        colors: [
+          '#004D4D', '#005C5C', '#006C6C', '#007B7B', '#008B8B', 
+          '#009A9A', '#00AAAA', '#00B9B9', '#00C9C9', '#00D8D8', 
+          '#00E8E8', '#00F7F7'
+        ],
+        dataLabels: {
+          enabled: true,
+          style: {
+            fontSize: '11px',
+            colors: ['#fff'],
+            fontWeight: '600'
+          },
+          formatter: function(val) {
+            return val;
+          },
+          offsetX: -12
+        },
+        xaxis: {
+          categories: deptData.map(d => d.name),
+          labels: {
+            show: true,
+            style: {
+              colors: '#64748b',
+              fontSize: '10px'
+            }
+          }
+        },
+        yaxis: {
+          labels: {
+            show: true,
+            style: {
+              colors: '#334155',
+              fontSize: '11px',
+              fontWeight: 600
+            }
+          }
+        },
+        grid: {
+          borderColor: '#f1f5f9',
+          xaxis: {
+            lines: {
+              show: true
+            }
+          },
+          yaxis: {
+            lines: {
+              show: false
+            }
+          }
+        },
+        legend: {
+          show: false
+        },
+        tooltip: {
+          theme: 'dark',
+          y: {
+            formatter: function(val) {
+              return val + " Employees";
             }
           }
         }
@@ -319,17 +376,11 @@ document.addEventListener('DOMContentLoaded', function() {
        <div class="hitech-card-header-inner mb-4">
          <h5 class="title mb-0">Organization Structure</h5>
        </div>
-       <div class="d-flex flex-column align-items-center justify-content-center" style="min-height: 350px;">
-        <div id="departmentChart"></div>
-        <a href="{{ route('departments.index') }}" class="small fw-bold text-teal mt-3">View Structure</a>
-        <div class="dept-legend-custom w-100 mt-4 px-3">
-            @foreach($departmentData->take(4) as $index => $dept)
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <span class="small fw-bold text-muted"><span class="dot" style="background: {{ ['#004D4D', '#00897b', '#00D2D2', '#D1FAE5'][$index % 4] }}"></span> {{ $dept['name'] }}</span>
-              <span class="small fw-bold text-heading">{{ $dept['count'] }}</span>
-            </div>
-            @endforeach
-         </div>
+       <div class="d-flex flex-column w-100" style="min-height: 350px;">
+        <div id="departmentChart" class="w-100"></div>
+        <div class="text-center mt-2">
+          <a href="{{ route('departments.index') }}" class="small fw-bold text-teal">View Structure</a>
+        </div>
        </div>
     </div>
   </div>
