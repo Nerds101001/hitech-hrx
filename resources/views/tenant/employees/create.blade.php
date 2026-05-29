@@ -437,13 +437,22 @@
                 </select>
               </div>
 
-              <div class="col-sm-6" id="ccAgentDiv" style="display: none;">
-                <label class="form-label-hitech" for="cc_agent_id">Assign CC Agent <i class="bx bx-info-circle text-muted" title="Only for Sales Dept"></i></label>
-                <select class="select2 w-100 hitech-input-group" id="cc_agent_id" data-style="btn-default"
-                        data-icon-base="bx" data-tick-icon="bx-check text-success" name="cc_agent_id">
-                  <option value="" selected>Select CC Agent (Optional)</option>
-                  @foreach ($ccUsers as $cc)
+              <div class="col-sm-6 ccAgentDiv" style="display: none;">
+                <label class="form-label-hitech" for="ccare_agent_id">Assign CC Agents <i class="bx bx-info-circle text-muted" title="Only for Sales Dept"></i></label>
+                <select class="select2 w-100 hitech-input-group" id="ccare_agent_id" multiple="multiple" data-style="btn-default"
+                        data-icon-base="bx" data-tick-icon="bx-check text-success" name="ccare_agent_id[]" data-placeholder="Select CC Agents (Optional)">
+                  @foreach ($ccareUsers as $cc)
                     <option value="{{$cc->id}}">{{$cc->first_name.' '.$cc->last_name}}</option>
+                  @endforeach
+                </select>
+              </div>
+
+              <div class="col-sm-6 ccAgentDiv" style="display: none;">
+                <label class="form-label-hitech" for="newbiz_agent_id">Assign New Biz Agents <i class="bx bx-info-circle text-muted" title="Only for Sales Dept"></i></label>
+                <select class="select2 w-100 hitech-input-group" id="newbiz_agent_id" multiple="multiple" data-style="btn-default"
+                        data-icon-base="bx" data-tick-icon="bx-check text-success" name="newbiz_agent_id[]" data-placeholder="Select New Biz Agents (Optional)">
+                  @foreach ($newbizUsers as $nb)
+                    <option value="{{$nb->id}}">{{$nb->first_name.' '.$nb->last_name}}</option>
                   @endforeach
                 </select>
               </div>
@@ -591,21 +600,19 @@
 document.addEventListener('DOMContentLoaded', function() {
     function toggleCcAgent() {
         var deptSelect = document.getElementById('departmentId');
-        var ccDiv = document.getElementById('ccAgentDiv');
+        var ccDivs = document.querySelectorAll('.ccAgentDiv');
         if(!deptSelect) return;
         var deptText = deptSelect.options[deptSelect.selectedIndex]?.text.toLowerCase().trim() || '';
         
         var allowedDepts = ['sales', 'sale', 'sale department', 'sales department'];
         if (allowedDepts.includes(deptText)) {
-            ccDiv.style.display = 'block';
+            ccDivs.forEach(div => div.style.display = 'block');
         } else {
-            ccDiv.style.display = 'none';
-            var ccSelect = window.jQuery ? window.jQuery('#cc_agent_id') : null;
-            if(ccSelect) {
-                ccSelect.val('').trigger('change');
-            } else {
-                document.getElementById('cc_agent_id').value = '';
-            }
+            ccDivs.forEach(div => div.style.display = 'none');
+            var ccSelect = window.jQuery ? window.jQuery('#ccare_agent_id') : null;
+            var nbSelect = window.jQuery ? window.jQuery('#newbiz_agent_id') : null;
+            if(ccSelect) ccSelect.val([]).trigger('change');
+            if(nbSelect) nbSelect.val([]).trigger('change');
         }
     }
 
