@@ -78,6 +78,8 @@ Route::middleware(['web'])->group(function () {
 
 
   // --- PUBLIC RECRUITMENT ROUTES ---
+  Route::get('/sales-visits/survey/{token}', [\App\Http\Controllers\tenant\SalesVisitController::class, 'showSurvey'])->name('sales-visits.survey');
+  Route::post('/sales-visits/survey/{token}', [\App\Http\Controllers\tenant\SalesVisitController::class, 'submitSurvey'])->name('sales-visits.survey.submit');
   Route::get('career/{lang?}', [JobController::class, 'career'])->name('career');
   Route::get('public-job/requirement/{code}/{lang}', [JobController::class, 'jobRequirement'])->name('job.requirement');
   Route::get('public-job/apply/{code}/{lang}', [JobController::class, 'jobApply'])->name('job.apply');
@@ -123,7 +125,8 @@ Route::middleware(['web'])->group(function () {
 Route::middleware([
   'web',
   'auth',
-  'role:Admin|admin|hr|manager|accounts'
+  'admin.guard',           // Hard gate: employee role / no role → redirected to employee dashboard
+  'role:admin|hr|manager|accounts',
 ])->group(function () {
 
     // --- DASHBOARD & GENERAL ---
@@ -164,7 +167,7 @@ Route::middleware([
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
     // --- SETTINGS (ADMIN ONLY) ---
-    Route::middleware(['role:Admin|Admin|admin'])->prefix('settings/')->name('settings.')->group(function () {
+    Route::middleware(['role:admin'])->prefix('settings/')->name('settings.')->group(function () {
       Route::get('', [SettingsController::class, 'index'])->name('index');
       Route::post('updateGeneralSettings', [SettingsController::class, 'updateGeneralSettings'])->name('updateGeneralSettings');
       Route::post('updateCompanySettings', [SettingsController::class, 'updateCompanySettings'])->name('updateCompanySettings');
@@ -454,7 +457,7 @@ Route::middleware([
       });
 
       // Document Reject / Delete (Admin / HR only)
-      Route::middleware(['role:hr|Admin|admin'])->group(function () {
+      Route::middleware(['role:hr|admin'])->group(function () {
           Route::post('{userId}/reject-document', [EmployeeController::class, 'rejectDocument'])->name('rejectDocument');
           Route::post('{userId}/delete-document', [EmployeeController::class, 'deleteDocument'])->name('deleteDocument');
           Route::post('{userId}/delete-document-request', [EmployeeController::class, 'deleteDocumentRequest'])->name('deleteDocumentRequest');
@@ -475,7 +478,7 @@ Route::middleware([
     });
 
     // Employee Lifecycle (HR/Admin)
-    Route::middleware(['role:hr|Admin|admin'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
+    Route::middleware(['role:hr|admin'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
       Route::get('', [EmployeeLifecycleController::class, 'index'])->name('index');
       Route::get('promotions', [EmployeeLifecycleController::class, 'promotions'])->name('promotions');
       Route::get('transfers', [EmployeeLifecycleController::class, 'transfers'])->name('transfers');
@@ -491,7 +494,7 @@ Route::middleware([
     });
     
     // Approvals (HR/Admin)
-    Route::middleware(['role:hr|Admin|admin'])->prefix('approvals')->name('approvals.')->group(function () {
+    Route::middleware(['role:hr|admin'])->prefix('approvals')->name('approvals.')->group(function () {
       Route::get('', [ApprovalController::class, 'index'])->name('index');
       Route::post('profile/{id}/approve', [ApprovalController::class, 'approveProfile'])->name('profile.approve');
       Route::post('profile/{id}/reject', [ApprovalController::class, 'rejectProfile'])->name('profile.reject');
@@ -543,7 +546,7 @@ Route::middleware([
     // --- ASSETS ---
 
     // Asset Management (Admin/HR)
-    Route::middleware(['role:hr|Admin|admin|manager'])->prefix('asset-management')->name('assets.')->group(function () {
+    Route::middleware(['role:hr|admin|manager'])->prefix('asset-management')->name('assets.')->group(function () {
       Route::get('', [AssetController::class, 'index'])->name('index');
       Route::get('list-ajax', [AssetController::class, 'getListAjax'])->name('listAjax');
       Route::get('getAssetAjax/{id}', [AssetController::class, 'getAssetAjax'])->name('getAssetAjax');
@@ -586,6 +589,13 @@ Route::middleware([
     // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
     Route::middleware(['web', 'auth'])->group(function() {
 
+        // --- MIND SPEAK ---
+        Route::prefix('mind-speak')->name('mind-speak.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'store'])->name('store');
+            Route::get('/export', [\App\Http\Controllers\tenant\MindSpeakController::class, 'export'])->name('export');
+        });
+
         // --- SALES FIELD OPERATIONS & CRM ---
         Route::prefix('sales-visits')->name('sales-visits.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'index'])->name('index');
@@ -598,6 +608,7 @@ Route::middleware([
             Route::get('/{id}', [\App\Http\Controllers\tenant\SalesVisitController::class, 'show'])->name('show');
             Route::patch('/{id}/cancel', [\App\Http\Controllers\tenant\SalesVisitController::class, 'cancel'])->name('cancel');
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\SalesVisitController::class, 'complete'])->name('complete');
+            Route::post('/{id}/start', [\App\Http\Controllers\tenant\SalesVisitController::class, 'start'])->name('start');
             Route::patch('/{id}/verify', [\App\Http\Controllers\tenant\SalesVisitController::class, 'verify'])->name('verify');
         });
 
@@ -625,6 +636,7 @@ Route::middleware([
                 Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
                 Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulk-store');
                 Route::post('reassign', [DigitalLibraryController::class, 'reassign'])->name('reassign');
+                Route::delete('delete-product', [DigitalLibraryController::class, 'deleteProduct'])->name('delete-product');
                 
                 // Taxonomy Management
                 Route::post('taxonomy/add', [DigitalLibraryController::class, 'addTaxonomy'])->name('taxonomy.add');
@@ -687,12 +699,12 @@ Route::middleware([
     Route::middleware([
       'web',
       'auth',
-      'role:Admin|Admin|admin|hr|manager'
+      'role:admin|hr|manager'
     ])->group(function () {
 
 
     // Asset Categories (Admin/HR)
-    Route::middleware(['role:Admin|Admin|admin|hr|manager'])->prefix('asset-categories')->name('assetCategories.')->group(function () {
+    Route::middleware(['role:admin|hr|manager'])->prefix('asset-categories')->name('assetCategories.')->group(function () {
         Route::get('', [AssetCategoryController::class, 'index'])->name('index');
         Route::get('list-ajax', [AssetCategoryController::class, 'getListAjax'])->name('listAjax');
         Route::post('', [AssetCategoryController::class, 'store'])->name('store');

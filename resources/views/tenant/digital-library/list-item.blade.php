@@ -19,6 +19,11 @@
         <a href="{{ $tds ? route('library.access', $tds->id) : 'javascript:void(0)' }}" target="{{ $tds ? '_blank' : '' }}" class="action-pill {{ !$tds ? 'disabled' : '' }}">TDS</a>
         <a href="{{ $sds ? route('library.access', $sds->id) : 'javascript:void(0)' }}" target="{{ $sds ? '_blank' : '' }}" class="action-pill {{ !$sds ? 'disabled' : '' }}">SDS</a>
         <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-pill {{ !$comp ? 'disabled' : '' }}">COMP</a>
-        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="btn btn-icon btn-label-primary rounded-circle ms-3" style="width: 32px; height: 32px;"><i class="ti ti-external-link"></i></a>
+        @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
+        <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="btn btn-icon btn-label-danger rounded-circle ms-3" style="width: 32px; height: 32px;" title="Delete Document">
+            <i class="ti ti-trash"></i>
+        </a>
+        @endif
+        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="btn btn-icon btn-label-primary rounded-circle ms-1" style="width: 32px; height: 32px;"><i class="ti ti-external-link"></i></a>
     </div>
 </div>

@@ -451,4 +451,36 @@ USER REQUEST:
             return response()->json(['error' => 'Reassignment failed: ' . $e->getMessage()], 500);
         }
     }
+
+    public function deleteProduct(Request $request)
+    {
+        $request->validate(['title' => 'required']);
+        
+        // Ensure only admin can delete
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return response()->json(['error' => 'Unauthorized. Only Administrators can delete vault documents.'], 403);
+        }
+
+        try {
+            $files = LibraryFile::where('title', $request->title)->get();
+            if ($files->isEmpty()) {
+                return response()->json(['error' => 'Asset not found.'], 404);
+            }
+
+            foreach($files as $file) {
+                if ($file->file_path) {
+                    try {
+                        Storage::disk('r2')->delete($file->file_path);
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to delete R2 file: " . $e->getMessage());
+                    }
+                }
+                $file->delete();
+            }
+
+            return response()->json(['message' => 'Document and associated assets successfully deleted from the vault.']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Delete failed: ' . $e->getMessage()], 500);
+        }
+    }
 }

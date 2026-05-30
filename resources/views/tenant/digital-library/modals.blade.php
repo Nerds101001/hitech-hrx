@@ -74,21 +74,36 @@
                                 <small>AI will detect category (SDS/TDS/MOM/LEARN) and extract the 5-6 line crux.</small>
                             </div>
 
-                            <div class="row g-2 mb-3">
+                            {{-- Document Type --}}
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Document Type</label>
+                                <select name="category" id="manualDocType" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;" onchange="toggleBrandSection()">
+                                    <option value="SDS">SDS – Safety Data Sheet</option>
+                                    <option value="TDS">TDS – Technical Data Sheet</option>
+                                    <option value="MOM">MOM – Minutes of Meeting</option>
+                                    <option value="LEARN">Learn @ Hitech</option>
+                                    <option value="Test Report">🧪 Test Report</option>
+                                    <option value="Comparison Report">📊 Comparison Report</option>
+                                    <option value="Video">Video</option>
+                                </select>
+                            </div>
+
+                            <div class="row g-2 mb-3" id="brandSection">
                                 <div class="col-6">
-                                    <label class="form-label fw-bold small text-uppercase">Brand</label>
+                                    <label class="form-label fw-bold small text-uppercase">Brand <span class="text-muted fw-normal">(optional for reports)</span></label>
                                     <select name="brand" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                        <option value="General">General / No Brand</option>
                                         <option value="RUST-X">RUST-X</option>
                                         <option value="Dr.Bio">Dr.Bio</option>
                                         <option value="KIF">KIF</option>
                                         <option value="Fillezy">Fillezy</option>
                                         <option value="Tuffpaulin">Tuffpaulin</option>
                                         <option value="ZOrbit">ZOrbit</option>
-                                        <option value="HITECH" selected>HITECH</option>
+                                        <option value="HITECH">HITECH</option>
                                     </select>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label fw-bold small text-uppercase">Category</label>
+                                    <label class="form-label fw-bold small text-uppercase">Sub-Category / Subject</label>
                                     <select name="sub_category" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
                                         <option value="Cleaners">Cleaners</option>
                                         <option value="Cutting Oil">Cutting Oil</option>
@@ -101,6 +116,10 @@
                                         <option value="Zorbit Desiccant">Desiccant</option>
                                         <option value="Industrial Lubricants">Lubricants</option>
                                         <option value="Data Logger">Data Logger</option>
+                                        <option value="Multi-Product">Multi-Product Comparison</option>
+                                        <option value="Lab Test">Lab Test</option>
+                                        <option value="Field Test">Field Test</option>
+                                        <option value="Third Party Test">Third Party Test</option>
                                     </select>
                                 </div>
                             </div>
@@ -237,8 +256,17 @@
 <script>
 let taxonomyModal = null;
 
+function toggleBrandSection() {
+    const type = document.getElementById('manualDocType')?.value;
+    const brandSection = document.getElementById('brandSection');
+    if (!brandSection) return;
+    const independentTypes = ['Test Report', 'Comparison Report', 'MOM'];
+    brandSection.style.opacity = independentTypes.includes(type) ? '0.4' : '1';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     taxonomyModal = new bootstrap.Modal(document.getElementById('taxonomyModal'));
+    toggleBrandSection(); // set initial state
 });
 
 function openAddModal(type, parentId = null) {
@@ -333,6 +361,26 @@ async function executeMove() {
         });
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'Move failed');
+        location.reload();
+    } catch (err) { alert(err.message); }
+}
+
+async function deleteDocument(title) {
+    if (!confirm('Are you sure you want to completely delete this document and all its associated files from the Digital Vault? This action cannot be undone.')) return;
+    
+    try {
+        const resp = await fetch('{{ route("delete-product") }}', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ title: title })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Delete failed');
+        alert('Document deleted successfully.');
         location.reload();
     } catch (err) { alert(err.message); }
 }
