@@ -223,77 +223,162 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
 .cnav-mod.cnav-completed .cnav-mod-status { color: #3fb950; }
 
 /* ══════════════════════════════════════════
-   PDF VIEWER
+   BOOK READER — Realistic Page Flip
 ══════════════════════════════════════════ */
-.pdf-wrap { width: 100%; max-width: 860px; }
-.pdf-canvas-card {
-    background: white; border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+.book-reader {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    background: #110b04;
+}
+
+/* Loading screen */
+.book-loading-screen {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+}
+.book-loading-emoji {
+    font-size: 3.5rem;
+    animation: bookFloat 1.4s ease-in-out infinite;
+}
+@keyframes bookFloat {
+    0%,100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-10px) rotate(2deg); }
+}
+.book-loading-label {
+    font-size: 0.9rem; font-weight: 600; color: #c9a864;
+    letter-spacing: 0.3px;
+}
+.book-loading-track {
+    width: 220px; height: 5px;
+    background: rgba(201,168,100,0.12); border-radius: 3px; overflow: hidden;
+}
+.book-loading-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #c9a84c, #f0d070);
+    border-radius: 3px; width: 0;
+    transition: width 0.3s ease;
+}
+
+/* Book stage — dark warm library */
+.book-stage {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    min-height: 0; padding: 16px 24px 8px;
+    background: radial-gradient(ellipse at 50% 40%, #2a1608 0%, #110b04 65%);
+    position: relative; overflow: hidden;
+}
+/* Candlelight glow under the book */
+.book-stage::after {
+    content: ''; position: absolute;
+    bottom: -10px; left: 50%; transform: translateX(-50%);
+    width: 55%; height: 60px;
+    background: radial-gradient(ellipse, rgba(220,150,50,0.22) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+/* Book controls bar */
+.book-controls {
+    background: #0e0802;
+    border-top: 1px solid rgba(201,168,100,0.12);
+    padding: 9px 20px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    flex-shrink: 0; flex-wrap: wrap;
+}
+.book-ctrl-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 16px; border-radius: 6px;
+    background: rgba(201,168,100,0.08);
+    border: 1px solid rgba(201,168,100,0.22);
+    color: #c9a864; font-size: 0.78rem; font-weight: 700;
+    cursor: pointer; transition: all 0.2s;
+}
+.book-ctrl-btn:hover:not(:disabled) {
+    background: rgba(201,168,100,0.18); border-color: rgba(201,168,100,0.5);
+    color: #f5d890; transform: translateY(-1px);
+}
+.book-ctrl-btn:disabled { opacity: 0.25; cursor: not-allowed; transform: none; }
+
+.book-page-info {
+    font-size: 0.78rem; color: #6b5030; font-weight: 700;
+    min-width: 82px; text-align: center; font-variant-numeric: tabular-nums;
+}
+/* Divider between control groups */
+.book-ctrl-sep {
+    width: 1px; height: 20px; background: rgba(201,168,100,0.12);
+    flex-shrink: 0;
+}
+/* Zoom controls */
+.book-zoom-group { display: flex; align-items: center; gap: 4px; }
+.book-zoom-btn {
+    width: 28px; height: 28px; border-radius: 5px;
+    background: rgba(201,168,100,0.06); border: 1px solid rgba(201,168,100,0.18);
+    color: #c9a864; font-size: 1rem; font-weight: 700; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    min-height: 480px;
-}
-#pdf-canvas { max-width: 100%; height: auto !important; display: block; }
-.pdf-controls {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px; margin-top: 14px;
-    background: #161b22; border-radius: 10px; border: 1px solid #30363d;
-    gap: 12px;
-}
-.pdf-btn {
-    display: flex; align-items: center; gap: 6px;
-    padding: 7px 14px; border-radius: 6px;
-    background: #21262d; border: 1px solid #30363d;
-    color: #8b949e; font-size: 0.78rem; font-weight: 600; cursor: pointer;
     transition: all 0.15s;
 }
-.pdf-btn:hover:not(:disabled) { color: white; border-color: #58a6ff; background: rgba(88,166,255,0.1); }
-.pdf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.pdf-page-info { color: #8b949e; font-size: 0.82rem; font-weight: 600; }
-.pdf-page-input {
-    width: 44px; text-align: center; padding: 4px 6px;
-    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
-    color: #e6edf3; font-size: 0.8rem; outline: none;
+.book-zoom-btn:hover { background: rgba(201,168,100,0.18); color: #f5d890; }
+.book-zoom-label {
+    font-size: 0.72rem; color: #5a4020; font-weight: 700;
+    min-width: 38px; text-align: center;
 }
-.pdf-page-input:focus { border-color: #58a6ff; }
+/* Fullscreen button */
+.book-fs-btn {
+    width: 30px; height: 30px; border-radius: 6px;
+    background: rgba(201,168,100,0.06); border: 1px solid rgba(201,168,100,0.18);
+    color: #8a6030; cursor: pointer; font-size: 0.88rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+}
+.book-fs-btn:hover { background: rgba(201,168,100,0.18); color: #f5d890; }
 
-/* AI Chat under PDF */
-.ai-chat-card {
-    width: 100%; max-width: 860px;
-    margin-top: 16px;
+/* Fullscreen: book fills screen */
+.book-reader:-webkit-full-screen { background: #0d0800; }
+.book-reader:-moz-full-screen    { background: #0d0800; }
+.book-reader:fullscreen          { background: #0d0800; }
+.book-reader:fullscreen .book-stage { flex: 1; padding: 24px; }
+.book-reader:fullscreen .book-controls { padding: 12px 28px; }
+
+/* Checkpoint popup overlay on PDF */
+.pdf-checkpoint {
+    position: fixed; inset: 0; z-index: 8000;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+    padding: 24px;
+}
+.pdf-checkpoint.open { display: flex; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+.checkpoint-card {
     background: #161b22; border: 1px solid #30363d;
-    border-radius: 10px; overflow: hidden;
+    border-radius: 16px; padding: 32px 28px; max-width: 480px; width: 100%;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.7);
 }
-.ai-chat-head {
-    padding: 12px 16px; border-bottom: 1px solid #30363d;
-    display: flex; align-items: center; gap: 10px;
+.checkpoint-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.25);
+    color: #58a6ff; font-size: 0.7rem; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase; padding: 4px 12px; border-radius: 20px;
+    margin-bottom: 16px;
 }
-.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; flex-shrink: 0; animation: blink 2s ease-in-out infinite; }
-@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
-.ai-chat-head-title { font-size: 0.82rem; font-weight: 700; color: #e6edf3; }
-.ai-chat-head-sub   { font-size: 0.68rem; color: #484f58; }
-.ai-msgs { padding: 14px; min-height: 120px; max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-.ai-msgs::-webkit-scrollbar { width: 4px; }
-.ai-msgs::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
-.ai-msg { padding: 10px 14px; border-radius: 8px; font-size: 0.8rem; line-height: 1.65; max-width: 85%; }
-.ai-msg.bot  { background: #21262d; color: #c9d1d9; align-self: flex-start; }
-.ai-msg.user { background: #0d419d; color: #e6edf3; align-self: flex-end; }
-.ai-msg.err  { background: rgba(248,81,73,0.1); color: #f85149; align-self: flex-start; }
-.ai-input-row { padding: 12px; border-top: 1px solid #30363d; display: flex; gap: 8px; }
-#ai-input {
-    flex: 1; padding: 8px 12px;
-    background: #21262d; border: 1px solid #30363d; border-radius: 6px;
-    color: #e6edf3; font-size: 0.82rem; outline: none;
+.checkpoint-title { font-size: 1rem; font-weight: 800; color: #e6edf3; margin-bottom: 8px; }
+.checkpoint-body  { font-size: 0.85rem; color: #8b949e; line-height: 1.65; margin-bottom: 20px; }
+.checkpoint-opts  { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.checkpoint-opt {
+    padding: 10px 14px; border-radius: 8px;
+    background: #21262d; border: 2px solid #30363d;
+    color: #c9d1d9; font-size: 0.84rem; cursor: pointer; transition: all 0.15s;
+    text-align: left;
 }
-#ai-input:focus { border-color: #58a6ff; }
-#ai-input::placeholder { color: #484f58; }
-.ai-send-btn {
-    padding: 8px 14px; border-radius: 6px;
-    background: #1f6feb; border: none; color: white;
-    font-size: 0.82rem; cursor: pointer; transition: background 0.15s;
-    display: flex; align-items: center; gap: 4px;
+.checkpoint-opt:hover { border-color: #58a6ff; color: white; }
+.checkpoint-opt.correct { border-color: #3fb950; background: rgba(63,185,80,0.1); color: #7ee787; }
+.checkpoint-opt.wrong   { border-color: #f85149; background: rgba(248,81,73,0.08); color: #f85149; }
+.checkpoint-continue {
+    width: 100%; padding: 11px; border-radius: 8px;
+    background: linear-gradient(135deg, #1f6feb, #388bfd);
+    border: none; color: white; font-size: 0.85rem; font-weight: 700;
+    cursor: pointer; display: none; transition: all 0.2s;
 }
-.ai-send-btn:hover { background: #388bfd; }
+.checkpoint-continue:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(31,111,235,0.4); }
+
+/* AI Chat removed */
 
 /* ══════════════════════════════════════════
    VIDEO
@@ -672,43 +757,63 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
         {{-- ── CONTENT ── --}}
         <div class="content-pane" id="content-pane">
 
-            {{-- ══ CATALOG / PDF ══ --}}
+            {{-- ══ CATALOG / PDF — Real Book Flip ══ --}}
             @if($module->content_type === 'catalog' && $module->content_url)
-            <div class="pdf-wrap">
-                <div class="pdf-canvas-card" id="pdf-box">
-                    <div id="pdf-loading" style="padding:60px;text-align:center;color:#64748b;">
-                        <div style="width:36px;height:36px;border:3px solid #e2e8f0;border-top-color:#06b6d4;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>
-                        Loading catalog...
+            <div class="book-reader" id="book-reader">
+
+                {{-- Loading --}}
+                <div class="book-loading-screen" id="book-loading">
+                    <div class="book-loading-emoji">📖</div>
+                    <div class="book-loading-label" id="book-loading-text">Opening catalog…</div>
+                    <div class="book-loading-track">
+                        <div class="book-loading-bar" id="book-loading-fill"></div>
                     </div>
-                    <canvas id="pdf-canvas" style="display:none;"></canvas>
                 </div>
-                <div class="pdf-controls">
-                    <button class="pdf-btn" id="pdf-prev" disabled><i class="ti ti-chevron-left"></i> Prev</button>
-                    <div class="pdf-page-info">
-                        Page <input type="number" id="pdf-pi" class="pdf-page-input" value="1" min="1"> of <span id="pdf-total">?</span>
+
+                {{-- The flip book --}}
+                <div class="book-stage" id="book-stage" style="display:none;">
+                    <div id="book-container"></div>
+                </div>
+
+                {{-- Controls --}}
+                <div class="book-controls" id="book-controls" style="display:none;">
+                    {{-- Navigation --}}
+                    <button class="book-ctrl-btn" id="book-prev" disabled>
+                        <i class="ti ti-arrow-left" style="font-size:0.78rem;"></i> Prev
+                    </button>
+                    <span class="book-page-info" id="book-page-info">Page 1 of ?</span>
+                    <button class="book-ctrl-btn" id="book-next">
+                        Next <i class="ti ti-arrow-right" style="font-size:0.78rem;"></i>
+                    </button>
+
+                    <div class="book-ctrl-sep"></div>
+
+                    {{-- Zoom --}}
+                    <div class="book-zoom-group">
+                        <button class="book-zoom-btn" id="book-zoom-out" title="Zoom out">−</button>
+                        <span class="book-zoom-label" id="book-zoom-label">100%</span>
+                        <button class="book-zoom-btn" id="book-zoom-in"  title="Zoom in">+</button>
                     </div>
-                    <button class="pdf-btn" id="pdf-next" disabled>Next <i class="ti ti-chevron-right"></i></button>
+
+                    <div class="book-ctrl-sep"></div>
+
+                    {{-- Fullscreen --}}
+                    <button class="book-fs-btn" id="book-fs-btn" title="Fullscreen (F)" onclick="toggleFullscreen()">
+                        <i class="ti ti-arrows-maximize" id="fs-btn-icon"></i>
+                    </button>
                 </div>
             </div>
 
-            {{-- AI Chat --}}
-            <div class="ai-chat-card">
-                <div class="ai-chat-head">
-                    <div class="ai-dot"></div>
-                    <div>
-                        <div class="ai-chat-head-title">AI Study Assistant</div>
-                        <div class="ai-chat-head-sub">Ask anything — I'll cite the page for you</div>
-                    </div>
-                    <button style="margin-left:auto;background:transparent;border:none;color:#484f58;cursor:pointer;font-size:0.72rem;" id="ai-toggle">Hide</button>
-                </div>
-                <div id="ai-chat-container">
-                    <div class="ai-msgs" id="ai-msgs">
-                        <div class="ai-msg bot">Hello! I'm your AI study assistant for this catalog. Ask me anything and I'll search the document and cite pages.</div>
-                    </div>
-                    <div class="ai-input-row">
-                        <input type="text" id="ai-input" placeholder="Ask a question about this catalog...">
-                        <button class="ai-send-btn" id="ai-send"><i class="ti ti-send"></i></button>
-                    </div>
+            {{-- Checkpoint popup --}}
+            <div class="pdf-checkpoint" id="pdf-checkpoint">
+                <div class="checkpoint-card">
+                    <div class="checkpoint-badge"><i class="ti ti-bolt" style="font-size:0.75rem;"></i> Page Checkpoint</div>
+                    <div class="checkpoint-title" id="cp-title">Quick Check</div>
+                    <div class="checkpoint-body"  id="cp-body"></div>
+                    <div class="checkpoint-opts"  id="cp-opts"></div>
+                    <button class="checkpoint-continue" id="cp-continue" onclick="closeCheckpoint()">
+                        <i class="ti ti-arrow-right" style="font-size:0.82rem;margin-right:4px;"></i> Continue Reading
+                    </button>
                 </div>
             </div>
 
@@ -941,6 +1046,7 @@ Auto-saved as you type."></textarea>
 @section('vendor-script')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/page-flip@2.0.7/dist/js/page-flip.browser.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 @endsection
 
@@ -961,7 +1067,6 @@ const VID_MILES    = {!! json_encode($module->video_milestones ?? []) !!};
 const CSRF         = "{{ csrf_token() }}";
 const ASSESS_URL        = "{{ route('training.assessment.get', $module->id) }}";
 const SUBMIT_URL        = "{{ route('training.assessment.submit', $module->id) }}";
-const AI_URL            = "{{ url('/training/module') }}/" + MOD_ID + "/chat";
 const NOTES_KEY         = "lms_notes_" + MOD_ID;
 const NEXT_MODULE_URL   = @json($nextModule ? route('training.module.show', $nextModule->id) : null);
 const NEXT_MODULE_TITLE = @json($nextModule ? $nextModule->title : null);
@@ -1082,102 +1187,201 @@ function closeCourseNav() {
 function toggleCourseNav() { cnavOpen ? closeCourseNav() : openCourseNav(); }
 
 /* ══════════════════════════════════════════
-   PDF VIEWER
+   BOOK READER — Realistic Page Flip
 ══════════════════════════════════════════ */
-let pdfDoc=null, pdfPage=1, pdfTotal=0, pdfRendering=false, pdfReached=false;
+let pdfPage = 1, pdfTotal = 0, pdfReached = false, pdfFlipBook = null;
+let bookZoom = 1.0;
+const CHECKPOINT_PAGES = new Set();
 
-function initPdf() {
+async function initPdf() {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    pdfjsLib.getDocument(CURL).promise.then(doc => {
-        pdfDoc = doc; pdfTotal = doc.numPages;
-        document.getElementById('pdf-total').textContent = pdfTotal;
-        document.getElementById('pdf-pi').max = pdfTotal;
-        const loading = document.getElementById('pdf-loading');
-        if (loading) loading.style.display = 'none';
-        document.getElementById('pdf-canvas').style.display = 'block';
-        if (pdfTotal > 1) document.getElementById('pdf-next').disabled = false;
-        renderPdfPage(1);
-    }).catch(e => {
-        const loading = document.getElementById('pdf-loading');
-        if (loading) loading.innerHTML = '<div style="color:#f85149;padding:30px;text-align:center;"><i class="ti ti-alert-circle" style="font-size:2rem;display:block;margin-bottom:8px;"></i>Failed to load PDF: ' + e.message + '</div>';
+
+    const loadingText = document.getElementById('book-loading-text');
+    const loadingFill = document.getElementById('book-loading-fill');
+    const loadingEl   = document.getElementById('book-loading');
+
+    function setProgress(pct) {
+        if (loadingFill) loadingFill.style.width = Math.min(pct, 100) + '%';
+        if (loadingText) loadingText.textContent = 'Loading catalog… ' + Math.round(pct) + '%';
+    }
+
+    const timeoutId = setTimeout(() => {
+        if (loadingText) loadingText.textContent = 'Connection is slow — please wait or refresh.';
+    }, 60000);
+
+    try {
+        // ── 1. Load PDF document ─────────────────────────
+        setProgress(2);
+        const loadTask = pdfjsLib.getDocument({
+            url: CURL,
+            withCredentials: false,
+            cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+            cMapPacked: true,
+        });
+        loadTask.onProgress = d => { if (d.total) setProgress(d.loaded / d.total * 35); };
+        const doc = await loadTask.promise;
+        pdfTotal = doc.numPages;
+        for (let p = 3; p < pdfTotal; p += 3) CHECKPOINT_PAGES.add(p);
+        setProgress(35);
+
+        // ── 2. Compute render scale ──────────────────────
+        const stage    = document.getElementById('book-stage');
+        const stageW   = Math.max((stage.clientWidth  || window.innerWidth)  - 48, 300);
+        const stageH   = Math.max((stage.clientHeight || window.innerHeight) - 48, 300);
+        const portrait = window.innerWidth < 700;
+        const pg1      = await doc.getPage(1);
+        const nv       = pg1.getViewport({scale: 1});
+        // Each page takes half the spread width on desktop, full width on mobile
+        const availW   = portrait ? stageW : (stageW - 10) / 2;
+        const rScale   = Math.min(availW / nv.width, stageH / nv.height, 1.8); // cap at 1.8×
+        const PW = Math.round(nv.width  * rScale);
+        const PH = Math.round(nv.height * rScale);
+
+        // ── 3. Render all pages → JPEG ──────────────────
+        // For proper book layout: total images must be EVEN (cover + inner pairs + back cover)
+        // If pdfTotal is odd, insert a blank page before the back cover
+        const needBlank = (pdfTotal > 2) && (pdfTotal % 2 === 1);
+        const totalImages = pdfTotal + (needBlank ? 1 : 0);
+        const images = [];
+
+        for (let i = 1; i <= pdfTotal; i++) {
+            // Insert blank before last page if needed (makes last page a proper back cover)
+            if (needBlank && i === pdfTotal) {
+                const bc = document.createElement('canvas');
+                bc.width = PW; bc.height = PH;
+                const bx = bc.getContext('2d');
+                bx.fillStyle = '#f5f0e8';
+                bx.fillRect(0, 0, PW, PH);
+                images.push(bc.toDataURL('image/jpeg', 0.5));
+                bc.width = 0;
+            }
+            const page = await doc.getPage(i);
+            const vp   = page.getViewport({scale: rScale});
+            const cv   = document.createElement('canvas');
+            cv.width = PW; cv.height = PH;
+            await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
+            images.push(cv.toDataURL('image/jpeg', 0.82));
+            cv.width = 0; cv.height = 0;
+            setProgress(35 + (i / pdfTotal) * 63);
+        }
+        clearTimeout(timeoutId);
+        setProgress(100);
+
+        // ── 4. Show stage + init PageFlip ───────────────
+        await new Promise(r => setTimeout(r, 80)); // let progress bar animate to 100%
+        loadingEl.style.display = 'none';
+        stage.style.display     = 'flex';
+        const ctrlEl = document.getElementById('book-controls');
+        if (ctrlEl) ctrlEl.style.display = 'flex';
+
+        const flipBook = new St.PageFlip(document.getElementById('book-container'), {
+            width:               PW,
+            height:              PH,
+            size:                'fixed',
+            drawShadow:          true,
+            flippingTime:        850,
+            usePortrait:         portrait,
+            showCover:           true,    // page 0 = front cover alone, last = back cover alone
+            mobileScrollSupport: false,
+            swipeDistance:       25,
+            clickEventForward:   true,
+            startZIndex:         0,
+            maxShadowOpacity:    0.5,
+        });
+        flipBook.loadFromImages(images);
+
+        // ── 5. Events ────────────────────────────────────
+        function syncControls(idx) {
+            pdfPage = Math.min(idx + 1, pdfTotal);
+            document.getElementById('book-page-info').textContent = 'Page ' + pdfPage + ' of ' + pdfTotal;
+            const pb = document.getElementById('top-progress');
+            if (pb) pb.style.width = (pdfPage / pdfTotal * 100) + '%';
+            document.getElementById('book-prev').disabled = idx <= 0;
+            document.getElementById('book-next').disabled = idx >= images.length - 1;
+            if (pdfPage >= pdfTotal) { pdfReached = true; checkCatalogReady(); }
+            if (CHECKPOINT_PAGES.has(pdfPage)) maybeShowCheckpoint(pdfPage);
+        }
+
+        flipBook.on('flip',       e => syncControls(e.data));
+        flipBook.on('changeState',e => { /* handle mid-flip states */ });
+
+        document.getElementById('book-prev').onclick = () => flipBook.flipPrev();
+        document.getElementById('book-next').onclick = () => flipBook.flipNext();
+        syncControls(0);
+
+        // Zoom buttons
+        document.getElementById('book-zoom-out').onclick = () => adjustBookZoom(-0.15);
+        document.getElementById('book-zoom-in').onclick  = () => adjustBookZoom(+0.15);
+
+        pdfFlipBook = flipBook;
+
+    } catch(err) {
+        clearTimeout(timeoutId);
+        if (loadingText) {
+            loadingText.textContent = 'Failed to load catalog.';
+            loadingText.style.color = '#f85149';
+        }
+        if (loadingFill) loadingFill.style.background = '#f85149';
+        console.error('Book init error:', err);
+    }
+}
+
+/* ── Zoom ─────────────────────────────────── */
+function adjustBookZoom(delta) {
+    bookZoom = Math.min(Math.max(bookZoom + delta, 0.4), 2.5);
+    const wrap = document.getElementById('book-container');
+    if (wrap) { wrap.style.transform = `scale(${bookZoom})`; wrap.style.transformOrigin = 'center center'; }
+    const lbl = document.getElementById('book-zoom-label');
+    if (lbl) lbl.textContent = Math.round(bookZoom * 100) + '%';
+}
+
+/* ── Fullscreen ───────────────────────────── */
+function toggleFullscreen() {
+    const el = document.getElementById('book-reader');
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen).call(el);
+    } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
+    }
+}
+['fullscreenchange','webkitfullscreenchange'].forEach(ev => {
+    document.addEventListener(ev, () => {
+        const icon = document.getElementById('fs-btn-icon');
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (icon) icon.className = isFs ? 'ti ti-arrows-minimize' : 'ti ti-arrows-maximize';
+        // Auto-boost zoom when entering fullscreen, restore when exiting
+        if (isFs)  adjustBookZoom( 0.35);
+        else       { bookZoom = 1.0; adjustBookZoom(0); }
     });
-}
-async function renderPdfPage(n) {
-    if (!pdfDoc || pdfRendering) return;
-    pdfRendering = true; pdfPage = n;
-    const page = await pdfDoc.getPage(n);
-    const canvas = document.getElementById('pdf-canvas');
-    const box = document.getElementById('pdf-box');
-    const scale = Math.min(box.clientWidth / page.getViewport({scale:1}).width * 0.95, 2);
-    const vp = page.getViewport({scale});
-    canvas.width = vp.width; canvas.height = vp.height;
-    canvas.style.opacity = '0'; canvas.style.transform = 'scale(0.97)';
-    await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
-    canvas.style.transition = 'opacity 0.3s, transform 0.3s';
-    canvas.style.opacity = '1'; canvas.style.transform = 'scale(1)';
-    document.getElementById('pdf-pi').value = n;
-    document.getElementById('pdf-prev').disabled = n <= 1;
-    document.getElementById('pdf-next').disabled = n >= pdfTotal;
-    const pct = (n / pdfTotal) * 100;
-    const pb = document.getElementById('top-progress'); if (pb) pb.style.width = pct + '%';
-    if (n >= pdfTotal) { pdfReached = true; checkCatalogReady(); }
-    pdfRendering = false;
-}
+});
+
 function checkCatalogReady() {
     if (IS_COMPLETED || (pdfReached && timerDone)) showAssessBtn();
 }
 
-/* ══════════════════════════════════════════
-   AI CHAT
-══════════════════════════════════════════ */
-function initAi() {
-    const send = document.getElementById('ai-send');
-    const inp  = document.getElementById('ai-input');
-    const tog  = document.getElementById('ai-toggle');
-    if (!send || !inp) return;
+/* ── Checkpoint Popup ── */
+const cpPool = [
+    { title: '💡 Key Insight',   body: "Take a moment — what's the most important idea on the pages you just read? Make sure you understand it before moving on." },
+    { title: '🔍 Stay Sharp',    body: "You're making great progress! Think about how the content on this page connects to what you already know." },
+    { title: '📌 Remember This', body: "Important details are often tested. Re-read any highlighted points before continuing." },
+    { title: '⚡ Quick Think',   body: "Can you summarize the last 2-3 pages in one sentence? If yes, you're ready to continue!" },
+    { title: '🎯 Focus Check',   body: "Before you move on — are there any terms or concepts on these pages that are unclear to you?" },
+];
+let cpShownPages = new Set();
 
-    async function doSend() {
-        const msg = inp.value.trim(); if (!msg) return;
-        inp.value = '';
-        appendAiMsg(msg, 'user');
-        const tid = appendAiTyping();
-        try {
-            const r = await fetch(AI_URL, { method:'POST', headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF}, body:JSON.stringify({message:msg}) });
-            const d = await r.json();
-            removeAiTyping(tid);
-            appendAiMsg(d.success ? d.message : (d.message||'AI error.'), d.success ? 'bot' : 'err');
-        } catch { removeAiTyping(tid); appendAiMsg('AI assistant unavailable.', 'err'); }
-    }
-    send.onclick = doSend;
-    inp.onkeydown = e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); doSend(); } };
-    if (tog) {
-        tog.onclick = () => {
-            const c = document.getElementById('ai-chat-container');
-            const hidden = c.style.display === 'none';
-            c.style.display = hidden ? 'block' : 'none';
-            tog.textContent = hidden ? 'Hide' : 'Show';
-        };
-    }
+function maybeShowCheckpoint(n) {
+    if (cpShownPages.has(n)) return;
+    cpShownPages.add(n);
+    const cp = cpPool[Math.floor(Math.random() * cpPool.length)];
+    document.getElementById('cp-title').textContent = cp.title;
+    document.getElementById('cp-body').textContent  = cp.body;
+    document.getElementById('cp-opts').innerHTML    = '';
+    document.getElementById('cp-continue').style.display = 'block';
+    document.getElementById('pdf-checkpoint').classList.add('open');
 }
-function appendAiMsg(text, type) {
-    const box = document.getElementById('ai-msgs'); if (!box) return;
-    const d = document.createElement('div'); d.className = 'ai-msg ' + type;
-    if (type === 'bot') {
-        d.innerHTML = text
-            .replace(/Page\s+(\d+)/gi, `<a href="javascript:void(0)" onclick="renderPdfPage($1)" style="color:#58a6ff;font-weight:700;">Page $1</a>`)
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br>');
-    } else { d.textContent = text; }
-    box.appendChild(d); box.scrollTop = box.scrollHeight;
+function closeCheckpoint() {
+    document.getElementById('pdf-checkpoint').classList.remove('open');
 }
-function appendAiTyping() {
-    const box = document.getElementById('ai-msgs'); if (!box) return null;
-    const id = 'ai-t-' + Date.now();
-    const d = document.createElement('div'); d.id = id; d.className = 'ai-msg bot';
-    d.innerHTML = '<span style="display:inline-flex;gap:4px;align-items:center;"><span style="width:6px;height:6px;background:#484f58;border-radius:50%;animation:blink 1.2s 0s ease-in-out infinite;display:inline-block;"></span><span style="width:6px;height:6px;background:#484f58;border-radius:50%;animation:blink 1.2s 0.2s ease-in-out infinite;display:inline-block;"></span><span style="width:6px;height:6px;background:#484f58;border-radius:50%;animation:blink 1.2s 0.4s ease-in-out infinite;display:inline-block;"></span></span>';
-    box.appendChild(d); box.scrollTop = box.scrollHeight; return id;
-}
-function removeAiTyping(id) { if (id) { const el = document.getElementById(id); if (el) el.remove(); } }
 
 /* ══════════════════════════════════════════
    VIDEO
@@ -1438,19 +1642,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // PDF controls
-    document.getElementById('pdf-prev')?.addEventListener('click', () => pdfPage > 1 && renderPdfPage(pdfPage-1));
-    document.getElementById('pdf-next')?.addEventListener('click', () => pdfPage < pdfTotal && renderPdfPage(pdfPage+1));
-    document.getElementById('pdf-pi')?.addEventListener('change', e => { const n = parseInt(e.target.value); if (n>=1&&n<=pdfTotal) renderPdfPage(n); });
+    // Keyboard navigation for book reader
     document.addEventListener('keydown', e => {
-        if (CTYPE==='catalog' && document.getElementById('quiz-overlay').style.display==='none') {
-            if (e.key==='ArrowRight'||e.key==='ArrowDown') { e.preventDefault(); pdfPage<pdfTotal&&renderPdfPage(pdfPage+1); }
-            if (e.key==='ArrowLeft'||e.key==='ArrowUp')   { e.preventDefault(); pdfPage>1&&renderPdfPage(pdfPage-1); }
+        if (CTYPE === 'catalog' && pdfFlipBook
+            && document.getElementById('quiz-overlay').style.display === 'none'
+            && !document.getElementById('pdf-checkpoint')?.classList.contains('open')) {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); pdfFlipBook.flipNext(); }
+            if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); pdfFlipBook.flipPrev(); }
+            if (e.key === '+' || e.key === '=')  adjustBookZoom(+0.15);
+            if (e.key === '-')                   adjustBookZoom(-0.15);
+            if (e.key === 'f' || e.key === 'F')  toggleFullscreen();
         }
     });
 
+    // Mouse-wheel zoom on the book stage (Ctrl+scroll OR plain scroll)
+    document.getElementById('book-stage')?.addEventListener('wheel', e => {
+        if (CTYPE !== 'catalog') return;
+        e.preventDefault();
+        // Ctrl+scroll = zoom (standard browser convention)
+        // Plain scroll = also zoom (since page-flip handles swipe navigation)
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        adjustBookZoom(delta);
+    }, { passive: false });
+
     // Init by type
-    if (CTYPE === 'catalog' && CURL) { initPdf(); initAi(); if (IS_COMPLETED) { markCompletedUI(); } else { startTimer(); } }
+    if (CTYPE === 'catalog' && CURL) {
+        // Stretch content-pane so book fills the area
+        const cp = document.getElementById('content-pane');
+        if (cp) { cp.style.padding = '0'; cp.style.overflow = 'hidden'; cp.style.alignItems = 'stretch'; }
+        initPdf();
+        if (IS_COMPLETED) { markCompletedUI(); } else { startTimer(); }
+    }
     else if (CTYPE === 'video') {
         initChapters();
         if (IS_COMPLETED) { markCompletedUI(); showAssessBtn(); }

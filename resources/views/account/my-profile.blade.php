@@ -683,8 +683,8 @@
                                                     <i class="bx bx-group text-muted fs-4"></i>
                                                 </div>
                                                 <div>
-                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Department / Team</p>
-                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->team != null ? $user->team->name : 'N/A' }}</p>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Department</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->department?->name ?? ($user->team?->name ?? 'N/A') }}</p>
                                                 </div>
                                             </div>
                                         </div>

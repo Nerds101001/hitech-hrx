@@ -65,27 +65,6 @@ if ! php artisan migrate --force --no-interaction; then
   echo "[7.0/8] migrate skipped due existing schema conflict; continuing deployment."
 fi
 
-echo "[7.1/8] Standardizing legacy documents..."
-php artisan documents:standardize --no-interaction || echo "Standardize failed, continuing..."
-
-if [[ -f "$APP_ROOT/migrate_roles.php" ]]; then
-  echo "[7.2/8] Running role name migration (field_employee -> employee)..."
-  php "$APP_ROOT/migrate_roles.php" || echo "Role migration failed, continuing..."
-  rm -f "$APP_ROOT/migrate_roles.php"
-fi
-
-if [[ -f "$APP_ROOT/fix_manager_perms.php" ]]; then
-  echo "[7.3/8] Running manager permission updates..."
-  php "$APP_ROOT/fix_manager_perms.php" || echo "Manager permissions update failed, continuing..."
-  rm -f "$APP_ROOT/fix_manager_perms.php"
-fi
-
-if [[ -f "$APP_ROOT/setup_accounts_role.php" ]]; then
-  echo "[7.4/8] Running accounts permission updates..."
-  php "$APP_ROOT/setup_accounts_role.php" || echo "Accounts permissions update failed, continuing..."
-  rm -f "$APP_ROOT/setup_accounts_role.php"
-fi
-
 
 php artisan config:cache
 if ! php artisan route:cache; then
@@ -94,11 +73,7 @@ if ! php artisan route:cache; then
 fi
 php artisan view:cache
 
-echo "[7.5/8] Ensuring Half Day Leave type exists..."
-php artisan leave:ensure-half-day-type || echo "HDL type seed failed, continuing..."
 
-echo "[7.6/8] Seeding Short Leave (SHL) for all active users..."
-php artisan leave:grant-short-leave || echo "SHL seed skipped (already granted this month or command unavailable)."
 # Use shell symlink because `php artisan storage:link` can fail when exec() is disabled.
 rm -rf "$APP_ROOT/public/storage" || true
 ln -sfn "$APP_ROOT/storage/app/public" "$APP_ROOT/public/storage" || true

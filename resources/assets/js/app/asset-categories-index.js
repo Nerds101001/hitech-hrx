@@ -83,7 +83,7 @@ $(function () {
     var modalForm = $('#offcanvasAddOrUpdateCategory');
     const addCategoryForm = document.getElementById('assetCategoryForm');
 
-    $(document).on('click', '.add-new-category', function () {
+    $(document).on('click', '[data-bs-target="#offcanvasAddOrUpdateCategory"]', function () {
         $('#id').val('');
         $('#name').val('');
         $('#description').val('');
@@ -127,7 +127,7 @@ $(function () {
             bootstrap5: new FormValidation.plugins.Bootstrap5({
                 eleValidClass: '',
                 rowSelector: function (field, ele) {
-                    return '.mb-3';
+                    return '.mb-4';
                 }
             }),
             submitButton: new FormValidation.plugins.SubmitButton(),

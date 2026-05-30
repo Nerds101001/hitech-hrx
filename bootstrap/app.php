@@ -46,6 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'permission' => PermissionMiddleware::class,
       'role_or_permission' => RoleOrPermissionMiddleware::class,
       'onboarding' => \App\Http\Middleware\OnboardingMiddleware::class,
+      'admin.guard' => \App\Http\Middleware\AdminRoleGuard::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

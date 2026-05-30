@@ -187,8 +187,10 @@ class UserDashboardController extends Controller
             ]);
         }
 
-        // 2. Employee Dashboard
-        if ($isFieldEmployee) {
+        // 2. Employee Dashboard — also catches users with NO role assigned yet
+        // (accounts-dept bulk role assignment issue: anyone not explicitly admin/hr/manager/accounts gets employee view)
+        $isPrivilegedRole = $user->hasRole(['admin', 'hr', 'accounts', 'manager']);
+        if ($isFieldEmployee || (!$isPrivilegedRole && !$isManager)) {
             $settings = Settings::first();
             
             // Celebrations logic
@@ -496,13 +498,13 @@ class UserDashboardController extends Controller
             return redirect()->back()->withErrors(['document' => 'Proof/Evidence document is required for this leave type.'])->withInput();
         }
 
-        // 3. Backdated Check (Limit: 7 Days)
+        // 3. Backdated Check (Limit: 30 Days)
         $fromDateObj = \Carbon\Carbon::parse($validated['from_date']);
         $todayObj = \Carbon\Carbon::today();
         if ($fromDateObj->lt($todayObj)) {
             $daysBack = $fromDateObj->diffInDays($todayObj);
-            if ($daysBack > 7) {
-                return redirect()->back()->withErrors(['from_date' => 'You cannot apply for leave more than 7 days in the past.'])->withInput();
+            if ($daysBack > 30) {
+                return redirect()->back()->withErrors(['from_date' => 'You cannot apply for leave more than 30 days in the past.'])->withInput();
             }
         }
 

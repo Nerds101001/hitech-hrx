@@ -2,7 +2,7 @@
 
 @section('title', 'Visit Reports & Analytics')
 
-@push('page-style')
+@section('page-style')
 <style>
     /* ── Hero ──────────────────────────────────────────────── */
     .rpt-hero {
@@ -167,10 +167,10 @@
         border-radius: 3px;
     }
 </style>
-@endpush
+@endsection
 
 @section('content')
-<div class="container-fluid py-4">
+<div class="animate__animated animate__fadeIn">
 
     {{-- ── Hero Header ───────────────────────────────────────────── --}}
     <div class="rpt-hero">
@@ -394,10 +394,84 @@
         </div>
     </div>
 
+    {{-- ── Client Feedback & Reviews Table ──────────────────────── --}}
+    <div class="analytics-table-card mb-4">
+        <div class="table-title d-flex justify-content-between align-items-center">
+            <div>
+                <i class="ti ti-star me-2"></i>Client Feedback &amp; Ratings
+            </div>
+            @if($ratingCount > 0)
+                <span class="badge bg-label-success px-3 py-2 fs-6">
+                    Average: <strong>{{ $avgRating }} / 5</strong> ({{ $ratingCount }} reviews)
+                </span>
+            @endif
+        </div>
+        <div class="table-responsive">
+            <table class="table mb-0 table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Salesperson</th>
+                        <th class="text-center">Rating</th>
+                        <th>Client Feedback Comment</th>
+                        <th class="text-center">Completed At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($reviews as $review)
+                    <tr>
+                        <td>
+                            <span class="fw-semibold">{{ $review->client->name ?? '—' }}</span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="width:32px;height:32px;border-radius:50%;background:#e2fcf7;color:#0d9488;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;flex-shrink:0;">
+                                    {{ strtoupper(substr($review->salesperson->name ?? 'S', 0, 1)) }}
+                                </span>
+                                <span class="fw-semibold">{{ $review->salesperson->name ?? '—' }}</span>
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <span class="fs-4" title="Rating: {{ $review->rating }}/5">
+                                @switch($review->rating)
+                                    @case(1) 😠 @break
+                                    @case(2) 🙁 @break
+                                    @case(3) 😐 @break
+                                    @case(4) 🙂 @break
+                                    @case(5) 😀 @break
+                                    @default —
+                                @endswitch
+                            </span>
+                            <div class="text-muted" style="font-size:0.75rem; font-weight:600;">{{ $review->rating }} / 5</div>
+                        </td>
+                        <td>
+                            @if($review->rating_comment)
+                                <span class="fst-italic" style="color: #4a5568;">"{{ $review->rating_comment }}"</span>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                        <td class="text-center text-muted" style="font-size: 0.85rem;">
+                            {{ $review->completed_at ? $review->completed_at->format('d M Y') : '' }}
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            <i class="ti ti-star-off" style="font-size:2rem;display:block;margin-bottom:.5rem;color:#cbd5e1;"></i>
+                            No client feedback ratings received yet for the selected period.
+                        </td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </div>
 @endsection
 
-@push('page-script')
+@section('page-script')
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // ── Visit Type Doughnut Chart ──────────────────────────────────────
@@ -483,4 +557,4 @@
     });
 })();
 </script>
-@endpush
+@endsection

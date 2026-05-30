@@ -57,7 +57,7 @@
       };
 
       // Redraw on filter change
-      $('#roleFilter, #teamFilter, #designationFilter, #statusFilter, #siteFilter').on('change', function () {
+      $('#roleFilter, #departmentFilter, #designationFilter, #statusFilter, #siteFilter').on('change', function () {
         if (window.dt_user) window.dt_user.ajax.reload();
       });
 
@@ -73,7 +73,7 @@
             type: 'GET',
             data: function (d) {
               d.roleFilter = $('#roleFilter').val();
-              d.teamFilter = $('#teamFilter').val();
+              d.departmentFilter = $('#departmentFilter').val();
               d.designationFilter = $('#designationFilter').val();
               d.statusFilter = $('#statusFilter').val();
               d.siteFilter = $('#siteFilter').val();
@@ -404,11 +404,11 @@
               </select>
             </div>
             <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department (Team)</label>
-              <select class="form-select select2" id="teamFilter">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
+              <select class="form-select select2" id="departmentFilter">
                 <option value="">All Departments</option>
-                @foreach($teams as $team)
-                  <option value="{{ $team->id }}">{{ $team->name }}</option>
+                @foreach($departments as $department)
+                  <option value="{{ $department->id }}">{{ $department->name }}</option>
                 @endforeach
               </select>
             </div>

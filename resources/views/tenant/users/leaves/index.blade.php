@@ -653,11 +653,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 3. Past Date Validation & Range Restriction (Allowed up to 7 days back)
+    // 3. Past Date Validation & Range Restriction (Allowed up to 30 days back)
     const todayDate = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(todayDate.getDate() - 7);
-    const minDate = sevenDaysAgo.toISOString().split('T')[0];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(todayDate.getDate() - 30);
+    const minDate = thirtyDaysAgo.toISOString().split('T')[0];
     
     fromDateInput.setAttribute('min', minDate);
     toDateInput.setAttribute('min', minDate);

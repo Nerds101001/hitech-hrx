@@ -23,5 +23,5 @@ $user = User::updateOrCreate(
         'code' => 'ONB-001',
     ]
 );
-$user->syncRoles(['field_employee']);
+$user->syncRoles(['employee']);
 echo "User Created with ID: " . $user->id . "\n";

@@ -14,14 +14,69 @@
   ])
   <x-enhanced-css />
   <style>
-    .admin-hero { margin-top: 0 !important; visibility: visible !important; min-height: 180px !important; }
+    /* ===================== Hero Header ===================== */
+    .sv-hero {
+      background: linear-gradient(135deg, #0d7377 0%, #14a085 40%, #0a9396 70%, #00b4d8 100%);
+      border-radius: 18px;
+      padding: 2.5rem 2.8rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(13, 115, 119, 0.30);
+    }
+    .sv-hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 260px; height: 260px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 50%;
+    }
+    .sv-hero::after {
+      content: '';
+      position: absolute;
+      bottom: -80px; left: -40px;
+      width: 200px; height: 200px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 50%;
+    }
+    .sv-hero-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -0.5px;
+      margin-bottom: 0.3rem;
+    }
+    .sv-hero-subtitle {
+      color: rgba(255,255,255,0.80);
+      font-size: 0.97rem;
+      margin-bottom: 0;
+    }
+    .sv-hero .btn-new {
+      background: #fff;
+      color: #0d7377;
+      border: none;
+      font-weight: 700;
+      border-radius: 10px;
+      padding: 0.65rem 1.4rem;
+      font-size: 0.92rem;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+      transition: all 0.22s ease;
+    }
+    .sv-hero .btn-new:hover {
+      background: #0d7377;
+      color: #fff;
+      box-shadow: 0 6px 22px rgba(13,115,119,0.35);
+      transform: translateY(-2px);
+    }
+
+
+
     .stat-card-label { color: #475569 !important; font-weight: 700 !important; opacity: 1 !important; }
     .stat-card-sub { color: #64748b !important; }
     .stat-card-value { color: #1e293b !important; font-weight: 800 !important; }
     .hitech-card { border: 1px solid #e2e8f0 !important; box-shadow: 0 10px 30px rgba(13, 110, 253, 0.05) !important; background: #fff !important; }
     .badge { font-weight: 700 !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important; padding: 0.5em 0.8em !important; }
-    /* Force visibility of hero banner */
-    .admin-hero-content { opacity: 1 !important; }
   </style>
 @endsection
 
@@ -34,15 +89,23 @@
 @endsection
 
 @section('content')
-<div class="row g-4">
-  <div class="col-lg-12">
-    <x-hero-banner
-      title="Asset Management"
-      subtitle="Track company assets, assignments, and lifecycle status"
-      icon="bx-archive"
-      gradient="primary"
-    />
+<div class="animate__animated animate__fadeIn px-4">
+  {{-- ===== Hero Header ===== --}}
+  <div class="sv-hero mb-4">
+    <div class="d-flex justify-content-between align-items-center" style="position:relative; z-index:2;">
+      <div>
+        <h1 class="sv-hero-title">📦 Asset Management</h1>
+        <p class="sv-hero-subtitle">Track company assets, assignments, and lifecycle status in one place.</p>
+      </div>
+      <div>
+        <button type="button" class="btn btn-new add-new" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateAsset">
+          <i class="bx bx-plus me-1"></i> Add Asset
+        </button>
+      </div>
+    </div>
   </div>
+
+  <div class="row g-4 mb-4">
 
   <x-stat-card
     title="Total Assets"
@@ -79,22 +142,49 @@
   {{-- Main Content Table --}}
   <div class="col-12">
     <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.5s">
-      <div class="hitech-card-header p-sm-5 p-4 border-bottom">
-        <div class="row align-items-center g-6">
-          <div class="col-md-7 d-flex align-items-center gap-3">
-            <div class="search-wrapper-hitech w-px-400">
-              <i class="bx bx-search text-muted ms-3"></i>
-              <input type="text" class="form-control" placeholder="Search assets..." id="customSearchInput">
-              <button class="btn-search" id="customSearchBtn">
-                <i class="bx bx-search fs-5"></i>
-              </button>
-            </div>
+      <div class="card-header bg-white border-bottom" style="padding: 1.5rem !important;">
+        <div class="d-flex align-items-center justify-content-between w-100">
+          <div class="d-flex align-items-center gap-4">
+            <h5 class="title mb-0 text-dark fw-bold">Assets List</h5>
           </div>
-          <div class="col-md-5 d-flex align-items-center justify-content-end gap-3">
-            <button type="button" class="btn btn-hitech add-new px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateAsset">
-              <i class="bx bx-plus-circle fs-5"></i>
-              <span>@lang('Add Asset')</span>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-hitech add-new d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateAsset">
+              <i class="bx bx-plus me-1"></i> Add Asset
             </button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body p-4 border-bottom">
+        <div class="d-flex flex-wrap align-items-center gap-3">
+          {{-- Search --}}
+          <div class="search-wrapper-hitech" style="width: 400px;">
+            <i class="bx bx-search text-muted ms-3 fs-5"></i>
+            <input type="text" class="form-control" placeholder="Search assets..." id="customSearchInput" style="padding-left: 2.5rem;">
+            <button class="btn-search shadow-sm" id="customSearchBtn">
+              <i class="bx bx-search fs-5"></i>
+              <span>Search</span>
+            </button>
+          </div>
+
+          {{-- Category Filter --}}
+          <div class="compact-select" style="min-width: 160px;">
+            <select id="filterCategory" class="form-select select2 filter-item-hitech">
+              <option value="">Category: All</option>
+              @foreach($categories as $category)
+                <option value="{{ $category->id }}">{{ $category->name }}</option>
+              @endforeach
+            </select>
+          </div>
+
+          {{-- Status Filter --}}
+          <div class="compact-select" style="min-width: 150px;">
+            <select id="filterStatus" class="form-select select2 filter-item-hitech">
+              <option value="">Status: All</option>
+              <option value="available">Available</option>
+              <option value="assigned">Assigned</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="retired">Retired</option>
+            </select>
           </div>
         </div>
       </div>
@@ -137,6 +227,8 @@
           url: '{{ route('assets.listAjax') }}',
           data: function (d) {
             d.searchTerm = $('#customSearchInput').val();
+            d.category = $('#filterCategory').val();
+            d.status = $('#filterStatus').val();
           }
         },
         columns: [
@@ -162,11 +254,13 @@
         responsive: true
       });
 
-      $('#customSearchInput').on('keyup', function () {
-        dt.draw();
+      $('#customSearchInput').on('keyup', function (e) {
+        if(e.key === 'Enter') {
+            dt.draw();
+        }
       });
 
-      $('#customSearchBtn').on('click', function () {
+      $('#customSearchBtn, #filterCategory, #filterStatus').on('click change', function () {
         dt.draw();
       });
 

@@ -122,7 +122,13 @@ class AppServiceProvider extends ServiceProvider
                 ->whereDoesntHave('acknowledgments', function($q) use ($user) {
                     $q->where('user_id', $user->id);
                 })
-                ->get();
+                ->get()
+                ->filter(function ($policy) use ($user) {
+                    if (empty($policy->target_departments)) {
+                        return true;
+                    }
+                    return in_array((string)$user->department_id, $policy->target_departments);
+                });
             
             if ($pendingPolicies->isNotEmpty()) {
                 $view->with('globalPendingPolicies', $pendingPolicies);

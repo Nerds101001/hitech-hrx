@@ -264,6 +264,14 @@ class AssetController extends Controller
                 });
             }
 
+            if ($category = $request->input('category')) {
+                $query->where('category_id', $category);
+            }
+
+            if ($status = $request->input('status')) {
+                $query->where('status', $status);
+            }
+
             $statusBadgeMap = [
                 'available'   => 'bg-success',
                 'assigned'    => 'bg-primary',

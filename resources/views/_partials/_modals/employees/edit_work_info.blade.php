@@ -90,10 +90,9 @@
 
             <div class="col-md-6" id="ccAgentEditDiv" style="display: none;">
               <label class="form-label-hitech" for="ccare_agent_id">Assign CCARE Agent <i class="bx bx-info-circle text-muted" title="Customer Care agent for Sales"></i></label>
-              <select class="form-select form-select-hitech select2" id="ccare_agent_id" name="ccare_agent_id">
-                <option value="">Select CCARE Agent (Optional)</option>
+              <select class="form-select form-select-hitech select2" id="ccare_agent_id" name="ccare_agent_id[]" multiple="multiple" data-placeholder="Select CCARE Agents">
                 @foreach($ccareUsers ?? [] as $cc)
-                  <option value="{{ $cc->id }}" {{ ($currentCcareId ?? null) == $cc->id ? 'selected' : '' }}>
+                  <option value="{{ $cc->id }}" {{ in_array($cc->id, $currentCcareIds ?? []) ? 'selected' : '' }}>
                     {{ $cc->first_name }} {{ $cc->last_name }}
                   </option>
                 @endforeach
@@ -102,10 +101,9 @@
 
             <div class="col-md-6" id="newbizAgentEditDiv" style="display: none;">
               <label class="form-label-hitech" for="newbiz_agent_id">Assign New Biz Agent <i class="bx bx-info-circle text-muted" title="New Biz agent for Sales"></i></label>
-              <select class="form-select form-select-hitech select2" id="newbiz_agent_id" name="newbiz_agent_id">
-                <option value="">Select New Biz Agent (Optional)</option>
+              <select class="form-select form-select-hitech select2" id="newbiz_agent_id" name="newbiz_agent_id[]" multiple="multiple" data-placeholder="Select New Biz Agents">
                 @foreach($newbizUsers ?? [] as $nb)
-                  <option value="{{ $nb->id }}" {{ ($currentNewbizId ?? null) == $nb->id ? 'selected' : '' }}>
+                  <option value="{{ $nb->id }}" {{ in_array($nb->id, $currentNewbizIds ?? []) ? 'selected' : '' }}>
                     {{ $nb->first_name }} {{ $nb->last_name }}
                   </option>
                 @endforeach
@@ -283,8 +281,8 @@
             // Clear selections
             var $jq = window.jQuery;
             if($jq) {
-                $jq('#ccare_agent_id').val('').trigger('change');
-                $jq('#newbiz_agent_id').val('').trigger('change');
+                $jq('#ccare_agent_id').val([]).trigger('change');
+                $jq('#newbiz_agent_id').val([]).trigger('change');
             }
         }
     }

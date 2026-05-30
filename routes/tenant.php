@@ -645,6 +645,30 @@ Route::middleware([
             });
         });
 
+        // Travel & Expense Claims
+        Route::prefix('travel-claims')->name('travel-claims.')->group(function() {
+            Route::get('/', [\App\Http\Controllers\tenant\TravelClaimController::class, 'index'])->name('index');
+            Route::get('/create', [\App\Http\Controllers\tenant\TravelClaimController::class, 'create'])->name('create');
+            Route::post('/store', [\App\Http\Controllers\tenant\TravelClaimController::class, 'store'])->name('store');
+            Route::get('/{id}/edit', [\App\Http\Controllers\tenant\TravelClaimController::class, 'edit'])->name('edit');
+            Route::post('/{id}/update', [\App\Http\Controllers\tenant\TravelClaimController::class, 'update'])->name('update');
+            Route::get('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'show'])->name('show');
+            
+            // Admin/HR specific
+            Route::middleware(['role:admin|hr'])->group(function() {
+                Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard');
+                Route::post('/{id}/verify', [\App\Http\Controllers\tenant\TravelClaimController::class, 'verify'])->name('verify');
+                Route::post('/{id}/reject', [\App\Http\Controllers\tenant\TravelClaimController::class, 'reject'])->name('reject');
+                Route::post('/{id}/objection', [\App\Http\Controllers\tenant\TravelClaimController::class, 'objection'])->name('objection');
+            });
+            
+            // Accounts specific
+            Route::middleware(['role:admin|accounts'])->group(function() {
+                Route::post('/{id}/approve', [\App\Http\Controllers\tenant\TravelClaimController::class, 'approve'])->name('approve');
+                Route::post('/{id}/pay', [\App\Http\Controllers\tenant\TravelClaimController::class, 'pay'])->name('pay');
+            });
+        });
+
         Route::middleware(['role:admin|hr'])->prefix('hr-policies')->name('hr-policies.')->group(function() {
             Route::get('/', [HRPolicyController::class, 'index'])->name('index');
             Route::post('/', [HRPolicyController::class, 'store'])->name('store');

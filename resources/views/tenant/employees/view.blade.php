@@ -550,10 +550,12 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#banking-payroll"><i
                                         class="bx bx-credit-card me-1"></i> Banking & Payroll</a>
                             </li>
+                            @if(!auth()->user()->hasRole('accounts'))
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#documents"><i class="bx bx-file me-1"></i>
                                     Documents</a>
                             </li>
+                            @endif
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab"><i
                                         class="bx bx-bullseye me-1"></i> Key Result Areas (KRAs)</a>
@@ -876,7 +878,7 @@
                                             $deptName = strtolower(trim($user->department?->name ?? ''));
                                             $allowedDepts = ['sales', 'sale', 'sale department', 'sales department'];
                                         @endphp
-                                        @if(in_array($deptName, $allowedDepts) || $currentCcareId || $currentNewbizId)
+                                        @if(in_array($deptName, $allowedDepts) || !empty($currentCcareIds) || !empty($currentNewbizIds))
                                         <!-- CC Agent -->
                                         <div class="col-md-4">
                                             <div class="emp-field-box">
@@ -891,9 +893,9 @@
                                                         </p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
                                                             @php
-                                                                $ccareUser = $currentCcareId ? \App\Models\User::find($currentCcareId) : null;
+                                                                $ccareUsersAssigned = !empty($currentCcareIds) ? \App\Models\User::whereIn('id', $currentCcareIds)->get() : collect();
                                                             @endphp
-                                                            {{ $ccareUser ? $ccareUser->first_name . ' ' . $ccareUser->last_name : 'Not Assigned' }}
+                                                            {{ $ccareUsersAssigned->count() > 0 ? $ccareUsersAssigned->map(fn($u) => $u->first_name . ' ' . $u->last_name)->implode(', ') : 'Not Assigned' }}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -912,9 +914,9 @@
                                                         </p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
                                                             @php
-                                                                $newbizUser = $currentNewbizId ? \App\Models\User::find($currentNewbizId) : null;
+                                                                $newbizUsersAssigned = !empty($currentNewbizIds) ? \App\Models\User::whereIn('id', $currentNewbizIds)->get() : collect();
                                                             @endphp
-                                                            {{ $newbizUser ? $newbizUser->first_name . ' ' . $newbizUser->last_name : 'Not Assigned' }}
+                                                            {{ $newbizUsersAssigned->count() > 0 ? $newbizUsersAssigned->map(fn($u) => $u->first_name . ' ' . $u->last_name)->implode(', ') : 'Not Assigned' }}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1955,6 +1957,7 @@
                         </div>
 
                         <!-- Documents Tab -->
+                        @if(!auth()->user()->hasRole('accounts'))
                         <div class="tab-pane fade" id="documents">
                             <div class="card mb-4 emp-card">
                                 <div class="card-body p-5">
@@ -2257,6 +2260,7 @@
                                 </div>
                             </div>
                         </div>
+                        @endif
 
 
                         <!-- KRAs (Key Result Areas) Tab -->

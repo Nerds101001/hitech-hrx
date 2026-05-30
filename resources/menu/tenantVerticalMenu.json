@@ -397,6 +397,37 @@
             ]
         },
         {
+            "name": "Travel & Expense",
+            "icon": "menu-icon bx bx-trip",
+            "slug": [
+                "travel-claims.index",
+                "travel-claims.adminDashboard"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts"
+            ],
+            "submenu": [
+                {
+                    "url": "/travel-claims",
+                    "name": "My Claims / Verify",
+                    "slug": "travel-claims.index"
+                },
+                {
+                    "url": "/travel-claims/admin/dashboard",
+                    "name": "Admin Dashboard",
+                    "slug": "travel-claims.adminDashboard",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
+            ]
+        },
+        {
             "menuHeader": "Operations",
             "roles": [
                 "admin",
@@ -570,6 +601,19 @@
             ]
         },
         {
+            "url": "/mind-speak",
+            "name": "Mind Speak",
+            "icon": "menu-icon bx bx-brain",
+            "slug": "mind-speak.index",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts"
+            ]
+        },
+        {
             "menuHeader": "Requests",
             "roles": [
                 "admin",
@@ -670,9 +714,9 @@
             ],
             "submenu": [
                 {
-                    "url": "/asset-management/create",
-                    "name": "Add Asset",
-                    "slug": "assets.create",
+                    "url": "/asset-management",
+                    "name": "Asset Manager",
+                    "slug": "assets.index",
                     "roles": [
                         "admin",
                         "hr"

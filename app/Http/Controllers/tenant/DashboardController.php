@@ -47,8 +47,13 @@ class DashboardController extends Controller
     $todayVisits = $user ? $user->todayVisits()->get() : collect();
     $isManager = $user ? $user->hasRole('manager') : false;
 
-    if ($user && ($user->hasRole(['admin', 'hr', 'accounts']) || $isManager)) {
-        // ... (existing admin/hr logic below or manager specific logic)
+    // If user has 'employee' role, always show employee dashboard —
+    // even if they were accidentally assigned 'accounts' role via bulk department assignment.
+    // Only pure accounts/admin/hr role holders (with no employee role) get the admin dashboard.
+    $isEmployee = $user && $user->hasRole('employee');
+
+    if (!$isEmployee && $user && ($user->hasRole(['admin', 'hr', 'accounts']) || $isManager)) {
+        // admin / hr / accounts (non-employee) get the full strategic dashboard
       // Calculate base HR stats
       $totalUser = User::count();
       $active = User::where('status', UserAccountStatus::ACTIVE)->count();
@@ -92,10 +97,16 @@ class DashboardController extends Controller
         $hiringTrend['attrition'][] = $attritionByMonth->get($monthLabel, 0);
       }
 
-      // 2. Department Distribution
-      $departmentData = Department::withCount('users')
-        ->whereHas('users') // Only show departments with actual staff
-        ->orderBy('users_count', 'desc')
+      // 2. Department Distribution — count ONLY currently active employees
+      // Uses direct department_id on users table (not via designation hasManyThrough)
+      $departmentData = Department::select('departments.id', 'departments.name')
+        ->selectRaw('COUNT(users.id) as users_count')
+        ->join('users', function ($join) {
+          $join->on('users.department_id', '=', 'departments.id')
+               ->where('users.status', '=', UserAccountStatus::ACTIVE->value);
+        })
+        ->groupBy('departments.id', 'departments.name')
+        ->orderByDesc('users_count')
         ->take(10)
         ->get()
         ->map(function ($dept) {
@@ -440,76 +451,9 @@ class DashboardController extends Controller
       ]);
     }
 
-    $totalUser = User::count();
-    $active = User::where('status', UserAccountStatus::ACTIVE)->count();
-    $presentUsersCount = Attendance::whereDate('check_in_time', now())->where('status', 'present')->count();
-    $presentUsersCountLastWeek = Attendance::whereBetween('created_at', [now()->startOfWeek()->subWeek(), now()->endOfWeek()->subWeek()])
-      ->where('check_out_time', '!=', null)
-      ->get()
-      ->sum(function ($attendance) {
-      return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-    });
-
-    $thisWeekWorkingHours = Attendance::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-      ->where('check_out_time', '!=', null)
-      ->get()
-      ->sum(function ($attendance) {
-      return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-    });
-
-    $todayHours = Attendance::whereDate('check_in_time', now())
-      ->where('check_out_time', '!=', null)
-      ->get()
-      ->sum(function ($attendance) {
-      return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-    });
-
-    $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
-      ->where('status', LeaveRequestStatus::APPROVED)
-      ->count();
-
-    // Holiday & team availability — same as UserDashboardController
-    $user = auth()->user();
-    $nextHoliday = Holiday::where('date', '>=', now()->toDateString())
-      ->where('status', 1)
-      ->where(function ($q) use ($user) {
-      $q->whereNull('site_id')
-        ->orWhere('site_id', $user->site_id);
-    })
-      ->orderBy('date', 'asc')
-      ->first();
-
-    $teamOutToday = LeaveRequest::whereDate('from_date', '<=', now())
-      ->whereDate('to_date', '>=', now())
-      ->where('status', LeaveRequestStatus::APPROVED)
-      ->with(['user', 'leaveType'])
-      ->get();
-
-    return view('tenant.dashboard.index', [
-      'todayVisits' => $todayVisits,
-      'pageConfigs' => ['contentLayout' => 'wide'],
-      'totalUser' => $totalUser,
-      'activeEmployees' => $active,
-      'active' => $active,
-      'presentUsersCount' => $presentUsersCount,
-      'pendingLeaveRequests' => LeaveRequest::where('status', 'pending')->count(),
-      'pendingExpenseRequests' => ExpenseRequest::where('status', 'pending')->count(),
-      'pendingDocumentRequests' => DocumentRequest::where('status', 'pending')->count(),
-      'pendingLoanRequests' => LoanRequest::where('status', 'pending')->count(),
-      'thisWeekWorkingHours' => round($thisWeekWorkingHours, 2),
-      'todayHours' => round($todayHours, 2),
-      'tasks' => Task::where('status', 'new')->count(),
-      'onGoingTasks' => Task::where('status', 'in_progress')->count(),
-      'todayPresentUsers' => Attendance::whereDate('check_in_time', now())->where('status', 'present')->count(),
-      'todayAbsentUsers' => $active - Attendance::whereDate('check_in_time', now())->where('status', 'present')->count(),
-      'presentUsersCountLastWeek' => $presentUsersCountLastWeek,
-      'absentUsersCountLastWeek' => $active - $presentUsersCountLastWeek,
-      'onLeaveUsersCount' => $onLeaveUsersCount,
-      'nextHoliday' => $nextHoliday,
-      'teamOutToday' => $teamOutToday,
-      'upcomingBirthdays' => $upcomingBirthdaysFiltered,
-      'upcomingAnniversaries' => $upcomingAnniversariesFiltered,
-    ]);
+    // All non-admin/non-hr/non-manager users → hand off to UserDashboardController
+    // which properly routes: employee role → employee-index (personal data only)
+    return app(\App\Http\Controllers\tenant\users\UserDashboardController::class)->index();
   }
 
   public function getRecentActivities()

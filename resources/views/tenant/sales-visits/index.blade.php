@@ -5,6 +5,9 @@
 @section('vendor-style')
 <link rel="stylesheet" href="{{ asset('vendor/libs/select2/select2.css') }}">
 <link rel="stylesheet" href="{{ asset('vendor/libs/flatpickr/flatpickr.css') }}">
+@vite([
+  'resources/assets/vendor/scss/pages/hitech-portal.scss'
+])
 @endsection
 
 @section('page-style')
@@ -65,48 +68,7 @@
     transform: translateY(-2px);
   }
 
-  /* ===================== KPI Cards ===================== */
-  .sv-stat-card {
-    border-radius: 16px;
-    padding: 1.5rem 1.6rem;
-    position: relative;
-    overflow: hidden;
-    border: none;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-    transition: transform 0.22s ease, box-shadow 0.22s ease;
-  }
-  .sv-stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 10px 32px rgba(0,0,0,0.14);
-  }
-  .sv-stat-card .stat-icon {
-    width: 52px; height: 52px;
-    border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-  }
-  .sv-stat-card .stat-value {
-    font-size: 2.1rem;
-    font-weight: 800;
-    line-height: 1;
-    margin-bottom: 0.25rem;
-  }
-  .sv-stat-card .stat-label {
-    font-size: 0.83rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.72;
-  }
-  .stat-total    { background: linear-gradient(135deg, #0d7377, #14a085); color:#fff; }
-  .stat-today    { background: linear-gradient(135deg, #3a0ca3, #7209b7); color:#fff; }
-  .stat-pending  { background: linear-gradient(135deg, #f77f00, #fcbf49); color:#fff; }
-  .stat-done     { background: linear-gradient(135deg, #2dc653, #38b000); color:#fff; }
-  .stat-total  .stat-icon { background: rgba(255,255,255,0.18); }
-  .stat-today  .stat-icon { background: rgba(255,255,255,0.18); }
-  .stat-pending .stat-icon { background: rgba(255,255,255,0.18); }
-  .stat-done   .stat-icon { background: rgba(255,255,255,0.18); }
+
 
   /* ===================== Filter Bar ===================== */
   .sv-filter-bar {
@@ -147,81 +109,17 @@
     color: #0d7377;
     font-size: 0.95rem;
   }
-  .sv-table thead th {
-    background: #f3fffe;
-    color: #0d7377;
-    font-size: 0.78rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 2px solid #c7eaea;
-    padding: 0.9rem 1rem;
-    white-space: nowrap;
-  }
-  .sv-table tbody tr {
-    transition: background 0.15s ease;
-  }
-  .sv-table tbody tr:hover {
-    background: #f0fffe;
-  }
-  .sv-table td {
-    padding: 0.85rem 1rem;
-    vertical-align: middle;
-    font-size: 0.88rem;
-    color: #3d3d3d;
-    border-bottom: 1px solid #f0f2f5;
-  }
   .sv-client-name {
     font-weight: 700;
-    color: #1a1a2e;
+    color: #1A1A2E;
     display: block;
     font-size: 0.9rem;
   }
   .sv-client-city {
     font-size: 0.78rem;
-    color: #8a90a2;
+    color: #8A90A2;
   }
-  .sv-badge {
-    display: inline-block;
-    padding: 0.3em 0.8em;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.3px;
-  }
-  .badge-visit-type  { background:#e8f4fd; color:#0077b6; }
-  .badge-pending     { background:#fff3cd; color:#856404; }
-  .badge-confirmed   { background:#cff4fc; color:#055160; }
-  .badge-completed   { background:#d1e7dd; color:#0a3622; }
-  .badge-cancelled   { background:#f8d7da; color:#58151c; }
-
-  .btn-action-view {
-    background: linear-gradient(135deg, #0d7377, #14a085);
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-    transition: all 0.2s ease;
-  }
-  .btn-action-view:hover {
-    opacity: 0.88;
-    color: #fff;
-    transform: translateY(-1px);
-  }
-  .btn-action-cancel {
-    background: #fff2f2;
-    color: #d63031;
-    border: 1px solid #f5c6c6;
-    border-radius: 8px;
-    padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
-    transition: all 0.2s ease;
-  }
-  .btn-action-cancel:hover {
-    background: #d63031;
-    color: #fff;
-  }
+  .badge-visit-type  { background:#E8F4FD; color:#0077B6; border-radius: 20px; padding: 0.3em 0.8em; font-size: 0.75rem; font-weight: 700; }
 
   /* ===================== Empty State ===================== */
   .sv-empty {
@@ -253,7 +151,7 @@
 @endsection
 
 @section('content')
-<div class="container-xxl flex-grow-1 container-p-y">
+<div class="animate__animated animate__fadeIn px-4">
 
   {{-- Flash Messages --}}
   @if(session('success'))
@@ -285,33 +183,49 @@
   </div>
 
   {{-- ===== KPI Stat Cards ===== --}}
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-xl-3">
-      <div class="sv-stat-card stat-total">
-        <div class="stat-icon">📊</div>
-        <div class="stat-value">{{ $stats['total'] ?? 0 }}</div>
-        <div class="stat-label">Total Visits</div>
+  <div class="row g-6 mb-6">
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="hitech-stat-card dashboard-variant card-teal h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-teal"><i class="bx bx-bar-chart-alt-2"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ $stats['total'] ?? 0 }}</h3>
+          <small class="stat-label">Total Visits</small>
+        </div>
       </div>
     </div>
-    <div class="col-6 col-xl-3">
-      <div class="sv-stat-card stat-today">
-        <div class="stat-icon">📅</div>
-        <div class="stat-value">{{ $stats['today'] ?? 0 }}</div>
-        <div class="stat-label">Today's Visits</div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="hitech-stat-card dashboard-variant card-blue h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-blue"><i class="bx bx-calendar"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ $stats['today'] ?? 0 }}</h3>
+          <small class="stat-label">Today's Visits</small>
+        </div>
       </div>
     </div>
-    <div class="col-6 col-xl-3">
-      <div class="sv-stat-card stat-pending">
-        <div class="stat-icon">⏳</div>
-        <div class="stat-value">{{ $stats['pending'] ?? 0 }}</div>
-        <div class="stat-label">Pending</div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="hitech-stat-card dashboard-variant card-amber h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-amber"><i class="bx bx-time-five"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ $stats['pending'] ?? 0 }}</h3>
+          <small class="stat-label">Pending</small>
+        </div>
       </div>
     </div>
-    <div class="col-6 col-xl-3">
-      <div class="sv-stat-card stat-done">
-        <div class="stat-icon">✅</div>
-        <div class="stat-value">{{ $stats['completed'] ?? 0 }}</div>
-        <div class="stat-label">Completed</div>
+    <div class="col-12 col-sm-6 col-xl-3">
+      <div class="hitech-stat-card dashboard-variant card-teal h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-teal"><i class="bx bx-check-double"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ $stats['completed'] ?? 0 }}</h3>
+          <small class="stat-label">Completed</small>
+        </div>
       </div>
     </div>
   </div>
@@ -384,33 +298,36 @@
   </div>
 
   {{-- ===== Visits Table ===== --}}
-  <div class="card sv-table-card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span><i class="bx bx-list-ul me-2"></i>All Visits
-        <span class="badge ms-2" style="background:#0d7377;font-size:0.78rem;">{{ $visits->total() }}</span>
-      </span>
+  <div class="hitech-card shadow-sm mb-6">
+    <div class="hitech-card-header d-flex justify-content-between align-items-center">
+      <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a;">
+        <i class="bx bx-list-ul fs-4" style="color: #0d9488;"></i>
+        <span>All Visits</span>
+        <span class="badge rounded-pill fw-bold" style="background: rgba(0, 90, 90, 0.15); color: #005a5a; font-size: 0.85rem;">{{ $visits->total() }}</span>
+      </h5>
       <small class="text-muted">Showing {{ $visits->firstItem() ?? 0 }}–{{ $visits->lastItem() ?? 0 }} of {{ $visits->total() }}</small>
     </div>
     <div class="card-body p-0">
       @if($visits->count() > 0)
         <div class="table-responsive">
-          <table class="table sv-table mb-0">
+          <table class="table mb-0 table-hover align-middle">
             <thead>
               <tr>
-                <th>#</th>
+                <th class="ps-4">#</th>
                 <th>Client</th>
                 <th>Visit Type</th>
                 <th>Salesperson</th>
                 <th>CC Agent</th>
                 <th>Scheduled</th>
                 <th>Status</th>
-                <th class="text-center">Actions</th>
+                <th>Feedback</th>
+                <th class="text-center pe-4">Actions</th>
               </tr>
             </thead>
             <tbody>
               @foreach($visits as $i => $visit)
               <tr>
-                <td class="text-muted" style="font-size:0.8rem;">{{ $visits->firstItem() + $i }}</td>
+                <td class="text-muted ps-4" style="font-size:0.8rem;">{{ $visits->firstItem() + $i }}</td>
                 <td>
                   <span class="sv-client-name">{{ $visit->client->name ?? '—' }}</span>
                   <span class="sv-client-city"><i class="bx bx-map-pin" style="font-size:0.75rem;"></i> {{ $visit->client->city ?? '' }}</span>
@@ -425,7 +342,7 @@
                     ];
                     $typeInfo = $typeLabels[$visit->visit_type] ?? ['label'=>ucfirst(str_replace('_',' ',$visit->visit_type)), 'icon'=>'📋'];
                   @endphp
-                  <span class="sv-badge badge-visit-type">{{ $typeInfo['icon'] }} {{ $typeInfo['label'] }}</span>
+                  <span class="badge badge-visit-type">{{ $typeInfo['icon'] }} {{ $typeInfo['label'] }}</span>
                 </td>
                 <td>
                   <span style="font-weight:600;">{{ $visit->salesperson->name ?? '—' }}</span>
@@ -438,42 +355,63 @@
                   <small class="text-muted">{{ \Carbon\Carbon::parse($visit->scheduled_at)->format('h:i A') }}</small>
                 </td>
                 <td>
-                  @switch($visit->status)
-                    @case('pending')
-                      <span class="sv-badge badge-pending">⏳ Pending</span>
-                      @break
-                    @case('confirmed')
-                      <span class="sv-badge badge-confirmed">✔ Confirmed</span>
-                      @break
-                    @case('completed')
-                      <span class="sv-badge badge-completed">✅ Completed</span>
-                      @if($visit->verification_status === 'approved')
-                        <span class="sv-badge mt-1" style="background:#d1fae5;color:#065f46;"><i class="ti ti-shield-check"></i> Approved</span>
-                      @elseif($visit->verification_status === 'rejected')
-                        <span class="sv-badge mt-1" style="background:#fee2e2;color:#991b1b;"><i class="ti ti-shield-x"></i> Rejected</span>
-                      @else
-                        <span class="sv-badge mt-1" style="background:#fef3c7;color:#92400e;"><i class="ti ti-shield"></i> Unverified</span>
-                      @endif
-                      @break
-                    @case('cancelled')
-                      <span class="sv-badge badge-cancelled">✖ Cancelled</span>
-                      @break
-                    @default
-                      <span class="sv-badge" style="background:#f0f0f0;color:#555;">{{ ucfirst($visit->status) }}</span>
-                  @endswitch
+                  <div class="d-flex flex-column align-items-start gap-1">
+                    @switch($visit->status)
+                      @case('pending')
+                        <span class="badge bg-label-warning px-3 py-1.5 fw-bold"><i class="bx bx-time-five me-1"></i> Pending</span>
+                        @break
+                      @case('confirmed')
+                        <span class="badge bg-label-info px-3 py-1.5 fw-bold"><i class="bx bx-check me-1"></i> Confirmed</span>
+                        @break
+                      @case('completed')
+                        <span class="badge bg-label-success px-3 py-1.5 fw-bold"><i class="bx bx-check-double me-1"></i> Completed</span>
+                        @if($visit->verification_status === 'approved')
+                          <span class="badge bg-label-success px-3 py-1.5 fw-bold"><i class="bx bx-shield-quarter me-1"></i> Approved</span>
+                        @elseif($visit->verification_status === 'rejected')
+                          <span class="badge bg-label-danger px-3 py-1.5 fw-bold"><i class="bx bx-shield-x me-1"></i> Rejected</span>
+                        @else
+                          <span class="badge bg-label-warning px-3 py-1.5 fw-bold"><i class="bx bx-shield-minus me-1"></i> Unverified</span>
+                        @endif
+                        @break
+                      @case('cancelled')
+                        <span class="badge bg-label-danger px-3 py-1.5 fw-bold"><i class="bx bx-x me-1"></i> Cancelled</span>
+                        @break
+                      @default
+                        <span class="badge bg-label-secondary px-3 py-1.5 fw-bold">{{ ucfirst($visit->status) }}</span>
+                    @endswitch
+                  </div>
                 </td>
-                <td class="text-center">
-                  <div class="d-flex gap-2 justify-content-center">
-                    <a href="{{ route('sales-visits.show', $visit->id) }}" class="btn btn-action-view" title="View Details">
-                      <i class="bx bx-show"></i>
+                <td>
+                  @if($visit->rating)
+                    <div class="d-flex align-items-center gap-1">
+                      <span class="text-warning">
+                        @for($i=1; $i<=5; $i++)
+                          <i class="bx {{ $i <= $visit->rating ? 'bxs-star' : 'bx-star' }}" style="font-size:0.95rem;"></i>
+                        @endfor
+                      </span>
+                      @if($visit->rating_comment)
+                        <button type="button" class="btn btn-icon btn-sm rounded-pill text-muted p-0 m-0" style="width:20px;height:20px;" data-bs-toggle="tooltip" data-bs-placement="top" title="{{ $visit->rating_comment }}">
+                          <i class="bx bx-message-dots" style="font-size:1.1rem; color:#0d9488;"></i>
+                        </button>
+                      @endif
+                    </div>
+                  @else
+                    <span class="text-muted" style="font-size:0.75rem;">—</span>
+                  @endif
+                </td>
+                <td class="text-center pe-4">
+                  <div class="d-flex gap-2 justify-content-center align-items-center">
+                    <a href="{{ route('sales-visits.show', $visit->id) }}" class="btn btn-sm btn-icon btn-label-teal rounded-pill" title="View Details">
+                      <i class="bx bx-show fs-5"></i>
                     </a>
                     @if($visit->status === 'pending')
                     <form method="POST" action="{{ route('sales-visits.cancel', $visit->id) }}"
+                          class="m-0"
                           onsubmit="return confirm('Cancel this visit?');">
                       @csrf
                       @method('PATCH')
-                      <button type="submit" class="btn btn-action-cancel" title="Cancel Visit">
-                        <i class="bx bx-x"></i> Cancel
+                      <button type="submit" class="btn btn-sm btn-label-danger rounded-pill px-3" title="Cancel Visit">
+                        <i class="bx bx-x me-1"></i> Cancel
                       </button>
                     </form>
                     @endif
@@ -518,6 +456,12 @@
       const bsAlert = new bootstrap.Alert(el);
       bsAlert.close();
     }, 4000);
+  });
+
+  // Initialize tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
   });
 </script>
 @endsection

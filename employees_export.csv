@@ -1,0 +1,205 @@
+Name,Department,Email,Phone,Designation
+"Nagender Kumar","IT Department",ai@rustx.com,7889041267,Manager
+"Mukul Sareen","Admin Department",mukul@rustx.com,,Director
+"MAHENDER SINGH","Ecommerce Department",ecom1@keep-it-fresh.com,9810590056,"SENIOR MANAGER"
+"AMIT KUMAR Nanda","Design Department",design@keep-it-fresh.com,9910831073,"SENIOR GRAPHIC DESIGNER"
+"SHIVANI CHHIBBER CHHIBBER","Customer Care",shivani.drbio@gmail.com,8279791840,"Senior Executive"
+"DIPALI SHARMA","New Biz",newbiz6@drbio.in,6398496919,"Senior Specialist"
+"MAMTA Arora","New Biz",ccare2@drbio.in,9999289992,Manager
+"SONIA Arora","New Biz",newbiz10@rustx.com,8567021019,"Senior Specialist"
+"GEET KAUR","New Biz",newbiz10@drbio.in,8448108122,"Senior Specialist"
+"RAJENDRA SINGH SINGH","Customer Care",ccare11@rustx.com,9166514300,Executive
+"REKHA DEVI","New Biz",Newbiz3@rustx.com,8920571780,"Senior Specialist"
+"PRIYAL Gangwar","HR Department",priyal@hitechgroup.in,9654077778,"Senior MANAGER"
+"POOJA SONI","New Biz",Ccare2@fillezy.com,9466688514,"Senior Executive"
+"Sobika Ambardar","Customer Excellence",ce@drbio.in,8527660264,Manager
+"POOJA KUMARI","New Biz",ccare3@fillezy.com,9580251056,Executive
+"SHRUTI MITTAL","Pre Sales",shruti@drbio.in,8057693234,"SENIOR EXECUTIVE"
+"TRISHNA DHARIWAL DHARIWAL","New Biz",presales2@hitechgroup.in,9310587830,"ASSISTANT MANAGER"
+"SHIVANI YADAV","Pre Sales",presales4@hitechgroup.in,9991310140,"Assistant Manager"
+"ARCHANA DESHWAL","Pre Sales",presales3@hitechgroup.in,9220627850,"Assistant Manager"
+"SUCHITA Rustogi","HR Department",suchita@rustx.com,9958590510,"Deputy General Manager"
+"ANCHAL THAKAR","New Biz",ccare1@fillezy.com,9582627541,Executive
+"SADHNA Arora","Design Department",process@rustx.com,8750998188,"SENIOR MANAGER"
+"SUUNIL SHARRMA","Ecommerce Department",ecom@keep-it-fresh.com,7042111565,"SENIOR MANAGER"
+"JASLEEN SAINS","Customer Care",ccare3@keep-it-fresh.com,7719773482,Executive
+"SANJANA YADAV","Customer Care",ccare9@rustx.com,7696381938,Executive
+"DIPIKA DAS","New Biz",newbiz2@rustx.com,9041118514,Executive
+"MANPREET KAUR KOHLI","Customer Care",export1@tuffpaulin.com,7696089526,Executive
+"Shallu Rani","Customer Care",ccare5@rustx.com,8437004179,"Customer Care Executive"
+"SHALLU SHARMA","Customer Care",ccare5@doctorrust.com,9814296444,Executive
+"PREETI SHARMA","Customer Care",ccare7@rustx.com,7986108856,Executive
+"NIDHI SHARMA","Customer Care",ccare4@rustx.com,9780145495,Executive
+"MANPREET KAUR","Customer Care",ccare6@drbio.in,9914302133,Executive
+"SATWINDER KAUR","Customer Care",ccare1@doctorrust.com,7347626889,Executive
+"POONAM SHARMA","Customer Care",ccare2@rustx.com,8219784311,Executive
+"RABINA PARKAR","Customer Care",ccare@tuffpaulin.com,7707803943,Executive
+"VANDANA MISHRA","Customer Care",ccare8@rustx.com,8437757651,Executive
+"RAJENDER SINGH","Export Department",export2@rustx.com,9501748704,"Senior Manager"
+"PANKAJ KUMARI","Export Department",exportaccount@rustx.com,9779007229,"Export Assistant"
+"MANJINDER KAUR","Export Department",export5@rustx.com,9914795444,"Export Manager"
+"DEBLINA LAYEK","Export Department",export3@rustx.com,9877790802,"Export Assistant"
+"Esha Das","Ecommerce Department",eshadas523@gmail.com,7703966839,"junior Executive"
+"Anjana Verma","New Biz",sainianjana94@gmail.com,9821411707,Executive
+"Sachin Sharma","Sales Department",sachinsharma722993@gmail.com,6396245523,"SENIOR EXECUTIVE"
+"Manoj Patle","Quality Department",gmquality@rustx.com,9049294066,"GENERAL MANAGER"
+"RAJESH BHARDWAJ","Accounts Department",accounts@rustx.com,9417726918,Manager
+"SHUBHAM KUMAR","Accounts Department",accounts5@rustx.com,6283139946,Executive
+"DHARMINDER PAL","Accounts Department",accounts2@rustx.com,9915570054,N/A
+"SHEELU MUKHAR","Billing Department",rustx.legal@gmail.com,8146488919,Manager
+"ARPANA Katyal","Finance Department",finance@rustx.com,9888972510,Head
+"PRIYANKA KAPUR","Finance Department",finance4@rustx.com,8264636251,Executive
+"LATA DEVI","Finance Department",finance5@rustx.com,9855746190,Executive
+"SANDHYA Kumari","Finance Department",finance3@rustx.com,8566862964,Executive
+"SHAVI GOYAL","Finance Department",finance1@rustx.com,9914190034,Executive
+"RUCHI GARG","Finance Department",finance7@rustx.com,8894938572,N/A
+"RAMANDEEP KAUR GILL","HR Department",hr@rustx.com,9041010184,Manager
+"RIYA SHARMA","HR Department",rustx.travelling@gmail.com,9779145166,Executive
+"SANDEEP SODHI","Legal Department",accounts1@docotrrust.com,9041018144,Manager
+"HEENA SAINI","Director Office",pa1@rustx.com,7986686115,"Executive assistant"
+"DINESH MAURYA","Production Department",rustx.unit8@gmail.com,7508555767,Manager
+"NITASHA SHARMA","Purchase Department",purchase@rustx.com,9878360549,Manager
+"SHEETAL MAGGO","Purchase Department",purchase4@rustx.com,6284299705,N/A
+"SHWETA mathur","Purchase Department",purchase6@rustx.com,8847376841,N/A
+"MEHA UPPAL","Purchase Department",purchase5@rustx.com,7658881092,N/A
+"PRIYANKA A","Purchase Department",purchase3@rustx.com,9646148027,N/A
+"ANJALI GANDHER","Purchase Department",purchase1@rustx.com,8699559329,N/A
+"MANSI Mansi","Purchase Department",purchase2@rustx.com,7986933708,N/A
+"BHUNESH KUMAR BHAGAT","Sales Department",gujarat1@rustx.com,9924527466,"SENIOR MANAGER"
+"NAVIN CHANDRA JOSHI","Sales Department",newbiz@doctorrust.com,8284012036,"SENIOR MANAGER"
+"BHUPINDER RAWAT","Sales Department",Punjab1@doctorrust.com,9914781444,"Assistant Manager"
+"AMOL KASHINATH KENDRE","Sales Department",aurangabad@rustx.com,7972658078,Manager
+"ATUL BHALERAO","Sales Department",pune1@doctorrust.com,9096250064,"Senior MANAGER"
+"VIVEKANAND SINGH BAIS","Sales Department",blr4@rustx.com,8660810708,"SENIOR MANAGER"
+"VISHAL DHANRAJ PATIL","Sales Department",pune2@rustx.com,8600104557,Executive
+"ANIKET DATTATRAYA AWHALE","Sales Department",pune6@rustx.com,9545775656,"Assistant Manager"
+"SADANAND SHARAD GORE","Sales Department",pune4@rustx.com,9175448306,"Sales Engineer"
+"LIJO NEDUNGOOR JOHN","Sales Department",kerala@tuffpaulin.com,9633351809,Manager
+"U KRISHNAMOORTHY","Sales Department",Chennai1@tuffpaulin.com,7397321286,N/A
+"V KRISHNAN MURTHY","Sales Department",chennai1@doctorrust.com,9444004055,N/A
+"KARTHIKEYAN D","Sales Department",Karthikeyan@rustx.com,9176647348,Manager
+"K R MANISH","Sales Department",chennai@rustx.com,9094402964,Manager
+"ASHOKA BM","Sales Department",blr3@rustx.com,7020811494,Executive
+"DANIEL RAJ DIVIYANANDAM","Sales Department",coimbatore1@rustx.com,6302467079,"SENIOR MANAGER"
+"KRISHNA DEO SINGH","Sales Department",delhi4@drbio.in,9891913611,Manager
+"ISHAN SIKKA","Sales Department",delhi@rustx.com,8800099601,"Project Head"
+"JAIDEEP SINGH","Sales Department",Delhi5@drbio.in,9529546671,"Senior MANAGER"
+"HARDIK GAUR","Sales Department",delhi1@keep-it-fresh.com,9058800570,"Assistant Manager"
+"PUSHPENDER KUMAR","Sales Department",gujarat@rustx.com,8800099607,Manager
+"PRAVEEN KUMAR","Sales Department",gurgaon1@rustx.com,9990033777,Manager
+"SHANKAR MORE","Sales Department",maharashtra1@keep-it-fresh.com,9834556340,Executive
+"VIKAS KAMLAKAR","Sales Department",kolhapur@doctorrust.com,7588920320,Manager
+"SHRI KANT","Sales Department",shrikant.bhalla@rustx.com,9780576973,Manager
+"BHARAT SHARMA","Sales Department",manesar3@rustx.com,9560039271,"Assistant Manager"
+"RAVI KUMAR NEGI","Sales Department",delhi5@rustx.com,9899274483,"SENIOR MANAGER"
+"PRATEEK TANDON","Channel Sales",prateek.tandon@rustx.com,9899240118,Manager
+"ANIL KUMAR B","Sales Department",blr1@rustx.com,8861212721,Manager
+"ARDAMAN SINGH WASON","Channel Sales",Ardaman@hitechgroup.in,9810316744,"Vice President"
+"MEER SINGH","Sales Department",delhi2@rustx.com,9813166421,"Assistant General Manager"
+"SURINDER SINGH OBEROI","Sales Department",surinder.oberoi@drbio.in,7838007400,"National Sales Manager"
+"CHANDAN SHARMA","Sales Department",mp2@doctorrust.com,7415004601,"SENIOR MANAGER"
+"PRADEEP VISHWAKARMA","Sales Department",Mumbai1@rustx.com,9699321338,"SENIOR MANAGER"
+"GIRISH ARJUN BIJUTKAR","Sales Department",nashik@keep-it-fresh.com,9137128982,Manager
+"AKSHAY SAMBHAJI ADHAV","Sales Department",pune8@rustx.net,8605167902,Manager
+"ANIL GORE","Sales Department",Pune1@tuffpaulin.com,9673283737,"Senior MANAGER"
+"PRADIP BABURAO MULGIR","Sales Department",Pradip.mulgir@rustx.com,8975720522,"Assistant Manager"
+"VINAY PAL SINGH","Sales Department",pune9@rustx.com,7017210437,"Assistant General Manager"
+"RAHUL RAHUL","Sales Department",rajasthan1@rustx.com,9466538883,"Sales Engineer"
+"OSWALD ANTHONY GREALY","Sales Department",rmsouth@rustx.com,9176840357,"GENERAL MANAGER"
+"RITU KAMAL","Accounts Department",ritukamal152@gmail.com,7087772892,Executive
+"RAJNISH SHRIVASTVE","Billing Department",rajnishludhiana@gmail.com,7527968481,Executive
+"SURAJ KUMAR","Accounts Department",sunnykumar5096@gmail.com,8146211467,N/A
+"MANISHA KUMARI","Billing Department",k9876manisha@gmail.com,8725924162,Executive
+"RAJ KISHORE SINGH","Accounts Department",rajkishoresingh576@gmail.com,9915175802,N/A
+"JATINDER KUMAR","Accounts Department",jk521649@gmail.com,6280180076,N/A
+"DIVYA Munjal","Accounts Department",divyamunjal63403@gmail.com,9592350763,Executive
+"DIMPLE RAWAT","Billing Department",idimplerawat@gmail.com,9023518967,Executive
+"ALOK KUMAR TIWARI","Billing Department",aloktiwari3289@gmail.com,8968014531,Executive
+"VISHAL SINGH","Billing Department",VV2995127@GMAIL.COM,7888454873,Executive
+"RASHMI KUMARI","Accounts Department",rashmi3867@gmail.com,8284842817,Executive
+"SHIVAM RAWAT","Billing Department",shivrawat9667@gmail.com,9540309797,Executive
+"PARDEEP SINGH","Billing Department",pardeepsingh770788@gmail.com,9876451107,Executive
+"KASHISH Kashyap","Billing Department",kashishkashyap222004@gmail.com,9988653050,Executive
+"LOVEPREET MEHTA","Finance Department",finance6@rustx.com,8894114855,Executive
+"Sidharth Sareen","Admin Department",Sid@rustx.com,9915715000,Director
+"Raghav Upadhyay","Sales Department",raghavu1999@gmail.com,6265679728,"Assistant Manager"
+"Udit Tandon","Sales Department",udit.tandon@rustx.com,+917020811494,"Senior Manager"
+"Pawan Kumar","IT Department",starkdsouza786@gmail.com,7710555102,Executive
+"Surinder Gupta","Production Department",despatch@doctorrust.com,9914767444,Manager
+"Rahul Kumar","Production Department",unit3@doctorrust.com,9781751692,Manager
+"Sonam Bhardwaj","New Biz",sonam.bhardwaj76@gmail.com,9592177707,"SENIOR EXECUTIVE"
+"Suresh Mishra","Production Department",suresh68.2016@gmail.com,9730047486,Manager
+"KISHORE KUMAR","Production Department",kishorekumar97300@gmailcom,9730047485,Manager
+"Rajesh Gupta","Billing Department",rajeshkgupta2126@gmail.com,7719446990,Executive
+"Abdhesh Tiwari","Quality Department",tiwariabdhesh12345@gmail.com,7087013098,"ASSISTANT MANAGER"
+"Ram Bhushan","Production Department",merambhushan@gmail.com,9818882824,"SENIOR MANAGER"
+"Abhineet Kumar","IT Department",Abhineetkumar800@gmail.com,9855580075,Executive
+"Paras Ram","Quality Department",pqm1@rustx.com,9041211937,Manager
+"Abhimanyu Sethi","Maintenance Department",rustx.eng1@gmail.com,9041125232,Manager
+"sandeep KUMAR","Production Department",kumar191185@yahoo.com,9056932741,Manager
+"Tej Pratap Lal Srivastav","Production Department",manesar18.tuffpaulin@gmail.com,8448119719,Manager
+"Banti Pawar","Production Department",pqm2@rustx.com,7087046797,Manager
+"ARUP RATAN GIRI","Production Department",arup.sjgiri110@gmail.com,8605355664,Supervisor
+"BANTI PAWAR","Production Department",bantipawar12@gmail.com,8208891256,Manager
+"KETKI PATIL","Quality Department",ketakipatil014@gmail.com,7973733494,Manager
+"KISHAN YADAV",N/A,kishanyadavsmartvalue@gmail.com,9118217453,Manager
+"Swati Rani","Admin Department",swatisehgal188@gmail.com,6284873219,Executive
+"Divya Mahajan","HR Department",hr@rustx.net,8288834556,Executive
+"Vijender Singh","Production Department",gmmfg@rustx.com,9056932744,"GENERAL MANAGER"
+"Subhash Sharma","Production Department",subhash3659@gmail.com,9971636988,"SENIOR MANAGER"
+"Sakshi Godavele","Billing Department",godivalesakshi11@gmail.com,8427904796,Executive
+"Dipali Madhik","Production Department",matedipali66@gmail.com,8149113618,Executive
+"Jasbir Kaur","Customer Care",corporate2@rustx.com,9876287540,Manager
+"Govind Yadav","Sales Department",manesar1@keep-it-fresh.com,9041211681,"SENIOR MANAGER"
+"mukesh kumar","Production Department",mkrajoriya98.ms@gmail.com,9416879348,Supervisor
+"mayank Tiwari","Production Department",mayanktiwari3644@gmail.com,8368864619,Manager
+"Sanjay Srivastav","Production Department",sanjay.sribsw20@gmail.com,7827700135,Supervisor
+"Rajendra Singh","Production Department",rajendrasingh1506@gmial.com,9350731390,Supervisor
+"MARKHANDEPPA m","Sales Department",blr5@rustx.com,7087014194,Manager
+"Vinoth Anand Velusamy","Sales Department",blr7@rustx.com,7087014624,"SENIOR MANAGER"
+"Ajinkya Pathare","Sales Department",pune5@rustx.com,7447273978,"Assistant Manager"
+"Aruna Kumar","Sales Department",blr6@rustx.com,7087014610,"Assistant Manager"
+"Jabeer Sareen","Admin Department",Js@docotrrust.com,,Director
+"Shammi Kumar","Finance Department",rustxpayments@gmail.com,9041777983,"SENIOR EXECUTIVE"
+"Trial User",N/A,onboarding_test@example.com,,N/A
+"Navtej Kumar","Finance Department",navtejkumar65@gmail.com,9877654467,Executive
+"Balvir Singh","Maintenance Department",balvirsin77@gmail.com,8437677737,Executive
+"Jaswinder Singh","Maintenance Department",Jaswinder.ramgarhia92@gmail.com,8284960073,Executive
+"Kamaljeet Singh","Maintenance Department",cad.rustx@gmail.com,9988382005,Executive
+"Ankita Choudhary",N/A,ankitachoudhary88948@gmail.com,8352836560,Executive
+"Rajpal Kaur",N/A,rust.ppc@gmail.com,"76969 1115",Manager
+"Nutan Vijay","Production Department",nutansoge@gmail.com,7499978872,Executive
+"Babita Bhimnath Yadav","Production Department",babitay831@gmail.com,8668240995,Executive
+"Neha Kumari","Customer Care",mannatrn@gmail.com,"89686 5416",Executive
+"Jolly Modgil","Customer Care",Jollymodgill@gmail.com,9914370430,Manager
+"Pallavi Sharma","Customer Care",pallavisharma6964@gmail.com,"84376 6250",Executive
+"karamjit Kaur","Quality Department",karammehra53@gmail.com,9548248171,Executive
+"DISHANT Gill","Production Department",dishantgill980300@gmail.com,6239871318,Supervisor
+"Jaya Kumari","Production Department",55544jayasingh@gmail.com,9056860251,Supervisor
+"Dixsha Dhiman","Accounts Department",dixshadhiman9@gmail.com,7986849667,Executive
+"Asha Hari Patil",N/A,hp4787203@gmail.com,8830888464,Executive
+"Rajni Shukla","Production Department",rajnishukla121314@gmail.com,9125048578,Executive
+"Puneet Singh","Production Department",puneetuppal515@gmail.com,8146310984,Executive
+"sandeep Kumar Singh","Production Department",ppc@doctorrust.com,8360199309,Manager
+"Pintu Kumar","Production Department",Pintukr0802203@gmail.com,9507557035,Supervisor
+"DADAS SAGAR BABA","Accounts Department",sagardadas432@gmail.com,9689849045,Executive
+"dharmanand Jha","Sales Department",faridabad@rustx.com,9056932747,Manager
+"Kamaljeet Kaur",N/A,ccare@keep-it-fresh.com,9041083044,Executive
+"Kanchan Mishra","Accounts Department",mishrakanchu8@gmail.com,9592616955,Executive
+"Pooja Kumari",N/A,rustx.ppc1@gmail.com,9041211126,Executive
+"Nisha Rai","Quality Department",nk0936492@gmail.com,7696911149,Executive
+"Dipak Pandav","Sales Department",dipakpandav7720822360@gmail.com,7823041168,N/A
+"AMOL RAMCHANDRA PAWAR","Sales Department",amolkkpawar@gmail.com,9527729913,Executive
+"AUDUMBAR KRUSHNADEV SHINDE","Sales Department",audumbarshinde1953@gmail.com,9637765322,Executive
+"SRI ASHWATHI K","Quality Department",pqm.chennai@gmail.com,9150454964,Manager
+"Avdesh Yadav","Production Department",Unit5rustx@gmail.com,9815274502,Manager
+"MANISHA KUMARI","Accounts Department",sharmamahi0722@gmail.com,7986929803,Executive
+"P Madeshwaran","Quality Department",qe3.rustx@gmail.com,9677240689,N/A
+"Abhishek Yadav","Quality Department",qe2.rustx@gmail.com,9041158240,N/A
+"Keerthika R","Quality Department",dhiyakeerthika@gmail.com,8015606943,N/A
+"Priya Rawat","Production Department",priyarawat200000@gmail.com,6239538631,Executive
+"Rajesh Verma","Sales Department",rajesh0605verma@gmail.com,9050428007,Manager
+"Preeti Rawat","Production Department",preetirawat5797@gmail.com,7657822240,Executive
+"Parmjeet Kaur","Lab Department",parmjee1995@gmail.com,9914723444,Executive
+"Rose Rust-X","Lab Department",roserandhawa5011@gmail.com,7889167071,Executive
+"Ramandeep Kaur","Lab Department",ramanamrit05@gmail.com,7658804415,Executive

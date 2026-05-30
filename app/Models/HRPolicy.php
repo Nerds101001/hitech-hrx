@@ -20,7 +20,15 @@ class HRPolicy extends Model
         'is_mandatory',
         'show_as_popup',
         'is_active',
-        'created_by_id'
+        'created_by_id',
+        'target_departments'
+    ];
+
+    protected $casts = [
+        'target_departments' => 'array',
+        'is_mandatory' => 'boolean',
+        'show_as_popup' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function acknowledgments()

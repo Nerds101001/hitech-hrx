@@ -2,7 +2,13 @@
 
 @section('title', 'Visit Details')
 
-@push('page-style')
+@section('vendor-style')
+@vite([
+  'resources/assets/vendor/scss/pages/hitech-portal.scss'
+])
+@endsection
+
+@section('page-style')
 <style>
     /* ── Hero ──────────────────────────────────────────────── */
     .sv-hero {
@@ -243,7 +249,7 @@
     .gps-status.success { color: #059669; }
     .gps-status.error   { color: #dc2626; }
 </style>
-@endpush
+@endsection
 
 @section('content')
 <div class="container-fluid py-4">
@@ -509,6 +515,28 @@
                 @endif
             </div>
 
+            {{-- Customer Feedback --}}
+            @if($visit->rating)
+            <div class="sv-detail-card mt-4" style="background:#fffcf2; border: 1px solid #fde047; padding: 1.5rem;">
+                <h6 style="color:#b45309; font-weight:700; margin-bottom: 1rem; font-size: 0.95rem;"><i class="ti ti-star me-2"></i>Customer Feedback</h6>
+                <div class="d-flex align-items-center mb-3">
+                    <span class="text-warning me-2" style="font-size: 1.4rem;">
+                        @for($i=1; $i<=5; $i++)
+                            <i class="bx {{ $i <= $visit->rating ? 'bxs-star' : 'bx-star' }}"></i>
+                        @endfor
+                    </span>
+                    <span class="fw-bold" style="color:#b45309; font-size:1.1rem;">{{ $visit->rating }}/5</span>
+                </div>
+                @if($visit->rating_comment)
+                <div class="sv-notes-box" style="background:rgba(253,224,71,0.15); border-left-color:#eab308; color:#92400e;">
+                    "{{ $visit->rating_comment }}"
+                </div>
+                @else
+                <p class="text-muted mb-0" style="font-size:0.85rem; font-style:italic;">No additional comments provided.</p>
+                @endif
+            </div>
+            @endif
+
         </div>
     </div>{{-- /row --}}
 </div>
@@ -627,7 +655,7 @@
 </div>
 @endif
 
-@push('page-script')
+@section('page-script')
 <script>
 // ── GPS Capture ────────────────────────────────────────────────────
 document.getElementById('captureGpsBtn')?.addEventListener('click', function () {
@@ -722,5 +750,5 @@ if (urlParams.get('mark_complete') === '1') {
     }
 }
 </script>
-@endpush
+@endsection
 @endsection

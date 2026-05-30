@@ -41,7 +41,24 @@
           if (!$isVisible) {
               $hasRole = isset($menu->roles) ? $user->hasRole((array) $menu->roles) : true;
               $hasPerm = isset($menu->permission) ? $user->can($menu->permission) : true;
-              $isVisible = $hasRole && $hasPerm;
+              
+              // Custom restrict Travel & Expense to Sales Dept only for standard employees
+              if (isset($menu->name) && $menu->name === 'Travel & Expense' && $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'accounts', 'manager']) && $user->department !== 'Sales Department') {
+                  $hasRole = false;
+              }
+
+              // Granular permission override
+              $granularPermName = isset($menu->name) ? Str::slug($menu->name) . '.view' : null;
+              $hasGranularOverride = false;
+              try {
+                  $hasGranularOverride = $granularPermName ? $user->hasPermissionTo($granularPermName) : false;
+              } catch (\Exception $e) {}
+
+              if ($hasGranularOverride) {
+                  $isVisible = true;
+              } else {
+                  $isVisible = $hasRole && $hasPerm;
+              }
           }
 
           if (!$isVisible) continue;
@@ -84,7 +101,18 @@
                       if (!$subVis) {
                           $sRole = isset($submenu->roles) ? $user->hasRole((array) $submenu->roles) : true;
                           $sPerm = isset($submenu->permission) ? $user->can($submenu->permission) : true;
-                          $subVis = $sRole && $sPerm;
+                          
+                          $granularSubPerm = isset($submenu->name) ? Str::slug($submenu->name) . '.view' : null;
+                          $hasSubOverride = false;
+                          try {
+                              $hasSubOverride = $granularSubPerm ? $user->hasPermissionTo($granularSubPerm) : false;
+                          } catch (\Exception $e) {}
+
+                          if ($hasSubOverride || $hasGranularOverride) {
+                              $subVis = true;
+                          } else {
+                              $subVis = $sRole && $sPerm;
+                          }
                       }
                       if (!$subVis) continue;
                     @endphp

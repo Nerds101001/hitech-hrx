@@ -21,12 +21,14 @@
   // Revised Logic:
   // 1. If submitted (Under Review): EVERYTHING LOCKED.
   // 2. If not submitted:
-  //    - If first time: EVERYTHING OPEN.
-  //    - If flagged for resubmission: ONLY REJECTED OPEN.
-  $canEditPersonal = !$isSubmitted && (!$isResubmission || in_array('personal', $rejectedSections));
-  $canEditContact = !$isSubmitted && (!$isResubmission || in_array('contact', $rejectedSections));
-  $canEditBanking = !$isSubmitted && (!$isResubmission || in_array('banking', $rejectedSections));
-  $canEditDocs = !$isSubmitted && (!$isResubmission || in_array('documents', $rejectedSections));
+  //    - If first time (no resubmission notes): EVERYTHING OPEN.
+  //    - If flagged for resubmission WITH specific sections: ONLY THOSE SECTIONS OPEN.
+  //    - If flagged for resubmission but NO sections specified: EVERYTHING OPEN (graceful fallback).
+  $noSpecificSections = $isResubmission && empty($rejectedSections); // HR forgot to tick sections → unlock all
+  $canEditPersonal = !$isSubmitted && (!$isResubmission || $noSpecificSections || in_array('personal',  $rejectedSections));
+  $canEditContact  = !$isSubmitted && (!$isResubmission || $noSpecificSections || in_array('contact',   $rejectedSections));
+  $canEditBanking  = !$isSubmitted && (!$isResubmission || $noSpecificSections || in_array('banking',   $rejectedSections));
+  $canEditDocs     = !$isSubmitted && (!$isResubmission || $noSpecificSections || in_array('documents', $rejectedSections));
 @endphp
 
 @extends('layouts/blankLayout')

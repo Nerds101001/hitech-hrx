@@ -21,7 +21,8 @@ class HRPolicyController extends Controller
     public function index()
     {
         $policies = HRPolicy::withCount('acknowledgments')->get();
-        return view('tenant.hr-policies.admin-index', compact('policies'));
+        $departments = \App\Models\Department::orderBy('name')->get();
+        return view('tenant.hr-policies.admin-index', compact('policies', 'departments'));
     }
 
     /**
@@ -30,7 +31,12 @@ class HRPolicyController extends Controller
     public function employeeIndex()
     {
         $user = auth()->user();
-        $policies = HRPolicy::where('is_active', true)->get();
+        $policies = HRPolicy::where('is_active', true)->get()->filter(function ($policy) use ($user) {
+            if (empty($policy->target_departments)) {
+                return true;
+            }
+            return in_array((string)$user->department_id, $policy->target_departments);
+        });
         $acknowledgedIds = HRPolicyAcknowledgment::where('user_id', $user->id)
             ->pluck('hr_policy_id')
             ->toArray();
@@ -48,7 +54,9 @@ class HRPolicyController extends Controller
             'file' => 'required|mimes:pdf|max:10240', // Max 10MB
             'category' => 'nullable|string',
             'is_mandatory' => 'boolean',
-            'show_as_popup' => 'boolean'
+            'show_as_popup' => 'boolean',
+            'target_departments' => 'nullable|array',
+            'target_departments.*' => 'exists:departments,id'
         ]);
 
         if ($request->hasFile('file')) {
@@ -64,6 +72,7 @@ class HRPolicyController extends Controller
                 'category' => $request->category ?? 'General',
                 'is_mandatory' => $request->boolean('is_mandatory'),
                 'show_as_popup' => $request->boolean('show_as_popup'),
+                'target_departments' => $request->has('target_departments') && in_array('all', $request->target_departments) ? null : $request->target_departments,
                 'created_by_id' => auth()->id()
             ]);
 

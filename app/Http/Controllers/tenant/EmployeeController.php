@@ -439,8 +439,10 @@ class EmployeeController extends Controller
       'designationId' => 'required|exists:designations,id',
       'role' => 'required|exists:roles,name',
       'reportingToId' => 'required|exists:users,id',
-      'ccare_agent_id' => 'nullable|exists:users,id',
-        'newbiz_agent_id' => 'nullable|exists:users,id',
+      'ccare_agent_id' => 'nullable|array',
+      'ccare_agent_id.*' => 'exists:users,id',
+      'newbiz_agent_id' => 'nullable|array',
+      'newbiz_agent_id.*' => 'exists:users,id',
       'attendanceType' => 'required|in:open,geofence,ipAddress,staticqr,site,dynamicqr,face',
       'geofenceGroupId' => 'required_if:attendanceType,geofence|nullable|exists:geofence_groups,id',
       'ipGroupId' => 'required_if:attendanceType,ipAddress|nullable|exists:ip_address_groups,id',
@@ -508,40 +510,38 @@ class EmployeeController extends Controller
 
     // CCARE Agent Assignment
     if ($request->has('ccare_agent_id')) {
-        $ccareAgentId = $request->input('ccare_agent_id');
+        $ccareAgentIds = (array) $request->input('ccare_agent_id');
         // Remove any existing CCARE mapping for this salesperson
-        $existingCcare = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+        \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
             ->whereHas('ccUser', function($q) {
                 $q->whereHas('department', function($dq) {
                     $dq->whereIn('name', ['CCARE', 'Customer Care']);
                 });
-            })->first();
-        if ($existingCcare) $existingCcare->delete();
+            })->delete();
 
-        if (!empty($ccareAgentId)) {
+        foreach(array_filter($ccareAgentIds) as $agentId) {
             \App\Models\CcSalespersonMap::create([
                 'sales_user_id' => $user->id,
-                'cc_user_id' => $ccareAgentId,
+                'cc_user_id' => $agentId,
             ]);
         }
     }
 
     // New Biz Agent Assignment
     if ($request->has('newbiz_agent_id')) {
-        $newbizAgentId = $request->input('newbiz_agent_id');
+        $newbizAgentIds = (array) $request->input('newbiz_agent_id');
         // Remove any existing New Biz mapping for this salesperson
-        $existingNewbiz = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+        \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
             ->whereHas('ccUser', function($q) {
                 $q->whereHas('department', function($dq) {
                     $dq->whereIn('name', ['New Biz', 'New Business Department']);
                 });
-            })->first();
-        if ($existingNewbiz) $existingNewbiz->delete();
+            })->delete();
 
-        if (!empty($newbizAgentId)) {
+        foreach(array_filter($newbizAgentIds) as $agentId) {
             \App\Models\CcSalespersonMap::create([
                 'sales_user_id' => $user->id,
-                'cc_user_id' => $newbizAgentId,
+                'cc_user_id' => $agentId,
             ]);
         }
     }
@@ -605,11 +605,11 @@ class EmployeeController extends Controller
     ]);
 
     // Security check: Only allow users to upload their own document unless they are admin/hr/manager
-    if ($request->userId != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+    if ($request->userId != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
-    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']);
+    $isEmployee = auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager']);
 
     try {
       $user = User::findOrFail($request->userId);
@@ -1345,8 +1345,8 @@ class EmployeeController extends Controller
         });
       }
 
-      if ($request->has('teamFilter') && !empty($request->input('teamFilter'))) {
-        $query->where('users.team_id', $request->input('teamFilter'));
+      if ($request->has('departmentFilter') && !empty($request->input('departmentFilter'))) {
+        $query->where('users.department_id', $request->input('departmentFilter'));
       }
 
       if ($request->has('designationFilter') && !empty($request->input('designationFilter'))) {
@@ -1581,14 +1581,14 @@ class EmployeeController extends Controller
     $newbizUsers = User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
     
     $currentMappings = \App\Models\CcSalespersonMap::with('ccUser.department')->where('sales_user_id', $user->id)->get();
-    $currentCcareId = null;
-    $currentNewbizId = null;
+    $currentCcareIds = [];
+    $currentNewbizIds = [];
     foreach ($currentMappings as $map) {
         $dName = strtolower($map->ccUser->department->name ?? '');
         if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
-            $currentCcareId = $map->cc_user_id;
+            $currentCcareIds[] = $map->cc_user_id;
         } elseif (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
-            $currentNewbizId = $map->cc_user_id;
+            $currentNewbizIds[] = $map->cc_user_id;
         }
     }
 
@@ -1608,8 +1608,8 @@ class EmployeeController extends Controller
       'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
       'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
       'currentCcMapping' => $currentMappings,
-      'currentCcareId' => $currentCcareId,
-      'currentNewbizId' => $currentNewbizId,
+      'currentCcareIds' => $currentCcareIds,
+      'currentNewbizIds' => $currentNewbizIds,
     ]);
   }
 
@@ -1740,11 +1740,15 @@ class EmployeeController extends Controller
       $user->assignRole($request->input('role'));
 
       // CC Agent Assignment for Sales/New Biz
-      if ($request->filled('ccare_agent_id')) {
-          \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $request->input('ccare_agent_id')]);
+      if ($request->has('ccare_agent_id')) {
+          foreach(array_filter((array) $request->input('ccare_agent_id')) as $agentId) {
+              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId]);
+          }
       }
-      if ($request->filled('newbiz_agent_id')) {
-          \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $request->input('newbiz_agent_id')]);
+      if ($request->has('newbiz_agent_id')) {
+          foreach(array_filter((array) $request->input('newbiz_agent_id')) as $agentId) {
+              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId]);
+          }
       }
 
       if ($user->leave_policy_profile_id) {
@@ -1980,6 +1984,7 @@ class EmployeeController extends Controller
     $user = User::with([
       'userDevice',
       'team',
+      'department',
       'leaveBalances.leaveType',
       'shift',
       'designation.department',
@@ -2887,6 +2892,10 @@ class EmployeeController extends Controller
    */
   public function rejectDocument(Request $request, $userId)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+      return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+    }
+
     $request->validate([
       'document_key'  => 'required|string',
       'admin_remarks' => 'required|string|min:5|max:500',
@@ -2971,6 +2980,10 @@ class EmployeeController extends Controller
    */
   public function deleteDocument(Request $request, $userId)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+      return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+    }
+
     $request->validate([
       'document_key' => 'required|string',
     ]);
@@ -3046,6 +3059,10 @@ class EmployeeController extends Controller
    */
   public function deleteDocumentRequest(Request $request, $userId)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+      return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
+    }
+
     $request->validate([
       'document_request_id' => 'required|integer|exists:document_requests,id',
     ]);

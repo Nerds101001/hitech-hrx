@@ -8,14 +8,19 @@ class SalesVisit extends Model {
     use HasFactory, SoftDeletes;
     protected $fillable = [
         'visit_type', 'status', 'verification_status', 'verification_notes', 'client_id', 'salesperson_id', 'cc_user_id',
-        'scheduled_at', 'notes', 'proof_photo',
-        'completed_lat', 'completed_lng', 'completed_at', 'completion_notes', 'tenant_id'
+        'scheduled_at', 'notes', 'started_lat', 'started_lng', 'started_at', 'proof_photo',
+        'completed_lat', 'completed_lng', 'completed_at', 'completion_notes',
+        'rating', 'rating_comment', 'survey_token', 'tenant_id'
     ];
     protected $casts = [
         'scheduled_at' => 'datetime',
+        'started_at' => 'datetime',
         'completed_at' => 'datetime',
+        'started_lat' => 'float',
+        'started_lng' => 'float',
         'completed_lat' => 'float',
         'completed_lng' => 'float',
+        'rating' => 'integer',
     ];
     public function client() { return $this->belongsTo(SalesClient::class, 'client_id'); }
     public function salesperson() { return $this->belongsTo(User::class, 'salesperson_id'); }

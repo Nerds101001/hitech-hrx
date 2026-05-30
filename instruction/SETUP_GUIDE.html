@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hitech HRX - Full Implementation Manual</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #696cff;
+            --primary-light: #e7e7ff;
+            --dark: #233446;
+            --body: #f5f5f9;
+            --text-main: #566a7f;
+            --text-heading: #32475c;
+            --white: #ffffff;
+            --border: #d9dee3;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--body);
+            color: var(--text-main);
+            margin: 0;
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--white);
+            border-radius: 8px;
+            box-shadow: 0 2px 6px 0 rgba(67, 89, 113, 0.12);
+            overflow: hidden;
+        }
+
+        header {
+            background: var(--dark);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 10px;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        h2 {
+            color: var(--text-heading);
+            font-size: 1.5rem;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        h2::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        .step {
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--primary-light);
+            color: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .step-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-heading);
+        }
+
+        .step-body {
+            padding-left: 47px;
+        }
+
+        ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #f1f0f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #d63384;
+            font-size: 0.95em;
+        }
+
+        pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.95rem;
+            overflow-x: auto;
+            margin: 15px 0;
+            position: relative;
+        }
+
+        .cmd-line::before {
+            content: '$ ';
+            color: #61afef;
+        }
+
+        .info-box {
+            background: #e7f8fb;
+            border-left: 4px solid #03c3ec;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 8px 8px 0;
+            color: #2c535a;
+        }
+
+        .info-box strong {
+            color: #03c3ec;
+        }
+
+        footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #8592a3;
+            border-top: 1px solid var(--border);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #696cff20;
+            color: #696cff;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Hitech HRX Implementation</h1>
+        <div class="subtitle">Complete Step-by-Step Installation & Configuration Guide</div>
+    </header>
+
+    <div class="content">
+        <p>This document provides a detailed walkthrough for setting up the Hitech HRX management system. Follow each step carefully to ensure a successful implementation.</p>
+
+        <h2>🛠️ System Requirements</h2>
+        <div class="info-box">
+            Before proceeding, ensure your server environment meets the following specifications:
+            <ul>
+                <li><strong>PHP Version:</strong> 8.2 or higher</li>
+                <li><strong>Database:</strong> MySQL 8.0+ / MariaDB 10.4+</li>
+                <li><strong>Web Server:</strong> Laragon, XAMPP, Apache, or Nginx</li>
+                <li><strong>Memory Limit:</strong> 256MB minimum</li>
+                <li><strong>Extensions:</strong> BCMath, Ctype, Fileinfo, JSON, Mbstring, OpenSSL, PDO, Tokenizer, XML</li>
+            </ul>
+        </div>
+
+        <h2>🚀 Installation Steps</h2>
+
+        <!-- Step 1 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <div class="step-title">Source Preparation</div>
+            </div>
+            <div class="step-body">
+                <p>Download the HRX source code and extract it to your web directory. For example:</p>
+                <ul>
+                    <li><strong>Windows (Laragon):</strong> <code>C:\laragon\www\hrx</code></li>
+                    <li><strong>Windows (XAMPP):</strong> <code>C:\xampp\htdocs\hrx</code></li>
+                    <li><strong>Linux:</strong> <code>/var/www/html/hrx</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <div class="step-title">Dependency Management</div>
+            </div>
+            <div class="step-body">
+                <p>Open your terminal/command prompt in the project root and install the required PHP and JavaScript packages:</p>
+                <pre><span class="cmd-line">composer install --no-dev --optimize-autoloader</span>
+<span class="cmd-line">npm install</span></pre>
+            </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <div class="step-title">Environment Configuration</div>
+            </div>
+            <div class="step-body">
+                <p>Create your environment file by copying the example template:</p>
+                <pre><span class="cmd-line">cp .env.example .env</span></pre>
+                <p>Open the <code>.env</code> file in a text editor and update the following settings:</p>
+                <ul>
+                    <li><code>DB_DATABASE</code>: The name of your database.</li>
+                    <li><code>DB_USERNAME</code>: Your database username (e.g., root).</li>
+                    <li><code>DB_PASSWORD</code>: Your database password.</li>
+                    <li><code>APP_URL</code>: Set this to your local or live domain (e.g., http://localhost:8000).</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">4</div>
+                <div class="step-title">Application Initialization</div>
+            </div>
+            <div class="step-body">
+                <p>Initialize the application security keys and set up the database structure:</p>
+                <pre><span class="cmd-line">php artisan key:generate</span>
+<span class="cmd-line">php artisan migrate --seed</span></pre>
+                <p>The <code>--seed</code> flag is important as it populates the database with initial administrative accounts and settings.</p>
+            </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">5</div>
+                <div class="step-title">Storage & Assets</div>
+            </div>
+            <div class="step-body">
+                <p>Link the application storage folder to the public directory and build the frontend assets:</p>
+                <pre><span class="cmd-line">php artisan storage:link</span>
+<span class="cmd-line">npm run build</span></pre>
+            </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="step">
+            <div class="step-header">
+                <div class="step-number">6</div>
+                <div class="step-title">Launching Services</div>
+            </div>
+            <div class="step-body">
+                <p>To run the application locally, you need to start the main server and the real-time notification engine:</p>
+                <pre><span class="cmd-line">php artisan serve</span> <span class="badge">App Server</span>
+<span class="cmd-line">php artisan reverb:start</span> <span class="badge">Real-time Messaging</span></pre>
+            </div>
+        </div>
+
+    </div>
+
+    <footer>
+        &copy; 2026 Hitech HRX. Proprietary & Confidential Implementation Guide.
+    </footer>
+</div>
+
+</body>
+</html>

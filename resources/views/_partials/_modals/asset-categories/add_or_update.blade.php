@@ -14,7 +14,7 @@
         </button>
       </div>
       <div class="modal-body modal-body-hitech">
-    <form class="add-new-category pt-0" id="assetCategoryForm" onsubmit="return false">
+    <form class="pt-0" id="assetCategoryForm" onsubmit="return false">
       <input type="hidden" name="id" id="id">
       
       <div class="mb-4">

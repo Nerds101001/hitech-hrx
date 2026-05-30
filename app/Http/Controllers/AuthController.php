@@ -378,7 +378,7 @@ class AuthController extends Controller
       }
 
       $isOwner = str_contains($path, '/' . $user->id . '/') || str_contains($path, '_' . $user->id . '_');
-      $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager', 'accounts']);
+      $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager']);
 
       if (!$isProfilePicture && !$isOwner && !$isAdminOrHR) {
           Log::warning('Secure Document: Access Denied for user ' . $user->id . ' to path: ' . $path);

@@ -1,0 +1,16 @@
+# Login - Hitech Secure Gateway |
+    Hi Tech HRX -
+    TemplateSuffix
+  
+
+
+# HI TECH HRX
+End-to-end encrypted administrative session
+All access attempts are logged and audited
+256-bit SSL secured connection
+
+## HI TECH HRX
+
+## Secure Login
+Please verify your identity to access the management portal.
+[Forgot Admin Password?](https://hrx.hitechgroup.in/forgot-password)

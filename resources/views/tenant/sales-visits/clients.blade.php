@@ -212,7 +212,7 @@
 @endsection
 
 @section('content')
-<div class="container-xxl flex-grow-1 container-p-y">
+<div class="animate__animated animate__fadeIn">
 
   {{-- Flash Messages --}}
   @if(session('success'))

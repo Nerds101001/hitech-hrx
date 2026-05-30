@@ -9,9 +9,11 @@ use App\Models\SalesClient;
 use App\Models\CcSalespersonMap;
 use App\Models\User;
 use App\Mail\SalesVisitConfirmation;
+use App\Mail\SalesVisitSurveyMail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
 
 class SalesVisitController extends Controller
@@ -84,7 +86,8 @@ class SalesVisitController extends Controller
             'completed' => SalesVisit::where('status', 'completed')->count(),
         ];
 
-        return view('tenant.sales-visits.index', compact('visits', 'salespersons', 'ccAgents', 'stats'));
+        return view('tenant.sales-visits.index', compact('visits', 'salespersons', 'ccAgents', 'stats'))
+            ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
     /**
@@ -112,7 +115,8 @@ class SalesVisitController extends Controller
                 ->get();
         }
 
-        return view('tenant.sales-visits.create', compact('clients', 'salespersons'));
+        return view('tenant.sales-visits.create', compact('clients', 'salespersons'))
+            ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
     /**
@@ -177,7 +181,8 @@ class SalesVisitController extends Controller
     public function show($id)
     {
         $visit = SalesVisit::with(['client', 'salesperson', 'ccAgent'])->findOrFail($id);
-        return view('tenant.sales-visits.show', compact('visit'));
+        return view('tenant.sales-visits.show', compact('visit'))
+            ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
     /**
@@ -256,11 +261,24 @@ class SalesVisitController extends Controller
         ]);
 
         if ($validated['action'] === 'approve') {
+            $surveyToken = Str::random(32);
             $visit->update([
                 'verification_status' => 'approved',
-                'verification_notes' => null
+                'verification_notes' => null,
+                'survey_token' => $surveyToken,
             ]);
-            return redirect()->back()->with('success', 'Visit verified and approved.');
+
+            // Send Survey email to client if they have an email
+            if ($visit->client && $visit->client->email) {
+                try {
+                    Mail::to($visit->client->email)
+                        ->send(new SalesVisitSurveyMail($visit));
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning('Sales visit survey email failed: ' . $e->getMessage());
+                }
+            }
+
+            return redirect()->back()->with('success', 'Visit verified, approved, and client survey email sent.');
         } else {
             $visit->update([
                 'verification_status' => 'rejected',
@@ -285,7 +303,8 @@ class SalesVisitController extends Controller
         }
 
         $clients = SalesClient::withCount('visits')->orderBy('name')->paginate(25);
-        return view('tenant.sales-visits.clients', compact('clients'));
+        return view('tenant.sales-visits.clients', compact('clients'))
+            ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
     public function clientStore(Request $request)
@@ -395,8 +414,87 @@ class SalesVisitController extends Controller
             ->orderBy('date')
             ->get();
 
+        // Client Feedback data
+        $reviewsQuery = SalesVisit::with(['client', 'salesperson'])
+            ->whereNotNull('rating')
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+            ->orderBy('completed_at', 'desc');
+
+        $reviews = $reviewsQuery->get();
+        $avgRating = round($reviewsQuery->avg('rating') ?? 0, 1);
+        $ratingCount = $reviewsQuery->count();
+
         return view('tenant.sales-visits.reports', compact(
-            'kpis', 'bySalesperson', 'byCcAgent', 'byType', 'dailyVisits', 'dateFrom', 'dateTo'
-        ));
+            'kpis', 'bySalesperson', 'byCcAgent', 'byType', 'dailyVisits', 'dateFrom', 'dateTo',
+            'reviews', 'avgRating', 'ratingCount'
+        ))->with('pageConfigs', ['contentLayout' => 'wide']);
+    }
+
+    /**
+     * Salesperson punches "Meeting Started" with GPS coordinates.
+     */
+    public function start(Request $request, $id)
+    {
+        $visit = SalesVisit::findOrFail($id);
+
+        // Only assigned salesperson or admin can start
+        if (Auth::id() !== $visit->salesperson_id && !Auth::user()->hasRole(['admin', 'hr'])) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'lat' => 'required|numeric',
+            'lng' => 'required|numeric',
+        ]);
+
+        $visit->update([
+            'started_lat' => $request->lat,
+            'started_lng' => $request->lng,
+            'started_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Meeting started successfully!'
+        ]);
+    }
+
+    /**
+     * Show survey form to the client.
+     */
+    public function showSurvey($token)
+    {
+        $visit = SalesVisit::with(['client', 'salesperson'])->where('survey_token', $token)->firstOrFail();
+
+        // If survey is already completed, show thank you page
+        if ($visit->rating) {
+            return view('tenant.sales-visits.survey-thankyou', compact('visit'));
+        }
+
+        return view('tenant.sales-visits.survey', compact('visit'));
+    }
+
+    /**
+     * Submit survey feedback from the client.
+     */
+    public function submitSurvey(Request $request, $token)
+    {
+        $visit = SalesVisit::where('survey_token', $token)->firstOrFail();
+
+        if ($visit->rating) {
+            return redirect()->back()->with('error', 'Feedback has already been submitted for this visit.');
+        }
+
+        $validated = $request->validate([
+            'rating'         => 'required|integer|between:1,5',
+            'rating_comment' => 'nullable|required_if:rating,1,2,3|string|max:1000',
+        ]);
+
+        $visit->update([
+            'rating'         => $validated['rating'],
+            'rating_comment' => $validated['rating_comment'] ?? null,
+        ]);
+
+        return view('tenant.sales-visits.survey-thankyou', compact('visit'));
     }
 }
