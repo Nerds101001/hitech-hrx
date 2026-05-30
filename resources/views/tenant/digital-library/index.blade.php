@@ -90,7 +90,7 @@
     .product-subtitle { font-size: 0.75rem; color: #aaa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
     .card-top-badge { position: absolute; right: 15px; top: 15px; font-size: 0.65rem; font-weight: 900; color: var(--hitech-primary); background: #e0f2f1; padding: 4px 12px; border-radius: 6px; z-index: 1; letter-spacing: 1px; }
     .card-summary { font-size: 0.8rem; color: #666; line-height: 1.6; margin: 15px 0; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; min-height: 80px; }
-    .action-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+    .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
     .action-btn { border: 1px solid #f0f2f5; border-radius: 10px; padding: 12px 4px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
     .action-btn:hover:not(.disabled) { background: #f8fafb; border-color: #ddd; transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
     .action-btn span:first-child { font-size: 0.75rem; font-weight: 900; color: #444; }
@@ -138,6 +138,8 @@
                 <a href="{{ route('library.index', ['category' => 'MOM']) }}" class="nav-link {{ request('category') === 'MOM' ? 'active' : '' }}">MOM</a>
                 <a href="{{ route('library.index', ['category' => 'LEARN']) }}" class="nav-link {{ request('category') === 'LEARN' ? 'active' : '' }}">Learn @ Hitech</a>
                 <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Videos</a>
+                <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Reports</a>
+                <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Reports</a>
             </div>
         </div>
         <div class="d-flex align-items-center gap-3">
@@ -148,6 +150,9 @@
         </div>
     </div>
 
+    @php $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report']); @endphp
+
+    @if(!$isIndependentCat)
     <!-- Select Brand Row -->
     <div class="section-label">Select Brand Ecosystem</div>
     <div class="brand-grid">
@@ -197,6 +202,47 @@
     </div>
 
     <!-- Main Content Matrix -->
+    @endif {{-- end !isIndependentCat brand grid --}}
+
+    @if($isIndependentCat)
+    {{-- ===== INDEPENDENT CATEGORY VIEW (Test Reports / Comparison Reports) ===== --}}
+    <div class="mt-2">
+        <div class="brand-header d-flex justify-content-between align-items-center mb-4">
+            <div class="d-flex align-items-center gap-3">
+                <div class="brand-header-dot" style="background-color: {{ $category === 'Test Report' ? '#4caf50' : '#2196f3' }};"></div>
+                <h2>{{ $category }}s</h2>
+                <div class="stats-badge">{{ $allFiles->count() }} Files</div>
+            </div>
+            <div class="view-switcher">
+                <button class="view-btn active" onclick="switchIndependentView('grid')"><i class="ti ti-layout-grid"></i> Grid View</button>
+                <button class="view-btn" onclick="switchIndependentView('list')"><i class="ti ti-list"></i> List View</button>
+            </div>
+        </div>
+
+        @if($allFiles->isEmpty())
+            <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
+                <i class="ti ti-file-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                <h6 class="text-muted fw-bold">No {{ $category }}s uploaded yet</h6>
+                <p class="text-muted small">Use "Add Document" and select <strong>{{ $category }}</strong> as the type.</p>
+            </div>
+        @else
+            {{-- Group by sub_category (product/test subject) for better organisation --}}
+            <div id="independent-grid-view">
+                <div class="row g-4">
+                    @foreach($allFiles->groupBy('title') as $productName => $files)
+                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => $files->first()->brand ?? '', 'category' => $files->first()->sub_category ?? ''])
+                    @endforeach
+                </div>
+            </div>
+            <div id="independent-list-view" style="display:none;">
+                @foreach($allFiles->groupBy('title') as $productName => $files)
+                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => $files->first()->brand ?? '', 'category' => $files->first()->sub_category ?? ''])
+                @endforeach
+            </div>
+        @endif
+    </div>
+    @else
+    {{-- ===== BRAND-BASED VIEW ===== --}}
     @foreach($brands as $b)
         @php
             $slug = \Illuminate\Support\Str::slug($b->name);
@@ -338,6 +384,7 @@
             </div>
         </div>
     @endforeach
+    @endif {{-- end brand/independent view --}}
 </div>
 
 @include('tenant.digital-library.modals')
@@ -347,6 +394,16 @@
 <script>
     let currentView = 'grid';
     const libraryTaxonomy = @json($taxonomies);
+
+    function switchIndependentView(view) {
+        const gridEl = document.getElementById('independent-grid-view');
+        const listEl = document.getElementById('independent-list-view');
+        if (!gridEl) return;
+        gridEl.style.display = view === 'grid' ? 'block' : 'none';
+        listEl.style.display = view === 'list' ? 'block' : 'none';
+        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll(`.view-btn`).forEach(b => { if (b.textContent.toLowerCase().includes(view)) b.classList.add('active'); });
+    }
     const pendingFiles = new Map();
     const auditState = new Map();
 

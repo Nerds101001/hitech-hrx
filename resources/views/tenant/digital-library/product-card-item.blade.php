@@ -3,6 +3,7 @@
     $tds = $files->firstWhere('category', 'TDS');
     $sds = $files->firstWhere('category', 'SDS');
     $comp = $files->firstWhere('category', 'COMP') ?? $files->firstWhere('category', 'MOM');
+    $testReport = $files->firstWhere('category', 'Test Report');
     $totalSize = 0;
     foreach($files as $f) $totalSize += $f->size;
     $sizeFormatted = number_format($totalSize / 1024 / 1024, 2) . ' MB';
@@ -34,6 +35,10 @@
                 <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-btn {{ !$comp ? 'disabled' : '' }}">
                     <span>COMP</span>
                     <span>{{ $comp ? 'Access' : 'N/A' }}</span>
+                </a>
+                <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-btn {{ !$testReport ? 'disabled' : '' }}">
+                    <span>TEST</span>
+                    <span>{{ $testReport ? 'Report' : 'N/A' }}</span>
                 </a>
             </div>
         </div>
