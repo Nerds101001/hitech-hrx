@@ -31,11 +31,12 @@ class DigitalLibraryController extends Controller
             });
         });
 
-        // Fetch dynamic taxonomy from DB
-        $brands = \App\Models\LibraryTaxonomy::where('type', 'brand')->orderBy('order')->get();
+        // Fetch dynamic taxonomy from DB — deduplicate brands (case-insensitive)
+        $brands = \App\Models\LibraryTaxonomy::where('type', 'brand')->orderBy('order')->get()
+            ->unique(fn($b) => strtolower($b->name))->values();
         $taxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->get()->groupBy('parent_id');
 
-        return view('tenant.digital-library.index', compact('groupedFiles', 'category', 'brands', 'taxonomies'));
+        return view('tenant.digital-library.index', compact('groupedFiles', 'allFiles', 'category', 'brands', 'taxonomies'));
     }
 
     public function addTaxonomy(Request $request)
@@ -104,7 +105,7 @@ class DigitalLibraryController extends Controller
                 'model' => config('openai.ai_model'),
                 'messages' => [
                     ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
-                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training).
+                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training), Test Report, Comparison Report.
                     Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
                     Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
                     
@@ -114,14 +115,14 @@ class DigitalLibraryController extends Controller
                     - Identify the SUB-CATEGORY from the list above. If not explicitly found, categorize it into the most logical one.
                     - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate MOM), do NOT reject it.
                     - Extract: BRAND|SUB_CATEGORY|CATEGORY|NAME|DATE|CRUX
-                    - CATEGORY MUST be one of (TDS, SDS, MOM, LEARN).
+                    - CATEGORY MUST be one of (TDS, SDS, MOM, LEARN, Test Report, Comparison Report).
                     - CRUX Rules (Must be 5-6 lines total, PLAIN TEXT ONLY):
                       - NO markdown, NO asterisks, NO bolding, NO numbered lists.
                       - Lines 1-3: Clear Product Description.
                       - Lines 4-5: Features & Key Applications.
                       - Line 6: Technical crux (Safety/Metric).
                     - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'."],
-                    ['role' => 'user', 'content' => "Text Sample: " . $textSample],
+                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . $textSample],
                 ],
             ]);
 
@@ -275,7 +276,7 @@ class DigitalLibraryController extends Controller
                     $verify = $client->chat()->create([
                         'model' => config('openai.ai_model'),
                         'messages' => [
-                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/INVALID). Reply ONLY with the key."],
+                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key."],
                             ['role' => 'user', 'content' => "Text: " . $text],
                         ],
                     ]);
