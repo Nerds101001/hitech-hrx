@@ -22,10 +22,12 @@
         <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-pill {{ !$comp ? 'disabled' : '' }}">COMP</a>
         <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-pill {{ !$testReport ? 'disabled' : '' }}">TEST</a>
         @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
-        <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="btn btn-icon btn-label-danger rounded-circle ms-3" style="width: 32px; height: 32px;" title="Delete Document">
-            <i class="ti ti-trash"></i>
+        <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="action-pill bg-danger text-white ms-3 border-0" title="Delete Document">
+            <i class="ti ti-trash"></i> DEL
         </a>
         @endif
-        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="btn btn-icon btn-label-primary rounded-circle ms-1" style="width: 32px; height: 32px;"><i class="ti ti-external-link"></i></a>
+        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-pill bg-primary text-white ms-1 border-0" title="View Details">
+            <i class="ti ti-external-link"></i> OPEN
+        </a>
     </div>
 </div>
