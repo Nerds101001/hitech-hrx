@@ -369,7 +369,7 @@ async function deleteDocument(title) {
     if (!confirm('Are you sure you want to completely delete this document and all its associated files from the Digital Vault? This action cannot be undone.')) return;
     
     try {
-        const resp = await fetch('{{ route("delete-product") }}', {
+        const resp = await fetch('{{ route("library.delete-product") }}', {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
