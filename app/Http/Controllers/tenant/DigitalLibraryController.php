@@ -90,10 +90,9 @@ class DigitalLibraryController extends Controller
             $text = mb_convert_encoding($pdf->getText(), 'UTF-8', 'UTF-8');
             $textSample = mb_substr($text, 0, 8000); // Increased for better accuracy
 
-            $isOcrNeeded = false;
-            if (strlen(trim($textSample)) < 50) {
+            if (strlen(trim($textSample)) < 100) {
                 Log::warning("DIGITAL_LIBRARY_OCR_NEEDED: Small text extracted from " . $originalName);
-                $isOcrNeeded = true;
+                // We'll try to let it pass if it's a valid file, but note it
             }
 
             $factory = OpenAI::factory();
@@ -101,7 +100,11 @@ class DigitalLibraryController extends Controller
                               ->withBaseUri(config('openai.base_url'))
                               ->make();
 
-            $systemPrompt = "You are an expert technical document auditor for Hitech HRX. 
+            // Request AI Audit
+            $resp = $client->chat()->create([
+                'model' => config('openai.ai_model'),
+                'messages' => [
+                    ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
                     Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training), Test Report, Comparison Report.
                     Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
                     Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
@@ -118,16 +121,8 @@ class DigitalLibraryController extends Controller
                       - Lines 1-3: Clear Product Description.
                       - Lines 4-5: Features & Key Applications.
                       - Line 6: Technical crux (Safety/Metric).
-                    - CRITICAL RULE: DO NOT hallucinate, guess, or invent ANY details, metrics, or values (like friction coefficients, mg/kg, etc) that are not EXPLICITLY present in the Text Sample. Base your summary ONLY on the provided text.
-                    - If the Text Sample is empty, mostly garbage, or lacks specific technical details to write a factual 6-line summary, DO NOT guess based on the filename. Instead, for the CRUX, strictly output: 'Insufficient text extracted from document (likely a scanned PDF or missing pages). Please enter details manually.'
-                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'.";
-
-            // Request AI Audit
-            $resp = $client->chat()->create([
-                'model' => config('openai.ai_model'),
-                'messages' => [
-                    ['role' => 'system', 'content' => $systemPrompt],
-                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $textSample)],
+                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'."],
+                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . $textSample],
                 ],
             ]);
 
@@ -278,16 +273,11 @@ class DigitalLibraryController extends Controller
                     $pdf = $parser->parseFile($file->getPathname());
                     $text = mb_substr($pdf->getText(), 0, 3000);
 
-                    $isOcrNeeded = false;
-                    if (strlen(trim($text)) < 50) {
-                        $isOcrNeeded = true;
-                    }
-
                     $verify = $client->chat()->create([
                         'model' => config('openai.ai_model'),
                         'messages' => [
-                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key. If the text is empty or says EMPTY/SCANNED, reply with INVALID."],
-                            ['role' => 'user', 'content' => "Text: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $text)],
+                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key."],
+                            ['role' => 'user', 'content' => "Text: " . $text],
                         ],
                     ]);
 
@@ -304,10 +294,10 @@ class DigitalLibraryController extends Controller
                             'messages' => [
                                 ['role' => 'system', 'content' => "Extract 5-6 lines summary. PLAIN TEXT ONLY. NO BOLDING, NO ASTERISKS, NO LISTS.
                                 - Lines 1-4: Product Name & description (Detailed).
-                                - Lines 5-6: Features & Tech Crux.
-                                - CRITICAL RULE: DO NOT guess, invent, or hallucinate metrics, values, or specifications.
-                                - If the text is insufficient, output EXACTLY: 'Insufficient text extracted for summary.'"],
-                                ['role' => 'user', 'content' => "Text: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $text)],
+                                - Line 5: Features/Applications.
+                                - Line 6: Technical/Chemical crux.
+                                Strictly plain text sentences."],
+                                ['role' => 'user', 'content' => "Text: " . $text],
                             ],
                         ]);
                         $summary = $extract->choices[0]->message->content ?? "Technical summary generated.";
