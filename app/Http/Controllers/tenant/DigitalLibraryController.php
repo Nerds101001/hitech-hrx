@@ -118,7 +118,8 @@ class DigitalLibraryController extends Controller
                       - Lines 1-3: Clear Product Description.
                       - Lines 4-5: Features & Key Applications.
                       - Line 6: Technical crux (Safety/Metric).
-                    - CRITICAL RULE: If the Text Sample is empty or very short, DO NOT hallucinate details or invent friction metrics/values. For the CRUX, strictly output: 'Document text could not be extracted automatically (likely a scanned image). Please review manually.'
+                    - CRITICAL RULE: DO NOT hallucinate, guess, or invent ANY details, metrics, or values (like friction coefficients, mg/kg, etc) that are not EXPLICITLY present in the Text Sample. Base your summary ONLY on the provided text.
+                    - If the Text Sample is empty, mostly garbage, or lacks specific technical details to write a factual 6-line summary, DO NOT guess based on the filename. Instead, for the CRUX, strictly output: 'Insufficient text extracted from document (likely a scanned PDF or missing pages). Please enter details manually.'
                     - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'.";
 
             // Request AI Audit
@@ -303,10 +304,10 @@ class DigitalLibraryController extends Controller
                             'messages' => [
                                 ['role' => 'system', 'content' => "Extract 5-6 lines summary. PLAIN TEXT ONLY. NO BOLDING, NO ASTERISKS, NO LISTS.
                                 - Lines 1-4: Product Name & description (Detailed).
-                                - Line 5: Features/Applications.
-                                - Line 6: Technical/Chemical crux.
-                                Strictly plain text sentences."],
-                                ['role' => 'user', 'content' => "Text: " . $text],
+                                - Lines 5-6: Features & Tech Crux.
+                                - CRITICAL RULE: DO NOT guess, invent, or hallucinate metrics, values, or specifications.
+                                - If the text is insufficient, output EXACTLY: 'Insufficient text extracted for summary.'"],
+                                ['role' => 'user', 'content' => "Text: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $text)],
                             ],
                         ]);
                         $summary = $extract->choices[0]->message->content ?? "Technical summary generated.";
