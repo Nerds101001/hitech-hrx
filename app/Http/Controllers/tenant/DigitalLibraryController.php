@@ -90,9 +90,10 @@ class DigitalLibraryController extends Controller
             $text = mb_convert_encoding($pdf->getText(), 'UTF-8', 'UTF-8');
             $textSample = mb_substr($text, 0, 8000); // Increased for better accuracy
 
-            if (strlen(trim($textSample)) < 100) {
+            $isOcrNeeded = false;
+            if (strlen(trim($textSample)) < 50) {
                 Log::warning("DIGITAL_LIBRARY_OCR_NEEDED: Small text extracted from " . $originalName);
-                // We'll try to let it pass if it's a valid file, but note it
+                $isOcrNeeded = true;
             }
 
             $factory = OpenAI::factory();
@@ -100,11 +101,7 @@ class DigitalLibraryController extends Controller
                               ->withBaseUri(config('openai.base_url'))
                               ->make();
 
-            // Request AI Audit
-            $resp = $client->chat()->create([
-                'model' => config('openai.ai_model'),
-                'messages' => [
-                    ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
+            $systemPrompt = "You are an expert technical document auditor for Hitech HRX. 
                     Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training), Test Report, Comparison Report.
                     Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
                     Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
@@ -121,8 +118,15 @@ class DigitalLibraryController extends Controller
                       - Lines 1-3: Clear Product Description.
                       - Lines 4-5: Features & Key Applications.
                       - Line 6: Technical crux (Safety/Metric).
-                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'."],
-                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . $textSample],
+                    - CRITICAL RULE: If the Text Sample is empty or very short, DO NOT hallucinate details or invent friction metrics/values. For the CRUX, strictly output: 'Document text could not be extracted automatically (likely a scanned image). Please review manually.'
+                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'.";
+
+            // Request AI Audit
+            $resp = $client->chat()->create([
+                'model' => config('openai.ai_model'),
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $textSample)],
                 ],
             ]);
 
@@ -273,11 +277,16 @@ class DigitalLibraryController extends Controller
                     $pdf = $parser->parseFile($file->getPathname());
                     $text = mb_substr($pdf->getText(), 0, 3000);
 
+                    $isOcrNeeded = false;
+                    if (strlen(trim($text)) < 50) {
+                        $isOcrNeeded = true;
+                    }
+
                     $verify = $client->chat()->create([
                         'model' => config('openai.ai_model'),
                         'messages' => [
-                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key."],
-                            ['role' => 'user', 'content' => "Text: " . $text],
+                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key. If the text is empty or says EMPTY/SCANNED, reply with INVALID."],
+                            ['role' => 'user', 'content' => "Text: " . ($isOcrNeeded ? "(EMPTY/SCANNED PDF)" : $text)],
                         ],
                     ]);
 
