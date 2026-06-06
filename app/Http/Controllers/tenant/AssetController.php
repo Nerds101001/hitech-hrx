@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Validator;
+use App\Exports\AssetsExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AssetController extends Controller
 {
@@ -38,7 +40,7 @@ class AssetController extends Controller
                 'total_value' => \App\Models\Asset::sum('current_value'),
             ];
 
-            $users = User::where('status', 'active')
+            $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
                 ->orderBy('first_name')
                 ->get(['id', 'first_name', 'last_name']);
 
@@ -64,7 +66,7 @@ class AssetController extends Controller
                 ->orderBy('name')
                 ->get();
                 
-            $users = User::where('status', 'active')
+            $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
                 ->orderBy('first_name')
                 ->get(['id', 'first_name', 'last_name']);
 
@@ -171,7 +173,7 @@ class AssetController extends Controller
         $categories = AssetCategory::where('status', Status::ACTIVE)
             ->orderBy('name')
             ->get();
-        $users = User::where('status', Status::ACTIVE)
+        $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name']);
 
@@ -239,11 +241,20 @@ class AssetController extends Controller
             $asset = \App\Models\Asset::findOrFail($id);
             $asset->delete();
 
+            if (request()->ajax()) {
+                return response()->json(['success' => true, 'message' => 'Asset deleted successfully!']);
+            }
+
             return redirect()->route('assets.index')
                 ->with('success', 'Asset deleted successfully!');
 
         } catch (Exception $e) {
             Log::error('Asset deletion failed: ' . $e->getMessage());
+            
+            if (request()->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to delete asset.'], 500);
+            }
+            
             return redirect()->back()
                 ->with('error', 'Failed to delete asset. Please try again.');
         }
@@ -270,6 +281,10 @@ class AssetController extends Controller
 
             if ($status = $request->input('status')) {
                 $query->where('status', $status);
+            }
+            
+            if ($userId = $request->input('user_id')) {
+                $query->where('assigned_to', $userId);
             }
 
             $statusBadgeMap = [
@@ -359,6 +374,21 @@ class AssetController extends Controller
         } catch (Exception $e) {
             Log::error('Asset unassignment failed: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to unassign asset.'], 500);
+        }
+    }
+
+    public function exportExcel(Request $request)
+    {
+        try {
+            $searchTerm = $request->input('searchTerm');
+            $category = $request->input('category');
+            $status = $request->input('status');
+            $userId = $request->input('user_id');
+
+            return Excel::download(new AssetsExport($searchTerm, $category, $status, $userId), 'assets_export_' . date('Y_m_d_H_i_s') . '.xlsx');
+        } catch (\Exception $e) {
+            Log::error('Asset Export failed: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to export assets. Please try again.');
         }
     }
 }
