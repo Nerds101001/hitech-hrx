@@ -1,4 +1,12 @@
 $(function () {
+  // GLightbox instance — declared at outer scope so all handlers can access it
+  var lightbox = null;
+
+  function initLightbox() {
+    if (typeof GLightbox === 'undefined') return;
+    if (lightbox) { try { lightbox.destroy(); } catch(e) {} }
+    lightbox = GLightbox({ selector: '.glightbox' });
+  }
   var date = $('#dateFilter').val();
   var initialStatus = $('#statusFilter').val() || 'pending';
 
@@ -78,18 +86,18 @@ $(function () {
         }
       },
       columns: [
-        { data: 'id' },                         // 0: Checkbox
+        { data: 'unified_id' },                 // 0: Checkbox
         { data: 'user_name' },                  // 1: Employee
         { data: 'department' },                 // 2: Department
-        { data: 'leave_type' },                 // 3: Leave Type
-        { data: 'from_date' },                  // 4: From Date
-        { data: 'days' },                       // 5: Days
+        { data: 'request_type' },               // 3: Request Type
+        { data: 'dates' },                      // 4: Dates
+        { data: 'duration' },                   // 5: Duration
         { data: 'reason' },                     // 6: Reason
         { data: 'status' },                     // 7: Status
-        { data: 'document' },                   // 8: Attachment
+        { data: 'attachment' },                 // 8: Attachment
         { data: null, defaultContent: '' },     // 9: Actions
         { data: 'approved_by_name', defaultContent: 'N/A' }, // 10: Approved By
-        { data: 'approved_at_formatted', defaultContent: 'N/A' } // 11: Approved At
+        { data: 'created_at', defaultContent: 'N/A' } // 11: Applied At
       ],
       columnDefs: [
         {
@@ -99,41 +107,21 @@ $(function () {
           searchable: false,
           checkboxes: true,
           render: function (data, type, full, meta) {
-            return '<input type="checkbox" class="dt-checkboxes form-check-input" value="' + full['id'] + '">';
+            return '<input type="checkbox" class="dt-checkboxes form-check-input" value="' + full['unified_id'] + '">';
           }
         },
         {
-          // Employee Name with avatar
+          // Employee Name (no avatar - clean name + code)
           targets: 1,
           className: 'text-start',
           render: function (data, type, full, meta) {
             var $name = full['user_name'],
-              code = full['user_code'],
-              initials = full['user_initial'],
-              profileOutput,
-              rowOutput;
+              code = full['user_code'];
 
-            if (full['user_profile_image']) {
-              profileOutput = '<img src="' + full['user_profile_image'] + '" alt="Avatar" class="avatar rounded-circle " />';
-            } else {
-              initials = full['user_initial'] || '';
-              profileOutput = '<span class="avatar-initial rounded-circle bg-label-info">' + initials + '</span>';
-            }
-
-            rowOutput =
-              '<div class="d-flex justify-content-start align-items-center user-name">' +
-              '<div class="avatar-wrapper">' +
-              '<div class="avatar avatar-sm me-4">' +
-              profileOutput +
-              '</div>' +
-              '</div>' +
-              '<div class="d-flex flex-column">' +
-              '<a href="' + employeeView + full['user_id'] + '" class="text-heading text-truncate"><span class="fw-medium">' + $name + '</span></a>' +
-              '<small>' + code + '</small>' +
-              '</div>' +
+            return '<div class="d-flex flex-column">' +
+              '<a href="' + employeeView + full['user_id'] + '" class="text-heading fw-medium text-truncate">' + $name + '</a>' +
+              '<small class="text-muted">' + code + '</small>' +
               '</div>';
-
-            return rowOutput;
           }
         },
         {
@@ -235,11 +223,11 @@ $(function () {
           render: function (data, type, full, meta) {
             var actionsHtml = '<div class="d-flex align-items-center justify-content-center gap-2">';
             // Medium icons for Hitech feel
-            actionsHtml += `<button class="btn btn-icon btn-hitech leave-request-details shadow-sm" data-id="${full['id']}" data-bs-toggle="modal" data-bs-target="#modalLeaveRequestDetails" title="Review Request"><i class="bx bx-show fs-5"></i></button>`;
+            actionsHtml += `<button class="btn btn-icon btn-hitech leave-request-details shadow-sm" data-id="${full['unified_id']}" data-bs-toggle="modal" data-bs-target="#modalLeaveRequestDetails" title="Review Request"><i class="bx bx-show fs-5"></i></button>`;
 
             if (full['status'] === 'pending' && !window.isAccountsRole) {
-              actionsHtml += `<button class="btn btn-icon btn-hitech-success quick-leave-approve shadow-sm" data-id="${full['id']}" title="Approve"><i class="bx bx-check fs-5"></i></button>`;
-              actionsHtml += `<button class="btn btn-icon btn-hitech-danger quick-leave-reject shadow-sm" data-id="${full['id']}" title="Reject"><i class="bx bx-x fs-5"></i></button>`;
+              actionsHtml += `<button class="btn btn-icon btn-hitech-success quick-leave-approve shadow-sm" data-id="${full['unified_id']}" title="Approve"><i class="bx bx-check fs-5"></i></button>`;
+              actionsHtml += `<button class="btn btn-icon btn-hitech-danger quick-leave-reject shadow-sm" data-id="${full['unified_id']}" title="Reject"><i class="bx bx-x fs-5"></i></button>`;
             }
 
             actionsHtml += '</div>';
@@ -266,7 +254,8 @@ $(function () {
         }
       ],
       order: [[1, 'asc']],
-      lengthMenu: [7, 10, 20, 50, 70, 100],
+      pageLength: 25,
+      lengthMenu: [25, 50, 100],
       language: {
         sLengthMenu: '_MENU_',
         search: '',
@@ -278,6 +267,11 @@ $(function () {
         }
       },
       responsive: false
+    });
+
+    // Re-init GLightbox after every DataTable draw (handles AJAX-rendered rows)
+    dtLeaveRequests.on('draw', function () {
+      initLightbox();
     });
 
     // Integrated Filter Listeners
@@ -319,10 +313,8 @@ $(function () {
     };
 
 
-    //Glide box initialisation
-    const lightbox = GLightbox({
-      selector: 'glightbox'
-    });
+    // Initial lightbox setup (rows may not exist yet; draw event handles the rest)
+    initLightbox();
 
     // To remove default btn-secondary in export buttons
     $('.dt-buttons > .btn-group > button').removeClass('btn-secondary');
@@ -579,8 +571,8 @@ $(function () {
     });
   }
 
-  // Re-initialize lightbox when modal opens
+  // Re-initialize lightbox when the details modal opens (attachment inside modal)
   $('#modalLeaveRequestDetails').on('shown.bs.modal', function () {
-    if (typeof lightbox !== 'undefined') lightbox.reload();
+    initLightbox();
   });
 });

@@ -40,54 +40,6 @@
 @endsection
 
 @section('content')
-<div class="px-4">
-  <div class="row g-6 mb-6">
-    <!-- Hero Banner -->
-    <div class="col-lg-12">
-      <x-hero-banner 
-        title="Leave Management" 
-        subtitle="Manage employee leave requests and balances efficiently"
-        icon="bx-calendar"
-        gradient="teal"
-      />
-    </div>
-  </div>
-
-  <!-- Stats Cards -->
-  <div class="row g-6 mb-6">
-    <x-stat-card 
-      title="Pending Requests" 
-      value="{{ $pendingRequests ?? 0 }}" 
-      icon="bx-time" 
-      color="warning"
-      animation-delay="0.1s"
-    />
-    
-    <x-stat-card 
-      title="Approved Today" 
-      value="{{ $approvedToday ?? 0 }}" 
-      icon="bx-check-circle" 
-      color="success"
-      animation-delay="0.2s"
-    />
-    
-    <x-stat-card 
-      title="On Leave Now" 
-      value="{{ $onLeaveNow ?? 0 }}" 
-      icon="bx-calendar-minus" 
-      color="info"
-      animation-delay="0.3s"
-    />
-    
-    <x-stat-card 
-      title="Leave Balance" 
-      value="{{ $totalLeaveBalance ?? 0 }}" 
-      icon="bx-wallet" 
-      color="primary"
-      animation-delay="0.4s"
-    />
-  </div>
-
 
 
   <!-- Leave Requests Table Section -->
@@ -97,8 +49,7 @@
         <div class="hitech-card-header border-bottom">
           <div class="d-flex align-items-center justify-content-between w-100">
             <div class="d-flex align-items-center gap-4">
-                <h5 class="title mb-0">Leave Management</h5>
-                
+                {{-- Main tab: Leave / Outdoor Duty --}}
                 {{-- Hitech Segmented Toggle --}}
                 @if(!auth()->user()->hasRole('accounts'))
                 <div class="hitech-segmented-control bg-light-soft rounded-pill p-1 d-flex" style="border: 1px solid rgba(0, 90, 90, 0.1);">
@@ -206,54 +157,198 @@
           </div>
         </div>
 
-        <div class="card-datatable table-responsive p-0">
-          <table class="datatables-leaveRequests table table-hover border-top mb-0">
-            <thead>
-              <tr>
-                @if(!auth()->user()->hasRole('accounts'))
-                <th><input type="checkbox" id="selectAll" class="form-check-input"></th>
-                @else
-                <th>ID</th>
+        {{-- LEAVE REQUESTS TABLE --}}
+        <div id="leaveSection">
+          <div class="card-datatable table-responsive p-0">
+            <table class="datatables-leaveRequests table table-hover border-top mb-0">
+              <thead>
+                <tr>
+                  @if(!auth()->user()->hasRole('accounts'))
+                  <th><input type="checkbox" id="selectAll" class="form-check-input"></th>
+                  @else
+                  <th>ID</th>
+                  @endif
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Leave Type</th>
+                  <th>From Date</th>
+                  <th>Days</th>
+                  <th>Reason</th>
+                  <th class="status-col">Status</th>
+                  <th>Attachment</th>
+                  <th class="action-col">Actions</th>
+                  <th class="approved-by-col" style="display:none;">Approved By</th>
+                  <th class="approved-at-col" style="display:none;">Approved At</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+        {{-- OUTDOOR DUTY SECTION --}}
+        <div id="outdoorSection" style="display:none;">
+          {{-- Outdoor Duty Filter Row --}}
+          <div class="p-4 border-bottom">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+              <div class="d-flex flex-wrap gap-3 align-items-center">
+                <div class="search-wrapper-hitech" style="width:300px;">
+                  <i class="bx bx-search text-muted ms-3 fs-5"></i>
+                  <input type="text" class="form-control" placeholder="Search purpose, location..." id="odSearchInput">
+                </div>
+                <select id="odStatusFilter" class="form-select form-select-sm filter-item-hitech" style="width:130px;">
+                  <option value="">Status: All</option>
+                  <option value="pending" selected>Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select id="odMonthFilter" class="form-select form-select-sm filter-item-hitech" style="width:130px;">
+                  <option value="">Month: All</option>
+                  @for($m=1;$m<=12;$m++)
+                    <option value="{{ $m }}" @selected($m==now()->month)>{{ date('F',mktime(0,0,0,$m,1)) }}</option>
+                  @endfor
+                </select>
+                @if(!auth()->user()->hasRole(['employee']))
+                <select id="odEmployeeFilter" class="form-select form-select-sm filter-item-hitech select2" style="width:200px;">
+                  <option value="">Emp: All</option>
+                  @foreach($employees as $e)
+                    <option value="{{ $e->id }}">{{ $e->getFullName() }}</option>
+                  @endforeach
+                </select>
                 @endif
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Leave Type</th>
-                <th>From Date</th>
-                <th>Days</th>
-                <th>Reason</th>
-                <th class="status-col">Status</th>
-                <th>Attachment</th>
-                <th class="action-col">Actions</th>
-                <th class="approved-by-col" style="display:none;">Approved By</th>
-                <th class="approved-at-col" style="display:none;">Approved At</th>
-              </tr>
-            </thead>
+              </div>
+              @if(!auth()->user()->hasRole('accounts'))
+              <button class="btn btn-sm btn-hitech" data-bs-toggle="modal" data-bs-target="#odApplyModal">
+                <i class="bx bx-plus me-1"></i>Apply for Outdoor Duty
+              </button>
+              @endif
+            </div>
+          </div>
+
+          <div class="card-datatable table-responsive p-0">
+            <table id="odTable" class="table table-hover border-top mb-0">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Date</th>
+                  <th>Purpose</th>
+                  <th>Location</th>
+                  <th>Exp. Return</th>
+                  <th>Status</th>
+                  <th>Approved By</th>
+                  <th>Applied On</th>
+                  @if(!auth()->user()->hasRole('accounts'))
+                  <th>Actions</th>
+                  @endif
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  {{-- Outdoor Duty: Apply Modal --}}
+  <div class="modal fade" id="odApplyModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bx bx-map-pin me-2"></i>Apply for Outdoor Duty</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="odApplyForm">
+          @csrf
+          <div class="modal-body">
+            @if(!auth()->user()->hasRole('employee'))
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Employee</label>
+              <select name="od_user_id" class="form-select select2">
+                <option value="{{ auth()->id() }}">Myself — {{ auth()->user()->getFullName() }}</option>
+                @foreach($employees as $e)
+                  @if($e->id !== auth()->id())
+                    <option value="{{ $e->id }}">{{ $e->getFullName() }} ({{ $e->code }})</option>
+                  @endif
+                @endforeach
+              </select>
+            </div>
+            @endif
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+              <input type="date" name="od_date" class="form-control" required value="{{ date('Y-m-d') }}">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Purpose <span class="text-danger">*</span></label>
+              <textarea name="od_purpose" class="form-control" rows="3" required maxlength="500" placeholder="Reason / task for outdoor duty..."></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Location / Destination</label>
+              <input type="text" name="od_location" class="form-control" maxlength="255" placeholder="e.g. Client office, site visit...">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Expected Return Time</label>
+              <input type="time" name="od_expected_return" class="form-control">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech" id="odSubmitBtn">
+              <span class="spinner-border spinner-border-sm d-none me-1" id="odSpinner"></span>Submit
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {{-- Outdoor Duty: View/Action Modal --}}
+  <div class="modal fade" id="odViewModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Outdoor Duty Details</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-3 mb-4">
+            <div class="avatar avatar-md">
+              <span class="avatar-initial rounded-circle bg-label-primary" id="odViewInitials"></span>
+            </div>
+            <div>
+              <div class="fw-semibold" id="odViewName"></div>
+              <small class="text-muted" id="odViewCode"></small>
+            </div>
+            <span class="badge ms-auto" id="odViewBadge"></span>
+          </div>
+          <table class="table table-borderless table-sm">
+            <tr><td class="text-muted" style="width:40%">Date</td><td id="odViewDate" class="fw-semibold"></td></tr>
+            <tr><td class="text-muted">Purpose</td><td id="odViewPurpose"></td></tr>
+            <tr><td class="text-muted">Location</td><td id="odViewLocation"></td></tr>
+            <tr><td class="text-muted">Expected Return</td><td id="odViewReturn"></td></tr>
+            <tr><td class="text-muted">Applied On</td><td id="odViewApplied"></td></tr>
+            <tr id="odApproverRow" class="d-none"><td class="text-muted">Approved By</td><td id="odViewApprover"></td></tr>
+            <tr id="odNotesRow" class="d-none"><td class="text-muted">Notes</td><td id="odViewNotes"></td></tr>
           </table>
+          @if(!auth()->user()->hasRole(['employee','accounts']))
+          <div id="odActionSection" class="d-none border-top pt-3 mt-2">
+            <input type="hidden" id="odActionId">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Remarks (optional)</label>
+              <textarea id="odActionNotes" class="form-control" rows="2"></textarea>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-success btn-sm flex-fill" id="odApproveBtn"><i class="bx bx-check me-1"></i>Approve</button>
+              <button class="btn btn-danger btn-sm flex-fill" id="odRejectBtn"><i class="bx bx-x me-1"></i>Reject</button>
+            </div>
+          </div>
+          @endif
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Analytics Section (Chart) at Bottom -->
-  <div class="row g-6">
-    <div class="col-12">
-      <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
-        <div class="hitech-card-header border-bottom">
-          <div class="d-flex align-items-center gap-3">
-              <h5 class="title mb-0">Leave Balance Overview</h5>
-              <div class="d-flex align-items-center gap-2 ms-4">
-                  <span class="badge badge-hitech-success rounded-pill px-3">Available</span>
-                  <span class="badge border rounded-pill px-3" style="background: rgba(100,116,139,0.08); color: #64748b;">Used</span>
-              </div>
-          </div>
-        </div>
-        <div class="card-body">
-          <div id="leaveBalanceChart" style="min-height: 400px;"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+
 
 @include('_partials._modals.leave.leave_request_details')
 
@@ -355,6 +450,173 @@ function rejectSelected() {
   processBulkAction('rejected');
 }
 
+// ── Outdoor Duty Tab ──────────────────────────────────────────────────────────
+$(function () {
+  const OD = {
+    list:    '{{ url("leaveRequests/outdoorDuty/listAjax") }}',
+    store:   '{{ url("leaveRequests/outdoorDuty/storeAjax") }}',
+    action:  '{{ url("leaveRequests/outdoorDuty/actionAjax") }}',
+    getById: '{{ url("leaveRequests/outdoorDuty/getByIdAjax") }}',
+  };
+  const canAct = {{ auth()->user()->hasRole(['admin','hr','manager']) ? 'true' : 'false' }};
+
+  // Main tab toggle
+  $('.main-tab-btn').on('click', function () {
+    $('.main-tab-btn').removeClass('active');
+    $(this).addClass('active');
+    const tab = $(this).data('tab');
+    if (tab === 'outdoor') {
+      $('#leaveSection').hide();
+      $('#outdoorSection').show();
+      $('.hitech-segmented-control:not(.main-tab-btn)').closest('.hitech-segmented-control').hide();
+      $('[onclick]').hide(); // hide bulk approve/reject for leave
+      if (!$.fn.DataTable.isDataTable('#odTable')) initOdTable();
+    } else {
+      $('#outdoorSection').hide();
+      $('#leaveSection').show();
+      $('.hitech-segmented-control').show();
+      $('[onclick]').show();
+    }
+  });
+
+  let odTable;
+  function initOdTable() {
+    let cols = [
+      {
+        data: null,
+        render: d => `<div class="d-flex align-items-center gap-2">
+          ${d.user_profile_image
+            ? `<img src="${d.user_profile_image}" class="rounded-circle" style="width:30px;height:30px;object-fit:cover">`
+            : `<span class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:30px;height:30px;font-size:11px">${d.user_initial}</span>`}
+          <div><div class="fw-semibold small">${d.user_name}</div><div class="text-muted" style="font-size:11px">${d.user_code||''}</div></div>
+        </div>`
+      },
+      { data: 'date_fmt' },
+      { data: 'purpose', render: d => d && d.length > 45 ? d.substring(0,45)+'…' : (d||'') },
+      { data: 'location', defaultContent: '<span class="text-muted">—</span>' },
+      { data: 'expected_return_time', defaultContent: '<span class="text-muted">—</span>' },
+      {
+        data: 'status',
+        render: s => {
+          const map = { pending:'warning', approved:'success', rejected:'danger', cancelled:'secondary' };
+          const od  = s === 'approved' ? ' <span class="badge bg-label-info ms-1 fw-bold" title="Outdoor Duty marked Present">O</span>' : '';
+          return `<span class="badge bg-label-${map[s]||'secondary'}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>${od}`;
+        }
+      },
+      { data: 'approved_by_name', defaultContent: '<span class="text-muted">—</span>' },
+      { data: 'created_at', render: d => d ? new Date(d).toLocaleDateString('en-GB') : '' },
+    ];
+
+    if (canAct) {
+      cols.push({
+        data: null, orderable: false,
+        render: d => `
+          <button class="btn btn-sm btn-icon btn-outline-primary od-view-btn" data-id="${d.id}"><i class="bx bx-show"></i></button>
+          ${d.status==='pending' ? `
+          <button class="btn btn-sm btn-icon btn-outline-success od-approve-btn" data-id="${d.id}"><i class="bx bx-check"></i></button>
+          <button class="btn btn-sm btn-icon btn-outline-danger od-reject-btn" data-id="${d.id}"><i class="bx bx-x"></i></button>` : ''}
+        `
+      });
+    }
+
+    odTable = $('#odTable').DataTable({
+      processing: true, serverSide: true,
+      ajax: { url: OD.list, data: d => {
+        d.employeeFilter = $('#odEmployeeFilter').val();
+        d.statusFilter   = $('#odStatusFilter').val();
+        d.monthFilter    = $('#odMonthFilter').val();
+        d.searchTerm     = $('#odSearchInput').val();
+      }},
+      columns: cols,
+      order: [[7, 'desc']],
+      pageLength: 25,
+    });
+
+    ['#odStatusFilter','#odMonthFilter','#odEmployeeFilter'].forEach(id =>
+      $(id).on('change', () => odTable.ajax.reload()));
+    let st; $('#odSearchInput').on('input', () => { clearTimeout(st); st = setTimeout(() => odTable.ajax.reload(), 400); });
+  }
+
+  // Apply form submit
+  $('#odApplyForm').on('submit', function (e) {
+    e.preventDefault();
+    const btn = $('#odSubmitBtn'), sp = $('#odSpinner');
+    btn.prop('disabled', true); sp.removeClass('d-none');
+    $.ajax({
+      url: OD.store, method: 'POST', data: $(this).serialize(),
+      success: r => {
+        if (r.status === 'success') {
+          Swal.fire({ icon: 'success', title: 'Submitted!', text: r.message, timer: 2000, showConfirmButton: false });
+          $('#odApplyModal').modal('hide');
+          this.reset();
+          if (odTable) odTable.ajax.reload();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Error', text: r.message });
+        }
+      },
+        error: (xhr) => {
+          let msg = 'Something went wrong.';
+          if (xhr.responseJSON && xhr.responseJSON.message) {
+            msg = xhr.responseJSON.message;
+          }
+          Swal.fire({ icon: 'error', title: 'Error', text: msg });
+        },
+      complete: () => { btn.prop('disabled', false); sp.addClass('d-none'); }
+    });
+  });
+
+  // View detail modal
+  $(document).on('click', '.od-view-btn', function () {
+    const id = $(this).data('id');
+    $.get(OD.getById + '/' + id, function (d) {
+      $('#odViewInitials').text(d.userInitials);
+      $('#odViewName').text(d.userName);
+      $('#odViewCode').text(d.userCode || '');
+      $('#odViewDate').text(d.date);
+      $('#odViewPurpose').text(d.purpose);
+      $('#odViewLocation').text(d.location);
+      $('#odViewReturn').text(d.expectedReturn);
+      $('#odViewApplied').text(d.createdAt);
+      const map = { pending:'warning', approved:'success', rejected:'danger', cancelled:'secondary' };
+      $('#odViewBadge').attr('class', `badge bg-label-${map[d.status]||'secondary'}`).text(d.status.charAt(0).toUpperCase()+d.status.slice(1));
+      d.approvedByName ? ($('#odViewApprover').text(d.approvedByName+(d.approvedAt?' — '+d.approvedAt:'')), $('#odApproverRow').removeClass('d-none')) : $('#odApproverRow').addClass('d-none');
+      d.approvalNotes  ? ($('#odViewNotes').text(d.approvalNotes), $('#odNotesRow').removeClass('d-none')) : $('#odNotesRow').addClass('d-none');
+      $('#odActionId').val(d.id);
+      (canAct && d.status === 'pending') ? $('#odActionSection').removeClass('d-none') : $('#odActionSection').addClass('d-none');
+      $('#odViewModal').modal('show');
+    });
+  });
+
+  // Inline quick approve
+  $(document).on('click', '.od-approve-btn', function () { odDoAction($(this).data('id'), 'approved', ''); });
+  $(document).on('click', '.od-reject-btn', function () {
+    const id = $(this).data('id');
+    Swal.fire({ title: 'Reject?', input: 'text', inputPlaceholder: 'Reason (optional)', showCancelButton: true,
+      confirmButtonColor: '#d33', confirmButtonText: 'Reject' })
+      .then(r => { if (r.isConfirmed) odDoAction(id, 'rejected', r.value || ''); });
+  });
+
+  // Modal approve/reject
+  $('#odApproveBtn').on('click', () => odDoAction($('#odActionId').val(), 'approved', $('#odActionNotes').val()));
+  $('#odRejectBtn').on('click',  () => odDoAction($('#odActionId').val(), 'rejected', $('#odActionNotes').val()));
+
+  function odDoAction(id, status, notes) {
+    $.ajax({
+      url: OD.action, method: 'POST',
+      data: { _token: $('meta[name=csrf-token]').attr('content'), id, status, adminNotes: notes },
+      success: r => {
+        if (r.status === 'success') {
+          Swal.fire({ icon: 'success', title: status.charAt(0).toUpperCase()+status.slice(1)+'!', text: r.message, timer: 2000, showConfirmButton: false });
+          $('#odViewModal').modal('hide');
+          if (odTable) odTable.ajax.reload();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Error', text: r.message });
+        }
+      }
+    });
+  }
+});
+
 // Select All Checkbox Logic
 document.addEventListener('DOMContentLoaded', function() {
   $('#selectAll').on('change', function() {
@@ -371,82 +633,6 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 
-// Leave Balance Chart
-document.addEventListener('DOMContentLoaded', function() {
-  const options = {
-    series: [{
-      name: 'Entitled/Available',
-      data: {!! json_encode(array_column($leaveBalanceData, 'balance')) !!}
-    }, {
-      name: 'Used To Date',
-      data: {!! json_encode(array_column($leaveBalanceData, 'used')) !!}
-    }],
-    chart: {
-      height: 400,
-      type: 'bar',
-      stacked: true,
-      toolbar: { show: false },
-      fontFamily: 'Outfit, sans-serif'
-    },
-    plotOptions: {
-      bar: {
-        horizontal: false,
-        columnWidth: '20%',
-        borderRadius: 8,
-        dataLabels: { position: 'center' },
-      }
-    },
-    colors: ['#005a5a', '#f1f5f9'],
-    dataLabels: {
-      enabled: true,
-      formatter: function(val) { return val > 0 ? val : '' },
-      style: {
-        fontSize: '10px',
-        fontWeight: 600,
-        colors: ['#fff', '#64748b']
-      }
-    },
-    grid: {
-        borderColor: '#f1f5f9',
-        strokeDashArray: 4,
-        padding: { top: 10, right: 0, bottom: 0, left: 10 }
-    },
-    xaxis: {
-      categories: {!! json_encode(array_column($leaveBalanceData, 'name')) !!},
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-      labels: {
-          style: { colors: '#94a3b8', fontSize: '11px', fontWeight: 500 }
-      }
-    },
-    yaxis: {
-        labels: {
-            style: { colors: '#475569', fontSize: '12px', fontWeight: 600 }
-        }
-    },
-    fill: {
-        opacity: 1
-    },
-    tooltip: {
-        theme: 'light',
-        shared: true,
-        intersect: false,
-        y: {
-            formatter: function(val) { return val + " Days" }
-        }
-    },
-    legend: {
-        position: 'top',
-        horizontalAlign: 'right',
-        fontSize: '13px',
-        fontWeight: 600,
-        markers: { radius: 12, width: 8, height: 8 },
-        itemMargin: { horizontal: 15, vertical: 0 }
-    }
-  };
-  
-  window.leaveChart = new ApexCharts(document.querySelector("#leaveBalanceChart"), options);
-  window.leaveChart.render();
-});
+
 </script>
 @endsection
