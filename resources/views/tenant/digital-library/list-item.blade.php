@@ -13,14 +13,34 @@
         </div>
         <div class="list-item-info">
             <div class="list-item-title">{{ $productName }}</div>
-            <div class="list-item-meta">{{ $brand }} · {{ $category }}</div>
+            <div class="list-item-meta">
+                {{ $brand }} · {{ $category }}
+                @if($file->category === 'LEARN' && $file->presenter_id)
+                    <span class="ms-2 border-start ps-2">
+                        <i class="ti ti-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }}
+                        @if($file->session_date)
+                            <i class="ti ti-calendar ms-1 text-primary"></i> {{ \Carbon\Carbon::parse($file->session_date)->format('M d') }}
+                        @endif
+                    </span>
+                @endif
+            </div>
         </div>
     </div>
     <div class="list-item-actions">
-        <a href="{{ $tds ? route('library.access', $tds->id) : 'javascript:void(0)' }}" target="{{ $tds ? '_blank' : '' }}" class="action-pill {{ !$tds ? 'disabled' : '' }}">TDS</a>
-        <a href="{{ $sds ? route('library.access', $sds->id) : 'javascript:void(0)' }}" target="{{ $sds ? '_blank' : '' }}" class="action-pill {{ !$sds ? 'disabled' : '' }}">SDS</a>
-        <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-pill {{ !$comp ? 'disabled' : '' }}">COMP</a>
-        <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-pill {{ !$testReport ? 'disabled' : '' }}">TEST</a>
+        @if($file->category === 'Video' || $file->category === 'LEARN')
+            @if($file->youtube_url)
+                @php
+                    $pName = $file->presenter ? trim($file->presenter->first_name . ' ' . $file->presenter->last_name) : '';
+                    $sDate = $file->session_date ? \Carbon\Carbon::parse($file->session_date)->format('M d, Y') : '';
+                @endphp
+                <a href="javascript:void(0)" onclick="playVideo('{{ $file->youtube_url }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-pill bg-danger text-white border-0"><i class="ti ti-player-play"></i> PLAY</a>
+            @endif
+        @else
+            <a href="{{ $tds ? route('library.access', $tds->id) : 'javascript:void(0)' }}" target="{{ $tds ? '_blank' : '' }}" class="action-pill {{ !$tds ? 'disabled' : '' }}">TDS</a>
+            <a href="{{ $sds ? route('library.access', $sds->id) : 'javascript:void(0)' }}" target="{{ $sds ? '_blank' : '' }}" class="action-pill {{ !$sds ? 'disabled' : '' }}">SDS</a>
+            <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-pill {{ !$comp ? 'disabled' : '' }}">COMP</a>
+            <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-pill {{ !$testReport ? 'disabled' : '' }}">TEST</a>
+        @endif
         @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
         <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="action-pill bg-danger text-white ms-3 border-0" title="Delete Document">
             <i class="ti ti-trash"></i> DEL

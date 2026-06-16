@@ -67,10 +67,7 @@ fi
 
 
 php artisan config:cache
-if ! php artisan route:cache; then
-  echo "[7.1/8] route:cache skipped (duplicate route names present)."
-  php artisan route:clear || true
-fi
+php artisan route:clear
 php artisan view:cache
 
 

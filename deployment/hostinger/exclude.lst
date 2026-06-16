@@ -85,7 +85,6 @@ delete_*.php
 brain_*.php
 add_temp_*.php
 r2_check.php
-implode('
 public/test_db.php
 public/debug_connection.php
 public/debug_connection.txt
@@ -111,3 +110,59 @@ README.md
 INSTALLATION.md
 SETUP_GUIDE.md
 SETUP_GUIDE.html
+# Loose diagnostic/debug/utility PHP files in project root
+decode.php
+decode_model.php
+decoded.php
+decoded_attendance_controller.php
+drop_tables.php
+force_tables.php
+live_check.php
+local_test.php
+nagender.php
+recalc_all.php
+recalc_all_june.php
+replace_480.php
+replace_480_local.php
+run_remote.ps1
+seed_april.php
+show_dinesh.php
+temp_mapper.php
+check.php
+check_configs.php
+check_dinesh.php
+check_kpi_kra.php
+check_pdo.php
+check_policies.php
+check_policy.php
+check_profile.php
+check_sat.php
+check_vaneet_crm.php
+check_visibility.php
+fix_dinesh.php
+fix_nagender.php
+test.php
+test2.php
+# Sensitive/data files that must never go to server
+.env.live
+*.docx
+*.pdf
+# Root-level images only (data/design files — NOT public/assets/)
+kingo_*.png
+kingo_*.jpg
+kingo_*.jpeg
+# Block any loose .png/.jpg at root level (2-level deep glob not supported by tar --exclude, so list explicitly)
+kingo_bl.png
+kingo_br.png
+kingo_tl.png
+kingo_tr.png
+kingo_page_1.png
+kingo_page_1_hd.png
+assets_raw.tsv
+crm_active_employees.json
+mapping_result.json
+draft_combined_mapping.md
+users_dump.txt
+hrx_db_backup_pre_granular_permissions.sql
+# Unneeded root scripts
+upload_hr_policies.ps1

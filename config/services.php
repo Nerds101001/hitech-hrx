@@ -31,4 +31,10 @@ return [
     ],
   ],
 
+  'crm' => [
+    'base_url' => env('CRM_API_BASE_URL', 'https://api-crm.rustx.net'),
+    'username' => env('CRM_API_USERNAME'),
+    'password' => env('CRM_API_PASSWORD'),
+  ],
+
 ];

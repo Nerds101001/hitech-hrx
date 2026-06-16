@@ -125,7 +125,6 @@ class DepartmentsController extends Controller
   public function addOrUpdateDepartmentAjax(Request $request)
   {
     $departmentId = $request->input('departmentId');
-    Log::info('Department update/create request:', $request->all());
 
     $validatedData = $request->validate([
       'name' => 'required|string|max:255',

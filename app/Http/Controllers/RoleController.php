@@ -18,23 +18,8 @@ class RoleController extends Controller
     $permissions = Permission::all();
     $users = User::all(); // Fetch all users for the special permissions section
     
-    // Group permissions dynamically based on the prefix (module name)
-    $groupedPermissions = [];
-    foreach ($permissions as $p) {
-        $parts = explode('.', $p->name);
-        if (count($parts) > 1) {
-            $moduleSlug = $parts[0];
-            // Format 'travel-expense' to 'Travel Expense'
-            $moduleName = ucwords(str_replace('-', ' ', $moduleSlug));
-        } else {
-            $moduleName = 'General';
-        }
-        
-        if (!isset($groupedPermissions[$moduleName])) {
-            $groupedPermissions[$moduleName] = collect();
-        }
-        $groupedPermissions[$moduleName]->push($p);
-    }
+    // Read exact business logic groupings from our centralized registry
+    $groupedPermissions = config('permissions_registry');
 
     return view('roles.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],

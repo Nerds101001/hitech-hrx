@@ -17,6 +17,7 @@ class Client extends Model implements AuditableContract
 
   protected $fillable = [
     'name',
+    'crm_company_code',
     'email',
     'address',
     'phone',

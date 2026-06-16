@@ -672,7 +672,6 @@ class UserDashboardController extends Controller
     public function attendanceIndex(Request $request)
     {
         $user = auth()->user();
-        $query = Attendance::where('user_id', $user->id);
 
         // Filter Logic
         $filter = $request->input('filter', 'this_month');
@@ -682,59 +681,165 @@ class UserDashboardController extends Controller
         $year = $request->input('year', now()->year);
 
         if ($request->has('month') && $request->has('year')) {
-            $query->whereMonth('created_at', $month)->whereYear('created_at', $year);
+            $periodStart = Carbon::create($year, $month, 1)->startOfMonth();
+            $periodEnd = $periodStart->copy()->endOfMonth();
             $filter = 'custom_month'; // Internal flag
         } elseif ($filter === 'today') {
-            $query->whereDate('created_at', now());
+            $periodStart = now()->startOfDay();
+            $periodEnd = now()->endOfDay();
         } elseif ($filter === 'this_week') {
-            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
+            $periodStart = now()->startOfWeek();
+            $periodEnd = now()->endOfWeek();
         } elseif ($filter === 'this_month') {
-            $query->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year);
+            $periodStart = now()->startOfMonth();
+            $periodEnd = now()->endOfMonth();
         } elseif ($filter === 'last_month') {
-            $query->whereMonth('created_at', now()->subMonth()->month)->whereYear('created_at', now()->subMonth()->year);
+            $periodStart = now()->subMonth()->startOfMonth();
+            $periodEnd = now()->subMonth()->endOfMonth();
         } elseif ($filter === 'custom' && $startDate && $endDate) {
-            $query->whereBetween('created_at', [$startDate, $endDate]);
+            $periodStart = Carbon::parse($startDate)->startOfDay();
+            $periodEnd = Carbon::parse($endDate)->endOfDay();
+        } else {
+            $periodStart = now()->startOfMonth();
+            $periodEnd = now()->endOfMonth();
         }
 
-        $attendances = $query->orderBy('id', 'desc')->get();
-        
+        // Fetch DB Attendances
+        $attendancesDb = Attendance::where('user_id', $user->id)
+            ->where(function($q) use ($periodStart, $periodEnd) {
+                $q->whereBetween('check_in_time', [$periodStart, $periodEnd])
+                  ->orWhereBetween('created_at', [$periodStart, $periodEnd]);
+            })->get();
+            
+        // Fetch Approved Leaves
+        $leavesDb = LeaveRequest::where('user_id', $user->id)
+            ->where('status', LeaveRequestStatus::APPROVED)
+            ->where(function($q) use ($periodStart, $periodEnd) {
+                $q->whereBetween('from_date', [$periodStart, $periodEnd])
+                  ->orWhereBetween('to_date', [$periodStart, $periodEnd])
+                  ->orWhere(function($q2) use ($periodStart, $periodEnd) {
+                      $q2->where('from_date', '<=', $periodStart)
+                         ->where('to_date', '>=', $periodEnd);
+                  });
+            })
+            ->with('leaveType')
+            ->get();
+
+        // Fetch Holidays
+        $holidaysDb = Holiday::where('status', 1)
+            ->whereBetween('date', [$periodStart, $periodEnd])
+            ->where(function($q) use ($user) {
+                $q->whereNull('site_id')
+                  ->orWhere('site_id', $user->site_id);
+            })
+            ->get();
+
         $presentDays = 0;
         $lateDays = 0;
         $absentDays = 0;
         $totalHours = 0;
         $workCount = 0;
 
-        foreach($attendances as $a) {
-            $s = strtolower($a->status ?: 'present');
-            
-            // Dynamic enforcement of 7:45 threshold rule (465 mins)
-            if (empty($a->admin_reason) && $a->check_in_time && $a->check_out_time) {
-                $mins = $a->check_in_time->diffInMinutes($a->check_out_time);
-                if ($mins < 465 && $s === 'present') {
-                    $s = 'half-day';
+        $dailyLogs = [];
+
+        for ($date = $periodStart->copy(); $date->lte($periodEnd); $date->addDay()) {
+            $dateStr = $date->toDateString();
+            $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $date);
+
+            $dayData = [
+                'created_at' => $date->copy(),
+                'status' => 'Missing',
+                'dynamic_status' => 'missing',
+                'check_in_time' => null,
+                'check_out_time' => null,
+                'admin_reason' => null,
+                'holiday_name' => null
+            ];
+
+            // 1. Check Holiday
+            $holiday = $holidaysDb->first(function($h) use ($dateStr) {
+                return Carbon::parse($h->date)->toDateString() === $dateStr;
+            });
+
+            // 2. Check Attendance
+            $attendance = $attendancesDb->first(function($a) use ($dateStr) {
+                return ($a->check_in_time && $a->check_in_time->toDateString() === $dateStr) || 
+                       (!$a->check_in_time && $a->created_at->toDateString() === $dateStr);
+            });
+
+            // 3. Check Leave
+            $leave = $leavesDb->first(function($l) use ($dateStr) {
+                return Carbon::parse($l->from_date)->toDateString() <= $dateStr && 
+                       Carbon::parse($l->to_date)->toDateString() >= $dateStr;
+            });
+
+            if ($holiday) {
+                $dayData['status'] = 'Holiday';
+                $dayData['dynamic_status'] = 'holiday';
+                $dayData['holiday_name'] = $holiday->name;
+            } elseif ($attendance && strtolower($attendance->status) !== 'absent') {
+                $dayData['check_in_time'] = $attendance->check_in_time;
+                $dayData['check_out_time'] = $attendance->check_out_time;
+                $dayData['admin_reason'] = $attendance->admin_reason;
+
+                $s = strtolower($attendance->status ?: 'present');
+                
+                // Dynamic enforcement of 7:45 threshold rule (465 mins)
+                if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+                    $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                    if ($mins < 465 && $s === 'present') {
+                        $s = 'half-day';
+                    }
                 }
-            }
-            
-            if ($s === 'absent') {
+
+                $dayData['dynamic_status'] = $s;
+
+                if ($s === 'late' || $s === 'half-day') {
+                    $dayData['status'] = ($s === 'late') ? 'Late' : 'Half Day';
+                    $lateDays++;
+                } elseif (in_array($s, ['work_from_home', 'wfh'])) {
+                    $dayData['status'] = 'WFH';
+                    $presentDays++;
+                } else {
+                    $dayData['status'] = 'Present';
+                    $presentDays++;
+                }
+
+                if ($attendance->check_in_time && $attendance->check_out_time) {
+                    $totalHours += $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
+                    $workCount++;
+                }
+
+            } elseif ($leave) {
+                $dayData['status'] = 'On Leave';
+                $dayData['dynamic_status'] = 'on_leave';
+                $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+            } elseif (!$isWorkingDay) {
+                $dayData['status'] = 'Weekly Off';
+                $dayData['dynamic_status'] = 'weekly_off';
+            } elseif ($date->isPast() && !$date->isToday()) {
+                $dayData['status'] = 'Absent';
+                $dayData['dynamic_status'] = 'absent';
                 $absentDays++;
-            } elseif ($s === 'late' || $s === 'half-day') {
-                $lateDays++;
-            } elseif (in_array($s, ['on_leave', 'leave', 'work_from_home', 'wfh'])) {
-                // Not counted towards present in cards
+            } elseif ($date->isToday()) {
+                $dayData['status'] = 'Today';
+                $dayData['dynamic_status'] = 'today';
+                if ($attendance && strtolower($attendance->status) === 'absent') {
+                    $dayData['status'] = 'Absent';
+                    $dayData['dynamic_status'] = 'absent';
+                    $absentDays++;
+                }
             } else {
-                $presentDays++;
+                $dayData['status'] = 'Scheduled';
+                $dayData['dynamic_status'] = 'scheduled';
             }
 
-            // For dynamic rendering in blade
-            $a->dynamic_status = $s;
-
-            if ($a->check_in_time && $a->check_out_time) {
-                $totalHours += $a->check_in_time->diffInMinutes($a->check_out_time) / 60;
-                $workCount++;
-            }
+            // We push to the top so the list shows newest dates first
+            array_unshift($dailyLogs, (object) $dayData);
         }
-        
+
         $avgHours = $workCount > 0 ? round($totalHours / $workCount, 1) : 0;
+        $attendances = collect($dailyLogs);
 
         return view('tenant.users.attendance.index', compact(
             'attendances', 

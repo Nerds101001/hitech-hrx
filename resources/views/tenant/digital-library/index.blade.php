@@ -113,6 +113,19 @@
 </style>
 @endsection
 
+@section('vendor-style')
+  @vite([
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss'
+  ])
+@endsection
+
+@section('vendor-script')
+  @vite([
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.js'
+  ])
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@endsection
+
 @section('content')
 <div class="container-xxl">
     <!-- Hero Banner -->
@@ -123,7 +136,7 @@
         </div>
         <div class="banner-btns">
             <button class="btn btn-white bg-white text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">AI Bulk Upload</button>
-            <button class="btn btn-outline-white border-white text-white rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#uploadModal">Add Document</button>
+            <button class="btn btn-outline-white border-white text-white rounded-pill px-4" onclick="openAddDocumentModal('{{ request('category') }}')">Add Document</button>
         </div>
     </div>
 
@@ -150,7 +163,7 @@
         </div>
     </div>
 
-    @php $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report']); @endphp
+    @php $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report', 'LEARN', 'Video']); @endphp
 
     @if(!$isIndependentCat)
     <!-- Select Brand Row -->

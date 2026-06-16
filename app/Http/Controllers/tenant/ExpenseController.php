@@ -19,7 +19,10 @@ class ExpenseController extends Controller
 {
   public function index()
   {
-    $employees = User::all();
+    $employees = User::select('id', 'first_name', 'last_name', 'code')
+      ->where('status', 'active')
+      ->orderBy('first_name')
+      ->get();
     $expenseTypes = ExpenseType::all();
     
     $user = auth()->user();

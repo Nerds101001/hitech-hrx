@@ -28,9 +28,11 @@ class MindSpeakController extends Controller
             // 1. KPI cards
             $stats = [
                 'total' => MindSpeak::count(),
-                'suggestion' => MindSpeak::where('category', 'Suggestion')->count(),
+                'idea' => MindSpeak::where('category', 'Idea')->count(),
                 'complaint' => MindSpeak::where('category', 'Complaint')->count(),
-                'improvement' => MindSpeak::where('category', 'Improvement')->count(),
+                'sales_pitch' => MindSpeak::where('category', 'Sales Pitch')->count(),
+                'seminar' => MindSpeak::where('category', 'Seminar')->count(),
+                'competitor_insights' => MindSpeak::where('category', 'Competitor Insights')->count(),
                 'anonymous' => MindSpeak::where('is_anonymous', true)->count(),
             ];
 
@@ -113,18 +115,39 @@ class MindSpeakController extends Controller
      */
     public function store(Request $request)
     {
+        $attachmentRule = 'nullable|file|mimes:pdf,jpeg,png,jpg,mp3,wav,ogg,webm,m4a,mp4,ppt,pptx,doc,docx|max:20480';
+        if ($request->category === 'Seminar') {
+            $attachmentRule = 'required|file|mimes:pdf,jpeg,png,jpg,mp3,wav,ogg,webm,m4a,mp4,ppt,pptx,doc,docx|max:20480';
+        }
+
         $request->validate([
             'category' => 'required|string|max:255',
             'content' => 'required|string|min:5|max:2000',
             'is_anonymous' => 'nullable|boolean',
+            'attachment' => $attachmentRule,
+        ], [
+            'attachment.required' => 'A presentation or document attachment is compulsory for Seminars.'
         ]);
 
         try {
+            $attachmentPath = null;
+            if ($request->hasFile('attachment')) {
+                $file = $request->file('attachment');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $attachmentPath = $file->storeAs('mind_speaks', $filename, 'public');
+            }
+
+            $isAnonymous = $request->has('is_anonymous') ? (bool) $request->is_anonymous : false;
+            if (in_array($request->category, ['Sales Pitch', 'Seminar', 'Competitor Insights'])) {
+                $isAnonymous = false;
+            }
+
             MindSpeak::create([
                 'user_id' => Auth::id(),
                 'category' => $request->category,
                 'content' => $request->content,
-                'is_anonymous' => $request->has('is_anonymous') ? (bool) $request->is_anonymous : false,
+                'attachment' => $attachmentPath,
+                'is_anonymous' => $isAnonymous,
                 'tenant_id' => Auth::user()->tenant_id
             ]);
 

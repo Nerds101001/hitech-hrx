@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class TravelClaimItem extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [];
 
     protected $casts = [
         'date' => 'date',

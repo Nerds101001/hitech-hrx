@@ -241,7 +241,13 @@ document.addEventListener('DOMContentLoaded', function() {
               <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="45" height="45" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
               <div>
                 <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
-                <div class="date-sub-text" style="color: #ef4444;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }} • <span class="badge bg-label-pink rounded-pill p-1 px-2">HAPPY BIRTHDAY!</span></div>
+                <div class="date-sub-text" style="color: #ef4444;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }} • 
+                  @if($u->is_wished ?? false)
+                    <span class="badge bg-label-secondary rounded-pill p-1 px-2">WISHED <i class="bx bx-check"></i></span>
+                  @else
+                    <span class="badge bg-label-pink rounded-pill p-1 px-2">HAPPY BIRTHDAY!</span>
+                  @endif
+                </div>
               </div>
             </div>
             @endforeach

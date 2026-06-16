@@ -13,18 +13,18 @@ class OnboardingInvite extends Notification
     use Queueable;
 
     private User $user;
-    private string $password;
+    private string $resetUrl;
     private string $title;
     private string $message;
 
     /**
      * Create a new notification instance.
-     * Password is always freshly generated and passed in — never reused.
+     * Reset URL is generated securely.
      */
-    public function __construct(User $user, string $password)
+    public function __construct(User $user, string $resetUrl)
     {
         $this->user     = $user;
-        $this->password = $password;
+        $this->resetUrl = $resetUrl;
         $this->title    = '🚀 Welcome to the Next Gen: The Hitech HRX Portal is Now Live!';
         $this->message  = 'The wait is finally over! 🌟 We are officially launching the all-new Hitech HRX Portal. Hi ' . $user->first_name . ', we are thrilled to have you part of this transformation!';
     }
@@ -46,7 +46,7 @@ class OnboardingInvite extends Notification
             ->subject($this->title)
             ->view('emails.onboarding_invite', [
                 'user'     => $this->user,
-                'password' => $this->password,
+                'resetUrl' => $this->resetUrl,
             ]);
     }
 

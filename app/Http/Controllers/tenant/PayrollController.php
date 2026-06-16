@@ -42,8 +42,8 @@ class PayrollController extends Controller
             ->whereNotIn('id', array_filter($processedUserIds))
             ->count();
 
-        $departments = \App\Models\Department::all();
-        $sites = \App\Models\Site::all();
+        $departments = \App\Models\Department::select('id', 'name')->orderBy('name')->get();
+        $sites = \App\Models\Site::select('id', 'name')->orderBy('name')->get();
 
         return view('tenant.payroll.index', [
             'pageConfigs' => ['contentLayout' => 'wide'],
@@ -57,7 +57,9 @@ class PayrollController extends Controller
 
     public function indexAjax(Request $request)
     {
-        $query = Payslip::query()->with(['user.designation.department', 'user.site', 'payrollRecord']);
+        // salaryPolicy must be eager-loaded here — 3 DataTables columns reference it per row,
+        // without this it fires up to 3 queries per employee (e.g. 600 queries for 200 employees)
+        $query = Payslip::query()->with(['user.designation.department', 'user.site', 'user.salaryPolicy', 'payrollRecord']);
 
         // Apply Filters
         if ($request->filled('department_id')) {
@@ -93,34 +95,16 @@ class PayrollController extends Controller
                 return '<span class="badge bg-label-secondary">' . $offs . '</span>';
             })
             ->addColumn('allotted_basic', function ($item) {
-                $userBaseSalary = $item->user->base_salary ?? 0;
-                $user = $item->user;
-                $policy = $user->salaryPolicy ?? \App\Models\SalaryPolicy::where('site_id', $user->site_id)->first() ?? \App\Models\SalaryPolicy::first();
-                $fullBasic = $user->custom_basic !== null ? $user->custom_basic : ($policy ? ($userBaseSalary * ($policy->basic_percentage / 100)) : ($userBaseSalary * 0.50));
-                return '₹' . number_format($fullBasic, 2);
+                ['basic' => $basic] = $this->resolveAllottedComponents($item->user);
+                return '₹' . number_format($basic, 2);
             })
             ->addColumn('allotted_hra', function ($item) {
-                $userBaseSalary = $item->user->base_salary ?? 0;
-                $user = $item->user;
-                $policy = $user->salaryPolicy ?? \App\Models\SalaryPolicy::where('site_id', $user->site_id)->first() ?? \App\Models\SalaryPolicy::first();
-                $fullHra = $user->custom_hra !== null ? $user->custom_hra : ($policy ? ($userBaseSalary * ($policy->hra_percentage / 100)) : ($userBaseSalary * 0.25));
-                return '₹' . number_format($fullHra, 2);
+                ['hra' => $hra] = $this->resolveAllottedComponents($item->user);
+                return '₹' . number_format($hra, 2);
             })
             ->addColumn('allotted_other', function ($item) {
-                $userBaseSalary = $item->user->base_salary ?? 0;
-                $user = $item->user;
-                $policy = $user->salaryPolicy ?? \App\Models\SalaryPolicy::where('site_id', $user->site_id)->first() ?? \App\Models\SalaryPolicy::first();
-                
-                $fullBasic = $user->custom_basic !== null ? $user->custom_basic : ($policy ? ($userBaseSalary * ($policy->basic_percentage / 100)) : ($userBaseSalary * 0.50));
-                $fullHra = $user->custom_hra !== null ? $user->custom_hra : ($policy ? ($userBaseSalary * ($policy->hra_percentage / 100)) : ($userBaseSalary * 0.25));
-                
-                $fullCa = $user->custom_ca !== null ? $user->custom_ca : ($policy ? $policy->ca_fixed : 0.00);
-                $fullMedical = $user->custom_medical !== null ? $user->custom_medical : ($policy ? $policy->medical_fixed : 0.00);
-                $fullEdu = $user->custom_edu !== null ? $user->custom_edu : ($policy ? $policy->edu_fixed : 0.00);
-                
-                $fullSpecial = $user->custom_special_allowance !== null ? $user->custom_special_allowance : max(0.00, $userBaseSalary - ($fullBasic + $fullHra + $fullCa + $fullMedical + $fullEdu));
-                
-                $totalOther = $fullCa + $fullMedical + $fullEdu + $fullSpecial;
+                $c = $this->resolveAllottedComponents($item->user);
+                $totalOther = $c['ca'] + $c['medical'] + $c['edu'] + $c['special'];
                 return '₹' . number_format($totalOther, 2);
             })
             ->addColumn('payable_basic', function ($item) {
@@ -279,5 +263,30 @@ class PayrollController extends Controller
         } catch (\Exception $e) {
             return Error::response("Failed to delete record: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Resolve all allotted salary components for a user in one place.
+     * Previously this logic was copy-pasted into three separate DataTables column closures.
+     * salaryPolicy must be eager-loaded on the user before calling this.
+     *
+     * @param  \App\Models\User  $user
+     * @return array{basic: float, hra: float, ca: float, medical: float, edu: float, special: float}
+     */
+    private function resolveAllottedComponents(\App\Models\User $user): array
+    {
+        $base   = (float) ($user->base_salary ?? 0);
+        $policy = $user->salaryPolicy; // Already eager-loaded — no extra DB query
+
+        $basic   = $user->custom_basic   !== null ? (float) $user->custom_basic   : ($policy ? $base * ($policy->basic_percentage / 100) : $base * 0.50);
+        $hra     = $user->custom_hra     !== null ? (float) $user->custom_hra     : ($policy ? $base * ($policy->hra_percentage   / 100) : $base * 0.25);
+        $ca      = $user->custom_ca      !== null ? (float) $user->custom_ca      : ($policy ? (float) $policy->ca_fixed      : 0.00);
+        $medical = $user->custom_medical !== null ? (float) $user->custom_medical : ($policy ? (float) $policy->medical_fixed : 0.00);
+        $edu     = $user->custom_edu     !== null ? (float) $user->custom_edu     : ($policy ? (float) $policy->edu_fixed     : 0.00);
+        $special = $user->custom_special_allowance !== null
+            ? (float) $user->custom_special_allowance
+            : max(0.00, $base - ($basic + $hra + $ca + $medical + $edu));
+
+        return compact('basic', 'hra', 'ca', 'medical', 'edu', 'special');
     }
 }

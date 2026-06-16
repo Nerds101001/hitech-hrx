@@ -1,0 +1,11 @@
+$pscp = "C:\Program Files\PuTTY\pscp.exe"
+$opts = "-P 65002 -pw "Diplo@6589#""
+$remoteBase = "u989061032@89.117.188.10:/home/u989061032/domains/hitechgroup.in/public_html/hrx"
+
+& $pscp $opts "d:\live_server\app\Http\Controllers\tenant\HRPolicyController.php" "$remoteBase/app/Http/Controllers/tenant/"
+& $pscp $opts "d:\live_server\app\Models\HRPolicy.php" "$remoteBase/app/Models/"
+& $pscp $opts "d:\live_server\app\Models\HRPolicyAcknowledgment.php" "$remoteBase/app/Models/"
+& $pscp $opts "d:\live_server\database\migrations\tenant\2026_04_29_122000_create_hr_policies_table.php" "$remoteBase/database/migrations/tenant/"
+& $pscp $opts "d:\live_server\database\migrations\tenant\2026_04_29_122100_create_hr_policy_acknowledgments_table.php" "$remoteBase/database/migrations/tenant/"
+& $pscp $opts "d:\live_server\database\migrations\tenant\2026_05_29_161806_add_target_departments_to_hr_policies_table.php" "$remoteBase/database/migrations/tenant/"
+& $pscp -r $opts "d:\live_server\resources\views\tenant\hr-policies" "$remoteBase/resources/views/tenant/"

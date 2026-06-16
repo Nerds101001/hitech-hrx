@@ -758,7 +758,7 @@
                                                 </div>
                                                 <div>
                                                     <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">Joining Date</p>
-                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->joining_date ? Carbon\Carbon::parse($user->joining_date)->format('d M Y') : 'N/A' }}</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->date_of_joining ? \Carbon\Carbon::parse($user->date_of_joining)->format('d M Y') : 'N/A' }}</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -791,6 +791,22 @@
                                             </div>
                                         </div>
                                     </div>
+                                    <!-- CRM ID -->
+                                    @if($user->crm_id)
+                                    <div class="col-md-4">
+                                        <div class="emp-field-box">
+                                            <div class="d-flex align-items-center">
+                                                <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                                    <i class="bx bx-link text-muted fs-4"></i>
+                                                </div>
+                                                <div>
+                                                    <p class="mb-0 text-muted smallest fw-bold text-uppercase" style="font-size: 0.65rem; letter-spacing: 0.05em;">CRM ID</p>
+                                                    <p class="mb-0 fw-bold text-dark fs-6">{{ $user->crm_id }}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    @endif
                                 </div>
                             </div>
                         </div>

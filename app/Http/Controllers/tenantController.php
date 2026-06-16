@@ -9,6 +9,8 @@ use App\Models\User;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 
 class tenantController extends Controller
 {
@@ -54,7 +56,7 @@ class tenantController extends Controller
         'email' => 'admin@' . $request->emailDomain,
         'phone' => '0987654321',
         'phone_verified_at' => now(),
-        'password' => bcrypt('123456'),
+        'password' => bcrypt(Str::random(16)),
         'code' => 'DEMO002',
         'email_verified_at' => now(),
         'tenant_id' => tenancy()->tenant
@@ -68,6 +70,15 @@ class tenantController extends Controller
       ]);
 
       tenancy()->end();
+
+      // On production, email the new admin a password reset link so they set their own password
+      if (!app()->isLocal()) {
+          try {
+              Password::sendResetLink(['email' => $user->email]);
+          } catch (Exception $mailEx) {
+              Log::warning('Password reset link could not be sent for new tenant admin: ' . $mailEx->getMessage());
+          }
+      }
 
       return redirect()->back()->with('success', 'Tenant created successfully');
 

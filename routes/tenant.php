@@ -14,6 +14,7 @@ use App\Http\Controllers\tenant\AttendanceController;
 use App\Http\Controllers\tenant\AttendanceImportController;
 use App\Http\Controllers\tenant\ClientController;
 use App\Http\Controllers\tenant\DashboardController;
+use App\Http\Controllers\tenant\BirthdayController;
 use App\Http\Controllers\tenant\DepartmentsController;
 use App\Http\Controllers\tenant\DesignationController;
 use App\Http\Controllers\tenant\DeviceController;
@@ -131,6 +132,9 @@ Route::middleware([
 
     // --- DASHBOARD & GENERAL ---
     Route::get('/', [DashboardController::class, 'index'])->name('tenant.dashboard');
+    
+
+
 
 
     Route::get('liveLocation', [DashboardController::class, 'liveLocationView'])->name('liveLocationView');
@@ -192,7 +196,7 @@ Route::middleware([
     Route::post('reports/getProductOrderReport', [ReportController::class, 'getProductOrderReport'])->name('report.getProductOrderReport');
 
     // --- PAYROLL MANAGEMENT ---
-    Route::middleware(['role:accounts'])->group(function () {
+    Route::middleware(['role:admin|hr|accounts'])->group(function () {
       Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
       Route::get('payroll/indexAjax', [PayrollController::class, 'indexAjax'])->name('payroll.indexAjax');
       Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
@@ -343,6 +347,11 @@ Route::middleware([
       Route::post('actionAjax', [LeaveController::class, 'actionAjax'])->name('actionAjax');
       Route::post('bulkActionAjax', [LeaveController::class, 'bulkActionAjax'])->name('bulkActionAjax');
       Route::get('getByIdAjax/{id}', [LeaveController::class, 'getByIdAjax'])->name('getByIdAjax');
+      // Outdoor Duty (inside leave page)
+      Route::get('outdoorDuty/listAjax', [LeaveController::class, 'outdoorDutyListAjax'])->name('outdoorDuty.listAjax');
+      Route::post('outdoorDuty/storeAjax', [LeaveController::class, 'outdoorDutyStoreAjax'])->name('outdoorDuty.storeAjax');
+      Route::post('outdoorDuty/actionAjax', [LeaveController::class, 'outdoorDutyActionAjax'])->name('outdoorDuty.actionAjax');
+      Route::get('outdoorDuty/getByIdAjax/{id}', [LeaveController::class, 'outdoorDutyGetByIdAjax'])->name('outdoorDuty.getByIdAjax');
     });
 
     // Restricted Operations (Admin/HR only)
@@ -549,6 +558,7 @@ Route::middleware([
     Route::middleware(['role:hr|admin|manager'])->prefix('asset-management')->name('assets.')->group(function () {
       Route::get('', [AssetController::class, 'index'])->name('index');
       Route::get('list-ajax', [AssetController::class, 'getListAjax'])->name('listAjax');
+      Route::get('export-excel', [AssetController::class, 'exportExcel'])->name('exportExcel');
       Route::get('getAssetAjax/{id}', [AssetController::class, 'getAssetAjax'])->name('getAssetAjax');
       Route::get('create', [AssetController::class, 'create'])->name('create');
       Route::get('{id}', [AssetController::class, 'show'])->name('show');
@@ -589,6 +599,18 @@ Route::middleware([
     // --- GENERAL AUTHENTICATED ROUTES (Employee & Above) ---
     Route::middleware(['web', 'auth'])->group(function() {
 
+    // --- BIRTHDAYS ---
+    Route::get('birthdays/check', [BirthdayController::class, 'checkBirthdays'])->name('birthdays.check');
+    Route::post('birthdays/send', [BirthdayController::class, 'sendWish'])->name('birthdays.send');
+    Route::post('birthdays/mark-read', [BirthdayController::class, 'markWishesRead'])->name('birthdays.markRead');
+
+        // CCARE Manual Salesperson Attendance
+        Route::get('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'index'])->name('cc-attendance.index');
+        Route::post('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'store'])->name('cc-attendance.store');
+        
+        Route::get('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'monthly'])->name('cc-attendance.monthly');
+        Route::post('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'storeMonthly'])->name('cc-attendance.monthly.store');
+
         // --- MIND SPEAK ---
         Route::prefix('mind-speak')->name('mind-speak.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'index'])->name('index');
@@ -601,6 +623,35 @@ Route::middleware([
             Route::get('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\tenant\SalesVisitController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'store'])->name('store');
+            
+            // Sales Report (formerly pipeline)
+            Route::get('/sales-report', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'index'])->name('pipeline.index');
+            Route::get('/sales-pipeline', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'actualPipelineIndex'])->name('actual-pipeline.index');
+            Route::post('/sales-report', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'store'])->name('pipeline.store');
+            Route::put('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'update'])->name('pipeline.update');
+            Route::delete('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'destroy'])->name('pipeline.destroy');
+            Route::post('/sales-report/month', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'monthUpdate'])->name('pipeline.month.update');
+
+            Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
+            Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
+            Route::post('/sales-report/import/process', [\App\Http\Controllers\tenant\PipelineImportController::class, 'processImport'])->name('pipeline.import.process');
+
+            // Redirects from old /pipeline URLs
+            Route::get('/pipeline', fn() => redirect()->route('sales-visits.pipeline.index'));
+            Route::get('/pipeline/import', fn() => redirect()->route('sales-visits.pipeline.import'));
+            
+            // Sales Targets
+            Route::post('/targets/update', [\App\Http\Controllers\tenant\SalesTargetController::class, 'update'])->name('targets.update');
+            Route::get('/sales-targets/import', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'showImport'])->name('sales-targets.import');
+            Route::post('/sales-targets/import/preview', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'previewImport'])->name('sales-targets.import.preview');
+            Route::post('/sales-targets/import/store', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'storeImport'])->name('sales-targets.import.store');
+
+            // Kingo Bingo ScoreCard
+            Route::get('/kingo-bingo', [\App\Http\Controllers\tenant\KingoBingoController::class, 'index'])->name('kingo-bingo.index');
+            Route::get('/kingo-bingo/fill-targets', [\App\Http\Controllers\tenant\KingoBingoController::class, 'fillTargets'])->name('kingo-bingo.fill-targets');
+            Route::put('/kingo-bingo/kpi-target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateKpiTarget'])->name('kingo-bingo.kpi-target');
+            Route::put('/kingo-bingo/target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateTarget'])->name('kingo-bingo.target');
+            
             Route::get('/reports', [\App\Http\Controllers\tenant\SalesVisitController::class, 'reportSummary'])->name('reports');
             Route::get('/clients', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientIndex'])->name('clients.index');
             Route::post('/clients', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientStore'])->name('clients.store');
@@ -623,11 +674,26 @@ Route::middleware([
         // Compatibility route for legacy JS calls
         Route::post('markAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsRead_legacy');
 
+        // CRM Client Mappings (api-crm.rustx.net integration)
+        Route::prefix('crm-clients')->name('crm-clients.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'store'])->name('store');
+            Route::post('/auto-sync', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'autoSync'])->name('auto-sync');
+            Route::post('/sync-page', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncPage'])->name('sync-page');
+            Route::get('/sync-status', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncStatus'])->name('sync-status');
+            Route::put('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'update'])->name('update');
+            Route::delete('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'destroy'])->name('destroy');
+            Route::get('/search', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'searchCrm'])->name('search');
+            Route::get('/employee/{userId}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'employeeClients'])->name('employee');
+            Route::get('/debug-crm', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'debugCrm'])->name('debug');
+        });
+
 
         // Digital Library - Viewable by all authenticated users
         Route::prefix('digital-library')->name('library.')->group(function() {
             Route::get('/', [DigitalLibraryController::class, 'index'])->name('index');
             Route::get('/access/{id}', [DigitalLibraryController::class, 'access'])->name('access');
+            Route::get('/preview-frame/{id}', [DigitalLibraryController::class, 'previewFrame'])->name('previewFrame');
             
             // AI Chat & Uploads (Admin/HR Only)
             Route::middleware(['role:admin|hr'])->group(function() {
@@ -636,6 +702,8 @@ Route::middleware([
                 Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
                 Route::post('bulk-store', [DigitalLibraryController::class, 'bulkStore'])->name('bulk-store');
                 Route::post('reassign', [DigitalLibraryController::class, 'reassign'])->name('reassign');
+                Route::post('mark-learn-completed', [DigitalLibraryController::class, 'markLearnCompleted'])->name('markLearnCompleted');
+                Route::post('score-presenter', [DigitalLibraryController::class, 'scorePresenter'])->name('scorePresenter');
                 Route::delete('delete-product', [DigitalLibraryController::class, 'deleteProduct'])->name('delete-product');
                 
                 // Taxonomy Management
@@ -818,6 +886,16 @@ Route::middleware([
       Route::post('changePassword', [AccountController::class, 'changePassword'])->name('changePassword');
     });
 
+
+    // Performance Appraisals & 90-Day Goals
+    Route::prefix('performance')->name('performance.')->group(function () {
+        Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+        Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+        Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+        Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
+        
+        Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
+        Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
+        Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
+    });
 });
-
-

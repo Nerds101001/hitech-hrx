@@ -19,6 +19,8 @@ use Constants;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 
 
 class DomainRequestController extends Controller
@@ -250,7 +252,7 @@ class DomainRequestController extends Controller
         'email' => $user->email,
         'phone' => $user->phone,
         'phone_verified_at' => now(),
-        'password' => bcrypt('123456'),
+        'password' => bcrypt(Str::random(16)),
         'code' => 'USR-O001',
         'email_verified_at' => now(),
         'team_id' => $team->id,
@@ -267,6 +269,15 @@ class DomainRequestController extends Controller
       ]);
 
       $newUser->assignRole('admin');
+
+      // On production, email the new admin a password reset link so they set their own password
+      if (!app()->isLocal()) {
+          try {
+              Password::sendResetLink(['email' => $newUser->email]);
+          } catch (Exception $mailEx) {
+              Log::warning('Password reset link could not be sent for domain request admin: ' . $mailEx->getMessage());
+          }
+      }
     } catch (Exception $e) {
       Log::error($e->getMessage());
       Error::response('Something went wrong');

@@ -267,6 +267,8 @@ class LeavePolicyService
         return (float)$workingDays;
     }
 
+    protected static $holidayCache = [];
+
     /**
      * Check if a specific date is a working day for a user.
      */
@@ -275,29 +277,34 @@ class LeavePolicyService
         $date = $date instanceof Carbon ? $date : Carbon::parse($date);
         $currentDateStr = $date->toDateString();
         
-        // 1. Check Holidays
-        $holiday = \App\Models\Holiday::where(function($q) use ($user) {
+        $siteKey = $user->site_id ?? 'global';
+        if (!isset(self::$holidayCache[$siteKey])) {
+            self::$holidayCache[$siteKey] = \App\Models\Holiday::where(function($q) use ($user) {
                 $q->whereNull('site_id')
                   ->orWhere('site_id', $user->site_id);
-            })
-            ->where('date', $currentDateStr)
-            ->exists();
-            
-        if ($holiday) return false;
+            })->pluck('date')->toArray();
+        }
+        
+        if (in_array($currentDateStr, self::$holidayCache[$siteKey])) return false;
 
         // 2. Check Sundays
-        if ($date->isSunday()) return false;
+        if ($date->isSunday()) {
+            if (!$user->shift) {
+                return false;
+            }
+        }
 
         // 3. Check Saturdays (Rules from Profile or Site)
         if ($date->isSaturday()) {
             $profile = $user->leavePolicyProfile;
             $site    = $user->site;
-            $satConfig = $profile ? ($profile->saturday_off_config ?? []) : ($site->saturday_off_config ?? []);
+            
+            if ($profile || $site) {
+                $satConfig = $profile ? ($profile->saturday_off_config ?? []) : ($site->saturday_off_config ?? []);
 
-            if (!empty($satConfig)) {
                 if (in_array('all', (array)$satConfig)) {
                     return false;
-                } else {
+                } elseif (!empty($satConfig)) {
                     $occurrence = ceil($date->day / 7);
                     $isLast = ($date->copy()->addWeek()->month != $date->month);
                     
@@ -305,6 +312,9 @@ class LeavePolicyService
                         return false;
                     }
                 }
+                
+                // If a profile or site dictates the rules, and this Saturday is not off, it must be a working day.
+                return true;
             }
         }
 

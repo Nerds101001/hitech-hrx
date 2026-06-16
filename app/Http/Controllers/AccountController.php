@@ -17,6 +17,8 @@ use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use OwenIt\Auditing\Models\Audit;
 use Spatie\Permission\Models\Role;
 
@@ -405,11 +407,20 @@ class AccountController extends Controller
         $user->last_name = $request->lastName;
         $user->email = $request->email;
         $user->phone = $request->phone;
-        $user->password = bcrypt('123456');
+        $user->password = bcrypt(Str::random(16));
 
         $user->save();
 
         $user->assignRole($request->role);
+
+        // On production, send a password reset link so the user can set their own password
+        if (!app()->isLocal()) {
+            try {
+                Password::sendResetLink(['email' => $user->email]);
+            } catch (\Exception $mailEx) {
+                Log::warning('Password reset link could not be sent for new user: ' . $mailEx->getMessage());
+            }
+        }
 
         return response()->json([
           'message' => 'added',

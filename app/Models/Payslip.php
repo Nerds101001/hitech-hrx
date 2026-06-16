@@ -19,10 +19,8 @@ class Payslip extends Model implements AuditableContract
     'user_id',
     'payroll_record_id',
     'code',
-    'basic_salary',
     'total_deductions',
     'total_benefits',
-    'net_salary',
     'status',
     'notes',
     'total_worked_days',
@@ -49,10 +47,8 @@ class Payslip extends Model implements AuditableContract
   ];
 
   protected $casts = [
-    'basic_salary' => 'float',
     'total_deductions' => 'float',
     'total_benefits' => 'float',
-    'net_salary' => 'float',
     'total_worked_days' => 'integer',
     'total_absent_days' => 'integer',
     'total_leave_days' => 'integer',
@@ -80,5 +76,15 @@ class Payslip extends Model implements AuditableContract
   public function payrollRecord()
   {
     return $this->belongsTo(PayrollRecord::class, 'payroll_record_id');
+  }
+
+  public function getBasicSalaryAttribute()
+  {
+      return $this->payrollRecord ? $this->payrollRecord->basic_salary : 0;
+  }
+
+  public function getNetSalaryAttribute()
+  {
+      return $this->payrollRecord ? $this->payrollRecord->net_salary : 0;
   }
 }

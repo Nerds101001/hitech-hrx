@@ -20,6 +20,7 @@ use Exception;
 use Illuminate\Hashing\BcryptHasher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
@@ -277,7 +278,7 @@ class AuthController extends Controller
     $user->first_name = 'Demo';
     $user->last_name = rand(1, 1000);
     $user->email = $randomEmail;
-    $user->password = (new BcryptHasher)->make('123456');
+    $user->password = (new BcryptHasher)->make(Str::random(16));
     $user->status = 'active';
     $user->code = $randomCode;
     $user->phone = $randomPhoneNumber;

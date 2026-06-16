@@ -65,7 +65,6 @@
         $settings = \App\Models\Settings::first();
         $allPerformance = $user->salesTargets;
         $kraPerformance = $allPerformance->filter(fn($t) => str_contains($t->description, 'Type: KRA'));
-        $kpiPerformance = $allPerformance->filter(fn($t) => !str_contains($t->description, 'Type: KRA'));
 
         // Helper to extract metric from description
         if (!function_exists('getMetric')) {
@@ -151,6 +150,15 @@
                                         <i class="bx bx-fingerprint text-muted me-3 fs-5"></i>
                                         <span class="fw-bold">Biometric
                                             ID:</span>&nbsp;{{ $user->biometric_id ?? 'Not Mapped' }}
+                                    </li>
+                                    <li class="mb-3 d-flex align-items-center">
+                                        <i class="bx bx-link-external text-muted me-3 fs-5"></i>
+                                        <span class="fw-bold">CRM ID:</span>&nbsp;
+                                        @if($user->crm_id)
+                                            <span class="badge bg-label-info">{{ $user->crm_id }}</span>
+                                        @else
+                                            <span class="text-muted fst-italic">Not Synced</span>
+                                        @endif
                                     </li>
                                     <li class="mb-3 d-flex align-items-center">
                                         <i class="bx bx-envelope text-muted me-3 fs-5"></i>
@@ -560,13 +568,14 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab"><i
                                         class="bx bx-bullseye me-1"></i> Key Result Areas (KRAs)</a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#kpi"><i
-                                        class="bx bx-bar-chart-alt-2 me-1"></i> Strategic KPIs</a>
-                            </li>
+                            
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#activity"><i class="bx bx-history me-1"></i>
                                     Activity Logs</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#crm-clients" id="crmClientsTabLink"><i class="bx bx-buildings me-1"></i>
+                                    CRM Clients</a>
                             </li>
                         </ul>
                         <button class="rosemary-tab-arrow right" type="button" aria-label="Scroll tabs right" data-dir="1">
@@ -1018,6 +1027,24 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <!-- CRM ID -->
+                                        <div class="col-md-4">
+                                            <div class="emp-field-box">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="bg-white rounded p-2 me-3 shadow-sm d-flex align-items-center justify-content-center"
+                                                        style="width: 40px; height: 40px;">
+                                                        <i class="bx bx-link-external text-muted fs-4"></i>
+                                                    </div>
+                                                    <div>
+                                                        <p class="mb-0 text-muted small fw-bold text-uppercase"
+                                                            style="font-size: 0.65rem; letter-spacing: 0.05em;">CRM ID
+                                                        </p>
+                                                        <p class="mb-0 fw-bold text-dark fs-6">
+                                                            {{ $user->crm_id ?? 'Not Mapped' }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1121,6 +1148,9 @@
                                                             $amountClass = 'text-danger';
                                                             $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
                                                             if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
+                                                            if (isset($item->leave_type) && $item->leave_type !== 'Unknown') {
+                                                                $reason = $item->leave_type . ' - ' . $reason;
+                                                            }
                                                         } else {
                                                             $amt = (float)$item->amount;
                                                             $notes = $item->notes ?? '';
@@ -1142,6 +1172,9 @@
                                                             $amountDisplay = ($amt > 0 ? '+' : '') . number_format($amt, 1);
                                                             $amountClass = $amt > 0 ? 'text-success' : 'text-danger';
                                                             $reason = $notes ?: 'System Adjustment';
+                                                            if (isset($item->leave_type) && $item->leave_type !== 'Unknown') {
+                                                                $reason = $item->leave_type . ' - ' . $reason;
+                                                            }
                                                         }
                                                     @endphp
                                                     <tr>
@@ -2368,148 +2401,77 @@
                         </div>
 
 
-                        <!-- KPI/Performance Tab -->
-                        <div class="tab-pane fade" id="kpi">
-                            <div class="card border-0 shadow-sm rounded-3 mb-4">
+
+
+                        <!-- CRM Clients Tab -->
+                        <div class="tab-pane fade" id="crm-clients">
+                            <div class="card border-0 shadow-sm rounded-3">
                                 <div class="card-body p-5">
                                     <div class="d-flex justify-content-between align-items-center mb-4">
                                         <div class="d-flex align-items-center">
                                             <div class="hitech-icon-wrap me-3"
-                                                style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
-                                                <i class="bx bx-bar-chart-alt-2 fs-4"></i>
+                                                style="background: rgba(15, 76, 117, 0.1); color: #0f4c75; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
+                                                <i class="bx bx-buildings fs-4"></i>
                                             </div>
-                                            <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Strategic Performance
-                                                (KPIs)</h6>
+                                            <div>
+                                                <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">CRM Client Assignments</h6>
+                                                <small class="text-muted">Clients from Rustx CRM mapped to this employee</small>
+                                            </div>
                                         </div>
-                                        @if(auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts', 'super_admin']))
-                                            <button class="btn btn-hitech px-4 rounded-pill shadow-sm" onclick="openAddKpi()">
-                                                <i class="bx bx-plus me-1"></i> Add KPI Target
-                                            </button>
-                                        @endif
+                                        <a href="{{ route('crm-clients.index') }}" class="btn btn-outline-primary rounded-pill px-4 btn-sm">
+                                            <i class="bx bx-cog me-1"></i>Manage Mappings
+                                        </a>
                                     </div>
 
-                                    <div class="row g-4 mb-4">
-                                        <div class="col-md-3">
-                                            <div class="emp-field-box text-center h-100 p-4">
-                                                <p class="text-muted small fw-bold text-uppercase mb-2">Total KPIs</p>
-                                                <h3 class="fw-extrabold mb-0" style="color: #127464;">
-                                                    {{ count($user->salesTargets) }}</h3>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="emp-field-box text-center h-100 p-4">
-                                                <p class="text-muted small fw-bold text-uppercase mb-2">Completed</p>
-                                                <h3 class="fw-extrabold mb-0 text-success">
-                                                    {{ $user->salesTargets->where('status', 'completed')->count() }}</h3>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="emp-field-box text-center h-100 p-4">
-                                                <p class="text-muted small fw-bold text-uppercase mb-2">In Progress</p>
-                                                <h3 class="fw-extrabold mb-0 text-warning">
-                                                    {{ $user->salesTargets->where('status', 'in_progress')->count() }}</h3>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="emp-field-box text-center h-100 p-4">
-                                                <p class="text-muted small fw-bold text-uppercase mb-2">Completion %</p>
-                                                @php
-                                                    $totalT = count($user->salesTargets);
-                                                    $compT = $user->salesTargets->where('status', 'completed')->count();
-                                                    $percT = $totalT > 0 ? round(($compT / $totalT) * 100) : 0;
-                                                @endphp
-                                                <h3 class="fw-extrabold mb-0 text-primary">{{ $percT }}%</h3>
-                                            </div>
-                                        </div>
+                                    <!-- Loading state -->
+                                    <div id="crmClientsLoading" class="text-center py-5" style="display:none;">
+                                        <div class="spinner-border text-primary" role="status"></div>
+                                        <p class="text-muted mt-2 small">Loading CRM clients...</p>
                                     </div>
-                                    @if(auth()->user()->can('user-edit') || auth()->user()->hasRole(['hr', 'accounts']))
-                                        <button class="btn btn-hitech-secondary px-4 rounded-pill shadow-sm"
-                                            data-bs-toggle="modal" data-bs-target="#modalAddTask" onclick="resetKraModal()">
-                                            <i class="bx bx-plus me-1"></i> Create Strategic KRA
-                                        </button>
-                                    @endif
-                                </div>
-                                <div class="card-body p-4">
-                                    <div class="table-responsive rounded-3 border" style="background:#fff;">
-                                        <table class="table table-hover table-borderless mb-0 align-middle">
-                                            <thead style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
-                                                <tr>
-                                                    <th class="ps-4 text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">#</th>
-                                                    <th class="text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">KPI Target</th>
-                                                    <th class="text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">Type</th>
-                                                    <th class="text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">Goal</th>
-                                                    <th class="text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">Status</th>
-                                                    <th class="pe-4 text-end text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">Actions</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                @forelse($kpiPerformance as $index => $target)
-                                                    <tr style="border-bottom:1px solid #F1F5F9;">
-                                                        <td class="ps-4 fw-medium text-muted">{{ $index + 1 }}</td>
-                                                        <td>
-                                                            <div class="d-flex align-items-center">
-                                                                <div class="avatar avatar-sm me-3"
-                                                                    style="width:38px;height:38px;">
-                                                                    <span
-                                                                        class="avatar-initial rounded-circle bg-label-info fw-bold"
-                                                                        style="font-size:0.85rem;">{{ substr(getMetric($target->description), 0, 2) }}</span>
-                                                                </div>
-                                                                <div>
-                                                                    <h6 class="mb-0 fw-bold text-dark"
-                                                                        style="font-size:0.9rem;">
-                                                                        {{ getMetric($target->description) }}</h6>
-                                                                    <small class="text-muted d-block text-truncate"
-                                                                        style="max-width:200px;">{{ \Illuminate\Support\Str::limit($target->description, 30) }}</small>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td class="text-dark small">
-                                                            {{ ucfirst($target->incentive_type->value) }}</td>
-                                                        <td class="text-dark small">
-                                                            {{ $settings->currency_symbol }}{{ number_format($target->target_amount, 2) }}
-                                                        </td>
-                                                        <td>
-                                                            <span class="badge bg-label-success rounded-pill fw-bold px-3 py-2"
-                                                                style="font-size:0.70rem;">{{ strtoupper($target->status->value) }}</span>
-                                                        </td>
-                                                        <td class="pe-4 text-end">
-                                                            <div class="d-flex align-items-center justify-content-end gap-2">
-                                                                <button
-                                                                    class="btn btn-sm btn-icon rounded-circle btn-hitech-secondary"
-                                                                    title="View/Edit"
-                                                                    onclick="editKpi({{ $target->id }}, '{{ getMetric($target->description) }}', 'KPI', 'Standard', {{ $target->target_amount }}, '{{ $target->incentive_type->value }}', '{{ addslashes($target->description) }}')">
-                                                                    <i class="bx bx-edit"></i>
-                                                                </button>
-                                                                <button
-                                                                    class="btn btn-sm btn-icon rounded-circle btn-hitech-alert"
-                                                                    title="Delete" onclick="deleteKpi({{ $target->id }})">
-                                                                    <i class="bx bx-trash"></i>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                @empty
-                                                    <tr>
-                                                        <td colspan="6" class="text-center py-5">
-                                                            <i class="bx bx-bar-chart-alt text-muted"
-                                                                style="font-size:3rem;opacity:0.3;"></i>
-                                                            <h6 class="mt-3 text-muted fw-medium">No Strategic Performance
-                                                                targets defined.</h6>
-                                                        </td>
-                                                    </tr>
-                                                @endforelse
-                                            </tbody>
-                                        </table>
+
+                                    <!-- Empty state -->
+                                    <div id="crmClientsEmpty" class="text-center py-5" style="display:none;">
+                                        <div style="width:70px;height:70px;background:#f0f9ff;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+                                            <i class="bx bx-buildings fs-1 text-primary"></i>
+                                        </div>
+                                        <h6 class="fw-bold text-dark">No CRM Clients Mapped</h6>
+                                        <p class="text-muted small mb-3">This employee has not been assigned any CRM clients yet.</p>
+                                        <a href="{{ route('crm-clients.index') }}" class="btn btn-primary rounded-pill px-4 btn-sm">
+                                            <i class="bx bx-plus me-1"></i>Add Client Mapping
+                                        </a>
+                                    </div>
+
+                                    <!-- Client lists -->
+                                    <div id="crmClientsContent">
+                                        <!-- Salesperson clients -->
+                                        <div id="salesSection" style="display:none;" class="mb-4">
+                                            <h6 class="fw-bold mb-3" style="color:#7c3aed;">
+                                                <span style="background:#ede9fe;color:#7c3aed;padding:4px 12px;border-radius:20px;font-size:0.75rem;">SALESPERSON</span>
+                                                &nbsp;<span id="salesCount" class="text-muted fw-normal small"></span>
+                                            </h6>
+                                            <div class="row g-3" id="salesList"></div>
+                                        </div>
+                                        <!-- CCare clients -->
+                                        <div id="ccareSection" style="display:none;" class="mb-4">
+                                            <h6 class="fw-bold mb-3" style="color:#1d4ed8;">
+                                                <span style="background:#dbeafe;color:#1d4ed8;padding:4px 12px;border-radius:20px;font-size:0.75rem;">CUSTOMER CARE</span>
+                                                &nbsp;<span id="ccareCount" class="text-muted fw-normal small"></span>
+                                            </h6>
+                                            <div class="row g-3" id="ccareList"></div>
+                                        </div>
+                                        <!-- New Biz clients -->
+                                        <div id="newBizSection" style="display:none;" class="mb-4">
+                                            <h6 class="fw-bold mb-3" style="color:#a16207;">
+                                                <span style="background:#fef9c3;color:#a16207;padding:4px 12px;border-radius:20px;font-size:0.75rem;">NEW BUSINESS</span>
+                                                &nbsp;<span id="newBizCount" class="text-muted fw-normal small"></span>
+                                            </h6>
+                                            <div class="row g-3" id="newBizList"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
                         <!-- Activity Tab -->
                         <div class="tab-pane fade" id="activity">
                             <div class="card border-0 shadow-sm rounded-3">
@@ -3130,6 +3092,87 @@
             // Global variables for employee context
             window.user = @json($user);
             window.baseUrl = baseUrl;
+
+            // ====== CRM CLIENTS TAB ======
+            let crmClientsLoaded = false;
+            const CRM_EMPLOYEE_URL = '{{ route('crm-clients.employee', $user->id) }}';
+
+            function buildClientCard(client) {
+                const stageColors = {
+                    'ACTIVE':       { bg: '#dcfce7', color: '#16a34a' },
+                    'DROPPED':      { bg: '#fee2e2', color: '#dc2626' },
+                    'PROSPECT':     { bg: '#fef3c7', color: '#d97706' },
+                    'INTRODUCTION': { bg: '#dbeafe', color: '#2563eb' },
+                };
+                const stage = (client.crm_stage || '').toUpperCase();
+                const sc = stageColors[stage] || { bg: '#f1f5f9', color: '#64748b' };
+
+                return `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="p-3 rounded-3 border h-100" style="transition:box-shadow 0.2s; cursor:default;"
+                             onmouseover="this.style.boxShadow='0 6px 20px rgba(0,0,0,0.08)'" onmouseout="this.style.boxShadow=''">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="fw-bold text-dark small">${client.crm_company_name}</div>
+                                ${client.crm_stage ? `<span style="background:${sc.bg};color:${sc.color};font-size:0.6rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:0.5px;text-transform:uppercase;">${client.crm_stage}</span>` : ''}
+                            </div>
+                            <div class="text-muted" style="font-size:0.72rem;">
+                                ${client.crm_city || client.crm_state ? `<i class="bx bx-map-pin me-1"></i>${[client.crm_city, client.crm_state].filter(Boolean).join(', ')}<br>` : ''}
+                                <i class="bx bx-hash me-1"></i>CRM #${client.crm_company_code}
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            function loadCrmClients() {
+                if (crmClientsLoaded) return;
+                crmClientsLoaded = true;
+
+                document.getElementById('crmClientsLoading').style.display = 'block';
+
+                fetch(CRM_EMPLOYEE_URL, { headers: { 'Accept': 'application/json' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        document.getElementById('crmClientsLoading').style.display = 'none';
+
+                        if (!data || data.length === 0) {
+                            document.getElementById('crmClientsEmpty').style.display = 'block';
+                            return;
+                        }
+
+                        const sales   = data.filter(c => c.role === 'Salesperson');
+                        const ccare   = data.filter(c => c.role === 'CCare');
+                        const newBiz  = data.filter(c => c.role === 'New Biz');
+
+                        if (sales.length) {
+                            document.getElementById('salesSection').style.display = 'block';
+                            document.getElementById('salesCount').textContent = `(${sales.length} client${sales.length > 1 ? 's' : ''})`;
+                            document.getElementById('salesList').innerHTML = sales.map(buildClientCard).join('');
+                        }
+                        if (ccare.length) {
+                            document.getElementById('ccareSection').style.display = 'block';
+                            document.getElementById('ccareCount').textContent = `(${ccare.length} client${ccare.length > 1 ? 's' : ''})`;
+                            document.getElementById('ccareList').innerHTML = ccare.map(buildClientCard).join('');
+                        }
+                        if (newBiz.length) {
+                            document.getElementById('newBizSection').style.display = 'block';
+                            document.getElementById('newBizCount').textContent = `(${newBiz.length} client${newBiz.length > 1 ? 's' : ''})`;
+                            document.getElementById('newBizList').innerHTML = newBiz.map(buildClientCard).join('');
+                        }
+                    })
+                    .catch(() => {
+                        document.getElementById('crmClientsLoading').style.display = 'none';
+                        document.getElementById('crmClientsEmpty').style.display = 'block';
+                    });
+            }
+
+            // Load CRM data when the tab is first clicked
+            document.addEventListener('DOMContentLoaded', () => {
+                const tabLink = document.getElementById('crmClientsTabLink');
+                if (tabLink) {
+                    tabLink.addEventListener('shown.bs.tab', loadCrmClients);
+                }
+            });
+            // ====== /CRM CLIENTS TAB ======
 
             // --- MANIFEST-STYLE ROBUST HANDLER FOR MANUAL LEAVE CREDIT ---
             // Defined at top to survive any downstream JS crashes

@@ -5,9 +5,9 @@
     use Illuminate\Support\Facades\Route;
     $containerNav = $configData['contentLayout'] === 'compact' ? 'container-xxl' : 'container-fluid';
     $navbarDetached = $navbarDetached ?? '';
-    $initial = Auth::user()->getInitials();
+    $initial = Auth::user()?->getInitials() ?? 'U';
     $addonService = app(IAddonService::class);
-    $isSuperAdmin = Auth::user()->hasRole('admin');
+    $isSuperAdmin = Auth::user()?->hasRole('admin') ?? false;
 @endphp
 
 <!-- Navbar -->
@@ -23,13 +23,18 @@
     </div>
 @endif
 
-<div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
-    <!-- Page Title / Breadcrumb (Minimalist Awesome Design) -->
-    <div class="hitech-nav-title d-none d-md-flex">
-      <h4 class="mb-0 fw-bold">@yield('title', config('variables.templateName'))</h4>
-    </div>
+    <div class="navbar-nav-right d-flex align-items-center" id="navbar-collapse">
+        <!-- Page Title / Breadcrumb (Minimalist Awesome Design) -->
+        <div class="hitech-nav-title d-none d-md-flex">
+            <h4 class="mb-0 fw-bold">@yield('title', config('variables.templateName'))</h4>
+        </div>
+        
+        <!-- Custom Navbar Actions per page -->
+        <div class="ms-3 d-flex align-items-center">
+            @yield('navbar-actions')
+        </div>
 
-    <ul class="navbar-nav flex-row align-items-center ms-auto">
+        <ul class="navbar-nav flex-row align-items-center ms-auto">
         <!-- Search icon moved to right -->
         @if ($configData['displaySearch'] == true)
           <li class="nav-item me-2 me-xl-0">
@@ -304,14 +309,14 @@
                           @endif
                       </div>
                       <div class="user-info">
-                          <span class="name">{{ Auth::user()->getFullName() }}</span>
-                          <span class="role">{{ Auth::user()->roles()->first()?->name ?? 'Employee' }}</span>
+                          <span class="name">{{ Auth::user()?->getFullName() ?? 'Guest' }}</span>
+                          <span class="role">{{ Auth::user()?->roles()->first()?->name ?? 'Employee' }}</span>
                       </div>
                   </div>
                 </li>
                 <li>
                     <a class="dropdown-item"
-                        href="{{ auth()->user()->hasRole('super_admin') ? route('account.myProfile') : route('employee.myProfile') }}">
+                        href="{{ auth()->user()?->hasRole('super_admin') ? route('account.myProfile') : route('employee.myProfile') }}">
                         <i class="bx bx-user-circle"></i><span>@lang('My Profile')</span>
                     </a>
                 </li>

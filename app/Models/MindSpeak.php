@@ -15,6 +15,7 @@ class MindSpeak extends Model {
         'user_id',
         'category',
         'content',
+        'attachment',
         'is_anonymous',
         'tenant_id'
     ];

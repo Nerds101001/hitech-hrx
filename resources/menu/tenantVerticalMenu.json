@@ -98,7 +98,6 @@
             "name": "Employees",
             "icon": "menu-icon bx bx-group",
             "slug": "employees.index",
-            "permission": "hr.employees.view",
             "roles": [
                 "admin",
                 "hr",
@@ -232,6 +231,7 @@
                 }
             ]
         },
+
         {
             "name": "Attendance",
             "icon": "menu-icon bx bx-time-five",
@@ -239,7 +239,6 @@
                 "attendance.index",
                 "biometric.index"
             ],
-            "permission": "hr.attendance.view",
             "roles": [
                 "admin",
                 "hr",
@@ -263,8 +262,9 @@
             "name": "Payroll",
             "icon": "menu-icon bx bx-money",
             "slug": "payroll.index",
-            "permission": "payroll.view",
             "roles": [
+                "admin",
+                "hr",
                 "accounts"
             ]
         },
@@ -413,7 +413,7 @@
             "submenu": [
                 {
                     "url": "/travel-claims",
-                    "name": "My Claims / Verify",
+                    "name": "My Claims",
                     "slug": "travel-claims.index"
                 },
                 {
@@ -507,6 +507,36 @@
                     "url": "/sales-visits/clients",
                     "name": "Client Master",
                     "slug": "sales-visits.clients.index"
+                },
+                {
+                    "url": "/cc-attendance",
+                    "name": "Attendance",
+                    "slug": "cc-attendance.index",
+                    "department": "Customer Care"
+                },
+                {
+                    "url": "/sales-visits/pipeline",
+                    "name": "Sales Report",
+                    "slug": "sales-visits.pipeline.index"
+                },
+                {
+                    "url": "/sales-visits/sales-pipeline",
+                    "name": "Sales Pipeline",
+                    "slug": "sales-visits.actual-pipeline.index"
+                },
+                {
+                    "url": "/sales-visits/kingo-bingo",
+                    "name": "Kingo Bingo",
+                    "slug": "sales-visits.kingo-bingo.index"
+                },
+                {
+                    "url": "/sales-targets/import",
+                    "name": "Import Targets",
+                    "slug": "sales-targets.import",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
                 }
             ]
         },
@@ -545,19 +575,6 @@
             "name": "My Leaves",
             "icon": "menu-icon bx bx-calendar-event",
             "slug": "user.leaves.index"
-        },
-        {
-            "url": "/user/expenses",
-            "name": "My Expenses",
-            "icon": "menu-icon bx bx-receipt",
-            "slug": "user.expenses.index",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ]
         },
         {
             "url": "/user/attendance",
@@ -602,7 +619,7 @@
         },
         {
             "url": "/mind-speak",
-            "name": "Mind Speak",
+            "name": "Innovation Hub",
             "icon": "menu-icon bx bx-brain",
             "slug": "mind-speak.index",
             "roles": [
@@ -632,7 +649,6 @@
                 "loan.index",
                 "approvals.index"
             ],
-            "permission": "hr.approvals.view",
             "roles": [
                 "admin",
                 "hr",

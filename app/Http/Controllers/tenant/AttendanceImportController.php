@@ -40,6 +40,10 @@ class AttendanceImportController extends Controller
             }
         }
 
+        // Preload users into memory
+        $usersByBiometric = \App\Models\User::whereNotNull('biometric_id')->get()->keyBy('biometric_id');
+        $usersByCode = \App\Models\User::whereNotNull('code')->get()->keyBy('code');
+
         if ($isReportFormat) {
             // Smart Parser for DLF Manesar style reports
             foreach ($data as $row) {
@@ -59,13 +63,7 @@ class AttendanceImportController extends Controller
                     $out = $this->excelTimeToHi($row[7] ?? null);
                     
                     if ($in || $out) {
-                        // Priority 1: Match by biometric_id
-                        $user = User::where('biometric_id', $currentBiometricId)->first();
-                        
-                        // Priority 2: Fallback to code
-                        if (!$user) {
-                            $user = User::where('code', $currentBiometricId)->first();
-                        }
+                        $user = $usersByBiometric->get($currentBiometricId) ?? $usersByCode->get($currentBiometricId);
 
                         $previewData[] = [
                             'biometric_id' => $currentBiometricId,
@@ -86,13 +84,7 @@ class AttendanceImportController extends Controller
                 if (empty($row[0])) continue;
                 $biometricId = $row[0];
                 
-                // Priority 1: Match by biometric_id
-                $user = User::where('biometric_id', $biometricId)->first();
-                
-                // Priority 2: Fallback to code
-                if (!$user) {
-                    $user = User::where('code', $biometricId)->first();
-                }
+                $user = $usersByBiometric->get($biometricId) ?? $usersByCode->get($biometricId);
                 
                 $previewData[] = [
                     'biometric_id' => $biometricId,
@@ -106,10 +98,13 @@ class AttendanceImportController extends Controller
             }
         }
 
+        $cacheKey = 'biometric_import_' . auth()->id();
+        \Illuminate\Support\Facades\Cache::put($cacheKey, $previewData, now()->addHours(1));
+
         if (request()->ajax()) {
             return response()->json([
                 'html' => view('tenant.attendance.preview_table', ['previewData' => $previewData])->render(),
-                'records' => $previewData
+                'records' => []
             ]);
         }
 
@@ -133,8 +128,44 @@ class AttendanceImportController extends Controller
 
     public function storeBiometricImport(Request $request)
     {
-        $records = json_decode($request->input('records'), true);
+        $records = \Illuminate\Support\Facades\Cache::get('biometric_import_' . auth()->id());
+        if (!$records) {
+            return redirect()->back()->with('error', 'Import session expired or invalid. Please upload the file again.');
+        }
+        \Illuminate\Support\Facades\Cache::forget('biometric_import_' . auth()->id());
+        
         $count = 0;
+
+        // Preload User Data
+        $userIds = collect($records)->pluck('user_id')->filter()->unique();
+        $usersById = \App\Models\User::with(['department', 'designation', 'shift'])->whereIn('id', $userIds)->get()->keyBy('id');
+        $salesUserIds = \App\Models\CcSalespersonMap::whereIn('sales_user_id', $userIds)->pluck('sales_user_id')->toArray();
+        
+        // Parse dates safely for preloading attendances
+        $dates = collect($records)->pluck('date')->map(function($dateStr) {
+            try {
+                if (str_contains($dateStr, '/')) {
+                    return Carbon::createFromFormat('d/m/Y', $dateStr)->format('Y-m-d');
+                }
+                return Carbon::parse($dateStr)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return null;
+            }
+        })->filter()->unique()->toArray();
+
+        $existingAttendancesGroup = empty($userIds) || empty($dates) ? collect() : \App\Models\Attendance::whereIn('user_id', $userIds)
+            ->where(function($q) use ($dates) {
+                foreach($dates as $d) {
+                    $q->orWhereDate('check_in_time', $d)
+                      ->orWhere(function($q2) use ($d) {
+                          $q2->whereNull('check_in_time')->whereDate('created_at', $d);
+                      });
+                }
+            })->get()->groupBy(function($att) {
+                return $att->user_id . '_' . ($att->check_in_time ? $att->check_in_time->format('Y-m-d') : $att->created_at->format('Y-m-d'));
+            });
+
+        $attendanceService = new \App\Services\Api\Attendance\AttendanceService();
 
         foreach ($records as $record) {
             if (empty($record['user_id'])) continue;
@@ -158,20 +189,48 @@ class AttendanceImportController extends Controller
             $checkIn = !empty($record['check_in']) && $record['check_in'] !== '--' ? Carbon::parse($date . ' ' . $record['check_in']) : null;
             $checkOut = !empty($record['check_out']) && $record['check_out'] !== '--' ? Carbon::parse($date . ' ' . $record['check_out']) : null;
 
-            $user = \App\Models\User::find($record['user_id']);
-            $attendanceService = new \App\Services\Api\Attendance\AttendanceService();
+            $user = $usersById->get($record['user_id']);
+            if (!$user) continue;
+            
+            // ----------------------------------------------------
+            // 1. Skip Salesperson (they are marked manually by CCARE)
+            // ----------------------------------------------------
+            $isSales = false;
+            if ($user->department && stripos($user->department->name, 'Sales') !== false) {
+                $isSales = true;
+            }
+            if ($user->designation && stripos($user->designation->name, 'Sales') !== false) {
+                $isSales = true;
+            }
+            if (in_array($user->id, $salesUserIds)) {
+                $isSales = true;
+            }
+
+            if ($isSales) {
+                \Illuminate\Support\Facades\Log::info("Biometric Import: Skipped Salesperson " . $user->code);
+                continue;
+            }
+
+            // ----------------------------------------------------
+            // 2. Prevent overriding approved leaves and duplicates
+            // ----------------------------------------------------
+            $attendanceGroup = $existingAttendancesGroup->get($user->id . '_' . $date);
+            $attendance = $attendanceGroup ? $attendanceGroup->first() : null;
+
+            $leaveStatuses = ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-day'];
+            if ($attendance && in_array(strtolower(str_replace('_', '-', $attendance->status)), $leaveStatuses)) {
+                \Illuminate\Support\Facades\Log::info("Biometric Import: Skipped {$user->code} for $date because of existing leave: {$attendance->status}");
+                continue;
+            }
 
             // Centralized calculation logic (replaces 60+ individual lines)
             $calc = $attendanceService->calculateDayStatus($user, $date, $checkIn, $checkOut);
 
-            // Correct Update/Create Logic: Match by User and Date, not exact timestamp
-            $attendance = \App\Models\Attendance::where('user_id', $record['user_id'])
-                ->whereDate('check_in_time', $date)
-                ->first();
+            $safeCheckIn = $checkIn ?: \Carbon\Carbon::parse($date)->startOfDay();
 
             if ($attendance) {
                 $attendance->update([
-                    'check_in_time' => $checkIn ?: $attendance->check_in_time,
+                    'check_in_time' => $safeCheckIn,
                     'check_out_time' => $checkOut ?: $attendance->check_out_time,
                     'status' => $calc['status'],
                     'tenant_id' => auth()->user()->tenant_id,
@@ -181,12 +240,13 @@ class AttendanceImportController extends Controller
             } else {
                 $attendance = \App\Models\Attendance::create([
                     'user_id' => $record['user_id'],
-                    'check_in_time' => $checkIn ?: \Carbon\Carbon::parse($date)->startOfDay(),
+                    'check_in_time' => $safeCheckIn,
                     'check_out_time' => $checkOut,
                     'status' => $calc['status'],
                     'tenant_id' => auth()->user()->tenant_id,
                     'is_policy_late' => $calc['is_policy_late'] ?? false,
                     'leave_request_id' => $calc['leave_request_id'] ?? null,
+                    'created_at' => \Carbon\Carbon::parse($date)->startOfDay()
                 ]);
             }
 

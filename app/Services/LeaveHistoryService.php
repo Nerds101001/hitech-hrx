@@ -91,8 +91,9 @@ class LeaveHistoryService
                 return $new - $old;
             });
 
-            // Opening Balance = Current - Sum(Recorded Adjustments)
-            $openingBalance = $currentBalance - $recordedAdjustments;
+            // Opening Balance = (Current + Used) - Sum(Recorded Adjustments)
+            // We must add 'used' because approved leave requests deduct from the balance without generating credit audits.
+            $openingBalance = ($currentBalance + (float)$bal->used) - $recordedAdjustments;
 
             if (abs($openingBalance) > 0.001) {
                 $cfAmount = (float)($bal->carry_forward_last_year ?? 0);

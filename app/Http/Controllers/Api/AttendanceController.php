@@ -367,6 +367,28 @@ class AttendanceController extends Controller
     $attendance->check_out_time = date('Y-m-d H:i:s');
     $attendance->save();
 
+    // Auto-credit Paid Leave for Sunday working >= 4 hours
+    if (Carbon::parse($attendance->check_in_time)->isSunday()) {
+        $minutes = Carbon::parse($attendance->check_in_time)->diffInMinutes(Carbon::parse($attendance->check_out_time));
+        if ($minutes >= 240) { // 4 hours
+            $compOffType = \App\Models\LeaveType::where('code', 'ALP')
+                ->orWhere('name', 'like', '%All Purpose%')
+                ->orWhere('code', 'PL')
+                ->first();
+
+            if ($compOffType) {
+                $balance = \App\Models\LeaveBalance::firstOrCreate(
+                    ['user_id' => $user->id, 'leave_type_id' => $compOffType->id],
+                    ['tenant_id' => $user->tenant_id, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
+                );
+                
+                \App\Models\LeaveBalance::$auditReason = "Earned via Sunday Working (Staff Checkout)";
+                $balance->increment('balance', 1);
+                $balance->increment('accrued_this_year', 1);
+            }
+        }
+    }
+
 
     $log = new AttendanceLog();
     $log->attendance_id = $attendance->id;

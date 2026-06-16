@@ -125,7 +125,7 @@
                                                         <td>₹{{ $item->courier_amount }}</td>
                                                         <td>
                                                             @if($item->photo_path)
-                                                                <a href="{{ Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
                                                             @else
                                                                 <span class="text-muted">N/A</span>
                                                             @endif

@@ -67,12 +67,12 @@
                 <div class="segmented-control-hitech-wrapper me-1">
                     <ul class="nav nav-pills segmented-control-hitech" role="tablist">
                         <li class="nav-item">
-                            <button class="nav-link active" id="list-view-tab" data-bs-toggle="tab" data-bs-target="#listViewTab">
+                            <button class="nav-link" id="list-view-tab" data-bs-toggle="tab" data-bs-target="#listViewTab">
                                 <i class="bx bx-list-ul me-1"></i> List VIEW
                             </button>
                         </li>
                         <li class="nav-item">
-                            <button class="nav-link" id="calendar-view-tab" data-bs-toggle="tab" data-bs-target="#calendarViewTab">
+                            <button class="nav-link active" id="calendar-view-tab" data-bs-toggle="tab" data-bs-target="#calendarViewTab">
                                 <i class="bx bx-calendar me-1"></i> Monthly CALENDAR
                             </button>
                         </li>
@@ -127,7 +127,7 @@
 
         <div class="tab-content border-0 p-0">
             {{-- LIST VIEW --}}
-            <div class="tab-pane fade show active" id="listViewTab" role="tabpanel">
+            <div class="tab-pane fade" id="listViewTab" role="tabpanel">
                 <div class="card-body p-0">
             <div class="table-responsive text-nowrap">
                 <table class="table table-hover mb-0">
@@ -185,11 +185,17 @@
                                     $ds = strtolower($attendance->dynamic_status);
                                     $bgClass = 'success';
                                     $label = 'Present';
+                                    
                                     if ($ds === 'absent') { $bgClass = 'danger'; $label = 'Absent'; }
                                     elseif ($ds === 'late') { $bgClass = 'warning'; $label = 'Late'; }
                                     elseif ($ds === 'half-day') { $bgClass = 'warning'; $label = 'Half Day'; }
-                                    elseif ($ds === 'leave' || $ds === 'on_leave') { $bgClass = 'info'; $label = 'On Leave'; }
+                                    elseif ($ds === 'on_leave' || $ds === 'leave') { $bgClass = 'info'; $label = $attendance->holiday_name ?? 'On Leave'; }
                                     elseif ($ds === 'work_from_home' || $ds === 'wfh') { $bgClass = 'primary'; $label = 'WFH'; }
+                                    elseif ($ds === 'holiday') { $bgClass = 'info'; $label = $attendance->holiday_name ?? 'Holiday'; }
+                                    elseif ($ds === 'weekly_off') { $bgClass = 'secondary'; $label = 'Weekly Off'; }
+                                    elseif ($ds === 'scheduled') { $bgClass = 'secondary'; $label = 'Scheduled'; }
+                                    elseif ($ds === 'today') { $bgClass = 'primary'; $label = 'Today (No Log)'; }
+                                    elseif ($ds === 'missing') { $bgClass = 'secondary'; $label = 'Missing'; }
                                     
                                     $adminBadge = $attendance->admin_reason ? '<i class="bx bxs-edit-alt ms-1 text-white opacity-75" title="Manual Adjustment"></i>' : '';
                                 @endphp
@@ -213,7 +219,7 @@
         </div> {{-- card-body --}}
     </div> {{-- listViewTab --}}
     
-            <div class="tab-pane fade" id="calendarViewTab" role="tabpanel">
+            <div class="tab-pane fade show active" id="calendarViewTab" role="tabpanel">
                 <div class="card-body bg-calendar-grid p-3 p-md-4">
                     <div class="calendar-grid-header">
                         <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
@@ -303,10 +309,14 @@
                 
                 let dayContent = '';
                 if (day.in) {
+                    let durationHtml = day.duration 
+                        ? `<span class="time-block mt-1" style="font-size: 0.75rem; font-weight: 800; background: rgba(255,255,255,0.25); padding: 2px 6px; border-radius: 4px; display: inline-block; width: fit-content; border: 1px solid rgba(255,255,255,0.2);"><i class="bx bx-time-five"></i> ${day.duration}</span>` 
+                        : '';
                     dayContent = `
                         <div class="day-in-out">
                             <span class="time-block"><i class="bx bx-down-arrow-alt text-success"></i> ${day.in}</span>
                             <span class="time-block"><i class="bx bx-up-arrow-alt text-danger"></i> ${day.out || '--:--'}</span>
+                            ${durationHtml}
                         </div>
                     `;
                 } else if (day.status === 'Leave' || day.status === 'Holiday') {

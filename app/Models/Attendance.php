@@ -35,6 +35,8 @@ class Attendance extends Model
     'attachment',
     'is_policy_late',
     'leave_request_id',
+    'is_outdoor_duty',
+    'outdoor_duty_id',
     'tenant_id',
   ];
 
@@ -42,8 +44,9 @@ class Attendance extends Model
     'check_in_time' => 'datetime',
     'check_out_time' => 'datetime',
     'approved_at' => 'datetime',
-    'is_policy_late' => 'boolean',
-    'created_at' => 'datetime',
+    'is_policy_late'  => 'boolean',
+    'is_outdoor_duty' => 'boolean',
+    'created_at'      => 'datetime',
   ];
 
   public function user()
@@ -54,6 +57,11 @@ class Attendance extends Model
   public function leaveRequest()
   {
     return $this->belongsTo(LeaveRequest::class);
+  }
+
+  public function outdoorDuty()
+  {
+    return $this->belongsTo(\App\Models\OutdoorDuty::class);
   }
 
   public function shift()

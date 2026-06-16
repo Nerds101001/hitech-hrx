@@ -22,9 +22,8 @@ Artisan::command('logs:clear', function () {
 Artisan::command('routes:validate-menu', function () {
   $this->call('routes:validate-menu');
 })->describe('Validate route-menu consistency');
-Artisan::command('leave:accrue', function () {
-  $this->call('leave:accrue');
-})->describe('Accrue monthly leave quotas')->monthly();
+// Properly schedule the class-based leave:accrue command instead of a recursive closure
+Schedule::command('leave:accrue')->monthly();
 
 // leave:grant-short-leave — class-based, scheduled via facade so signature is preserved
 Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');

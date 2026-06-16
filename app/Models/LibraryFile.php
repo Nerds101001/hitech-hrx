@@ -29,6 +29,8 @@ class LibraryFile extends Model
         'is_public',
         'created_by_id',
         'tenant_id',
+        'presenter_id',
+        'session_date',
     ];
 
     protected $casts = [
@@ -37,11 +39,17 @@ class LibraryFile extends Model
         'hazards' => 'array',
         'usage_instructions' => 'array',
         'tags' => 'array',
+        'session_date' => 'date',
     ];
 
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    public function presenter()
+    {
+        return $this->belongsTo(User::class, 'presenter_id');
     }
 
     public function permissions()

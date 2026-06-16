@@ -148,6 +148,9 @@
             <h5 class="title mb-0 text-dark fw-bold">Assets List</h5>
           </div>
           <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-outline-success d-flex align-items-center gap-2" id="exportExcelBtn">
+              <i class="bx bx-export me-1"></i> Export Excel
+            </button>
             <button type="button" class="btn btn-sm btn-hitech add-new d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateAsset">
               <i class="bx bx-plus me-1"></i> Add Asset
             </button>
@@ -186,6 +189,16 @@
               <option value="retired">Retired</option>
             </select>
           </div>
+
+          {{-- User Filter --}}
+          <div class="compact-select" style="min-width: 160px;">
+            <select id="filterUser" class="form-select select2 filter-item-hitech">
+              <option value="">Assigned To: All</option>
+              @foreach($users as $user)
+                <option value="{{ $user->id }}">{{ $user->first_name }} {{ $user->last_name }}</option>
+              @endforeach
+            </select>
+          </div>
         </div>
       </div>
       <div class="card-datatable table-responsive p-0">
@@ -211,6 +224,9 @@
 @section('page-script')
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      // Move modal to body to fix z-index overlay stacking issues
+      document.body.appendChild(document.getElementById('assetForm'));
+
       // Select2 initialization for modal
       const initSelect2 = () => {
         $('.select2-modal').select2({
@@ -229,6 +245,7 @@
             d.searchTerm = $('#customSearchInput').val();
             d.category = $('#filterCategory').val();
             d.status = $('#filterStatus').val();
+            d.user_id = $('#filterUser').val();
           }
         },
         columns: [
@@ -260,8 +277,24 @@
         }
       });
 
-      $('#customSearchBtn, #filterCategory, #filterStatus').on('click change', function () {
+      $('#customSearchBtn, #filterCategory, #filterStatus, #filterUser').on('click change', function () {
         dt.draw();
+      });
+
+      $('#exportExcelBtn').on('click', function(e) {
+          e.preventDefault();
+          const search = $('#customSearchInput').val();
+          const category = $('#filterCategory').val();
+          const status = $('#filterStatus').val();
+          const user_id = $('#filterUser').val();
+          
+          let url = `{{ route('assets.exportExcel') }}?`;
+          if (search) url += `searchTerm=${search}&`;
+          if (category) url += `category=${category}&`;
+          if (status) url += `status=${status}&`;
+          if (user_id) url += `user_id=${user_id}&`;
+          
+          window.location.href = url;
       });
 
       // --- Dynamic Parameters Logic ---
@@ -370,6 +403,48 @@
           },
           error: function(err) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save asset' });
+          }
+        });
+      });
+
+      // Handle Delete Asset
+      $(document).on('click', '.delete-record', function(e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        
+        Swal.fire({
+          title: 'Are you sure?',
+          text: "You want to delete this asset?",
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonColor: '#d33',
+          cancelButtonColor: '#3085d6',
+          confirmButtonText: 'Yes, delete it!',
+          customClass: {
+            confirmButton: 'btn btn-danger me-3',
+            cancelButton: 'btn btn-label-secondary'
+          },
+          buttonsStyling: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            $.ajax({
+              url: `${baseUrl}asset-management/${id}`,
+              type: 'DELETE',
+              data: {
+                _token: $('meta[name="csrf-token"]').attr('content')
+              },
+              success: function(response) {
+                if(response.success) {
+                    Swal.fire({ icon: 'success', title: 'Deleted!', text: response.message, customClass: { confirmButton: 'btn btn-success' } });
+                    dt.draw();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: response.message || 'Failed to delete asset', customClass: { confirmButton: 'btn btn-primary' } });
+                }
+              },
+              error: function(xhr) {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to delete asset.', customClass: { confirmButton: 'btn btn-primary' } });
+              }
+            });
           }
         });
       });

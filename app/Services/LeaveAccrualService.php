@@ -40,15 +40,25 @@ class LeaveAccrualService
                     // Carry Forward: Increment the existing balance
                     $balance->balance += $monthlyIncrement;
                     $balance->accrued_this_year += $monthlyIncrement;
-                    $balance->auditCustomMessage = "Monthly Accrual ({$rule->leaveType->name})";
+                    $monthYear = now()->format('F Y');
+                    \App\Models\LeaveBalance::$auditReason = "Earned for {$monthYear}";
                 } else {
-                    // Reset: Set balance specifically to the monthly quota (non-cumulative)
-                    // Note: We still increment 'accrued_this_year' to track annual total
+                    // Reset: Lapse any unused balance first
+                    if ($balance->exists && $balance->balance > 0) {
+                        $balance->balance = 0;
+                        \App\Models\LeaveBalance::$auditReason = "Leave lapsed for last month";
+                        $balance->save();
+                    }
+
+                    // Grant the new monthly quota
+                    // Note: We increment 'accrued_this_year' to track annual total
                     $balance->balance = $monthlyIncrement;
                     $balance->used    = 0; 
-                    $balance->accrued_this_year = $monthlyIncrement;
+                    $balance->accrued_this_year += $monthlyIncrement;
                     $balance->carry_forward_last_year = 0;
-                    $balance->auditCustomMessage = "Monthly Reset & Grant ({$rule->leaveType->name})";
+                    
+                    $monthYear = now()->format('F Y');
+                    \App\Models\LeaveBalance::$auditReason = "Earned for {$monthYear}";
                 }
 
                 $balance->save();
@@ -90,7 +100,7 @@ class LeaveAccrualService
                     $balance->balance = ($oldBalance > $cap) ? $cap : $oldBalance;
                     $balance->carry_forward_last_year = $balance->balance;
                     $balance->accrued_this_year = 0; // Reset for new fiscal year
-                    $balance->auditCustomMessage = "Yearly Reset (April 1st) - Carry Forward Cap: {$cap}";
+                    \App\Models\LeaveBalance::$auditReason = "Yearly Reset (April 1st) - Carry Forward Cap: {$cap}";
                     $balance->save();
                     
                     Log::info("April Reset for User {$user->id}, LeaveType {$rule->leave_type_id}. Carry Forward: {$balance->carry_forward_last_year}");
@@ -114,7 +124,7 @@ class LeaveAccrualService
 
         $balance->balance = ($balance->balance ?? 0) + $amount;
         $balance->accrued_this_year = ($balance->accrued_this_year ?? 0) + $amount;
-        $balance->auditCustomMessage = "Comp Off Granted (Automated)";
+        \App\Models\LeaveBalance::$auditReason = "Comp Off Granted (Automated)";
         $balance->save();
         
         Log::info("Granted {$amount} COFF to user {$user->id}.");

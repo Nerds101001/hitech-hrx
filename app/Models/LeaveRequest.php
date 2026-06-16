@@ -10,10 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
+use App\Traits\HasApprovals;
 
 class LeaveRequest extends Model implements AuditableContract
 {
-  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes;
+  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes, HasApprovals;
 
   protected $table = 'leave_requests';
 
@@ -80,7 +81,7 @@ class LeaveRequest extends Model implements AuditableContract
               $user        = $leaveRequest->user;
               $isPaidType  = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
-              $plType      = \App\Models\LeaveType::where('code', 'PL')->first();
+              $plType      = \App\Models\LeaveType::where('code', 'ALP')->first();
               $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
 
               // Determine which balance record to deduct from
@@ -162,7 +163,7 @@ class LeaveRequest extends Model implements AuditableContract
               $user          = $leaveRequest->user;
               $isPaidType    = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
-              $plType        = \App\Models\LeaveType::where('code', 'PL')->first();
+              $plType        = \App\Models\LeaveType::where('code', 'ALP')->first();
               $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
 
               $refundLeaveTypeId = $leaveRequest->leave_type_id;

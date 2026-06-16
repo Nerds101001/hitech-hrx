@@ -1,0 +1,154 @@
+Sr.No,Source,Department,Machine Name,Machine Type,Person Name,User Name,OS,Make,Model,Storage,RAM,Serial Number,Processor
+1,CG Office,CCARE,CGCCARE-1,Desktop,Deepali Sharma,CGCCARE-1,Windows 11,HP,HP ProDesk 600 G2 DM,238.47 GB,8 GB,7N39256G54676,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+2,CG Office,CCARE,CGCCARE-2,Desktop,Archana Deshwal,CGCCARE-2,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23316X802081,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+3,CG Office,CCARE,CGCCARE-3,Desktop,Trishna,CGCCARE-3,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23316X802082,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+4,CG Office,Production,CGCCARE-4,Desktop,Prakash Babu,CGCCARE-4,Windows 10,,,,,,
+5,CG Office,CCARE,CGCCARE-5,Desktop,Ratna,CGCCARE-5,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23194W802425,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+6,CG Office,CCARE,CGCCARE-6,Desktop,Rekha Rajput,CGCCARE-6,Windows 11,HP,HP ProDesk 600 G2 DM,238.47 GB,8 GB,7N39256G54687,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+7,CG Office,CCARE,CGCCARE-7,Desktop,Shivani Yadav,CGCCARE-7,Windows 11,HP,HP ProDesk 600 G2 DM,238.47 GB,8 GB,7N39256G54683,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+8,CG Office,CCARE,CGCCARE-8,Desktop,Mamta Arora,CGCCARE-8,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23410W800694,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+9,CG Office,CCARE,CGCCARE-9,Desktop,Sonia Arora,CGCCARE-9,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W800028,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+10,CG Office,CCARE,CGCCARE-10,Desktop,Geet Kaur,CGCCARE-10,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W800468,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+11,CG Office,CCARE,CGCCARE-11,Desktop,Shivani Chhibber,CGCCARE-11,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23316X802195,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+12,CG Office,CCARE,CGCCARE-12,Desktop,Rajendra Singh,CGCCARE-12,Windows 11,Dell Inc.,OptiPlex 7040,223.57 GB,8 GB,23314Z801261,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+13,CG Office,CCARE,CGCCARE-13,Desktop,Pooja Kumari,CGCCARE-13,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W803889,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+14,CG Office,CCARE,CGCCARE-14,Desktop,Pooja Soni,CGCCARE-14,Windows 10,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W803898,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+15,CG Office,HR,CGHR,Laptop,Ashish,CGHR,Windows 11,,,,,,
+16,CG Office,HR,CGHRDESK,Desktop,Ashish,CGHRDESK,Windows 11,,,,,,
+17,CG Office,E-Com,Manesar-Despatch,Desktop,Sunny,Despatch-1,Windows 10,,,,,,
+18,CG Office,E-Com,Manesar-Despatch-2,Desktop,Avni,Despatch-2,,,,,,,
+19,CG Office,Production,PPC18-1,Desktop,Abhimanyu Sethi,PPC18-01,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W803900,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+20,CG Office,Production,PPC18-2,Desktop,Ravikant,PPC18-2,Windows 11,,,,,,
+21,CG Office,Production,PPC18-3,Desktop,Beenu,PPC18-3,Windows 10,LENOVO,10AXS5PL07,465.76 GB,8 GB,RC250A1T0MK5HU,Intel(R) Core(TM) i5-4570 CPU @ 3.20GHz
+22,CG Office,Production,PPC18-4,Desktop,Ravikant,PPC18-4,Windows 10,,,,,,
+23,CG Office,CCARE,CGCCARE-15,Desktop,Anjana,CGCCARE-15,Windows 11,Dell Inc.,OptiPlex 3060,476.94 GB,4 GB,GXG512VC51J51975,Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz
+24,CG Office,CCARE,CGCCARE-16,Desktop,Anchal,CGCCARE-16,Windows 11,Dell Inc.,OptiPlex 3060,476.94 GB,4 GB,AA000000000000001303,Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz
+25,CG Office,Sales,Rustx,Laptop,Suchita,Suchita,Windows 11,ASUSTeK COMPUTER INC.,Vivobook_ASUSLaptop X1504VA_X1504VA,476.94 GB,8 GB,0025_3846_41BE_0AA7.,13th Gen Intel(R) Core(TM) i3-1315U
+26,CG Office,Sales,Hi Tech Group,Laptop,Govind Singh Yadav,Hi Tech Group,Windows 10,,,,,,
+27,CG Office,Sales,DelhiNCR-01,Laptop,Gaurav Nayar,Hi Tech Group 01,Windows 11,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3707_0500.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+28,CG Office,Sales,Hi Tech Group 02,Laptop,Ravi Negi,Hi Tech Group 02,Windows 10,,,,,,
+29,CG Office,Sales,Hi Tech Group 03,Laptop,Mudassar Ameen,Hi Tech Group 03,Windows 10,,,,,,
+30,CG Office,Sales,EA-MANESAR,Laptop,Prateek Tondon,Prateek,Windows 10,Dell Inc.,Latitude 5420,476.94 GB,16 GB,E823_8FA6_BF53_0001_001B_448B_4188_0A6B.,11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+31,CG Office,CCARE,CGCCARE-05,Laptop,Shruti Mittal,Hi Tech Group 05,Windows 11,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3706_B400.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+32,CG Office,Production,Hi Tech Group 06,Laptop,Parasram,Hi Tech Group 06,Windows 10,,,,,,
+33,CG Office,Sales,DelhiNCR-03,Laptop,Griss,Hi Tech Group 07,Windows 10,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3706_B900.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+34,CG Office,CCARE,Hi Tech Group 08,Laptop,Ayesha in Ludhiana,Hi Tech Group 08,Windows 10,,,,,,
+35,CG Office,Production,PPC18-5,Laptop,Aakash Yadav,Hi Tech Group 09,Windows 11,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3707_A800.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+36,CG Office,Sales,DelhiNCR-02,Laptop,Bharat Sharma,Hi Tech Group 10,Windows 11,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3703_3E00.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+37,CG Office,Sales,Chennai-01,Laptop,KR Manish,Hi Tech Group 11,Windows 11 - 10.0.26200,LENOVO,20U1S08F00,476.94 GB,16 GB,0000_0006_0000_0000_3A5A_2702_3707_3C00.,Intel(R) Core(TM) i5-10310U CPU @ 1.70GHz
+38,CG Office,Production,PPC99-1,Desktop,Mukesh,Admin,Windows 11,HP,HP ProDesk 600 G2 DM,238.47 GB,8 GB,7N39256G54674,Intel(R) Core(TM) i5-6600T CPU @ 2.70GHz
+39,CG Office,Production,PPC99-2,Desktop,,,Windows 7,"Gigabyte Technology Co., Ltd.",To be filled by O.E.M.,931.51 GB,2 GB,2020202057202d44435736433259524b50355648,Intel(R) Core(TM) i3-3220 CPU @ 3.30GHz
+40,CG Office,Sales,CG-VP-Sales,Laptop,Ardaman Singh,Ardaman Singh,Windows 11,Dell Inc.,Latitude 5420,476.94 GB,16 GB,,11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+41,CG Office,,HiTechGroup-12,Laptop,,Hi Tech Group 12,Windows 11,,,,,,
+42,CG Office,Sales,GM-Sales-TN,Laptop,Karthikeyan handover form G Karthikeyn,G. Karthikeyan,Windows 10,,,,,,
+43,CG Office,Sales,Pune-Sales-01,Laptop,Pradip Mulgir,Pradip Mulgir,Windows 10,,,,,,
+44,CG Office,Sales,Ahmedabad-Sales-01,Laptop,Mahavir Solanki,Mahavir Solanki,Windows 10,,,,,,
+45,CG Office,Production,Hi-Tech-Production-18,Laptop,Sandeep,Hi-tech Production,Windows 11,,,,,,
+46,CG Office,CCARE,CCare-Meeting,Laptop,Mamta Arora,CCare Meeting,Windows 11,,,,,,
+47,CG Office,Sales,Hi-Tech-Production-13,Laptop,Anil Kumar B,Hi Tech Group 13,Windows 11,,,,,,
+48,CG Office,Sales,Hi-Tech-Group-14,Laptop,Dharma Nand Jha,Hi Tech Group 14,Windows 11,,,,,,
+49,CG Office,Sales,Hi-Tech-Group-15,Laptop,Lijo John,Hi Tech Group 15,Windows 11,,,,,,
+50,CG Office,,Hi-Tech-Group-16,Laptop,,Hi Tech Group 16,Windows 11,,,,,,
+51,CG Office,Sales,Hitech-01,Laptop,Aruna Kumar,Hitech-01,Windows 11,,,,,,
+52,CG Office,Sales,Hitech-02,Laptop,Ajinkiya Pathare,Hitech-02,Windows 11,,,,,,
+53,CG Office,Sales,Hitech-03,Laptop,Amol,Hitech-03,Windows 11,,,,,,
+54,CG Office,Sales,Hitech-04,Laptop,Banti panwar,Hitech-04,Windows 11,,,,,,
+55,CG Office,Sales,Hitech-05,Laptop,Vinod,Hitech-05,Windows 11,,,,,,
+56,CG Office,Sales,Hitech-06,Laptop,Markhendappa,Hitech-06,Windows 11,,,,,,
+57,CG Office,Sales,Hitech-07,Laptop,Avdesh tiwari,Hitech-07,Windows 11,,,,,,
+58,CG Office,Production,Hitech-08,Laptop,Manoj Patle,Hitech-08,Windows 11,,,,,,
+59,CG Office,E-Com,CGE-Com-01,Desktop,Esha Das,CGE-Com-01,Windows 11,Dell Inc.,OptiPlex 3060,476.94 GB,8 GB,BTLA751300DF512DGN,Intel(R) Core(TM) i5-8500 CPU @ 3.00GHz
+60,CG Office,Sales,Hitech-09,Laptop,Praveen Kumar,Hitech-09,Windows 11,,,,,,
+61,CG Office,Sales,Hitech-10,Laptop,Raghav Upadhyay,Hitech10,Windows 11,,,,,,
+62,CG Office,Production,Hitech-11,Laptop,Ram Bhushan,Hitech-11,Windows 11,,,,,,
+63,IT Dept,Purchase,NITASHA,Printer & Desktop,Nitasha Sharma,NITASHA,Windows 8.1,,,,,,
+64,IT Dept,Purchase,Purchase-2,Desktop,Sheetal,Purchase-2,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,223.57 GB,8 GB,23405H807212,Intel(R) Core(TM) i5-6600T CPU @ 2.70GHz
+65,IT Dept,Purchase,Purchase-3,Desktop,Taran,Purchase-3,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000003940,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+66,IT Dept,Purchase,Purchase-4,Desktop,Shweta,Purchase-4,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,238.47 GB,8 GB,30119160326,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+67,IT Dept,Purchase,Purchase-5,Desktop,Ankita,Purchase-5,Windows 11,ASUS,All Series,238.47 GB,4 GB,VTB256S1116063VC22,Intel(R) Core(TM) i5-4570S CPU @ 2.90GHz
+68,IT Dept,Purchase,Purchase-6,Desktop,Nikki,Purchase-6,Windows 11,,,,,,
+69,IT Dept,Purchase,Purchase-7,Desktop,Shivani,Purchase-7,Windows 10,,,,,,
+70,IT Dept,Finance,Finance-1,Desktop,Arpana,Finance-1,Windows 11,,,,,,
+71,IT Dept,Finance,Finance-2,Desktop,Sandhya,Finance-2,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000005011,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+72,IT Dept,Finance,Finance-3,Desktop,Harinder,Finance-3,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000004434,Intel(R) Core(TM) i5-6400T CPU @ 2.20GHz
+73,IT Dept,Finance,Finance-4,Desktop,Lata,Finance-4,Windows 11,,,,,,
+74,IT Dept,Finance,Finance-5,Desktop,Shavi,Finance-5,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,2N242912QKJ2,Intel(R) Core(TM) i5-6400T CPU @ 2.20GHz
+75,IT Dept,Finance,Finance-6,Desktop,Priyanka,Finance-6,Windows 11,,,,,,
+76,IT Dept,Finance,Lovepreet,Printer & Desktop,Loverpreet,Rustx,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000000287,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+77,IT Dept,Billing,Rajnish,Printer & Desktop,Rajnish,Rajnish,Windows 11,,,,,,
+78,IT Dept,Billing,Billing-2,Desktop,Sheelu,Billing-2,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,238.47 GB,8 GB,7N39256G54145,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+79,IT Dept,Billing,Billing-3,Desktop,Priya,Billing-3,Windows 10,Dell Inc.,OptiPlex 3050,238.47 GB,8 GB,FFBAF5BD052118463210,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+80,IT Dept,Billing,Billing-4,Desktop,Bittu,Billing-4,Windows 11,HP,HP ProDesk 600 G2 DM,238.47 GB,8 GB,5EA16904041805131815,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+81,IT Dept,Billing,Billing-5,Desktop,Suraj,Billing-5,Windows 11,MSI,MS-7A15,232.88 GB,4 GB,AA000000000000002204,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+82,IT Dept,Billing,Billing-6,Desktop,Jahnvi,Billing-6,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,238.47 GB,8 GB,30117794020,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+83,IT Dept,Billing,Billing-7,Desktop,Gauri,Billing-7,Windows 7,"Gigabyte Technology Co., Ltd.",H81M-S,465.73 GB,4 GB,9VVDEVLC | 30040723601,Intel(R) Pentium(R) CPU G3240 @ 3.10GHz
+84,IT Dept,Billing,Billing-8,Desktop,Manisha,Billing-8,Windows 7,"Gigabyte Technology Co., Ltd.",GA-H81M-H,111.79 GB,8 GB,194296803657 | Y4SDWAKKS,Intel(R) Core(TM) i5-4440S CPU @ 2.80GHz
+85,IT Dept,Billing,Billing-9,Desktop,Ashok,Billing-9,Windows 11,Dell Inc.,OptiPlex 5040,238.47 GB,4 GB,7N38256G49327,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+86,IT Dept,CCARE,Ccare-1,Desktop,Poonam,Ccare-1,Windows 11,To Be Filled By O.E.M.,To Be Filled By O.E.M.,238.47 GB,8 GB,YS202207319000000140,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+87,IT Dept,CCARE,Ccare-2,Desktop,Preeti,Ccare-2,Windows 10,System manufacturer,System Product Name,238.47 GB,8 GB,30065615084,Intel(R) Core(TM) i5-7400 CPU @ 3.00GHz
+88,IT Dept,CCARE,Ccare-3,Desktop,Nidhi,Ccare-3,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000001689,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+89,IT Dept,CCARE,Administrator,Laptop,Naveen Joshi,Administrator,Windows 11,,,,,,
+90,IT Dept,CCARE,Ccare-5,Desktop,Free,Ccare-5,Windows 11,LENOVO,10AXS5C102,223.57 GB,8 GB,23125Q803856,Intel(R) Core(TM) i5-4590T CPU @ 2.00GHz
+91,IT Dept,CCARE,Ccare-06,Desktop,Pooja Patel,Ccare-06,Windows 11,,,,,,
+92,IT Dept,CCARE,Ccare-7,Desktop,Shailja Kashyap,Ccare-7,Windows 10,Dell Inc.,OptiPlex 3050,238.47 GB,4 GB,YS202010003251AA,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+93,IT Dept,CCARE,Ccare-8,Desktop,Sonali,Ccare-8,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,2N2429ACB6XA,Intel(R) Core(TM) i5-6400T CPU @ 2.20GHz
+94,IT Dept,CCARE,Ccare-9,Desktop,Shallu Sharma,Ccare-9,Windows 11,"Micro-Star International Co., Ltd.",MS-7C31,223.57 GB,4 GB,22466U468705,Intel(R) Core(TM) i5-9600KF CPU @ 3.70GHz
+95,IT Dept,CCARE,Ccare-10,Desktop,Sanjana,Ccare-10,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W800354,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+96,IT Dept,CCARE,Ccare-11,Desktop,Monika,Ccare-11,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23405H807735,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+97,IT Dept,CCARE,Ccare-12,Desktop,Divya,Ccare-12,Windows 11,Dell Inc.,Wyse 7040,223.57 GB,8 GB,23410W800352,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+98,IT Dept,CCARE,Ccare-13,Desktop,Manpreet KIF,Ccare-13,Windows 10,Dell Inc.,OptiPlex 3050,238.47 GB,8 GB,YS2022116598896,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+99,IT Dept,CCARE,NAVJOT,Printer & Desktop,Satwinder,Navjot Kaur,Windows 11,HP,HP ProDesk 400 G3 SFF,238.47 GB,8 GB,AA000000000000002231,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+100,IT Dept,CCARE,Ccare-15,,Jasbeer,Ccare-15,Windows 11,,,,,,
+101,IT Dept,CCARE,Ccare-16,Desktop,Nisha,Ccare-16,Windows 8.1,,,,,,
+102,IT Dept,CCARE,Ccare-17,Desktop,Seema,Ccare-17,Windows 8.1,ASUS,All Series,111.8 GB,4 GB,20397B806186,Intel(R) Pentium(R) CPU G3240 @ 3.10GHz
+103,IT Dept,CCARE,Ccare-18,Desktop,Priyanka Mishra,Ccare-18,Windows 8.1,Dell Inc.,Inspiron 620s,465.76 GB,4 GB,S20BJ9CZ506458 | 194230805456,Intel(R) Pentium(R) CPU G630 @ 2.70GHz
+104,IT Dept,CCARE,Ccare-19,Desktop,Karamvir,Ccare-19,Windows 11,,,,,,
+105,IT Dept,CCARE,Ccare-20,Desktop,Shallu Arora,Ccare-20,Windows 11,,,,,,
+106,IT Dept,CCARE,Ccare-21,Desktop,Sonam,Ccare-21,Windows 11,HP,HP ProDesk 600 G2 DM,476.94 GB,8 GB,AA000000000000001710,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+107,IT Dept,CCARE,Ccare-22,Desktop,Rubina Parkar,Ccare-22,Windows 8.1,LENOVO,10AAA00HIN,238.47 GB,4 GB,2021110801173,Intel(R) Core(TM) i5-4570T CPU @ 2.90GHz
+108,IT Dept,CCARE,Ccare-23,Desktop,Manpreet Kohli,Ccare-23,Windows 11,,,,,,
+109,IT Dept,Accounts,Accounts-1,Desktop,Rajesh,Accounts-1,Windows 11,LENOVO,90SM0089IN,476.94 GB,8 GB,5CD2_E48C_21A0_2572.,12th Gen Intel(R) Core(TM) i5-12400
+110,IT Dept,Accounts,Dharminder,Printer & Desktop,Dharminder,Dharminder,Windows 11,MSI,MS-7A15,465.76 GB,4 GB,2250E6920D53,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+111,IT Dept,Accounts,Shuhamacc,Desktop,Shubham,Shuhamacc,Windows 7 SP1,,,,,,
+112,IT Dept,Accounts,RITU,Desktop,Ritu,RITU,Windows 10,LENOVO,11GLS01J00,931.51 GB,4 GB,W9ANY9KK,Intel(R) Core(TM) i3-10100 CPU @ 3.60GHz
+113,IT Dept,Accounts,Accounts-6,Desktop,Manisha,Accounts-6,Windows 7 SP1,"Gigabyte Technology Co., Ltd.",H110M-S2,111.79 GB,8 GB,194296804064,Intel(R) Pentium(R) CPU G4560 @ 3.50GHz
+114,IT Dept,Accounts,Accounts-7,Desktop,Rajkishore,Accounts-7,Windows 10,MSI,MS-7A15,111.79 GB,8 GB,50026B72822B4F58 | Z8557DXFS,Intel(R) Pentium(R) CPU G4560 @ 3.50GHz
+115,IT Dept,Accounts,Accounts-8,Desktop,Shammi,Accounts-8,Windows 8.1,,,,,,
+116,IT Dept,Accounts,Accounts-9,Desktop,Heena,Accounts-9,Windows 11,MSI,MS-7A15,111.79 GB,4 GB,30040723626,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+117,IT Dept,Accounts,Accounts-10,Printer & Desktop,Jatinder,Accounts-10,Windows 10,,,,,,
+118,IT Dept,Accounts,Accoounts-11,Desktop,Divya,Accounts-11,Windows 11,,,,,,
+119,IT Dept,Accounts,Accounts-12,Desktop,Shivangi,Accounts-12,Windows 10,"Gigabyte Technology Co., Ltd.",H410M H,238.47 GB,8 GB,0000_0000_0100_0000_4CE0_0018_DD8C_9084.,Intel(R) Pentium(R) Gold G6400 CPU @ 4.00GHz
+120,IT Dept,Accounts,Accounts-15,Desktop,Rubina,Accounts-15,Windows 7 SP1,Dell Inc.,Inspiron 620s,111.79 GB,4 GB,,Intel(R) Pentium(R) CPU G630 @ 2.70GHz
+121,IT Dept,Accounts,Accounts-13,Desktop,Dixsha,Accounts-13,Windows 11,,,,,,
+122,IT Dept,Accounts,Accounts-14,Desktop,Navtej,Accounts-14,Windows 10,,,,,,
+123,IT Dept,Accounts,Accounts-16,Desktop,Grover,Acocunts-16,Windows 11,LENOVO,10AXS01A00,238.47 GB,4 GB,GSMC2211982258,Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz
+124,IT Dept,Production,PPC-1,Desktop,Dinesh,PPC-1,Windows 7 SP1,ASUS,All Series,111.8 GB,4 GB,3931343343363038343437302020202020202020 | 2020202020202020202036204637533353355346,Intel(R) Pentium(R) CPU G3250 @ 3.20GHz
+125,IT Dept,Production,PPC-2,Desktop,,PPC-2,Windows 11,Dell Inc.,Inspiron 3880,931.51 GB,4 GB,WD-WCC6Y2LES1NX | 30033004046,Intel(R) Core(TM) i3-10100 CPU @ 3.60GHz
+126,IT Dept,Production,PPC-3,Printer & Desktop,Pooja,PPC-3,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,238.47 GB,4 GB,0000_0000_0000_0000_00E0_4C12_6E15_6F65.,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+127,IT Dept,Production,PPC-4,Desktop,Preeti,PPC-4,Windows 10,"Gigabyte Technology Co., Ltd.",H310M H 2.0,119.24 GB,4 GB,30009128804 | 30DXT37FS,Intel(R) Pentium(R) Gold G5400 CPU @ 3.70GHz
+128,IT Dept,Production,Bio,Printer & Desktop,Sandeep,Bio,Windows 11,HP,HP EliteDesk 800 G2 DM 35W,238.47 GB,16 GB,0000_0000_0000_0000_707C_1812_BDD5_A3FF.,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+129,IT Dept,Production,Bio-1,Desktop,Atinder,Bio-1,Windows 8.1,,,,,,
+130,IT Dept,Production,Bio-2,Desktop,Pooja,Administrator,Windows 11,Dell Inc.,Inspiron 20 Model 3048,465.76 GB,4 GB,W3PC4VCJ | SN210908931794,Intel(R) Pentium(R) CPU G3250T @ 2.80GHz
+131,IT Dept,Production,Sample,Printer & Desktop,Gurpreet,Sample,Windows 11,"Micro-Star International Co., Ltd.",MS-7C89,931.51 GB,8 GB,76D9Z2GFS | 30031516748,Intel(R) Core(TM) i3-10105 CPU @ 3.70GHz
+132,IT Dept,Production,Lab-1,Printer & Desktop,Raman,Lab-1,Windows 10,"Micro-Star International Co., Ltd.",MS-7C13,223.57 GB,8 GB,2044GP441201,Intel(R) Pentium(R) Gold G5400 CPU @ 3.70GHz
+133,IT Dept,Production,Lab-2,Desktop,Rose,Lab-2,Windows 11,Dell Inc.,OptiPlex 3050,238.47 GB,8 GB,0000_0000_0000_0000_707C_1813_B630_FBF5.,Intel(R) Core(TM) i5-6500T CPU @ 2.50GHz
+134,IT Dept,Production,KIF_1,Printer & Desktop,Rajpal,KIF_1,Windows 7 SP1,ASUS,All Series,223.57 GB,4 GB,204601A010EA,Intel(R) Pentium(R) CPU G3240 @ 3.10GHz
+135,IT Dept,Production,Tuffpaulin_1,Printer & Desktop,Raman,Tuffpaulin_1,Windows 7 SP1,DIGILITE,DL-960GM-GS3 FX,465.76 GB,8 GB,202020202020202020202020315339444139524e,AMD Sempron(tm) 145 Processor
+136,IT Dept,Export,Export-7,Desktop,Deblina,Export-7,Windows 11,,,,,,
+137,IT Dept,Export,Export-8,Laptop,Manjinder,Export-8,Windows 11,,,,,,
+138,IT Dept,Export,Export-9,Desktop,,Export-9,Windows 7 SP1,,,,,,
+139,IT Dept,Export,Riya,Printer & Desktop,Riya,Riya,Windows 11,LENOVO,10FY000QUS,238.47 GB,8 GB,YS20220670000744,Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz
+140,IT Dept,Accounts,Sandeep,Printer & Desktop,Sodhi,Sandeep,Windows 11,,,,,,
+141,IT Dept,MD Office,Heena,Laptop,Heena,Heena,Windows 11,,,,,,
+142,IT Dept,IT,Abhi,Desktop,Abhineet,Abhi,WIndows 10,,,,,,
+143,IT Dept,IT,LEO,Desktop,Pawan Kumar,LEO,Windows 11,,,,,,
+144,IT Dept,IT,IT5,Desktop,Vishal Yadav,IT5,Windows 11,Dell Inc.,OptiPlex 3040,111.8 GB,4 GB,174962802635,Intel(R) Core(TM) i5-6500 CPU @ 3.20GHz
+145,IT Dept,IT,Nerds,Desktop,Nagender Kumar,Nerds,Windows 11,"Gigabyte Technology Co., Ltd.",H410M H,465.76 GB,8 GB,13QZGSXPS | E823_8FA6_BF53_0001_001B_448B_457D_ECE1.,Intel(R) Core(TM) i3-10100F CPU @ 3.60GHz
+146,IT Dept,HR,HR-1,Desktop,Raman,Divya,Windows 11,,,,,,
+147,IT Dept,HR,HR-2,Desktop,Divya,HR-Dept,Windows 11,,,,,,
+148,IT Dept,HR,HR-3,Printer & Desktop,Riya,RIYAHR,Windows 11,,,,,,
+149,IT Dept,Quality,Quality,Desktop,Harjeet SIngh,Quality,Windows 11,HP,HP ProDesk 600 G3 DM,238.47 GB,8 GB,0000_0000_0000_0000_0C82_D502_2500_1016.,Intel(R) Core(TM) i5-7500T CPU @ 2.70GHz
+150,IT Dept - Laptop,CE,Sobika Ambardar,Laptop,Sobika Ambardar,Sobika,Windows 10,Dell,Dell Latitude 3420,256.0 GB,8GB,FVLDFG3,i5 11th Gen
+151,IT Dept - Laptop,Production,Rahul,Laptop,Rahul,,Windows 10,Dell,Dell Latitude 3421,256.0 GB,8GB,JSLDFG3,i5 11th Gen
+152,IT Dept - Laptop,Production,Paras Ram,Laptop,Rai Varinder Malhotra,Hi Tech Group,Windows 11,Asus,Asus Vivbook 15,512.0 GB,16GB,T1N0CV02U776018,i3 13th Gen
+153,IT Dept - Laptop,Production,Vijender Singh,Laptop,Vijender Singh,Gmmfg,Windows 11,Asus,Asus Vivbook 15,512.0 GB,16GB,T1N0CV02M880019,i3 13th Gen

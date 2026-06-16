@@ -172,7 +172,14 @@ class DigitalLibraryController extends Controller
                 'file' => 'required_without:youtube_url|nullable|mimes:pdf,mp4,mov,avi|max:51200',
                 'youtube_url' => 'required_without:file|nullable|url',
                 'category' => 'nullable',
-                'overwrite' => 'nullable|boolean'
+                'overwrite' => 'nullable|boolean',
+                'title_yt' => 'required_if:video_category,LEARN',
+                'presenter_id' => 'required_if:video_category,LEARN',
+                'session_date' => 'required_if:video_category,LEARN'
+            ], [
+                'title_yt.required_if' => 'Video Title is required for Learn @ HiTech sessions.',
+                'presenter_id.required_if' => 'Presenter is compulsory for Learn @ HiTech sessions.',
+                'session_date.required_if' => 'Session Date is compulsory for Learn @ HiTech sessions.'
             ]);
 
             if ($validator->fails()) {
@@ -200,8 +207,12 @@ class DigitalLibraryController extends Controller
             $size = $file ? $file->getSize() : 0;
 
             if ($youtubeUrl) {
-                $category = 'Video';
-                $summary = "YouTube Digital Asset: " . $youtubeUrl;
+                $category = $request->video_category ?? 'LEARN';
+                $productName = $request->title_yt ?? $productName;
+                if (!$request->title_yt && $productName === 'Hitech Asset') {
+                    $productName = 'Learn @ HiTech Session';
+                }
+                $summary = "Digital Video Asset: " . $youtubeUrl;
             } elseif ($file) {
                 // R2 Storage
                 $filename = time() . '_' . $file->getClientOriginalName();
@@ -236,6 +247,8 @@ class DigitalLibraryController extends Controller
                 'is_public' => true,
                 'tenant_id' => auth()->user()->tenant_id ?? 1,
                 'created_by_id' => auth()->id() ?? 1,
+                'presenter_id' => $request->presenter_id,
+                'session_date' => $request->session_date,
             ]);
 
             return response()->json(['success' => 'Asset secured to Hitech Vault. Type: ' . $category]);
@@ -422,9 +435,45 @@ USER REQUEST:
     public function access($id)
     {
         $file = LibraryFile::findOrFail($id);
-        
-        // 🔒 SECURITY FIX: Use signed temporary URLs for private R2 storage
+
+        if ($file->youtube_url) {
+            return redirect()->away($file->youtube_url);
+        }
+
+        // SECURITY FIX: Use signed temporary URLs for private R2 storage
         return redirect()->away(Storage::disk('r2')->temporaryUrl($file->file_path, now()->addMinutes(30)));
+    }
+
+    public function previewFrame($id)
+    {
+        $file = LibraryFile::findOrFail($id);
+        
+        $embedUrl = '';
+        $isDrive = false;
+        $driveId = null;
+
+        if ($file->youtube_url) {
+            $embedUrl = $file->youtube_url;
+            if (str_contains($embedUrl, 'youtube.com/watch?v=')) {
+                $embedUrl = str_replace('watch?v=', 'embed/', $embedUrl);
+                $embedUrl = explode('&', $embedUrl)[0];
+            } elseif (str_contains($embedUrl, 'youtu.be/')) {
+                $embedUrl = str_replace('youtu.be/', 'youtube.com/embed/', $embedUrl);
+                $embedUrl = explode('?', $embedUrl)[0];
+            } elseif (str_contains($embedUrl, 'drive.google.com/file/d/')) {
+                preg_match('/\/d\/([a-zA-Z0-9_-]+)/', $embedUrl, $matches);
+                if (!empty($matches[1])) {
+                    $isDrive = true;
+                    $driveId = $matches[1];
+                }
+                $embedUrl = preg_replace('/\/view.*/', '/preview', $embedUrl);
+            }
+        } else {
+            // For hosted files, it's safer to just return a signed temporary url to preview
+            $embedUrl = Storage::disk('r2')->temporaryUrl($file->file_path, now()->addMinutes(30));
+        }
+
+        return view('tenant.digital-library.preview-frame', compact('embedUrl', 'isDrive', 'driveId'));
     }
 
     /**
@@ -481,6 +530,136 @@ USER REQUEST:
             return response()->json(['message' => 'Document and associated assets successfully deleted from the vault.']);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Delete failed: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function markLearnCompleted(Request $request)
+    {
+        $request->validate([
+            'library_file_id' => 'required|exists:library_files,id',
+            'user_id' => 'required|exists:users,id',
+            'points' => 'nullable|numeric|min:1'
+        ]);
+
+        try {
+            $file = LibraryFile::findOrFail($request->library_file_id);
+            if ($file->category !== 'LEARN') {
+                return response()->json(['error' => 'Only Learn @ HiTech sessions can be marked as completed.'], 400);
+            }
+
+            $userId = $request->user_id;
+            $points = $request->points ?? 5;
+
+            // Check if already completed
+            $existing = \App\Models\LearnHitechLog::where('library_file_id', $file->id)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($existing) {
+                return response()->json(['error' => 'This user has already been awarded points for this session.'], 400);
+            }
+
+            \App\Models\LearnHitechLog::create([
+                'library_file_id' => $file->id,
+                'user_id' => $userId,
+                'awarded_by_id' => auth()->id(),
+                'awarded_points' => $points,
+                'tenant_id' => auth()->user()->tenant_id ?? 1
+            ]);
+
+            // Update user's current appraisal scorecard
+            $scorecard = \App\Models\AppraisalScorecard::where('user_id', $userId)
+                ->latest('id')
+                ->first();
+
+            if ($scorecard) {
+                $scorecard->learn_hitech_programs += 1;
+                $scorecard->learn_hitech_score += $points;
+                
+                // Recalculate total score
+                $scorecard->total_score = $scorecard->revenue_score + $scorecard->pipeline_score + 
+                    $scorecard->yoy_growth_score + $scorecard->demos_score + $scorecard->new_customer_score + 
+                    $scorecard->ninety_day_goal_score + $scorecard->sales_pitch_score + $scorecard->learn_hitech_score + 
+                    $scorecard->seminars_score + $scorecard->competitor_insights_score + $scorecard->product_ideas_score + 
+                    $scorecard->cost_of_selling_score + $scorecard->cross_sell_score + $scorecard->market_share_score + 
+                    $scorecard->attrition_penalty;
+                    
+                $scorecard->save();
+            }
+
+            return response()->json(['message' => 'Points successfully awarded to the salesperson.']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to assign completion: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function scorePresenter(Request $request)
+    {
+        $request->validate([
+            'library_file_id' => 'required|exists:library_files,id',
+            'presenter_id' => 'required|exists:users,id',
+            'points' => 'required|numeric|min:1'
+        ]);
+
+        try {
+            $file = LibraryFile::findOrFail($request->library_file_id);
+            if ($file->category !== 'LEARN') {
+                return response()->json(['error' => 'Only Learn @ HiTech sessions can be scored for presenters.'], 400);
+            }
+
+            if ($file->presenter_id != $request->presenter_id) {
+                return response()->json(['error' => 'Presenter ID mismatch.'], 400);
+            }
+
+            $userId = $request->presenter_id;
+            $points = $request->points;
+
+            // Optional: Prevent scoring multiple times by checking logs if needed
+            // But let's assume a presenter could receive additional bonus points or it's a one-time score.
+            $existing = \App\Models\LearnHitechLog::where('library_file_id', $file->id)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($existing) {
+                return response()->json(['error' => 'This presenter has already been scored for this session.'], 400);
+            }
+
+            // Create log entry for presenter score (assuming we can use LearnHitechLog with a flag, or just log it normally)
+            // If the schema doesn't have is_presenter_score, we will just use the log normally
+            // To differentiate, maybe we can add a note if there's a field for it, or just use normal logging.
+            // Since we didn't add a new column, we'll just log it.
+            \App\Models\LearnHitechLog::create([
+                'library_file_id' => $file->id,
+                'user_id' => $userId,
+                'awarded_by_id' => auth()->id(),
+                'awarded_points' => $points,
+                'tenant_id' => auth()->user()->tenant_id ?? 1
+            ]);
+
+            // Update user's current appraisal scorecard
+            $scorecard = \App\Models\AppraisalScorecard::where('user_id', $userId)
+                ->latest('id')
+                ->first();
+
+            if ($scorecard) {
+                // We'll add the points to seminars_score or learn_hitech_score
+                $scorecard->seminars_score += $points;
+                $scorecard->learn_hitech_programs += 1;
+                
+                // Recalculate total score
+                $scorecard->total_score = $scorecard->revenue_score + $scorecard->pipeline_score + 
+                    $scorecard->yoy_growth_score + $scorecard->demos_score + $scorecard->new_customer_score + 
+                    $scorecard->ninety_day_goal_score + $scorecard->sales_pitch_score + $scorecard->learn_hitech_score + 
+                    $scorecard->seminars_score + $scorecard->competitor_insights_score + $scorecard->product_ideas_score + 
+                    $scorecard->cost_of_selling_score + $scorecard->cross_sell_score + $scorecard->market_share_score + 
+                    $scorecard->attrition_penalty;
+                    
+                $scorecard->save();
+            }
+
+            return response()->json(['message' => 'Score successfully awarded to the presenter.']);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to score presenter: ' . $e->getMessage()], 500);
         }
     }
 }

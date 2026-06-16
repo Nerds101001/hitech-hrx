@@ -58,7 +58,7 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link border-0 rounded-pill" data-bs-toggle="tab" href="#youtubeTab" role="tab">
-                        <i class="ti ti-brand-youtube me-1"></i> YouTube Link
+                        <i class="ti ti-brand-youtube me-1"></i> External Video Link
                     </a>
                 </li>
             </ul>
@@ -143,17 +143,43 @@
 
                         <!-- YouTube Tab -->
                         <div class="tab-pane fade" id="youtubeTab" role="tabpanel">
-                            <div class="alert alert-warning d-flex align-items-center mb-4 border-0" style="border-radius: 12px;">
+                            <div class="alert alert-warning d-flex align-items-center mb-2 border-0" style="border-radius: 12px;">
                                 <i class="ti ti-alert-circle me-2"></i>
-                                <small>YouTube videos are stored as links and do not require AI validation.</small>
+                                <small>External video links (YouTube/Google Drive) do not require AI validation.</small>
+                            </div>
+                            <div class="alert alert-danger d-flex align-items-center mb-4 border-0" style="border-radius: 12px;">
+                                <i class="ti ti-brand-google-drive me-2 fs-4"></i>
+                                <small><strong>Google Drive Warning:</strong> Even if set to "Public", Google Drive often blocks embedded videos and forces viewers to log in. For seamless playback, please use the <strong>File Upload</strong> tab to upload your .mp4 files directly!</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small text-uppercase">Document Type / Category</label>
+                                <select name="video_category" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                    <option value="LEARN">Learn @ Hitech</option>
+                                    <option value="Video">General Video</option>
+                                </select>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label fw-bold small text-uppercase">Video Title</label>
                                 <input type="text" name="title_yt" class="form-control border-0 bg-light" placeholder="e.g. Training Session 1" style="border-radius: 12px; height: 45px;">
                             </div>
                             <div class="mb-3">
-                                <label class="form-label fw-bold small text-uppercase">YouTube URL</label>
-                                <input type="url" name="youtube_url" class="form-control border-0 bg-light" placeholder="https://youtube.com/watch?v=..." style="border-radius: 12px; height: 45px;">
+                                <label class="form-label fw-bold small text-uppercase">Video URL (YouTube/Drive)</label>
+                                <input type="url" name="youtube_url" class="form-control border-0 bg-light" placeholder="https://youtube.com/... or https://drive.google.com/..." style="border-radius: 12px; height: 45px;">
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-uppercase">Presenter <span class="text-danger">*</span></label>
+                                    <select name="presenter_id" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                        <option value="">Select Presenter</option>
+                                        @foreach(\App\Models\User::where('status', 'active')->orderBy('first_name')->get() as $u)
+                                            <option value="{{ $u->id }}">{{ $u->first_name }} {{ $u->last_name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small text-uppercase">Session Date <span class="text-danger">*</span></label>
+                                    <input type="date" name="session_date" class="form-control border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -253,6 +279,88 @@
     </div>
 </div>
 
+<!-- Video Player Modal -->
+<div class="modal fade" id="videoPlayerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg bg-dark">
+            <div class="modal-header border-0 pb-0 flex-column align-items-start">
+                <div class="d-flex w-100 justify-content-between align-items-center">
+                    <h5 class="modal-title fw-bold text-white" id="videoPlayerTitle">Video Player</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div id="videoPlayerMeta" class="mt-2 text-white small d-none fw-bold">
+                    <span id="videoPlayerPresenter"><i class="ti ti-user me-1 text-primary"></i> Presenter: <span class="name"></span></span>
+                    <span class="ms-3" id="videoPlayerDate"><i class="ti ti-calendar me-1 text-primary"></i> Date: <span class="date"></span></span>
+                </div>
+            </div>
+            <div class="modal-body p-0 mt-3 position-relative">
+                <div class="position-absolute top-0 start-0 w-100" style="height: 65px; z-index: 10; background: transparent;"></div>
+                <div class="ratio ratio-16x9">
+                    <iframe class="w-100 h-100 border-0" id="videoPlayerIframe" allowfullscreen></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Completion Modal -->
+<div class="modal fade" id="assignCompletionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="assignCompletionTitle">Assign Learn @ HiTech Completion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="assignFileId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Salesperson</label>
+                    <select id="assignUserId" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                        <option value="">Select Salesperson</option>
+                        @foreach(\App\Models\User::where('status', 'active')->orderBy('first_name')->get() as $u)
+                            <option value="{{ $u->id }}">{{ $u->first_name }} {{ $u->last_name }} ({{ $u->employee_code }})</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Award Points</label>
+                    <input type="number" id="assignPoints" class="form-control border-0 bg-light" value="5" min="1" style="border-radius: 12px; height: 45px;">
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Score Presenter Modal -->
+<div class="modal fade" id="scorePresenterModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px;">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold" id="scorePresenterTitle">Score Presenter</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <input type="hidden" id="scoreFileId">
+                <input type="hidden" id="scorePresenterId">
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Presenter Name</label>
+                    <input type="text" id="scorePresenterNameDisplay" class="form-control border-0 bg-light" disabled style="border-radius: 12px; height: 45px;">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Score / Points Awarded</label>
+                    <input type="number" id="scorePresenterPoints" class="form-control border-0 bg-light" value="20" min="1" style="border-radius: 12px; height: 45px;">
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn text-white w-100 rounded-pill py-3 shadow-lg fw-bold" style="background: #f57f17;" onclick="submitScorePresenter()">
+                    <i class="ti ti-star me-2"></i> Award Score to Presenter
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 let taxonomyModal = null;
 
@@ -261,7 +369,13 @@ function toggleBrandSection() {
     const brandSection = document.getElementById('brandSection');
     if (!brandSection) return;
     const independentTypes = ['Test Report', 'Comparison Report', 'MOM'];
-    brandSection.style.opacity = independentTypes.includes(type) ? '0.4' : '1';
+    const hiddenTypes = ['LEARN', 'Video'];
+    if (hiddenTypes.includes(type)) {
+        brandSection.style.display = 'none';
+    } else {
+        brandSection.style.display = 'flex';
+        brandSection.style.opacity = independentTypes.includes(type) ? '0.4' : '1';
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -388,5 +502,258 @@ async function deleteDocument(title) {
 document.getElementById('fileSelector')?.addEventListener('change', function(e) {
     const fileName = e.target.files[0]?.name || 'Click to browse file';
     document.getElementById('fileNameLabel').textContent = fileName;
+});
+
+function playVideo(url, title, presenterName = '', sessionDate = '') {
+    document.getElementById('videoPlayerTitle').innerText = title;
+    
+    const metaContainer = document.getElementById('videoPlayerMeta');
+    if (presenterName || sessionDate) {
+        metaContainer.classList.remove('d-none');
+        document.querySelector('#videoPlayerPresenter .name').innerText = presenterName || 'N/A';
+        document.querySelector('#videoPlayerDate .date').innerText = sessionDate || 'N/A';
+    } else {
+        metaContainer.classList.add('d-none');
+    }
+    
+    let embedUrl = url;
+    
+    // Auto-convert YouTube watch URLs
+    if (url.includes('youtube.com/watch')) {
+        try {
+            const urlParams = new URL(url).searchParams;
+            if (urlParams.get('v')) embedUrl = 'https://www.youtube.com/embed/' + urlParams.get('v');
+        } catch(e) {}
+    }
+    // Auto-convert Google Drive URLs
+    else if (url.includes('drive.google.com/file/d/')) {
+        const matches = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (matches && matches[1]) {
+            // HACK: docs.google.com sometimes bypasses the aggressive login limits of drive.google.com
+            embedUrl = 'https://docs.google.com/file/d/' + matches[1] + '/preview';
+        }
+    }
+    
+    document.getElementById('videoPlayerIframe').src = embedUrl;
+    new bootstrap.Modal(document.getElementById('videoPlayerModal')).show();
+}
+
+document.getElementById('videoPlayerModal')?.addEventListener('hidden.bs.modal', function () {
+    document.getElementById('videoPlayerIframe').src = ''; // Stop video playback
+});
+
+function openAssignCompletionModal(fileId, title) {
+    document.getElementById('assignFileId').value = fileId;
+    document.getElementById('assignCompletionTitle').innerText = 'Assign Completion: ' + title;
+    new bootstrap.Modal(document.getElementById('assignCompletionModal')).show();
+}
+
+async function submitAssignCompletion() {
+    const fileId = document.getElementById('assignFileId').value;
+    const userId = document.getElementById('assignUserId').value;
+    const points = document.getElementById('assignPoints').value;
+    
+    if (!userId) {
+        alert('Please select a salesperson.');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('{{ route("library.markLearnCompleted") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                library_file_id: fileId,
+                user_id: userId,
+                points: points
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed to assign completion');
+        alert(data.message);
+        bootstrap.Modal.getInstance(document.getElementById('assignCompletionModal')).hide();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function openScorePresenterModal(fileId, title, presenterId, presenterName) {
+    document.getElementById('scoreFileId').value = fileId;
+    document.getElementById('scorePresenterId').value = presenterId;
+    document.getElementById('scorePresenterNameDisplay').value = presenterName;
+    document.getElementById('scorePresenterTitle').innerText = 'Score Presenter: ' + title;
+    new bootstrap.Modal(document.getElementById('scorePresenterModal')).show();
+}
+
+async function submitScorePresenter() {
+    const fileId = document.getElementById('scoreFileId').value;
+    const presenterId = document.getElementById('scorePresenterId').value;
+    const points = document.getElementById('scorePresenterPoints').value;
+    
+    if (!points || points < 1) {
+        alert('Please enter a valid score.');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('{{ route("library.scorePresenter") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                library_file_id: fileId,
+                presenter_id: presenterId,
+                points: points
+            })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed to score presenter');
+        alert(data.message);
+        bootstrap.Modal.getInstance(document.getElementById('scorePresenterModal')).hide();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function openAddDocumentModal(category) {
+    const fileTabNav = document.querySelector('a[href="#fileTab"]').parentElement;
+    const youtubeTabNav = document.querySelector('a[href="#youtubeTab"]').parentElement;
+    const fileTabLink = new bootstrap.Tab(document.querySelector('a[href="#fileTab"]'));
+    const youtubeTabLink = new bootstrap.Tab(document.querySelector('a[href="#youtubeTab"]'));
+    
+    const fileDocTypeSelect = document.getElementById('manualDocType');
+    const videoDocTypeSelect = document.querySelector('select[name="video_category"]');
+
+    // Reset visibility
+    fileTabNav.style.display = 'block';
+    youtubeTabNav.style.display = 'block';
+    
+    // Show all options initially
+    Array.from(fileDocTypeSelect.options).forEach(opt => opt.style.display = 'block');
+    Array.from(videoDocTypeSelect.options).forEach(opt => opt.style.display = 'block');
+
+    if (category === 'LEARN' || category === 'Video') {
+        fileTabNav.style.display = 'none';
+        youtubeTabLink.show();
+        
+        // Hide non-matching options
+        Array.from(videoDocTypeSelect.options).forEach(opt => {
+            if (opt.value !== category) opt.style.display = 'none';
+        });
+        videoDocTypeSelect.value = category;
+        
+    } else if (category && category !== 'All Files') {
+        // SDS, TDS, MOM, Test Report, Comparison Report
+        youtubeTabNav.style.display = 'none';
+        fileTabLink.show();
+        
+        // Hide non-matching options
+        Array.from(fileDocTypeSelect.options).forEach(opt => {
+            if (opt.value !== category) opt.style.display = 'none';
+        });
+        
+        // If the category exists in the dropdown, select it
+        if (Array.from(fileDocTypeSelect.options).some(opt => opt.value === category)) {
+            fileDocTypeSelect.value = category;
+        }
+    } else {
+        // Default when no specific category
+        fileTabLink.show();
+    }
+    
+    if (typeof toggleBrandSection === 'function') {
+        toggleBrandSection();
+    }
+
+    new bootstrap.Modal(document.getElementById('uploadModal')).show();
+}
+
+document.getElementById('singleUploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Validation for LEARN
+    const formData = new FormData(this);
+    const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
+    const isYoutube = activeTab === '#youtubeTab';
+    const category = isYoutube ? formData.get('video_category') : formData.get('category');
+    
+    if (category === 'LEARN') {
+        const title = isYoutube ? formData.get('title_yt') : formData.get('name');
+        const presenter = formData.get('presenter_id');
+        const date = formData.get('session_date');
+        
+        if (!title || !presenter || !date) {
+            Swal.fire({
+                title: 'Missing Required Fields',
+                text: 'Video Title, Presenter, and Session Date are compulsory for Learn @ HiTech Sessions.',
+                icon: 'warning',
+                confirmButtonColor: '#00897b',
+                customClass: {
+                    popup: 'rounded-4 shadow-lg border-0',
+                    title: 'fw-bold text-dark',
+                    confirmButton: 'btn btn-primary rounded-pill px-4'
+                }
+            });
+            return;
+        }
+    }
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="ti ti-loader-2 spin me-2"></i> Committing...';
+    submitBtn.disabled = true;
+    
+    try {
+        const response = await fetch(this.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || data.message || 'Failed to upload asset');
+        }
+        
+        // Success Popup
+        Swal.fire({
+            title: 'Success!',
+            text: data.success || 'Asset secured to vault.',
+            icon: 'success',
+            confirmButtonColor: '#00897b',
+            customClass: {
+                popup: 'rounded-4 shadow-lg border-0',
+                title: 'fw-bold text-dark',
+                confirmButton: 'btn btn-primary rounded-pill px-4'
+            }
+        }).then(() => {
+            location.reload();
+        });
+        
+    } catch (err) {
+        Swal.fire({
+            title: 'Error',
+            text: err.message,
+            icon: 'error',
+            confirmButtonColor: '#dc3545',
+            customClass: {
+                popup: 'rounded-4 shadow-lg border-0',
+                title: 'fw-bold text-dark',
+                confirmButton: 'btn btn-danger rounded-pill px-4'
+            }
+        });
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }
 });
 </script>

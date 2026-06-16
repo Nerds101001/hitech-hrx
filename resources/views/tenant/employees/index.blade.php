@@ -96,7 +96,7 @@
                 var $email = full['email'] || '';
                 var initials = $name.match(/\b\w/g) || [];
                 var $initials = ((initials.shift() || '') + (initials.pop() || '')).toUpperCase();
-                var $output = full['profile_picture'] ? `<img src="${full['profile_picture']}" alt="Avatar" class="avatar rounded-circle" />` : `<span class="avatar-initial-hitech">${$initials}</span>`;
+                var $output = full['profile_picture'] ? `<img src="${full['profile_picture']}" alt="Avatar" class="avatar rounded-circle" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';" />` : `<span class="avatar-initial-hitech">${$initials}</span>`;
                 return `
                   <div class="d-flex justify-content-start align-items-center user-name">
                     <div class="avatar-wrapper"><div class="avatar avatar-sm me-3">${$output}</div></div>
@@ -192,13 +192,14 @@
       $('#confirmResetBtn').on('click', function() {
         const user_id = $(this).data('id');
         const btn = $(this);
+        const newPassword = $('#displayResetPassword').text();
         
         btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span> Processing...');
 
         $.ajax({
           type: 'POST',
           url: "{{ route('employees.resetPasswordAjax') }}",
-          data: { id: user_id, _token: '{{ csrf_token() }}' },
+          data: { id: user_id, new_password: newPassword, _token: '{{ csrf_token() }}' },
           success: function (response) {
             $('#hitechResetPasswordModal').modal('hide');
             btn.prop('disabled', false).text('Confirm Reset');
@@ -295,13 +296,11 @@
       <div class="hitech-stat-card dashboard-variant card-teal uniform-card clickable-stat" onclick="applyStatusFilter('all')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-teal" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-group"></i></div>
-          <div class="trend-indicator text-success" style="font-size:0.65rem; padding: 2px 6px;"><i class="bx bx-trending-up me-1"></i>+4%</div>
         </div>
         <div>
           <h3 class="stat-value mb-0">{{ $totalUser }}</h3>
           <div class="d-flex justify-content-between align-items-center">
             <span class="stat-label">Total Team</span>
-            <span class="badge bg-label-success rounded-pill" style="font-size: 0.55rem;">+1 New</span>
           </div>
         </div>
       </div>
@@ -311,13 +310,11 @@
       <div class="hitech-stat-card dashboard-variant card-blue uniform-card clickable-stat" onclick="applyStatusFilter('active')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-blue" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-check-circle"></i></div>
-          <div class="trend-indicator text-primary" style="font-size:0.65rem; padding: 2px 6px;"><i class="bx bx-check-circle me-1"></i>98%</div>
         </div>
         <div>
           <h3 class="stat-value mb-0">{{ $active }}</h3>
           <div class="d-flex justify-content-between align-items-center">
             <span class="stat-label">Active Now</span>
-            <span class="text-danger fw-extrabold" style="font-size: 0.65rem;">0 Absent</span>
           </div>
         </div>
       </div>
@@ -327,7 +324,6 @@
       <div class="hitech-stat-card dashboard-variant card-amber uniform-card clickable-stat" onclick="applyStatusFilter('onboarding')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-amber" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-paper-plane"></i></div>
-          <div class="trend-indicator text-warning" style="font-size:0.65rem; padding: 2px 6px;">{{ $onboardingCount }} Today</div>
         </div>
         <div>
           <h3 class="stat-value mb-0">{{ $onboardingCount }}</h3>
@@ -340,7 +336,6 @@
       <div class="hitech-stat-card dashboard-variant card-red uniform-card clickable-stat" onclick="applyStatusFilter('relieved')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-red" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-user-x"></i></div>
-          <div class="trend-indicator text-danger" style="font-size:0.65rem; padding: 2px 6px;">Archived</div>
         </div>
         <div>
           <h3 class="stat-value mb-0" style="color: #dc2626;">{{ $relieved }}</h3>
@@ -599,7 +594,7 @@
                 </div>
                 <p class="text-muted small px-4">
                     <i class="bx bx-info-circle me-1"></i>
-                    The user will automatically receive a secure email notification with these new credentials.
+                    The user's password will be updated to this new password immediately.
                 </p>
             </div>
             <div class="modal-footer border-0 px-4 pb-4 mt-2">

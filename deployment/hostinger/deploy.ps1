@@ -2,7 +2,7 @@ param(
   [string]$ServerHost  = "89.117.188.10",
   [int]$Port           = 65002,
   [string]$User        = "u989061032",
-  [string]$SshPassword = "Diplo@6589#",
+  [string]$SshPassword = "",  # NEVER hardcode — pass via: .\deploy.ps1 -SshPassword "yourpass"
   [string]$AppRoot     = "/home/u989061032/domains/hitechgroup.in/public_html/hrx",
   [switch]$ImportDatabase,
   [string]$SqlFile     = "",

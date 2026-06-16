@@ -15,37 +15,27 @@ class ModulePermissionsSeeder extends Seeder
      */
     public function run()
     {
-        $json = file_get_contents(resource_path('menu/tenantVerticalMenu.json'));
-        $data = json_decode($json, true);
-        $menus = $data['menu'] ?? $data;
-        
-        $actions = ['view', 'create', 'edit', 'delete'];
+        // Clear cached permissions
+        app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+
+        // Delete all existing permissions to start fresh with the business logic
+        Permission::query()->delete();
+
+        $registry = config('permissions_registry');
         $createdCount = 0;
 
-        foreach ($menus as $menu) {
-            if (isset($menu['name'])) {
-                $slug = Str::slug($menu['name']);
-                foreach ($actions as $action) {
-                    $permName = "{$slug}.{$action}";
-                    Permission::firstOrCreate(['name' => $permName, 'guard_name' => 'web']);
-                    $createdCount++;
-                }
+        if (!$registry) {
+            $this->command->error("Registry not found. Did you clear the config cache?");
+            return;
+        }
 
-                if (isset($menu['submenu'])) {
-                    foreach ($menu['submenu'] as $submenu) {
-                        if (isset($submenu['name'])) {
-                            $subSlug = Str::slug($submenu['name']);
-                            foreach ($actions as $action) {
-                                $subPermName = "{$subSlug}.{$action}";
-                                Permission::firstOrCreate(['name' => $subPermName, 'guard_name' => 'web']);
-                                $createdCount++;
-                            }
-                        }
-                    }
-                }
+        foreach ($registry as $module => $permissions) {
+            foreach ($permissions as $permName => $humanLabel) {
+                Permission::firstOrCreate(['name' => $permName, 'guard_name' => 'web']);
+                $createdCount++;
             }
         }
 
-        $this->command->info("Granular permissions generated successfully! Total evaluated/created: {$createdCount}");
+        $this->command->info("Advanced Business Permissions seeded successfully! Total loaded: {$createdCount}");
     }
 }

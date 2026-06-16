@@ -148,7 +148,7 @@
           @if($nextHoliday)
             <div style="font-size:1.15rem; font-weight:800; color:#fff; margin-bottom:4px;">{{ $nextHoliday->name }}</div>
             <div style="font-size:0.8rem; color:rgba(255,255,255,0.65);">{{ $nextHoliday->date->format('l, F jS') }}</div>
-            <div class="holiday-chip mt-2">In {{ now()->diffInDays($nextHoliday->date) }} Days</div>
+            <div class="holiday-chip mt-2">In {{ (int) now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($nextHoliday->date)->startOfDay()) }} Days</div>
           @else
             <div style="font-size:0.875rem; color:rgba(255,255,255,0.6);">No upcoming holidays scheduled.</div>
           @endif
@@ -168,10 +168,14 @@
             <div class="section-label small fw-bold text-uppercase text-muted mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Upcoming Birthdays</div>
             @forelse($todayBirthdays as $u)
               <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="35" height="45" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
+                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="35" height="35" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
                 <div>
                   <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-danger fw-bold" style="font-size: 0.7rem;">Today 🎉</div>
+                  <div class="small text-danger fw-bold" style="font-size: 0.7rem;">Today 🎉
+                    @if($u->is_wished ?? false)
+                        <span class="badge bg-label-secondary ms-1 p-1" style="font-size: 0.6rem;">WISHED ✓</span>
+                    @endif
+                  </div>
                 </div>
               </div>
             @empty
@@ -179,7 +183,7 @@
 
             @forelse($upcomingBirthdays as $u)
               <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="35" height="45" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
+                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="35" height="35" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
                 <div>
                   <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
                   <div class="small text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }}</div>

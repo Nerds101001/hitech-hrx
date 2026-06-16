@@ -37,6 +37,7 @@ use Exception;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
@@ -76,45 +77,45 @@ class DashboardController extends Controller
 
       // --- Strategic Data for Revamped Dashboard ---
 
-      // 1. Hiring Trends (Last 12 Months) - Optimized with single aggregation queries
+      // 1. Hiring Trends (Last 12 Months) — cached 1 hour (historical data, rarely changes)
+      $tenantId = auth()->user()->tenant_id ?? 'shared';
       $twelveMonthsAgo = Carbon::now()->subMonths(11)->startOfMonth();
-      
-      $hiresByMonth = User::where('date_of_joining', '>=', $twelveMonthsAgo)
-        ->selectRaw("DATE_FORMAT(date_of_joining, '%M %Y') as month, count(*) as count")
-        ->groupBy('month')
-        ->pluck('count', 'month');
 
-      $attritionByMonth = User::where('relieved_at', '>=', $twelveMonthsAgo)
-        ->selectRaw("DATE_FORMAT(relieved_at, '%M %Y') as month, count(*) as count")
-        ->groupBy('month')
-        ->pluck('count', 'month');
+      $hiringTrend = Cache::remember("dashboard.hiring_trend.{$tenantId}", 3600, function () use ($twelveMonthsAgo) {
+          $hiresByMonth = User::where('date_of_joining', '>=', $twelveMonthsAgo)
+              ->selectRaw("DATE_FORMAT(date_of_joining, '%M %Y') as month, count(*) as count")
+              ->groupBy('month')
+              ->pluck('count', 'month');
 
-      $hiringTrend = ['labels' => [], 'hires' => [], 'attrition' => []];
-      for ($i = 11; $i >= 0; $i--) {
-        $monthLabel = Carbon::now()->subMonths($i)->format('F Y');
-        $hiringTrend['labels'][] = Carbon::now()->subMonths($i)->format('M Y');
-        $hiringTrend['hires'][] = $hiresByMonth->get($monthLabel, 0);
-        $hiringTrend['attrition'][] = $attritionByMonth->get($monthLabel, 0);
-      }
+          $attritionByMonth = User::where('relieved_at', '>=', $twelveMonthsAgo)
+              ->selectRaw("DATE_FORMAT(relieved_at, '%M %Y') as month, count(*) as count")
+              ->groupBy('month')
+              ->pluck('count', 'month');
 
-      // 2. Department Distribution — count ONLY currently active employees
-      // Uses direct department_id on users table (not via designation hasManyThrough)
-      $departmentData = Department::select('departments.id', 'departments.name')
-        ->selectRaw('COUNT(users.id) as users_count')
-        ->join('users', function ($join) {
-          $join->on('users.department_id', '=', 'departments.id')
-               ->where('users.status', '=', UserAccountStatus::ACTIVE->value);
-        })
-        ->groupBy('departments.id', 'departments.name')
-        ->orderByDesc('users_count')
-        ->take(10)
-        ->get()
-        ->map(function ($dept) {
-          return [
-            'name' => $dept->name,
-            'count' => $dept->users_count
-          ];
-        });
+          $trend = ['labels' => [], 'hires' => [], 'attrition' => []];
+          for ($i = 11; $i >= 0; $i--) {
+              $monthLabel = Carbon::now()->subMonths($i)->format('F Y');
+              $trend['labels'][]    = Carbon::now()->subMonths($i)->format('M Y');
+              $trend['hires'][]     = $hiresByMonth->get($monthLabel, 0);
+              $trend['attrition'][] = $attritionByMonth->get($monthLabel, 0);
+          }
+          return $trend;
+      });
+
+      // 2. Department Distribution — cached 1 hour (changes only when employees move departments)
+      $departmentData = Cache::remember("dashboard.dept_distribution.{$tenantId}", 3600, function () {
+          return Department::select('departments.id', 'departments.name')
+              ->selectRaw('COUNT(users.id) as users_count')
+              ->join('users', function ($join) {
+                  $join->on('users.department_id', '=', 'departments.id')
+                       ->where('users.status', '=', UserAccountStatus::ACTIVE->value);
+              })
+              ->groupBy('departments.id', 'departments.name')
+              ->orderByDesc('users_count')
+              ->take(10)
+              ->get()
+              ->map(fn($dept) => ['name' => $dept->name, 'count' => $dept->users_count]);
+      });
 
       // 3. Announcements
       $announcements = Announcement::where('is_active', true)
@@ -123,148 +124,178 @@ class DashboardController extends Controller
         ->take(5)
         ->get();
 
-      // 4. Recruitment Pipeline (Top Candidates)
-      $topCandidates = JobApplication::with(['jobs', 'stage'])
-        ->latest()
-        ->take(3)
-        ->get();
+      // 4. Recruitment Pipeline (Top Candidates) — only needed columns, cached 15 min
+      [$topCandidates, $jobStages, $activeJobsCount, $activeJobs, $recentActivities] =
+          Cache::remember("dashboard.recruitment.{$tenantId}", 900, function () {
+              $topCandidates = JobApplication::with(['jobs:id,title', 'stage:id,title,order'])
+                  ->latest()->take(3)->get();
 
-      $jobStages = JobStage::orderBy('order', 'asc')->get();
+              $jobStages = JobStage::select('id', 'title', 'order')->orderBy('order')->get();
 
-      // 5. Active Job Openings - Optimized with withCount
-      $activeJobsCount = Job::where('status', 'active')->count();
-      $activeJobs = Job::where('status', 'active')
-        ->withCount('applications')
-        ->latest()
-        ->take(4)
-        ->get();
+              // 5. Active Job Openings
+              $activeJobsCount = Job::where('status', 'active')->count();
+              $activeJobs = Job::select('id', 'title', 'status', 'created_at')
+                  ->where('status', 'active')
+                  ->withCount('applications')
+                  ->latest()->take(4)->get();
 
-      // 6. Recent Applicant Activity
+              // 6. Recent Applicant Activity
+              $recentActivities = JobApplication::with('jobs:id,title')
+                  ->latest()->take(6)->get();
+
+              return [$topCandidates, $jobStages, $activeJobsCount, $activeJobs, $recentActivities];
+          });
+
       $newApplicantsToday = JobApplication::whereDate('created_at', now())->count();
-      $recentActivities = JobApplication::with('jobs')
 
-        ->latest()
-        ->take(6)
-        ->get();
-
-      // 7. Celebrations (Birthdays & Work Anniversaries - Next 6 Imminent)
+      // 7. Celebrations — cached 1 hour keyed to today's date (changes at midnight only)
       $todayMd = now()->format('md');
+      $todayDate = now()->toDateString();
 
-      $upcomingBirthdays = User::whereNotNull('dob')
-        ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
-        ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
-        ->take(15) // Get broad set
-        ->get()
-        ->unique('id')
-        ->map(function ($u) use ($todayMd) {
-          $u->is_today = (Carbon::parse($u->dob)->format('md') === $todayMd);
-          return $u;
-        });
-      
-      $todayBirthdays = $upcomingBirthdays->filter(fn($u) => $u->is_today);
-      $upcomingBirthdaysFiltered = $upcomingBirthdays->filter(fn($u) => !$u->is_today)->take(2);
+      [$upcomingBirthdays, $upcomingAnniversaries] =
+          Cache::remember("dashboard.celebrations.{$tenantId}.{$todayDate}", 3600, function () use ($todayMd) {
+              $birthdays = User::whereNotNull('dob')
+                  ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
+                  ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
+                  ->take(15)->get()->unique('id')
+                  ->map(function ($u) use ($todayMd) {
+                      $u->is_today = (Carbon::parse($u->dob)->format('md') === $todayMd);
+                      return $u;
+                  });
 
-      $upcomingAnniversaries = User::whereNotNull('date_of_joining')
-        ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
-        ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
-        ->take(15)
-        ->get()
-        ->unique('id')
-        ->map(function ($u) use ($todayMd) {
-          $u->is_today = (Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
-          return $u;
-        });
-      
-      $todayAnniversaries = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
+              $anniversaries = User::whereNotNull('date_of_joining')
+                  ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
+                  ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
+                  ->take(15)->get()->unique('id')
+                  ->map(function ($u) use ($todayMd) {
+                      $u->is_today = (Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
+                      return $u;
+                  });
+
+              return [$birthdays, $anniversaries];
+          });
+
+        $todayBirthdays           = $upcomingBirthdays->filter(fn($u) => $u->is_today);
+
+        // Add is_wished flag for today's birthdays
+        if ($todayBirthdays->isNotEmpty()) {
+            $alreadyWishedUserIds = \Illuminate\Support\Facades\DB::table('notifications')
+                ->where('type', \App\Notifications\BirthdayWishNotification::class)
+                ->whereJsonContains('data->sender_id', auth()->id())
+                ->whereYear('created_at', now()->year)
+                ->pluck('notifiable_id')
+                ->toArray();
+                
+            $todayBirthdays = $todayBirthdays->map(function ($u) use ($alreadyWishedUserIds) {
+                $u->is_wished = in_array($u->id, $alreadyWishedUserIds);
+                return $u;
+            });
+        }
+
+        $upcomingBirthdaysFiltered = $upcomingBirthdays->filter(fn($u) => !$u->is_today)->take(2);
+      $todayAnniversaries           = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
       $upcomingAnniversariesFiltered = $upcomingAnniversaries->filter(fn($u) => !$u->is_today)->take(2);
 
-      // 8. Upcoming Probation Ends (Past the date + Next 30 Days)
-      $upcomingProbationEnds = User::where('status', UserAccountStatus::ACTIVE)
-        ->whereNotNull('probation_end_date')
-        ->whereNull('probation_confirmed_at')
-        ->where('probation_end_date', '<=', now()->addDays(30)->toDateString())
-        ->with('reportingTo')
-        ->orderBy('probation_end_date')
-        ->get();
+      // 8. Upcoming Probation Ends — cached 30 min
+      $upcomingProbationEnds = Cache::remember("dashboard.probation.{$tenantId}", 1800, function () {
+          return User::where('status', UserAccountStatus::ACTIVE)
+              ->whereNotNull('probation_end_date')
+              ->whereNull('probation_confirmed_at')
+              ->where('probation_end_date', '<=', now()->addDays(30)->toDateString())
+              ->with('reportingTo:id,first_name,last_name')
+              ->orderBy('probation_end_date')
+              ->get();
+      });
 
       // Extra Stats for Suggestions
       $absentCount = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
       $newHiresThisMonth = User::whereMonth('date_of_joining', now()->month)->whereYear('date_of_joining', now()->year)->count();
 
-      // 8. Pending Approvals Data (With Detailed Info)
-      $pendingApprovals = collect();
+      // 9. Pending Approvals — fetched fresh (5-min cache so approvals feel responsive)
+      $pendingApprovals = Cache::remember("dashboard.pending_approvals.{$tenantId}", 300, function () {
+          $list = collect();
 
-      LeaveRequest::where('status', 'pending')->with(['user.designation.department', 'leaveType'])->each(function ($r) use ($pendingApprovals) {
-        $days = 1;
-        if ($r->from_date && $r->to_date) {
-          try {
-            $days = Carbon::parse($r->from_date)->diffInDays(Carbon::parse($r->to_date)) + 1;
+          // Fetch all four approval types in one go each (no .each() — avoids chunked N+1)
+          $leavesPending = LeaveRequest::where('status', 'pending')
+              ->with(['user.designation.department', 'leaveType'])
+              ->get();
+          foreach ($leavesPending as $r) {
+              $days = 1;
+              if ($r->from_date && $r->to_date) {
+                  try { $days = Carbon::parse($r->from_date)->diffInDays(Carbon::parse($r->to_date)) + 1; }
+                  catch (\Exception $e) { $days = 1; }
+              }
+              $list->push([
+                  'type'       => 'Leave',
+                  'user'       => $r->user?->name ?? 'N/A',
+                  'emp_id'     => $r->user?->code ?? 'N/A',
+                  'department' => $r->user?->designation?->department?->name ?? 'HR',
+                  'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
+                  'date'       => $r->from_date ? Carbon::parse($r->from_date)->format('M d') : 'N/A',
+                  'raw_date'   => $r->from_date ? Carbon::parse($r->from_date) : now(),
+                  'time_ago'   => $r->created_at ? $r->created_at->diffForHumans() : 'Recently',
+                  'details'    => (optional($r->leaveType)->name ?? 'Request') . ' (' . $days . ' days)',
+                  'days'       => $days,
+                  'id'         => $r->id,
+              ]);
           }
-          catch (\Exception $e) {
-            $days = 1;
+
+          $expensesPending = ExpenseRequest::where('status', 'pending')
+              ->with(['user.designation.department', 'expenseType'])
+              ->get();
+          foreach ($expensesPending as $r) {
+              $list->push([
+                  'type'       => 'Expense',
+                  'user'       => $r->user?->name ?? 'N/A',
+                  'emp_id'     => $r->user?->code ?? 'N/A',
+                  'department' => $r->user?->designation?->department?->name ?? 'Finance',
+                  'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
+                  'date'       => Carbon::parse($r->created_at)->format('M d'),
+                  'raw_date'   => Carbon::parse($r->created_at),
+                  'time_ago'   => $r->created_at->diffForHumans(),
+                  'details'    => 'Amount: ' . number_format($r->amount ?? 0, 2),
+                  'id'         => $r->id,
+              ]);
           }
-        }
-        $pendingApprovals->push([
-          'type' => 'Leave',
-          'user' => $r->user?->name ?? 'N/A',
-          'emp_id' => $r->user?->code ?? 'N/A',
-          'department' => $r->user?->designation?->department?->name ?? 'HR',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
-          'date' => $r->from_date ?Carbon::parse($r->from_date)->format('M d') : 'N/A',
-          'raw_date' => $r->from_date ?Carbon::parse($r->from_date) : now(),
-          'time_ago' => $r->created_at ? $r->created_at->diffForHumans() : 'Recently',
-          'details' => (optional($r->leaveType)->name ?? 'Request') . ' (' . $days . ' days)',
-          'days' => $days,
-          'id' => $r->id
-        ]);
-      });
 
-      ExpenseRequest::where('status', 'pending')->with(['user.designation.department', 'expenseType'])->each(function ($r) use ($pendingApprovals) {
-        $pendingApprovals->push([
-          'type' => 'Expense',
-          'user' => $r->user?->name ?? 'N/A',
-          'emp_id' => $r->user?->code ?? 'N/A',
-          'department' => $r->user?->designation?->department?->name ?? 'Finance',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
-          'date' => Carbon::parse($r->created_at)->format('M d'),
-          'raw_date' => Carbon::parse($r->created_at),
-          'time_ago' => $r->created_at->diffForHumans(),
-          'details' => 'Amount: ' . number_format($r->amount ?? 0, 2),
-          'id' => $r->id
-        ]);
-      });
+          $docsPending = DocumentRequest::where('status', 'pending')
+              ->with(['user.designation.department', 'documentType'])
+              ->get();
+          foreach ($docsPending as $r) {
+              $list->push([
+                  'type'       => 'Document',
+                  'user'       => $r->user?->name ?? 'N/A',
+                  'emp_id'     => $r->user?->code ?? 'N/A',
+                  'department' => $r->user?->designation?->department?->name ?? 'Admin',
+                  'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
+                  'date'       => Carbon::parse($r->created_at)->format('M d'),
+                  'raw_date'   => Carbon::parse($r->created_at),
+                  'time_ago'   => $r->created_at->diffForHumans(),
+                  'details'    => 'Req: ' . (optional($r->documentType)->name ?? 'Document'),
+                  'id'         => $r->id,
+              ]);
+          }
 
-      DocumentRequest::where('status', 'pending')->with(['user.designation.department', 'documentType'])->each(function ($r) use ($pendingApprovals) {
-        $pendingApprovals->push([
-          'type' => 'Document',
-          'user' => $r->user?->name ?? 'N/A',
-          'emp_id' => $r->user?->code ?? 'N/A',
-          'department' => $r->user?->designation?->department?->name ?? 'Admin',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
-          'date' => Carbon::parse($r->created_at)->format('M d'),
-          'raw_date' => Carbon::parse($r->created_at),
-          'time_ago' => $r->created_at->diffForHumans(),
-          'details' => 'Req: ' . (optional($r->documentType)->name ?? 'Document'),
-          'id' => $r->id
-        ]);
-      });
+          $loansPending = LoanRequest::where('status', 'pending')
+              ->with(['user.designation.department'])
+              ->get();
+          foreach ($loansPending as $r) {
+              $list->push([
+                  'type'       => 'Loan',
+                  'user'       => $r->user?->name ?? 'N/A',
+                  'emp_id'     => $r->user?->code ?? 'N/A',
+                  'department' => $r->user?->designation?->department?->name ?? 'Operations',
+                  'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
+                  'date'       => Carbon::parse($r->created_at)->format('M d'),
+                  'raw_date'   => Carbon::parse($r->created_at),
+                  'time_ago'   => $r->created_at->diffForHumans(),
+                  'details'    => 'Amt: ' . number_format($r->amount ?? 0, 2),
+                  'id'         => $r->id,
+              ]);
+          }
 
-      LoanRequest::where('status', 'pending')->with(['user.designation.department'])->each(function ($r) use ($pendingApprovals) {
-        $pendingApprovals->push([
-          'type' => 'Loan',
-          'user' => $r->user?->name ?? 'N/A',
-          'emp_id' => $r->user?->code ?? 'N/A',
-          'department' => $r->user?->designation?->department?->name ?? 'Operations',
-          'avatar' => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
-          'date' => Carbon::parse($r->created_at)->format('M d'),
-          'raw_date' => Carbon::parse($r->created_at),
-          'time_ago' => $r->created_at->diffForHumans(),
-          'details' => 'Amt: ' . number_format($r->amount ?? 0, 2),
-          'id' => $r->id
-        ]);
+          return $list->sortByDesc('raw_date');
       });
-
-      $pendingApprovals = $pendingApprovals->sortByDesc('raw_date');
 
       // Improved Trends Calculation
       $yesterday = now()->subDay()->toDateString();
@@ -361,7 +392,7 @@ class DashboardController extends Controller
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
             'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->get(),
-            'roles' => \Spatie\Permission\Models\Role::all(),
+            'roles' => \Spatie\Permission\Models\Role::get(),
             'designations' => \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get(),
             'managers' => \App\Models\User::withoutGlobalScopes()->whereHas('roles', function($q) {
                 $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
@@ -370,11 +401,11 @@ class DashboardController extends Controller
       }
 
 
-      $roles = \Spatie\Permission\Models\Role::all();
-      $departments = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
-      $teams = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
+      $roles = \Spatie\Permission\Models\Role::get();
+      $departments  = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
+      $teams        = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
       $designations = \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get();
-      $managers = User::withoutGlobalScopes()->whereHas('roles', function($q) {
+      $managers     = User::withoutGlobalScopes()->whereHas('roles', function($q) {
           $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
       })->where('status', UserAccountStatus::ACTIVE)->get();
 
@@ -388,20 +419,6 @@ class DashboardController extends Controller
       if ($managers->isEmpty()) {
           $managers = User::withoutGlobalScopes()->where('status', UserAccountStatus::ACTIVE)->get();
       }
-
-      // Debug logging for onboarding modal data
-      \Illuminate\Support\Facades\Log::info('Onboarding Modal Data Debug', [
-          'roles_count' => $roles->count(),
-          'departments_count' => $departments->count(),
-          'teams_count' => $teams->count(),
-          'designations_count' => $designations->count(),
-          'managers_count' => $managers->count(),
-          'tenant_id' => auth()->user()->tenant_id ?? 'N/A',
-          'roles_sample' => $roles->take(3)->pluck('name')->toArray(),
-          'departments_sample' => $departments->take(3)->pluck('name')->toArray(),
-          'designations_sample' => $designations->take(3)->pluck('name')->toArray(),
-          'managers_sample' => $managers->take(3)->pluck('name')->toArray()
-      ]);
 
       // Return HR dashboard view directly
       return view('tenant.users.dashboard.hr-index', [
@@ -554,9 +571,8 @@ class DashboardController extends Controller
 
     try {
 
-      $todayAttendances = Attendance::with('user.userDevice')
-        ->whereDate('created_at', '>=', now())
-        ->with('user')->with('user.userDevice')
+      $todayAttendances = Attendance::with(['user.userDevice', 'user.designation'])
+        ->whereDate('created_at', today())
         ->get();
 
 
@@ -622,6 +638,26 @@ class DashboardController extends Controller
       ->get();
 
     $teams = [];
+    
+    $allUserIds = $users->pluck('id')->toArray();
+    $allAttendanceLogIds = $attendances->flatMap->attendanceLogs->pluck('id')->toArray();
+
+    $visitCounts = empty($allAttendanceLogIds) ? collect() : Visit::whereIn('attendance_log_id', $allAttendanceLogIds)
+        ->selectRaw('attendance_log_id, count(*) as count')
+        ->groupBy('attendance_log_id')
+        ->pluck('count', 'attendance_log_id');
+
+    $orderCounts = empty($allAttendanceLogIds) ? collect() : ProductOrder::whereIn('attendance_log_id', $allAttendanceLogIds)
+        ->selectRaw('attendance_log_id, count(*) as count')
+        ->groupBy('attendance_log_id')
+        ->pluck('count', 'attendance_log_id');
+
+    $formCounts = empty($allUserIds) ? collect() : FormEntry::whereIn('user_id', $allUserIds)
+        ->whereDate('created_at', now())
+        ->selectRaw('user_id, count(*) as count')
+        ->groupBy('user_id')
+        ->pluck('count', 'user_id');
+
     foreach ($teamsList as $team) {
 
       $user = $users->where('team_id', '=', $team->id);
@@ -645,14 +681,14 @@ class DashboardController extends Controller
 
         $isOnline = $trackingHelper->isUserOnline($device->updated_at);
 
-        $visitsCount = Visit::whereIn('attendance_log_id', $attendanceLogIds)
-          ->count();
-        $ordersCount = ProductOrder::whereIn('attendance_log_id', $attendanceLogIds)
-          ->count();
+        $visitsCount = 0;
+        $ordersCount = 0;
+        foreach($attendanceLogIds as $alId) {
+            $visitsCount += $visitCounts->get($alId, 0);
+            $ordersCount += $orderCounts->get($alId, 0);
+        }
 
-        $formsFilled = FormEntry::where('user_id', $attendance->user_id)
-          ->whereDate('created_at', now())
-          ->count();
+        $formsFilled = $formCounts->get($attendance->user_id, 0);
 
 
         $cardItems[] = [
@@ -718,6 +754,14 @@ class DashboardController extends Controller
       ->get();
 
     $cardItems = [];
+
+    $allAttendanceIds = $attendances->pluck('id')->toArray();
+    $visitCountsAjax = empty($allAttendanceIds) ? collect() : Visit::whereIn('attendance_id', $allAttendanceIds)
+        ->whereDate('created_at', '=', now())
+        ->selectRaw('attendance_id, count(*) as count')
+        ->groupBy('attendance_id')
+        ->pluck('count', 'attendance_id');
+
     foreach ($teamsList as $team) {
 
       $user = $users->where('team_id', '=', $team->id);
@@ -737,9 +781,7 @@ class DashboardController extends Controller
 
         $isOnline = $trackingHelper->isUserOnline($device->updated_at);
 
-        $visitsCount = Visit::where('attendance_id', '=', $attendance->id)
-          ->whereDate('created_at', '=', now())
-          ->count();
+        $visitsCount = $visitCountsAjax->get($attendance->id, 0);
 
         $cardItems[] = [
           'id' => $attendance->user->id,
@@ -767,8 +809,7 @@ class DashboardController extends Controller
 
   public function timelineView()
   {
-    $employees = User::where('status', UserAccountStatus::ACTIVE)
-      ->get();
+    $employees = User::where('status', UserAccountStatus::ACTIVE)->get();
 
     return view('tenant.dashboard.timeline_view', [
       'pageConfigs' => ['contentLayout' => 'wide'],
@@ -1138,35 +1179,36 @@ class DashboardController extends Controller
 
   public function getDepartmentPerformanceAjax()
   {
+    // Two bulk queries instead of one query per user (eliminates N×M×K N+1 problem)
+    $totalByDept = User::where('status', UserAccountStatus::ACTIVE)
+        ->select('department_id', DB::raw('count(*) as total'))
+        ->whereNotNull('department_id')
+        ->groupBy('department_id')
+        ->pluck('total', 'department_id');
+
+    $presentByDept = Attendance::whereDate('check_in_time', today())
+        ->join('users', 'attendances.user_id', '=', 'users.id')
+        ->select('users.department_id', DB::raw('count(*) as present_count'))
+        ->whereNotNull('users.department_id')
+        ->groupBy('users.department_id')
+        ->pluck('present_count', 'department_id');
+
     $departments = Department::where('status', Status::ACTIVE)
-      ->with('designations')
-      ->with('designations.users')
-      ->get();
+        ->select('id', 'name', 'code')
+        ->get();
 
-    $departmentPerformance = [];
-
-    foreach ($departments as $department) {
-      $departmentPerformance[] = [
-        'id' => $department->id,
-        'name' => $department->name,
-        'code' => $department->code,
-        'totalEmployees' => $department->designations->sum(function ($designation) {
-        return $designation->users->count();
-      }),
-        'totalPresentEmployees' => $department->designations->sum(function ($designation) {
-        return $designation->users->sum(function ($user) {
-            return Attendance::where('user_id', $user->id)->whereDate('created_at', now())->count();
-          }
-          );
-        }),
-        'totalAbsentEmployees' => $department->designations->sum(function ($designation) {
-        return $designation->users->count() - $designation->users->sum(function ($user) {
-            return Attendance::where('user_id', $user->id)->whereDate('created_at', now())->count();
-          }
-          );
-        }),
-      ];
-    }
+    $departmentPerformance = $departments->map(function ($dept) use ($totalByDept, $presentByDept) {
+        $total   = $totalByDept->get($dept->id, 0);
+        $present = $presentByDept->get($dept->id, 0);
+        return [
+            'id'                     => $dept->id,
+            'name'                   => $dept->name,
+            'code'                   => $dept->code,
+            'totalEmployees'         => $total,
+            'totalPresentEmployees'  => $present,
+            'totalAbsentEmployees'   => max(0, $total - $present),
+        ];
+    })->values();
 
     return Success::response($departmentPerformance);
   }

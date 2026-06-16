@@ -42,8 +42,11 @@ class SalesVisitController extends Controller
             });
         } else {
             // CC or salesperson
-            $query->where(function ($q) use ($user) {
-                $q->where('salesperson_id', $user->id)
+            $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
+            $allowedSpIds = array_unique(array_merge([$user->id], $mappedIds));
+
+            $query->where(function ($q) use ($user, $allowedSpIds) {
+                $q->whereIn('salesperson_id', $allowedSpIds)
                   ->orWhere('cc_user_id', $user->id);
             });
         }
@@ -73,17 +76,35 @@ class SalesVisitController extends Controller
 
         $visits = $query->paginate(20)->withQueryString();
 
-        // For filter dropdowns
-        $salespersons = User::whereHas('roles', fn($q) => $q->whereIn('name', ['employee', 'manager']))->get();
+        // Filter dropdowns — scope salesperson list to what the current user may see
+        if ($user->hasRole(['admin', 'hr', 'accounts'])) {
+            $salespersons = User::whereHas('roles', fn($q) => $q->whereIn('name', ['employee', 'manager']))->get();
+        } else {
+            // CC agent: only their mapped salespersons; salesperson: only themselves
+            $mappedIds = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
+            $salespersons = $mappedIds->isNotEmpty()
+                ? User::whereIn('id', $mappedIds)->get()
+                : User::where('id', $user->id)->get();
+        }
         $ccAgents = User::whereHas('mappedSalespersons')->orWhereHas('roles', fn($q) => $q->whereIn('name', ['hr', 'accounts', 'admin']))->get();
 
-        // Stats for header
+        // Stats for header — scoped to the same records the user can see
         $today = Carbon::today();
+        $statsQuery = SalesVisit::query();
+        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
+            $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
+            $allowedSpIds = array_unique(array_merge([$user->id], $mappedIds));
+            
+            $statsQuery->where(function ($q) use ($user, $allowedSpIds) {
+                $q->whereIn('salesperson_id', $allowedSpIds)
+                  ->orWhere('cc_user_id', $user->id);
+            });
+        }
         $stats = [
-            'total'     => SalesVisit::count(),
-            'today'     => SalesVisit::whereDate('scheduled_at', $today)->count(),
-            'pending'   => SalesVisit::where('status', 'pending')->count(),
-            'completed' => SalesVisit::where('status', 'completed')->count(),
+            'total'     => (clone $statsQuery)->count(),
+            'today'     => (clone $statsQuery)->whereDate('scheduled_at', $today)->count(),
+            'pending'   => (clone $statsQuery)->where('status', 'pending')->count(),
+            'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
         ];
 
         return view('tenant.sales-visits.index', compact('visits', 'salespersons', 'ccAgents', 'stats'))
@@ -146,9 +167,18 @@ class SalesVisitController extends Controller
 
         $visit = SalesVisit::create([
             ...$validated,
-            'cc_user_id' => Auth::id(),
-            'status'     => 'pending',
-            'tenant_id'  => Auth::user()->tenant_id,
+            'cc_user_id'       => Auth::id(),
+            'status'           => 'pending',
+            'tenant_id'        => Auth::user()->tenant_id,
+            'razor_blade'      => $request->boolean('razor_blade'),
+            'is_new_customer'  => $request->boolean('is_new_customer'),
+            'is_upsell'        => $request->boolean('is_upsell'),
+            'rate_increase'    => $request->boolean('rate_increase'),
+            'is_nif'           => $request->boolean('is_nif'),
+            'training_done'    => $request->boolean('training_done'),
+            'mom_submitted'    => $request->boolean('mom_submitted'),
+            'competitor_insight' => $request->boolean('competitor_insight'),
+            'product_idea'     => $request->boolean('product_idea'),
         ]);
 
         $visit->load(['client', 'salesperson', 'ccAgent']);
@@ -156,7 +186,7 @@ class SalesVisitController extends Controller
         // Send email to salesperson
         try {
             Mail::to($visit->salesperson->email)
-                ->send(new SalesVisitConfirmation($visit, 'salesperson'));
+                ->queue(new SalesVisitConfirmation($visit, 'salesperson'));
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::warning('Sales visit email (salesperson) failed: ' . $e->getMessage());
         }
@@ -165,7 +195,7 @@ class SalesVisitController extends Controller
         if ($visit->client->email) {
             try {
                 Mail::to($visit->client->email)
-                    ->send(new SalesVisitConfirmation($visit, 'client'));
+                    ->queue(new SalesVisitConfirmation($visit, 'client'));
             } catch (\Exception $e) {
                 \Illuminate\Support\Facades\Log::warning('Sales visit email (client) failed: ' . $e->getMessage());
             }
@@ -272,7 +302,7 @@ class SalesVisitController extends Controller
             if ($visit->client && $visit->client->email) {
                 try {
                     Mail::to($visit->client->email)
-                        ->send(new SalesVisitSurveyMail($visit));
+                        ->queue(new SalesVisitSurveyMail($visit));
                 } catch (\Exception $e) {
                     \Illuminate\Support\Facades\Log::warning('Sales visit survey email failed: ' . $e->getMessage());
                 }
@@ -295,15 +325,71 @@ class SalesVisitController extends Controller
     public function clientIndex()
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
-            $hasMappings = CcSalespersonMap::where('cc_user_id', $user->id)->exists();
-            if (!$hasMappings) {
-                abort(403, 'You are not authorized to view the clients database.');
+
+        // Departments allowed to access Client Master
+        // Sales dept IDs: 2 (Sales Department), 26 (Sales)
+        // Customer Care: 10, New Biz: 13
+        $salesDeptIds   = [2, 26];
+        $ccareDeptIds   = [10];
+        $newBizDeptIds  = [13];
+        $allowedDeptIds = array_merge($salesDeptIds, $ccareDeptIds, $newBizDeptIds);
+
+        $isAdmin = $user->hasRole(['admin', 'hr', 'manager', 'accounts']);
+        $inAllowedDept = in_array($user->department_id, $allowedDeptIds);
+
+        // Also allow users who are directly assigned in any CRM mapping role
+        $hasAnyMapping = \App\Models\CrmClientMapping::where('salesperson_id', $user->id)
+            ->orWhere('ccare_id', $user->id)
+            ->orWhere('new_biz_id', $user->id)
+            ->orWhere('billing_id', $user->id)
+            ->orWhere('finance_id', $user->id)
+            ->exists();
+
+        if (!$isAdmin && !$inAllowedDept && !$hasAnyMapping) {
+            abort(403, 'You are not authorized to view the Client Master.');
+        }
+
+        // Build query — admins see all, dept users see only their clients
+        $query = \App\Models\CrmClientMapping::with([
+            'salesperson', 'ccare', 'newBiz', 'billing', 'finance',
+        ]);
+
+        if (!$isAdmin) {
+            // Filter by department role
+            if (in_array($user->department_id, $salesDeptIds)) {
+                // Sales: see clients where they are salesperson
+                $query->where('salesperson_id', $user->id);
+            } elseif (in_array($user->department_id, $ccareDeptIds) || in_array($user->department_id, $newBizDeptIds)) {
+                // CCare & New Biz: see clients for salespersons they are mapped to
+                $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
+                $query->whereIn('salesperson_id', $mappedIds);
+            } else {
+                // Fallback: any role assignment
+                $query->where(function($q) use ($user) {
+                    $q->where('salesperson_id', $user->id)
+                      ->orWhere('ccare_id', $user->id)
+                      ->orWhere('new_biz_id', $user->id)
+                      ->orWhere('billing_id', $user->id)
+                      ->orWhere('finance_id', $user->id);
+                });
             }
         }
 
-        $clients = SalesClient::withCount('visits')->orderBy('name')->paginate(25);
-        return view('tenant.sales-visits.clients', compact('clients'))
+        $mappings = $query->orderBy('crm_company_name')->paginate(25);
+
+        // Employees for dropdowns (admins only — dept users don't need to reassign)
+        $employees = $isAdmin
+            ? \App\Models\User::select('id', 'first_name', 'last_name', 'code')
+                ->where('status', 'active')
+                ->orderBy('first_name')
+                ->get()
+                ->map(fn($u) => [
+                    'id'   => $u->id,
+                    'name' => trim("{$u->first_name} {$u->last_name}") . ($u->code ? " ({$u->code})" : ''),
+                ])
+            : collect();
+
+        return view('tenant.crm-clients.index', compact('mappings', 'employees'))
             ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 

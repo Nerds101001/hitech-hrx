@@ -57,30 +57,11 @@
                   <tr>
                     <th style="width: 280px;">@lang('Module / Feature Set')</th>
                     <th class="text-center" style="width: 120px;">@lang('Select All')</th>
-                    <th class="text-center">@lang('View')</th>
-                    <th class="text-center">@lang('Create')</th>
-                    <th class="text-center">@lang('Edit')</th>
-                    <th class="text-center">@lang('Delete')</th>
+                    <th class="ps-4">@lang('Individual Permissions')</th>
                   </tr>
                 </thead>
                 <tbody>
-                  @php
-                    $modules = [
-                        'Roles & Permissions' => ['roles.view', 'roles.create', 'roles.edit', 'roles.delete', 'admin.roles.manage'],
-                        'Employees' => ['hr.employees.view', 'hr.employees.create', 'hr.employees.edit', 'hr.employees.delete'],
-                        'Attendance' => ['hr.attendance.view', 'hr.attendance.create', 'hr.attendance.edit', 'hr.attendance.delete', 'Manage Attendance'],
-                        'Recruitment' => ['recruitment.view', 'recruitment.create', 'recruitment.edit', 'recruitment.delete', 'recruitment.manage'],
-                        'Payroll' => ['payroll.view', 'payroll.create', 'payroll.edit', 'payroll.delete', 'payroll.manage'],
-                        'Settings' => ['hr.settings.view', 'hr.settings.create', 'hr.settings.edit', 'hr.settings.delete', 'hr.settings.manage'],
-                        'Approvals' => ['hr.approvals.view', 'hr.approvals.create', 'hr.approvals.edit', 'hr.approvals.delete'],
-                        'Assets' => ['assets.view', 'assets.create', 'assets.edit', 'assets.delete', 'assets.index'],
-                        'AI & Library Vault' => ['library.view', 'library.upload', 'bot.chat', 'ai.training.manage'],
-                        'LMS' => ['lms.courses.view', 'lms.courses.create', 'lms.courses.edit', 'lms.courses.delete', 'lms.courses.index'],
-                        'System Logs' => ['auditLogs.view', 'auditLogs.create', 'auditLogs.edit', 'auditLogs.delete', 'auditLogs.index']
-                    ];
-                  @endphp
-
-                  @foreach($modules as $moduleName => $perms)
+                  @foreach($groupedPermissions as $moduleName => $permsArray)
                   <tr>
                     <td>
                         <div class="d-flex align-items-center">
@@ -94,35 +75,20 @@
                             <span class="checkmark"></span>
                         </label>
                     </td>
-                    @foreach(['view', 'create', 'edit', 'delete'] as $action)
-                        <td class="text-center">
-                            @php
-                                $matchedPerm = null;
-                                foreach($perms as $p) {
-                                    if(str_contains(strtolower($p), $action)) {
-                                        $matchedPerm = $p;
-                                        break;
-                                    }
-                                    // Custom mappings for specific modules that don't follow .view, .create, etc.
-                                    if($moduleName == 'AI & Library Vault') {
-                                        if($action == 'create' && str_contains($p, 'upload')) { $matchedPerm = $p; break; }
-                                        if($action == 'edit' && str_contains($p, 'chat')) { $matchedPerm = $p; break; }
-                                        if($action == 'delete' && str_contains($p, 'manage')) { $matchedPerm = $p; break; }
-                                    }
-                                }
-                                if(!$matchedPerm && $action == 'view' && count($perms) > 0) $matchedPerm = $perms[0];
-                            @endphp
-                            @if($matchedPerm)
-                            <label class="hitech-checkbox justify-content-center m-0">
-                                <input class="user-permission-checkbox user-{{ \Illuminate\Support\Str::slug($moduleName) }}-checkbox" 
-                                       type="checkbox" 
-                                       name="permissions[]" 
-                                       value="{{ $matchedPerm }}" />
-                                <span class="checkmark"></span>
-                            </label>
-                            @endif
-                        </td>
-                    @endforeach
+                    <td class="ps-4">
+                        <div class="d-flex flex-wrap gap-4 py-2">
+                            @foreach($permsArray as $permName => $humanLabel)
+                                <label class="hitech-checkbox m-0 d-flex align-items-center">
+                                    <input class="user-permission-checkbox user-{{ \Illuminate\Support\Str::slug($moduleName) }}-checkbox" 
+                                           type="checkbox" 
+                                           name="permissions[]" 
+                                           value="{{ $permName }}" />
+                                    <span class="checkmark me-2"></span>
+                                    <span class="small fw-medium text-muted" style="margin-top: 1px;">{{ $humanLabel }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </td>
                   </tr>
                   @endforeach
                 </tbody>

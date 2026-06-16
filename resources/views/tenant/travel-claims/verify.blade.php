@@ -12,9 +12,16 @@
 <div class="container-fluid animate__animated animate__fadeIn">
     {{-- Hero Header --}}
     <div class="hitech-page-hero mb-6">
-        <div class="hitech-page-hero-text">
-            <h4 class="greeting text-white mb-1">Verify Travel Claims</h4>
-            <p class="sub-text text-white-50 mb-0">Review and verify travel expenses submitted by employees.</p>
+        <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100">
+            <div>
+                <h4 class="greeting text-white mb-1">Verify Travel Claims</h4>
+                <p class="sub-text text-white-50 mb-0">Review and verify travel expenses submitted by employees.</p>
+            </div>
+            <div>
+                <a href="{{ route('travel-claims.create') }}" class="btn btn-hitech btn-light fw-bold shadow-sm rounded-pill px-4" style="color: #005a5a !important;">
+                    <i class="bx bx-plus me-1"></i> New Claim
+                </a>
+            </div>
         </div>
     </div>
 
@@ -22,19 +29,25 @@
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
-    <div class="card shadow-sm border-0">
-        <div class="card-body p-0">
+    <div class="hitech-card shadow-sm border-0">
+        <div class="hitech-card-header">
+            <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a;">
+                <i class="bx bx-list-check fs-4 text-primary" style="color: #0d9488 !important;"></i> 
+                <span>Pending Verifications</span>
+            </h5>
+        </div>
+        <div class="card-body p-4">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light">
+                <table class="table table-flush-spacing align-middle mb-0">
+                    <thead class="bg-light">
                         <tr>
-                            <th>Claim ID</th>
-                            <th>Employee</th>
-                            <th>Month</th>
-                            <th>Company</th>
-                            <th>Net Payable</th>
-                            <th>Status</th>
-                            <th>Action</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Claim ID</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Employee</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Month</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Company</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Net Payable</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Status</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -54,72 +67,10 @@
                                 <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : 'secondary' }}">{{ ucfirst($claim->status) }}</span>
                             </td>
                             <td>
-                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
+                                <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
                             </td>
                         </tr>
 
-                        <!-- Review Modal -->
-                        <div class="modal fade" id="verifyModal{{ $claim->id }}" tabindex="-1">
-                            <div class="modal-dialog modal-xl">
-                                <div class="modal-content">
-                                    <div class="modal-header bg-light">
-                                        <h5 class="modal-title">Review Claim #{{ $claim->id }} - {{ $claim->user->name }}</h5>
-                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body p-0">
-                                        <div class="table-responsive">
-                                            <table class="table table-bordered mb-0" style="font-size: 0.8rem;">
-                                                <thead class="table-light">
-                                                    <tr>
-                                                        <th>Date</th>
-                                                        <th>Locations</th>
-                                                        <th>Party</th>
-                                                        <th>Mode & KMs</th>
-                                                        <th>Conveyance</th>
-                                                        <th>Food</th>
-                                                        <th>Lodging</th>
-                                                        <th>Courier</th>
-                                                        <th>Photo Proof</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    @foreach($claim->items as $item)
-                                                    <tr>
-                                                        <td>{{ $item->date->format('d M') }}</td>
-                                                        <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
-                                                        <td>{{ $item->party_visited }}</td>
-                                                        <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
-                                                        <td>₹{{ $item->conveyance_amount }}
-                                                            @if($item->penalty_applied) <br><span class="text-danger small">No Photo Penalty</span> @endif
-                                                        </td>
-                                                        <td>₹{{ $item->food_allowance }}</td>
-                                                        <td>₹{{ $item->lodging_amount }}</td>
-                                                        <td>₹{{ $item->courier_amount }}</td>
-                                                        <td>
-                                                            @if($item->photo_path)
-                                                                <a href="{{ Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
-                                                            @else
-                                                                <span class="text-muted">N/A</span>
-                                                            @endif
-                                                        </td>
-                                                    </tr>
-                                                    @endforeach
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <form action="{{ route('travel-claims.verify', $claim->id) }}" method="POST">
-                                            @csrf
-                                            <div class="input-group">
-                                                <input type="text" name="remarks" class="form-control" placeholder="Optional remarks...">
-                                                <button type="submit" class="btn btn-success">Mark as Verified</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         @empty
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">No claims pending verification.</td>
@@ -131,4 +82,70 @@
         </div>
     </div>
 </div>
+
+{{-- Render Modals --}}
+@foreach($claims as $claim)
+<!-- Review Modal -->
+<div class="modal fade" id="verifyModal{{ $claim->id }}" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header" style="background: linear-gradient(90deg, #005a5a, #007a7a); padding: 1.5rem;">
+                <h5 class="modal-title text-white fw-bold mb-0">CLAIM #{{ $claim->id }} - {{ strtoupper($claim->user->name) }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered mb-0" style="font-size: 0.8rem;">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date</th>
+                                <th>Locations</th>
+                                <th>Party</th>
+                                <th>Mode & KMs</th>
+                                <th>Conveyance</th>
+                                <th>Food</th>
+                                <th>Lodging</th>
+                                <th>Courier</th>
+                                <th>Photo Proof</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($claim->items as $item)
+                            <tr>
+                                <td>{{ $item->date->format('d M') }}</td>
+                                <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
+                                <td>{{ $item->party_visited }}</td>
+                                <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
+                                <td>₹{{ $item->conveyance_amount }}
+                                    @if($item->penalty_applied) <br><span class="text-danger small">No Photo Penalty</span> @endif
+                                </td>
+                                <td>₹{{ $item->food_allowance }}</td>
+                                <td>₹{{ $item->lodging_amount }}</td>
+                                <td>₹{{ $item->courier_amount }}</td>
+                                <td>
+                                    @if($item->photo_path)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    @else
+                                        <span class="text-muted">N/A</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-top">
+                <form action="{{ route('travel-claims.verify', $claim->id) }}" method="POST" class="w-100 m-0">
+                    @csrf
+                    <div class="d-flex gap-2 justify-content-end">
+                        <input type="text" name="remarks" class="form-control" placeholder="Optional remarks..." style="border-radius: 8px;">
+                        <button type="submit" class="btn btn-success text-nowrap" style="border-radius: 8px;">Mark as Verified</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endforeach
 @endsection

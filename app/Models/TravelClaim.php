@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class TravelClaim extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [];
 
     protected $casts = [
         'verified_at' => 'datetime',

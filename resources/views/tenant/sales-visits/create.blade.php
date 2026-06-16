@@ -321,6 +321,43 @@
               </div>
             </div>
 
+            {{-- KPI FLAGS --}}
+            <div class="sv-section-title"><span>🎯</span> Kingo Bingo KPI Flags</div>
+            <div class="sv-field-group">
+              <p class="text-muted mb-3" style="font-size:0.82rem;">Check all that apply to this visit. These are counted automatically in the Kingo Bingo scorecard.</p>
+              <div class="row g-3">
+                @php
+                $kpiFlags = [
+                    ['name'=>'razor_blade',      'icon'=>'🔪', 'label'=>'Razor Blade Test',           'desc'=>'Product demo / trial run conducted'],
+                    ['name'=>'is_new_customer',  'icon'=>'🆕', 'label'=>'New Customer',                'desc'=>'First-time / newly acquired customer'],
+                    ['name'=>'is_upsell',        'icon'=>'📈', 'label'=>'Upsell / Upgrade / Cross-sell','desc'=>'Higher tier or additional product pitched'],
+                    ['name'=>'rate_increase',    'icon'=>'💸', 'label'=>'Rate Increase',               'desc'=>'Price revision discussed with customer'],
+                    ['name'=>'is_nif',           'icon'=>'🏭', 'label'=>'NIF Client',                  'desc'=>'New customer in funnel / first order'],
+                    ['name'=>'training_done',    'icon'=>'🎓', 'label'=>'Customer Training',           'desc'=>'Training session conducted at customer site'],
+                    ['name'=>'mom_submitted',    'icon'=>'📋', 'label'=>'MOM Report',                  'desc'=>'Minutes of Meeting submitted after visit'],
+                    ['name'=>'competitor_insight','icon'=>'🕵️','label'=>'Competitor Insight',          'desc'=>'Competitor info gathered from customer'],
+                    ['name'=>'product_idea',     'icon'=>'💡', 'label'=>'Product Idea',                'desc'=>'New product feedback / idea captured'],
+                ];
+                @endphp
+                @foreach($kpiFlags as $flag)
+                <div class="col-md-4 col-sm-6">
+                  <label class="d-flex align-items-start gap-2 p-2 rounded" style="cursor:pointer;border:1.5px solid #e0f0ef;background:#f8fffe;transition:border-color .15s;"
+                    onmouseover="this.style.borderColor='#0d7377'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='#e0f0ef'">
+                    <input type="checkbox" name="{{ $flag['name'] }}" value="1" class="form-check-input mt-1 flex-shrink-0"
+                      {{ old($flag['name']) ? 'checked' : '' }}
+                      style="width:18px;height:18px;accent-color:#0d7377;"
+                      onchange="this.closest('label').style.borderColor=this.checked?'#0d7377':'#e0f0ef';this.closest('label').style.background=this.checked?'#e6f7f7':'#f8fffe'">
+                    <span>
+                      <span style="font-size:1rem;">{{ $flag['icon'] }}</span>
+                      <strong style="font-size:0.83rem;color:#1a3252;display:block;">{{ $flag['label'] }}</strong>
+                      <small style="color:#64748b;font-size:0.75rem;">{{ $flag['desc'] }}</small>
+                    </span>
+                  </label>
+                </div>
+                @endforeach
+              </div>
+            </div>
+
             {{-- Submit --}}
             <div class="d-flex justify-content-between align-items-center mt-2">
               <a href="{{ route('sales-visits.index') }}" class="btn btn-outline-secondary" style="border-radius:10px;">

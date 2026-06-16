@@ -34,16 +34,18 @@
           // 1. Addon & Visibility Logic
           if(isset($menu->addon) && !$addonService->isAddonEnabled($menu->addon)) continue;
           
-          $user = auth()->user();
-          $isAdmin = $user->hasRole(['admin', 'super_admin']);
-          $isVisible = $isAdmin; 
-
-          if (!$isVisible) {
-              $hasRole = isset($menu->roles) ? $user->hasRole((array) $menu->roles) : true;
-              $hasPerm = isset($menu->permission) ? $user->can($menu->permission) : true;
+          // 1. Role Check
+          $user = Auth::user();
+          $isAdmin = $user ? $user->hasRole(['admin', 'super_admin']) : false;
+          
+          if ($isAdmin) {
+              $isVisible = true;
+          } else {
+              $hasRole = isset($menu->roles) ? ($user ? $user->hasRole((array) $menu->roles) : false) : true;
+              $hasPerm = isset($menu->permission) ? ($user ? $user->can($menu->permission) : false) : true;
               
-              // Custom restrict Travel & Expense to Sales Dept only for standard employees
-              if (isset($menu->name) && $menu->name === 'Travel & Expense' && $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'accounts', 'manager']) && $user->department !== 'Sales Department') {
+              // Specific Hardcoded Travel & Expense logic
+              if (isset($menu->name) && $menu->name === 'Travel & Expense' && $user && $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'accounts', 'manager']) && $user->department !== 'Sales Department') {
                   $hasRole = false;
               }
 
@@ -99,13 +101,13 @@
                       
                       $subVis = $isAdmin;
                       if (!$subVis) {
-                          $sRole = isset($submenu->roles) ? $user->hasRole((array) $submenu->roles) : true;
-                          $sPerm = isset($submenu->permission) ? $user->can($submenu->permission) : true;
+                          $sRole = isset($submenu->roles) ? ($user ? $user->hasRole((array) $submenu->roles) : false) : true;
+                          $sPerm = isset($submenu->permission) ? ($user ? $user->can($submenu->permission) : false) : true;
                           
                           $granularSubPerm = isset($submenu->name) ? Str::slug($submenu->name) . '.view' : null;
                           $hasSubOverride = false;
                           try {
-                              $hasSubOverride = $granularSubPerm ? $user->hasPermissionTo($granularSubPerm) : false;
+                              $hasSubOverride = $granularSubPerm ? ($user ? $user->hasPermissionTo($granularSubPerm) : false) : false;
                           } catch (\Exception $e) {}
 
                           if ($hasSubOverride || $hasGranularOverride) {

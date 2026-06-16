@@ -3,6 +3,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\tenant\users\UserDashboardController;
 use App\Http\Controllers\tenant\users\UserPayrollController;
+use App\Http\Controllers\tenant\LeaveController;
 
 Route::middleware([
   'web',
@@ -18,6 +19,13 @@ Route::middleware([
      Route::post('/check-impact', [UserDashboardController::class, 'leaveCheckAjax'])->name('check_impact');
      Route::get('/check-attendance', [UserDashboardController::class, 'leaveAttendanceCheck'])->name('check_attendance');
    });
+
+  // Outdoor Duty (employee self-service)
+  Route::prefix('outdoor-duty')->name('outdoor_duty.')->group(function () {
+    Route::get('listAjax', [LeaveController::class, 'outdoorDutyListAjax'])->name('listAjax');
+    Route::post('storeAjax', [LeaveController::class, 'outdoorDutyStoreAjax'])->name('storeAjax');
+    Route::get('getByIdAjax/{id}', [LeaveController::class, 'outdoorDutyGetByIdAjax'])->name('getByIdAjax');
+  });
 
   // Expenses
   Route::prefix('expenses')->name('expenses.')->group(function () {

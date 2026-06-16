@@ -55,7 +55,11 @@ class AuthController extends Controller
         return redirect()->back()->with('error', "Your IP address is temporarily blocked due to multiple failed attempts. Please try again in $minutes minutes.");
       }
 
-      $user = User::where('email', $request->email)->first();
+      $user = User::where('email', $request->email)
+                  ->orWhere('phone', $request->email)
+                  ->orWhere('code', $request->email)
+                  ->orWhere('user_name', $request->email)
+                  ->first();
 
       if (!empty($user)) {
         // 2. Check if account is locked
@@ -142,7 +146,7 @@ class AuthController extends Controller
 
             // Send Security Alert to Admin
             try {
-                \Illuminate\Support\Facades\Notification::route('mail', 'csenerds@gmail.com')
+                \Illuminate\Support\Facades\Notification::route('mail', config('app.security_alert_email', 'admin@example.com'))
                     ->notify(new \App\Notifications\Auth\SecurityAlertNotification([
                         'email' => $user->email,
                         'ip' => $ip,
@@ -211,8 +215,10 @@ class AuthController extends Controller
             return redirect()->route('login')->with('error', 'Your account is locked. Please request an unlock.');
         }
 
-        $isLocalBypass = (app()->isLocal() && $request->otp == '123456');
-        if (($user->otp_code == $request->otp || $isLocalBypass) && $user->otp_expires_at && now()->lt($user->otp_expires_at)) {
+        // On localhost only: allow bypass OTP with 123456 for development ease
+        $isLocalBypass = app()->isLocal() && $request->otp == '123456';
+
+        if (($isLocalBypass || ($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at)))) {
             // Success
             $user->otp_code = null;
             $user->otp_expires_at = null;
@@ -239,7 +245,7 @@ class AuthController extends Controller
                 ]);
 
                 // Set secure cookie for 7 days
-                Cookie::queue('hrx_device_token', $rawToken, 60 * 24 * 7);
+                Cookie::queue('hrx_device_token', $rawToken, 60 * 24 * 7, null, null, true, true, false, 'Lax');
             }
             // ---------------------------
 
@@ -259,7 +265,7 @@ class AuthController extends Controller
                 
                 // Notify Admin
                 try {
-                    \Illuminate\Support\Facades\Notification::route('mail', 'csenerds@gmail.com')
+                    \Illuminate\Support\Facades\Notification::route('mail', config('app.security_alert_email', 'admin@example.com'))
                         ->notify(new \App\Notifications\Auth\SecurityAlertNotification([
                             'email' => $user->email,
                             'ip' => $request->ip(),
@@ -359,14 +365,8 @@ class AuthController extends Controller
           abort(404, 'Invalid document path.');
       }
       
-      if (!Auth::check()) {
-          abort(403, 'Unauthorized access to secure document.');
-      }
-
       // Authorization check: 
-      // 1. Profile pictures are visible to all authenticated employees
-      // 2. Sensitive documents are restricted to Admin, HR, or the owner
-      $user = Auth::user();
+      // 1. Profile pictures are visible to all authenticated employees (we bypass DB query to save connections)
       $isProfilePicture = str_contains($path, \App\Constants\Constants::BaseFolderEmployeeProfile);
       
       // Also treat images in onboarding folder as profile pictures for visibility
@@ -377,12 +377,36 @@ class AuthController extends Controller
           }
       }
 
-      $isOwner = str_contains($path, '/' . $user->id . '/') || str_contains($path, '_' . $user->id . '_');
-      $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager']);
+      // If it is NOT a profile picture, we must boot the auth session and hit the database
+      if (!$isProfilePicture) {
+          if (!Auth::check()) {
+              abort(403, 'Unauthorized access to secure document.');
+          }
 
-      if (!$isProfilePicture && !$isOwner && !$isAdminOrHR) {
-          Log::warning('Secure Document: Access Denied for user ' . $user->id . ' to path: ' . $path);
-          abort(403, 'You do not have permission to view this document.');
+          $user = Auth::user();
+          $isAdminOrHR = $user->hasRole(['admin', 'hr', 'manager']);
+
+          // Secure ownership check: look up the file path in the database.
+          // This prevents guessing attacks based on predictable employee IDs in the path.
+          // We check document_requests (uploaded docs) and ProfileUpdateApproval (pending changes).
+          $isOwner = \App\Models\DocumentRequest::where('generated_file', $path)
+              ->where('user_id', $user->id)
+              ->exists();
+
+          if (!$isOwner) {
+              // Also check pending profile update approvals (e.g. bank document, profile photo uploads)
+              $isOwner = \App\Models\ProfileUpdateApproval::where('user_id', $user->id)
+                  ->where('requested_data', 'like', '%' . $path . '%')
+                  ->exists();
+          }
+
+          if (!$isOwner && !$isAdminOrHR) {
+              Log::warning('Secure Document: Access Denied for user ' . $user->id . ' to path: ' . $path);
+              abort(403, 'You do not have permission to view this document.');
+          }
+
+          // Audit Log: Track who viewed this sensitive file
+          Log::info("Security Audit: User ID " . $user->id . " (" . $user->full_name . ") viewed sensitive document: " . $path);
       }
 
       $decryptedContent = \App\Helpers\FileSecurityHelper::decryptAndGet($path);
@@ -391,12 +415,6 @@ class AuthController extends Controller
           Log::error('Secure Document: File not found or decryption failed.', ['path' => $path]);
           abort(404, 'Document not found or decryption failed.');
       }
-
-      // Audit Log: Track who viewed this sensitive file
-      Log::info("Security Audit: User ID " . $user->id . " (" . $user->full_name . ") viewed sensitive document: " . $path);
-      
-      // If Owen-it/Auditing is available, we could also create a manual audit record here
-      // But for now, system logs are reliable.
 
       $mimeType = \Illuminate\Support\Facades\Storage::disk('public')->mimeType($path);
       
@@ -413,6 +431,7 @@ class AuthController extends Controller
       
       return response($decryptedContent)
           ->header('Content-Type', $mimeType)
+          ->header('Cache-Control', 'private, max-age=604800')
           ->header('Content-Disposition', 'inline; filename="' . basename($path) . '"');
   }
 

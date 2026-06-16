@@ -102,7 +102,7 @@ $customizerHidden = 'customizer-hide';
               <label class="form-label label-username">ADMINISTRATOR EMAIL</label>
               <div class="hitech-input-group">
                 <i class="bx bx-envelope group-icon"></i>
-                <input type="email" class="form-control input-email" name="email"
+                <input type="text" class="form-control input-email" name="email"
                   placeholder="admin@hitechgroup.in" value="{{ old('email') }}" required autofocus>
               </div>
               @error('email')<span class="text-danger small">{{ $message }}</span>@enderror
@@ -175,6 +175,8 @@ $customizerHidden = 'customizer-hide';
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('hr@demo.com', 'admin')">LOGIN AS HR</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('manager@demo.com', 'employee')">LOGIN AS MANAGER</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('emp@demo.com', 'employee')">LOGIN AS EMPLOYEE</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" style="font-size: 10px; border-color: rgba(105, 108, 255, 0.5); color: #fff;" onclick="quickLogin('sales@demo.com', 'employee')">SALES DEMO</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" style="font-size: 10px; border-color: rgba(255, 62, 29, 0.5); color: #fff;" onclick="quickLogin('ccare@demo.com', 'employee')">CCARE DEMO</button>
         <button type="button" class="btn btn-sm btn-outline-success" style="font-size: 10px; border-color: rgba(40, 199, 111, 0.5); color: #fff;" onclick="quickLogin('accounts@demo.com', 'employee', 'password')">LOGIN AS ACCOUNTS</button>
         <button type="button" class="btn btn-sm btn-outline-warning" style="font-size: 10px; border-color: rgba(255, 159, 67, 0.5); color: #fff;" onclick="quickLogin('tester.onboarding@hitech.com', 'employee')">LOGIN AS ONBOARDING</button>
         <button type="button" class="btn btn-sm" style="font-size: 10px; border: 1px solid rgba(168,85,247,0.6); color: #d8b4fe; background: rgba(168,85,247,0.12);" onclick="quickLogin('tester.submitted@hitech.com', 'employee')">📋 SUBMITTED (REVIEW)</button>

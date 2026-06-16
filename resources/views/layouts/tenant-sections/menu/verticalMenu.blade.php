@@ -38,16 +38,24 @@
 
           // 3. Role & Permission Check (Refined)
           $user = auth()->user();
-          $isAdmin = $user->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr']);
+          $isAdmin = $user ? $user->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr']) : false;
           
           if(isset($menu->roles)) {
+              if (!$user) continue;
               $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
               $requiredRoles = array_map('strtolower', (array) $menu->roles);
               if (empty(array_intersect($userRoles, $requiredRoles))) continue;
           }
 
           if(isset($menu->permission) && !$isAdmin) {
-              if (!$user->can($menu->permission)) continue;
+              if (!$user || !$user->can($menu->permission)) continue;
+          }
+
+          if(isset($menu->department)) {
+              if (!$user || !$user->department || stripos($user->department->name, $menu->department) === false) {
+                  // Only skip if they aren't admin/hr and don't match the department
+                  if (!$isAdmin) continue;
+              }
           }
         @endphp
 
@@ -93,13 +101,14 @@
                        if(isset($submenu->standardAddon) && !in_array($submenu->standardAddon, $settings->available_modules ?? [])) continue;
                        
                        if(isset($submenu->roles)) {
+                           if (!$user) continue;
                            $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
                            $requiredRoles = array_map('strtolower', (array) $submenu->roles);
                            if (empty(array_intersect($userRoles, $requiredRoles))) continue;
                        }
 
                        if(isset($submenu->permission) && !$isAdmin) {
-                         if (!$user->can($submenu->permission)) continue;
+                         if (!$user || !$user->can($submenu->permission)) continue;
                      }
                     @endphp
                     <li class="hitech-submenu-item {{ Route::currentRouteName() === $submenu->slug ? 'active' : '' }}">

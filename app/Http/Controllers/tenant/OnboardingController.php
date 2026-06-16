@@ -327,6 +327,14 @@ class OnboardingController extends Controller
         $inputName = $request->input('field');
         $file = $request->file('file');
         
+        // Strict MIME Check based on actual file signature (magic bytes)
+        $mime = $file->getMimeType();
+        $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
+        if (!in_array($mime, $allowedMimes)) {
+            Log::warning('Security: Blocked invalid file upload attempt. Mime detected: ' . $mime);
+            return response()->json(['success' => false, 'message' => 'Invalid file type. Only JPG, PNG, and PDF are allowed.'], 400);
+        }
+        
         // Map input field to file prefix
         $filePrefixes = [
             'photo' => 'profile_photo',

@@ -91,13 +91,13 @@
       <div class="hitech-card-header border-bottom p-0">
           <ul class="nav nav-tabs nav-justified hitech-tabs-sm mb-0" role="tablist">
               <li class="nav-item">
-                  <button class="nav-link py-3" id="log-view-tab" data-bs-toggle="tab" data-bs-target="#listViewTab">
-                      <i class="bx bx-list-ul me-2"></i>Real-time Logs
+                  <button class="nav-link py-3 active" id="registry-view-tab" data-bs-toggle="tab" data-bs-target="#registryViewTab">
+                      <i class="bx bx-grid-alt me-2 text-primary"></i>Monthly Registry
                   </button>
               </li>
               <li class="nav-item">
-                  <button class="nav-link py-3 active" id="registry-view-tab" data-bs-toggle="tab" data-bs-target="#registryViewTab">
-                      <i class="bx bx-grid-alt me-2 text-primary"></i>Monthly Registry
+                  <button class="nav-link py-3" id="log-view-tab" data-bs-toggle="tab" data-bs-target="#listViewTab">
+                      <i class="bx bx-list-ul me-2"></i>Real-time Logs
                   </button>
               </li>
           </ul>
@@ -213,6 +213,16 @@
       </div>
 
       <div class="tab-content border-0 p-0" id="attendanceTabs">
+        {{-- Monthly Registry --}}
+        <div class="tab-pane fade show active" id="registryViewTab" role="tabpanel">
+            <div class="table-responsive p-0" id="registryTableContainer" style="max-height: 70vh; min-height: 400px; overflow: auto;">
+                <div class="text-center p-5">
+                    <div class="spinner-border text-teal" role="status"></div>
+                    <p class="mt-2 text-muted">Building your monthly registry...</p>
+                </div>
+            </div>
+        </div>
+
         {{-- List View --}}
         <div class="tab-pane fade" id="listViewTab" role="tabpanel">
             <div class="card-datatable table-responsive p-0">
@@ -231,16 +241,6 @@
                 </thead>
                 <tbody></tbody>
               </table>
-            </div>
-        </div>
-
-        {{-- Monthly Registry --}}
-        <div class="tab-pane fade show active" id="registryViewTab" role="tabpanel">
-            <div class="table-responsive p-0" id="registryTableContainer" style="max-height: 70vh; min-height: 400px; overflow: auto;">
-                <div class="text-center p-5">
-                    <div class="spinner-border text-teal" role="status"></div>
-                    <p class="mt-2 text-muted">Building your monthly registry...</p>
-                </div>
             </div>
         </div>
       </div>

@@ -86,6 +86,7 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     'gender',
     'profile_picture',
     'alternate_number',
+    'crm_id',
     'cover_picture',
     'email',
     'personal_email',

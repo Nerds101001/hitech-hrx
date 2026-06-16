@@ -1,0 +1,1 @@
+<?php require __DIR__.'/vendor/autoload.php'; \ = require_once __DIR__.'/bootstrap/app.php'; \ = \->make(Illuminate\Contracts\Console\Kernel::class); \->bootstrap(); \ = \App\Models\HRPolicy::latest()->take(3)->get(['id', 'title', 'target_departments'])->toArray(); echo json_encode(\); ?>

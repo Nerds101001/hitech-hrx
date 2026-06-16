@@ -1,4 +1,7 @@
 /node_modules
+/deployment/hostinger/deploy.ps1
+/deployment/hostinger/DEPLOY.bat
+/deployment/hostinger/export-db.ps1
 /vendor
 /.env
 /.env.backup
@@ -28,3 +31,15 @@ vite.config.js.timestamp-*
 /deployment/hostinger/artifacts
 /hrx-release.tar.gz
 /hrx-partial-release.tar.gz
+
+# Local-only debug & patch scripts (must never be deployed to live server)
+/patch_*.php
+/read_excel.php
+/read_excel.py
+/read_excel.js
+
+# Data/import files that may contain real employee data
+/*.csv
+/*.xlsx
+/MAPPING_REPORT*
+/import*.csv

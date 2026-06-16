@@ -1,9 +1,10 @@
 <!-- Add/Update Asset Modal -->
-<div class="modal fade" id="modalAddOrUpdateAsset" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content modal-content-hitech">
-      <div class="modal-header modal-header-hitech">
-        <div class="d-flex align-items-center">
+<form id="assetForm" onsubmit="return false">
+  <div class="modal fade" id="modalAddOrUpdateAsset" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content modal-content-hitech">
+        <div class="modal-header modal-header-hitech">
+          <div class="d-flex align-items-center">
           <div class="modal-icon-header me-3">
             <i class="bx bx-package fs-3"></i>
           </div>
@@ -13,8 +14,7 @@
           <i class="bx bx-x"></i>
         </button>
       </div>
-      <form id="assetForm" onsubmit="return false">
-        <div class="modal-body modal-body-hitech">
+      <div class="modal-body modal-body-hitech">
           <input type="hidden" name="id" id="asset_id">
           <div class="row g-4">
             <div class="col-md-6 mb-2">
@@ -82,7 +82,7 @@
             </div>
             <div class="col-md-6 mb-2">
               <label class="form-label form-label-hitech">Location</label>
-              <input type="text" id="asset_location" name="location" class="form-control form-control-hitech" placeholder="e.g. Dubai Office">
+              <input type="text" id="asset_location" name="location" class="form-control form-control-hitech" placeholder="e.g. Ramgarh Office">
             </div>
 
 
@@ -106,7 +106,7 @@
           <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-hitech px-4 data-submit">Save Asset</button>
         </div>
-      </form>
+      </div>
     </div>
   </div>
-</div>
+</form>

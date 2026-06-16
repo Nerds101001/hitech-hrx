@@ -8,10 +8,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
+use App\Traits\HasApprovals;
 
 class ExpenseRequest extends Model implements AuditableContract
 {
-  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes;
+  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes, HasApprovals;
 
   protected $table = 'expense_requests';
 

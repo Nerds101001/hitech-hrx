@@ -127,10 +127,11 @@
     font-weight: 700;
     letter-spacing: 0.3px;
   }
-  .badge-suggestion { background: #e0e7ff; color: #3730a3; }
+  .badge-idea { background: #e0e7ff; color: #3730a3; }
   .badge-complaint  { background: #fee2e2; color: #991b1b; }
-  .badge-improvement { background: #dcfce7; color: #166534; }
-  .badge-other       { background: #f3f4f6; color: #374151; }
+  .badge-sales { background: #fef3c7; color: #92400e; }
+  .badge-seminar { background: #dcfce7; color: #166534; }
+  .badge-competitor { background: #e0e7ff; color: #4338ca; }
 
   .emp-code-badge {
     background: #f1f5f9;
@@ -185,8 +186,8 @@
   {{-- Hero Header --}}
   <div class="hitech-page-hero mb-6 animate__animated animate__fadeIn">
     <div class="hitech-page-hero-text">
-      <h4 class="greeting">Mind Speak Dashboard</h4>
-      <p class="sub-text">Review suggestions, feedback, complaints, and organizational improvement plans submitted by staff members.</p>
+      <h4 class="greeting">Innovation Hub Dashboard</h4>
+      <p class="sub-text">Review ideas, feedback, complaints, sales pitches, and seminars submitted by staff members.</p>
     </div>
   </div>
 
@@ -209,19 +210,41 @@
           <div class="stat-icon-wrap icon-teal"><i class="bx bx-bulb"></i></div>
         </div>
         <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['suggestion']) }}</h3>
-          <small class="stat-label">Suggestions</small>
+          <h3 class="stat-value mb-1">{{ number_format($stats['idea']) }}</h3>
+          <small class="stat-label">Ideas</small>
         </div>
       </div>
     </div>
     <div class="col-12 col-sm-6 col-md-4 col-lg">
       <div class="hitech-stat-card dashboard-variant card-amber h-100">
         <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-amber"><i class="bx bx-rocket"></i></div>
+          <div class="stat-icon-wrap icon-amber"><i class="bx bx-microphone"></i></div>
         </div>
         <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['improvement']) }}</h3>
-          <small class="stat-label">Improvements</small>
+          <h3 class="stat-value mb-1">{{ number_format($stats['sales_pitch'] ?? 0) }}</h3>
+          <small class="stat-label">Sales Pitches</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-4 col-lg">
+      <div class="hitech-stat-card dashboard-variant card-emerald h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-emerald" style="background: rgba(16, 185, 129, 0.15); color: #10b981;"><i class="bx bx-presentation"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ number_format($stats['seminar'] ?? 0) }}</h3>
+          <small class="stat-label">Seminars</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-sm-6 col-md-4 col-lg">
+      <div class="hitech-stat-card dashboard-variant card-blue h-100">
+        <div class="stat-card-header">
+          <div class="stat-icon-wrap icon-blue" style="background: rgba(67, 56, 202, 0.15); color: #4338ca;"><i class="bx bx-bullseye"></i></div>
+        </div>
+        <div>
+          <h3 class="stat-value mb-1">{{ number_format($stats['competitor_insights'] ?? 0) }}</h3>
+          <small class="stat-label">Competitor Insights</small>
         </div>
       </div>
     </div>
@@ -236,7 +259,7 @@
         </div>
       </div>
     </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
+    <div class="col-12 col-sm-6 col-md-6 col-lg">
       <div class="hitech-stat-card dashboard-variant card-purple h-100">
         <div class="stat-card-header">
           <div class="stat-icon-wrap icon-purple"><i class="bx bx-hide"></i></div>
@@ -257,11 +280,11 @@
           <label class="form-label">Category</label>
           <select name="category" class="form-select">
             <option value="">All Categories</option>
-            <option value="Suggestion" {{ request('category') == 'Suggestion' ? 'selected' : '' }}>Suggestion</option>
+            <option value="Idea" {{ request('category') == 'Idea' ? 'selected' : '' }}>Idea</option>
             <option value="Complaint" {{ request('category') == 'Complaint' ? 'selected' : '' }}>Complaint</option>
-            <option value="Improvement" {{ request('category') == 'Improvement' ? 'selected' : '' }}>Improvement</option>
-            <option value="Feedback" {{ request('category') == 'Feedback' ? 'selected' : '' }}>Feedback</option>
-            <option value="Other" {{ request('category') == 'Other' ? 'selected' : '' }}>Other</option>
+            <option value="Sales Pitch" {{ request('category') == 'Sales Pitch' ? 'selected' : '' }}>Sales Pitch</option>
+            <option value="Seminar" {{ request('category') == 'Seminar' ? 'selected' : '' }}>Seminar</option>
+            <option value="Competitor Insights" {{ request('category') == 'Competitor Insights' ? 'selected' : '' }}>Competitor Insights</option>
           </select>
         </div>
 
@@ -385,9 +408,11 @@
                   <td>
                     @php
                       $badgeClass = match($sub->category) {
-                        'Suggestion' => 'badge-suggestion',
+                        'Idea' => 'badge-idea',
                         'Complaint' => 'badge-complaint',
-                        'Improvement' => 'badge-improvement',
+                        'Sales Pitch' => 'badge-sales',
+                        'Seminar' => 'badge-seminar',
+                        'Competitor Insights' => 'badge-competitor',
                         default => 'badge-other',
                       };
                     @endphp
@@ -450,6 +475,25 @@
                             <div class="p-3 bg-light rounded-3 text-dark" style="white-space: pre-line; line-height: 1.7; font-size: 0.95rem;">
                               {{ $sub->content }}
                             </div>
+                            @if($sub->attachment)
+                              <div class="mt-4">
+                                <span class="d-block text-uppercase text-muted fw-bold mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Attached File / Recording</span>
+                                @php
+                                  $ext = pathinfo($sub->attachment, PATHINFO_EXTENSION);
+                                  $isAudio = in_array(strtolower($ext), ['mp3', 'wav', 'ogg', 'webm', 'm4a', 'mp4']);
+                                @endphp
+                                @if($isAudio)
+                                  <audio controls class="w-100">
+                                    <source src="{{ Storage::url($sub->attachment) }}" type="audio/{{ $ext == 'webm' ? 'webm' : 'mpeg' }}">
+                                    Your browser does not support the audio element.
+                                  </audio>
+                                @else
+                                  <a href="{{ Storage::url($sub->attachment) }}" target="_blank" class="btn btn-outline-primary rounded-pill px-4">
+                                    <i class="bx bx-download me-1"></i> View Attachment
+                                  </a>
+                                @endif
+                              </div>
+                            @endif
                           </div>
                           <div class="modal-footer bg-light" style="border-top: 1px solid #f1f5f9; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
                             <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>

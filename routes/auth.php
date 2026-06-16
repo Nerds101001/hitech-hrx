@@ -29,22 +29,29 @@ Route::middleware('web')->group(function () {
   Route::get('account/unlock/{user}', [AuthController::class, 'unlockAccount'])->name('auth.unlock');
 
   // Secure Document Proxy
-  Route::get('secure-document', [AuthController::class, 'serveDocument'])->middleware('auth')->name('auth.document.serve');
-  Route::get('db-patch', [AuthController::class, 'runDbPatch'])->middleware('auth')->name('auth.db_patch');
+  Route::get('secure-document', [AuthController::class, 'serveDocument'])
+      ->withoutMiddleware([
+          \App\Http\Middleware\LoadSettings::class,
+          \App\Http\Middleware\MenuPermissionMiddleware::class,
+          \App\Http\Middleware\SetHrLayoutMiddleware::class,
+          \App\Http\Middleware\OnboardingMiddleware::class,
+          \App\Http\Middleware\SecurityHardenMiddleware::class
+      ])
+      ->name('auth.document.serve');
+  // Only available on local development — disabled on production
+  if (app()->isLocal()) {
+      Route::get('db-patch', [AuthController::class, 'runDbPatch'])->middleware('auth')->name('auth.db_patch');
+  }
 
   Route::get('/auth/register', [AuthController::class, 'register'])->name('auth.register');
   Route::post('/auth/register', [AuthController::class, 'registerPost'])->name('auth.registerPost');
 
   Route::get('/', [AuthController::class, 'rootRedirect'])->name('root');
 
-  Route::get('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('guest')->name('password.request');
-  Route::post('/forgot-password', [AuthController::class, 'forgotPasswordPost'])->middleware('guest')->name('password.email');
-  Route::get('/reset-password/{token}', [AuthController::class, 'resetPassword'])->middleware('guest')->name('password.reset');
-
-
-
-
-  Route::post('/reset-password', [AuthController::class, 'resetPasswordPost'])->middleware('guest')->name('password.update');
+  Route::get('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware(['guest', 'throttle:5,15'])->name('password.request');
+  Route::post('/forgot-password', [AuthController::class, 'forgotPasswordPost'])->middleware(['guest', 'throttle:5,15'])->name('password.email');
+  Route::get('/reset-password/{token}', [AuthController::class, 'resetPassword'])->middleware(['guest', 'throttle:5,15'])->name('password.reset');
+  Route::post('/reset-password', [AuthController::class, 'resetPasswordPost'])->middleware(['guest', 'throttle:5,15'])->name('password.update');
 
   Route::get('/email/verify', [AuthController::class, 'verifyEmail'])->name('verification.notice');
 

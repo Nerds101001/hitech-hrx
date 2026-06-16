@@ -32,3 +32,31 @@
 
 @include('layouts.sections.toaster')
 
+<script>
+  // Global DataTables Error Handler to suppress ugly browser alerts on Session Timeout (401/419)
+  document.addEventListener('DOMContentLoaded', function() {
+    if (typeof $.fn !== 'undefined' && typeof $.fn.dataTable !== 'undefined') {
+        $.fn.dataTable.ext.errMode = 'none';
+        $(document).on('error.dt', function (e, settings, techNote, message) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Secure Session Expired',
+                    text: 'Your connection has timed out. Please reload to generate a new security token.',
+                    confirmButtonText: '<i class="bx bx-refresh"></i> Reload Session',
+                    customClass: {
+                        confirmButton: 'btn btn-primary shadow-sm'
+                    },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location.reload();
+                    }
+                });
+            } else {
+                console.warn('DataTables Error:', message);
+            }
+        });
+    }
+  });
+</script>

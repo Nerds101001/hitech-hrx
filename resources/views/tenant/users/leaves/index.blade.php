@@ -35,15 +35,15 @@
 
 <div class="container-xxl flex-grow-1 container-p-y">
     
-    {{-- HERO SECTION --}}
-    <div class="leaves-hero animate__animated animate__fadeIn">
-        <div class="leaves-hero-text">
-            <div class="greeting">Leave Management</div>
-            <div class="sub-text">Plan your time off and track request statuses.</div>
-        </div>
-        <div>
-            <button type="button" class="btn btn-hitech" data-bs-toggle="modal" data-bs-target="#hitechApplyLeaveModal">
-                <i class="bx bx-plus-circle me-2"></i> Apply for Leave
+    {{-- PAGE HEADER --}}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="mb-0 fw-bold">Leave Management</h5>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#hitechApplyLeaveModal">
+                <i class="bx bx-plus-circle me-1"></i> Apply for Leave
+            </button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#odApplyModal">
+                <i class="bx bx-map-pin me-1"></i> Apply for Outdoor Duty
             </button>
         </div>
     </div>
@@ -216,6 +216,72 @@
                         @endif
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    {{-- OUTDOOR DUTY HISTORY --}}
+    <div class="hitech-card animate__animated animate__fadeInUp mt-4" style="animation-delay: 0.35s">
+        <div class="hitech-card-header">
+            <h5 class="title"><i class="bx bx-map-pin me-2 text-primary"></i>My Outdoor Duty Requests</h5>
+        </div>
+        <div class="card-body p-0">
+            <div id="odListWrap" class="px-3 py-2">
+                <div class="text-center py-3 text-muted small">
+                    <div class="spinner-border spinner-border-sm text-primary me-2"></div> Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- OD Apply Modal -->
+<div class="modal fade" id="odApplyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bx bx-map-pin me-2"></i>Apply for Outdoor Duty</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+                    <input type="date" id="od_date" class="form-control" min="{{ date('Y-m-d') }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Purpose <span class="text-danger">*</span></label>
+                    <textarea id="od_purpose" class="form-control" rows="3" placeholder="Describe the purpose of outdoor duty..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Location <span class="text-muted small">(optional)</span></label>
+                    <input type="text" id="od_location" class="form-control" placeholder="e.g. Client office, Site visit">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Expected Return Time <span class="text-muted small">(optional)</span></label>
+                    <input type="time" id="od_return_time" class="form-control">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="odSubmitBtn">Submit Request</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- OD View Modal -->
+<div class="modal fade" id="odViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Outdoor Duty Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="odViewBody">
+                <div class="text-center py-3"><div class="spinner-border text-primary"></div></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -705,6 +771,101 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeSelect && typeSelect.value) {
         updateLeaveDetails();
     }
+});
+
+// ── Outdoor Duty ──────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+    const statusMap = { pending: 'warning', approved: 'success', rejected: 'danger', cancelled: 'secondary' };
+
+    function loadOdList() {
+        $.get('{{ route("user.outdoor_duty.listAjax") }}', function(res) {
+            const rows = res.data || [];
+            if (!rows.length) {
+                $('#odListWrap').html('<p class="text-center text-muted small py-3 mb-0">No outdoor duty requests yet.</p>');
+                return;
+            }
+            let html = '<div class="list-group list-group-flush">';
+            rows.slice(0, 10).forEach(function(r) {
+                const color = statusMap[r.status] || 'secondary';
+                html += `<div class="list-group-item px-0 py-2 border-0 border-bottom d-flex align-items-center gap-3">
+                    <div class="flex-shrink-0 text-center" style="min-width:52px">
+                        <div class="fw-bold small">${r.date_fmt}</div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden">
+                        <div class="text-truncate small fw-semibold">${r.purpose}</div>
+                        ${r.location ? `<div class="text-muted" style="font-size:11px">${r.location}</div>` : ''}
+                    </div>
+                    <span class="badge bg-label-${color} text-capitalize flex-shrink-0">${r.status}</span>
+                    <button class="btn btn-sm btn-icon btn-label-info od-view-btn flex-shrink-0" data-id="${r.id}"><i class="bx bx-show"></i></button>
+                </div>`;
+            });
+            html += '</div>';
+            if (rows.length > 10) html += `<p class="text-muted text-center small py-2 mb-0">Showing latest 10 of ${rows.length} requests.</p>`;
+            $('#odListWrap').html(html);
+        }).fail(function() {
+            $('#odListWrap').html('<p class="text-center text-muted small py-3 mb-0">Could not load outdoor duty records.</p>');
+        });
+    }
+
+    loadOdList();
+
+    // Submit OD request
+    $('#odSubmitBtn').on('click', function() {
+        const date    = $('#od_date').val();
+        const purpose = $('#od_purpose').val().trim();
+        if (!date)    { alert('Please select a date.'); return; }
+        if (!purpose) { alert('Please enter the purpose.'); return; }
+
+        $(this).prop('disabled', true).text('Submitting...');
+        $.ajax({
+            url: '{{ route("user.outdoor_duty.storeAjax") }}',
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') },
+            data: {
+                od_date:            date,
+                od_purpose:         purpose,
+                od_location:        $('#od_location').val(),
+                od_expected_return: $('#od_return_time').val()
+            },
+            success: function() {
+                if (typeof toastr !== 'undefined') toastr.success('Outdoor duty request submitted successfully.');
+                else alert('Outdoor duty request submitted successfully.');
+                $('#odApplyModal').modal('hide');
+                $('#od_date, #od_purpose, #od_location, #od_return_time').val('');
+                loadOdList();
+            },
+            error: function(xhr) {
+                const msg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Failed to submit.';
+                if (typeof toastr !== 'undefined') toastr.error(msg);
+                else alert(msg);
+            },
+            complete: function() {
+                $('#odSubmitBtn').prop('disabled', false).text('Submit Request');
+            }
+        });
+    });
+
+    // View OD detail
+    $(document).on('click', '.od-view-btn', function() {
+        const id = $(this).data('id');
+        $('#odViewBody').html('<div class="text-center py-3"><div class="spinner-border text-primary"></div></div>');
+        $('#odViewModal').modal('show');
+        $.get('{{ url("user/outdoor-duty/getByIdAjax") }}/' + id, function(d) {
+            const color = statusMap[d.status] || 'secondary';
+            const badge = `<span class="badge bg-label-${color} text-capitalize">${d.status}</span>`;
+            $('#odViewBody').html(`
+                <div class="row g-3">
+                    <div class="col-6"><strong>Date</strong><br>${d.date}</div>
+                    <div class="col-6"><strong>Status</strong><br>${badge}</div>
+                    <div class="col-12"><strong>Purpose</strong><br>${d.purpose}</div>
+                    ${d.location ? `<div class="col-6"><strong>Location</strong><br>${d.location}</div>` : ''}
+                    ${d.expectedReturnTime ? `<div class="col-6"><strong>Expected Return</strong><br>${d.expectedReturnTime}</div>` : ''}
+                    ${d.approvalNotes ? `<div class="col-12"><strong>Notes</strong><br>${d.approvalNotes}</div>` : ''}
+                    <div class="col-12 text-muted small">Applied on ${d.createdAt}</div>
+                </div>
+            `);
+        });
+    });
 });
 </script>
 @endsection

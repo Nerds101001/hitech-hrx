@@ -15,7 +15,7 @@ class FileSecurityHelper
     public static function encryptAndStore(UploadedFile $file, string $folder, string $prefix, string $disk = 'public'): ?string
     {
         try {
-            $fileName = $prefix . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $fileName = $prefix . '_' . \Illuminate\Support\Str::random(24) . '.' . $file->getClientOriginalExtension();
             $path = $folder . '/' . $fileName;
 
             // Read and encrypt content

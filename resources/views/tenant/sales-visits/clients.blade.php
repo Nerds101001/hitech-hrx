@@ -235,10 +235,13 @@
         <h1 class="sv-hero-title">🏢 Client Master</h1>
         <p class="sv-hero-subtitle">Manage all customers for field visits and trials.</p>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex gap-2 flex-wrap">
         <a href="{{ route('sales-visits.index') }}" class="btn-hero-action" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.35);">
           <i class="bx bx-arrow-back"></i> Back to Visits
         </a>
+        <button type="button" id="syncFromCrmBtn" class="btn-hero-action" style="background:rgba(255,255,255,0.18);color:#fff;border:1.5px solid rgba(255,255,255,0.35);">
+          <i class="bx bx-sync"></i> Sync from CRM
+        </button>
         <button type="button" class="btn-hero-action" data-bs-toggle="modal" data-bs-target="#addClientModal">
           <i class="bx bx-plus"></i> Add Client
         </button>
@@ -310,7 +313,7 @@
                 </td>
                 <td class="text-center">
                   <span class="cl-badge-visits">
-                    {{ $client->sales_visits_count ?? $client->salesVisits()->count() }}
+                    {{ $client->visits_count ?? $client->visits()->count() }}
                   </span>
                 </td>
                 <td class="text-center">
@@ -342,6 +345,73 @@
     </div>
   </div>
 
+</div>
+
+{{-- ===== CRM Sync Progress Modal ===== --}}
+<div class="modal fade" id="syncProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:460px;">
+    <div class="modal-content" style="border-radius:18px;border:none;box-shadow:0 20px 60px rgba(0,0,0,0.18);">
+      <div class="modal-header" style="background:linear-gradient(135deg,#0d7377,#14a085);color:#fff;border-radius:18px 18px 0 0;border:none;padding:1.2rem 1.6rem;">
+        <h5 class="modal-title" style="font-weight:800;font-size:1rem;">
+          <i class="bx bx-sync me-2"></i> Syncing from CRM
+        </h5>
+      </div>
+      <div class="modal-body p-4">
+
+        {{-- Preparing state --}}
+        <div id="syncPreparing" class="text-center">
+          <div class="spinner-border mb-3" style="color:#0d7377;width:2.5rem;height:2.5rem;" role="status"></div>
+          <p class="mb-0" style="font-weight:600;color:#555;">Connecting to CRM…</p>
+        </div>
+
+        {{-- Progress state --}}
+        <div id="syncProgress" style="display:none;">
+          <div class="d-flex justify-content-between mb-1">
+            <span style="font-weight:700;color:#0d7377;font-size:0.9rem;">Syncing clients…</span>
+            <span id="syncPageLabel" style="font-size:0.82rem;color:#888;">Page 0 / 0</span>
+          </div>
+          <div class="progress mb-3" style="height:12px;border-radius:10px;background:#e8f5f5;">
+            <div id="syncProgressBar" class="progress-bar" role="progressbar"
+                 style="width:0%;background:linear-gradient(90deg,#0d7377,#14a085);border-radius:10px;transition:width 0.4s ease;">
+            </div>
+          </div>
+          <div class="row text-center" style="font-size:0.82rem;">
+            <div class="col-4">
+              <div style="font-weight:800;font-size:1.2rem;color:#0d7377;" id="syncCountSynced">0</div>
+              <div style="color:#888;">Synced</div>
+            </div>
+            <div class="col-4">
+              <div style="font-weight:800;font-size:1.2rem;color:#e67e22;" id="syncCountSkipped">0</div>
+              <div style="color:#888;">Skipped</div>
+            </div>
+            <div class="col-4">
+              <div style="font-weight:800;font-size:1.2rem;color:#888;" id="syncCountTotal">—</div>
+              <div style="color:#888;">Total</div>
+            </div>
+          </div>
+          <p class="mt-3 mb-0 text-center" style="font-size:0.8rem;color:#aaa;">Processing in batches of 50. Please keep this window open.</p>
+        </div>
+
+        {{-- Done state --}}
+        <div id="syncDone" style="display:none;text-align:center;">
+          <div style="font-size:3rem;margin-bottom:0.5rem;">✅</div>
+          <p style="font-weight:800;color:#0d7377;font-size:1.05rem;margin-bottom:0.25rem;">Sync Complete!</p>
+          <p id="syncDoneMsg" style="color:#555;font-size:0.88rem;"></p>
+        </div>
+
+        {{-- Error state --}}
+        <div id="syncError" style="display:none;">
+          <div class="alert alert-danger mb-0" style="border-radius:10px;"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer border-0 pt-0" id="syncFooter" style="display:none;">
+        <button type="button" class="btn" style="background:#0d7377;color:#fff;border-radius:9px;font-weight:700;padding:0.55rem 1.4rem;" onclick="location.reload()">
+          <i class="bx bx-refresh me-1"></i> Reload to See Changes
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 {{-- ===== Add Client Modal ===== --}}
@@ -499,6 +569,121 @@ $(function () {
   document.getElementById('addClientModal').addEventListener('hidden.bs.modal', function () {
     $('#addClientForm')[0].reset();
     $('#modalAlert').html('');
+  });
+
+  // ===== Paginated Sync from CRM =====
+  let syncRunning  = false;
+  let syncTotalSynced  = 0;
+  let syncTotalSkipped = 0;
+  let syncTotalPages   = 0;
+  const CSRF = $('meta[name="csrf-token"]').attr('content');
+  const SYNC_PAGE_URL   = '{{ route('crm-clients.sync-page') }}';
+  const SYNC_STATUS_URL = '{{ route('crm-clients.sync-status') }}';
+
+  function resetSyncModal() {
+    syncRunning = syncTotalSynced = syncTotalSkipped = syncTotalPages = 0;
+    $('#syncPreparing').show();
+    $('#syncProgress').hide();
+    $('#syncDone').hide();
+    $('#syncError').hide();
+    $('#syncFooter').hide();
+    $('#syncProgressBar').css('width', '0%');
+    $('#syncPageLabel').text('Page 0 / ?');
+    $('#syncCountSynced').text('0');
+    $('#syncCountSkipped').text('0');
+    $('#syncCountTotal').text('—');
+  }
+
+  function updateProgress(page, totalPages, synced, skipped, total) {
+    const pct = totalPages > 0 ? Math.round((page / totalPages) * 100) : 0;
+    $('#syncProgressBar').css('width', pct + '%');
+    $('#syncPageLabel').text('Batch ' + page + ' / ' + totalPages);
+    $('#syncCountSynced').text(synced);
+    $('#syncCountSkipped').text(skipped);
+    $('#syncCountTotal').text(total > 0 ? total : '—');
+  }
+
+  function syncNextPage(page) {
+    if (!syncRunning) return;
+
+    $.ajax({
+      url:     SYNC_PAGE_URL,
+      method:  'POST',
+      data:    { _token: CSRF, page: page },
+      timeout: 120000,
+      success: function(res) {
+        if (!res.success) {
+          showSyncError(res.message || 'Unexpected error on page ' + page);
+          return;
+        }
+
+        syncTotalSynced  += res.synced  || 0;
+        syncTotalSkipped += res.skipped || 0;
+        if (res.total_pages) syncTotalPages = res.total_pages;
+
+        // Show progress section on first data
+        if (page === 1) {
+          $('#syncPreparing').hide();
+          $('#syncProgress').show();
+        }
+
+        updateProgress(page, syncTotalPages, syncTotalSynced, syncTotalSkipped, res.total || 0);
+
+        if (res.done || !res.total_pages) {
+          // All pages done
+          syncRunning = false;
+          $('#syncProgress').hide();
+          $('#syncDoneMsg').text(
+            'Synced ' + syncTotalSynced + ' clients across ' + page + ' batches. ' +
+            (syncTotalSkipped > 0 ? syncTotalSkipped + ' had no company code and were skipped.' : '')
+          );
+          $('#syncDone').show();
+          $('#syncFooter').show();
+        } else {
+          // Fetch next page
+          syncNextPage(page + 1);
+        }
+      },
+      error: function(xhr) {
+        const msg = xhr.responseJSON?.message || xhr.responseJSON?.error || 'Request failed on page ' + page + '. Check server logs.';
+        showSyncError(msg);
+      }
+    });
+  }
+
+  function showSyncError(msg) {
+    syncRunning = false;
+    $('#syncPreparing').hide();
+    $('#syncProgress').hide();
+    $('#syncError').show().find('.alert').html('<i class="bx bx-error-circle me-2"></i>' + msg);
+    $('#syncFooter').show();
+  }
+
+  $('#syncFromCrmBtn').on('click', function () {
+    resetSyncModal();
+    syncRunning = true;
+    const modal = new bootstrap.Modal(document.getElementById('syncProgressModal'));
+    modal.show();
+
+    // Step 1: Get total count first so we can show accurate progress
+    $.ajax({
+      url:     SYNC_STATUS_URL,
+      method:  'GET',
+      timeout: 30000,
+      success: function(res) {
+        if (res.success && res.total_pages) {
+          syncTotalPages = res.total_pages;
+          $('#syncCountTotal').text(res.total);
+          $('#syncPageLabel').text('Batch 0 / ' + syncTotalPages);
+        }
+        // Start syncing from page 1
+        syncNextPage(1);
+      },
+      error: function() {
+        // Can't get total — start anyway, progress will be approximate
+        syncNextPage(1);
+      }
+    });
   });
 });
 </script>

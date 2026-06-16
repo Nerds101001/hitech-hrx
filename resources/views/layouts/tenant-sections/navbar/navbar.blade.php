@@ -25,6 +25,11 @@
               <span class="bullet me-2">/</span>
               <h5 class="mb-0 fw-bold text-dark">@yield('title', 'Dashboard')</h5>
             </div>
+            
+            <!-- Custom Navbar Actions per page -->
+            <div class="ms-3 d-flex align-items-center">
+                @yield('navbar-actions')
+            </div>
 
             <ul class="navbar-nav flex-row align-items-center ms-auto">
               <!-- Search icon moved to right -->

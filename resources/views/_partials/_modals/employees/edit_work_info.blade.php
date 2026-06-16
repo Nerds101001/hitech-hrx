@@ -153,10 +153,16 @@
                 </select>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-sm-6">
                 <label class="form-label-hitech" for="biometric_id">@lang('Biometric ID (Machine ID)')</label>
                 <input type="text" name="biometric_id" id="biometric_id" class="form-control form-control-hitech" 
                        value="{{ $user->biometric_id }}" placeholder="e.g. 101" />
+            </div>
+
+            <div class="col-sm-6">
+                <label class="form-label-hitech" for="crm_id">@lang('CRM Employee ID')</label>
+                <input type="number" name="crm_id" id="crm_id" class="form-control form-control-hitech" 
+                       value="{{ $user->crm_id }}" placeholder="e.g. 1115" />
             </div>
 
             <div class="col-md-6">
