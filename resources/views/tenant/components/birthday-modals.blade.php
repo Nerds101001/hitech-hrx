@@ -140,7 +140,20 @@
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <script>
+function _he(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Listen for modal close to prevent re-showing today
+    var bdayModalEl = document.getElementById('colleagueBirthdayModal');
+    if (bdayModalEl) {
+        bdayModalEl.addEventListener('hidden.bs.modal', function (event) {
+            localStorage.setItem('bday_popup_closed_date', new Date().toDateString());
+        });
+    }
+
+    // Automatically check for birthdays today
     checkBirthdays();
     
     // If using Echo/Reverb, listen for BirthdayWishNotification
@@ -166,12 +179,17 @@ function checkBirthdays() {
             // Wait a few seconds before showing colleague birthdays if any
             if (response.colleagues && response.colleagues.length > 0) {
                 let hasUnwished = response.colleagues.some(c => !c.is_wished);
-                if (hasUnwished) {
+                let alreadyClosedToday = localStorage.getItem('bday_popup_closed_date') === new Date().toDateString();
+
+                if (hasUnwished && !alreadyClosedToday) {
                     setTimeout(() => {
                         if (!$('#myBirthdayModal').is(':visible')) {
-                            showColleaguesBirthdays(response.colleagues);
+                            showColleaguesBirthdays(response.colleagues, true);
                         }
                     }, 2000);
+                } else {
+                    // Populate silently for manual open
+                    showColleaguesBirthdays(response.colleagues, false);
                 }
             }
         }
@@ -187,15 +205,15 @@ function showMyBirthdayCelebration(wishes) {
         let card = `
             <div class="wish-card">
                 <div class="wish-card-header">
-                    <img src="${avatar}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
-                    <div class="wish-card-name">${wish.sender_name}</div>
+                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                    <div class="wish-card-name">${_he(wish.sender_name)}</div>
                 </div>
-                <div class="wish-message">"${wish.message}"</div>
+                <div class="wish-message">"${_he(wish.message)}"</div>
             </div>
         `;
         container.innerHTML += card;
     });
-    
+
     var myModal = new bootstrap.Modal(document.getElementById('myBirthdayModal'));
     myModal.show();
     
@@ -208,10 +226,10 @@ function showRealtimeWish(wish) {
     let card = `
         <div class="wish-card">
             <div class="wish-card-header">
-                <img src="${avatar}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
-                <div class="wish-card-name">${wish.sender_name}</div>
+                <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                <div class="wish-card-name">${_he(wish.sender_name)}</div>
             </div>
-            <div class="wish-message">"${wish.message}"</div>
+            <div class="wish-message">"${_he(wish.message)}"</div>
         </div>
     `;
     
@@ -227,22 +245,22 @@ function showRealtimeWish(wish) {
     }
 }
 
-function showColleaguesBirthdays(colleagues) {
+function showColleaguesBirthdays(colleagues, showModal = true) {
     let container = document.getElementById('colleaguesListContainer');
     container.innerHTML = '';
     
     colleagues.forEach(user => {
         let avatar = user.profile_picture ? '/storage/' + user.profile_picture : '{{ asset("assets/img/avatars/1.png") }}';
-        let buttonHtml = user.is_wished 
+        let buttonHtml = user.is_wished
             ? `<button class="btn btn-sm btn-outline-secondary rounded-pill" disabled>Wished <i class="bx bx-check ms-1"></i></button>`
-            : `<button class="btn btn-sm btn-outline-danger rounded-pill" onclick="openSendWishModal(${user.id}, '${user.first_name}')">Wish <i class="bx bx-send ms-1"></i></button>`;
+            : `<button class="btn btn-sm btn-outline-danger rounded-pill" data-uid="${_he(user.id)}" data-uname="${_he(user.first_name)}" onclick="openSendWishModal(this.dataset.uid, this.dataset.uname)">Wish <i class="bx bx-send ms-1"></i></button>`;
 
         let card = `
             <div class="colleague-bday-card d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-3">
-                    <img src="${avatar}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
                     <div>
-                        <h6 class="mb-0 fw-bold">${user.first_name} ${user.last_name}</h6>
+                        <h6 class="mb-0 fw-bold">${_he(user.first_name)} ${_he(user.last_name)}</h6>
                         <small class="text-muted">Birthday Today!</small>
                     </div>
                 </div>
@@ -252,8 +270,10 @@ function showColleaguesBirthdays(colleagues) {
         container.innerHTML += card;
     });
     
-    var myModal = new bootstrap.Modal(document.getElementById('colleagueBirthdayModal'));
-    myModal.show();
+    if (showModal) {
+        var myModal = new bootstrap.Modal(document.getElementById('colleagueBirthdayModal'));
+        myModal.show();
+    }
 }
 
 function openSendWishModal(userId, userName) {

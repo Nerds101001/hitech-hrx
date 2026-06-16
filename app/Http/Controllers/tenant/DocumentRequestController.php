@@ -40,7 +40,12 @@ class DocumentRequestController extends Controller
     public function getListAjax(Request $request)
     {
         try {
+            $user = auth()->user();
+            $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
             $query = DocumentRequest::with(['user', 'documentType']);
+            if (!$isAdmin) {
+                $query->where('user_id', $user->id);
+            }
 
             if ($request->has('statusFilter') && !in_array($request->statusFilter, ['All', ''])) {
                 $query->where('status', $request->statusFilter);
@@ -100,6 +105,11 @@ class DocumentRequestController extends Controller
 
         try {
             $docRequest = DocumentRequest::findOrFail($request->id);
+            
+            if ($docRequest->user_id === Auth::id() && in_array($request->status, ['Approved', 'Rejected'])) {
+                return Error::response('You cannot approve or reject your own document request.');
+            }
+
             $docRequest->status = $request->status;
             $docRequest->admin_remarks = $request->admin_remarks;
             $docRequest->action_taken_by_id = Auth::id();

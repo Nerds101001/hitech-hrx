@@ -38,6 +38,10 @@ class ApprovalController extends Controller
         $approval = ProfileUpdateApproval::findOrFail($id);
         $user = auth()->user();
         
+        if ($approval->user_id === $user->id) {
+            return redirect()->back()->with('error', 'You cannot approve your own profile update.');
+        }
+        
         if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
             if ($approval->user->reporting_to_id !== $user->id) {
                 return redirect()->back()->with('error', 'Unauthorized: You can only approve profile updates for your direct reports.');
@@ -81,6 +85,10 @@ class ApprovalController extends Controller
         $approval = ProfileUpdateApproval::findOrFail($id);
         $user = auth()->user();
 
+        if ($approval->user_id === $user->id) {
+            return redirect()->back()->with('error', 'You cannot reject your own profile update.');
+        }
+
         if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
             if ($approval->user->reporting_to_id !== $user->id) {
                 return redirect()->back()->with('error', 'Unauthorized: You can only reject profile updates for your direct reports.');
@@ -102,6 +110,10 @@ class ApprovalController extends Controller
         $docRequest = DocumentRequest::findOrFail($id);
         $user = auth()->user();
 
+        if ($docRequest->user_id === $user->id) {
+            return redirect()->back()->with('error', 'You cannot approve your own document request.');
+        }
+
         if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
             if ($docRequest->user->reporting_to_id !== $user->id) {
                 return redirect()->back()->with('error', 'Unauthorized: You can only approve documents for your direct reports.');
@@ -110,6 +122,8 @@ class ApprovalController extends Controller
         
         $docRequest->update([
             'status' => 'approved',
+            'actioned_by_id' => auth()->id(),
+            'actioned_at' => now(),
             'remarks' => $request->remarks . ($docRequest->remarks ? " | Original Ref: " . $docRequest->remarks : "")
         ]);
 
@@ -121,6 +135,10 @@ class ApprovalController extends Controller
         $docRequest = DocumentRequest::findOrFail($id);
         $user = auth()->user();
 
+        if ($docRequest->user_id === $user->id) {
+            return redirect()->back()->with('error', 'You cannot reject your own document request.');
+        }
+
         if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr'])) {
             if ($docRequest->user->reporting_to_id !== $user->id) {
                 return redirect()->back()->with('error', 'Unauthorized: You can only reject documents for your direct reports.');
@@ -129,6 +147,8 @@ class ApprovalController extends Controller
         
         $docRequest->update([
             'status' => 'rejected',
+            'actioned_by_id' => auth()->id(),
+            'actioned_at' => now(),
             'remarks' => $request->remarks
         ]);
 

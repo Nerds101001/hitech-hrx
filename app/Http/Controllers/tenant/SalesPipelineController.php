@@ -288,7 +288,15 @@ class SalesPipelineController extends Controller
     public function update(Request $request, $id)
     {
         $pipeline = SalesPipeline::findOrFail($id);
-        
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        $isCcare  = $user->department && $user->department->name === 'Customer Care';
+        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+            if ($request->ajax()) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            return redirect()->back()->with('error', 'Unauthorized.');
+        }
+
         $data = $request->only([
             'party_name',
             'salesperson_id',
@@ -328,6 +336,15 @@ class SalesPipelineController extends Controller
             'value' => 'nullable'
         ]);
 
+        $pipeline = SalesPipeline::findOrFail($request->sales_pipeline_id);
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        $isCcare  = $user->department && $user->department->name === 'Customer Care';
+        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $monthData = SalesPipelineMonth::firstOrCreate(
             [
                 'sales_pipeline_id' => $request->sales_pipeline_id,
@@ -340,9 +357,8 @@ class SalesPipelineController extends Controller
         $monthData->save();
 
         if ($field === 'sale_amount') {
-            $pipeline = \App\Models\SalesPipeline::find($request->sales_pipeline_id);
-            if ($pipeline && $pipeline->type === 'New Biz') {
-                $monthsWithSales = \App\Models\SalesPipelineMonth::where('sales_pipeline_id', $pipeline->id)
+            if ($pipeline->type === 'New Biz') {
+                $monthsWithSales = SalesPipelineMonth::where('sales_pipeline_id', $pipeline->id)
                     ->where('sale_amount', '>', 0)
                     ->count();
                 if ($monthsWithSales >= 5) {
@@ -358,7 +374,15 @@ class SalesPipelineController extends Controller
     
     public function destroy($id)
     {
-        SalesPipeline::findOrFail($id)->delete();
+        $pipeline = SalesPipeline::findOrFail($id);
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        $isCcare  = $user->department && $user->department->name === 'Customer Care';
+        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+            return redirect()->back()->with('error', 'Unauthorized.');
+        }
+        $pipeline->delete();
         return redirect()->back()->with('success', 'Deleted successfully.');
     }
 }

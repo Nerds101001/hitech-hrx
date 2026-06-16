@@ -26,16 +26,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const hiringTrendsChart = new ApexCharts(document.querySelector("#hiringTrendsChart"), {
     series: [{
       name: 'Hires',
-      data: {!! json_encode($hiringTrend['hires'] ?? []) !!}
+      data: {!! json_encode($hiringTrend['hires'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}
     }, {
       name: 'Attrition',
-      data: {!! json_encode($hiringTrend['attrition'] ?? []) !!}
+      data: {!! json_encode($hiringTrend['attrition'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}
     }],
     chart: { type: 'area', height: 350, toolbar: { show: false }, animations: { enabled: true, easing: 'linear', speed: 800 } },
     colors: ['#00897b', '#dc2626'],
     stroke: { curve: 'smooth', width: 3 },
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.05 } },
-    xaxis: { categories: {!! json_encode($hiringTrend['labels'] ?? []) !!}, labels: { style: { colors: '#94a3b8' } } },
+    xaxis: { categories: {!! json_encode($hiringTrend['labels'] ?? [], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}, labels: { style: { colors: '#94a3b8' } } },
     yaxis: { labels: { style: { colors: '#94a3b8' } } },
     grid: { borderColor: '#f1f5f9' },
     dataLabels: { enabled: false }
@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if(document.querySelector("#hiringTrendsChart")) hiringTrendsChart.render();
 
   // 2. Department Distribution (Awesome Bar Chart)
-  const deptData = {!! json_encode($departmentData) !!};
+  const deptData = {!! json_encode($departmentData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!};
   if (deptData && deptData.length > 0) {
       const departmentChart = new ApexCharts(document.querySelector("#departmentChart"), {
         series: [{
@@ -243,9 +243,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
                 <div class="date-sub-text" style="color: #ef4444;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }} • 
                   @if($u->is_wished ?? false)
-                    <span class="badge bg-label-secondary rounded-pill p-1 px-2">WISHED <i class="bx bx-check"></i></span>
+                    <span class="badge bg-label-secondary rounded-pill p-1 px-2" style="cursor: pointer;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">WISHED <i class="bx bx-check"></i></span>
                   @else
-                    <span class="badge bg-label-pink rounded-pill p-1 px-2">HAPPY BIRTHDAY!</span>
+                    <span class="badge bg-label-pink rounded-pill p-1 px-2" style="cursor: pointer;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">HAPPY BIRTHDAY!</span>
                   @endif
                 </div>
               </div>

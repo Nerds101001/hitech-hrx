@@ -35,7 +35,7 @@ class TravelClaimController extends Controller
         return view('tenant.travel-claims.form');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, TravelClaim $existingClaim = null)
     {
         // Pre-filter empty items submitted by the grid
         if ($request->has('items') && is_array($request->items)) {
@@ -74,17 +74,28 @@ class TravelClaimController extends Controller
         try {
             DB::beginTransaction();
 
-            $claim = TravelClaim::forceCreate([
-                'user_id' => auth()->id(),
-                'claim_month' => $request->claim_month,
-                'company' => $request->company,
-                'sales_collection' => $request->sales_collection ?? 0,
-                'bank_account_name' => 'On File',
-                'bank_account_no' => 'On File',
-                'bank_ifsc' => 'On File',
-                'status' => 'submitted',
-                'late_penalty_applied' => $latePenalty,
-            ]);
+            if ($existingClaim) {
+                $claim = $existingClaim;
+                $claim->forceFill([
+                    'claim_month' => $request->claim_month,
+                    'company' => $request->company,
+                    'sales_collection' => $request->sales_collection ?? 0,
+                    'status' => 'submitted',
+                    'late_penalty_applied' => $latePenalty,
+                ])->save();
+            } else {
+                $claim = TravelClaim::forceCreate([
+                    'user_id' => auth()->id(),
+                    'claim_month' => $request->claim_month,
+                    'company' => $request->company,
+                    'sales_collection' => $request->sales_collection ?? 0,
+                    'bank_account_name' => 'On File',
+                    'bank_account_no' => 'On File',
+                    'bank_ifsc' => 'On File',
+                    'status' => 'submitted',
+                    'late_penalty_applied' => $latePenalty,
+                ]);
+            }
 
             $total_amount = 0;
 
@@ -158,7 +169,7 @@ class TravelClaimController extends Controller
         }
 
         $net_payable = $total_amount - $total_advances;
-        if ($isLate) {
+        if ($latePenalty) {
             $net_payable = $net_payable * 0.90; // 10% late penalty
         }
 
@@ -192,25 +203,31 @@ public function update(Request $request, $id)
     if ($claim->status !== 'draft' && $claim->status !== 'objection') {
         return redirect()->route('travel-claims.index')->with('error', 'You can only edit claims that are in draft or have objections.');
     }
-    
-    // Delete old items and advances
+
+    // Clear children so store() repopulates them on the same parent record
     $claim->items()->delete();
     $claim->advances()->delete();
-    $claim->delete();
-    
-    // Quick trick: store handles everything
-    return $this->store($request);
+
+    return $this->store($request, $claim);
 }
 
     public function show($id)
     {
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'super_admin', 'accounts', 'Accounts', 'manager', 'Manager', 'hr', 'HR']);
         $claim = TravelClaim::with(['items', 'advances', 'user'])->findOrFail($id);
+        if (!$isPrivileged && $claim->user_id !== $user->id) {
+            abort(403);
+        }
         return response()->json($claim);
     }
 
     public function verify(Request $request, $id)
     {
         $claim = TravelClaim::findOrFail($id);
+        if ($claim->user_id === auth()->id()) {
+            return back()->with('error', 'You cannot verify your own claim.');
+        }
         $claim->forceFill([
             'status' => 'verified',
             'verifier_id' => auth()->id(),
@@ -223,6 +240,9 @@ public function update(Request $request, $id)
     public function approve(Request $request, $id)
     {
         $claim = TravelClaim::findOrFail($id);
+        if ($claim->user_id === auth()->id()) {
+            return back()->with('error', 'You cannot approve your own claim.');
+        }
         
         // Split payments: 85% on 11th, 15% on 25th
         $split85 = round($claim->net_payable * 0.85, 2);
@@ -305,6 +325,9 @@ public function update(Request $request, $id)
     public function reject(Request $request, $id)
     {
         $claim = TravelClaim::findOrFail($id);
+        if ($claim->user_id === auth()->id()) {
+            return back()->with('error', 'You cannot reject your own claim.');
+        }
         $claim->forceFill([
             'status' => 'rejected',
             'remarks' => 'Rejected: ' . $request->remarks,
@@ -315,6 +338,9 @@ public function update(Request $request, $id)
     public function objection(Request $request, $id)
     {
         $claim = TravelClaim::findOrFail($id);
+        if ($claim->user_id === auth()->id()) {
+            return back()->with('error', 'You cannot raise an objection on your own claim.');
+        }
         $claim->forceFill([
             'status' => 'objection',
             'remarks' => 'Objection Raised: ' . $request->remarks,

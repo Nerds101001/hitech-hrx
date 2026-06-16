@@ -12,7 +12,7 @@ class FileSecurityHelper
     /**
      * Encrypt and store a file.
      */
-    public static function encryptAndStore(UploadedFile $file, string $folder, string $prefix, string $disk = 'public'): ?string
+    public static function encryptAndStore(UploadedFile $file, string $folder, string $prefix, string $disk = 'local'): ?string
     {
         try {
             $fileName = $prefix . '_' . \Illuminate\Support\Str::random(24) . '.' . $file->getClientOriginalExtension();
@@ -34,7 +34,7 @@ class FileSecurityHelper
     /**
      * Decrypt and retrieve file content.
      */
-    public static function decryptAndGet(string $path, string $disk = 'public'): ?string
+    public static function decryptAndGet(string $path, string $disk = 'local'): ?string
     {
         try {
             if (!Storage::disk($disk)->exists($path)) {

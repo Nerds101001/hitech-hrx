@@ -53,8 +53,8 @@ Route::middleware('api')->group(function () {
 
     Route::post('checkUsername', [AuthController::class, 'checkEmail'])->name('api.auth.checkUserName');
 
-    Route::post('login', [AuthController::class, 'login'])->name('api.auth.login');
-    Route::post('loginWithUid', [AuthController::class, 'loginWithUid'])->name('loginWithUid');
+    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('api.auth.login');
+    Route::post('loginWithUid', [AuthController::class, 'loginWithUid'])->middleware('throttle:5,1')->name('loginWithUid');
     Route::post('createDemoUser', [AuthController::class, 'createDemoUser'])->name('createDemoUser');
 
     //Open Auth Routes

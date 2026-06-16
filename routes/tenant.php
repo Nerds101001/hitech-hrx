@@ -58,7 +58,6 @@ use App\Http\Controllers\tenant\CustomQuestionController;
 use App\Http\Controllers\tenant\InterviewScheduleController;
 use App\Http\Controllers\tenant\AiTrainingController;
 use App\Http\Controllers\tenant\HRPolicyController;
-use App\Http\Controllers\tenant\DebugController;
 use App\Constants\ModuleConstants;
 use App\Services\AddonService\IAddonService;
 use Illuminate\Support\Facades\Route;
@@ -73,7 +72,6 @@ require __DIR__ . '/user.php';
 
 // --- GUEST ROUTES ---
 Route::middleware(['web'])->group(function () {
-  Route::get('/create-test-user', [DebugController::class, 'createTestUser']);
   Route::get('/auth/login', [AuthController::class, 'login'])->name('auth.login');
   Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
 
@@ -389,9 +387,6 @@ Route::middleware([
       Route::delete('delete/{id}', [TaskController::class, 'destroy'])->name('destroy');
     });
 
-
-    // --- HR & ORGANIZATION ---
-    Route::get('debug-onboarding-data', [DebugController::class, 'debugOnboardingData']);
 
     // --- APPROVALS ---
     Route::middleware(['role:admin|hr'])->group(function () {

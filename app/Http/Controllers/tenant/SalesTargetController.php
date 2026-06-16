@@ -10,6 +10,14 @@ class SalesTargetController extends Controller
 {
     public function update(Request $request)
     {
+        $user = auth()->user();
+        $isAdmin   = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        $isCcare   = $user->department && $user->department->name === 'Customer Care';
+        $isNewBiz  = $user->department && $user->department->name === 'New Biz';
+        if (!$isAdmin && !$isCcare && !$isNewBiz) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'month_year' => 'required|string',

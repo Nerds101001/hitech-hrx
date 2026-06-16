@@ -119,6 +119,13 @@
                                             <h2 class="mb-0 text-white fw-bold">{{ $user->getInitials() }}</h2>
                                         </div>
                                     @endif
+                                    
+                                    <!-- Change Button Overlay (Admin/HR) -->
+                                    <div class="position-absolute bottom-0 end-0">
+                                        <button class="btn btn-sm btn-icon rounded-circle shadow-sm" style="background: #127464; color: #fff; width: 32px; height: 32px;" onclick="document.getElementById('file').click()">
+                                            <i class="bx bx-camera fs-6"></i>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="mt-2 text-center">
@@ -208,7 +215,7 @@
                                 method="POST" enctype="multipart/form-data" style="display: none;">
                                 @csrf
                                 <input type="hidden" name="userId" id="userId" value="{{ $user->id }}">
-                                <input type="file" id="file" name="file" accept="image/*">
+                                <input type="file" id="file" name="file" accept="image/*" onchange="this.form.submit()">
                             </form>
                         </div>
                     </div>
@@ -1882,7 +1889,8 @@
                                                 <div class="col-md-6">
                                                     <div class="d-flex align-items-center justify-content-between p-3 rounded-4 hitech-adjustment-card"
                                                         style="background-color: #F8FAFC; border: 1px solid #F1F5F9; cursor: pointer; transition: all 0.3s ease;"
-                                                        onclick='editAdjustment({!! json_encode($adjustment) !!})'
+                                                        data-adjustment="{{ e(json_encode($adjustment)) }}"
+                                                        onclick="editAdjustment(JSON.parse(this.dataset.adjustment))"
                                                         data-bs-toggle="modal" data-bs-target="#offcanvasPayrollAdjustment">
                                                         <div class="d-flex align-items-center">
                                                             <div class="bg-white p-2 rounded-circle me-3 shadow-sm d-flex align-items-center justify-content-center"

@@ -39,9 +39,12 @@ class AdminRoleGuard
     {
         $user = auth()->user();
 
-        // Not logged in — let auth middleware handle it
+        // Not logged in — redirect to login
         if (!$user) {
-            return $next($request);
+            if ($request->expectsJson()) {
+                return response()->json(['error' => 'Unauthenticated.'], 401);
+            }
+            return redirect()->route('login');
         }
 
         // Allow self-service routes for all authenticated users

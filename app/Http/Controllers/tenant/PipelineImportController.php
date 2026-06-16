@@ -43,12 +43,14 @@ class PipelineImportController extends Controller
             'salesperson_id' => 'required|exists:users,id'
         ]);
 
+        $path = null;
         try {
             // Keep the file temporarily in storage
             $path = $request->file('file')->storeAs('temp', 'pipeline_matrix_'.time().'.'.$request->file('file')->getClientOriginalExtension());
             $fullPath = storage_path('app/' . $path);
             $data = Excel::toArray(new \stdClass(), $fullPath)[0];
         } catch (\Exception $e) {
+            if ($path) @unlink(storage_path('app/' . $path));
             return back()->with('error', 'Error reading file: ' . $e->getMessage());
         }
 
@@ -177,7 +179,11 @@ class PipelineImportController extends Controller
             'month_mappings' => 'required|json'
         ]);
 
-        $fullPath = storage_path('app/' . $request->temp_path);
+        $tempPath = $request->temp_path;
+        if (!str_starts_with($tempPath, 'temp/')) {
+            return redirect()->route('sales-visits.pipeline.import')->with('error', 'Invalid file reference.');
+        }
+        $fullPath = storage_path('app/' . $tempPath);
         if (!file_exists($fullPath)) {
             return redirect()->route('sales-visits.pipeline.import')->with('error', 'Temporary file expired. Please upload again.');
         }
@@ -263,6 +269,9 @@ class PipelineImportController extends Controller
                     }
                     if (isset($indices['remarks'])) {
                         $remarksVal = trim($row[$indices['remarks']] ?? null);
+                        if ($remarksVal && in_array($remarksVal[0], ['=', '+', '-', '@'])) {
+                            $remarksVal = "'" . $remarksVal;
+                        }
                     }
 
                     // Accumulate YoY by financial year (April = FY start)

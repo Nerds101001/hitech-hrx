@@ -135,15 +135,15 @@ class LeaveController extends Controller
               'reason' => $item->user_notes ?? 'N/A',
               'status' => $statusVal,
               'approved_by_name' => $item->approvedBy ? $item->approvedBy->getFullName() : 'N/A',
-              'attachment' => $item->document ? asset('storage/' . \Constants::BaseFolderLeaveDocumentWithSlash . $item->document) : null,
+              'attachment' => $item->document ? asset('storage/' . \App\Constants\Constants::BaseFolderLeaveRequestDocument . $item->document) : null,
               'sort_date' => $item->created_at->timestamp
           ];
       });
 
       $ods = $odQuery->get()->map(function($item) {
           $dept = $item->user && $item->user->designation && $item->user->designation->department ? $item->user->designation->department->name : 'N/A';
-          $reason = $item->purpose;
-          if ($item->location) $reason .= " <small class='text-muted d-block'>Loc: {$item->location}</small>";
+          $reason = e($item->purpose);
+          if ($item->location) $reason .= " <small class='text-muted d-block'>Loc: " . e($item->location) . "</small>";
           
           return [
               'unified_id' => 'outdoor_' . $item->id,
@@ -191,6 +191,11 @@ class LeaveController extends Controller
     try {
 
       $leaveRequest = LeaveRequest::findOrFail($validated['id']);
+      
+      if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
+          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own leave request.']);
+      }
+
       $leaveRequest->status = $validated['status'];
 
       if ($validated['status'] == LeaveRequestStatus::CANCELLED) {
@@ -240,6 +245,9 @@ class LeaveController extends Controller
       if (count($leaveIds) > 0) {
           $leaveRequests = LeaveRequest::whereIn('id', $leaveIds)->get();
           foreach ($leaveRequests as $leaveRequest) {
+            if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
+                continue; // Skip their own requests
+            }
             $newStatus = LeaveRequestStatus::tryFrom($validated['status']) ?? $validated['status'];
             $leaveRequest->status = $newStatus;
             if ($validated['status'] == 'approved') {
@@ -258,6 +266,9 @@ class LeaveController extends Controller
       if (count($outdoorIds) > 0) {
           $outdoorDuties = OutdoorDuty::whereIn('id', $outdoorIds)->get();
           foreach ($outdoorDuties as $duty) {
+              if ($duty->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
+                  continue; // Cannot approve/reject own outdoor duty
+              }
               $duty->status = $validated['status'];
               if ($validated['status'] === 'approved') {
                   $duty->approved_by_id = auth()->id();
@@ -428,6 +439,11 @@ class LeaveController extends Controller
 
     try {
       $duty = OutdoorDuty::findOrFail($validated['id']);
+      
+      if ($duty->user_id === $user->id && in_array($validated['status'], ['approved', 'rejected'])) {
+          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own outdoor duty request.']);
+      }
+
       $duty->status        = $validated['status'];
       $duty->updated_by_id = $user->id;
 

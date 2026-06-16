@@ -296,6 +296,11 @@ class AuthController extends Controller
         return redirect()->route('login')->with('error', 'Account is locked.');
       }
 
+      // Enforce 1-minute cooldown between resend requests
+      if ($user->otp_expires_at && now()->lt(\Carbon\Carbon::parse($user->otp_expires_at)->subMinutes(9))) {
+        return redirect()->back()->with('error', 'Please wait 1 minute before requesting a new code.');
+      }
+
       $otp = rand(100000, 999999);
       $user->otp_code = $otp;
       $user->otp_expires_at = now()->addMinutes(10);
@@ -409,7 +414,7 @@ class AuthController extends Controller
           Log::info("Security Audit: User ID " . $user->id . " (" . $user->full_name . ") viewed sensitive document: " . $path);
       }
 
-      $decryptedContent = \App\Helpers\FileSecurityHelper::decryptAndGet($path);
+      $decryptedContent = \App\Helpers\FileSecurityHelper::decryptAndGet($path, 'public');
 
       if (!$decryptedContent) {
           Log::error('Secure Document: File not found or decryption failed.', ['path' => $path]);

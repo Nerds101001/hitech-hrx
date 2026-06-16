@@ -135,8 +135,12 @@ class SalesTargetImportController extends Controller
             'mapping.month_year' => 'required|numeric',
         ]);
 
-        $filePath = storage_path('app/' . $request->file_path);
-        
+        $rawFilePath = $request->file_path;
+        if (!str_starts_with($rawFilePath, 'temp_imports/')) {
+            return redirect()->route('sales-targets.import')->with('error', 'Invalid file reference.');
+        }
+        $filePath = storage_path('app/' . $rawFilePath);
+
         if (!file_exists($filePath)) {
             return redirect()->route('sales-targets.import')->with('error', 'Uploaded file was lost. Please try uploading again.');
         }

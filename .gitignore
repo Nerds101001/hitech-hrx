@@ -6,6 +6,7 @@
 /.env
 /.env.backup
 /.env.production
+/.env.live
 /.phpunit.result.cache
 /public/build
 /public/hot

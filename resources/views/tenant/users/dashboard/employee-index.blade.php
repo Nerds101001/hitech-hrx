@@ -171,7 +171,7 @@
                 <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="35" height="35" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
                 <div>
                   <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-danger fw-bold" style="font-size: 0.7rem;">Today 🎉
+                  <div class="small text-danger fw-bold" style="font-size: 0.7rem; cursor: pointer;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">Today 🎉
                     @if($u->is_wished ?? false)
                         <span class="badge bg-label-secondary ms-1 p-1" style="font-size: 0.6rem;">WISHED ✓</span>
                     @endif

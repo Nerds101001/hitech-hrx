@@ -158,6 +158,11 @@ class ExpenseController extends Controller
 
     try {
       $expenseRequest = ExpenseRequest::findOrFail($validated['id']);
+
+      if ($expenseRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
+          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own expense request.']);
+      }
+
       $expenseRequest->status = $validated['status'];
       
       // Fallback to original amount if not specified
@@ -190,10 +195,6 @@ class ExpenseController extends Controller
   public function getByIdAjax($id)
   {
     $expenseRequest = ExpenseRequest::with('user')->findOrFail($id);
-
-    if (!$expenseRequest) {
-      return Error::response('Expense request not found.');
-    }
 
     $user = auth()->user();
     if ($user->hasRole('manager') && !$user->hasRole(['admin', 'hr', 'Admin', 'HR']) && $expenseRequest->user_id != $user->id) {

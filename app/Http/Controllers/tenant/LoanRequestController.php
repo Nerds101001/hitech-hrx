@@ -117,6 +117,11 @@ class LoanRequestController extends Controller
 
         try {
             $loan = LoanRequest::findOrFail($request->id);
+            
+            if ($loan->user_id === Auth::id() && in_array($request->status, ['Approved', 'Rejected'])) {
+                return Error::response('You cannot approve or reject your own loan request.');
+            }
+
             $loan->status = $request->status;
             $loan->approved_amount = $request->status == 'Approved' ? ($request->approved_amount ?? $loan->amount) : null;
             $loan->admin_remarks = $request->admin_remarks;
