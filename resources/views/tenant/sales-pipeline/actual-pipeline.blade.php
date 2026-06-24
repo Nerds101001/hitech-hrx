@@ -29,7 +29,7 @@
         ? substr($fyParts[0], -2) . '-' . substr($fyParts[1], -2)
         : ($selectedFy ?? 'FY');
     $totalPotential = $pipelines->sum('total_business_potential');
-    $potentialPerMonth = $totalPotential / 12;
+    $potentialPerMonth = $totalPotential;
 @endphp
 <div class="container-fluid px-4 py-4">
 
@@ -445,7 +445,7 @@ function updateDynamicStats() {
         } catch(e) {}
     });
 
-    const potentialPerMonth = potential / 12;
+    const potentialPerMonth = potential;
 
     function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
 
