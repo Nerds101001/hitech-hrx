@@ -22,6 +22,14 @@
         'Introduction'=>'#2563eb','TRIAL ONGOING'=>'#2563eb',
         'Sales to Visit'=>'#7c3aed','NEED CONTACT NO.'=>'#7c3aed','Trying to Upgrade'=>'#7c3aed',
     ];
+
+    $currentFyActualTotal = array_sum($monthlyActuals ?? []);
+    $fyParts = explode('-', $selectedFy ?? '');
+    $selectedFyLabel = (count($fyParts) === 2)
+        ? substr($fyParts[0], -2) . '-' . substr($fyParts[1], -2)
+        : ($selectedFy ?? 'FY');
+    $totalPotential = $pipelines->sum('total_business_potential');
+    $potentialPerMonth = $totalPotential / 12;
 @endphp
 <div class="container-fluid px-4 py-4">
 
@@ -60,9 +68,23 @@
     {{-- ─── COMPACT STATS STRIP ────────────────────────────────────────── --}}
     <div class="d-flex flex-wrap gap-2 mb-3">
         @foreach(['22_23'=>'22-23','23_24'=>'23-24','24_25'=>'24-25','25_26'=>'25-26'] as $key => $label)
-            <div class="stat-chip"><span class="stat-label">YoY {{ $label }}</span><span class="stat-value">₹{{ number_format(($totals[$key] ?? 0) / 100000, 2) }}<em>L</em></span></div>
+            <div class="stat-chip">
+                <span class="stat-label">YoY {{ $label }}</span>
+                <span class="stat-value" id="cardYoy{{ $key }}">₹{{ number_format($totals[$key] ?? 0, 2) }}<em>L</em></span>
+            </div>
         @endforeach
-        <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Total Customers</span><span class="stat-value text-primary">{{ $pipelines->count() }}</span></div>
+        <div class="stat-chip" style="border-left-color:#10b981;">
+            <span class="stat-label">YoY {{ $selectedFyLabel }}</span>
+            <span class="stat-value" id="fyTotalCard">₹{{ number_format($currentFyActualTotal, 2) }}<em>L</em></span>
+        </div>
+        <div class="stat-chip" style="border-left-color:#f59e0b;">
+            <span class="stat-label">Potential/Month</span>
+            <span class="stat-value" id="potentialMonthCard">₹{{ number_format($potentialPerMonth, 2) }}<em>L</em></span>
+        </div>
+        <div class="stat-chip" style="border-left-color:#3b82f6;">
+            <span class="stat-label">Total Customers</span>
+            <span class="stat-value text-primary" id="totalCustomersCard">{{ $pipelines->count() }}</span>
+        </div>
     </div>
 
     {{-- ─── FILTER BAR ─────────────────────────────────────────────────── --}}
@@ -112,7 +134,6 @@
                             <th class="align-middle">Start Date</th>
                             <th class="align-middle">Customer Name</th>
                             <th class="align-middle">Product</th>
-                            <th class="align-middle">Address</th>
                             @if($isAdmin)
                                 <th class="align-middle">Salesperson</th>
                                 <th class="align-middle">New Biz</th>
@@ -123,10 +144,9 @@
                                 {{-- CCare / New Biz see the salesperson --}}
                                 <th class="align-middle">Salesperson</th>
                             @endif
-                            <th class="text-end align-middle">Potential (L)</th>
+                            <th class="text-end align-middle">Potential (L) /M (Month)</th>
                             <th class="align-middle">Stage</th>
                             <th class="align-middle" style="min-width:250px;">Status Remarks</th>
-                            <th class="text-center align-middle">Action</th>
                         </tr>
                     </thead>
                     <tbody id="pipelineBody">
@@ -150,11 +170,18 @@
                                         $row->ccare->name       ?? '',
                                       ]))
                                     : $repDisplay;
+                                $rowMonthSales = $row->months->pluck('sale_amount', 'month_year')->toArray();
                             @endphp
                             <tr data-id="{{ $row->id }}"
                                 data-party="{{ strtolower($row->party_name) }}"
                                 data-stage="{{ strtolower($row->status_stage ?? '') }}"
                                 data-rep="{{ strtolower($repStr) }}"
+                                data-yoy22="{{ $row->yoy_22_23 ?? 0 }}"
+                                data-yoy23="{{ $row->yoy_23_24 ?? 0 }}"
+                                data-yoy24="{{ $row->yoy_24_25 ?? 0 }}"
+                                data-yoy25="{{ $row->yoy_25_26 ?? 0 }}"
+                                data-potential="{{ $row->total_business_potential ?? 0 }}"
+                                data-months='@json($rowMonthSales)'
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
                                 <td class="text-center">{{ $index + 1 }}</td>
@@ -162,7 +189,6 @@
                                 <td class="col-party fw-semibold text-dark text-truncate"
                                     title="{{ $row->party_name }}">{{ $row->party_name }}</td>
                                 <td class="align-middle">{{ $row->product }}</td>
-                                <td class="align-middle">{{ $row->address }}</td>
 
                                 @if($isAdmin)
                                     <td class="align-middle">{{ $row->salesperson->name ?? '-' }}</td>
@@ -175,7 +201,7 @@
                                 @endif
 
                                 <td class="text-end align-middle fw-bold font-monospace" style="color:#0f766e;">
-                                    {{ number_format(($row->total_business_potential ?? 0) / 100000, 2) }}
+                                    {{ number_format($row->total_business_potential ?? 0, 2) }}
                                 </td>
 
                                 <td class="p-0 align-middle">
@@ -198,19 +224,6 @@
                                            value="{{ $row->status_remarks }}"
                                            placeholder="Type status remarks…">
                                 </td>
-
-                                <td class="text-center p-1">
-                                    <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}"
-                                          method="POST" class="d-inline"
-                                          onsubmit="return confirm('Delete this row?');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit"
-                                                class="btn btn-sm btn-outline-danger border-0 p-1">
-                                            <i class="bx bx-trash"></i>
-                                        </button>
-                                    </form>
-                                </td>
                             </tr>
                         @empty
                             <tr id="emptyRow">
@@ -231,10 +244,6 @@
                             <td class="p-1">
                                 <input type="text" id="new_product"
                                        class="form-control form-control-sm" placeholder="Product">
-                            </td>
-                            <td class="p-1">
-                                <input type="text" id="new_address"
-                                       class="form-control form-control-sm" placeholder="Address">
                             </td>
                             @if($isAdmin)
                                 <td class="p-1">
@@ -267,7 +276,7 @@
                             @endif
                             <td class="p-1">
                                 <input type="number" id="new_potential" step="0.01"
-                                       class="form-control form-control-sm text-end" placeholder="Potential ₹">
+                                       class="form-control form-control-sm text-end" placeholder="Potential (L)">
                             </td>
                             <td class="p-1">
                                 <select id="new_status_stage" class="form-select form-select-sm">
@@ -281,7 +290,6 @@
                                 <input type="text" id="new_remarks"
                                        class="form-control form-control-sm" placeholder="Remarks">
                             </td>
-                            <td></td>
                         </tr>
                         {{-- Save / Cancel --}}
                         <tr id="addNewRowActions" style="display:none;background:#f0fdf4;">
@@ -364,6 +372,8 @@
 </style>
 
 <script>
+const activeMonthKeys = @json(array_column($months, 'key'));
+
 document.addEventListener('DOMContentLoaded', function () {
 
     // ── Inline edit: row-field ─────────────────────────────────────────
@@ -384,11 +394,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     this.style.backgroundColor = '#e8f5e9';
                     setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
                     // Keep data-stage in sync for filter
-                    if (fieldKey === 'status_stage') tr.dataset.stage = val.toLowerCase();
+                    if (fieldKey === 'status_stage') {
+                        tr.dataset.stage = val.toLowerCase();
+                        updateDynamicStats();
+                    }
                 }
             });
         });
     });
+
+    applyFilters();
 });
 
 // ── Filters ───────────────────────────────────────────────────────────
@@ -407,6 +422,40 @@ function applyFilters() {
         if (show) visible++;
     });
     document.getElementById('filterCount').textContent = visible;
+    updateDynamicStats();
+}
+
+function updateDynamicStats() {
+    let yoy22 = 0, yoy23 = 0, yoy24 = 0, yoy25 = 0, selectedFyTotal = 0, potential = 0;
+    let count = 0;
+
+    document.querySelectorAll('#pipelineBody tr[data-id]:not(.pipeline-row-hidden)').forEach(tr => {
+        yoy22     += parseFloat(tr.dataset.yoy22 || 0);
+        yoy23     += parseFloat(tr.dataset.yoy23 || 0);
+        yoy24     += parseFloat(tr.dataset.yoy24 || 0);
+        yoy25     += parseFloat(tr.dataset.yoy25 || 0);
+        potential += parseFloat(tr.dataset.potential || 0);
+        count++;
+
+        try {
+            const months = JSON.parse(tr.dataset.months || '{}');
+            activeMonthKeys.forEach(mk => {
+                selectedFyTotal += parseFloat(months[mk] || 0);
+            });
+        } catch(e) {}
+    });
+
+    const potentialPerMonth = potential / 12;
+
+    function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
+
+    const elY22 = document.getElementById('cardYoy22_23'); if (elY22) elY22.innerHTML = fmtL(yoy22);
+    const elY23 = document.getElementById('cardYoy23_24'); if (elY23) elY23.innerHTML = fmtL(yoy23);
+    const elY24 = document.getElementById('cardYoy24_25'); if (elY24) elY24.innerHTML = fmtL(yoy24);
+    const elY25 = document.getElementById('cardYoy25_26'); if (elY25) elY25.innerHTML = fmtL(yoy25);
+    const elFy  = document.getElementById('fyTotalCard');    if (elFy)  elFy.innerHTML  = fmtL(selectedFyTotal);
+    const elPot = document.getElementById('potentialMonthCard'); if (elPot) elPot.innerHTML = fmtL(potentialPerMonth);
+    const elCnt = document.getElementById('totalCustomersCard');  if (elCnt) elCnt.textContent = count;
 }
 
 function clearFilters() {
@@ -428,7 +477,7 @@ function cancelNewPipeline() {
     document.getElementById('addNewRow').style.display        = 'none';
     document.getElementById('addNewRowActions').style.display = 'none';
     document.getElementById('addRowTriggerBtn').style.display = '';
-    ['new_party_name','new_product','new_address','new_potential',
+    ['new_party_name','new_product','new_potential',
      'new_status_stage','new_remarks',
      'new_salesperson_id','new_new_biz_id','new_ccare_id']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -445,7 +494,6 @@ function saveNewPipeline() {
     const payload = {
         party_name:               partyName,
         product:                  document.getElementById('new_product')?.value     || '',
-        address:                  document.getElementById('new_address')?.value     || '',
         total_business_potential: document.getElementById('new_potential')?.value   || 0,
         status_stage:             document.getElementById('new_status_stage')?.value || 'Prospect',
         status_remarks:           document.getElementById('new_remarks')?.value     || '',

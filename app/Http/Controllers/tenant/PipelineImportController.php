@@ -225,15 +225,15 @@ class PipelineImportController extends Controller
                 continue;
             }
 
-            // CSV stores potential in lakhs; DB expects rupees (display divides by 100000)
-            $potential = (float) str_replace(',', '', $row[$potentialColIdx] ?? 0) * 100000;
+            // CSV stores potential in lakhs; DB also expects lakhs
+            $potential = (float) str_replace(',', '', $row[$potentialColIdx] ?? 0);
 
             if (isset($potentialOverrides[$rowNum])) {
-                $potential = (float) $potentialOverrides[$rowNum] * 100000;
+                $potential = (float) $potentialOverrides[$rowNum];
             }
 
             $typeRaw = strtolower(trim($row[$typeColIdx] ?? ''));
-            $typeMap = ['ccare' => 'CCare', 'newbiz' => 'New Biz', 'closed' => 'Closed', 'dropped' => 'Dropped', 'inactive' => 'Inactive'];
+            $typeMap = ['ccare' => 'CCare', 'newbiz' => 'New Biz', 'new biz' => 'New Biz', 'closed' => 'Closed', 'dropped' => 'Dropped', 'inactive' => 'Inactive'];
             $partyType = $typeMap[$typeRaw] ?? null;
 
             try {

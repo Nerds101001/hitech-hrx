@@ -253,7 +253,7 @@
                                 </td>
 
                                 <td class="col-potential text-end font-monospace fw-bold text-dark">
-                                    {{ number_format(($row->total_business_potential ?? 0) / 100000, 2) }}
+                                    {{ number_format($row->total_business_potential ?? 0, 2) }}
                                 </td>
 
                                 @if($isAdmin)
@@ -605,6 +605,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    // Trigger initial filter and stats calculation on page load
+    applyFilters();
 });
 
 // ── Filters ───────────────────────────────────────────────────────────
@@ -660,7 +662,7 @@ function updateDynamicStats() {
     document.getElementById('pendingCard').innerHTML   = fmtL(pending);
     document.getElementById('totalCustomersCard').textContent = count;
     const potEl = document.getElementById('totalPotential');
-    if (potEl) potEl.textContent = (potential/100000).toFixed(2);
+    if (potEl) potEl.textContent = potential.toFixed(2);
 
     // Update monthly sale totals row
     for (const [mk, total] of Object.entries(monthTotals)) {
