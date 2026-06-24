@@ -327,7 +327,19 @@
       </table>
       </div>
 
-
+      <div class="cred-row">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td class="cred-icon-cell">
+            <span class="cred-icon-badge">Key</span>
+          </td>
+          <td class="cred-content">
+            <div class="cred-label">Temporary Password</div>
+            <div class="cred-value">{{ $resetUrl }}</div>
+          </td>
+        </tr>
+      </table>
+      </div>
     </div>
 
     <!-- STEPS -->
@@ -361,7 +373,7 @@
 
     <!-- CTA -->
     <div class="cta-container">
-      <a href="{{ $resetUrl }}" class="cta-button">Set Password & Start Onboarding</a>
+      <a href="{{ url('/auth/login') }}" class="cta-button">Access My Portal & Start Onboarding</a>
     </div>
 
     <hr class="divider">
