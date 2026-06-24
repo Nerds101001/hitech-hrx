@@ -147,6 +147,7 @@
                             <th class="text-end align-middle">Potential (L) / Month</th>
                             <th class="align-middle">Stage</th>
                             <th class="align-middle" style="min-width:250px;">Status Remarks</th>
+                            <th class="text-center align-middle" style="width:60px;">Action</th>
                         </tr>
                     </thead>
                     <tbody id="pipelineBody">
@@ -275,6 +276,17 @@
                                         <i class="bx bx-pencil" style="font-size: 0.75rem;"></i>
                                     </span>
                                 </td>
+                                <td class="text-center align-middle">
+                                    <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}" method="POST"
+                                          onsubmit="return confirm('Are you sure you want to delete this pipeline entry?');"
+                                          style="display:inline-block;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-icon btn-text-danger" style="padding:0;background:none;border:none;" title="Delete Entry">
+                                            <i class="bx bx-trash text-danger" style="font-size:1.1rem;"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                         @empty
                             <tr id="emptyRow">
@@ -341,6 +353,7 @@
                                 <input type="text" id="new_remarks"
                                        class="form-control form-control-sm" placeholder="Remarks">
                             </td>
+                            <td></td>
                         </tr>
                         {{-- Save / Cancel --}}
                         <tr id="addNewRowActions" style="display:none;background:#f0fdf4;">
