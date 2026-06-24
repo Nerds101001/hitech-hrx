@@ -71,7 +71,7 @@
                         <div class="tab-pane fade show active" id="fileTab" role="tabpanel">
                             <div class="alert alert-info d-flex align-items-center mb-4 border-0" style="border-radius: 12px; background: rgba(0, 172, 193, 0.1); color: #00838f;">
                                 <i class="ti ti-info-circle me-2"></i>
-                                <small>AI will detect category (SDS/TDS/MOM/LEARN) and extract the 5-6 line crux.</small>
+                                <small>AI will detect category (SDS/TDS/Presentation/LEARN) and extract the 5-6 line crux.</small>
                             </div>
 
                             {{-- Document Type --}}
@@ -80,7 +80,7 @@
                                 <select name="category" id="manualDocType" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;" onchange="toggleBrandSection()">
                                     <option value="SDS">SDS – Safety Data Sheet</option>
                                     <option value="TDS">TDS – Technical Data Sheet</option>
-                                    <option value="MOM">MOM – Minutes of Meeting</option>
+                                    <option value="Presentation">Presentation</option>
                                     <option value="LEARN">Learn @ Hitech</option>
                                     <option value="Test Report">🧪 Test Report</option>
                                     <option value="Comparison Report">📊 Comparison Report</option>
@@ -368,7 +368,7 @@ function toggleBrandSection() {
     const type = document.getElementById('manualDocType')?.value;
     const brandSection = document.getElementById('brandSection');
     if (!brandSection) return;
-    const independentTypes = ['Test Report', 'Comparison Report', 'MOM'];
+    const independentTypes = ['Test Report', 'Comparison Report'];
     const hiddenTypes = ['LEARN', 'Video'];
     if (hiddenTypes.includes(type)) {
         brandSection.style.display = 'none';
@@ -650,7 +650,7 @@ function openAddDocumentModal(category) {
         videoDocTypeSelect.value = category;
         
     } else if (category && category !== 'All Files') {
-        // SDS, TDS, MOM, Test Report, Comparison Report
+        // SDS, TDS, Presentation, Test Report, Comparison Report
         youtubeTabNav.style.display = 'none';
         fileTabLink.show();
         

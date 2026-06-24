@@ -186,22 +186,61 @@
 
                                 <td class="text-center">{{ $index + 1 }}</td>
                                 <td class="text-muted">{{ $row->created_at->format('d M Y') }}</td>
-                                <td class="col-party fw-semibold text-dark text-truncate"
-                                    title="{{ $row->party_name }}">{{ $row->party_name }}</td>
-                                <td class="align-middle">{{ $row->product }}</td>
+                                <td class="col-party fw-semibold text-dark text-truncate p-0"
+                                    title="{{ $row->party_name }}">
+                                    <input type="text" class="excel-input row-field"
+                                           data-field="party_name"
+                                           value="{{ $row->party_name }}">
+                                </td>
+                                <td class="p-0 align-middle">
+                                    <input type="text" class="excel-input row-field"
+                                           data-field="product"
+                                           value="{{ $row->product }}">
+                                </td>
 
                                 @if($isAdmin)
-                                    <td class="align-middle">{{ $row->salesperson->name ?? '-' }}</td>
-                                    <td class="align-middle">{{ $row->newBiz->name ?? '-' }}</td>
-                                    <td class="align-middle">{{ $row->ccare->name ?? '-' }}</td>
+                                    <td class="p-0 align-middle">
+                                        <select class="excel-select row-field" data-field="salesperson_id">
+                                            <option value="">-SP-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}" {{ $row->salesperson_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td class="p-0 align-middle">
+                                        <select class="excel-select row-field" data-field="new_biz_id">
+                                            <option value="">-NB-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}" {{ $row->new_biz_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td class="p-0 align-middle">
+                                        <select class="excel-select row-field" data-field="ccare_id">
+                                            <option value="">-CC-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}" {{ $row->ccare_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
                                 @elseif($isSalesperson)
                                     <td class="align-middle">{{ $repDisplay }}</td>
                                 @else
-                                    <td class="align-middle">{{ $row->salesperson->name ?? '-' }}</td>
+                                    <td class="p-0 align-middle">
+                                        <select class="excel-select row-field" data-field="salesperson_id">
+                                            <option value="">-Select Salesperson-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}" {{ $row->salesperson_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
                                 @endif
 
-                                <td class="text-end align-middle fw-bold font-monospace" style="color:#0f766e;">
-                                    {{ number_format($row->total_business_potential ?? 0, 2) }}
+                                <td class="p-0 align-middle">
+                                    <input type="number" step="0.01" class="excel-input row-field text-end fw-bold font-monospace"
+                                           style="color:#0f766e;"
+                                           data-field="total_business_potential"
+                                           value="{{ $row->total_business_potential }}">
                                 </td>
 
                                 <td class="p-0 align-middle">
@@ -393,10 +432,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (data.success) {
                     this.style.backgroundColor = '#e8f5e9';
                     setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
-                    // Keep data-stage in sync for filter
-                    if (fieldKey === 'status_stage') {
+                    // Keep data attributes in sync for filter and calculations
+                    if (fieldKey === 'party_name') {
+                        tr.dataset.party = val.toLowerCase();
+                    } else if (fieldKey === 'status_stage') {
                         tr.dataset.stage = val.toLowerCase();
                         updateDynamicStats();
+                    } else if (fieldKey === 'total_business_potential') {
+                        tr.dataset.potential = val || 0;
+                        updateDynamicStats();
+                    } else if (fieldKey === 'salesperson_id' || fieldKey === 'new_biz_id' || fieldKey === 'ccare_id') {
+                        let reps = [];
+                        tr.querySelectorAll('select[data-field$="_id"], select[data-field="salesperson_id"]').forEach(sel => {
+                            if (sel.selectedIndex >= 0) {
+                                const optText = sel.options[sel.selectedIndex].text;
+                                if (optText && !optText.startsWith('-')) {
+                                    reps.push(optText);
+                                }
+                            }
+                        });
+                        tr.dataset.rep = reps.join(' | ').toLowerCase();
                     }
                 }
             });

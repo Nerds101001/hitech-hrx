@@ -107,7 +107,12 @@
             
             <div class="card shadow-sm border-0 mt-4" style="border-radius: 16px;">
                 <div class="card-body bg-light" style="border-radius: 16px;">
-                    <h6 class="fw-bold"><i class="bx bx-info-circle me-1"></i> Format Instructions</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="bx bx-info-circle me-1"></i> Format Instructions</h6>
+                        <a href="{{ asset('templates/sales_pipeline_template.csv') }}" class="btn btn-xs btn-outline-primary rounded-pill fw-bold" download>
+                            <i class="bx bx-download me-1"></i> Download CSV Template
+                        </a>
+                    </div>
                     <p class="small text-muted mb-0">
                         Please make sure your uploaded file matches the standard tracker format: <br>
                         - <strong>Row 2</strong> must contain the month columns (e.g. <code>JUNE 26-27</code>).<br>

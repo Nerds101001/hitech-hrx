@@ -2,7 +2,7 @@
     $file = $files->first();
     $tds = $files->firstWhere('category', 'TDS');
     $sds = $files->firstWhere('category', 'SDS');
-    $comp = $files->firstWhere('category', 'COMP') ?? $files->firstWhere('category', 'MOM');
+    $pres = $files->firstWhere('category', 'Presentation') ?? $files->firstWhere('category', 'COMP');
     $testReport = $files->firstWhere('category', 'Test Report');
     $totalSize = 0;
     foreach($files as $f) $totalSize += $f->size;
@@ -96,9 +96,9 @@
                         <span>SDS</span>
                         <span>{{ $sds ? 'View PDF' : 'N/A' }}</span>
                     </a>
-                    <a href="{{ $comp ? route('library.access', $comp->id) : 'javascript:void(0)' }}" target="{{ $comp ? '_blank' : '' }}" class="action-btn {{ !$comp ? 'disabled' : '' }}">
-                        <span>COMP</span>
-                        <span>{{ $comp ? 'Access' : 'N/A' }}</span>
+                    <a href="{{ $pres ? route('library.access', $pres->id) : 'javascript:void(0)' }}" target="{{ $pres ? '_blank' : '' }}" class="action-btn {{ !$pres ? 'disabled' : '' }}">
+                        <span>PRES</span>
+                        <span>{{ $pres ? 'Access' : 'N/A' }}</span>
                     </a>
                     <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-btn {{ !$testReport ? 'disabled' : '' }}">
                         <span>TEST</span>

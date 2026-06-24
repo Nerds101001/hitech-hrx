@@ -3141,14 +3141,15 @@ class EmployeeController extends Controller
       'target_type' => 'required|string|max:255',
       'metric_name' => 'required|string|max:255',
       'kpi_type' => 'required|string|max:255',
-      'grade_system' => 'required|string|max:255',
+      'grade_system' => 'nullable|string|max:255',
       'target_amount' => 'required|numeric',
       'incentive_type' => 'required|in:fixed,percentage,points,count',
       'description' => 'nullable|string|max:1000'
     ]);
 
     try {
-      $formattedDescription = "Type: " . $validated['kpi_type'] . " | Grade: " . $validated['grade_system'] . " | Metric: " . $validated['metric_name'] . "\n\n" . ($validated['description'] ?? '');
+      $gradePart = !empty($validated['grade_system']) ? " | Grade: " . $validated['grade_system'] : "";
+      $formattedDescription = "Type: " . $validated['kpi_type'] . $gradePart . " | Metric: " . $validated['metric_name'] . "\n\n" . ($validated['description'] ?? '');
 
       $salesTarget = SalesTarget::updateOrCreate(
         ['id' => $validated['kpiId'] ?? null],

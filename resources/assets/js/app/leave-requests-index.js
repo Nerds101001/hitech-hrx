@@ -431,8 +431,42 @@ $(function () {
   };
 
   $(document).on('click', '.leave-request-details', function () {
-    var id = $(this).data('id');
-    window.openLeaveDetails(id);
+    var unifiedId = $(this).data('id');
+    // Parse unifiedId (e.g., 'leave_137' or 'outdoor_45')
+    var parts = unifiedId.toString().split('_');
+    var type = parts.length > 1 ? parts[0] : 'leave';
+    var id = parts.length > 1 ? parts[1] : unifiedId;
+
+    if (type === 'outdoor') {
+        // Trigger outdoor duty modal logic defined in index.blade.php
+        $.get(`${baseUrl}leaveRequests/outdoorDuty/getByIdAjax/${id}`, function (d) {
+            $('#odViewInitials').text(d.userInitials);
+            $('#odViewName').text(d.userName);
+            $('#odViewCode').text(d.userCode);
+            $('#odViewDate').text(d.date);
+            $('#odViewPurpose').text(d.purpose);
+            $('#odViewLocation').text(d.location);
+            $('#odViewReturn').text(d.expectedReturn);
+            $('#odViewStatus').text(d.status);
+            $('#odViewNotes').text(d.approvalNotes || 'N/A');
+            $('#odViewApprovedBy').text(d.approvedByName || 'N/A');
+            $('#odViewApprovedAt').text(d.approvedAt || 'N/A');
+            $('#odViewCreatedAt').text(d.createdAt);
+            
+            // Set up actions
+            $('#odActionId').val(id);
+            $('#odActionNotes').val('');
+            
+            if (d.status === 'pending' && !window.isAccountsRole) {
+                $('#odActionBlock').removeClass('d-none');
+            } else {
+                $('#odActionBlock').addClass('d-none');
+            }
+            $('#odViewModal').modal('show');
+        });
+    } else {
+        window.openLeaveDetails(id);
+    }
   });
 
   // Deep Link Handling
@@ -479,31 +513,35 @@ $(function () {
         $('#modalLeaveRequestDetails').modal('hide');
         Swal.fire({
           title: 'Success!',
-          text: `Leave request has been updated.`,
+          text: 'Leave request has been updated.',
           icon: 'success',
           timer: 2000,
           showConfirmButton: false
         });
-
-        if (dtLeaveRequests) dtLeaveRequests.ajax.reload();
-
-        // Refresh stats cards manually or by reloading page - let's try to fetch fresh counts if possible
-        // For now, a quick reload of stats or page works best to ensure accuracy
-        setTimeout(() => { location.reload(); }, 2000);
+        if (dt_leave_requests) {
+          dt_leave_requests.ajax.reload();
+        }
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
       },
-      error: function () {
+      error: function (xhr) {
         btn.removeClass('disabled').html(originalContent);
-        Swal.fire('Error', 'Failed to update request.', 'error');
+        Swal.fire(
+          'Error',
+          'Failed to update request.',
+          'error'
+        );
       }
     });
   });
 
-  // Quick Approve Logic
+  // Quick Action Buttons directly from DataTable
   $(document).on('click', '.quick-leave-approve', function () {
-    const id = $(this).data('id');
+    const unifiedId = $(this).data('id');
     Swal.fire({
       title: 'Approve Leave?',
-      text: 'Are you sure you want to quickly approve this request?',
+      text: "Are you sure you want to quickly approve this request?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: 'Yes, Approve',
@@ -511,40 +549,43 @@ $(function () {
       cancelButtonColor: '#94a3b8'
     }).then((result) => {
       if (result.isConfirmed) {
-        performQuickAction(id, 'approved', 'Quick approved from table.');
+        processAction(unifiedId, 'approved', 'Quick approved from table.');
       }
     });
   });
 
-  // Quick Reject Logic
   $(document).on('click', '.quick-leave-reject', function () {
-    const id = $(this).data('id');
+    const unifiedId = $(this).data('id');
     Swal.fire({
       title: 'Reject Leave?',
-      text: 'Please provide a reason for rejection:',
+      text: "Please provide a reason for rejection:",
       input: 'textarea',
       inputPlaceholder: 'Enter remarks here...',
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Submit Rejection',
       confirmButtonColor: '#ff4d4d',
-      preConfirm: (value) => {
-        if (!value) {
+      preConfirm: (remarks) => {
+        if (!remarks) {
           Swal.showValidationMessage('Remarks are required for rejection!');
         }
-        return value;
+        return remarks;
       }
     }).then((result) => {
       if (result.isConfirmed) {
-        performQuickAction(id, 'rejected', result.value);
+        processAction(unifiedId, 'rejected', result.value);
       }
     });
   });
 
-  // Core AJAX function for quick actions
-  function performQuickAction(id, status, notes) {
+  function processAction(unifiedId, status, notes) {
+    var parts = unifiedId.toString().split('_');
+    var type = parts.length > 1 ? parts[0] : 'leave';
+    var id = parts.length > 1 ? parts[1] : unifiedId;
+    var actionUrl = type === 'outdoor' ? `${baseUrl}leaveRequests/outdoorDuty/actionAjax` : `${baseUrl}leaveRequests/actionAjax`;
+
     $.ajax({
-      url: `${baseUrl}leaveRequests/actionAjax`,
+      url: actionUrl,
       type: 'POST',
       data: {
         _token: $('meta[name="csrf-token"]').attr('content'),
@@ -555,18 +596,24 @@ $(function () {
       success: function (response) {
         Swal.fire({
           title: 'Success!',
-          text: `Leave request has been ${status}.`,
+          text: `Request has been ${status}.`,
           icon: 'success',
           timer: 2000,
           showConfirmButton: false
         });
-        if (dtLeaveRequests) dtLeaveRequests.ajax.reload();
-
-        // Refresh stats cards
-        setTimeout(() => { location.reload(); }, 2000);
+        if (dt_leave_requests) {
+          dt_leave_requests.ajax.reload();
+        }
+        setTimeout(() => {
+            location.reload();
+        }, 2000);
       },
       error: function (xhr) {
-        Swal.fire('Error', 'Failed to process request. Please try again.', 'error');
+        Swal.fire(
+          'Error',
+          'Failed to process request. Please try again.',
+          'error'
+        );
       }
     });
   }

@@ -289,24 +289,24 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
 
     // 1. Check if the path exists as-is (already fully prefixed)
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
-      return asset('storage/' . $path);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
     }
 
-    // If it starts with 'uploads/', don't try to prefix it again
+    // If it starts with 'uploads/', don't try to prefix it again with other folders
     if (str_starts_with($path, 'uploads/')) {
-        return asset('storage/' . $path);
+        return \App\Helpers\FileSecurityHelper::generateSecureUrl($path);
     }
 
     // 2. Try prefixing with employee profile folder (Standard/Legacy)
     $profilePath = Constants::BaseFolderEmployeeProfileWithSlash . $path;
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($profilePath)) {
-      return asset('storage/' . $profilePath);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($profilePath);
     }
 
     // 3. Try prefixing with onboarding folder (if only filename was saved)
     $onboardingPath = Constants::BaseFolderOnboardingDocuments . $this->id . '/' . $path;
     if (\Illuminate\Support\Facades\Storage::disk('public')->exists($onboardingPath)) {
-      return asset('storage/' . $onboardingPath);
+      return \App\Helpers\FileSecurityHelper::generateSecureUrl($onboardingPath);
     }
 
     return null;

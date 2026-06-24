@@ -110,7 +110,12 @@
             
             <div class="card shadow-sm border-0 mt-4" style="border-radius: 16px;">
                 <div class="card-body bg-light" style="border-radius: 16px;">
-                    <h6 class="fw-bold"><i class="bx bx-info-circle me-1"></i> Smart AI Column Mapping</h6>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="fw-bold mb-0"><i class="bx bx-info-circle me-1"></i> Smart AI Column Mapping</h6>
+                        <a href="{{ asset('templates/sales_target_template.csv') }}" class="btn btn-xs btn-outline-primary rounded-pill fw-bold" download>
+                            <i class="bx bx-download me-1"></i> Download CSV Template
+                        </a>
+                    </div>
                     <p class="small text-muted mb-0">
                         Our system will automatically scan your file and guess which column is the Employee Code, which is the Month, and which are the targets. 
                         You'll have a chance to review and fix the mappings on the next screen before any data is saved.

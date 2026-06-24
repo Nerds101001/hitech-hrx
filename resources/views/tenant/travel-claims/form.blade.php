@@ -65,7 +65,7 @@
         </div>
 
         <div class="table-responsive bg-white rounded shadow-sm border mb-3">
-            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 1400px; font-size: 0.85rem;">
+            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 2200px; font-size: 0.85rem;">
                 <thead class="bg-light">
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
@@ -74,13 +74,19 @@
                         <th style="min-width: 80px;">Meter<br>Start</th>
                         <th style="min-width: 80px;">Meter<br>End</th>
                         <th style="min-width: 60px;">Total<br>KM</th>
-                        <th style="min-width: 130px;">Odometer<br>Proof</th>
-                        <th style="min-width: 80px;">Conv.<br>(₹)</th>
-                        <th style="min-width: 60px;">Outst.<br>>5hrs</th>
-                        <th style="min-width: 75px;">Food<br>(₹)</th>
-                        <th style="min-width: 75px;">Lodging<br>(₹)</th>
-                        <th style="min-width: 75px;">Courier<br>(₹)</th>
-                        <th style="min-width: 75px;">Other<br>(₹)</th>
+                        <th style="min-width: 180px;">Odometer<br>Proof</th>
+                        <th style="min-width: 95px;">Conveyance<br>(₹)</th>
+                        <th style="min-width: 95px;">Outstation<br>>5hrs</th>
+                        <th style="min-width: 100px;">Food<br>(₹)</th>
+                        <th style="min-width: 110px;">Additional<br>Food (₹)</th>
+                        <th style="min-width: 160px;">Additional Food Proof</th>
+                        <th style="min-width: 90px;">Toll<br>(₹)</th>
+                        <th style="min-width: 140px;">Toll Proof</th>
+                        <th style="min-width: 110px;">Special<br>Approval (₹)</th>
+                        <th style="min-width: 160px;">Special Approval Proof</th>
+                        <th style="min-width: 90px;">Lodging<br>(₹)</th>
+                        <th style="min-width: 90px;">Courier<br>(₹)</th>
+                        <th style="min-width: 90px;">Other<br>(₹)</th>
                         <th style="min-width: 120px;">Remarks</th>
                     </tr>
                 </thead>
@@ -99,22 +105,15 @@
             </div>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
-            <h5 class="mb-0 fw-bold">Advances Taken</h5>
-            <button type="button" class="btn btn-secondary btn-sm shadow-sm" onclick="addAdvanceRow()"><i class="bx bx-plus me-1"></i> Add Advance</button>
-        </div>
-
-        <div id="advanceRows">
-            <!-- Advances inserted by JS -->
-        </div>
-        
         <div class="card shadow-sm border mb-4 mt-4" style="background: transparent;">
             <div class="card-body text-end p-4">
-                <h6 class="text-danger mb-2">Total Advances: <span id="totalAdvances">₹0.00</span></h6>
                 <p id="latePenaltyWarning" class="text-danger small mb-1 fw-bold" style="display:none;"><i class="bx bx-error-circle"></i> 10% Late Submission Penalty Applied to Net Payable!</p>
                 <h3 class="mb-3">Net Payable: <span id="netPayableText" class="text-success fw-bold">₹0.00</span></h3>
                 <p class="text-muted small mb-4">By submitting, you certify these expenses were incurred for official business in compliance with the company Travel Policy.</p>
-                <button type="submit" class="btn btn-success btn-lg px-5 shadow"><i class="bx bx-check-circle me-1"></i> Submit Claim</button>
+                <div class="d-flex justify-content-end gap-2">
+                    <button type="submit" name="action" value="draft" formnovalidate class="btn btn-outline-secondary btn-lg px-4 shadow-sm"><i class="bx bx-save me-1"></i> Save Draft</button>
+                    <button type="submit" name="action" value="submit" class="btn btn-success btn-lg px-5 shadow"><i class="bx bx-check-circle me-1"></i> Submit Claim</button>
+                </div>
             </div>
         </div>
     </form>
@@ -128,8 +127,22 @@
     @if(isset($claim) && $claim->items->count() > 0)
         let itemsArr = {!! json_encode($claim->items) !!};
         itemsArr.forEach(item => {
-            let d = item.date.split('T')[0];
-            existingItemsData[d] = item;
+            let dateStr = item.date;
+            let dateString;
+            if (dateStr.includes('T') && dateStr.endsWith('Z')) {
+                // Handle ISO format by adjusting the UTC timestamp to Indian Standard Time (+5:30)
+                let dateObj = new Date(dateStr);
+                let localTime = dateObj.getTime() + (5.5 * 60 * 60 * 1000);
+                let localDate = new Date(localTime);
+                let y = localDate.getUTCFullYear();
+                let m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
+                let d = String(localDate.getUTCDate()).padStart(2, '0');
+                dateString = `${y}-${m}-${d}`;
+            } else {
+                // If it is already in Y-m-d format (e.g. 2026-06-01), extract directly
+                dateString = dateStr.substring(0, 10);
+            }
+            existingItemsData[dateString] = item;
         });
     @endif
 
@@ -188,6 +201,21 @@
                     <input class="form-check-input" type="checkbox" name="items[${d}][is_outstation]" value="1" onchange="toggleOutstation(${d}, this)" ${ex.is_outstation ? 'checked' : ''}>
                 </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][food_allowance]" class="form-control form-control-sm food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.food_allowance || 0).toFixed(2)}" ${ex.is_outstation ? 'readonly' : ''}></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][additional_food_amount]" class="form-control form-control-sm add-food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.additional_food_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][additional_food_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.additional_food_proof ? `<input type="hidden" name="items[${d}][existing_additional_food_proof]" value="${ex.additional_food_proof}"><a href="/storage/${ex.additional_food_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][toll_amount]" class="form-control form-control-sm toll text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.toll_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][toll_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.toll_proof ? `<input type="hidden" name="items[${d}][existing_toll_proof]" value="${ex.toll_proof}"><a href="/storage/${ex.toll_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][special_approval_amount]" class="form-control form-control-sm special-appr text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.special_approval_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][special_approval_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.special_approval_proof ? `<input type="hidden" name="items[${d}][existing_special_approval_proof]" value="${ex.special_approval_proof}"><a href="/storage/${ex.special_approval_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.lodging_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.courier_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.other_amount || 0).toFixed(2)}"></td>
@@ -248,7 +276,7 @@
     }
 
     function calculateTotals() {
-        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0;
+        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tAddFood = 0, tSpecialAppr = 0;
         
         $('.expense-row').each(function() {
             tConv += parseFloat($(this).find('.conveyance').val()) || 0;
@@ -256,17 +284,15 @@
             tLodg += parseFloat($(this).find('.lodging').val()) || 0;
             tCour += parseFloat($(this).find('.courier').val()) || 0;
             tOth  += parseFloat($(this).find('.other').val()) || 0;
+            tToll += parseFloat($(this).find('.toll').val()) || 0;
+            tAddFood += parseFloat($(this).find('.add-food').val()) || 0;
+            tSpecialAppr += parseFloat($(this).find('.special-appr').val()) || 0;
         });
 
-        let grandTotal = tConv + tFood + tLodg + tCour + tOth;
+        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr;
         $('#grandTotal').text('₹' + grandTotal.toFixed(2));
-
-        let tAdv = 0;
-        $('.advance-card').each(function() {
-            tAdv += parseFloat($(this).find('.advance-amount').val()) || 0;
-        });
         
-        let net = grandTotal - tAdv;
+        let net = grandTotal;
         
         // Late Submission Penalty Logic
         let claimMonth = $('#claimMonthInput').val();
@@ -287,44 +313,7 @@
             $('#latePenaltyWarning').hide();
         }
 
-        $('#totalAdvances').text('₹' + tAdv.toFixed(2));
         $('#netPayableText').text('₹' + net.toFixed(2));
-    }
-
-    function addAdvanceRow() {
-        const html = `
-            <div class="card shadow-sm border-0 mb-2 advance-card" id="advanceRow${advanceIndex}">
-                <div class="card-body p-3">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted">Date</label>
-                            <input type="date" name="advances[${advanceIndex}][date]" class="form-control" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted">Mode</label>
-                            <select name="advances[${advanceIndex}][mode]" class="form-select">
-                                <option value="Cash">Cash</option>
-                                <option value="Cheque">Cheque</option>
-                                <option value="Transfer">Bank Transfer</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label small text-muted">Reference / Cheque No.</label>
-                            <input type="text" name="advances[${advanceIndex}][cheque_number]" class="form-control">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label small text-danger fw-bold">Amount (₹)</label>
-                            <input type="number" step="0.01" name="advances[${advanceIndex}][amount]" class="form-control advance-amount text-end fw-bold text-danger" value="0.00" oninput="calculateTotals()" required>
-                        </div>
-                        <div class="col-md-1 text-end">
-                            <button type="button" class="btn btn-outline-danger btn-icon rounded-circle" onclick="$('#advanceRow${advanceIndex}').remove(); calculateTotals();" title="Remove Advance"><i class="bx bx-trash"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        $('#advanceRows').append(html);
-        advanceIndex++;
     }
 
     $(document).ready(function() {
@@ -333,20 +322,6 @@
         tooltipTriggerList.map(function (tooltipTriggerEl) {
           return new bootstrap.Tooltip(tooltipTriggerEl);
         });
-
-        // Setup advances if editing
-        @if(isset($claim) && $claim->advances->count() > 0)
-            let advances = {!! json_encode($claim->advances) !!};
-            advances.forEach((adv, index) => {
-                addAdvanceRow();
-                let row = $('#advanceRow' + index);
-                row.find('input[name="advances['+index+'][date]"]').val(adv.date.split('T')[0]);
-                row.find('select[name="advances['+index+'][mode]"]').val(adv.mode);
-                row.find('input[name="advances['+index+'][cheque_number]"]').val(adv.cheque_number);
-                row.find('input[name="advances['+index+'][amount]"]').val(adv.amount);
-            });
-            calculateTotals();
-        @endif
 
         // Trigger grid generation on load if month is already set (e.g. edit mode or validation redirect)
         if ($('#claimMonthInput').val()) {
@@ -364,9 +339,12 @@
                 let lodging = parseFloat(row.find('.lodging').val()) || 0;
                 let courier = parseFloat(row.find('.courier').val()) || 0;
                 let other = parseFloat(row.find('.other').val()) || 0;
+                let toll = parseFloat(row.find('.toll').val()) || 0;
+                let addFood = parseFloat(row.find('.add-food').val()) || 0;
+                let specialAppr = parseFloat(row.find('.special-appr').val()) || 0;
                 
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0) {
+                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

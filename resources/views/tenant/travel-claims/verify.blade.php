@@ -67,7 +67,11 @@
                                 <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : 'secondary' }}">{{ ucfirst($claim->status) }}</span>
                             </td>
                             <td>
-                                <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
+                                @if($claim->status === 'draft')
+                                    <a href="{{ route('travel-claims.edit', $claim->id) }}" class="btn btn-sm btn-outline-warning rounded-pill px-3">Continue Draft</a>
+                                @else
+                                    <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
+                                @endif
                             </td>
                         </tr>
 
@@ -106,6 +110,12 @@
                                 <th>Food</th>
                                 <th>Lodging</th>
                                 <th>Courier</th>
+                                <th>Toll</th>
+                                <th>Toll Proof</th>
+                                <th>Additional Food</th>
+                                <th>Additional Food Proof</th>
+                                <th>Special Approval</th>
+                                <th>Special Approval Proof</th>
                                 <th>Photo Proof</th>
                             </tr>
                         </thead>
@@ -122,6 +132,30 @@
                                 <td>₹{{ $item->food_allowance }}</td>
                                 <td>₹{{ $item->lodging_amount }}</td>
                                 <td>₹{{ $item->courier_amount }}</td>
+                                <td>₹{{ $item->toll_amount }}</td>
+                                <td>
+                                    @if($item->toll_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->toll_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ $item->additional_food_amount ?? 0 }}</td>
+                                <td>
+                                    @if($item->additional_food_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->additional_food_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ $item->special_approval_amount ?? 0 }}</td>
+                                <td>
+                                    @if($item->special_approval_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->special_approval_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
                                 <td>
                                     @if($item->photo_path)
                                         <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>

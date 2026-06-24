@@ -148,7 +148,7 @@
                 <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
                 <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
                 <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
-                <a href="{{ route('library.index', ['category' => 'MOM']) }}" class="nav-link {{ request('category') === 'MOM' ? 'active' : '' }}">MOM</a>
+                <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentations</a>
                 <a href="{{ route('library.index', ['category' => 'LEARN']) }}" class="nav-link {{ request('category') === 'LEARN' ? 'active' : '' }}">Learn @ Hitech</a>
                 <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Videos</a>
                 <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Reports</a>

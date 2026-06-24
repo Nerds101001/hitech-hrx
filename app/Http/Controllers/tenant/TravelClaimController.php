@@ -19,7 +19,12 @@ class TravelClaimController extends Controller
     {
         $user = auth()->user();
         if ($user->hasRole(['admin', 'Admin', 'super_admin'])) {
-            $claims = TravelClaim::with('user')->orderBy('created_at', 'desc')->get();
+            $claims = TravelClaim::with('user')
+                ->where(function($q) use ($user) {
+                    $q->where('status', '!=', 'draft')
+                      ->orWhere('user_id', $user->id);
+                })
+                ->orderBy('created_at', 'desc')->get();
             return view('tenant.travel-claims.verify', compact('claims'));
         } elseif ($user->hasRole(['accounts', 'Accounts'])) {
             $claims = TravelClaim::with('user')->whereIn('status', ['verified', 'approved', 'paid'])->orderBy('created_at', 'desc')->get();
@@ -41,23 +46,33 @@ class TravelClaimController extends Controller
         if ($request->has('items') && is_array($request->items)) {
             $filteredItems = array_filter($request->items, function($item) {
                 return !empty($item['mode_of_travel']) || 
+                       !empty($item['to_location']) ||
+                       !empty($item['from_location']) ||
+                       !empty($item['remarks']) ||
                        (isset($item['food_allowance']) && floatval($item['food_allowance']) > 0) ||
                        (isset($item['lodging_amount']) && floatval($item['lodging_amount']) > 0) ||
                        (isset($item['courier_amount']) && floatval($item['courier_amount']) > 0) ||
                        (isset($item['other_amount']) && floatval($item['other_amount']) > 0) ||
-                       !empty($item['remarks']) || !empty($item['from_location']);
+                       (isset($item['toll_amount']) && floatval($item['toll_amount']) > 0) ||
+                       (isset($item['additional_food_amount']) && floatval($item['additional_food_amount']) > 0) ||
+                       (isset($item['special_approval_amount']) && floatval($item['special_approval_amount']) > 0);
             });
             $request->merge(['items' => $filteredItems]);
         }
+
+        $isDraft = $request->input('action') === 'draft';
 
         $request->validate([
             'claim_month' => 'required|string',
             'company' => 'required|string',
             'sales_collection' => 'nullable|numeric',
-            'items' => 'required|array|min:1',
+            'items' => $isDraft ? 'nullable|array' : 'required|array|min:1',
             'items.*.date' => 'required|date',
             'items.*.mode_of_travel' => 'nullable|string',
             'items.*.photo' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.toll_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.additional_food_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.special_approval_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
         ]);
 
         $latePenalty = false;
@@ -74,13 +89,15 @@ class TravelClaimController extends Controller
         try {
             DB::beginTransaction();
 
+            $targetStatus = $isDraft ? 'draft' : 'submitted';
+
             if ($existingClaim) {
                 $claim = $existingClaim;
                 $claim->forceFill([
                     'claim_month' => $request->claim_month,
                     'company' => $request->company,
                     'sales_collection' => $request->sales_collection ?? 0,
-                    'status' => 'submitted',
+                    'status' => $targetStatus,
                     'late_penalty_applied' => $latePenalty,
                 ])->save();
             } else {
@@ -92,63 +109,85 @@ class TravelClaimController extends Controller
                     'bank_account_name' => 'On File',
                     'bank_account_no' => 'On File',
                     'bank_ifsc' => 'On File',
-                    'status' => 'submitted',
+                    'status' => $targetStatus,
                     'late_penalty_applied' => $latePenalty,
                 ]);
             }
 
             $total_amount = 0;
 
-            foreach ($request->items as $index => $item) {
-                $photoPath = null;
-                if ($request->hasFile("items.{$index}.photo")) {
-                    $photoPath = $request->file("items.{$index}.photo")->store('travel_claims', 'public');
+            if (!empty($request->items) && is_array($request->items)) {
+                foreach ($request->items as $index => $item) {
+                    $photoPath = $request->hasFile("items.{$index}.photo")
+                        ? $request->file("items.{$index}.photo")->store('travel_claims', 'public')
+                        : ($item['existing_photo'] ?? null);
+                    
+                    $tollProofPath = $request->hasFile("items.{$index}.toll_proof")
+                        ? $request->file("items.{$index}.toll_proof")->store('travel_claims_tolls', 'public')
+                        : ($item['existing_toll_proof'] ?? null);
+
+                    $addFoodProofPath = $request->hasFile("items.{$index}.additional_food_proof")
+                        ? $request->file("items.{$index}.additional_food_proof")->store('travel_claims_extra', 'public')
+                        : ($item['existing_additional_food_proof'] ?? null);
+
+                    $specialApprovalProofPath = $request->hasFile("items.{$index}.special_approval_proof")
+                        ? $request->file("items.{$index}.special_approval_proof")->store('travel_claims_special', 'public')
+                        : ($item['existing_special_approval_proof'] ?? null);
+
+                    $distance = floatval($item['distance_km'] ?? 0);
+                    $mode = $item['mode_of_travel'] ?? null;
+                    $rate = 0;
+                    if ($mode == 'Bike') $rate = 4.00;
+                    elseif ($mode == 'Car') $rate = 9.50;
+
+                    $conveyance = $distance * $rate;
+                    $penalty_applied = false;
+
+                    if (in_array($mode, ['Bike', 'Car']) && !$photoPath) {
+                        $conveyance = $conveyance * 0.70; // 30% reduction
+                        $penalty_applied = true;
+                    }
+                    
+                    // If the user checked outstation, apply 300
+                    $food_allowance = isset($item['is_outstation']) && $item['is_outstation'] ? 300 : floatval($item['food_allowance'] ?? 0);
+
+                    $lodging = floatval($item['lodging_amount'] ?? 0);
+                    $courier = floatval($item['courier_amount'] ?? 0);
+                    $other = floatval($item['other_amount'] ?? 0);
+                    $toll_amount = floatval($item['toll_amount'] ?? 0);
+                    $add_food_amount = floatval($item['additional_food_amount'] ?? 0);
+                    $special_approval_amount = floatval($item['special_approval_amount'] ?? 0);
+
+                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount;
+                    $total_amount += $row_total;
+
+                    TravelClaimItem::forceCreate([
+                        'travel_claim_id' => $claim->id,
+                        'date' => $item['date'],
+                        'from_location' => $item['from_location'] ?? null,
+                        'to_location' => $item['to_location'] ?? null,
+                        'party_visited' => $item['party_visited'] ?? null,
+                        'mode_of_travel' => $mode,
+                        'start_meter' => $item['start_meter'] ?? null,
+                        'end_meter' => $item['end_meter'] ?? null,
+                        'distance_km' => $distance,
+                        'photo_path' => $photoPath,
+                        'penalty_applied' => $penalty_applied,
+                        'conveyance_amount' => $conveyance,
+                        'is_outstation' => isset($item['is_outstation']) ? true : false,
+                        'food_allowance' => $food_allowance,
+                        'lodging_amount' => $lodging,
+                        'courier_amount' => $courier,
+                        'other_amount' => $other,
+                        'toll_amount' => $toll_amount,
+                        'toll_proof' => $tollProofPath,
+                        'additional_food_amount' => $add_food_amount,
+                        'additional_food_proof' => $addFoodProofPath,
+                        'special_approval_amount' => $special_approval_amount,
+                        'special_approval_proof' => $specialApprovalProofPath,
+                        'remarks' => $item['remarks'] ?? null,
+                    ]);
                 }
-
-                $distance = floatval($item['distance_km'] ?? 0);
-                $mode = $item['mode_of_travel'] ?? null;
-                $rate = 0;
-                if ($mode == 'Bike') $rate = 4.00;
-                elseif ($mode == 'Car') $rate = 9.50;
-
-                $conveyance = $distance * $rate;
-                $penalty_applied = false;
-
-                if (in_array($mode, ['Bike', 'Car']) && !$photoPath) {
-                    $conveyance = $conveyance * 0.70; // 30% reduction
-                    $penalty_applied = true;
-                }
-                
-                // If the user checked outstation, apply 300
-                $food_allowance = isset($item['is_outstation']) && $item['is_outstation'] ? 300 : floatval($item['food_allowance'] ?? 0);
-
-                $lodging = floatval($item['lodging_amount'] ?? 0);
-                $courier = floatval($item['courier_amount'] ?? 0);
-                $other = floatval($item['other_amount'] ?? 0);
-
-                $row_total = $conveyance + $food_allowance + $lodging + $courier + $other;
-                $total_amount += $row_total;
-
-                TravelClaimItem::forceCreate([
-                    'travel_claim_id' => $claim->id,
-                    'date' => $item['date'],
-                    'from_location' => $item['from_location'] ?? null,
-                    'to_location' => $item['to_location'] ?? null,
-                    'party_visited' => $item['party_visited'] ?? null,
-                    'mode_of_travel' => $mode,
-                    'start_meter' => $item['start_meter'] ?? null,
-                    'end_meter' => $item['end_meter'] ?? null,
-                    'distance_km' => $distance,
-                    'photo_path' => $photoPath,
-                    'penalty_applied' => $penalty_applied,
-                    'conveyance_amount' => $conveyance,
-                    'is_outstation' => isset($item['is_outstation']) ? true : false,
-                    'food_allowance' => $food_allowance,
-                    'lodging_amount' => $lodging,
-                    'courier_amount' => $courier,
-                    'other_amount' => $other,
-                    'remarks' => $item['remarks'] ?? null,
-                ]);
             }
 
         $total_advances = 0;

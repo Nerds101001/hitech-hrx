@@ -213,7 +213,9 @@ class LeaveController extends Controller
 
       $leaveRequest->save();
 
-      Notification::send($leaveRequest->user, new LeaveRequestApproval($leaveRequest, $validated['status']));
+      app()->terminating(function () use ($leaveRequest, $validated) {
+          Notification::send($leaveRequest->user, new LeaveRequestApproval($leaveRequest, $validated['status']));
+      });
 
       return response()->json(['status' => 'success', 'message' => 'Leave request ' . $validated['status'] . ' successfully.']);
     } catch (Exception $e) {
@@ -258,7 +260,9 @@ class LeaveController extends Controller
                 $leaveRequest->rejected_at = now();
             }
             $leaveRequest->save();
-            Notification::send($leaveRequest->user, new LeaveRequestApproval($leaveRequest, $validated['status']));
+            app()->terminating(function () use ($leaveRequest, $validated) {
+                Notification::send($leaveRequest->user, new LeaveRequestApproval($leaveRequest, $validated['status']));
+            });
           }
       }
 

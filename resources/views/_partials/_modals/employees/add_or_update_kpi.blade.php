@@ -25,7 +25,7 @@
                                 <option value="KRA">KRA (Key Result Area)</option>
                             </select>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6" id="gradeSystemContainer">
                             <label class="form-label-hitech">MNC Grade System <span class="text-danger">*</span></label>
                             <select name="grade_system" id="modalKpiGrade" class="form-select form-select-hitech">
                                 <option value="Standard">Standard Level</option>

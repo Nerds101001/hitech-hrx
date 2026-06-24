@@ -9,7 +9,7 @@ class TravelClaimItem extends Model
     protected $fillable = [];
 
     protected $casts = [
-        'date' => 'date',
+        'date' => 'date:Y-m-d',
         'penalty_applied' => 'boolean',
     ];
 

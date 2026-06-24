@@ -2320,7 +2320,7 @@
                                         <div class="d-flex gap-2">
                                             @if(auth()->user()->hasRole(['admin', 'Admin', 'hr', 'manager', 'accounts', 'super_admin']) || auth()->user()->can('user-edit'))
                                                 <button class="btn btn-hitech px-4 rounded-pill shadow-sm"
-                                                    data-bs-toggle="modal" data-bs-target="#modalAddKpi" onclick="openAddKpi()">
+                                                    data-bs-toggle="modal" data-bs-target="#modalAddKpi" onclick="openAddKpi('', '', '', 'percentage', '', 'KRA')">
                                                     <i class="bx bx-plus-circle me-1"></i> Add KRA Objective
                                                 </button>
                                             @endif
@@ -3953,17 +3953,40 @@
 
             // ── KRA & KPI Strategic Management ────────────────────────────────────
 
-            window.openAddKpi = function (id = '', metric = '', goal = '', type = 'percentage', description = '') {
+            // Toggle grade system field visibility based on category selection
+            $(document).on('change', '#modalKpiCategory', function () {
+                if ($(this).val() === 'KRA') {
+                    $('#gradeSystemContainer').hide();
+                    $('#modalKpiGrade').prop('required', false);
+                } else {
+                    $('#gradeSystemContainer').show();
+                    $('#modalKpiGrade').prop('required', true);
+                }
+            });
+
+            window.openAddKpi = function (id = '', metric = '', goal = '', type = 'percentage', description = '', category = 'KPI') {
                 $('#modalKpiId').val(id);
                 $('#modalKpiMetric').val(metric);
                 $('#modalKpiGoal').val(goal);
                 $('#modalKpiType').val(type);
-                $('#modalKpiDescription').val(description);
+                
+                // Clean the formatted description prefix if present
+                let cleanDescription = description.replace(/^Type:\s*.*?\n\n/i, '');
+                $('#modalKpiDescription').val(cleanDescription);
 
-                $('.modal-title-hitech').text(id ? 'Refine Performance KPI' : 'Define Strategic KPI');
-                $('.btn-hitech-modal-submit').html(id ? 'Update KPI <i class="bx bx-check-circle ms-1"></i>' : 'Deploy KPI <i class="bx bx-rocket ms-1"></i>');
+                $('#modalKpiCategory').val(category).trigger('change');
+
+                $('.modal-title-hitech').text(id ? 'Refine Strategy Details' : (category === 'KRA' ? 'Define Strategic KRA' : 'Define Strategic KPI'));
+                $('.btn-hitech-modal-submit').html(id ? 'Update Strategy <i class="bx bx-check-circle ms-1"></i>' : 'Deploy Strategy <i class="bx bx-rocket ms-1"></i>');
 
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddKpi')).show();
+            };
+
+            window.editKpi = function (id, metric, category, grade, goal, type, description) {
+                window.openAddKpi(id, metric, goal, type, description, category);
+                if (category !== 'KRA') {
+                    $('#modalKpiGrade').val(grade);
+                }
             };
 
             // KPI Form Submission Handler

@@ -105,7 +105,7 @@ class DigitalLibraryController extends Controller
                 'model' => config('openai.ai_model'),
                 'messages' => [
                     ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
-                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), MOM (Minutes of Meeting), LEARN (Training), Test Report, Comparison Report.
+                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), Presentation (Corporate Presentation), LEARN (Training), Test Report, Comparison Report.
                     Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
                     Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
                     
@@ -113,9 +113,9 @@ class DigitalLibraryController extends Controller
                     - You MUST identify the document type.
                     - Identify the BRAND from the list above. If not found, use 'HITECH'.
                     - Identify the SUB-CATEGORY from the list above. If not explicitly found, categorize it into the most logical one.
-                    - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate MOM), do NOT reject it.
+                    - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate Presentation), do NOT reject it.
                     - Extract: BRAND|SUB_CATEGORY|CATEGORY|NAME|DATE|CRUX
-                    - CATEGORY MUST be one of (TDS, SDS, MOM, LEARN, Test Report, Comparison Report).
+                    - CATEGORY MUST be one of (TDS, SDS, Presentation, LEARN, Test Report, Comparison Report).
                     - CRUX Rules (Must be 5-6 lines total, PLAIN TEXT ONLY):
                       - NO markdown, NO asterisks, NO bolding, NO numbered lists.
                       - Lines 1-3: Clear Product Description.
@@ -289,7 +289,7 @@ class DigitalLibraryController extends Controller
                     $verify = $client->chat()->create([
                         'model' => config('openai.ai_model'),
                         'messages' => [
-                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/MOM/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key."],
+                            ['role' => 'system', 'content' => "Identify document type (SDS/TDS/Presentation/LEARN/Test Report/Comparison Report/INVALID). Reply ONLY with the key."],
                             ['role' => 'user', 'content' => "Text: " . $text],
                         ],
                     ]);
