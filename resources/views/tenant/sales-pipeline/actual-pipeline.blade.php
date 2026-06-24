@@ -186,16 +186,22 @@
 
                                 <td class="text-center">{{ $index + 1 }}</td>
                                 <td class="text-muted">{{ $row->created_at->format('d M Y') }}</td>
-                                <td class="col-party fw-semibold text-dark text-truncate p-0"
+                                <td class="col-party fw-semibold text-dark text-truncate p-0 position-relative editable-cell"
                                     title="{{ $row->party_name }}">
-                                    <input type="text" class="excel-input row-field"
+                                    <input type="text" class="excel-input row-field pe-4"
                                            data-field="party_name"
                                            value="{{ $row->party_name }}">
+                                    <span class="edit-pencil-icon position-absolute end-0 top-50 translate-middle-y me-2 text-muted" style="pointer-events: none;">
+                                        <i class="bx bx-pencil" style="font-size: 0.75rem;"></i>
+                                    </span>
                                 </td>
-                                <td class="p-0 align-middle">
-                                    <input type="text" class="excel-input row-field"
+                                <td class="p-0 align-middle position-relative editable-cell">
+                                    <input type="text" class="excel-input row-field pe-4"
                                            data-field="product"
                                            value="{{ $row->product }}">
+                                    <span class="edit-pencil-icon position-absolute end-0 top-50 translate-middle-y me-2 text-muted" style="pointer-events: none;">
+                                        <i class="bx bx-pencil" style="font-size: 0.75rem;"></i>
+                                    </span>
                                 </td>
 
                                 @if($isAdmin)
@@ -236,11 +242,14 @@
                                     </td>
                                 @endif
 
-                                <td class="p-0 align-middle">
-                                    <input type="number" step="0.01" class="excel-input row-field text-end fw-bold font-monospace"
+                                <td class="p-0 align-middle position-relative editable-cell">
+                                    <input type="number" step="0.01" class="excel-input row-field text-end fw-bold font-monospace ps-4"
                                            style="color:#0f766e;"
                                            data-field="total_business_potential"
                                            value="{{ $row->total_business_potential }}">
+                                    <span class="edit-pencil-icon position-absolute start-0 top-50 translate-middle-y ms-2 text-muted" style="pointer-events: none;">
+                                        <i class="bx bx-pencil" style="font-size: 0.75rem;"></i>
+                                    </span>
                                 </td>
 
                                 <td class="p-0 align-middle">
@@ -257,11 +266,14 @@
                                     </select>
                                 </td>
 
-                                <td class="p-0">
-                                    <input type="text" class="excel-input row-field"
+                                <td class="p-0 position-relative editable-cell">
+                                    <input type="text" class="excel-input row-field pe-4"
                                            data-field="status_remarks"
                                            value="{{ $row->status_remarks }}"
                                            placeholder="Type status remarks…">
+                                    <span class="edit-pencil-icon position-absolute end-0 top-50 translate-middle-y me-2 text-muted" style="pointer-events: none;">
+                                        <i class="bx bx-pencil" style="font-size: 0.75rem;"></i>
+                                    </span>
                                 </td>
                             </tr>
                         @empty
@@ -408,6 +420,17 @@
     .converted-row td { background-color:#fdf4ff !important; border-bottom:2px solid #e879f9 !important; }
     .converted-row .col-party::after { content:' (Converted)'; color:#d946ef; font-size:0.7rem; font-weight:bold; }
     .pipeline-row-hidden { display:none !important; }
+    .editable-cell { position: relative; }
+    .editable-cell .edit-pencil-icon {
+        color: #94a3b8;
+        opacity: 0.4;
+        transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out;
+    }
+    .editable-cell:hover .edit-pencil-icon,
+    .editable-cell:focus-within .edit-pencil-icon {
+        opacity: 1;
+        color: #0d9488;
+    }
 </style>
 
 <script>
