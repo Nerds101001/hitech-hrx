@@ -144,7 +144,7 @@
                                 {{-- CCare / New Biz see the salesperson --}}
                                 <th class="align-middle">Salesperson</th>
                             @endif
-                            <th class="text-end align-middle">Potential (L) /M (Month)</th>
+                            <th class="text-end align-middle">Potential (L) / Month</th>
                             <th class="align-middle">Stage</th>
                             <th class="align-middle" style="min-width:250px;">Status Remarks</th>
                         </tr>
