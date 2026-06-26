@@ -233,7 +233,11 @@ class PipelineImportController extends Controller
             }
 
             $typeRaw = strtolower(trim($row[$typeColIdx] ?? ''));
-            $typeMap = ['ccare' => 'CCare', 'newbiz' => 'New Biz', 'new biz' => 'New Biz', 'closed' => 'Closed', 'dropped' => 'Dropped', 'inactive' => 'Inactive'];
+            $typeMap = [
+                'ccare' => 'CCare', 'newbiz' => 'New Biz', 'new biz' => 'New Biz',
+                'distributor' => 'Distributor', 'dealer' => 'Dealer', 'customer' => 'Customer',
+                'closed' => 'Closed', 'dropped' => 'Dropped', 'inactive' => 'Inactive'
+            ];
             $partyType = $typeMap[$typeRaw] ?? null;
 
             try {

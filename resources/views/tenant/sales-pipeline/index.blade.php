@@ -67,8 +67,9 @@
                 <select class="form-select form-select-sm" id="filterType" style="width:130px;"
                         onchange="applyFilters()">
                     <option value="">All Types</option>
-                    <option value="CCare">CCare</option>
-                    <option value="New Biz">New Biz</option>
+                    <option value="Distributor">Distributor</option>
+                    <option value="Dealer">Dealer</option>
+                    <option value="Customer">Customer</option>
                 </select>
                 <input type="text" class="form-control form-control-sm" id="filterParty"
                        placeholder="Search customer…" style="width:200px;" oninput="applyFilters()">
@@ -207,9 +208,10 @@
                             @php
                                 // Determine what to show in the "rep" column
                                 if ($isSalesperson) {
-                                    if ($row->type === 'CCare')    { $repDisplay = $row->ccare->name   ?? '-'; }
-                                    elseif ($row->type === 'New Biz') { $repDisplay = $row->newBiz->name ?? '-'; }
-                                    else                           { $repDisplay = '-'; }
+                                    $reps = [];
+                                    if ($row->ccare->name ?? null) { $reps[] = $row->ccare->name . ' (CC)'; }
+                                    if ($row->newBiz->name ?? null) { $reps[] = $row->newBiz->name . ' (NB)'; }
+                                    $repDisplay = !empty($reps) ? implode(' / ', $reps) : '-';
                                 } elseif ($isCcare || $isNewBiz) {
                                     $repDisplay = $row->salesperson->name ?? '-';
                                 } else {
@@ -247,8 +249,12 @@
                                     <select class="excel-select row-field status-select text-truncate"
                                             data-field="type">
                                         <option value="">-Select-</option>
-                                        <option value="CCare"    {{ $row->type === 'CCare'    ? 'selected' : '' }}>CCare</option>
-                                        <option value="New Biz"  {{ $row->type === 'New Biz'  ? 'selected' : '' }}>New Biz</option>
+                                        <option value="Distributor" {{ $row->type === 'Distributor' ? 'selected' : '' }}>Distributor</option>
+                                        <option value="Dealer"      {{ $row->type === 'Dealer'      ? 'selected' : '' }}>Dealer</option>
+                                        <option value="Customer"    {{ $row->type === 'Customer'    ? 'selected' : '' }}>Customer</option>
+                                        @if($row->type && !in_array($row->type, ['Distributor', 'Dealer', 'Customer']))
+                                            <option value="{{ $row->type }}" selected>{{ $row->type }}</option>
+                                        @endif
                                     </select>
                                 </td>
 
@@ -266,8 +272,22 @@
                                     <td class="col-salesperson text-truncate" title="{{ $row->salesperson->name ?? '-' }}">{{ $row->salesperson->name ?? '-' }}</td>
                                 @endif
 
-                                <td class="text-truncate block-end" style="max-width:150px;"
-                                    title="{{ $row->product }}">{{ $row->product ?: '-' }}</td>
+                                <td class="p-0 align-middle block-end" style="max-width:150px;">
+                                    <select class="excel-select row-field status-select text-truncate"
+                                            data-field="product">
+                                        <option value="">-Select-</option>
+                                        <option value="Rust-X"      {{ $row->product === 'Rust-X'      ? 'selected' : '' }}>Rust-X</option>
+                                        <option value="Dr.Bio"      {{ $row->product === 'Dr.Bio'      ? 'selected' : '' }}>Dr.Bio</option>
+                                        <option value="Fillezy"     {{ $row->product === 'Fillezy'     ? 'selected' : '' }}>Fillezy</option>
+                                        <option value="KIF"         {{ $row->product === 'KIF'         ? 'selected' : '' }}>KIF</option>
+                                        <option value="Zorbit"      {{ $row->product === 'Zorbit'      ? 'selected' : '' }}>Zorbit</option>
+                                        <option value="Tuffpaulin"  {{ $row->product === 'Tuffpaulin'  ? 'selected' : '' }}>Tuffpaulin</option>
+                                        <option value="HITECH"      {{ $row->product === 'HITECH'      ? 'selected' : '' }}>HITECH</option>
+                                        @if($row->product && !in_array($row->product, ['Rust-X', 'Dr.Bio', 'Fillezy', 'KIF', 'Zorbit', 'Tuffpaulin', 'HITECH']))
+                                            <option value="{{ $row->product }}" selected>{{ $row->product }}</option>
+                                        @endif
+                                    </select>
+                                </td>
 
                                 @foreach($months as $m)
                                     @php
@@ -324,8 +344,9 @@
                             <td class="p-1">
                                 <select id="new_type" class="form-select form-select-sm">
                                     <option value="">-Type-</option>
-                                    <option value="CCare">CCare</option>
-                                    <option value="New Biz">New Biz</option>
+                                    <option value="Distributor">Distributor</option>
+                                    <option value="Dealer">Dealer</option>
+                                    <option value="Customer">Customer</option>
                                 </select>
                             </td>
                             <td class="p-1">
@@ -361,8 +382,16 @@
                                 <td class="p-2 text-muted small align-middle">Auto-assigned</td>
                             @endif
                             <td class="p-1">
-                                <input type="text" id="new_product" class="form-control form-control-sm"
-                                       placeholder="Brand">
+                                <select id="new_product" class="form-select form-select-sm">
+                                    <option value="">-Brand-</option>
+                                    <option value="Rust-X">Rust-X</option>
+                                    <option value="Dr.Bio">Dr.Bio</option>
+                                    <option value="Fillezy">Fillezy</option>
+                                    <option value="KIF">KIF</option>
+                                    <option value="Zorbit">Zorbit</option>
+                                    <option value="Tuffpaulin">Tuffpaulin</option>
+                                    <option value="HITECH">HITECH</option>
+                                </select>
                             </td>
                             {{-- Empty cells for month columns --}}
                             @foreach($months as $m)

@@ -155,9 +155,10 @@
                             @php
                                 // Determine single rep column value for salesperson view
                                 if ($isSalesperson) {
-                                    if ($row->type === 'CCare')     { $repDisplay = $row->ccare->name   ?? '-'; }
-                                    elseif ($row->type === 'New Biz') { $repDisplay = $row->newBiz->name ?? '-'; }
-                                    else                             { $repDisplay = '-'; }
+                                    $reps = [];
+                                    if ($row->ccare->name ?? null) { $reps[] = $row->ccare->name . ' (CC)'; }
+                                    if ($row->newBiz->name ?? null) { $reps[] = $row->newBiz->name . ' (NB)'; }
+                                    $repDisplay = !empty($reps) ? implode(' / ', $reps) : '-';
                                 } elseif ($isCcare || $isNewBiz) {
                                     $repDisplay = $row->salesperson->name ?? '-';
                                 } else {

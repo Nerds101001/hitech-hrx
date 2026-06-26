@@ -76,8 +76,16 @@ table.prev-table tr:hover td { background: #f0fdf4; }
                                 <input type="hidden" name="potentials[{{ $row['row_num'] }}]" value="{{ $row['potential'] }}">
                             </td>
                             <td class="text-center">
-                                @php $t = strtoupper($row['type'] ?? '') @endphp
-                                <span class="badge bg-label-{{ $t === 'CCARE' ? 'success' : ($t === 'NEWBIZ' ? 'primary' : 'secondary') }} text-uppercase" style="font-size:10px;">{{ $t ?: '—' }}</span>
+                                @php
+                                    $t = strtoupper($row['type'] ?? '');
+                                    $badgeColor = 'secondary';
+                                    if ($t === 'DISTRIBUTOR') { $badgeColor = 'success'; }
+                                    elseif ($t === 'DEALER') { $badgeColor = 'primary'; }
+                                    elseif ($t === 'CUSTOMER') { $badgeColor = 'info'; }
+                                    elseif ($t === 'CCARE') { $badgeColor = 'warning'; }
+                                    elseif ($t === 'NEWBIZ' || $t === 'NEW BIZ') { $badgeColor = 'danger'; }
+                                @endphp
+                                <span class="badge bg-label-{{ $badgeColor }} text-uppercase" style="font-size:10px;">{{ $row['type'] ?: '—' }}</span>
                             </td>
                             <td class="text-end fw-semibold">{{ number_format($row['potential'], 2) }}<small class="text-muted ms-1">L</small></td>
                             @foreach($previewMonthKeys as $mk)
