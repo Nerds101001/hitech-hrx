@@ -69,6 +69,11 @@
                             <td>
                                 @if($claim->status === 'draft')
                                     <a href="{{ route('travel-claims.edit', $claim->id) }}" class="btn btn-sm btn-outline-warning rounded-pill px-3">Continue Draft</a>
+                                    <form action="{{ route('travel-claims.destroy', $claim->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this draft claim? This action cannot be undone.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3">Delete Draft</button>
+                                    </form>
                                 @else
                                     <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
                                 @endif
@@ -95,6 +100,9 @@
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header" style="background: linear-gradient(90deg, #005a5a, #007a7a); padding: 1.5rem;">
                 <h5 class="modal-title text-white fw-bold mb-0">CLAIM #{{ $claim->id }} - {{ strtoupper($claim->user->name) }}</h5>
+                <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-light ms-auto me-3" style="border-radius: 8px;">
+                    <i class="bx bx-download"></i> Download Attachments
+                </a>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
@@ -110,6 +118,13 @@
                                 <th>Food</th>
                                 <th>Lodging</th>
                                 <th>Courier</th>
+                                <th>Courier Proof</th>
+                                <th>Transport</th>
+                                <th>Transport Proof</th>
+                                <th>Bills</th>
+                                <th>Bills Proof</th>
+                                <th>Freight</th>
+                                <th>Freight Proof</th>
                                 <th>Toll</th>
                                 <th>Toll Proof</th>
                                 <th>Additional Food</th>
@@ -132,6 +147,37 @@
                                 <td>₹{{ $item->food_allowance }}</td>
                                 <td>₹{{ $item->lodging_amount }}</td>
                                 <td>₹{{ $item->courier_amount }}</td>
+                                <td>
+                                    @if($item->courier_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->courier_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ $item->transport_amount }}</td>
+                                <td>
+                                    @if($item->transport_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->transport_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ $item->bills_amount }}</td>
+                                <td>
+                                    @if($item->bills_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->bills_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ $item->freight_amount }}</td>
+                                <td>
+                                    @if($item->freight_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->freight_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    @else
+                                        <span class="text-muted">-</span>
+                                    @endif
+                                </td>
                                 <td>₹{{ $item->toll_amount }}</td>
                                 <td>
                                     @if($item->toll_proof)

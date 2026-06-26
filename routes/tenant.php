@@ -716,6 +716,8 @@ Route::middleware([
             Route::get('/{id}/edit', [\App\Http\Controllers\tenant\TravelClaimController::class, 'edit'])->name('edit');
             Route::post('/{id}/update', [\App\Http\Controllers\tenant\TravelClaimController::class, 'update'])->name('update');
             Route::get('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'show'])->name('show');
+            Route::get('/{id}/download-attachments', [\App\Http\Controllers\tenant\TravelClaimController::class, 'downloadAttachments'])->name('download-attachments');
+            Route::delete('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroy'])->name('destroy');
             
             // Admin/HR specific
             Route::middleware(['role:admin|hr'])->group(function() {

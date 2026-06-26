@@ -85,6 +85,9 @@
                                     <button class="btn btn-sm btn-outline-success mb-1" data-bs-toggle="modal" data-bs-target="#payModal85_{{ $claim->id }}">Pay 85%</button><br>
                                     <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal15_{{ $claim->id }}">Pay 15%</button>
                                 @endif
+                                <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-primary mt-1 w-100 d-block" style="border-radius: 8px; font-size: 0.75rem; text-align: center;">
+                                    <i class="bx bx-download"></i> Attachments (ZIP)
+                                </a>
                             </td>
                         </tr>
 

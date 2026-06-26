@@ -23,6 +23,12 @@
         </div>
     </div>
 
+    @if(session('error'))
+        <div class="alert alert-danger">
+            {{ session('error') }}
+        </div>
+    @endif
+
     @if($errors->any())
         <div class="alert alert-danger">
             <ul class="mb-0">
@@ -65,7 +71,7 @@
         </div>
 
         <div class="table-responsive bg-white rounded shadow-sm border mb-3">
-            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 2200px; font-size: 0.85rem;">
+            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 3300px; font-size: 0.85rem;">
                 <thead class="bg-light">
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
@@ -84,8 +90,15 @@
                         <th style="min-width: 140px;">Toll Proof</th>
                         <th style="min-width: 110px;">Special<br>Approval (₹)</th>
                         <th style="min-width: 160px;">Special Approval Proof</th>
+                        <th style="min-width: 95px;">Transport<br>(₹)</th>
+                        <th style="min-width: 160px;">Transport Proof</th>
+                        <th style="min-width: 95px;">Bills<br>(₹)</th>
+                        <th style="min-width: 160px;">Bills Proof</th>
+                        <th style="min-width: 95px;">Freight<br>(₹)</th>
+                        <th style="min-width: 160px;">Freight Proof</th>
                         <th style="min-width: 90px;">Lodging<br>(₹)</th>
                         <th style="min-width: 90px;">Courier<br>(₹)</th>
+                        <th style="min-width: 160px;">Courier Proof</th>
                         <th style="min-width: 90px;">Other<br>(₹)</th>
                         <th style="min-width: 120px;">Remarks</th>
                     </tr>
@@ -118,8 +131,32 @@
         </div>
     </form>
 </div>
+@endsection
 
+@section('page-script')
 <script>
+    // Global Error Logger for UI Troubleshooting
+    window.addEventListener('error', function(e) {
+        let errorDiv = document.createElement('div');
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '0';
+        errorDiv.style.left = '0';
+        errorDiv.style.width = '100%';
+        errorDiv.style.backgroundColor = '#ea5455';
+        errorDiv.style.color = 'white';
+        errorDiv.style.padding = '15px';
+        errorDiv.style.zIndex = '99999';
+        errorDiv.style.fontFamily = 'monospace';
+        errorDiv.style.fontSize = '13px';
+        errorDiv.style.lineHeight = '1.4';
+        errorDiv.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        errorDiv.innerHTML = '<h5 style="color: white; margin-bottom: 5px;">⚠️ JavaScript Error Detected:</h5>' +
+            '<div><strong>Message:</strong> ' + e.message + '</div>' +
+            '<div><strong>File:</strong> ' + e.filename + ' (Line: ' + e.lineno + ', Col: ' + e.colno + ')</div>' +
+            '<pre style="margin-top: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 4px; color: #ffcccc; overflow-x: auto; max-height: 200px;">' + (e.error ? e.error.stack : '') + '</pre>';
+        document.body.appendChild(errorDiv);
+    });
+
     let advanceIndex = 0;
     
     // In edit mode, store existing items so we can prefill the grid
@@ -127,9 +164,10 @@
     @if(isset($claim) && $claim->items->count() > 0)
         let itemsArr = {!! json_encode($claim->items) !!};
         itemsArr.forEach(item => {
+            if (!item || !item.date) return;
             let dateStr = item.date;
             let dateString;
-            if (dateStr.includes('T') && dateStr.endsWith('Z')) {
+            if (typeof dateStr === 'string' && dateStr.includes('T') && dateStr.endsWith('Z')) {
                 // Handle ISO format by adjusting the UTC timestamp to Indian Standard Time (+5:30)
                 let dateObj = new Date(dateStr);
                 let localTime = dateObj.getTime() + (5.5 * 60 * 60 * 1000);
@@ -138,9 +176,11 @@
                 let m = String(localDate.getUTCMonth() + 1).padStart(2, '0');
                 let d = String(localDate.getUTCDate()).padStart(2, '0');
                 dateString = `${y}-${m}-${d}`;
-            } else {
+            } else if (typeof dateStr === 'string') {
                 // If it is already in Y-m-d format (e.g. 2026-06-01), extract directly
                 dateString = dateStr.substring(0, 10);
+            } else {
+                return;
             }
             existingItemsData[dateString] = item;
         });
@@ -196,29 +236,48 @@
                     <input type="file" name="items[${d}][photo]" class="form-control form-control-sm photo p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.photo_path ? `<input type="hidden" name="items[${d}][existing_photo]" value="${ex.photo_path}"><a href="/storage/${ex.photo_path}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="text" class="form-control form-control-sm conveyance bg-light text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" readonly value="${(ex.conveyance_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="text" class="form-control form-control-sm conveyance bg-light text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" readonly value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
                 <td class="text-center align-middle p-1">
                     <input class="form-check-input" type="checkbox" name="items[${d}][is_outstation]" value="1" onchange="toggleOutstation(${d}, this)" ${ex.is_outstation ? 'checked' : ''}>
                 </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][food_allowance]" class="form-control form-control-sm food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.food_allowance || 0).toFixed(2)}" ${ex.is_outstation ? 'readonly' : ''}></td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][additional_food_amount]" class="form-control form-control-sm add-food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.additional_food_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][food_allowance]" class="form-control form-control-sm food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.food_allowance || 0).toFixed(2)}" ${ex.is_outstation ? 'readonly' : ''}></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][additional_food_amount]" class="form-control form-control-sm add-food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.additional_food_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][additional_food_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.additional_food_proof ? `<input type="hidden" name="items[${d}][existing_additional_food_proof]" value="${ex.additional_food_proof}"><a href="/storage/${ex.additional_food_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][toll_amount]" class="form-control form-control-sm toll text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.toll_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][toll_amount]" class="form-control form-control-sm toll text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.toll_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][toll_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.toll_proof ? `<input type="hidden" name="items[${d}][existing_toll_proof]" value="${ex.toll_proof}"><a href="/storage/${ex.toll_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][special_approval_amount]" class="form-control form-control-sm special-appr text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.special_approval_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][special_approval_amount]" class="form-control form-control-sm special-appr text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.special_approval_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][special_approval_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.special_approval_proof ? `<input type="hidden" name="items[${d}][existing_special_approval_proof]" value="${ex.special_approval_proof}"><a href="/storage/${ex.special_approval_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.lodging_amount || 0).toFixed(2)}"></td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.courier_amount || 0).toFixed(2)}"></td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${(ex.other_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][transport_amount]" class="form-control form-control-sm transport text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.transport_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][transport_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.transport_proof ? `<input type="hidden" name="items[${d}][existing_transport_proof]" value="${ex.transport_proof}"><a href="/storage/${ex.transport_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][bills_amount]" class="form-control form-control-sm bills text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.bills_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][bills_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.bills_proof ? `<input type="hidden" name="items[${d}][existing_bills_proof]" value="${ex.bills_proof}"><a href="/storage/${ex.bills_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][freight_amount]" class="form-control form-control-sm freight text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.freight_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][freight_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.freight_proof ? `<input type="hidden" name="items[${d}][existing_freight_proof]" value="${ex.freight_proof}"><a href="/storage/${ex.freight_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.lodging_amount || 0).toFixed(2)}"></td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.courier_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][courier_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.courier_proof ? `<input type="hidden" name="items[${d}][existing_courier_proof]" value="${ex.courier_proof}"><a href="/storage/${ex.courier_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.other_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="text" name="items[${d}][remarks]" class="form-control form-control-sm p-1" style="font-size: 0.8rem;" placeholder="..." value="${ex.remarks || ''}"></td>
             </tr>`;
             grid.append(html);
@@ -277,6 +336,7 @@
 
     function calculateTotals() {
         let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tAddFood = 0, tSpecialAppr = 0;
+        let tTransport = 0, tBills = 0, tFreight = 0;
         
         $('.expense-row').each(function() {
             tConv += parseFloat($(this).find('.conveyance').val()) || 0;
@@ -287,9 +347,12 @@
             tToll += parseFloat($(this).find('.toll').val()) || 0;
             tAddFood += parseFloat($(this).find('.add-food').val()) || 0;
             tSpecialAppr += parseFloat($(this).find('.special-appr').val()) || 0;
+            tTransport += parseFloat($(this).find('.transport').val()) || 0;
+            tBills += parseFloat($(this).find('.bills').val()) || 0;
+            tFreight += parseFloat($(this).find('.freight').val()) || 0;
         });
 
-        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr;
+        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr + tTransport + tBills + tFreight;
         $('#grandTotal').text('₹' + grandTotal.toFixed(2));
         
         let net = grandTotal;
@@ -316,12 +379,18 @@
         $('#netPayableText').text('₹' + net.toFixed(2));
     }
 
-    $(document).ready(function() {
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-          return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize tooltips (safeguarded against missing bootstrap globals)
+        try {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+              if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                  return new bootstrap.Tooltip(tooltipTriggerEl);
+              }
+            });
+        } catch (e) {
+            console.warn('Tooltip initialization failed:', e);
+        }
 
         // Trigger grid generation on load if month is already set (e.g. edit mode or validation redirect)
         if ($('#claimMonthInput').val()) {
@@ -342,9 +411,21 @@
                 let toll = parseFloat(row.find('.toll').val()) || 0;
                 let addFood = parseFloat(row.find('.add-food').val()) || 0;
                 let specialAppr = parseFloat(row.find('.special-appr').val()) || 0;
+                let transport = parseFloat(row.find('.transport').val()) || 0;
+                let bills = parseFloat(row.find('.bills').val()) || 0;
+                let freight = parseFloat(row.find('.freight').val()) || 0;
+                
+                let hasPhoto = row.find('.photo').val() || row.find('input[name*="[existing_photo]"]').length > 0;
+                let hasTollProof = row.find('input[name*="[toll_proof]"]').val() || row.find('input[name*="[existing_toll_proof]"]').length > 0;
+                let hasAddFoodProof = row.find('input[name*="[additional_food_proof]"]').val() || row.find('input[name*="[existing_additional_food_proof]"]').length > 0;
+                let hasSpecialApprProof = row.find('input[name*="[special_approval_proof]"]').val() || row.find('input[name*="[existing_special_approval_proof]"]').length > 0;
+                let hasTransportProof = row.find('input[name*="[transport_proof]"]').val() || row.find('input[name*="[existing_transport_proof]"]').length > 0;
+                let hasBillsProof = row.find('input[name*="[bills_proof]"]').val() || row.find('input[name*="[existing_bills_proof]"]').length > 0;
+                let hasFreightProof = row.find('input[name*="[freight_proof]"]').val() || row.find('input[name*="[existing_freight_proof]"]').length > 0;
+                let hasCourierProof = row.find('input[name*="[courier_proof]"]').val() || row.find('input[name*="[existing_courier_proof]"]').length > 0;
                 
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0) {
+                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0 && transport === 0 && bills === 0 && freight === 0 && !hasPhoto && !hasTollProof && !hasAddFoodProof && !hasSpecialApprProof && !hasTransportProof && !hasBillsProof && !hasFreightProof && !hasCourierProof) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

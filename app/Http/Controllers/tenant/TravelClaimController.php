@@ -55,7 +55,10 @@ class TravelClaimController extends Controller
                        (isset($item['other_amount']) && floatval($item['other_amount']) > 0) ||
                        (isset($item['toll_amount']) && floatval($item['toll_amount']) > 0) ||
                        (isset($item['additional_food_amount']) && floatval($item['additional_food_amount']) > 0) ||
-                       (isset($item['special_approval_amount']) && floatval($item['special_approval_amount']) > 0);
+                       (isset($item['special_approval_amount']) && floatval($item['special_approval_amount']) > 0) ||
+                       (isset($item['transport_amount']) && floatval($item['transport_amount']) > 0) ||
+                       (isset($item['bills_amount']) && floatval($item['bills_amount']) > 0) ||
+                       (isset($item['freight_amount']) && floatval($item['freight_amount']) > 0);
             });
             $request->merge(['items' => $filteredItems]);
         }
@@ -73,6 +76,10 @@ class TravelClaimController extends Controller
             'items.*.toll_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.additional_food_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.special_approval_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.transport_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.bills_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.freight_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.courier_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
         ]);
 
         $latePenalty = false;
@@ -134,6 +141,22 @@ class TravelClaimController extends Controller
                         ? $request->file("items.{$index}.special_approval_proof")->store('travel_claims_special', 'public')
                         : ($item['existing_special_approval_proof'] ?? null);
 
+                    $transportProofPath = $request->hasFile("items.{$index}.transport_proof")
+                        ? $request->file("items.{$index}.transport_proof")->store('travel_claims_transport', 'public')
+                        : ($item['existing_transport_proof'] ?? null);
+
+                    $billsProofPath = $request->hasFile("items.{$index}.bills_proof")
+                        ? $request->file("items.{$index}.bills_proof")->store('travel_claims_bills', 'public')
+                        : ($item['existing_bills_proof'] ?? null);
+
+                    $freightProofPath = $request->hasFile("items.{$index}.freight_proof")
+                        ? $request->file("items.{$index}.freight_proof")->store('travel_claims_freight', 'public')
+                        : ($item['existing_freight_proof'] ?? null);
+
+                    $courierProofPath = $request->hasFile("items.{$index}.courier_proof")
+                        ? $request->file("items.{$index}.courier_proof")->store('travel_claims_courier', 'public')
+                        : ($item['existing_courier_proof'] ?? null);
+
                     $distance = floatval($item['distance_km'] ?? 0);
                     $mode = $item['mode_of_travel'] ?? null;
                     $rate = 0;
@@ -157,8 +180,11 @@ class TravelClaimController extends Controller
                     $toll_amount = floatval($item['toll_amount'] ?? 0);
                     $add_food_amount = floatval($item['additional_food_amount'] ?? 0);
                     $special_approval_amount = floatval($item['special_approval_amount'] ?? 0);
+                    $transport_amount = floatval($item['transport_amount'] ?? 0);
+                    $bills_amount = floatval($item['bills_amount'] ?? 0);
+                    $freight_amount = floatval($item['freight_amount'] ?? 0);
 
-                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount;
+                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount + $transport_amount + $bills_amount + $freight_amount;
                     $total_amount += $row_total;
 
                     TravelClaimItem::forceCreate([
@@ -185,6 +211,13 @@ class TravelClaimController extends Controller
                         'additional_food_proof' => $addFoodProofPath,
                         'special_approval_amount' => $special_approval_amount,
                         'special_approval_proof' => $specialApprovalProofPath,
+                        'transport_amount' => $transport_amount,
+                        'transport_proof' => $transportProofPath,
+                        'bills_amount' => $bills_amount,
+                        'bills_proof' => $billsProofPath,
+                        'freight_amount' => $freight_amount,
+                        'freight_proof' => $freightProofPath,
+                        'courier_proof' => $courierProofPath,
                         'remarks' => $item['remarks'] ?? null,
                     ]);
                 }
@@ -386,4 +419,114 @@ public function update(Request $request, $id)
         ])->save();
         return back()->with('success', 'Objection raised and sent back to user.');
     }
+
+    public function downloadAttachments($id)
+    {
+        $claim = TravelClaim::with(['items', 'user'])->findOrFail($id);
+        $user = auth()->user();
+
+        // Authorization check: admin, hr, accounts, or the owner of the claim
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) && $claim->user_id !== $user->id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $proofFields = [
+            'photo_path' => 'odometer_proof',
+            'toll_proof' => 'toll_proof',
+            'additional_food_proof' => 'additional_food_proof',
+            'special_approval_proof' => 'special_approval_proof',
+            'transport_proof' => 'transport_proof',
+            'bills_proof' => 'bills_proof',
+            'freight_proof' => 'freight_proof',
+            'courier_proof' => 'courier_proof'
+        ];
+
+        // Find all attachments
+        $filesToAdd = [];
+        foreach ($claim->items as $item) {
+            foreach ($proofFields as $field => $folderName) {
+                if ($item->$field) {
+                    $relativePath = $item->$field;
+                    $absolutePath = \Illuminate\Support\Facades\Storage::disk('public')->path($relativePath);
+                    if (file_exists($absolutePath)) {
+                        $dateStr = \Carbon\Carbon::parse($item->date)->format('d_M');
+                        $ext = pathinfo($absolutePath, PATHINFO_EXTENSION);
+                        $ext = $ext ? $ext : 'jpg';
+                        $filename = "{$dateStr}_item_{$item->id}_{$folderName}.{$ext}";
+                        $filesToAdd[] = [
+                            'path' => $absolutePath,
+                            'zipPath' => "{$folderName}/{$filename}"
+                        ];
+                    }
+                }
+            }
+        }
+
+        if (empty($filesToAdd)) {
+            return redirect()->back()->with('error', 'No attachments found for this claim.');
+        }
+
+        // Create temporary zip file
+        $zipName = 'claim_' . $claim->id . '_' . \Illuminate\Support\Str::slug($claim->user->name) . '_attachments.zip';
+        $zipPath = tempnam(sys_get_temp_dir(), 'zip');
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return redirect()->back()->with('error', 'Could not create ZIP file.');
+        }
+
+        foreach ($filesToAdd as $f) {
+            $zip->addFile($f['path'], $f['zipPath']);
+        }
+        $zip->close();
+
+        return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+    }
+
+    public function destroy($id)
+    {
+        $claim = TravelClaim::where('user_id', auth()->id())->findOrFail($id);
+        
+        if ($claim->status !== 'draft') {
+            return redirect()->route('travel-claims.index')->with('error', 'You can only delete claims that are in draft status.');
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Delete proof files associated with the items
+            foreach ($claim->items as $item) {
+                $proofFields = [
+                    'photo_path',
+                    'toll_proof',
+                    'additional_food_proof',
+                    'special_approval_proof',
+                    'transport_proof',
+                    'bills_proof',
+                    'freight_proof',
+                    'courier_proof'
+                ];
+                foreach ($proofFields as $field) {
+                    if ($item->$field) {
+                        Storage::disk('public')->delete($item->$field);
+                    }
+                }
+            }
+
+            // Delete related items and advances
+            $claim->items()->delete();
+            $claim->advances()->delete();
+
+            // Delete the claim itself
+            $claim->delete();
+
+            DB::commit();
+
+            return redirect()->route('travel-claims.index')->with('success', 'Draft claim deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->route('travel-claims.index')->with('error', 'Failed to delete draft claim: ' . $e->getMessage());
+        }
+    }
 }
+

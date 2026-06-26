@@ -268,30 +268,51 @@ class TrainingController extends Controller
      */
     private function unlockNextModule(TrainingModule $currentModule)
     {
-        $nextModule = TrainingModule::where('phase_id', $currentModule->phase_id)
-            ->where('order', '>', $currentModule->order)
-            ->orderBy('order')
-            ->first();
+        $user = Auth::user();
+        $nextModules = collect();
 
-        if (!$nextModule) {
+        // Find the lowest order value of modules in the current phase that is strictly greater than current order
+        $minNextOrder = TrainingModule::where('phase_id', $currentModule->phase_id)
+            ->where('order', '>', $currentModule->order)
+            ->min('order');
+
+        if ($minNextOrder !== null) {
+            $nextModules = TrainingModule::where('phase_id', $currentModule->phase_id)
+                ->where('order', $minNextOrder)
+                ->get();
+        } else {
             // Check next phase
             $nextPhase = TrainingPhase::where('order', '>', $currentModule->phase->order)
                 ->orderBy('order')
                 ->first();
             
             if ($nextPhase) {
-                $nextModule = $nextPhase->modules()->first();
+                $minPhaseOrder = TrainingModule::where('phase_id', $nextPhase->id)->min('order');
+                if ($minPhaseOrder !== null) {
+                    $nextModules = TrainingModule::where('phase_id', $nextPhase->id)
+                        ->where('order', $minPhaseOrder)
+                        ->get();
+                }
             }
         }
 
-        if ($nextModule) {
-            UserTrainingProgress::updateOrCreate(
-                ['user_id' => Auth::id(), 'module_id' => $nextModule->id],
-                ['status' => 'available', 'tenant_id' => Auth::user()->tenant_id]
-            );
+        if ($nextModules->isNotEmpty()) {
+            foreach ($nextModules as $nm) {
+                UserTrainingProgress::updateOrCreate(
+                    ['user_id' => $user->id, 'module_id' => $nm->id],
+                    ['status' => 'available', 'tenant_id' => $user->tenant_id]
+                );
+            }
         } else {
-            // All training complete!
-            Auth::user()->update(['training_status' => 'completed']);
+            // Check if ALL modules across all phases are completed for this user
+            $totalModules = TrainingModule::count();
+            $completedModulesCount = UserTrainingProgress::where('user_id', $user->id)
+                ->where('status', 'completed')
+                ->count();
+            
+            if ($completedModulesCount >= $totalModules) {
+                $user->update(['training_status' => 'completed']);
+            }
         }
     }
     /**
@@ -558,8 +579,13 @@ class TrainingController extends Controller
             CONTENT TO ANALYZE:
             " . \Illuminate\Support\Str::limit($content, 4000); // Limit context window
 
-            $result = OpenAI::chat()->create([
-                'model' => 'gpt-3.5-turbo',
+            $factory = \OpenAI::factory();
+            $client = $factory->withApiKey(config('openai.api_key'))
+                              ->withBaseUri(config('openai.base_url'))
+                              ->make();
+
+            $result = $client->chat()->create([
+                'model' => config('openai.ai_model'),
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],

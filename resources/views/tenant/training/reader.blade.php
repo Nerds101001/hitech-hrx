@@ -1071,11 +1071,12 @@ const NOTES_KEY         = "lms_notes_" + MOD_ID;
 const NEXT_MODULE_URL   = @json($nextModule ? route('training.module.show', $nextModule->id) : null);
 const NEXT_MODULE_TITLE = @json($nextModule ? $nextModule->title : null);
 const IS_COMPLETED      = {{ $progress->status === 'completed' ? 'true' : 'false' }};
+const ELAPSED_SECS      = {{ $progress->started_at ? max(0, now()->timestamp - $progress->started_at->timestamp) : 0 }};
 
 /* ══════════════════════════════════════════
    TIMER
 ══════════════════════════════════════════ */
-let timerSecs = EST_MINS * 60, timerElapsed = 0, timerDone = false, timerInterval = null;
+let timerSecs = EST_MINS * 60, timerElapsed = Math.min(ELAPSED_SECS, timerSecs), timerDone = false, timerInterval = null;
 
 function markCompletedUI() {
     timerDone = true;
@@ -1356,7 +1357,18 @@ function toggleFullscreen() {
 });
 
 function checkCatalogReady() {
-    if (IS_COMPLETED || (pdfReached && timerDone)) showAssessBtn();
+    if (pdfReached) {
+        timerDone = true;
+        if (timerInterval) clearInterval(timerInterval);
+        timerElapsed = timerSecs;
+        const disp = document.getElementById('timer-display');
+        if (disp) disp.textContent = 'Done!';
+        const chip = document.getElementById('timer-chip');
+        if (chip) { chip.classList.remove('active','warning'); chip.classList.add('done'); }
+        const icon = document.getElementById('timer-icon');
+        if (icon) icon.className = 'ti ti-check';
+    }
+    if (IS_COMPLETED || pdfReached || timerDone) showAssessBtn();
 }
 
 /* ── Checkpoint Popup ── */
@@ -1455,12 +1467,8 @@ function initLocalVideo() {
 let qList=[], qIdx=0, qAnswers={}, showAll=false, passPct=80;
 
 function openQuiz() {
-    if (CTYPE !== 'video' && !timerDone) {
-        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
-        return;
-    }
-    if (CTYPE === 'catalog' && CURL && !pdfReached) {
-        Swal.fire({title:'Read the full catalog',text:'Scroll through all pages before taking the quiz.',icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
+    if (CTYPE !== 'video' && !timerDone && !pdfReached) {
+        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) or reach the last page first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
         return;
     }
     const ov = document.getElementById('quiz-overlay'); ov.style.display = 'block'; ov.scrollTop = 0;

@@ -546,11 +546,31 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
     $nextModId   = null;
     $nextModName = null;
     $outerBreak  = false;
-    foreach ($phases as $ph) {
+    foreach ($phases as $phaseIdx => $ph) {
         if ($outerBreak) break;
+
+        $isPhaseAccessible = true;
+        if ($phaseIdx > 0) {
+            $prevPhase = $phases[$phaseIdx - 1];
+            $prevDone  = $prevPhase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+            if ($prevPhase->modules->count() > 0 && $prevDone < $prevPhase->modules->count()) {
+                $isPhaseAccessible = false;
+            }
+        }
+
         foreach ($ph->modules as $mod) {
             $prog = $mod->userProgress->first();
             $st   = $prog ? $prog->status : 'locked';
+
+            if ($st === 'locked' && $isPhaseAccessible) {
+                $hasIncompleteLower = $ph->modules->filter(function($m) use ($mod) {
+                    return $m->order < $mod->order && optional($m->userProgress->first())->status !== 'completed';
+                })->isNotEmpty();
+                if (!$hasIncompleteLower) {
+                    $st = 'available';
+                }
+            }
+
             if (in_array($st, ['available','in_progress','failed'])) {
                 $nextModId   = $mod->id;
                 $nextModName = $mod->title;
@@ -749,6 +769,15 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     // Auto-unlock first module if user has no progress
                     if (!$hasAnyProgress && $phaseIdx === 0 && $loop->first && $status === 'locked') {
                         $status = 'available';
+                    }
+
+                    if ($status === 'locked' && $isAccessible) {
+                        $hasIncompleteLower = $phase->modules->filter(function($m) use ($module) {
+                            return $m->order < $module->order && optional($m->userProgress->first())->status !== 'completed';
+                        })->isNotEmpty();
+                        if (!$hasIncompleteLower) {
+                            $status = 'available';
+                        }
                     }
 
                     $isClickable = $status !== 'locked';
