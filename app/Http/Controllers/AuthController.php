@@ -116,14 +116,20 @@ class AuthController extends Controller
           $user->save();
 
           // Send OTP Notification
+          $emailSent = false;
           try {
             if (class_exists('App\Notifications\Auth\OtpNotification')) {
               $user->notify(new OtpNotification($otp));
+              $emailSent = true;
             } else {
               Log::warning("OTP Warning: App\Notifications\Auth\OtpNotification class not found. Ensure file is uploaded.");
             }
           } catch (Exception $e) {
             Log::error("OTP Email Failed: " . $e->getMessage());
+          }
+
+          if (!$emailSent) {
+            return redirect()->back()->with('error', 'We could not send your verification code due to a mail server issue. Please try again in a few minutes or contact your administrator.');
           }
 
           // Store session data for OTP verification
