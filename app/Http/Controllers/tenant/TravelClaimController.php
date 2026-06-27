@@ -44,22 +44,49 @@ class TravelClaimController extends Controller
     {
         // Pre-filter empty items submitted by the grid
         if ($request->has('items') && is_array($request->items)) {
-            $filteredItems = array_filter($request->items, function($item) {
-                return !empty($item['mode_of_travel']) || 
-                       !empty($item['to_location']) ||
-                       !empty($item['from_location']) ||
-                       !empty($item['remarks']) ||
-                       (isset($item['food_allowance']) && floatval($item['food_allowance']) > 0) ||
-                       (isset($item['lodging_amount']) && floatval($item['lodging_amount']) > 0) ||
-                       (isset($item['courier_amount']) && floatval($item['courier_amount']) > 0) ||
-                       (isset($item['other_amount']) && floatval($item['other_amount']) > 0) ||
-                       (isset($item['toll_amount']) && floatval($item['toll_amount']) > 0) ||
-                       (isset($item['additional_food_amount']) && floatval($item['additional_food_amount']) > 0) ||
-                       (isset($item['special_approval_amount']) && floatval($item['special_approval_amount']) > 0) ||
-                       (isset($item['transport_amount']) && floatval($item['transport_amount']) > 0) ||
-                       (isset($item['bills_amount']) && floatval($item['bills_amount']) > 0) ||
-                       (isset($item['freight_amount']) && floatval($item['freight_amount']) > 0);
-            });
+            $filteredItems = [];
+            foreach ($request->items as $idx => $item) {
+                $hasFile = $request->hasFile("items.{$idx}.photo") ||
+                           $request->hasFile("items.{$idx}.petrol_slip") ||
+                           $request->hasFile("items.{$idx}.toll_proof") ||
+                           $request->hasFile("items.{$idx}.additional_food_proof") ||
+                           $request->hasFile("items.{$idx}.special_approval_proof") ||
+                           $request->hasFile("items.{$idx}.transport_proof") ||
+                           $request->hasFile("items.{$idx}.bills_proof") ||
+                           $request->hasFile("items.{$idx}.freight_proof") ||
+                           $request->hasFile("items.{$idx}.courier_proof") ||
+                           $request->hasFile("items.{$idx}.auto_taxi_proof");
+
+                $hasValue = !empty($item['mode_of_travel']) || 
+                            !empty($item['to_location']) ||
+                            !empty($item['from_location']) ||
+                            !empty($item['remarks']) ||
+                            (isset($item['food_allowance']) && floatval($item['food_allowance']) > 0) ||
+                            (isset($item['lodging_amount']) && floatval($item['lodging_amount']) > 0) ||
+                            (isset($item['courier_amount']) && floatval($item['courier_amount']) > 0) ||
+                            (isset($item['other_amount']) && floatval($item['other_amount']) > 0) ||
+                            (isset($item['toll_amount']) && floatval($item['toll_amount']) > 0) ||
+                            (isset($item['additional_food_amount']) && floatval($item['additional_food_amount']) > 0) ||
+                            (isset($item['special_approval_amount']) && floatval($item['special_approval_amount']) > 0) ||
+                            (isset($item['transport_amount']) && floatval($item['transport_amount']) > 0) ||
+                            (isset($item['bills_amount']) && floatval($item['bills_amount']) > 0) ||
+                            (isset($item['freight_amount']) && floatval($item['freight_amount']) > 0) ||
+                            (isset($item['auto_taxi_amount']) && floatval($item['auto_taxi_amount']) > 0) ||
+                            !empty($item['existing_photo']) ||
+                            !empty($item['existing_petrol_slip']) ||
+                            !empty($item['existing_toll_proof']) ||
+                            !empty($item['existing_additional_food_proof']) ||
+                            !empty($item['existing_special_approval_proof']) ||
+                            !empty($item['existing_transport_proof']) ||
+                            !empty($item['existing_bills_proof']) ||
+                            !empty($item['existing_freight_proof']) ||
+                            !empty($item['existing_courier_proof']) ||
+                            !empty($item['existing_auto_taxi_proof']);
+
+                if ($hasFile || $hasValue) {
+                    $filteredItems[$idx] = $item;
+                }
+            }
             $request->merge(['items' => $filteredItems]);
         }
 
@@ -73,6 +100,7 @@ class TravelClaimController extends Controller
             'items.*.date' => 'required|date',
             'items.*.mode_of_travel' => 'nullable|string',
             'items.*.photo' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.petrol_slip' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.toll_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.additional_food_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.special_approval_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
@@ -80,6 +108,8 @@ class TravelClaimController extends Controller
             'items.*.bills_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.freight_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.courier_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.auto_taxi_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
+            'items.*.auto_taxi_amount' => 'nullable|numeric',
         ]);
 
         $latePenalty = false;
@@ -129,6 +159,10 @@ class TravelClaimController extends Controller
                         ? $request->file("items.{$index}.photo")->store('travel_claims', 'public')
                         : ($item['existing_photo'] ?? null);
                     
+                    $petrolSlipPath = $request->hasFile("items.{$index}.petrol_slip")
+                        ? $request->file("items.{$index}.petrol_slip")->store('travel_claims_petrol', 'public')
+                        : ($item['existing_petrol_slip'] ?? null);
+
                     $tollProofPath = $request->hasFile("items.{$index}.toll_proof")
                         ? $request->file("items.{$index}.toll_proof")->store('travel_claims_tolls', 'public')
                         : ($item['existing_toll_proof'] ?? null);
@@ -157,16 +191,32 @@ class TravelClaimController extends Controller
                         ? $request->file("items.{$index}.courier_proof")->store('travel_claims_courier', 'public')
                         : ($item['existing_courier_proof'] ?? null);
 
+                    $autoTaxiProofPath = $request->hasFile("items.{$index}.auto_taxi_proof")
+                        ? $request->file("items.{$index}.auto_taxi_proof")->store('travel_claims_taxi', 'public')
+                        : ($item['existing_auto_taxi_proof'] ?? null);
+
                     $distance = floatval($item['distance_km'] ?? 0);
                     $mode = $item['mode_of_travel'] ?? null;
                     $rate = 0;
-                    if ($mode == 'Bike') $rate = 4.00;
-                    elseif ($mode == 'Car') $rate = 9.50;
+                    $isOfficial = false;
+                    
+                    if ($mode == 'Personal Bike' || $mode == 'Bike') {
+                        $rate = 4.00;
+                    } elseif ($mode == 'Personal Car' || $mode == 'Car') {
+                        $rate = 9.50;
+                    } elseif ($mode == 'Official Bike' || $mode == 'Official Car') {
+                        $isOfficial = true;
+                    }
 
-                    $conveyance = $distance * $rate;
+                    if ($isOfficial) {
+                        $conveyance = floatval($item['conveyance_amount'] ?? 0);
+                    } else {
+                        $conveyance = $distance * $rate;
+                    }
+
                     $penalty_applied = false;
 
-                    if (in_array($mode, ['Bike', 'Car']) && !$photoPath) {
+                    if (in_array($mode, ['Personal Bike', 'Personal Car', 'Bike', 'Car']) && !$photoPath) {
                         $conveyance = $conveyance * 0.70; // 30% reduction
                         $penalty_applied = true;
                     }
@@ -183,8 +233,9 @@ class TravelClaimController extends Controller
                     $transport_amount = floatval($item['transport_amount'] ?? 0);
                     $bills_amount = floatval($item['bills_amount'] ?? 0);
                     $freight_amount = floatval($item['freight_amount'] ?? 0);
+                    $auto_taxi_amount = floatval($item['auto_taxi_amount'] ?? 0);
 
-                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount + $transport_amount + $bills_amount + $freight_amount;
+                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount + $transport_amount + $bills_amount + $freight_amount + $auto_taxi_amount;
                     $total_amount += $row_total;
 
                     TravelClaimItem::forceCreate([
@@ -198,8 +249,11 @@ class TravelClaimController extends Controller
                         'end_meter' => $item['end_meter'] ?? null,
                         'distance_km' => $distance,
                         'photo_path' => $photoPath,
+                        'petrol_slip_proof' => $petrolSlipPath,
                         'penalty_applied' => $penalty_applied,
                         'conveyance_amount' => $conveyance,
+                        'auto_taxi_amount' => $auto_taxi_amount,
+                        'auto_taxi_proof' => $autoTaxiProofPath,
                         'is_outstation' => isset($item['is_outstation']) ? true : false,
                         'food_allowance' => $food_allowance,
                         'lodging_amount' => $lodging,
@@ -416,6 +470,7 @@ public function update(Request $request, $id)
         $claim->forceFill([
             'status' => 'objection',
             'remarks' => 'Objection Raised: ' . $request->remarks,
+            'objection_notes' => $request->remarks,
         ])->save();
         return back()->with('success', 'Objection raised and sent back to user.');
     }
@@ -438,7 +493,9 @@ public function update(Request $request, $id)
             'transport_proof' => 'transport_proof',
             'bills_proof' => 'bills_proof',
             'freight_proof' => 'freight_proof',
-            'courier_proof' => 'courier_proof'
+            'courier_proof' => 'courier_proof',
+            'petrol_slip_proof' => 'petrol_slip_proof',
+            'auto_taxi_proof' => 'auto_taxi_proof'
         ];
 
         // Find all attachments
@@ -504,7 +561,9 @@ public function update(Request $request, $id)
                     'transport_proof',
                     'bills_proof',
                     'freight_proof',
-                    'courier_proof'
+                    'courier_proof',
+                    'petrol_slip_proof',
+                    'auto_taxi_proof'
                 ];
                 foreach ($proofFields as $field) {
                     if ($item->$field) {

@@ -22,6 +22,78 @@
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
 
+    {{-- Split Payments Summary Sheet --}}
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-light">
+            <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a; font-weight: bold;">
+                <i class="bx bx-spreadsheet fs-4 text-primary" style="color: #0d9488 !important;"></i> 
+                <span>Split Payments Summary Sheet</span>
+            </h5>
+        </div>
+        <div class="card-body p-4">
+            <div class="table-responsive">
+                <table class="table table-bordered mb-0 align-middle" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Claim ID</th>
+                            <th>Employee</th>
+                            <th>Claim Month</th>
+                            <th>Total Net Payable</th>
+                            <th>85% Split (11th of next month)</th>
+                            <th>85% Payout Status</th>
+                            <th>15% Split (25th of next month)</th>
+                            <th>15% Payout Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @php
+                            $payoutClaims = $claims->filter(function($c) {
+                                return in_array($c->status, ['approved', 'paid']);
+                            });
+                        @endphp
+                        @forelse($payoutClaims as $pClaim)
+                        <tr>
+                            <td><strong>#{{ $pClaim->id }}</strong></td>
+                            <td>
+                                <strong>{{ $pClaim->user->name }}</strong><br>
+                                <small class="text-muted">{{ $pClaim->company }}</small>
+                            </td>
+                            <td>{{ $pClaim->claim_month }}</td>
+                            <td class="fw-bold">₹{{ number_format($pClaim->net_payable, 2) }}</td>
+                            <td>
+                                <div><strong>₹{{ number_format($pClaim->split_85_amount, 2) }}</strong></div>
+                                <small class="text-muted">Due: {{ $pClaim->split_85_paid_on ? $pClaim->split_85_paid_on->format('d M, Y') : '11th' }}</small>
+                            </td>
+                            <td>
+                                @if($pClaim->split_85_transaction)
+                                    <span class="badge bg-success" title="TXN: {{ $pClaim->split_85_transaction }}">Paid</span>
+                                @else
+                                    <span class="badge bg-warning text-dark">Pending Payout</span>
+                                @endif
+                            </td>
+                            <td>
+                                <div><strong>₹{{ number_format($pClaim->split_15_amount, 2) }}</strong></div>
+                                <small class="text-muted">Due: {{ $pClaim->split_15_paid_on ? $pClaim->split_15_paid_on->format('d M, Y') : '25th' }}</small>
+                            </td>
+                            <td>
+                                @if($pClaim->split_15_transaction)
+                                    <span class="badge bg-success" title="TXN: {{ $pClaim->split_15_transaction }}">Paid</span>
+                                @else
+                                    <span class="badge bg-warning text-dark">Pending Payout</span>
+                                @endif
+                            </td>
+                        </tr>
+                        @empty
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">No approved or paid claims for payout splits.</td>
+                        </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm border-0">
         <div class="card-body p-0">
             <div class="table-responsive">

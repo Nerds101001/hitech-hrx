@@ -158,6 +158,7 @@
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Employee</th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Month</th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Net Payable</th>
+                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Remarks / Objection</th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Status</th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Actions</th>
                 </tr>
@@ -173,6 +174,15 @@
                     <td>{{ $claim->claim_month }}</td>
                     <td>₹{{ number_format($claim->net_payable, 2) }}</td>
                     <td>
+                        @if($claim->objection_notes)
+                            <div class="text-danger fw-bold"><i class="bx bx-error-circle"></i> {{ $claim->objection_notes }}</div>
+                        @elseif($claim->remarks)
+                            <div class="text-muted small">{{ $claim->remarks }}</div>
+                        @else
+                            <span class="text-muted">-</span>
+                        @endif
+                    </td>
+                    <td>
                       <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : ($claim->status == 'approved' ? 'success' : 'secondary') }}">
                         {{ ucfirst($claim->status) }}
                       </span>
@@ -187,7 +197,82 @@
                   </tr>
                 @empty
                   <tr>
-                    <td colspan="6" class="text-center py-5">No claims found.</td>
+                    <td colspan="7" class="text-center py-5">No claims found.</td>
+                  </tr>
+                @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+  </div>
+
+  {{-- Split Payments Summary Sheet --}}
+  <div class="row g-4 mb-4">
+    <div class="col-12">
+      <div class="hitech-card h-100">
+        <div class="hitech-card-header bg-light">
+          <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a;">
+            <i class="bx bx-spreadsheet fs-4 text-primary" style="color: #0d9488 !important;"></i> 
+            <span>Split Payments Summary Sheet</span>
+          </h5>
+        </div>
+        <div class="card-body p-4">
+          <div class="table-responsive">
+            <table class="table table-bordered mb-0 align-middle" id="summarySheetTable" style="font-size: 0.85rem;">
+              <thead class="bg-light">
+                <tr>
+                  <th>Claim ID</th>
+                  <th>Employee</th>
+                  <th>Claim Month</th>
+                  <th>Total Net Payable</th>
+                  <th>85% Split (11th of next month)</th>
+                  <th>85% Payout Status</th>
+                  <th>15% Split (25th of next month)</th>
+                  <th>15% Payout Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @php
+                  $payoutClaims = $claims->filter(function($c) {
+                      return in_array($c->status, ['approved', 'paid']);
+                  });
+                @endphp
+                @forelse($payoutClaims as $pClaim)
+                  <tr>
+                    <td><strong>#{{ $pClaim->id }}</strong></td>
+                    <td>
+                      <strong>{{ $pClaim->user->name }}</strong><br>
+                      <small class="text-muted">{{ $pClaim->company }}</small>
+                    </td>
+                    <td>{{ $pClaim->claim_month }}</td>
+                    <td class="fw-bold">₹{{ number_format($pClaim->net_payable, 2) }}</td>
+                    <td>
+                      <div><strong>₹{{ number_format($pClaim->split_85_amount, 2) }}</strong></div>
+                      <small class="text-muted">Due: {{ $pClaim->split_85_paid_on ? \Carbon\Carbon::parse($pClaim->split_85_paid_on)->format('d M, Y') : '11th' }}</small>
+                    </td>
+                    <td>
+                      @if($pClaim->split_85_transaction)
+                        <span class="badge bg-success" data-bs-toggle="tooltip" title="TXN: {{ $pClaim->split_85_transaction }}">Paid</span>
+                      @else
+                        <span class="badge bg-warning text-dark">Pending Payout</span>
+                      @endif
+                    </td>
+                    <td>
+                      <div><strong>₹{{ number_format($pClaim->split_15_amount, 2) }}</strong></div>
+                      <small class="text-muted">Due: {{ $pClaim->split_15_paid_on ? \Carbon\Carbon::parse($pClaim->split_15_paid_on)->format('d M, Y') : '25th' }}</small>
+                    </td>
+                    <td>
+                      @if($pClaim->split_15_transaction)
+                        <span class="badge bg-success" data-bs-toggle="tooltip" title="TXN: {{ $pClaim->split_15_transaction }}">Paid</span>
+                      @else
+                        <span class="badge bg-warning text-dark">Pending Payout</span>
+                      @endif
+                    </td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">No approved or paid claims for payout splits.</td>
                   </tr>
                 @endforelse
               </tbody>
@@ -238,7 +323,11 @@
                             <th>Locations</th>
                             <th>Party</th>
                             <th>Mode & KMs</th>
+                            <th>Odometer Photo</th>
+                            <th>Petrol Slip</th>
                             <th>Conveyance</th>
+                            <th>Auto/Taxi Amount</th>
+                            <th>Auto/Taxi Proof</th>
                             <th>Food</th>
                             <th>Lodging</th>
                             <th>Courier</th>
@@ -255,7 +344,6 @@
                             <th>Additional Food Proof</th>
                             <th>Special Approval</th>
                             <th>Special Approval Proof</th>
-                            <th>Photo Proof</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -266,8 +354,30 @@
                             <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
                             <td>{{ $item->party_visited }}</td>
                             <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
-                            <td>₹{{ $item->conveyance_amount }}
+                            <td>
+                                @if($item->photo_path)
+                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                @else
+                                     <span class="text-muted">-</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($item->petrol_slip_proof)
+                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->petrol_slip_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                @else
+                                     <span class="text-muted">-</span>
+                                @endif
+                            </td>
+                            <td>₹{{ number_format($item->conveyance_amount, 2) }}
                                 @if($item->penalty_applied) <br><span class="text-danger small">No Photo Penalty</span> @endif
+                            </td>
+                            <td>₹{{ number_format($item->auto_taxi_amount ?? 0, 2) }}</td>
+                            <td>
+                                @if($item->auto_taxi_proof)
+                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->auto_taxi_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                @else
+                                     <span class="text-muted">-</span>
+                                @endif
                             </td>
                             <td>₹{{ $item->food_allowance }}</td>
                             <td>₹{{ $item->lodging_amount }}</td>
@@ -325,13 +435,6 @@
                                     <a href="{{ \Illuminate\Support\Facades\Storage::url($item->special_approval_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
                                 @else
                                     <span class="text-muted">-</span>
-                                @endif
-                            </td>
-                            <td>
-                                @if($item->photo_path)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
-                                @else
-                                    <span class="text-muted">N/A</span>
                                 @endif
                             </td>
                         </tr>

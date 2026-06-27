@@ -40,6 +40,7 @@
                             <th>Company</th>
                             <th>Total Amount</th>
                             <th>Net Payable</th>
+                            <th>Remarks / Objection</th>
                             <th>Status</th>
                             <th>Payment Info</th>
                             <th>Submitted At</th>
@@ -57,6 +58,15 @@
                                 <strong>₹{{ number_format($claim->net_payable, 2) }}</strong>
                                 @if($claim->late_penalty_applied)
                                     <br><span class="badge bg-danger">10% Late Penalty</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($claim->objection_notes)
+                                    <div class="text-danger fw-bold"><i class="bx bx-error-circle"></i> {{ $claim->objection_notes }}</div>
+                                @elseif($claim->remarks)
+                                    <div class="text-muted small">{{ $claim->remarks }}</div>
+                                @else
+                                    <span class="text-muted">-</span>
                                 @endif
                             </td>
                             <td>
@@ -112,7 +122,11 @@
                                                         <th>Locations</th>
                                                         <th>Party</th>
                                                         <th>Mode & KMs</th>
+                                                        <th>Odometer Photo</th>
+                                                        <th>Petrol Slip</th>
                                                         <th>Conveyance</th>
+                                                        <th>Auto/Taxi Amount</th>
+                                                        <th>Auto/Taxi Proof</th>
                                                         <th>Food</th>
                                                         <th>Lodging</th>
                                                         <th>Courier</th>
@@ -129,7 +143,6 @@
                                                         <th>Additional Food Proof</th>
                                                         <th>Special Approval</th>
                                                         <th>Special Approval Proof</th>
-                                                        <th>Photo Proof</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
@@ -140,8 +153,30 @@
                                                         <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
                                                         <td>{{ $item->party_visited }}</td>
                                                         <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
-                                                        <td>₹{{ $item->conveyance_amount }}
+                                                        <td>
+                                                            @if($item->photo_path)
+                                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                                            @else
+                                                                 <span class="text-muted">-</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>
+                                                            @if($item->petrol_slip_proof)
+                                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($item->petrol_slip_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                                            @else
+                                                                 <span class="text-muted">-</span>
+                                                            @endif
+                                                        </td>
+                                                        <td>₹{{ number_format($item->conveyance_amount, 2) }}
                                                             @if($item->penalty_applied) <br><span class="text-danger small">No Photo Penalty</span> @endif
+                                                        </td>
+                                                        <td>₹{{ number_format($item->auto_taxi_amount ?? 0, 2) }}</td>
+                                                        <td>
+                                                            @if($item->auto_taxi_proof)
+                                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($item->auto_taxi_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                                            @else
+                                                                 <span class="text-muted">-</span>
+                                                            @endif
                                                         </td>
                                                         <td>₹{{ $item->food_allowance }}</td>
                                                         <td>₹{{ $item->lodging_amount }}</td>
@@ -199,13 +234,6 @@
                                                                 <a href="{{ \Illuminate\Support\Facades\Storage::url($item->special_approval_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
                                                             @else
                                                                 <span class="text-muted">-</span>
-                                                            @endif
-                                                        </td>
-                                                        <td>
-                                                            @if($item->photo_path)
-                                                                <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
-                                                            @else
-                                                                <span class="text-muted">N/A</span>
                                                             @endif
                                                         </td>
                                                     </tr>

@@ -71,17 +71,20 @@
         </div>
 
         <div class="table-responsive bg-white rounded shadow-sm border mb-3">
-            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 3300px; font-size: 0.85rem;">
+            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 3600px; font-size: 0.85rem;">
                 <thead class="bg-light">
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
-                        <th style="min-width: 90px;">Mode</th>
+                        <th style="min-width: 110px;">Mode</th>
                         <th style="min-width: 120px;">Customer Name</th>
                         <th style="min-width: 80px;">Meter<br>Start</th>
                         <th style="min-width: 80px;">Meter<br>End</th>
                         <th style="min-width: 60px;">Total<br>KM</th>
                         <th style="min-width: 180px;">Odometer<br>Proof</th>
+                        <th style="min-width: 160px;">Petrol Slip</th>
                         <th style="min-width: 95px;">Conveyance<br>(₹)</th>
+                        <th style="min-width: 95px;">Auto/Taxi<br>Amount (₹)</th>
+                        <th style="min-width: 160px;">Auto/Taxi Proof</th>
                         <th style="min-width: 95px;">Outstation<br>>5hrs</th>
                         <th style="min-width: 100px;">Food<br>(₹)</th>
                         <th style="min-width: 110px;">Additional<br>Food (₹)</th>
@@ -221,8 +224,10 @@
                 <td class="p-1">
                     <select name="items[${d}][mode_of_travel]" class="form-select form-select-sm mode-select p-1" style="font-size: 0.8rem;" onchange="calculateRow(${d})">
                         <option value="">--</option>
-                        <option value="Bike" ${ex.mode_of_travel == 'Bike' ? 'selected' : ''}>Bike</option>
-                        <option value="Car" ${ex.mode_of_travel == 'Car' ? 'selected' : ''}>Car</option>
+                        <option value="Personal Bike" ${(ex.mode_of_travel == 'Personal Bike' || ex.mode_of_travel == 'Bike') ? 'selected' : ''}>Personal Bike</option>
+                        <option value="Personal Car" ${(ex.mode_of_travel == 'Personal Car' || ex.mode_of_travel == 'Car') ? 'selected' : ''}>Personal Car</option>
+                        <option value="Official Bike" ${ex.mode_of_travel == 'Official Bike' ? 'selected' : ''}>Official Bike</option>
+                        <option value="Official Car" ${ex.mode_of_travel == 'Official Car' ? 'selected' : ''}>Official Car</option>
                         <option value="Train" ${ex.mode_of_travel == 'Train' ? 'selected' : ''}>Train</option>
                         <option value="Bus" ${ex.mode_of_travel == 'Bus' ? 'selected' : ''}>Bus</option>
                         <option value="Flight" ${ex.mode_of_travel == 'Flight' ? 'selected' : ''}>Flight</option>
@@ -236,7 +241,18 @@
                     <input type="file" name="items[${d}][photo]" class="form-control form-control-sm photo p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.photo_path ? `<input type="hidden" name="items[${d}][existing_photo]" value="${ex.photo_path}"><a href="/storage/${ex.photo_path}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="text" class="form-control form-control-sm conveyance bg-light text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" readonly value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][petrol_slip]" class="form-control form-control-sm petrol-slip p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.petrol_slip_proof ? `<input type="hidden" name="items[${d}][existing_petrol_slip]" value="${ex.petrol_slip_proof}"><a href="/storage/${ex.petrol_slip_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][conveyance_amount]" class="form-control form-control-sm conveyance text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
+                <td class="p-1">
+                    <input type="number" step="0.01" name="items[${d}][auto_taxi_amount]" class="form-control form-control-sm auto-taxi-amount text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.auto_taxi_amount || 0).toFixed(2)}">
+                </td>
+                <td class="p-1">
+                    <input type="file" name="items[${d}][auto_taxi_proof]" class="form-control form-control-sm auto-taxi-proof p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                    ${ex.auto_taxi_proof ? `<input type="hidden" name="items[${d}][existing_auto_taxi_proof]" value="${ex.auto_taxi_proof}"><a href="/storage/${ex.auto_taxi_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
+                </td>
                 <td class="text-center align-middle p-1">
                     <input class="form-check-input" type="checkbox" name="items[${d}][is_outstation]" value="1" onchange="toggleOutstation(${d}, this)" ${ex.is_outstation ? 'checked' : ''}>
                 </td>
@@ -295,32 +311,40 @@
         let mode = row.find('.mode-select').val();
         let start = parseFloat(row.find('.start-meter').val()) || 0;
         let end = parseFloat(row.find('.end-meter').val()) || 0;
-        let dist = parseFloat(row.find('.distance').val()) || 0;
+        let dist = 0;
         
-        if (['Bike', 'Car'].includes(mode)) {
+        let isPersonal = ['Personal Bike', 'Personal Car', 'Bike', 'Car'].includes(mode);
+        
+        if (isPersonal) {
             if (end > start && end !== 0) {
                 dist = end - start;
                 row.find('.distance').val(dist.toFixed(2));
             } else {
                 dist = parseFloat(row.find('.distance').val()) || 0;
             }
+            row.find('.start-meter, .end-meter').prop('readonly', false).removeClass('bg-light');
         } else {
             row.find('.distance').val('');
+            row.find('.start-meter, .end-meter').val('').prop('readonly', true).addClass('bg-light');
         }
 
         let rate = 0;
-        if(mode === 'Bike') rate = 4.00;
-        if(mode === 'Car') rate = 9.50;
+        if(mode === 'Personal Bike' || mode === 'Bike') rate = 4.00;
+        if(mode === 'Personal Car' || mode === 'Car') rate = 9.50;
 
-        let conveyance = dist * rate;
-        let photoVal = row.find('.photo').val();
-        let hasExistingPhoto = row.find('input[name*="[existing_photo]"]').length > 0;
-        
-        if (['Bike', 'Car'].includes(mode) && !photoVal && !hasExistingPhoto && conveyance > 0) {
-            conveyance = conveyance * 0.70; // 30% penalty
+        let conveyance = 0;
+        if (isPersonal) {
+            conveyance = dist * rate;
+            let photoVal = row.find('.photo').val();
+            let hasExistingPhoto = row.find('input[name*="[existing_photo]"]').length > 0;
+            
+            if (!photoVal && !hasExistingPhoto && conveyance > 0) {
+                conveyance = conveyance * 0.70; // 30% penalty
+            }
+            row.find('.conveyance').val(conveyance.toFixed(2)).prop('readonly', true).addClass('bg-light');
+        } else {
+            row.find('.conveyance').prop('readonly', false).removeClass('bg-light');
         }
-
-        row.find('.conveyance').val(conveyance.toFixed(2));
         calculateTotals();
     }
 
@@ -336,7 +360,7 @@
 
     function calculateTotals() {
         let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tAddFood = 0, tSpecialAppr = 0;
-        let tTransport = 0, tBills = 0, tFreight = 0;
+        let tTransport = 0, tBills = 0, tFreight = 0, tAutoTaxi = 0;
         
         $('.expense-row').each(function() {
             tConv += parseFloat($(this).find('.conveyance').val()) || 0;
@@ -350,9 +374,10 @@
             tTransport += parseFloat($(this).find('.transport').val()) || 0;
             tBills += parseFloat($(this).find('.bills').val()) || 0;
             tFreight += parseFloat($(this).find('.freight').val()) || 0;
+            tAutoTaxi += parseFloat($(this).find('.auto-taxi-amount').val()) || 0;
         });
 
-        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr + tTransport + tBills + tFreight;
+        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr + tTransport + tBills + tFreight + tAutoTaxi;
         $('#grandTotal').text('₹' + grandTotal.toFixed(2));
         
         let net = grandTotal;
@@ -414,8 +439,11 @@
                 let transport = parseFloat(row.find('.transport').val()) || 0;
                 let bills = parseFloat(row.find('.bills').val()) || 0;
                 let freight = parseFloat(row.find('.freight').val()) || 0;
+                let autoTaxiAmount = parseFloat(row.find('.auto-taxi-amount').val()) || 0;
+                let conveyanceAmount = parseFloat(row.find('.conveyance').val()) || 0;
                 
                 let hasPhoto = row.find('.photo').val() || row.find('input[name*="[existing_photo]"]').length > 0;
+                let hasPetrolSlip = row.find('.petrol-slip').val() || row.find('input[name*="[existing_petrol_slip]"]').length > 0;
                 let hasTollProof = row.find('input[name*="[toll_proof]"]').val() || row.find('input[name*="[existing_toll_proof]"]').length > 0;
                 let hasAddFoodProof = row.find('input[name*="[additional_food_proof]"]').val() || row.find('input[name*="[existing_additional_food_proof]"]').length > 0;
                 let hasSpecialApprProof = row.find('input[name*="[special_approval_proof]"]').val() || row.find('input[name*="[existing_special_approval_proof]"]').length > 0;
@@ -423,9 +451,10 @@
                 let hasBillsProof = row.find('input[name*="[bills_proof]"]').val() || row.find('input[name*="[existing_bills_proof]"]').length > 0;
                 let hasFreightProof = row.find('input[name*="[freight_proof]"]').val() || row.find('input[name*="[existing_freight_proof]"]').length > 0;
                 let hasCourierProof = row.find('input[name*="[courier_proof]"]').val() || row.find('input[name*="[existing_courier_proof]"]').length > 0;
+                let hasAutoTaxiProof = row.find('.auto-taxi-proof').val() || row.find('input[name*="[existing_auto_taxi_proof]"]').length > 0;
                 
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0 && transport === 0 && bills === 0 && freight === 0 && !hasPhoto && !hasTollProof && !hasAddFoodProof && !hasSpecialApprProof && !hasTransportProof && !hasBillsProof && !hasFreightProof && !hasCourierProof) {
+                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0 && transport === 0 && bills === 0 && freight === 0 && autoTaxiAmount === 0 && conveyanceAmount === 0 && !hasPhoto && !hasPetrolSlip && !hasTollProof && !hasAddFoodProof && !hasSpecialApprProof && !hasTransportProof && !hasBillsProof && !hasFreightProof && !hasCourierProof && !hasAutoTaxiProof) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

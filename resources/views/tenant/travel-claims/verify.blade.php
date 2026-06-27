@@ -46,6 +46,7 @@
                             <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Month</th>
                             <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Company</th>
                             <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Net Payable</th>
+                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Remarks / Objection</th>
                             <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Status</th>
                             <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Action</th>
                         </tr>
@@ -64,7 +65,16 @@
                                 @endif
                             </td>
                             <td>
-                                <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : 'secondary' }}">{{ ucfirst($claim->status) }}</span>
+                                @if($claim->objection_notes)
+                                    <div class="text-danger fw-bold"><i class="bx bx-error-circle"></i> {{ $claim->objection_notes }}</div>
+                                @elseif($claim->remarks)
+                                    <div class="text-muted small">{{ $claim->remarks }}</div>
+                                @else
+                                    <span class="text-muted">-</span>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : ($claim->status == 'objection' ? 'warning text-dark' : 'secondary') }}">{{ ucfirst($claim->status) }}</span>
                             </td>
                             <td>
                                 @if($claim->status === 'draft')
@@ -114,7 +124,11 @@
                                 <th>Locations</th>
                                 <th>Party</th>
                                 <th>Mode & KMs</th>
+                                <th>Odometer Photo</th>
+                                <th>Petrol Slip</th>
                                 <th>Conveyance</th>
+                                <th>Auto/Taxi Amount</th>
+                                <th>Auto/Taxi Proof</th>
                                 <th>Food</th>
                                 <th>Lodging</th>
                                 <th>Courier</th>
@@ -131,7 +145,6 @@
                                 <th>Additional Food Proof</th>
                                 <th>Special Approval</th>
                                 <th>Special Approval Proof</th>
-                                <th>Photo Proof</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -141,8 +154,30 @@
                                 <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
                                 <td>{{ $item->party_visited }}</td>
                                 <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
-                                <td>₹{{ $item->conveyance_amount }}
+                                <td>
+                                    @if($item->photo_path)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    @else
+                                         <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if($item->petrol_slip_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->petrol_slip_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    @else
+                                         <span class="text-muted">-</span>
+                                    @endif
+                                </td>
+                                <td>₹{{ number_format($item->conveyance_amount, 2) }}
                                     @if($item->penalty_applied) <br><span class="text-danger small">No Photo Penalty</span> @endif
+                                </td>
+                                <td>₹{{ number_format($item->auto_taxi_amount ?? 0, 2) }}</td>
+                                <td>
+                                    @if($item->auto_taxi_proof)
+                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->auto_taxi_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    @else
+                                         <span class="text-muted">-</span>
+                                    @endif
                                 </td>
                                 <td>₹{{ $item->food_allowance }}</td>
                                 <td>₹{{ $item->lodging_amount }}</td>
@@ -202,25 +237,26 @@
                                         <span class="text-muted">-</span>
                                     @endif
                                 </td>
-                                <td>
-                                    @if($item->photo_path)
-                                        <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
-                                    @else
-                                        <span class="text-muted">N/A</span>
-                                    @endif
-                                </td>
                             </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
             </div>
-            <div class="modal-footer border-top">
-                <form action="{{ route('travel-claims.verify', $claim->id) }}" method="POST" class="w-100 m-0">
+            <div class="modal-footer border-top d-block">
+                <form id="verifyForm{{ $claim->id }}" method="POST" action="" class="w-100 m-0">
                     @csrf
-                    <div class="d-flex gap-2 justify-content-end">
-                        <input type="text" name="remarks" class="form-control" placeholder="Optional remarks..." style="border-radius: 8px;">
-                        <button type="submit" class="btn btn-success text-nowrap" style="border-radius: 8px;">Mark as Verified</button>
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-7">
+                            <input type="text" id="remarksInput{{ $claim->id }}" name="remarks" class="form-control" placeholder="Enter remarks / objection reason / rejection reason..." style="border-radius: 8px;">
+                        </div>
+                        <div class="col-md-5 text-end">
+                            <div class="btn-group gap-2">
+                                <button type="submit" onclick="submitClaimAction({{ $claim->id }}, '{{ route('travel-claims.verify', $claim->id) }}', false)" class="btn btn-success" style="border-radius: 8px;"><i class="bx bx-check"></i> Verify</button>
+                                <button type="submit" onclick="submitClaimAction({{ $claim->id }}, '{{ route('travel-claims.objection', $claim->id) }}', true)" class="btn btn-warning text-white" style="border-radius: 8px;"><i class="bx bx-error-circle"></i> Objection</button>
+                                <button type="submit" onclick="submitClaimAction({{ $claim->id }}, '{{ route('travel-claims.reject', $claim->id) }}', true)" class="btn btn-danger" style="border-radius: 8px;"><i class="bx bx-x-circle"></i> Reject</button>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -228,4 +264,22 @@
     </div>
 </div>
 @endforeach
+
+@section('page-script')
+<script>
+function submitClaimAction(claimId, routeUrl, requireRemarks) {
+    let form = document.getElementById('verifyForm' + claimId);
+    let remarksInput = document.getElementById('remarksInput' + claimId);
+    if (requireRemarks && !remarksInput.value.trim()) {
+        remarksInput.setCustomValidity('Remarks are required for objection or rejection.');
+        remarksInput.reportValidity();
+        event.preventDefault();
+        return false;
+    } else {
+        remarksInput.setCustomValidity('');
+    }
+    form.action = routeUrl;
+}
+</script>
+@endsection
 @endsection
