@@ -206,27 +206,21 @@ class AttendanceService implements IAttendance
         }
 
         // --- Handle Short Leave Waiver & Required Hours ---
-        if (!self::$shortLeaveTypeFetched) {
-            self::$shortLeaveTypeCache = \App\Models\LeaveType::where('is_short_leave', true)->first();
-            self::$shortLeaveTypeFetched = true;
+        if (!array_key_exists($cacheKey, self::$shortLeaveCache)) {
+            self::$shortLeaveCache[$cacheKey] = \App\Models\LeaveRequest::where('user_id', $user->id)
+                ->where('from_date', $dateStr)
+                ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
+                ->whereHas('leaveType', function($q) {
+                    $q->where('is_short_leave', true);
+                })
+                ->first();
         }
-        $shortLeaveType = self::$shortLeaveTypeCache;
+        $approvedShortLeave = self::$shortLeaveCache[$cacheKey];
 
-        if ($shortLeaveType) {
-            if (!array_key_exists($cacheKey, self::$shortLeaveCache)) {
-                self::$shortLeaveCache[$cacheKey] = \App\Models\LeaveRequest::where('user_id', $user->id)
-                    ->where('from_date', $dateStr)
-                    ->where('leave_type_id', $shortLeaveType->id)
-                    ->where('status', \App\Enums\LeaveRequestStatus::APPROVED)
-                    ->first();
-            }
-            $approvedShortLeave = self::$shortLeaveCache[$cacheKey];
-
-            if ($approvedShortLeave) {
-                if ($isLate) {
-                    $isLate = false;
-                    $isPolicyLate = true; // Waved due to approved short leave
-                }
+        if ($approvedShortLeave) {
+            if ($isLate) {
+                $isLate = false;
+                $isPolicyLate = true; // Waved due to approved short leave
             }
         }
 
@@ -263,9 +257,9 @@ class AttendanceService implements IAttendance
                     if ($minutesWorked >= $graceMinutes) {
                         // They worked the required >= 7 hours 45 minutes
                         
-                        // Check if they punched in after 11:00 AM
+                        // Check if they punched in after 11:00 AM (only if no approved short leave)
                         $elevenAM = Carbon::parse($dateStr . ' 11:00:00');
-                        if ($checkIn->gt($elevenAM)) {
+                        if (!$approvedShortLeave && $checkIn->gt($elevenAM)) {
                             // Punched in after 11:00 AM -> Force Half-Day (Orange)
                             $isHalfDay = true;
                         } else {
