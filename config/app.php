@@ -123,6 +123,8 @@ return [
     'store' => env('APP_MAINTENANCE_STORE', 'database'),
   ],
 
+  'backup_license_key' => env('BACKUP_LICENSE_KEY'),
+
 
 
   'aliases' => [

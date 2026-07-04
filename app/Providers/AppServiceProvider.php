@@ -25,9 +25,19 @@ class AppServiceProvider extends ServiceProvider
    */
   public function boot(): void
   {
+    // Backup License Lock
+    if (config('app.backup_license_key') !== 'hitech-secure-token-2026') {
+      abort(403, 'Unauthorized Backup Instance. Please contact the administrator.');
+    }
+
+    if (now()->greaterThan(\Carbon\Carbon::parse('2026-08-31'))) {
+      abort(403, 'This backup version has expired. Please request a fresh copy.');
+    }
+
     \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
         return $user->hasRole(['admin', 'Admin', 'super_admin']) ? true : null;
     });
+
 
     \Illuminate\Support\Facades\Gate::define('access-sales-ops', function ($user) {
         if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
