@@ -1483,12 +1483,13 @@ class EmployeeController extends Controller
       
       // Formula: Ucfirst(Name[:4]) + @ + Phone[-4]
       $firstName = trim($user->first_name) ?: 'User';
+      $firstNamePart = explode(' ', $firstName)[0];
       $phone = $user->phone ?: ($user->official_phone ?: '12345678');
       $lastFour = substr((string)$phone, -4);
       if (!$user->phone && !$user->official_phone) {
           $lastFour = '1234';
       }
-      $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
+      $newPassword = ucfirst(strtolower(substr($firstNamePart, 0, 4))) . '@' . $lastFour;
 
       $user->password = bcrypt($newPassword);
       $user->save();
@@ -1667,9 +1668,10 @@ class EmployeeController extends Controller
       if ($request->has('useDefaultPassword') && $request->input('useDefaultPassword') == 'on') {
         // Dynamic Default Password Rule: Ucfirst(Name[:4]) + Phone[-4]
         $firstName = $request->input('firstName') ?: 'User';
+        $firstNamePart = explode(' ', trim($firstName))[0];
         $phone = $request->input('phone') ?: '1234';
         $lastFour = substr((string)$phone, -4);
-        $newPassword = ucfirst(strtolower(substr($firstName, 0, 4))) . '@' . $lastFour;
+        $newPassword = ucfirst(strtolower(substr($firstNamePart, 0, 4))) . '@' . $lastFour;
         $user->password = bcrypt($newPassword);
       } else {
         $user->password = bcrypt($request->input('password'));
