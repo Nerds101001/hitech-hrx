@@ -18,8 +18,8 @@ class ModulePermissionsSeeder extends Seeder
         // Clear cached permissions
         app()->make(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // Delete all existing permissions to start fresh with the business logic
-        Permission::query()->delete();
+        // Do NOT delete existing permissions to preserve custom user setups
+        // Permission::query()->delete();
 
         $registry = config('permissions_registry');
         $createdCount = 0;

@@ -20,7 +20,7 @@ class MindSpeakController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $isAdminOrHR = $user->hasRole(['admin', 'hr']);
+        $isAdminOrHR = $user->hasRole(['admin', 'hr']) || $user->can('mind_speak.manage');
 
         if ($isAdminOrHR) {
             // --- ADMIN/HR DASHBOARD ---
@@ -164,7 +164,7 @@ class MindSpeakController extends Controller
     public function export(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr'])) {
+        if (!$user->hasRole(['admin', 'hr']) && !$user->can('mind_speak.manage')) {
             abort(403, 'Unauthorized action.');
         }
 

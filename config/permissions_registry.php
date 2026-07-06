@@ -100,6 +100,16 @@ return [
         'monitoring.card_view' => 'View Card View',
     ],
 
+    'Kingo Bingo' => [
+        'kingo_bingo.play' => 'Play Kingo Bingo',
+        'kingo_bingo.manage' => 'Manage Kingo Bingo Targets',
+    ],
+
+    '90-Day Goals' => [
+        'goals.view' => 'View 90-Day Goals',
+        'goals.manage' => 'Manage 90-Day Goals',
+    ],
+
     'Reports' => [
         'reports.view' => 'View Reports',
         'reports.export' => 'Export Reports',

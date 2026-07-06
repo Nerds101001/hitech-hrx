@@ -18,7 +18,7 @@ class KingoBingoController extends Controller
     public function index(Request $request)
     {
         $user     = auth()->user();
-        $isAdmin  = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        $isAdmin  = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('kingo_bingo.manage');
         $isCcare  = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
 
@@ -152,7 +152,8 @@ class KingoBingoController extends Controller
         }
 
         $canEditTargets = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) ||
-            ($user->department && $user->department->name === 'Customer Care');
+            ($user->department && $user->department->name === 'Customer Care') ||
+            $user->can('kingo_bingo.manage');
 
         // Dropdown for salesperson filter — respect the same access scope
         if ($allowedSpIds === null) {
@@ -178,9 +179,9 @@ class KingoBingoController extends Controller
     public function fillTargets(Request $request)
     {
         $user    = auth()->user();
-        $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz= $user->department && $user->department->name === 'New Biz';
+        $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('kingo_bingo.manage');
+        $isCcare = ($user->department && $user->department->name === 'Customer Care') || $user->can('kingo_bingo.manage');
+        $isNewBiz= ($user->department && $user->department->name === 'New Biz') || $user->can('kingo_bingo.manage');
 
         if (!$isAdmin && !$isCcare && !$isNewBiz) {
             abort(403);

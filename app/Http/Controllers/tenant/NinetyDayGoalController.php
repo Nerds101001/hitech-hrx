@@ -22,7 +22,7 @@ class NinetyDayGoalController extends Controller
         }
 
         // If regular employee, only see their own goals
-        if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+        if (!Auth::user()->hasRole(['admin', 'hr', 'manager']) && !Auth::user()->can('goals.manage')) {
             $query->where('user_id', Auth::id());
         }
 
@@ -65,7 +65,7 @@ class NinetyDayGoalController extends Controller
         $goal = NinetyDayGoal::findOrFail($id);
 
         // Security check: only owner or manager/admin can update
-        if ($goal->user_id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+        if ($goal->user_id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager']) && !Auth::user()->can('goals.manage')) {
             abort(403);
         }
 
@@ -96,7 +96,7 @@ class NinetyDayGoalController extends Controller
     {
         $goal = NinetyDayGoal::findOrFail($id);
         
-        if ($goal->user_id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+        if ($goal->user_id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager']) && !Auth::user()->can('goals.manage')) {
             abort(403);
         }
 
