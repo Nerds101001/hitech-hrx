@@ -57,16 +57,47 @@ class AdminRoleGuard
         // 'employee' role ALWAYS blocks admin access, regardless of other roles.
         // This prevents accidental department bulk-assignments from leaking data.
         if ($user->hasRole('employee') || $user->hasRole('office_employee')) {
-            return $this->redirectToEmployeeDashboard();
+            if (!$this->hasAdminPermissionOverride($user)) {
+                return $this->redirectToEmployeeDashboard();
+            }
         }
 
         // Must have at least one legitimate admin role
         if (!$user->hasAnyRole(self::ADMIN_ROLES)) {
-            // No recognised role at all — send to employee dashboard safely
-            return $this->redirectToEmployeeDashboard();
+            if (!$this->hasAdminPermissionOverride($user)) {
+                // No recognised role at all — send to employee dashboard safely
+                return $this->redirectToEmployeeDashboard();
+            }
         }
 
         return $next($request);
+    }
+
+    /**
+     * Check if user possesses any administrative permission override.
+     */
+    private function hasAdminPermissionOverride($user): bool
+    {
+        $selfServicePermissions = [
+            'leave.apply',
+            'expense.apply',
+            'attendance.view_my',
+            'payroll.view_my_slips',
+            'vault.view',
+            'vault.chat',
+            'goals.view',
+            'sales_pipeline.view_my',
+            'sales_visits.view_my',
+            'kingo_bingo.play'
+        ];
+
+        foreach ($user->getAllPermissions() as $permission) {
+            if (!in_array($permission->name, $selfServicePermissions)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function redirectToEmployeeDashboard(): Response

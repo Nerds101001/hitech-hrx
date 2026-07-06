@@ -385,6 +385,14 @@ class AttendanceController extends Controller
                 \App\Models\LeaveBalance::$auditReason = "Earned via Sunday Working (Staff Checkout)";
                 $balance->increment('balance', 1);
                 $balance->increment('accrued_this_year', 1);
+
+                // Auto-offset if there's any prior absent day in this month
+                try {
+                    $cTime = Carbon::parse($attendance->check_in_time);
+                    \App\Services\AttendanceAdjustmentService::autoOffsetSundayWorking($user, $cTime->month, $cTime->year);
+                } catch (\Exception $e) {
+                    \Log::error("Failed to run auto-offset for user " . $user->id . " on Sunday checkout: " . $e->getMessage());
+                }
             }
         }
     }

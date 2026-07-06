@@ -73,6 +73,13 @@ class PayrollService
         return DB::transaction(function () use ($user, $startDate, $endDate, $periodName, $daysInMonth, $status, $cycleId) {
             $baseSalary = $user->base_salary ?? 0;
             
+            // Auto-offset Sunday working against absent/unpaid leaves in the target month
+            try {
+                \App\Services\AttendanceAdjustmentService::autoOffsetSundayWorking($user, $startDate->month, $startDate->year);
+            } catch (\Exception $e) {
+                \Log::error("Failed to run auto-offset for user payroll: " . $e->getMessage());
+            }
+            
             // If cycleId is not provided, try to find or create one
             if (!$cycleId) {
                 $cycle = PayrollCycle::firstOrCreate(
@@ -284,7 +291,23 @@ class PayrollService
         $absents       = 0.0;
 
         foreach ($attendances as $att) {
-            $status = strtolower($att->status);
+            $status = strtolower($att->status ?? '');
+            
+            // Normalize status based on working hours if it's check_in/check_out/empty
+            if (empty($att->admin_reason) && $att->check_in_time && $att->check_out_time) {
+                $mins = Carbon::parse($att->check_in_time)->diffInMinutes(Carbon::parse($att->check_out_time));
+                $requiredMins = 465;
+                if ($att->leaveRequest && $att->leaveRequest->is_short_leave) {
+                    $requiredMins -= ($att->leaveRequest->duration_hours * 60);
+                }
+                if ($mins >= $requiredMins) {
+                    $status = 'present';
+                } elseif ($mins < $requiredMins && in_array($status, ['present', 'late', 'checked_out', 'checked_in', ''])) {
+                    $status = 'half-day';
+                }
+            } elseif ($status === 'checked_out' && $att->check_in_time && $att->check_out_time) {
+                $status = 'present';
+            }
             
             if ($status === 'present') {
                 if ($att->leaveRequest && $att->leaveRequest->is_half_day) {

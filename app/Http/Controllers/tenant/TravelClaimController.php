@@ -18,7 +18,7 @@ class TravelClaimController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        if ($user->hasRole(['admin', 'Admin', 'super_admin'])) {
+        if ($user->hasRole(['admin', 'Admin', 'super_admin']) || $user->can('travel_claim.verify')) {
             $claims = TravelClaim::with('user')
                 ->where(function($q) use ($user) {
                     $q->where('status', '!=', 'draft')
@@ -26,7 +26,7 @@ class TravelClaimController extends Controller
                 })
                 ->orderBy('created_at', 'desc')->get();
             return view('tenant.travel-claims.verify', compact('claims'));
-        } elseif ($user->hasRole(['accounts', 'Accounts'])) {
+        } elseif ($user->hasRole(['accounts', 'Accounts']) || $user->can('travel_claim.approve')) {
             $claims = TravelClaim::with('user')->whereIn('status', ['verified', 'approved', 'paid'])->orderBy('created_at', 'desc')->get();
             return view('tenant.travel-claims.accounts', compact('claims'));
         } else {
@@ -340,7 +340,9 @@ public function update(Request $request, $id)
     public function show($id)
     {
         $user = auth()->user();
-        $isPrivileged = $user->hasRole(['admin', 'Admin', 'super_admin', 'accounts', 'Accounts', 'manager', 'Manager', 'hr', 'HR']);
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'super_admin', 'accounts', 'Accounts', 'manager', 'Manager', 'hr', 'HR']) ||
+            $user->can('travel_claim.verify') ||
+            $user->can('travel_claim.approve');
         $claim = TravelClaim::with(['items', 'advances', 'user'])->findOrFail($id);
         if (!$isPrivileged && $claim->user_id !== $user->id) {
             abort(403);
@@ -481,7 +483,10 @@ public function update(Request $request, $id)
         $user = auth()->user();
 
         // Authorization check: admin, hr, accounts, or the owner of the claim
-        if (!$user->hasRole(['admin', 'hr', 'accounts']) && $claim->user_id !== $user->id) {
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) &&
+            !$user->can('travel_claim.verify') &&
+            !$user->can('travel_claim.approve') &&
+            $claim->user_id !== $user->id) {
             abort(403, 'Unauthorized action.');
         }
 

@@ -108,6 +108,10 @@ class LoanRequestController extends Controller
      */
     public function actionAjax(Request $request)
     {
+        if (!Auth::user()->hasRole(['admin', 'hr']) && !Auth::user()->can('loans.approve')) {
+            return Error::response('You do not have permission to approve/reject loan requests.');
+        }
+
         $request->validate([
             'id' => 'required',
             'status' => 'required|in:Approved,Rejected,Pending',

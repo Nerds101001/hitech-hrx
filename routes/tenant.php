@@ -124,8 +124,7 @@ Route::middleware(['web'])->group(function () {
 Route::middleware([
   'web',
   'auth',
-  'admin.guard',           // Hard gate: employee role / no role → redirected to employee dashboard
-  'role:admin|hr|manager|accounts',
+  'admin.guard',           // Hard gate: employee/manager roles and permission overrides
 ])->group(function () {
 
     // --- DASHBOARD & GENERAL ---
@@ -352,8 +351,8 @@ Route::middleware([
       Route::get('outdoorDuty/getByIdAjax/{id}', [LeaveController::class, 'outdoorDutyGetByIdAjax'])->name('outdoorDuty.getByIdAjax');
     });
 
-    // Restricted Operations (Admin/HR only)
-    Route::middleware(['role:admin|hr'])->group(function () {
+    // Restricted Operations (Admin/HR or delegated permissions)
+    Route::middleware(['role_or_permission:admin|hr|expense.approve|loans.view_all|loans.approve|onboarding.manage'])->group(function () {
       // Expense Requests
       Route::prefix('expenseRequests')->name('expenseRequests.')->group(function () {
         Route::get('', [ExpenseController::class, 'index'])->name('index');
@@ -482,7 +481,7 @@ Route::middleware([
     });
 
     // Employee Lifecycle (HR/Admin)
-    Route::middleware(['role:hr|admin'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
+    Route::middleware(['role_or_permission:hr|admin|lifecycle.manage'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
       Route::get('', [EmployeeLifecycleController::class, 'index'])->name('index');
       Route::get('promotions', [EmployeeLifecycleController::class, 'promotions'])->name('promotions');
       Route::get('transfers', [EmployeeLifecycleController::class, 'transfers'])->name('transfers');
@@ -498,7 +497,7 @@ Route::middleware([
     });
     
     // Approvals (HR/Admin)
-    Route::middleware(['role:hr|admin'])->prefix('approvals')->name('approvals.')->group(function () {
+    Route::middleware(['role_or_permission:hr|admin|approvals.manage'])->prefix('approvals')->name('approvals.')->group(function () {
       Route::get('', [ApprovalController::class, 'index'])->name('index');
       Route::post('profile/{id}/approve', [ApprovalController::class, 'approveProfile'])->name('profile.approve');
       Route::post('profile/{id}/reject', [ApprovalController::class, 'rejectProfile'])->name('profile.reject');
@@ -720,7 +719,7 @@ Route::middleware([
             Route::delete('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroy'])->name('destroy');
             
             // Admin/HR specific
-            Route::middleware(['role:admin|hr'])->group(function() {
+            Route::middleware(['role_or_permission:admin|hr|travel_claim.verify'])->group(function() {
                 Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard');
                 Route::post('/{id}/verify', [\App\Http\Controllers\tenant\TravelClaimController::class, 'verify'])->name('verify');
                 Route::post('/{id}/reject', [\App\Http\Controllers\tenant\TravelClaimController::class, 'reject'])->name('reject');
@@ -728,7 +727,7 @@ Route::middleware([
             });
             
             // Accounts specific
-            Route::middleware(['role:admin|accounts'])->group(function() {
+            Route::middleware(['role_or_permission:admin|accounts|travel_claim.approve|travel_claim.pay'])->group(function() {
                 Route::post('/{id}/approve', [\App\Http\Controllers\tenant\TravelClaimController::class, 'approve'])->name('approve');
                 Route::post('/{id}/pay', [\App\Http\Controllers\tenant\TravelClaimController::class, 'pay'])->name('pay');
             });
@@ -855,7 +854,7 @@ Route::middleware([
     });
 
     // SOS (Addon Check)
-    Route::middleware([SOSAddonCheck::class])->group(function () {
+    Route::middleware([SOSAddonCheck::class, 'role_or_permission:admin|hr|sos.manage'])->group(function () {
       Route::get('/sos', [SOSController::class, 'index'])->name('sos.index');
       Route::get('/sos/fetch', [SOSController::class, 'fetchSOSRequests'])->name('sos.fetch');
       Route::post('/sos/resolve/{id}', [SOSController::class, 'markAsResolved'])->name('sos.resolve');

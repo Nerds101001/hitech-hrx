@@ -29,7 +29,7 @@ class EmployeeLifecycleController extends Controller
     public function index(): View
     {
         $user = Auth::user();
-        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage');
         $managedTeamIds = [];
         if ($isManager) {
             $managedTeamIds = Team::where('team_head_id', $user->id)->pluck('id')->toArray();
@@ -75,7 +75,7 @@ class EmployeeLifecycleController extends Controller
     public function promotions(): View
     {
         $user = Auth::user();
-        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+        $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage');
         
         $query = EmployeePromotion::with(['user', 'previousDesignation', 'newDesignation', 'approvedBy']);
         

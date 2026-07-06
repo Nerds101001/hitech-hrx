@@ -50,6 +50,9 @@ return [
         'expense.apply' => 'Apply / Claim Expense',
         'expense.approve' => 'Approve / Reject Claims',
         'expense.manage_types' => 'Manage Expense Types',
+        'travel_claim.verify' => 'Verify Travel Claims',
+        'travel_claim.approve' => 'Approve Travel Claims',
+        'travel_claim.pay' => 'Pay Travel Claims',
     ],
 
     'Payroll' => [
@@ -65,6 +68,7 @@ return [
         'recruitment.edit' => 'Edit Candidate',
         'recruitment.delete' => 'Delete Candidate',
         'recruitment.manage_jobs' => 'Manage Job Postings',
+        'onboarding.manage' => 'Manage & Review Onboarding',
     ],
 
     'Hierarchy & Probation' => [
@@ -72,6 +76,7 @@ return [
         'hierarchy.manage' => 'Manage Org Chart',
         'probation.view' => 'View Probation Status',
         'probation.manage' => 'Manage Probation',
+        'lifecycle.manage' => 'Manage Employee Lifecycle',
     ],
 
     'Sales Field Ops' => [
@@ -98,6 +103,7 @@ return [
         'monitoring.live_location' => 'View Live Location',
         'monitoring.timeline' => 'View Time Line',
         'monitoring.card_view' => 'View Card View',
+        'sos.manage' => 'Manage SOS Alerts',
     ],
 
     'Kingo Bingo' => [
@@ -108,6 +114,11 @@ return [
     '90-Day Goals' => [
         'goals.view' => 'View 90-Day Goals',
         'goals.manage' => 'Manage 90-Day Goals',
+    ],
+
+    'Loans & Advances' => [
+        'loans.view_all' => 'View All Loan Requests',
+        'loans.approve' => 'Approve / Reject Loans',
     ],
 
     'Reports' => [

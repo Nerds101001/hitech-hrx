@@ -1,0 +1,8 @@
+cd domains/hitechgroup.in/public_html/hrx
+php artisan tinker --execute="
+\$relativePath = str_replace(asset('storage/'), '', 'https://hrx.hitechgroup.in/storage/training/aOTRnfjiGJGxEaygDdwYSu4Zf9qFzBODqtDXUS3E.pdf');
+\$fullPath = storage_path('app/public/' . \$relativePath);
+\$parser = new \Smalot\PdfParser\Parser();
+\$pdf = \$parser->parseFile(\$fullPath);
+echo 'pages: ' . count(\$pdf->getPages()) . '\n';
+"

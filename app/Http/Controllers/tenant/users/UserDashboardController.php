@@ -704,6 +704,13 @@ class UserDashboardController extends Controller
             $periodEnd = now()->endOfMonth();
         }
 
+        // Auto-offset Sunday working against absent/unpaid leaves in the target month
+        try {
+            \App\Services\AttendanceAdjustmentService::autoOffsetSundayWorking($user, $periodStart->month, $periodStart->year);
+        } catch (\Exception $e) {
+            \Log::error("Failed to run auto-offset for user dashboard: " . $e->getMessage());
+        }
+
         // Fetch DB Attendances
         $attendancesDb = Attendance::where('user_id', $user->id)
             ->where(function($q) use ($periodStart, $periodEnd) {
@@ -876,6 +883,13 @@ class UserDashboardController extends Controller
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
         $daysInMonth = $startOfMonth->daysInMonth;
         
+        // Auto-offset Sunday working against absent/unpaid leaves in the target month
+        try {
+            \App\Services\AttendanceAdjustmentService::autoOffsetSundayWorking($user, $month, $year);
+        } catch (\Exception $e) {
+            \Log::error("Failed to run auto-offset for user registry: " . $e->getMessage());
+        }
+
         // Fetch Attendance for the month
         $attendances = Attendance::where('user_id', $user->id)
             ->whereMonth('check_in_time', $month)
