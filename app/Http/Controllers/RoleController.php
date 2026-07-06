@@ -89,7 +89,7 @@ class RoleController extends Controller
     if (!$user) {
         return Error::response('User not found');
     }
-    return Success::response('User permissions fetched', $user->permissions);
+    return Success::response($user->permissions);
   }
 
   public function syncUserPermissionsAjax(Request $request)
