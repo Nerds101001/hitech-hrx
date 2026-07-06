@@ -212,6 +212,38 @@ class PipelineImportController extends Controller
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
+        // Automatically assign CCare/New Biz mapping if available
+        $ccareId = null;
+        $newBizId = null;
+
+        if ($isCcare) {
+            $ccareId = $user->id;
+        }
+        if ($isNewBiz) {
+            $newBizId = $user->id;
+        }
+
+        // Retrieve mapped CCare and New Biz users from map if not set
+        $mappedCcMaps = \App\Models\CcSalespersonMap::where('sales_user_id', $salespersonId)
+            ->with(['ccUser.department'])
+            ->get();
+
+        foreach ($mappedCcMaps as $map) {
+            $ccUser = $map->ccUser;
+            if ($ccUser && $ccUser->department) {
+                $deptName = strtolower($ccUser->department->name);
+                if (str_contains($deptName, 'customer care') || str_contains($deptName, 'c-care') || str_contains($deptName, 'ccare')) {
+                    if (!$ccareId) {
+                        $ccareId = $ccUser->id;
+                    }
+                } elseif (str_contains($deptName, 'new biz') || str_contains($deptName, 'newbiz')) {
+                    if (!$newBizId) {
+                        $newBizId = $ccUser->id;
+                    }
+                }
+            }
+        }
+
         $successCount = 0;
         $errorCount = 0;
         $errors = [];
@@ -241,16 +273,25 @@ class PipelineImportController extends Controller
             $partyType = $typeMap[$typeRaw] ?? null;
 
             try {
+                $updateData = [
+                    'total_business_potential' => $potential,
+                    'type' => $partyType,
+                    'is_locked' => true,
+                ];
+
+                if ($ccareId) {
+                    $updateData['ccare_id'] = $ccareId;
+                }
+                if ($newBizId) {
+                    $updateData['new_biz_id'] = $newBizId;
+                }
+
                 $pipeline = SalesPipeline::updateOrCreate(
                     [
                         'party_name' => $partyName,
                         'salesperson_id' => $salespersonId
                     ],
-                    [
-                        'total_business_potential' => $potential,
-                        'type' => $partyType,
-                        'is_locked' => true,
-                    ]
+                    $updateData
                 );
 
                 // Insert months + accumulate YoY
