@@ -175,6 +175,25 @@ document.addEventListener('DOMContentLoaded', function() {
         theme: 'bootstrap-5',
         width: '100%'
     });
+
+    // Sync Assign To and Status dropdowns
+    $('select[name="assigned_to"]').on('change', function() {
+        const val = $(this).val();
+        if (val) {
+            $('select[name="status"]').val('assigned');
+        } else {
+            if ($('select[name="status"]').val() === 'assigned') {
+                $('select[name="status"]').val('available');
+            }
+        }
+    });
+
+    $('select[name="status"]').on('change', function() {
+        const val = $(this).val();
+        if (val === 'available' || val === 'maintenance' || val === 'retired') {
+            $('select[name="assigned_to"]').val('').trigger('change');
+        }
+    });
 });
 </script>
 @endsection
