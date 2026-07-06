@@ -447,6 +447,23 @@
             });
           }
         });
+      // Sync Assign To and Status dropdowns
+      $('#asset_assigned_to').on('change', function() {
+        const val = $(this).val();
+        if (val) {
+          $('#asset_status').val('assigned');
+        } else {
+          if ($('#asset_status').val() === 'assigned') {
+            $('#asset_status').val('available');
+          }
+        }
+      });
+
+      $('#asset_status').on('change', function() {
+        const val = $(this).val();
+        if (val === 'available' || val === 'maintenance' || val === 'retired') {
+          $('#asset_assigned_to').val('').trigger('change');
+        }
       });
     });
   </script>

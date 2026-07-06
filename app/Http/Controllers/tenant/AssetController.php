@@ -113,15 +113,28 @@ class AssetController extends Controller
             $prefix = $category ? strtoupper(substr($category->name, 0, 3)) : 'AST';
             $asset_code = $prefix . '-' . strtoupper(substr(uniqid(), -5));
 
+            $status = $request->status;
+            $assigned_to = $request->assigned_to;
+
+            if ($status === 'maintenance' || $status === 'retired') {
+                $assigned_to = null;
+            } elseif ($assigned_to) {
+                $status = 'assigned';
+            } else {
+                if ($status === 'assigned') {
+                    $status = 'available';
+                }
+            }
+
             $asset = \App\Models\Asset::create([
                 'name' => $request->name,
                 'asset_code' => $asset_code,
                 'category_id' => $request->category_id,
-                'assigned_to' => $request->assigned_to,
+                'assigned_to' => $assigned_to,
                 'purchase_date' => now(),
                 'purchase_cost' => 0,
                 'current_value' => 0,
-                'status' => $request->status,
+                'status' => $status,
                 'location' => $request->location,
                 'serial_number' => $request->serial_number,
                 'brand' => $request->brand,
@@ -211,11 +224,24 @@ class AssetController extends Controller
                 $asset->warranty_bill = 'assets/bills/' . $filename;
             }
 
+            $status = $request->status;
+            $assigned_to = $request->assigned_to;
+
+            if ($status === 'maintenance' || $status === 'retired') {
+                $assigned_to = null;
+            } elseif ($assigned_to) {
+                $status = 'assigned';
+            } else {
+                if ($status === 'assigned') {
+                    $status = 'available';
+                }
+            }
+
             $asset->update([
                 'name' => $request->name,
                 'category_id' => $request->category_id,
-                'assigned_to' => $request->assigned_to,
-                'status' => $request->status,
+                'assigned_to' => $assigned_to,
+                'status' => $status,
                 'location' => $request->location,
                 'serial_number' => $request->serial_number,
                 'brand' => $request->brand,
