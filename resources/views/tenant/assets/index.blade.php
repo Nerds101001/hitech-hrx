@@ -447,6 +447,8 @@
             });
           }
         });
+      });
+
       // Sync Assign To and Status dropdowns
       $('#asset_assigned_to').on('change', function() {
         const val = $(this).val();
