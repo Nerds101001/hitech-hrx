@@ -38,11 +38,12 @@ class BirthdayController extends Controller
                 ->where('type', BirthdayWishNotification::class)
                 ->get()
                 ->map(function ($notification) {
+                    $sender = User::find($notification->data['sender_id'] ?? null);
                     return [
                         'id' => $notification->id,
                         'sender_id' => $notification->data['sender_id'] ?? null,
                         'sender_name' => $notification->data['sender_name'] ?? 'Someone',
-                        'sender_avatar' => $notification->data['sender_avatar'] ?? null,
+                        'sender_avatar' => $sender ? $sender->getProfilePicture() : null,
                         'message' => $notification->data['message'] ?? 'Happy Birthday!',
                     ];
                 });
@@ -66,6 +67,7 @@ class BirthdayController extends Controller
 
         $colleaguesBirthdays = $colleaguesBirthdays->map(function ($user) use ($alreadyWishedUserIds) {
             $user->is_wished = in_array($user->id, $alreadyWishedUserIds);
+            $user->avatar_url = $user->getProfilePicture(); // Resolved storage/signed URL
             return $user;
         });
 

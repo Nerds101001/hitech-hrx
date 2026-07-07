@@ -2819,6 +2819,43 @@
                                     <textarea id="exitReason" name="exitReason" class="form-control form-control-hitech"
                                         rows="3" placeholder="Provide detailed reason..." required></textarea>
                                 </div>
+
+                                {{-- Dynamic Assets Return Checklist --}}
+                                @php
+                                    $assignedAssets = \App\Models\Asset::where('assigned_to', $user->id)->get();
+                                @endphp
+                                @if($assignedAssets->isNotEmpty())
+                                <div class="col-12 mt-3">
+                                    <label class="form-label-hitech text-warning fw-bold mb-2 d-block">
+                                        <i class="bx bx-laptop me-1"></i> Assigned Assets & Equipment
+                                    </label>
+                                    <div class="border rounded p-3 bg-light">
+                                        <div class="alert alert-info py-2 px-3 mb-3 border-0" style="font-size: 0.85rem; background-color: #e0f2fe; color: #0369a1;">
+                                            Please verify if these assets have been returned. Checked assets will be marked as <strong>Available</strong> and restocked automatically.
+                                        </div>
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="checkbox" id="selectAllModalAssets" checked>
+                                            <label class="form-check-label fw-bold text-dark" for="selectAllModalAssets">
+                                                Mark all as Returned
+                                            </label>
+                                        </div>
+                                        <hr class="my-2">
+                                        <div style="max-height: 180px; overflow-y: auto;">
+                                            @foreach($assignedAssets as $asset)
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input modal-asset-checkbox" type="checkbox" name="returned_assets[]" value="{{ $asset->id }}" id="modal_asset_{{ $asset->id }}" checked>
+                                                    <label class="form-check-label text-dark" for="modal_asset_{{ $asset->id }}">
+                                                        <span class="fw-semibold">{{ $asset->name }}</span> <small class="text-muted">({{ $asset->asset_code }})</small>
+                                                        @if($asset->serial_number)
+                                                            <span class="badge bg-label-secondary ms-1" style="font-size:0.7rem;">S/N: {{ $asset->serial_number }}</span>
+                                                        @endif
+                                                    </label>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </div>
+                                @endif
                             </div>
                         </div>
                         <div class="modal-footer border-0 px-4 pb-4 d-flex justify-content-end gap-3">
@@ -3797,6 +3834,17 @@
                     $(terminateModal).find('.select2').select2({ dropdownParent: $(terminateModal) });
                     flatpickr("#exitDate", { dateFormat: 'Y-m-d', altInput: true, altFormat: 'M j, Y' });
                     flatpickr("#lastWorkingDay", { dateFormat: 'Y-m-d', altInput: true, altFormat: 'M j, Y' });
+
+                    // Handle Select All Assets Toggle inside employee profile termination modal
+                    const $selectAllModal = $('#selectAllModalAssets');
+                    $selectAllModal.on('change', function() {
+                        $('.modal-asset-checkbox').prop('checked', $(this).prop('checked'));
+                    });
+                    $(document).on('change', '.modal-asset-checkbox', function() {
+                        const total = $('.modal-asset-checkbox').length;
+                        const checked = $('.modal-asset-checkbox:checked').length;
+                        $selectAllModal.prop('checked', total === checked);
+                    });
 
                     document.getElementById('terminateEmployeeForm')?.addEventListener('submit', function (e) {
                         e.preventDefault();

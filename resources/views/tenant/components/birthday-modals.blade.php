@@ -201,11 +201,12 @@ function showMyBirthdayCelebration(wishes) {
     container.innerHTML = '';
     
     wishes.forEach(wish => {
-        let avatar = wish.sender_avatar ? '/storage/' + wish.sender_avatar : '{{ asset("assets/img/avatars/1.png") }}';
+        let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(wish.sender_name) + '&background=e11d48&color=fff';
+        let avatar = wish.sender_avatar ? wish.sender_avatar : defaultAvatar;
         let card = `
             <div class="wish-card">
                 <div class="wish-card-header">
-                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
                     <div class="wish-card-name">${_he(wish.sender_name)}</div>
                 </div>
                 <div class="wish-message">"${_he(wish.message)}"</div>
@@ -222,11 +223,12 @@ function showMyBirthdayCelebration(wishes) {
 
 function showRealtimeWish(wish) {
     let container = document.getElementById('myWishesListContainer');
-    let avatar = wish.sender_avatar ? '/storage/' + wish.sender_avatar : '{{ asset("assets/img/avatars/1.png") }}';
+    let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(wish.sender_name) + '&background=e11d48&color=fff';
+    let avatar = wish.sender_avatar ? wish.sender_avatar : defaultAvatar;
     let card = `
         <div class="wish-card">
             <div class="wish-card-header">
-                <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
                 <div class="wish-card-name">${_he(wish.sender_name)}</div>
             </div>
             <div class="wish-message">"${_he(wish.message)}"</div>
@@ -250,7 +252,9 @@ function showColleaguesBirthdays(colleagues, showModal = true) {
     container.innerHTML = '';
     
     colleagues.forEach(user => {
-        let avatar = user.profile_picture ? '/storage/' + user.profile_picture : '{{ asset("assets/img/avatars/1.png") }}';
+        let fullName = user.first_name + ' ' + user.last_name;
+        let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fullName) + '&background=e11d48&color=fff';
+        let avatar = user.avatar_url ? user.avatar_url : defaultAvatar;
         let buttonHtml = user.is_wished
             ? `<button class="btn btn-sm btn-outline-secondary rounded-pill" disabled>Wished <i class="bx bx-check ms-1"></i></button>`
             : `<button class="btn btn-sm btn-outline-danger rounded-pill" data-uid="${_he(user.id)}" data-uname="${_he(user.first_name)}" onclick="openSendWishModal(this.dataset.uid, this.dataset.uname)">Wish <i class="bx bx-send ms-1"></i></button>`;
@@ -258,7 +262,7 @@ function showColleaguesBirthdays(colleagues, showModal = true) {
         let card = `
             <div class="colleague-bday-card d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-3">
-                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='{{ asset('assets/img/avatars/1.png') }}';">
+                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
                     <div>
                         <h6 class="mb-0 fw-bold">${_he(user.first_name)} ${_he(user.last_name)}</h6>
                         <small class="text-muted">Birthday Today!</small>

@@ -891,7 +891,30 @@ class EmployeeController extends Controller
         // Maybe clear tokens, disable login? Depends on setup.
       ]);
 
-      // TODO: Trigger Offboarding Checklist / Notifications?
+      // Restock selected assets to available
+      $returnedAssetIds = $request->input('returned_assets', []);
+      if (!empty($returnedAssetIds)) {
+          $assets = \App\Models\Asset::whereIn('id', $returnedAssetIds)
+              ->where('assigned_to', $user->id)
+              ->get();
+
+          foreach ($assets as $asset) {
+              if (\Illuminate\Support\Facades\Schema::hasTable('asset_assignments')) {
+                  \App\Models\AssetAssignment::where('asset_id', $asset->id)
+                      ->where('user_id', $user->id)
+                      ->whereNull('returned_at')
+                      ->update([
+                          'returned_at' => now(),
+                          'notes' => 'Returned during employee termination',
+                      ]);
+              }
+
+              $asset->update([
+                  'assigned_to' => null,
+                  'status' => 'available',
+              ]);
+          }
+      }
 
       // Log this action (using a generic activity logger or specific audit)
       Log::info("User ID {$user->id} terminated by User ID {$adminUserId}. Reason: {$validatedData['exitReason']}");
@@ -902,8 +925,9 @@ class EmployeeController extends Controller
       // Return structure consistent with your Success::response wrapper if applicable
       return response()->json([
         'success' => true,
-        'message' => 'Employee termination process initiated successfully.'
+        'message' => 'Employee termination process completed successfully and assets returned.'
       ]);
+
     } catch (\Exception $e) {
       DB::rollBack();
       Log::error("Error terminating employee ID {$user->id}: " . $e->getMessage());
