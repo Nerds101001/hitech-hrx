@@ -77,15 +77,37 @@
                     <form action="{{ route('sales-visits.pipeline.import.preview') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
                         @csrf
                         
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Select Salesperson <span class="text-danger">*</span></label>
-                            <select name="salesperson_id" class="form-select" required>
-                                <option value="">-- Choose Salesperson --</option>
-                                @foreach($salespersons as $user)
-                                    <option value="{{ $user->id }}">{{ $user->getFullName() }} ({{ $user->code }})</option>
-                                @endforeach
-                            </select>
-                            <div class="form-text">All imported parties and data will be assigned to this user.</div>
+                        <div class="row mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Select Salesperson <span class="text-danger">*</span></label>
+                                <select name="salesperson_id" class="form-select" required>
+                                    <option value="">-- Choose Salesperson --</option>
+                                    @foreach($salespersons as $user)
+                                        <option value="{{ $user->id }}">{{ $user->getFullName() }} ({{ $user->code }})</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">All imported parties and data will be assigned to this user.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Select Customer Care (CCare) <span class="text-muted">(Optional)</span></label>
+                                <select name="ccare_id" class="form-select">
+                                    <option value="">-- Choose CCare --</option>
+                                    @foreach($ccareUsers as $user)
+                                        <option value="{{ $user->id }}">{{ $user->getFullName() }} ({{ $user->code }})</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Optionally link a CCare user.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Select New Biz <span class="text-muted">(Optional)</span></label>
+                                <select name="new_biz_id" class="form-select">
+                                    <option value="">-- Choose New Biz --</option>
+                                    @foreach($newBizUsers as $user)
+                                        <option value="{{ $user->id }}">{{ $user->getFullName() }} ({{ $user->code }})</option>
+                                    @endforeach
+                                </select>
+                                <div class="form-text">Optionally link a New Biz user.</div>
+                            </div>
                         </div>
 
                         <div class="text-center p-5 border-dashed rounded-3 bg-light cursor-pointer hover-bg-teal-soft transition-all" onclick="document.getElementById('fileInput').click()">

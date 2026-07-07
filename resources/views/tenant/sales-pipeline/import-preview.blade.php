@@ -24,6 +24,8 @@ table.prev-table tr:hover td { background: #f0fdf4; }
         @csrf
         <input type="hidden" name="temp_path" value="{{ $path }}">
         <input type="hidden" name="salesperson_id" value="{{ $salesperson->id }}">
+        <input type="hidden" name="ccare_id" value="{{ $ccareId }}">
+        <input type="hidden" name="new_biz_id" value="{{ $newBizId }}">
         <input type="hidden" name="type_col" value="{{ $typeColIdx }}">
         <input type="hidden" name="party_col" value="{{ $partyColIdx }}">
         <input type="hidden" name="potential_col" value="{{ $potentialColIdx }}">

@@ -35,14 +35,26 @@ class PipelineImportController extends Controller
 
         $salespersons = $query->orderBy('first_name')->get();
 
-        return view('tenant.sales-pipeline.import', compact('salespersons'));
+        $ccareUsers = User::where('status', 'active')
+            ->whereHas('department', function($q) {
+                $q->where('name', 'like', '%Customer Care%');
+            })->orderBy('first_name')->get();
+
+        $newBizUsers = User::where('status', 'active')
+            ->whereHas('department', function($q) {
+                $q->where('name', 'like', '%New Biz%');
+            })->orderBy('first_name')->get();
+
+        return view('tenant.sales-pipeline.import', compact('salespersons', 'ccareUsers', 'newBizUsers'));
     }
 
     public function previewImport(Request $request)
     {
         $request->validate([
             'file' => 'required|mimes:xlsx,xls,csv|max:10240',
-            'salesperson_id' => 'required|exists:users,id'
+            'salesperson_id' => 'required|exists:users,id',
+            'ccare_id' => 'nullable|exists:users,id',
+            'new_biz_id' => 'nullable|exists:users,id'
         ]);
 
         $path = null;
@@ -162,10 +174,13 @@ class PipelineImportController extends Controller
         }
 
         $salesperson = User::find($request->salesperson_id);
+        $ccareId = $request->input('ccare_id');
+        $newBizId = $request->input('new_biz_id');
 
         return view('tenant.sales-pipeline.import-preview', compact(
             'previewData', 'totalMonthsDetected', 'monthMappings', 'path', 'salesperson',
-            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'dataStartRowIdx', 'headers', 'previewMonthKeys'
+            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'dataStartRowIdx', 'headers', 'previewMonthKeys',
+            'ccareId', 'newBizId'
         ));
     }
 
@@ -174,6 +189,8 @@ class PipelineImportController extends Controller
         $request->validate([
             'temp_path' => 'required',
             'salesperson_id' => 'required|exists:users,id',
+            'ccare_id' => 'nullable|exists:users,id',
+            'new_biz_id' => 'nullable|exists:users,id',
             'party_col' => 'required|numeric',
             'potential_col' => 'required|numeric',
             'type_col' => 'nullable|numeric',
@@ -215,13 +232,13 @@ class PipelineImportController extends Controller
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
         // Automatically assign CCare/New Biz mapping if available
-        $ccareId = null;
-        $newBizId = null;
+        $ccareId = $request->input('ccare_id');
+        $newBizId = $request->input('new_biz_id');
 
-        if ($isCcare) {
+        if (!$ccareId && $isCcare) {
             $ccareId = $user->id;
         }
-        if ($isNewBiz) {
+        if (!$newBizId && $isNewBiz) {
             $newBizId = $user->id;
         }
 
