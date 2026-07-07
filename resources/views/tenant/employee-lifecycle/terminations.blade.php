@@ -120,10 +120,33 @@
             <select name="user_id" class="form-select select2" required>
               <option value="">Select Employee</option>
               @foreach(App\Models\User::where('status', '!=', \App\Enums\UserAccountStatus::TERMINATED)->get() as $user)
-                <option value="{{ $user->id }}">{{ $user->name }}</option>
+                <option value="{{ $user->id }}">{{ $user->name }} ({{ $user->code }})</option>
               @endforeach
             </select>
           </div>
+
+          <!-- Dynamic Assets Checker Container -->
+          <div id="termination-assets-container" class="mb-3 d-none">
+            <label class="form-label d-block fw-bold text-warning mb-2">
+              <i class="ti ti-device-laptop me-1"></i> Assigned Assets & Equipment
+            </label>
+            <div class="border rounded p-3 bg-light">
+              <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 0.85rem;">
+                Please verify if these assets have been returned. Checked assets will be marked as <strong>Available</strong> and restocked automatically.
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="selectAllAssets" checked>
+                <label class="form-check-label fw-bold" for="selectAllAssets">
+                  Mark all as Returned
+                </label>
+              </div>
+              <hr class="my-2">
+              <div id="termination-assets-list" style="max-height: 180px; overflow-y: auto;">
+                <!-- Filled dynamically via JS -->
+              </div>
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-label">Termination Type</label>
             <select name="termination_type" class="form-select" required>
@@ -157,4 +180,79 @@
     </div>
   </div>
 </div>
+@endsection
+
+@section('page-script')
+<script>
+  $(document).ready(function() {
+    // Select element
+    const $employeeSelect = $('select[name="user_id"]');
+    const $assetsContainer = $('#termination-assets-container');
+    const $assetsList = $('#termination-assets-list');
+    const $selectAll = $('#selectAllAssets');
+
+    // Function to load assets
+    function checkEmployeeAssets(userId) {
+      if (!userId) {
+        $assetsContainer.addClass('d-none');
+        $assetsList.empty();
+        return;
+      }
+
+      // Fetch assets using user-assets AJAX route
+      const url = `{{ route('employee-lifecycle.user-assets', '') }}/${userId}`;
+      
+      $.ajax({
+        url: url,
+        method: 'GET',
+        success: function(response) {
+          if (response.success && response.assets && response.assets.length > 0) {
+            $assetsList.empty();
+            response.assets.forEach(function(asset) {
+              const html = `
+                <div class="form-check mb-2">
+                  <input class="form-check-input asset-checkbox" type="checkbox" name="returned_assets[]" value="${asset.id}" id="asset_${asset.id}" checked>
+                  <label class="form-check-label" for="asset_${asset.id}">
+                    <span class="fw-semibold text-dark">${asset.name}</span> <small class="text-muted">(${asset.asset_code})</small>
+                    ${asset.serial_number ? `<span class="badge bg-label-secondary ms-1" style="font-size:0.7rem;">S/N: ${asset.serial_number}</span>` : ''}
+                  </label>
+                </div>
+              `;
+              $assetsList.append(html);
+            });
+            $assetsContainer.removeClass('d-none');
+            // reset select-all status to checked
+            $selectAll.prop('checked', true);
+          } else {
+            $assetsContainer.addClass('d-none');
+            $assetsList.empty();
+          }
+        },
+        error: function(xhr, status, error) {
+          console.error("Failed to load user assets:", error);
+          $assetsContainer.addClass('d-none');
+          $assetsList.empty();
+        }
+      });
+    }
+
+    // Bind event for standard & Select2 dropdown
+    $employeeSelect.on('change', function() {
+      checkEmployeeAssets($(this).val());
+    });
+
+    // Select/Deselect All Checkbox Logic
+    $selectAll.on('change', function() {
+      const isChecked = $(this).prop('checked');
+      $('.asset-checkbox').prop('checked', isChecked);
+    });
+
+    // Individual checkbox change updates SelectAll checkbox
+    $(document).on('change', '.asset-checkbox', function() {
+      const total = $('.asset-checkbox').length;
+      const checked = $('.asset-checkbox:checked').length;
+      $selectAll.prop('checked', total === checked);
+    });
+  });
+</script>
 @endsection

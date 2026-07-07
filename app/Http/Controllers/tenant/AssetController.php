@@ -297,7 +297,11 @@ class AssetController extends Controller
                     $q->where('asset_code', 'like', "%{$search}%")
                       ->orWhere('name', 'like', "%{$search}%")
                       ->orWhere('brand', 'like', "%{$search}%")
-                      ->orWhere('serial_number', 'like', "%{$search}%");
+                      ->orWhere('serial_number', 'like', "%{$search}%")
+                      ->orWhereHas('assignedUser', function ($qu) use ($search) {
+                          $qu->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
+                      });
                 });
             }
 

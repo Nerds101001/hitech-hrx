@@ -274,15 +274,97 @@ class EmployeeLifecycleController extends Controller
             'user_id' => 'required|exists:users,id',
             'termination_date' => 'required|date',
             'last_working_day' => 'required|date|after_or_equal:termination_date',
-            'termination_type' => 'required|in:misconduct,performance,redundancy,contract_end',
+            'termination_type' => 'required|in:layoff,misconduct,performance,violation,contract_end',
             'reason' => 'nullable|string|max:1000',
-            'termination_notes' => 'nullable|string|max:1000',
+            'remarks' => 'nullable|string|max:1000',
             'is_eligible_for_rehire' => 'boolean',
         ]);
 
-        EmployeeTermination::create($validated);
+        $returnedAssetIds = $request->input('returned_assets', []);
 
-        return redirect()->back()->with('success', 'Termination recorded successfully.');
+        DB::beginTransaction();
+        try {
+            // 1. Create the termination log record
+            $terminationData = [
+                'user_id' => $validated['user_id'],
+                'approved_by_id' => Auth::id(),
+                'termination_date' => $validated['termination_date'],
+                'last_working_day' => $validated['last_working_day'],
+                'termination_type' => $validated['termination_type'],
+                'reason' => $validated['reason'] ?? $validated['remarks'] ?? null,
+                'termination_notes' => $validated['remarks'] ?? null,
+                'is_eligible_for_rehire' => $request->boolean('is_eligible_for_rehire'),
+                'status' => 'approved',
+            ];
+            EmployeeTermination::create($terminationData);
+
+            // 2. Deactivate the employee's user account
+            $user = User::findOrFail($validated['user_id']);
+            $user->update([
+                'status' => \App\Enums\UserAccountStatus::TERMINATED,
+                'exit_date' => $validated['termination_date'],
+                'last_working_day' => $validated['last_working_day'],
+                'termination_type' => $validated['termination_type'],
+                'exit_reason' => $validated['reason'] ?? $validated['remarks'] ?? null,
+                'is_eligible_for_rehire' => $request->boolean('is_eligible_for_rehire'),
+                'updated_by_id' => Auth::id(),
+            ]);
+
+            // 3. Restock selected assets to available
+            if (!empty($returnedAssetIds)) {
+                $assets = \App\Models\Asset::whereIn('id', $returnedAssetIds)
+                    ->where('assigned_to', $user->id)
+                    ->get();
+
+                foreach ($assets as $asset) {
+                    // Update AssetAssignment history if table exists
+                    if (\Illuminate\Support\Facades\Schema::hasTable('asset_assignments')) {
+                        \App\Models\AssetAssignment::where('asset_id', $asset->id)
+                            ->where('user_id', $user->id)
+                            ->whereNull('returned_at')
+                            ->update([
+                                'returned_at' => now(),
+                                'notes' => 'Returned during employee termination',
+                            ]);
+                    }
+
+                    // Reset asset assignment and set status to available
+                    $asset->update([
+                        'assigned_to' => null,
+                        'status' => 'available',
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return redirect()->back()->with('success', 'Termination recorded and employee account deactivated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('Termination store error: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to process termination: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get list of assets assigned to a user (AJAX)
+     */
+    public function getUserAssetsAjax($userId)
+    {
+        try {
+            $assets = \App\Models\Asset::where('assigned_to', $userId)
+                ->select('id', 'name', 'asset_code', 'serial_number')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'assets' => $assets
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load user assets: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

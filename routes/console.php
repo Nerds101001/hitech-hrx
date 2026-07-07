@@ -34,7 +34,7 @@ Artisan::command('leave:auto-reject-expired', function () {
 
 Artisan::command('leave:daily-digest', function () {
     $this->call('leave:daily-digest');
-})->describe('Send daily digest of team members on leave')->dailyAt('08:00');
+})->describe('Send daily digest of team members on leave')->dailyAt('10:15');
 
 Artisan::command('onboarding:enforce-deadlines', function () {
     $this->call('onboarding:enforce-deadlines');

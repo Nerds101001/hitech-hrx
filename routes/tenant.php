@@ -484,10 +484,16 @@ Route::middleware([
     Route::middleware(['role_or_permission:hr|admin|lifecycle.manage'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
       Route::get('', [EmployeeLifecycleController::class, 'index'])->name('index');
       Route::get('promotions', [EmployeeLifecycleController::class, 'promotions'])->name('promotions');
+      Route::post('promotions/store', [EmployeeLifecycleController::class, 'storePromotion'])->name('promotions.store');
       Route::get('transfers', [EmployeeLifecycleController::class, 'transfers'])->name('transfers');
+      Route::post('transfers/store', [EmployeeLifecycleController::class, 'storeTransfer'])->name('transfers.store');
       Route::get('warnings', [EmployeeLifecycleController::class, 'warnings'])->name('warnings');
+      Route::post('warnings/store', [EmployeeLifecycleController::class, 'storeWarning'])->name('warnings.store');
       Route::get('resignations', [EmployeeLifecycleController::class, 'resignations'])->name('resignations');
+      Route::post('resignations/store', [EmployeeLifecycleController::class, 'storeResignation'])->name('resignations.store');
       Route::get('terminations', [EmployeeLifecycleController::class, 'terminations'])->name('terminations');
+      Route::post('terminations/store', [EmployeeLifecycleController::class, 'storeTermination'])->name('terminations.store');
+      Route::get('user-assets/{userId}', [EmployeeLifecycleController::class, 'getUserAssetsAjax'])->name('user-assets');
       Route::get('complaints', [EmployeeLifecycleController::class, 'complaints'])->name('complaints');
       Route::post('complaints/store', [EmployeeLifecycleController::class, 'storeComplaint'])->name('complaints.store');
       Route::get('trips', [EmployeeLifecycleController::class, 'trips'])->name('trips');
