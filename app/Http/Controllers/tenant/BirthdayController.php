@@ -21,6 +21,28 @@ class BirthdayController extends Controller
     {
         $currentUser = auth()->user();
         $today = Carbon::today();
+
+        \Illuminate\Support\Facades\Log::info('Anniversary debug: Birthday check start', [
+            'today' => $today->toDateString(),
+            'month' => $today->month,
+            'day' => $today->day,
+            'current_user_id' => $currentUser->id,
+        ]);
+        
+        $allUsers = User::select('id', 'first_name', 'last_name', 'status', 'date_of_joining')->get();
+        foreach ($allUsers as $u) {
+            if ($u->date_of_joining) {
+                $doj = Carbon::parse($u->date_of_joining);
+                \Illuminate\Support\Facades\Log::info("Anniversary debug: DOJ check for user {$u->first_name} {$u->last_name}", [
+                    'id' => $u->id,
+                    'status' => $u->status,
+                    'doj' => $doj->toDateString(),
+                    'doj_month' => $doj->month,
+                    'doj_day' => $doj->day,
+                    'matches' => ($doj->month == $today->month && $doj->day == $today->day)
+                ]);
+            }
+        }
         
         // 1. Check if it's the current user's birthday
         $isMyBirthday = false;
