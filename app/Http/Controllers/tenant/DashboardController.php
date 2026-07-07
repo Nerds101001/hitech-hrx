@@ -175,26 +175,34 @@ class DashboardController extends Controller
               return [$birthdays, $anniversaries];
           });
 
-        $todayBirthdays           = $upcomingBirthdays->filter(fn($u) => $u->is_today);
-
         // Add is_wished flag for today's birthdays
-        if ($todayBirthdays->isNotEmpty()) {
-            $alreadyWishedUserIds = \Illuminate\Support\Facades\DB::table('notifications')
-                ->where('type', \App\Notifications\BirthdayWishNotification::class)
-                ->whereJsonContains('data->sender_id', auth()->id())
-                ->whereYear('created_at', now()->year)
-                ->pluck('notifiable_id')
-                ->toArray();
-                
-            $todayBirthdays = $todayBirthdays->map(function ($u) use ($alreadyWishedUserIds) {
-                $u->is_wished = in_array($u->id, $alreadyWishedUserIds);
-                return $u;
-            });
+        $alreadyWishedUserIds = \Illuminate\Support\Facades\DB::table('notifications')
+            ->where('type', \App\Notifications\BirthdayWishNotification::class)
+            ->whereJsonContains('data->sender_id', auth()->id())
+            ->whereYear('created_at', now()->year)
+            ->pluck('notifiable_id')
+            ->toArray();
+            
+        foreach ($upcomingBirthdays as $u) {
+            $u->is_wished = in_array($u->id, $alreadyWishedUserIds);
         }
 
+        // Add is_wished flag for today's anniversaries
+        $alreadyWishedAnniversaryIds = \Illuminate\Support\Facades\DB::table('notifications')
+            ->where('type', \App\Notifications\WorkAnniversaryWishNotification::class)
+            ->whereJsonContains('data->sender_id', auth()->id())
+            ->whereYear('created_at', now()->year)
+            ->pluck('notifiable_id')
+            ->toArray();
+            
+        foreach ($upcomingAnniversaries as $u) {
+            $u->is_wished = in_array($u->id, $alreadyWishedAnniversaryIds);
+        }
+
+        $todayBirthdays = $upcomingBirthdays->filter(fn($u) => $u->is_today);
         $upcomingBirthdaysFiltered = $upcomingBirthdays->filter(fn($u) => !$u->is_today)->take(2);
-      $todayAnniversaries           = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
-      $upcomingAnniversariesFiltered = $upcomingAnniversaries->filter(fn($u) => !$u->is_today)->take(2);
+        $todayAnniversaries = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
+        $upcomingAnniversariesFiltered = $upcomingAnniversaries->filter(fn($u) => !$u->is_today)->take(2);
 
       // 8. Upcoming Probation Ends — cached 30 min
       $upcomingProbationEnds = Cache::remember("dashboard.probation.{$tenantId}", 1800, function () {

@@ -300,7 +300,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h6 class="mb-0 fw-bold small-text text-truncate" style="max-width: 150px;">{{ $u->name }}</h6>
                 <div class="date-sub-text" style="color: #7c3aed;">
                     {{ floor(\Carbon\Carbon::parse($u->date_of_joining)->diffInYears(now())) }} YRS • 
-                    <span class="badge bg-label-secondary rounded-pill p-1 px-2">CONGRATS!</span>
+                    @if($u->is_wished ?? false)
+                      <span class="badge bg-label-secondary rounded-pill p-1 px-2" style="cursor: pointer;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">CONGRATULATED <i class="bx bx-check"></i></span>
+                    @else
+                      <span class="badge bg-label-purple rounded-pill p-1 px-2 text-white" style="cursor: pointer; background-color: #7c3aed;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">CONGRATS!</span>
+                    @endif
                 </div>
               </div>
             </div>
