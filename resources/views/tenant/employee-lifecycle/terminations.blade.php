@@ -150,6 +150,7 @@
           <div class="mb-3">
             <label class="form-label">Termination Type</label>
             <select name="termination_type" class="form-select" required>
+              <option value="resignation_without_notice_period">Resignation Without Notice Period</option>
               <option value="layoff">Layoff</option>
               <option value="misconduct">Misconduct</option>
               <option value="performance">Poor Performance</option>

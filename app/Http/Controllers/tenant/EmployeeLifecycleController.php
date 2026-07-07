@@ -274,7 +274,7 @@ class EmployeeLifecycleController extends Controller
             'user_id' => 'required|exists:users,id',
             'termination_date' => 'required|date',
             'last_working_day' => 'required|date|after_or_equal:termination_date',
-            'termination_type' => 'required|in:layoff,misconduct,performance,violation,contract_end',
+            'termination_type' => 'required|in:layoff,misconduct,performance,violation,contract_end,resignation_without_notice_period',
             'reason' => 'nullable|string|max:1000',
             'remarks' => 'nullable|string|max:1000',
             'is_eligible_for_rehire' => 'boolean',
