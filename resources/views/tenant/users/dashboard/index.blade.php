@@ -59,7 +59,7 @@
              <i class="bx bx-dots-vertical-rounded text-muted"></i>
            </button>
            <div class="dropdown-menu dropdown-menu-end" aria-labelledby="employeeList">
-             <a class="dropdown-item" href="{{ route('users.index') }}">View All</a>
+             <a class="dropdown-item" href="{{ route('employees.index') }}">View All</a>
            </div>
          </div>
       </div>

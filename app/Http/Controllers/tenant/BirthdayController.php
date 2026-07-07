@@ -21,29 +21,6 @@ class BirthdayController extends Controller
     {
         $currentUser = auth()->user();
         $today = Carbon::today();
-
-        \Illuminate\Support\Facades\Log::info('Anniversary debug: Birthday check start', [
-            'today' => $today->toDateString(),
-            'month' => $today->month,
-            'day' => $today->day,
-            'current_user_id' => $currentUser->id,
-        ]);
-        
-        $allUsers = User::select('id', 'first_name', 'last_name', 'status', 'date_of_joining')->get();
-        foreach ($allUsers as $u) {
-            if ($u->date_of_joining) {
-                $doj = Carbon::parse($u->date_of_joining);
-                \Illuminate\Support\Facades\Log::info("Anniversary debug: DOJ check for user {$u->first_name} {$u->last_name}", [
-                    'id' => $u->id,
-                    'status' => $u->status,
-                    'doj' => $doj->toDateString(),
-                    'doj_month' => $doj->month,
-                    'doj_day' => $doj->day,
-                    'matches' => ($doj->month == $today->month && $doj->day == $today->day)
-                ]);
-            }
-        }
-        
         // 1. Check if it's the current user's birthday
         $isMyBirthday = false;
         if ($currentUser->dob) {
@@ -51,6 +28,24 @@ class BirthdayController extends Controller
             if ($dob->month == $today->month && $dob->day == $today->day) {
                 $isMyBirthday = true;
             }
+        }
+
+        // Fetch current user's unread birthday notifications
+        $unreadWishes = [];
+        if ($isMyBirthday) {
+            $unreadWishes = $currentUser->unreadNotifications()
+                ->where('type', BirthdayWishNotification::class)
+                ->get()
+                ->map(function ($notification) {
+                    $sender = User::find($notification->data['sender_id'] ?? null);
+                    return [
+                        'id' => $notification->id,
+                        'sender_id' => $notification->data['sender_id'] ?? null,
+                        'sender_name' => $notification->data['sender_name'] ?? 'Someone',
+                        'sender_avatar' => $sender ? $sender->getProfilePicture() : null,
+                        'message' => $notification->data['message_raw'] ?? ($notification->data['message'] ?? 'Happy Birthday!'),
+                    ];
+                });
         }
 
         // 2. Check if today is the current user's work anniversary
