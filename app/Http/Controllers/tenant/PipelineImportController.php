@@ -68,78 +68,146 @@ class PipelineImportController extends Controller
             return back()->with('error', 'Error reading file: ' . $e->getMessage());
         }
 
-        if (count($data) < 5) {
-            return back()->with('error', 'File does not contain enough rows to match the expected Matrix format.');
+        if (count($data) < 2) {
+            return back()->with('error', 'File does not contain enough rows.');
         }
 
-        $dataStartRowIdx = $request->input('data_start_row', 4); // Row 5 (0-indexed), skips blank + 2 header rows + totals row
+        // Auto-detect single-row vs 2-row layout
+        $isSingleRowHeader = false;
+        $firstRow = $data[0] ?? [];
+        $inferredYear = null;
 
-        $monthRow = $data[1] ?? [];  // Row 2: month labels (JUNE 26-27, MAY 26-27, ...)
-        $metricRow = $data[2] ?? []; // Row 3: column names (S.No., Party Name, SALE, PENDING, ...)
-        
-        // Extract headers from Row 3 (index 2) for Zoho-style mapping
-        $headers = [];
-        foreach ($metricRow as $idx => $val) {
-            $headers[] = [
-                'index' => $idx,
-                'name' => trim($val) ?: "Column " . chr(65 + ($idx % 26)) // Fallback if empty
-            ];
+        // Scan first row to find year references as a fallback
+        foreach ($firstRow as $cell) {
+            $cellStr = strtoupper(trim(preg_replace('/\s+/', ' ', (string)$cell)));
+            if (preg_match('/(?:\b|-)(\d{2}|\d{4})\b/', $cellStr, $matches)) {
+                $yr = (int)$matches[1];
+                if ($yr > 20 && $yr < 99) {
+                    $inferredYear = 2000 + $yr;
+                } elseif ($yr >= 2020 && $yr <= 2040) {
+                    $inferredYear = $yr;
+                }
+            }
+        }
+        if (!$inferredYear) {
+            $inferredYear = (int)date('Y');
         }
 
-        // Auto-detect party and potential columns if not explicitly posted
+        // Count how many combined month-metric columns exist in the first row
+        $monthMetricColsCount = 0;
+        foreach ($firstRow as $cell) {
+            if ($cell) {
+                $parsed = $this->parseMonthAndMetricFromHeader((string)$cell, $inferredYear);
+                if ($parsed) {
+                    $monthMetricColsCount++;
+                }
+            }
+        }
+
         $partyColIdx = $request->input('party_col');
         $potentialColIdx = $request->input('potential_col');
-
-        if ($partyColIdx === null) {
-            foreach ($headers as $h) {
-                if (str_contains(strtolower($h['name']), 'party')) {
-                    $partyColIdx = $h['index']; break;
-                }
-            }
-            if ($partyColIdx === null) $partyColIdx = 1; // Default Col B
-        }
-
-        if ($potentialColIdx === null) {
-            foreach ($headers as $h) {
-                if (str_contains(strtolower($h['name']), 'potential')) {
-                    $potentialColIdx = $h['index']; break;
-                }
-            }
-            if ($potentialColIdx === null) $potentialColIdx = 2; // Default Col C
-        }
-
         $typeColIdx = null;
-        foreach ($headers as $h) {
-            $name = strtolower($h['name']);
-            if (str_contains($name, 'ccare') || str_contains($name, 'newbiz') || str_contains($name, 'new biz')) {
-                $typeColIdx = $h['index']; break;
-            }
-        }
-        if ($typeColIdx === null) $typeColIdx = 3; // Default Col D
-
-        // Parse month columns mapped to their indices
         $monthMappings = [];
-        $currentParsedMonth = null;
-        $totalMonthsDetected = 0;
 
-        for ($i = 0; $i < count($monthRow); $i++) {
-            $monthRaw = trim($monthRow[$i] ?? '');
+        if ($monthMetricColsCount >= 2) {
+            $isSingleRowHeader = true;
+            $dataStartRowIdx = 1; // start from row 2 (which contains "TOTAL" and will be skipped)
             
-            if ($monthRaw) {
-                $parsed = $this->parseFinancialMonthYear($monthRaw);
-                if ($parsed) {
-                    $currentParsedMonth = $parsed;
-                    $totalMonthsDetected++;
+            // Scan first row for party, potential, and type columns
+            foreach ($firstRow as $idx => $cell) {
+                $cellStr = strtolower(trim((string)$cell));
+                if (str_contains($cellStr, 'party') && $partyColIdx === null) {
+                    $partyColIdx = $idx;
+                } elseif ((str_contains($cellStr, 'potential') || str_contains($cellStr, 'business potential')) && $potentialColIdx === null) {
+                    $potentialColIdx = $idx;
+                } elseif (str_contains($cellStr, 'ccare') || str_contains($cellStr, 'newbiz') || str_contains($cellStr, 'new biz') || str_contains($cellStr, 'new/ccare') || str_contains($cellStr, 'new biz/ccare')) {
+                    $typeColIdx = $idx;
                 }
             }
+            if ($partyColIdx === null) $partyColIdx = 1;
+            if ($potentialColIdx === null) $potentialColIdx = 2;
+            if ($typeColIdx === null) $typeColIdx = 3;
 
-            if ($currentParsedMonth) {
-                $metric = strtolower(trim($metricRow[$i] ?? ''));
-                if (in_array($metric, ['sale', 'pending', 'forecast', 'remarks'])) {
-                    if (!isset($monthMappings[$currentParsedMonth])) {
-                        $monthMappings[$currentParsedMonth] = [];
+            // Map the months
+            foreach ($firstRow as $idx => $cell) {
+                $parsed = $this->parseMonthAndMetricFromHeader((string)$cell, $inferredYear);
+                if ($parsed) {
+                    $mYear = $parsed['month_year'];
+                    $metric = $parsed['metric'];
+                    if (!isset($monthMappings[$mYear])) {
+                        $monthMappings[$mYear] = [];
                     }
-                    $monthMappings[$currentParsedMonth][$metric] = $i;
+                    $monthMappings[$mYear][$metric] = $idx;
+                }
+            }
+            
+            $headers = [];
+            foreach ($firstRow as $idx => $val) {
+                $headers[] = [
+                    'index' => $idx,
+                    'name' => trim($val) ?: "Column " . chr(65 + ($idx % 26))
+                ];
+            }
+            $totalMonthsDetected = count($monthMappings);
+        } else {
+            // Standard 2-row layout fallback
+            $dataStartRowIdx = $request->input('data_start_row', 4);
+            $monthRow = $data[1] ?? [];
+            $metricRow = $data[2] ?? [];
+
+            $headers = [];
+            foreach ($metricRow as $idx => $val) {
+                $headers[] = [
+                    'index' => $idx,
+                    'name' => trim($val) ?: "Column " . chr(65 + ($idx % 26))
+                ];
+            }
+
+            if ($partyColIdx === null) {
+                foreach ($headers as $h) {
+                    if (str_contains(strtolower($h['name']), 'party')) {
+                        $partyColIdx = $h['index']; break;
+                    }
+                }
+                if ($partyColIdx === null) $partyColIdx = 1;
+            }
+
+            if ($potentialColIdx === null) {
+                foreach ($headers as $h) {
+                    if (str_contains(strtolower($h['name']), 'potential')) {
+                        $potentialColIdx = $h['index']; break;
+                    }
+                }
+                if ($potentialColIdx === null) $potentialColIdx = 2;
+            }
+
+            foreach ($headers as $h) {
+                $name = strtolower($h['name']);
+                if (str_contains($name, 'ccare') || str_contains($name, 'newbiz') || str_contains($name, 'new biz')) {
+                    $typeColIdx = $h['index']; break;
+                }
+            }
+            if ($typeColIdx === null) $typeColIdx = 3;
+
+            $currentParsedMonth = null;
+            $totalMonthsDetected = 0;
+            for ($i = 0; $i < count($monthRow); $i++) {
+                $monthRaw = trim($monthRow[$i] ?? '');
+                if ($monthRaw) {
+                    $parsed = $this->parseFinancialMonthYear($monthRaw);
+                    if ($parsed) {
+                        $currentParsedMonth = $parsed;
+                        $totalMonthsDetected++;
+                    }
+                }
+                if ($currentParsedMonth) {
+                    $metric = strtolower(trim($metricRow[$i] ?? ''));
+                    if (in_array($metric, ['sale', 'pending', 'forecast', 'remarks'])) {
+                        if (!isset($monthMappings[$currentParsedMonth])) {
+                            $monthMappings[$currentParsedMonth] = [];
+                        }
+                        $monthMappings[$currentParsedMonth][$metric] = $i;
+                    }
                 }
             }
         }
@@ -448,5 +516,75 @@ class PipelineImportController extends Controller
             return "{$actualYear}-{$monthNum}";
         }
         return null;
+    }
+
+    private function parseMonthAndMetricFromHeader($headerStr, $fallbackYear = null)
+    {
+        $str = strtoupper(trim(preg_replace('/\s+/', ' ', $headerStr)));
+        
+        $monthsMap = [
+            'JANUARY' => '01', 'FEBRUARY' => '02', 'MARCH' => '03', 'APRIL' => '04',
+            'MAY' => '05', 'JUNE' => '06', 'JULY' => '07', 'AUGUST' => '08',
+            'SEPTEMBER' => '09', 'OCTOBER' => '10', 'NOVEMBER' => '11', 'DECEMBER' => '12',
+            'JAN' => '01', 'FEB' => '02', 'MAR' => '03', 'APR' => '04',
+            'JUN' => '06', 'JUL' => '07', 'AUG' => '08', 'SEP' => '09',
+            'OCT' => '10', 'NOV' => '11', 'DEC' => '12'
+        ];
+        
+        $matchedMonth = null;
+        $monthNum = null;
+        foreach ($monthsMap as $name => $num) {
+            if (str_contains($str, $name)) {
+                $matchedMonth = $name;
+                $monthNum = $num;
+                break;
+            }
+        }
+        
+        if (!$matchedMonth) {
+            return null; // Not a month column
+        }
+        
+        // Determine metric type
+        $metric = null;
+        if (str_contains($str, 'PENDING')) {
+            $metric = 'pending';
+        } elseif (str_contains($str, 'FORECAST')) {
+            $metric = 'forecast';
+        } elseif (str_contains($str, 'REMARK')) {
+            $metric = 'remarks';
+        } elseif (str_contains($str, 'SALE') || str_contains($str, 'ACTUAL')) {
+            $metric = 'sale';
+        } else {
+            // Default to sale if no metric is specified
+            $metric = 'sale';
+        }
+        
+        // Parse year
+        $year = null;
+        // Check for FY format first (e.g. 26-27 or 2026-2027)
+        if (preg_match('/(\d{2,4})\s*-\s*(\d{2,4})/', $str, $matches)) {
+            $yr = (int)$matches[1];
+            if ($yr < 100) $yr = 2000 + $yr;
+            
+            if (in_array($monthNum, ['01', '02', '03'])) {
+                $year = $yr + 1;
+            } else {
+                $year = $yr;
+            }
+        }
+        // Check for single year format (e.g. -26 or 2026)
+        elseif (preg_match('/(?:-|\b)(20\d{2}|\d{2})\b/', $str, $matches)) {
+            $yr = (int)$matches[1];
+            if ($yr < 100) $yr = 2000 + $yr;
+            $year = $yr;
+        } else {
+            $year = $fallbackYear ?? date('Y');
+        }
+        
+        return [
+            'month_year' => "{$year}-{$monthNum}",
+            'metric' => $metric
+        ];
     }
 }
