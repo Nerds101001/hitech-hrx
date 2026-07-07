@@ -185,13 +185,22 @@
 @section('page-script')
 <script>
   $(document).ready(function() {
-    // Select element
-    const $employeeSelect = $('select[name="user_id"]');
+    // Select element specifically inside the modal
+    const $employeeSelect = $('#terminationModal select[name="user_id"]');
     const $assetsContainer = $('#termination-assets-container');
     const $assetsList = $('#termination-assets-list');
     const $selectAll = $('#selectAllAssets');
 
-    // Function to load assets
+    // Explicitly initialize Select2 for the employee selector within the modal parent context
+    if ($.fn.select2) {
+      $employeeSelect.select2({
+        dropdownParent: $('#terminationModal'),
+        placeholder: 'Select Employee',
+        allowClear: true
+      });
+    }
+
+    // Function to load assets via AJAX
     function checkEmployeeAssets(userId) {
       if (!userId) {
         $assetsContainer.addClass('d-none');
@@ -199,8 +208,8 @@
         return;
       }
 
-      // Fetch assets using user-assets AJAX route
-      const url = `{{ route('employee-lifecycle.user-assets', '') }}/${userId}`;
+      // Safe route parameter generation using placeholder replacement
+      const url = "{{ route('employee-lifecycle.user-assets', ['userId' => ':id']) }}".replace(':id', userId);
       
       $.ajax({
         url: url,
@@ -237,7 +246,7 @@
     }
 
     // Bind event for standard & Select2 dropdown
-    $employeeSelect.on('change', function() {
+    $employeeSelect.on('change select2:select', function() {
       checkEmployeeAssets($(this).val());
     });
 
