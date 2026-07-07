@@ -331,6 +331,12 @@ class LeavePolicyService
 
     public static function checkConflicts(User $user, string $fromDate, string $toDate): array
     {
+        // If the user has no team assigned, there are no team conflicts to check.
+        // Without this guard, all "no-team" users would see each other's leaves as conflicts.
+        if (!$user->team_id) {
+            return [];
+        }
+
         $conflicts = LeaveRequest::where('status', LeaveRequestStatus::APPROVED)
             ->where('from_date', '<=', $toDate)
             ->where('to_date', '>=', $fromDate)

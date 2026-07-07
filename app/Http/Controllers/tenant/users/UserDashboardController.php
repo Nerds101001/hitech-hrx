@@ -22,6 +22,8 @@ use App\Models\Payslip;
 use App\Models\Settings;
 use App\Helpers\NotificationHelper;
 use App\Notifications\Leave\NewLeaveRequest;
+use App\Mail\TeamLeaveAppliedMail;
+use Illuminate\Support\Facades\Mail;
 use App\Notifications\Expense\NewExpenseRequest;
 use App\Services\LeavePolicyService;
 use Carbon\Carbon;
@@ -550,7 +552,34 @@ class UserDashboardController extends Controller
 
         $leaveRequest->save();
 
+        // Notify Admin/HR as before
         NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));
+
+        // Notify all active teammates (single email with CC) after response is sent
+        if ($user->team_id) {
+            $teamMembers = User::where('team_id', $user->team_id)
+                ->where('id', '!=', $user->id)
+                ->where('status', UserAccountStatus::ACTIVE)
+                ->whereNotNull('email')
+                ->get();
+
+            if ($teamMembers->isNotEmpty()) {
+                $leaveRequest->load(['leaveType', 'user.team']);
+                app()->terminating(function () use ($teamMembers, $leaveRequest, $user) {
+                    $primary   = $teamMembers->first();
+                    $ccEmails  = $teamMembers->skip(1)->pluck('email')->filter()->values()->toArray();
+                    try {
+                        $mailer = Mail::to($primary->email);
+                        if (!empty($ccEmails)) {
+                            $mailer->cc($ccEmails);
+                        }
+                        $mailer->send(new TeamLeaveAppliedMail($leaveRequest, $user));
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::error('Team leave notification failed: ' . $e->getMessage());
+                    }
+                });
+            }
+        }
 
         return redirect()->back()->with('success', 'Leave request submitted successfully.');
     }
