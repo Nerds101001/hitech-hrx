@@ -77,7 +77,7 @@
 }
 </style>
 
-<!-- Colleague Birthday Modal -->
+<!-- Colleague Birthday & Anniversary Modal -->
 <div class="modal fade" id="colleagueBirthdayModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content birthday-modal-body">
@@ -86,8 +86,8 @@
       </div>
       <div class="modal-body pt-0">
         <div class="birthday-header">
-            <h3 class="fw-bold" style="color: #e11d48;">🎂 Today's Birthdays!</h3>
-            <p class="text-muted">Send a warm wish to your colleagues.</p>
+            <h3 class="fw-bold" style="color: #e11d48;" id="colleagueCelebrationsTitle">🎉 Today's Celebrations!</h3>
+            <p class="text-muted" id="colleagueCelebrationsSubtitle">Send a warm wish to your colleagues.</p>
         </div>
         <div id="colleaguesListContainer"></div>
       </div>
@@ -95,7 +95,7 @@
   </div>
 </div>
 
-<!-- My Birthday Modal -->
+<!-- My Birthday & Anniversary Modal -->
 <div class="modal fade" id="myBirthdayModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content birthday-modal-body">
@@ -104,9 +104,9 @@
       </div>
       <div class="modal-body pt-0">
         <div class="birthday-header">
-            <div style="font-size: 5rem;">🥳</div>
-            <h2 class="fw-extrabold" style="color: #e11d48; font-size: 2.5rem;">Happy Birthday!</h2>
-            <p class="fs-5 text-muted">Wishing you a fantastic year ahead. Here are some wishes from your team:</p>
+            <div style="font-size: 5rem;" id="myCelebrationEmoji">🥳</div>
+            <h2 class="fw-extrabold" style="color: #e11d48; font-size: 2.5rem;" id="myCelebrationTitle">Happy Birthday!</h2>
+            <p class="fs-5 text-muted" id="myCelebrationSubtitle">Wishing you a fantastic year ahead. Here are some wishes from your team:</p>
         </div>
         <div class="birthday-wishes-list px-3 pb-3" id="myWishesListContainer">
             <!-- Wishes will be appended here -->
@@ -128,8 +128,9 @@
         <form id="sendWishForm" onsubmit="submitWish(event)">
             @csrf
             <input type="hidden" id="wishReceiverId" name="receiver_id">
+            <input type="hidden" id="wishType" name="wish_type" value="birthday">
             <div class="mb-3">
-                <textarea class="form-control" id="wishMessage" name="message" rows="4" placeholder="Write a personalized birthday message..." required></textarea>
+                <textarea class="form-control" id="wishMessage" name="message" rows="4" placeholder="Write a personalized message..." required></textarea>
             </div>
             <button type="submit" class="btn btn-primary w-100" id="sendWishBtn">Send Wish 🎈</button>
         </form>
@@ -164,39 +165,52 @@ document.addEventListener('DOMContentLoaded', function() {
                     showRealtimeWish(notification);
                 }
             });
-    }
-});
-
-function checkBirthdays() {
+  function checkBirthdays() {
     $.ajax({
         url: "{{ route('birthdays.check') }}",
         type: 'GET',
         success: function(response) {
+            // 1. My Birthday wishes popup
             if (response.isMyBirthday && response.unreadWishes && response.unreadWishes.length > 0) {
-                showMyBirthdayCelebration(response.unreadWishes);
+                $('#myCelebrationEmoji').text('🎂');
+                $('#myCelebrationTitle').text('Happy Birthday!');
+                $('#myCelebrationSubtitle').text('Wishing you a fantastic year ahead. Here are some wishes from your team:');
+                showMyCelebration(response.unreadWishes);
             }
             
-            // Wait a few seconds before showing colleague birthdays if any
-            if (response.colleagues && response.colleagues.length > 0) {
-                let hasUnwished = response.colleagues.some(c => !c.is_wished);
+            // 2. My Work Anniversary wishes popup
+            else if (response.isMyAnniversary && response.unreadAnniversaryWishes && response.unreadAnniversaryWishes.length > 0) {
+                $('#myCelebrationEmoji').text('🏅');
+                $('#myCelebrationTitle').text('Happy Work Anniversary!');
+                $('#myCelebrationSubtitle').text('Congratulations on another great year with us! Here are some wishes from your team:');
+                showMyCelebration(response.unreadAnniversaryWishes);
+            }
+            
+            // 3. Colleague celebrations (Birthdays & Anniversaries) popup
+            const birthdaysCount = response.colleagues ? response.colleagues.length : 0;
+            const anniversariesCount = response.colleagueAnniversaries ? response.colleagueAnniversaries.length : 0;
+            
+            if (birthdaysCount > 0 || anniversariesCount > 0) {
+                let hasUnwishedBday = response.colleagues && response.colleagues.some(c => !c.is_wished);
+                let hasUnwishedAnniv = response.colleagueAnniversaries && response.colleagueAnniversaries.some(c => !c.is_wished);
                 let alreadyClosedToday = localStorage.getItem('bday_popup_closed_date') === new Date().toDateString();
 
-                if (hasUnwished && !alreadyClosedToday) {
+                if ((hasUnwishedBday || hasUnwishedAnniv) && !alreadyClosedToday) {
                     setTimeout(() => {
                         if (!$('#myBirthdayModal').is(':visible')) {
-                            showColleaguesBirthdays(response.colleagues, true);
+                            showColleaguesCelebrations(response.colleagues, response.colleagueAnniversaries, true);
                         }
                     }, 2000);
                 } else {
                     // Populate silently for manual open
-                    showColleaguesBirthdays(response.colleagues, false);
+                    showColleaguesCelebrations(response.colleagues, response.colleagueAnniversaries, false);
                 }
             }
         }
     });
 }
 
-function showMyBirthdayCelebration(wishes) {
+function showMyCelebration(wishes) {
     let container = document.getElementById('myWishesListContainer');
     container.innerHTML = '';
     
@@ -240,39 +254,68 @@ function showRealtimeWish(wish) {
         container.innerHTML += card;
         triggerConfetti();
     } else {
-        container.innerHTML = card; // Just this one or fetch all unread
+        container.innerHTML = card;
         var myModal = new bootstrap.Modal(document.getElementById('myBirthdayModal'));
         myModal.show();
         triggerConfetti();
     }
 }
 
-function showColleaguesBirthdays(colleagues, showModal = true) {
+function showColleaguesCelebrations(birthdays, anniversaries, showModal = true) {
     let container = document.getElementById('colleaguesListContainer');
     container.innerHTML = '';
     
-    colleagues.forEach(user => {
-        let fullName = user.first_name + ' ' + user.last_name;
-        let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fullName) + '&background=e11d48&color=fff';
-        let avatar = user.avatar_url ? user.avatar_url : defaultAvatar;
-        let buttonHtml = user.is_wished
-            ? `<button class="btn btn-sm btn-outline-secondary rounded-pill" disabled>Wished <i class="bx bx-check ms-1"></i></button>`
-            : `<button class="btn btn-sm btn-outline-danger rounded-pill" data-uid="${_he(user.id)}" data-uname="${_he(user.first_name)}" onclick="openSendWishModal(this.dataset.uid, this.dataset.uname)">Wish <i class="bx bx-send ms-1"></i></button>`;
+    // Render birthdays
+    if (birthdays && birthdays.length > 0) {
+        birthdays.forEach(user => {
+            let fullName = user.first_name + ' ' + user.last_name;
+            let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fullName) + '&background=e11d48&color=fff';
+            let avatar = user.avatar_url ? user.avatar_url : defaultAvatar;
+            let buttonHtml = user.is_wished
+                ? `<button class="btn btn-sm btn-outline-secondary rounded-pill" disabled>Wished <i class="bx bx-check ms-1"></i></button>`
+                : `<button class="btn btn-sm btn-outline-danger rounded-pill" data-uid="${_he(user.id)}" data-uname="${_he(user.first_name)}" data-wtype="birthday" onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, this.dataset.wtype)">Wish <i class="bx bx-send ms-1"></i></button>`;
 
-        let card = `
-            <div class="colleague-bday-card d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-3">
-                    <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
-                    <div>
-                        <h6 class="mb-0 fw-bold">${_he(user.first_name)} ${_he(user.last_name)}</h6>
-                        <small class="text-muted">Birthday Today!</small>
+            let card = `
+                <div class="colleague-bday-card d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">${_he(fullName)}</h6>
+                            <small class="text-muted"><i class="bx bx-cake text-primary"></i> Birthday Today!</small>
+                        </div>
                     </div>
+                    ${buttonHtml}
                 </div>
-                ${buttonHtml}
-            </div>
-        `;
-        container.innerHTML += card;
-    });
+            `;
+            container.innerHTML += card;
+        });
+    }
+
+    // Render anniversaries
+    if (anniversaries && anniversaries.length > 0) {
+        anniversaries.forEach(user => {
+            let fullName = user.first_name + ' ' + user.last_name;
+            let defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fullName) + '&background=004D4D&color=fff';
+            let avatar = user.avatar_url ? user.avatar_url : defaultAvatar;
+            let buttonHtml = user.is_wished
+                ? `<button class="btn btn-sm btn-outline-secondary rounded-pill" disabled>Congratulated <i class="bx bx-check ms-1"></i></button>`
+                : `<button class="btn btn-sm btn-outline-success rounded-pill" data-uid="${_he(user.id)}" data-uname="${_he(user.first_name)}" data-wtype="anniversary" onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, this.dataset.wtype)">Wish <i class="bx bx-send ms-1"></i></button>`;
+
+            let card = `
+                <div class="colleague-bday-card d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <img src="${_he(avatar)}" alt="Avatar" onerror="this.onerror=null; this.src='${defaultAvatar}';">
+                        <div>
+                            <h6 class="mb-0 fw-bold text-dark">${_he(fullName)}</h6>
+                            <small class="text-muted"><i class="bx bx-medal text-warning"></i> Work Anniversary! (${user.milestone} Yr Milestone)</small>
+                        </div>
+                    </div>
+                    ${buttonHtml}
+                </div>
+            `;
+            container.innerHTML += card;
+        });
+    }
     
     if (showModal) {
         var myModal = new bootstrap.Modal(document.getElementById('colleagueBirthdayModal'));
@@ -280,11 +323,17 @@ function showColleaguesBirthdays(colleagues, showModal = true) {
     }
 }
 
-function openSendWishModal(userId, userName) {
+function openSendWishModal(userId, userName, wishType) {
     $('#colleagueBirthdayModal').modal('hide');
     document.getElementById('wishReceiverId').value = userId;
-    document.getElementById('sendWishModalTitle').innerText = 'Wish ' + userName;
-    document.getElementById('wishMessage').value = 'Happy Birthday ' + userName + '! Hope you have a great one.';
+    document.getElementById('wishType').value = wishType;
+    document.getElementById('sendWishModalTitle').innerText = (wishType === 'birthday' ? 'Wish ' : 'Congratulate ') + userName;
+    
+    const message = wishType === 'birthday' 
+        ? 'Happy Birthday ' + userName + '! Hope you have a great day ahead.' 
+        : 'Happy Work Anniversary ' + userName + '! Congratulations on your milestone and thank you for being a great teammate.';
+        
+    document.getElementById('wishMessage').value = message;
     
     var myModal = new bootstrap.Modal(document.getElementById('sendWishModal'));
     myModal.show();

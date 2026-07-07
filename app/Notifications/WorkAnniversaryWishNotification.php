@@ -8,7 +8,7 @@ use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
 use App\Models\User;
 
-class BirthdayWishNotification extends Notification implements ShouldQueue
+class WorkAnniversaryWishNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -18,8 +18,6 @@ class BirthdayWishNotification extends Notification implements ShouldQueue
 
     /**
      * Create a new notification instance.
-     *
-     * @return void
      */
     public function __construct(User $sender, $message)
     {
@@ -30,9 +28,6 @@ class BirthdayWishNotification extends Notification implements ShouldQueue
 
     /**
      * Get the notification's delivery channels.
-     *
-     * @param  mixed  $notifiable
-     * @return array
      */
     public function via($notifiable)
     {
@@ -41,16 +36,13 @@ class BirthdayWishNotification extends Notification implements ShouldQueue
 
     /**
      * Get the array representation of the notification for the database.
-     *
-     * @param  mixed  $notifiable
-     * @return array
      */
     public function toDatabase($notifiable)
     {
         return [
-            'title' => 'Birthday Wish 🎂',
+            'title' => 'Work Anniversary Wish 🏅',
             'message' => 'From ' . $this->sender->first_name . ': "' . $this->message . '"',
-            'type' => 'birthday_wish',
+            'type' => 'anniversary_wish',
             'sender_id' => $this->sender->id,
             'sender_name' => $this->sender->first_name . ' ' . $this->sender->last_name,
             'sender_avatar' => $this->sender->getProfilePicture(), // Resolved signed URL
@@ -61,16 +53,13 @@ class BirthdayWishNotification extends Notification implements ShouldQueue
 
     /**
      * Get the broadcast representation of the notification.
-     *
-     * @param  mixed  $notifiable
-     * @return BroadcastMessage
      */
     public function toBroadcast($notifiable)
     {
         return new BroadcastMessage([
-            'title' => 'Birthday Wish 🎂',
+            'title' => 'Work Anniversary Wish 🏅',
             'message' => 'From ' . $this->sender->first_name . ': "' . $this->message . '"',
-            'type' => 'birthday_wish',
+            'type' => 'anniversary_wish',
             'sender_id' => $this->sender->id,
             'sender_name' => $this->sender->first_name . ' ' . $this->sender->last_name,
             'sender_avatar' => $this->sender->getProfilePicture(), // Resolved signed URL
