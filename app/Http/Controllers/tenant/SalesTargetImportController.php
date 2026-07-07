@@ -165,16 +165,22 @@ class SalesTargetImportController extends Controller
         $errorCount = 0;
         $errors = [];
 
+        $consecutiveEmptyRows = 0;
         foreach ($data as $rowIndex => $row) {
             $rowNum = $rowIndex + 2; // +1 for 0-index, +1 for header row
             
             $monthRaw = trim($row[$monthIdx] ?? '');
             
             if (empty($monthRaw)) {
+                $consecutiveEmptyRows++;
+                if ($consecutiveEmptyRows > 15) {
+                    break;
+                }
                 $errorCount++;
                 $errors[] = "Row {$rowNum}: Missing Month.";
                 continue;
             }
+            $consecutiveEmptyRows = 0;
 
             $userId = $salespersonId;
 

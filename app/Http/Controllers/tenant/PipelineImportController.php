@@ -149,10 +149,19 @@ class PipelineImportController extends Controller
 
         // Preview First 10 Parties
         $previewData = [];
-        for ($r = $dataStartRowIdx; $r < min(count($data), $dataStartRowIdx + 15); $r++) {
+        $consecutiveEmptyRows = 0;
+        for ($r = $dataStartRowIdx; $r < count($data); $r++) {
             $row = $data[$r];
             $partyName = trim($row[$partyColIdx] ?? '');
-            if (empty($partyName) || strtolower($partyName) == 'total') continue;
+            if (empty($partyName)) {
+                $consecutiveEmptyRows++;
+                if ($consecutiveEmptyRows > 15) {
+                    break;
+                }
+                continue;
+            }
+            $consecutiveEmptyRows = 0;
+            if (strtolower($partyName) == 'total') continue;
 
             $potential = (float) str_replace(',', '', $row[$potentialColIdx] ?? 0);
             $type = strtolower(trim($row[$typeColIdx] ?? ''));
@@ -267,12 +276,22 @@ class PipelineImportController extends Controller
         $errorCount = 0;
         $errors = [];
 
+        $consecutiveEmptyRows = 0;
         for ($r = $dataStartRowIdx; $r < count($data); $r++) {
             $rowNum = $r + 1;
             $row = $data[$r];
 
             $partyName = trim($row[$partyColIdx] ?? '');
-            if (empty($partyName) || strtolower($partyName) == 'total') {
+            if (empty($partyName)) {
+                $consecutiveEmptyRows++;
+                if ($consecutiveEmptyRows > 15) {
+                    break;
+                }
+                continue;
+            }
+            $consecutiveEmptyRows = 0;
+
+            if (strtolower($partyName) == 'total') {
                 continue;
             }
 
