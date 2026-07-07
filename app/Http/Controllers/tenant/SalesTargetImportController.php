@@ -22,7 +22,9 @@ class SalesTargetImportController extends Controller
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
         $query = User::where('status', 'active');
-        if (($isCcare || $isNewBiz) && !$user->hasRole(['admin', 'Admin'])) {
+        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            // Admin and HR can see all active users
+        } elseif (($isCcare || $isNewBiz)) {
             $taggedSalespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
                 ->pluck('sales_user_id')->filter()->unique();
             $query->whereIn('id', $taggedSalespersonIds);
@@ -31,7 +33,7 @@ class SalesTargetImportController extends Controller
                 $q->where('name', 'like', '%Sales%');
             });
         }
-        $salespersons = $query->get();
+        $salespersons = $query->orderBy('first_name')->get();
 
         return view('tenant.sales-targets.import', [
             'pageConfigs' => ['contentLayout' => 'wide'],
