@@ -165,7 +165,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     showRealtimeWish(notification);
                 }
             });
-  function checkBirthdays() {
+    }
+});
+
+function checkBirthdays() {
     $.ajax({
         url: "{{ route('birthdays.check') }}",
         type: 'GET',
