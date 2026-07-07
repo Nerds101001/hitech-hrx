@@ -72,9 +72,24 @@ class PipelineImportController extends Controller
             return back()->with('error', 'File does not contain enough rows.');
         }
 
+        // Scan the first 15 rows to find the actual header row
+        $headerRowIdx = 0;
+        $firstRow = [];
+        for ($i = 0; $i < min(15, count($data)); $i++) {
+            $rowStr = strtolower(implode(' ', $data[$i]));
+            if (str_contains($rowStr, 'party') || str_contains($rowStr, 'potential')) {
+                $headerRowIdx = $i;
+                $firstRow = $data[$i];
+                break;
+            }
+        }
+        
+        if (empty($firstRow)) {
+            $firstRow = $data[0] ?? [];
+        }
+
         // Auto-detect single-row vs 2-row layout
         $isSingleRowHeader = false;
-        $firstRow = $data[0] ?? [];
         $inferredYear = null;
 
         // Scan first row to find year references as a fallback
@@ -112,7 +127,8 @@ class PipelineImportController extends Controller
 
         if ($monthMetricColsCount >= 2) {
             $isSingleRowHeader = true;
-            $dataStartRowIdx = 1; // start from row 2 (which contains "TOTAL" and will be skipped)
+            $dataStartRowIdx = $headerRowIdx + 1; // start from the row after headers
+
             
             // Scan first row for party, potential, and type columns
             foreach ($firstRow as $idx => $cell) {
@@ -154,9 +170,9 @@ class PipelineImportController extends Controller
             $totalMonthsDetected = count($monthMappings);
         } else {
             // Standard 2-row layout fallback
-            $dataStartRowIdx = $request->input('data_start_row', 4);
-            $monthRow = $data[1] ?? [];
-            $metricRow = $data[2] ?? [];
+            $dataStartRowIdx = $request->input('data_start_row', $headerRowIdx + 2);
+            $monthRow = $data[$headerRowIdx] ?? [];
+            $metricRow = $data[$headerRowIdx + 1] ?? [];
 
             $headers = [];
             foreach ($metricRow as $idx => $val) {
@@ -186,11 +202,18 @@ class PipelineImportController extends Controller
 
             foreach ($headers as $h) {
                 $name = strtolower($h['name']);
-                if (str_contains($name, 'ccare') || str_contains($name, 'newbiz') || str_contains($name, 'new biz')) {
+                if (str_contains($name, 'type') || str_contains($name, 'customer type')) {
                     $typeColIdx = $h['index']; break;
                 }
             }
             if ($typeColIdx === null) $typeColIdx = 3;
+
+            foreach ($headers as $h) {
+                $name = strtolower($h['name']);
+                if (str_contains($name, 'brand') || str_contains($name, 'product')) {
+                    $productColIdx = $h['index']; break;
+                }
+            }
 
             $currentParsedMonth = null;
             $totalMonthsDetected = 0;
