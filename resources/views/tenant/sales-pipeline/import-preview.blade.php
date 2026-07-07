@@ -27,6 +27,7 @@ table.prev-table tr:hover td { background: #f0fdf4; }
         <input type="hidden" name="ccare_id" value="{{ $ccareId }}">
         <input type="hidden" name="new_biz_id" value="{{ $newBizId }}">
         <input type="hidden" name="type_col" value="{{ $typeColIdx }}">
+        <input type="hidden" name="product_col" value="{{ $productColIdx }}">
         <input type="hidden" name="party_col" value="{{ $partyColIdx }}">
         <input type="hidden" name="potential_col" value="{{ $potentialColIdx }}">
         <input type="hidden" name="data_start_row" value="{{ $dataStartRowIdx }}">
@@ -43,7 +44,7 @@ table.prev-table tr:hover td { background: #f0fdf4; }
                     <i class="bx bx-check me-1"></i>{{ $totalMonthsDetected }} months detected
                 </span>
                 <span class="badge bg-primary fs-6 px-3 py-2">
-                    {{ count($previewData) }} of {{ count($previewData) >= 10 ? '10+ ' : '' }} parties previewed
+                    {{ count($previewData) }} of {{ count($previewData) >= 50 ? '50+ ' : '' }} parties previewed
                 </span>
                 <a href="{{ route('sales-visits.pipeline.import') }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">Cancel</a>
                 <button type="submit" class="btn btn-hitech rounded-pill px-4 shadow-sm">
@@ -60,6 +61,7 @@ table.prev-table tr:hover td { background: #f0fdf4; }
                         <tr>
                             <th class="left" style="min-width:140px;max-width:160px;">Party Name</th>
                             <th style="width:60px;">Type</th>
+                            <th style="width:60px;">Brand</th>
                             <th style="width:70px;">Potential<br><span style="font-weight:400;font-size:10px;">₹ Lakh</span></th>
                             @foreach($previewMonthKeys as $mk)
                                 @php
@@ -89,6 +91,9 @@ table.prev-table tr:hover td { background: #f0fdf4; }
                                 @endphp
                                 <span class="badge bg-label-{{ $badgeColor }} text-uppercase" style="font-size:10px;">{{ $row['type'] ?: '—' }}</span>
                             </td>
+                            <td class="text-center" style="font-size:11px; font-weight:600;">
+                                {{ $row['product'] ?: '—' }}
+                            </td>
                             <td class="text-end fw-semibold">{{ number_format($row['potential'], 2) }}<small class="text-muted ms-1">L</small></td>
                             @foreach($previewMonthKeys as $mk)
                                 @php $val = $row['months'][$mk] ?? null; @endphp
@@ -108,7 +113,7 @@ table.prev-table tr:hover td { background: #f0fdf4; }
                 </table>
             </div>
             <div class="card-footer bg-light text-muted small py-2 px-3">
-                Showing first 10 parties · {{ $totalMonthsDetected }} months total will be imported · All {{ count($monthMappings) }} months of sale/pending data will be saved
+                Showing first {{ count($previewData) }} parties · {{ $totalMonthsDetected }} months total will be imported · All {{ count($monthMappings) }} months of sale/pending data will be saved
             </div>
         </div>
 

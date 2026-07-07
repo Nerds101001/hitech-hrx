@@ -1,0 +1,2 @@
+cd /home/u989061032/domains/hitechgroup.in/public_html/hrx
+php artisan tinker --execute="\\Illuminate\\Support\\Facades\\DB::statement('SET FOREIGN_KEY_CHECKS=0;'); \\Illuminate\\Support\\Facades\\DB::table('sales_pipeline_months')->truncate(); \\Illuminate\\Support\\Facades\\DB::table('sales_pipelines')->truncate(); \\Illuminate\\Support\\Facades\\DB::statement('SET FOREIGN_KEY_CHECKS=1;'); echo 'TRUNCATED_ALL_HOSTINGER';"

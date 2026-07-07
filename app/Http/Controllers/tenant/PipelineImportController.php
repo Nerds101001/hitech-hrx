@@ -104,9 +104,10 @@ class PipelineImportController extends Controller
             }
         }
 
-        $partyColIdx = $request->input('party_col');
-        $potentialColIdx = $request->input('potential_col');
+        $partyColIdx = null;
+        $potentialColIdx = null;
         $typeColIdx = null;
+        $productColIdx = null;
         $monthMappings = [];
 
         if ($monthMetricColsCount >= 2) {
@@ -120,8 +121,10 @@ class PipelineImportController extends Controller
                     $partyColIdx = $idx;
                 } elseif ((str_contains($cellStr, 'potential') || str_contains($cellStr, 'business potential')) && $potentialColIdx === null) {
                     $potentialColIdx = $idx;
-                } elseif (str_contains($cellStr, 'ccare') || str_contains($cellStr, 'newbiz') || str_contains($cellStr, 'new biz') || str_contains($cellStr, 'new/ccare') || str_contains($cellStr, 'new biz/ccare')) {
+                } elseif ((str_contains($cellStr, 'type') || str_contains($cellStr, 'customer type') || str_contains($cellStr, 'customer/dealer type')) && $typeColIdx === null) {
                     $typeColIdx = $idx;
+                } elseif ((str_contains($cellStr, 'brand') || str_contains($cellStr, 'product')) && $productColIdx === null) {
+                    $productColIdx = $idx;
                 }
             }
             if ($partyColIdx === null) $partyColIdx = 1;
@@ -221,7 +224,7 @@ class PipelineImportController extends Controller
         for ($r = $dataStartRowIdx; $r < count($data); $r++) {
             $row = $data[$r];
             $partyName = trim($row[$partyColIdx] ?? '');
-            if (empty($partyName)) {
+            if (empty($partyName) || strtolower($partyName) == 'party name' || strtolower($partyName) == 'sr no') {
                 $consecutiveEmptyRows++;
                 if ($consecutiveEmptyRows > 15) {
                     break;
@@ -240,14 +243,17 @@ class PipelineImportController extends Controller
                 $monthSales[$mk] = $saleIdx !== null ? (float) str_replace(',', '', $row[$saleIdx] ?? 0) : null;
             }
 
+            $product = $productColIdx !== null ? trim($row[$productColIdx] ?? '') : '';
+
             $previewData[] = [
                 'row_num'    => $r + 1,
                 'party_name' => $partyName,
                 'potential'  => $potential,
                 'type'       => $type ?: '—',
+                'product'    => $product ?: '—',
                 'months'     => $monthSales,
             ];
-            if (count($previewData) >= 10) break;
+            if (count($previewData) >= 50) break;
         }
 
         $salesperson = User::find($request->salesperson_id);
@@ -256,7 +262,7 @@ class PipelineImportController extends Controller
 
         return view('tenant.sales-pipeline.import-preview', compact(
             'previewData', 'totalMonthsDetected', 'monthMappings', 'path', 'salesperson',
-            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'dataStartRowIdx', 'headers', 'previewMonthKeys',
+            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'productColIdx', 'dataStartRowIdx', 'headers', 'previewMonthKeys',
             'ccareId', 'newBizId'
         ));
     }
@@ -271,6 +277,7 @@ class PipelineImportController extends Controller
             'party_col' => 'required|numeric',
             'potential_col' => 'required|numeric',
             'type_col' => 'nullable|numeric',
+            'product_col' => 'nullable|numeric',
             'data_start_row' => 'required|numeric',
             'month_mappings' => 'required|json'
         ]);
@@ -295,6 +302,7 @@ class PipelineImportController extends Controller
         $partyColIdx = $request->party_col;
         $potentialColIdx = $request->potential_col;
         $typeColIdx = $request->type_col ?? 3;
+        $productColIdx = $request->product_col;
         $dataStartRowIdx = $request->data_start_row;
 
         // FY key map for YoY totals (fyStart year → DB column). FY 26-27 shown via monthly actuals, not stored here.
@@ -350,7 +358,7 @@ class PipelineImportController extends Controller
             $row = $data[$r];
 
             $partyName = trim($row[$partyColIdx] ?? '');
-            if (empty($partyName)) {
+            if (empty($partyName) || strtolower($partyName) == 'party name' || strtolower($partyName) == 'sr no') {
                 $consecutiveEmptyRows++;
                 if ($consecutiveEmptyRows > 15) {
                     break;
@@ -377,6 +385,11 @@ class PipelineImportController extends Controller
                 'closed' => 'Closed', 'dropped' => 'Dropped', 'inactive' => 'Inactive'
             ];
             $partyType = $typeMap[$typeRaw] ?? null;
+            
+            $product = null;
+            if ($productColIdx !== null) {
+                $product = trim($row[$productColIdx] ?? '');
+            }
 
             try {
                 $updateData = [
@@ -384,6 +397,10 @@ class PipelineImportController extends Controller
                     'type' => $partyType,
                     'is_locked' => true,
                 ];
+                
+                if ($product) {
+                    $updateData['product'] = $product;
+                }
 
                 if ($ccareId) {
                     $updateData['ccare_id'] = $ccareId;
