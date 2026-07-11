@@ -18,24 +18,7 @@
                 <input type="hidden" name="kpiId" id="modalKpiId" value="">
                 <div class="modal-body modal-body-hitech">
                     <div class="row g-4">
-                        <div class="col-md-6">
-                            <label class="form-label-hitech">Evaluation Category <span class="text-danger">*</span></label>
-                            <select name="kpi_type" id="modalKpiCategory" class="form-select form-select-hitech">
-                                <option value="KPI">KPI (Key Performance Indicator)</option>
-                                <option value="KRA">KRA (Key Result Area)</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6" id="gradeSystemContainer">
-                            <label class="form-label-hitech">MNC Grade System <span class="text-danger">*</span></label>
-                            <select name="grade_system" id="modalKpiGrade" class="form-select form-select-hitech">
-                                <option value="Standard">Standard Level</option>
-                                <option value="Bronze Grade">Bronze Grade</option>
-                                <option value="Silver Grade">Silver Grade</option>
-                                <option value="Gold Grade">Gold Grade</option>
-                                <option value="Platinum (MNC)">Platinum Grade (MNC)</option>
-                                <option value="Diamond (MNC)">Diamond Grade (MNC)</option>
-                            </select>
-                        </div>
+                        <input type="hidden" name="kpi_type" id="modalKpiCategory" value="KPI">
                         <div class="col-md-6">
                             <label class="form-label-hitech">Target Metric Name <span class="text-danger">*</span></label>
                             <input type="text" name="metric_name" id="modalKpiMetric" class="form-control form-control-hitech" placeholder="e.g. Sales Volume, CSAT Score" required>

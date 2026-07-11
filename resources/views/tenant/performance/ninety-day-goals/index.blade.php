@@ -44,7 +44,7 @@
                                 </td>
                             @endfor
                             <td>
-                                <form action="{{ route('tenant.performance.ninety-day-goals.destroy', $goal->id) }}" method="POST" class="d-inline">
+                                <form action="{{ route('performance.ninety-day-goals.destroy', $goal->id) }}" method="POST" class="d-inline">
                                     @csrf @method('DELETE')
                                     <button class="btn btn-sm btn-danger"><i class="bx bx-trash"></i></button>
                                 </form>
@@ -61,7 +61,7 @@
 <!-- Add Goal Modal -->
 <div class="modal fade" id="addGoalModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog" role="document">
-        <form action="{{ route('tenant.performance.ninety-day-goals.store') }}" method="POST">
+        <form action="{{ route('performance.ninety-day-goals.store') }}" method="POST">
             @csrf
             <div class="modal-content">
                 <div class="modal-header">

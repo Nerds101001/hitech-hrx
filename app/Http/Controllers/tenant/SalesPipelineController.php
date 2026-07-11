@@ -318,14 +318,78 @@ class SalesPipelineController extends Controller
             $data['is_locked'] = true;
         }
 
+        // ── Handle Category change (Admin/HR only) ──────────────────────────
+        if ($request->has('category') && $isPrivileged) {
+            $newCategory = $request->input('category');
+
+            if ($newCategory === 'CCare') {
+                // Keep existing ccare_id if already set, otherwise find from CcSalespersonMap
+                $ccareId = $pipeline->ccare_id;
+                if (!$ccareId) {
+                    $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
+                        ->with(['ccUser.department'])->get();
+                    foreach ($maps as $map) {
+                        if ($map->ccUser && $map->ccUser->department) {
+                            $dept = strtolower($map->ccUser->department->name);
+                            if (str_contains($dept, 'customer care') || str_contains($dept, 'c-care') || str_contains($dept, 'ccare')) {
+                                $ccareId = $map->ccUser->id;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // Directly save — bypasses mass assignment issues with null
+                $pipeline->ccare_id   = $ccareId;
+                $pipeline->new_biz_id = null;
+                $pipeline->save();
+
+            } elseif ($newCategory === 'New Biz') {
+                // Keep existing new_biz_id if already set, otherwise find from CcSalespersonMap
+                $newBizId = $pipeline->new_biz_id;
+                if (!$newBizId) {
+                    $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
+                        ->with(['ccUser.department'])->get();
+                    foreach ($maps as $map) {
+                        if ($map->ccUser && $map->ccUser->department) {
+                            $dept = strtolower($map->ccUser->department->name);
+                            if (str_contains($dept, 'new biz') || str_contains($dept, 'newbiz')) {
+                                $newBizId = $map->ccUser->id;
+                                break;
+                            }
+                        }
+                    }
+                }
+                $pipeline->new_biz_id = $newBizId;
+                $pipeline->ccare_id   = null;
+                $pipeline->save();
+            }
+
+            // Return rep name immediately without running rest of $data update
+            $pipeline->refresh()->load(['ccare', 'newBiz']);
+            $repName = $pipeline->newBiz->name ?? $pipeline->ccare->name ?? null;
+            return response()->json(['success' => true, 'rep_name' => $repName]);
+        }
+
         $pipeline->update($data);
 
+
         if ($request->ajax()) {
-            return response()->json(['success' => true]);
+            // If category changed, return the resolved rep name so JS can update cell live
+            $repName = null;
+            if ($request->has('category')) {
+                $pipeline->refresh()->load(['ccare', 'newBiz']);
+                if ($pipeline->newBiz) {
+                    $repName = $pipeline->newBiz->name;
+                } elseif ($pipeline->ccare) {
+                    $repName = $pipeline->ccare->name;
+                }
+            }
+            return response()->json(['success' => true, 'rep_name' => $repName]);
         }
 
         return redirect()->back()->with('success', 'Pipeline updated.');
     }
+
 
     public function monthUpdate(Request $request)
     {

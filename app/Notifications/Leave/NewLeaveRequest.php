@@ -28,14 +28,48 @@ class NewLeaveRequest extends Notification
     $this->message = 'You have a new leave request from ' . $leaveRequest->user->getFullName();
   }
 
-  /**
-   * Get the notification's delivery channels.
-   *
-   * @return array<int, string>
-   */
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class];
+    $employee = $this->leaveRequest->user;
+    $reportingToId = $employee ? $employee->reporting_to_id : null;
+
+    if ($reportingToId) {
+        // Only send the email to the direct manager
+        if ($notifiable->id == $reportingToId) {
+            return ['database', 'mail', FirebaseChannel::class];
+        }
+    } else {
+        // If there's no reporting manager, send the email to the first active HR staff
+        // member who handles this employee's location.
+        $siteName = ($employee && $employee->site) ? strtolower($employee->site->name) : '';
+        $address = $employee ? strtolower(($employee->perm_street ?? '') . ' ' . ($employee->temp_street ?? '') . ' ' . ($employee->address ?? '')) : '';
+
+        $isTargetLocation = str_contains($siteName, 'ramgarh') || 
+                            str_contains($siteName, 'sahnewal') || 
+                            str_contains($siteName, 'jamalpur') ||
+                            str_contains($address, 'jamalpur');
+
+        // Determine which HR email should receive the main "To" email
+        $mainHrEmail = $isTargetLocation ? 'hr@rustx.com' : 'priyal@rustx.com';
+
+        // Find the user with this email
+        $mainHr = User::where('email', $mainHrEmail)->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+
+        // Fallback to any active HR if not found
+        if (!$mainHr) {
+            $mainHr = User::whereHas('roles', function ($query) {
+                $query->where('name', 'hr');
+            })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+        }
+
+        // If the main HR is the current notifiable, send the mail
+        if ($mainHr && $notifiable->id == $mainHr->id) {
+            return ['database', 'mail', FirebaseChannel::class];
+        }
+    }
+
+    // Others (including other HRs if manager is present) only get DB and Firebase notifications
+    return ['database', FirebaseChannel::class];
   }
 
   /**
@@ -49,7 +83,7 @@ class NewLeaveRequest extends Notification
     $toDate = $this->leaveRequest->to_date->format('d M, Y');
     $duration = $this->leaveRequest->from_date->diffInDays($this->leaveRequest->to_date) + 1;
 
-    return (new MailMessage)
+    $mail = (new MailMessage)
       ->subject('New Leave Application: ' . $employee->getFullName())
       ->view('emails.new_leave_request', [
         'notifiable' => $notifiable,
@@ -62,6 +96,32 @@ class NewLeaveRequest extends Notification
         'userNotes' => $this->leaveRequest->user_notes,
         'isBackdated' => $this->leaveRequest->from_date->lt($this->leaveRequest->created_at->startOfDay())
       ]);
+
+    // Determine target location (Ramgarh, Sahnewal, Jamalpur)
+    $siteName = ($employee && $employee->site) ? strtolower($employee->site->name) : '';
+    $address = $employee ? strtolower(($employee->perm_street ?? '') . ' ' . ($employee->temp_street ?? '') . ' ' . ($employee->address ?? '')) : '';
+
+    $isTargetLocation = str_contains($siteName, 'ramgarh') || 
+                        str_contains($siteName, 'sahnewal') || 
+                        str_contains($siteName, 'jamalpur') ||
+                        str_contains($address, 'jamalpur');
+
+    if ($isTargetLocation) {
+        $ccEmails = ['hr@rustx.com', 'hr@rustx.net']; // Raman & Divya
+    } else {
+        $ccEmails = ['priyal@rustx.com', 'suchita@rustx.com']; // Priyal & Suchita
+    }
+
+    // Exclude the recipient from the CC list to avoid duplicate mails
+    $ccEmails = array_filter($ccEmails, function ($email) use ($notifiable) {
+        return strtolower($email) !== strtolower($notifiable->email);
+    });
+
+    if (!empty($ccEmails)) {
+        $mail->cc(array_unique($ccEmails));
+    }
+
+    return $mail;
   }
 
   /**

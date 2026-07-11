@@ -23,11 +23,17 @@ table.prev-table tr:hover td { background: #f0fdf4; }
     <form action="{{ route('sales-visits.pipeline.import.process') }}" method="POST">
         @csrf
         <input type="hidden" name="temp_path" value="{{ $path }}">
+        <input type="hidden" name="import_target" value="{{ $importTarget ?? 'report' }}">
         <input type="hidden" name="salesperson_id" value="{{ $salesperson->id }}">
         <input type="hidden" name="ccare_id" value="{{ $ccareId }}">
         <input type="hidden" name="new_biz_id" value="{{ $newBizId }}">
         <input type="hidden" name="type_col" value="{{ $typeColIdx }}">
         <input type="hidden" name="product_col" value="{{ $productColIdx }}">
+        <input type="hidden" name="stage_col" value="{{ $stageColIdx ?? '' }}">
+        <input type="hidden" name="remarks_col" value="{{ $remarksColIdx ?? '' }}">
+        <input type="hidden" name="salesperson_col" value="{{ $salespersonColIdx ?? '' }}">
+        <input type="hidden" name="new_biz_col" value="{{ $newBizColIdx ?? '' }}">
+        <input type="hidden" name="ccare_col" value="{{ $ccareColIdx ?? '' }}">
         <input type="hidden" name="party_col" value="{{ $partyColIdx }}">
         <input type="hidden" name="potential_col" value="{{ $potentialColIdx }}">
         <input type="hidden" name="data_start_row" value="{{ $dataStartRowIdx }}">

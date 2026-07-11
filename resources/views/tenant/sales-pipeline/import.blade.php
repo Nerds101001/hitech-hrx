@@ -1,6 +1,6 @@
 @extends('layouts/layoutMaster')
 
-@section('title', 'Import Sales Report')
+@section('title', (isset($importTarget) && $importTarget === 'pipeline') ? 'Import Sales Pipeline' : 'Import Sales Report')
 
 @section('page-style')
 <style>
@@ -32,7 +32,7 @@
                             <i class="bx bx-upload fs-3 text-teal"></i>
                         </div>
                         <div>
-                            <h4 class="mb-1 fw-bold text-dark">Bulk Import Sales Report</h4>
+                            <h4 class="mb-1 fw-bold text-dark">Bulk Import {{ (isset($importTarget) && $importTarget === 'pipeline') ? 'Sales Pipeline' : 'Sales Report' }}</h4>
                             <p class="mb-0 text-muted small">Upload a salesperson's full sales history matrix (.csv / .xlsx).</p>
                         </div>
                     </div>
@@ -76,6 +76,7 @@
 
                     <form action="{{ route('sales-visits.pipeline.import.preview') }}" method="POST" enctype="multipart/form-data" id="uploadForm">
                         @csrf
+                        <input type="hidden" name="import_target" value="{{ $importTarget ?? 'report' }}">
                         
                         <div class="row mb-4">
                             <div class="col-md-4">
@@ -112,7 +113,7 @@
 
                         <div class="text-center p-5 border-dashed rounded-3 bg-light cursor-pointer hover-bg-teal-soft transition-all" onclick="document.getElementById('fileInput').click()">
                             <i class="bx bxs-file-export fs-1 text-muted mb-3 opacity-50"></i>
-                            <h5 class="fw-bold mb-1">Click to Upload Sales Report File</h5>
+                            <h5 class="fw-bold mb-1">Click to Upload {{ (isset($importTarget) && $importTarget === 'pipeline') ? 'Sales Pipeline' : 'Sales Report' }} File</h5>
                             <p class="text-muted small mb-0">.csv, .xls, .xlsx supported (Max 10MB)</p>
                             <div id="fileNameDisplay" class="mt-3 fw-bold text-teal d-none"></div>
                         </div>
@@ -131,17 +132,26 @@
                 <div class="card-body bg-light" style="border-radius: 16px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h6 class="fw-bold mb-0"><i class="bx bx-info-circle me-1"></i> Format Instructions</h6>
-                        <a href="{{ asset('templates/sales_pipeline_template.csv') }}" class="btn btn-xs btn-outline-primary rounded-pill fw-bold" download>
+                        <a href="{{ route('sales-visits.pipeline.download-template', ['type' => $importTarget ?? 'report']) }}" class="btn btn-xs btn-outline-primary rounded-pill fw-bold">
                             <i class="bx bx-download me-1"></i> Download CSV Template
                         </a>
                     </div>
+                    @if(isset($importTarget) && $importTarget === 'pipeline')
                     <p class="small text-muted mb-0">
-                        Please make sure your uploaded file matches the standard tracker format: <br>
+                        Please make sure your uploaded file matches the Sales Pipeline flat format: <br>
+                        - <strong>Row 1</strong> must contain your column headers (e.g. Customer Name, Product, Potential, Type, Stage, Status Remarks, Salesperson, New Biz, Cust. Care).<br>
+                        - <strong>Row 2 onwards</strong> should contain your list of pipeline records.<br>
+                        - We will automatically detect these columns based on the header row names.
+                    </p>
+                    @else
+                    <p class="small text-muted mb-0">
+                        Please make sure your uploaded file matches the Sales Report matrix format: <br>
                         - <strong>Row 2</strong> must contain the month columns (e.g. <code>JUNE 26-27</code>).<br>
                         - <strong>Row 3</strong> must contain the metric type (<code>SALE</code>, <code>PENDING</code>, <code>FORECAST</code>).<br>
                         - <strong>Row 4</strong> is the totals row (skipped automatically).<br>
-                        - <strong>Row 5 onwards</strong> should contain your list of parties in Column B, potential in Column C, and type (CCARE/NEWBIZ) in Column D.
+                        - <strong>Row 5 onwards</strong> should contain your list of parties, potential, type, brand, and optionally Salesperson, New Biz, Cust. Care.
                     </p>
+                    @endif
                 </div>
             </div>
         </div>

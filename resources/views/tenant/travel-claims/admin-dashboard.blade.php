@@ -188,11 +188,16 @@
                       </span>
                     </td>
                     <td>
-                      @if($claim->status == 'submitted' || $claim->status == 'verified')
-                        <button class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">Review</button>
-                      @else
-                        <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">View</button>
-                      @endif
+                      <div class="d-flex gap-2">
+                        @if($claim->status == 'submitted' || $claim->status == 'verified')
+                          <button class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">Review</button>
+                        @else
+                          <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">View</button>
+                        @endif
+                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 d-flex align-items-center gap-1" title="Download All Attachments">
+                          <i class="bx bx-download"></i> Download All
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 @empty
@@ -356,14 +361,14 @@
                             <td>{{ $item->mode_of_travel }} <br> <strong>{{ $item->distance_km }} KM</strong></td>
                             <td>
                                 @if($item->photo_path)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->photo_path) }}" class="btn btn-xs btn-outline-primary btn-preview-attachment">View</button>
                                 @else
                                      <span class="text-muted">-</span>
                                 @endif
                             </td>
                             <td>
                                 @if($item->petrol_slip_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->petrol_slip_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->petrol_slip_proof) }}" class="btn btn-xs btn-outline-primary btn-preview-attachment">View</button>
                                 @else
                                      <span class="text-muted">-</span>
                                 @endif
@@ -374,7 +379,7 @@
                             <td>₹{{ number_format($item->auto_taxi_amount ?? 0, 2) }}</td>
                             <td>
                                 @if($item->auto_taxi_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->auto_taxi_proof) }}" target="_blank" class="btn btn-xs btn-outline-primary">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->auto_taxi_proof) }}" class="btn btn-xs btn-outline-primary btn-preview-attachment">View</button>
                                 @else
                                      <span class="text-muted">-</span>
                                 @endif
@@ -384,7 +389,7 @@
                             <td>₹{{ $item->courier_amount }}</td>
                             <td>
                                 @if($item->courier_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->courier_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->courier_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -392,7 +397,7 @@
                             <td>₹{{ $item->transport_amount }}</td>
                             <td>
                                 @if($item->transport_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->transport_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->transport_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -400,7 +405,7 @@
                             <td>₹{{ $item->bills_amount }}</td>
                             <td>
                                 @if($item->bills_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->bills_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->bills_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -408,7 +413,7 @@
                             <td>₹{{ $item->freight_amount }}</td>
                             <td>
                                 @if($item->freight_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->freight_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->freight_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -416,7 +421,7 @@
                             <td>₹{{ $item->toll_amount }}</td>
                             <td>
                                 @if($item->toll_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->toll_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->toll_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -424,7 +429,7 @@
                             <td>₹{{ $item->additional_food_amount ?? 0 }}</td>
                             <td>
                                 @if($item->additional_food_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->additional_food_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->additional_food_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -432,7 +437,7 @@
                             <td>₹{{ $item->special_approval_amount ?? 0 }}</td>
                             <td>
                                 @if($item->special_approval_proof)
-                                    <a href="{{ \Illuminate\Support\Facades\Storage::url($item->special_approval_proof) }}" target="_blank" class="btn btn-xs btn-outline-info">View</a>
+                                    <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($item->special_approval_proof) }}" class="btn btn-xs btn-outline-info btn-preview-attachment">View</button>
                                 @else
                                     <span class="text-muted">-</span>
                                 @endif
@@ -491,6 +496,23 @@
   @endforeach
 
 </div>
+
+<!-- Attachment Preview Modal -->
+<div class="modal fade" id="attachmentPreviewModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-dark py-3">
+                <h5 class="modal-title text-white fw-bold mb-0">Attachment Preview</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center p-3" id="previewModalBody">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @section('page-script')
@@ -506,6 +528,36 @@
         search: "_INPUT_",
         searchPlaceholder: "Search claims..."
       }
+    });
+
+    // Attachment Preview Listener
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.btn-preview-attachment');
+        if (btn) {
+            e.preventDefault();
+            const url = btn.getAttribute('data-url');
+            const filename = url.split('/').pop();
+            const ext = filename.split('.').pop().toLowerCase();
+            
+            let html = '';
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext)) {
+                html = '<img src="' + url + '" class="img-fluid rounded shadow-sm" style="max-height: 75vh;" />';
+            } else if (ext === 'pdf') {
+                html = '<iframe src="' + url + '" style="width: 100%; height: 75vh; border: none;"></iframe>';
+            } else {
+                html = '<div class="p-5 text-center">' +
+                       '<i class="bx bx-file-blank fs-1 text-muted mb-3"></i>' +
+                       '<h5>Cannot Preview Directly</h5>' +
+                       '<p class="text-muted">This file format (.' + ext + ') cannot be previewed in your browser.</p>' +
+                       '<a href="' + url + '" target="_blank" class="btn btn-primary rounded-pill px-4 mt-2" download>' +
+                       '<i class="bx bx-download me-1"></i> Download File' +
+                       '</a>' +
+                       '</div>';
+            }
+            
+            document.getElementById('previewModalBody').innerHTML = html;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('attachmentPreviewModal')).show();
+        }
     });
   });
 </script>

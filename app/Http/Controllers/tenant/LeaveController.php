@@ -43,8 +43,8 @@ class LeaveController extends Controller
       $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
       $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
       
-      $leaveQuery = LeaveRequest::query()->with(['user', 'leaveType', 'user.designation.department', 'approvedBy']);
-      $odQuery = OutdoorDuty::query()->with(['user', 'user.designation.department', 'approvedBy']);
+      $leaveQuery = LeaveRequest::query()->with(['user', 'leaveType', 'user.department', 'approvedBy']);
+      $odQuery = OutdoorDuty::query()->with(['user', 'user.department', 'approvedBy']);
 
       if ($isManager) {
           $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
@@ -111,7 +111,7 @@ class LeaveController extends Controller
               $name .= ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>';
           }
           
-          $dept = $item->user && $item->user->designation && $item->user->designation->department ? $item->user->designation->department->name : 'N/A';
+          $dept = $item->user && $item->user->department ? $item->user->department->name : 'N/A';
           $statusVal = $item->status instanceof \App\Enums\LeaveRequestStatus ? $item->status->value : $item->status;
           $duration = $item->is_half_day ? 0.5 : ($item->from_date->diffInDays($item->to_date) + 1);
           $dateFmt = $item->from_date->format('d M, Y');
@@ -141,7 +141,7 @@ class LeaveController extends Controller
       });
 
       $ods = $odQuery->get()->map(function($item) {
-          $dept = $item->user && $item->user->designation && $item->user->designation->department ? $item->user->designation->department->name : 'N/A';
+          $dept = $item->user && $item->user->department ? $item->user->department->name : 'N/A';
           $reason = e($item->purpose);
           if ($item->location) $reason .= " <small class='text-muted d-block'>Loc: " . e($item->location) . "</small>";
           

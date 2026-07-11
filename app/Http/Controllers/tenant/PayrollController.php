@@ -59,7 +59,7 @@ class PayrollController extends Controller
     {
         // salaryPolicy must be eager-loaded here — 3 DataTables columns reference it per row,
         // without this it fires up to 3 queries per employee (e.g. 600 queries for 200 employees)
-        $query = Payslip::query()->with(['user.designation.department', 'user.site', 'user.salaryPolicy', 'payrollRecord']);
+        $query = Payslip::query()->with(['user.department', 'user.designation', 'user.site', 'user.salaryPolicy', 'payrollRecord']);
 
         // Apply Filters
         if ($request->filled('department_id')) {

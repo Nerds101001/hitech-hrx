@@ -54,8 +54,8 @@
                     </select>
                 </form>
                 @if($isCcare || $isAdmin || $isNewBiz)
-                    <a href="{{ route('sales-visits.pipeline.import') }}" class="btn btn-sm btn-outline-light rounded-pill fw-bold shadow-sm d-flex align-items-center me-2" title="Import Sales & Forecast Data">
-                        <i class="bx bx-upload me-1"></i> Import Sales Report (Sale & Forecast)
+                    <a href="{{ route('sales-visits.pipeline.import', ['target' => 'pipeline']) }}" class="btn btn-sm btn-outline-light rounded-pill fw-bold shadow-sm d-flex align-items-center me-2" title="Import Sales Pipeline Data">
+                        <i class="bx bx-upload me-1"></i> Import Sales Pipeline Data
                     </a>
                     <a href="{{ route('sales-visits.sales-targets.import') }}" class="btn btn-sm btn-warning text-dark rounded-pill fw-bold shadow-sm d-flex align-items-center" title="Import Kingo & Bingo Targets">
                         <i class="bx bx-upload me-1"></i> Import Sales Targets (Kingo & Bingo)

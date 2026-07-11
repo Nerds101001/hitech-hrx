@@ -129,8 +129,6 @@ Route::middleware([
 
     // --- DASHBOARD & GENERAL ---
     Route::get('/', [DashboardController::class, 'index'])->name('tenant.dashboard');
-    
-
 
 
 
@@ -635,6 +633,7 @@ Route::middleware([
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
             Route::post('/sales-report/import/process', [\App\Http\Controllers\tenant\PipelineImportController::class, 'processImport'])->name('pipeline.import.process');
+            Route::get('/sales-report/download-template', [\App\Http\Controllers\tenant\PipelineImportController::class, 'downloadTemplate'])->name('pipeline.download-template');
 
             // Redirects from old /pipeline URLs
             Route::get('/pipeline', fn() => redirect()->route('sales-visits.pipeline.index'));
@@ -787,6 +786,14 @@ Route::middleware([
         Route::prefix('organizationHierarchy')->name('organizationHierarchy.')->group(function () {
           Route::get('', [OrganisationHierarchyController::class, 'index'])->name('index');
         });
+
+        // Work Control (Viewable by all authenticated users)
+        Route::prefix('work-control')->name('tenant.work-control.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\tenant\WorkControlController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\tenant\WorkControlController::class, 'export'])->name('export');
+            Route::get('/my-routines', [\App\Http\Controllers\tenant\WorkControlController::class, 'myRoutines'])->name('my-routines');
+            Route::post('/store', [\App\Http\Controllers\tenant\WorkControlController::class, 'store'])->name('store');
+        });
     });
 
     // --- RE-OPEN ADMINISTRATIVE ROUTES (Admin/HR/Manager) ---
@@ -889,7 +896,8 @@ Route::middleware([
     });
 
 
-    // Performance Appraisals & 90-Day Goals
+
+
     Route::prefix('performance')->name('performance.')->group(function () {
         Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
         Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
@@ -899,5 +907,6 @@ Route::middleware([
         Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
         Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
         Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
+        Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
     });
 });

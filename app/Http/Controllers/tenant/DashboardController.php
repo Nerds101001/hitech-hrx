@@ -225,7 +225,7 @@ class DashboardController extends Controller
 
           // Fetch all four approval types in one go each (no .each() — avoids chunked N+1)
           $leavesPending = LeaveRequest::where('status', 'pending')
-              ->with(['user.designation.department', 'leaveType'])
+              ->with(['user.department', 'leaveType'])
               ->get();
           foreach ($leavesPending as $r) {
               $days = 1;
@@ -237,7 +237,7 @@ class DashboardController extends Controller
                   'type'       => 'Leave',
                   'user'       => $r->user?->name ?? 'N/A',
                   'emp_id'     => $r->user?->code ?? 'N/A',
-                  'department' => $r->user?->designation?->department?->name ?? 'HR',
+                  'department' => $r->user?->department?->name ?? 'HR',
                   'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
                   'date'       => $r->from_date ? Carbon::parse($r->from_date)->format('M d') : 'N/A',
                   'raw_date'   => $r->from_date ? Carbon::parse($r->from_date) : now(),
@@ -249,14 +249,14 @@ class DashboardController extends Controller
           }
 
           $expensesPending = ExpenseRequest::where('status', 'pending')
-              ->with(['user.designation.department', 'expenseType'])
+              ->with(['user.department', 'expenseType'])
               ->get();
           foreach ($expensesPending as $r) {
               $list->push([
                   'type'       => 'Expense',
                   'user'       => $r->user?->name ?? 'N/A',
                   'emp_id'     => $r->user?->code ?? 'N/A',
-                  'department' => $r->user?->designation?->department?->name ?? 'Finance',
+                  'department' => $r->user?->department?->name ?? 'Finance',
                   'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
                   'date'       => Carbon::parse($r->created_at)->format('M d'),
                   'raw_date'   => Carbon::parse($r->created_at),
@@ -267,14 +267,14 @@ class DashboardController extends Controller
           }
 
           $docsPending = DocumentRequest::where('status', 'pending')
-              ->with(['user.designation.department', 'documentType'])
+              ->with(['user.department', 'documentType'])
               ->get();
           foreach ($docsPending as $r) {
               $list->push([
                   'type'       => 'Document',
                   'user'       => $r->user?->name ?? 'N/A',
                   'emp_id'     => $r->user?->code ?? 'N/A',
-                  'department' => $r->user?->designation?->department?->name ?? 'Admin',
+                  'department' => $r->user?->department?->name ?? 'Admin',
                   'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
                   'date'       => Carbon::parse($r->created_at)->format('M d'),
                   'raw_date'   => Carbon::parse($r->created_at),
@@ -285,14 +285,14 @@ class DashboardController extends Controller
           }
 
           $loansPending = LoanRequest::where('status', 'pending')
-              ->with(['user.designation.department'])
+              ->with(['user.department'])
               ->get();
           foreach ($loansPending as $r) {
               $list->push([
                   'type'       => 'Loan',
                   'user'       => $r->user?->name ?? 'N/A',
                   'emp_id'     => $r->user?->code ?? 'N/A',
-                  'department' => $r->user?->designation?->department?->name ?? 'Operations',
+                  'department' => $r->user?->department?->name ?? 'Operations',
                   'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
                   'date'       => Carbon::parse($r->created_at)->format('M d'),
                   'raw_date'   => Carbon::parse($r->created_at),

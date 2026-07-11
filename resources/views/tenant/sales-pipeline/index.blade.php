@@ -105,13 +105,13 @@
                             <th rowspan="2" class="text-center align-middle col-sno">S.No.</th>
                             <th rowspan="2" class="align-middle col-party">Party Name</th>
                             <th rowspan="2" class="align-middle col-status">Type</th>
+                            <th rowspan="2" class="align-middle col-category" style="min-width:90px;">Category</th>
+                            <th rowspan="2" class="align-middle col-repname" style="min-width:130px;">Representative</th>
                             <th rowspan="2" class="text-end align-middle col-potential">
                                 Potential<br><small class="fw-normal opacity-75" style="font-size:0.65rem">₹ Lakh</small>
                             </th>
                             @if($isAdmin)
                                 <th rowspan="2" class="align-middle col-salesperson">Salesperson</th>
-                                <th rowspan="2" class="align-middle col-newbiz">New Biz</th>
-                                <th rowspan="2" class="align-middle col-ccare">Cust. Care</th>
                             @elseif($isSalesperson)
                                 <th rowspan="2" class="align-middle col-salesperson"
                                     title="Shows CCare name if type=CCare, New Biz name if type=New Biz">Representative</th>
@@ -173,11 +173,11 @@
                             <td class="text-center col-sno" style="background:#d1fae5!important;color:#065f46;">∑</td>
                             <td class="col-party" style="background:#d1fae5!important;color:#065f46;">Total</td>
                             <td class="col-status" style="background:#d1fae5!important;"></td>
+                            <td class="col-category" style="background:#d1fae5!important;"></td>
+                            <td class="col-repname" style="background:#d1fae5!important;"></td>
                             <td class="col-potential text-end font-monospace" style="background:#d1fae5!important;color:#065f46;" id="totalPotential">—</td>
                             @if($isAdmin)
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
-                                <td class="col-newbiz" style="background:#d1fae5!important;"></td>
-                                <td class="col-ccare" style="background:#d1fae5!important;"></td>
                             @elseif($isSalesperson)
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
                             @else
@@ -258,14 +258,44 @@
                                     </select>
                                 </td>
 
+                                @php
+                                    $catDisplay = '-';
+                                    $catPerson  = '-';
+                                    if ($row->newBiz->name ?? null) {
+                                        $catDisplay = 'New Biz';
+                                        $catPerson  = $row->newBiz->name;
+                                    } elseif ($row->ccare->name ?? null) {
+                                        $catDisplay = 'CCare';
+                                        $catPerson  = $row->ccare->name;
+                                    }
+                                @endphp
+
+                                {{-- Category column --}}
+                                <td class="col-category align-middle text-center">
+                                    @if($isAdmin)
+                                        <select class="excel-select row-field status-select text-truncate" data-field="category" style="width:85px;">
+                                            <option value="">-Select-</option>
+                                            <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>
+                                            <option value="CCare" {{ $catDisplay === 'CCare' ? 'selected' : '' }}>CCare</option>
+                                        </select>
+                                    @elseif($catDisplay === 'New Biz')
+                                        <span class="badge bg-primary fw-normal" style="font-size:0.75rem;">New Biz</span>
+                                    @elseif($catDisplay === 'CCare')
+                                        <span class="badge bg-info text-dark fw-normal" style="font-size:0.75rem;">CCare</span>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
+
+                                {{-- Representative name column --}}
+                                <td class="col-repname text-truncate" title="{{ $catPerson }}">{{ $catPerson }}</td>
+
                                 <td class="col-potential text-end font-monospace fw-bold text-dark">
                                     {{ number_format($row->total_business_potential ?? 0, 2) }}
                                 </td>
 
                                 @if($isAdmin)
                                     <td class="col-salesperson text-truncate" title="{{ $row->salesperson->name ?? '-' }}">{{ $row->salesperson->name ?? '-' }}</td>
-                                    <td class="col-newbiz text-truncate" title="{{ $row->newBiz->name ?? '-' }}">{{ $row->newBiz->name ?? '-' }}</td>
-                                    <td class="col-ccare text-truncate" title="{{ $row->ccare->name ?? '-' }}">{{ $row->ccare->name ?? '-' }}</td>
                                 @elseif($isSalesperson)
                                     <td class="col-salesperson text-truncate" title="{{ $repDisplay }}">{{ $repDisplay }}</td>
                                 @else
@@ -594,7 +624,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const key = this.dataset.field;
             const val = this.value;
 
-            fetch(`{{ url('sales-visits/pipeline') }}/${id}`, {
+            fetch(`{{ url('sales-visits/sales-report') }}/${id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ [key]: val })
@@ -604,10 +634,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
                     // Update data-type attribute for filter
                     if (key === 'type') tr.dataset.type = val;
+                    // When category changes, update the Representative name cell instantly
+                    if (key === 'category' && data.rep_name !== undefined) {
+                        const repCell = tr.querySelector('td.col-repname');
+                        if (repCell) {
+                            repCell.textContent = data.rep_name || '-';
+                            repCell.title       = data.rep_name || '-';
+                            repCell.style.backgroundColor = '#e8f5e9';
+                            setTimeout(() => { repCell.style.backgroundColor = 'transparent'; }, 800);
+                        }
+                    }
                 }
             });
         });
     });
+
 
     // ── Inline edit: month-field ──────────────────────────────────────
     document.querySelectorAll('.month-field').forEach(field => {

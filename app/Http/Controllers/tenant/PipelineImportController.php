@@ -12,8 +12,9 @@ use Carbon\Carbon;
 
 class PipelineImportController extends Controller
 {
-    public function showImport()
+    public function showImport(Request $request)
     {
+        $importTarget = $request->input('target', 'report');
         $user = auth()->user();
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
@@ -45,7 +46,30 @@ class PipelineImportController extends Controller
                 $q->where('name', 'like', '%New Biz%');
             })->orderBy('first_name')->get();
 
-        return view('tenant.sales-pipeline.import', compact('salespersons', 'ccareUsers', 'newBizUsers'));
+        return view('tenant.sales-pipeline.import', compact('salespersons', 'ccareUsers', 'newBizUsers', 'importTarget'));
+    }
+
+    public function downloadTemplate(Request $request)
+    {
+        $type = $request->input('type', 'report');
+        if ($type === 'target') {
+            $path = public_path('templates/sales_target_template.csv');
+            $name = 'sales_target_template.csv';
+        } elseif ($type === 'pipeline') {
+            $path = public_path('templates/sales_actual_pipeline_template.csv');
+            $name = 'sales_pipeline_template.csv';
+        } else {
+            $path = public_path('templates/sales_pipeline_template.csv');
+            $name = 'sales_report_template.csv';
+        }
+
+        if (!file_exists($path)) {
+            return back()->with('error', 'Template file not found.');
+        }
+
+        return response()->download($path, $name, [
+            'Content-Type' => 'text/csv',
+        ]);
     }
 
     public function previewImport(Request $request)
@@ -125,7 +149,43 @@ class PipelineImportController extends Controller
         $productColIdx = null;
         $monthMappings = [];
 
-        if ($monthMetricColsCount >= 2) {
+        $stageColIdx = null;
+        $remarksColIdx = null;
+
+        $salespersonColIdx = null;
+        $newBizColIdx = null;
+        $ccareColIdx = null;
+
+        if ($request->input('import_target') === 'pipeline') {
+            $isSingleRowHeader = true;
+            $dataStartRowIdx = $headerRowIdx + 1; // start from the row after headers
+            
+            // Scan first row for columns
+            foreach ($firstRow as $idx => $cell) {
+                $cellStr = strtolower(trim((string)$cell));
+                if (str_contains($cellStr, 'party') || str_contains($cellStr, 'customer name')) $partyColIdx = $idx;
+                elseif ((str_contains($cellStr, 'potential') || str_contains($cellStr, 'business potential'))) $potentialColIdx = $idx;
+                elseif ((str_contains($cellStr, 'type') || str_contains($cellStr, 'customer type') || str_contains($cellStr, 'customer/dealer type'))) $typeColIdx = $idx;
+                elseif ((str_contains($cellStr, 'brand') || str_contains($cellStr, 'product'))) $productColIdx = $idx;
+                elseif (str_contains($cellStr, 'stage')) $stageColIdx = $idx;
+                elseif (str_contains($cellStr, 'remark')) $remarksColIdx = $idx;
+                elseif (str_contains($cellStr, 'salesperson') || str_contains($cellStr, 'sales person') || str_contains($cellStr, 'rep')) $salespersonColIdx = $idx;
+                elseif (str_contains($cellStr, 'new biz') || str_contains($cellStr, 'newbiz')) $newBizColIdx = $idx;
+                elseif (str_contains($cellStr, 'ccare') || str_contains($cellStr, 'cust care') || str_contains($cellStr, 'cust. care')) $ccareColIdx = $idx;
+            }
+            if ($partyColIdx === null) $partyColIdx = 1;
+            if ($potentialColIdx === null) $potentialColIdx = 4;
+            
+            $headers = [];
+            foreach ($firstRow as $idx => $val) {
+                $headers[] = [
+                    'index' => $idx,
+                    'name' => trim($val) ?: "Column " . chr(65 + ($idx % 26))
+                ];
+            }
+            $totalMonthsDetected = 0;
+            $monthMappings = [];
+        } elseif ($monthMetricColsCount >= 2) {
             $isSingleRowHeader = true;
             $dataStartRowIdx = $headerRowIdx + 1; // start from the row after headers
 
@@ -141,6 +201,12 @@ class PipelineImportController extends Controller
                     $typeColIdx = $idx;
                 } elseif ((str_contains($cellStr, 'brand') || str_contains($cellStr, 'product')) && $productColIdx === null) {
                     $productColIdx = $idx;
+                } elseif (str_contains($cellStr, 'salesperson') || str_contains($cellStr, 'sales person') || str_contains($cellStr, 'rep')) {
+                    $salespersonColIdx = $idx;
+                } elseif (str_contains($cellStr, 'new biz') || str_contains($cellStr, 'newbiz')) {
+                    $newBizColIdx = $idx;
+                } elseif (str_contains($cellStr, 'ccare') || str_contains($cellStr, 'cust care') || str_contains($cellStr, 'cust. care')) {
+                    $ccareColIdx = $idx;
                 }
             }
             if ($partyColIdx === null) $partyColIdx = 1;
@@ -282,11 +348,14 @@ class PipelineImportController extends Controller
         $salesperson = User::find($request->salesperson_id);
         $ccareId = $request->input('ccare_id');
         $newBizId = $request->input('new_biz_id');
+        $importTarget = $request->input('import_target', 'report');
 
         return view('tenant.sales-pipeline.import-preview', compact(
             'previewData', 'totalMonthsDetected', 'monthMappings', 'path', 'salesperson',
-            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'productColIdx', 'dataStartRowIdx', 'headers', 'previewMonthKeys',
-            'ccareId', 'newBizId'
+            'partyColIdx', 'potentialColIdx', 'typeColIdx', 'productColIdx', 'stageColIdx', 'remarksColIdx',
+            'salespersonColIdx', 'newBizColIdx', 'ccareColIdx',
+            'dataStartRowIdx', 'headers', 'previewMonthKeys',
+            'ccareId', 'newBizId', 'importTarget'
         ));
     }
 
@@ -324,9 +393,19 @@ class PipelineImportController extends Controller
         $salespersonId = $request->salesperson_id;
         $partyColIdx = $request->party_col;
         $potentialColIdx = $request->potential_col;
-        $typeColIdx = $request->type_col ?? 3;
-        $productColIdx = $request->product_col;
-        $dataStartRowIdx = $request->data_start_row;
+        $typeColIdx = $request->input('type_col') !== '' ? (int)$request->input('type_col') : null;
+        $productColIdx = $request->input('product_col') !== '' ? (int)$request->input('product_col') : null;
+        $stageColIdx = $request->input('stage_col') !== '' ? (int)$request->input('stage_col') : null;
+        $remarksColIdx = $request->input('remarks_col') !== '' ? (int)$request->input('remarks_col') : null;
+        $salespersonColIdx = $request->input('salesperson_col') !== '' ? (int)$request->input('salesperson_col') : null;
+        $newBizColIdx = $request->input('new_biz_col') !== '' ? (int)$request->input('new_biz_col') : null;
+        $ccareColIdx = $request->input('ccare_col') !== '' ? (int)$request->input('ccare_col') : null;
+        $dataStartRowIdx = (int)$request->input('data_start_row', 2);
+
+        // Pre-load users map for quick lookup by name (case-insensitive)
+        $usersMap = \App\Models\User::where('status', 'active')->pluck('id', 'name')->mapWithKeys(function($id, $name) {
+            return [strtolower(trim($name)) => $id];
+        })->toArray();
 
         // FY key map for YoY totals (fyStart year → DB column). FY 26-27 shown via monthly actuals, not stored here.
         $fyKeyMap = [2022 => 'yoy_22_23', 2023 => 'yoy_23_24', 2024 => 'yoy_24_25', 2025 => 'yoy_25_26'];
@@ -418,24 +497,57 @@ class PipelineImportController extends Controller
                 $updateData = [
                     'total_business_potential' => $potential,
                     'type' => $partyType,
-                    'is_locked' => true,
+                    'is_locked' => $request->input('import_target') === 'pipeline' ? false : true,
                 ];
                 
+                // Dynamic user assignments if columns exist
+                $rowSalespersonId = $salespersonId;
+                if ($salespersonColIdx !== null) {
+                    $name = strtolower(trim($row[$salespersonColIdx] ?? ''));
+                    if ($name && isset($usersMap[$name])) $rowSalespersonId = $usersMap[$name];
+                }
+
+                $rowNewBizId = $newBizId;
+                if ($newBizColIdx !== null) {
+                    $name = strtolower(trim($row[$newBizColIdx] ?? ''));
+                    if ($name && isset($usersMap[$name])) $rowNewBizId = $usersMap[$name];
+                }
+
+                $rowCcareId = $ccareId;
+                if ($ccareColIdx !== null) {
+                    $name = strtolower(trim($row[$ccareColIdx] ?? ''));
+                    if ($name && isset($usersMap[$name])) $rowCcareId = $usersMap[$name];
+                }
+
                 if ($product) {
                     $updateData['product'] = $product;
                 }
 
-                if ($ccareId) {
-                    $updateData['ccare_id'] = $ccareId;
+                if ($stageColIdx !== null) {
+                    $stageRaw = trim($row[$stageColIdx] ?? '');
+                    if ($stageRaw) {
+                        $updateData['status_stage'] = $stageRaw;
+                    }
                 }
-                if ($newBizId) {
-                    $updateData['new_biz_id'] = $newBizId;
+
+                if ($remarksColIdx !== null) {
+                    $remarksRaw = trim($row[$remarksColIdx] ?? '');
+                    if ($remarksRaw) {
+                        $updateData['status_remarks'] = $remarksRaw;
+                    }
+                }
+
+                if ($rowCcareId) {
+                    $updateData['ccare_id'] = $rowCcareId;
+                }
+                if ($rowNewBizId) {
+                    $updateData['new_biz_id'] = $rowNewBizId;
                 }
 
                 $pipeline = SalesPipeline::updateOrCreate(
                     [
                         'party_name' => $partyName,
-                        'salesperson_id' => $salespersonId
+                        'salesperson_id' => $rowSalespersonId,
                     ],
                     $updateData
                 );

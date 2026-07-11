@@ -25,6 +25,12 @@
             ]
         },
         {
+            "url": "/work-control",
+            "name": "DWM",
+            "icon": "menu-icon bx bx-task",
+            "slug": "tenant.work-control.index"
+        },
+        {
             "icon": "menu-icon bx bx-bullseye",
             "name": "Monitoring",
             "slug": [
@@ -266,6 +272,46 @@
                 "admin",
                 "hr",
                 "accounts"
+            ]
+        },
+        {
+            "name": "Performance",
+            "icon": "menu-icon bx bx-bar-chart-alt-2",
+            "slug": [
+                "performance.scorecards.index",
+                "performance.ninety-day-goals.index"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts"
+            ],
+            "submenu": [
+                {
+                    "url": "/performance/scorecards",
+                    "name": "Scorecards",
+                    "slug": "performance.scorecards.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/performance/ninety-day-goals",
+                    "name": "90-Day Goals",
+                    "slug": "performance.ninety-day-goals.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee"
+                    ]
+                }
             ]
         },
         {

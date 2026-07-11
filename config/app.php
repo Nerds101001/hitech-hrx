@@ -125,7 +125,7 @@ return [
 
   'backup_license_key' => env('BACKUP_LICENSE_KEY'),
 
-
+  'security_alert_email' => explode(',', env('SECURITY_ALERT_EMAIL', 'ai@rustx.com,suchita@rustx.com')),
 
   'aliases' => [
     // Other aliases...

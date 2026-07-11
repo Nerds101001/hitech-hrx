@@ -1535,7 +1535,7 @@ class EmployeeController extends Controller
         'department:id,name,code',
         'leaveBalances.leaveType:id,name,code',
         'shift:id,name,code,start_time,end_time',
-        'designation.department:id,name,code',
+        'designation',
         'bankAccount:id,user_id,bank_name,bank_code,account_name,account_number,branch_name,branch_code,passbook_path',
         'site:id,name',
         'leavePolicyProfile:id,name',
@@ -1544,7 +1544,7 @@ class EmployeeController extends Controller
         'documentRequests' => fn($q) => $q->with('documentType')->latest(),
         'payslips' => fn($q) => $q->latest()->take(6),
         'payrollAdjustments' => fn($q) => $q->latest()->take(10),
-        'salesTargets' => fn($q) => $q->latest()->take(10)
+        'salesTargets' => fn($q) => $q->latest()
       ])
       ->first();
 
@@ -2013,7 +2013,7 @@ class EmployeeController extends Controller
       'department',
       'leaveBalances.leaveType',
       'shift',
-      'designation.department',
+      'designation',
       'assets.category',
       'salesTargets',
       'bankAccount',

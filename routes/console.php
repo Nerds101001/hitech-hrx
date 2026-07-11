@@ -43,3 +43,5 @@ Artisan::command('onboarding:enforce-deadlines', function () {
 Artisan::command('probation:process-expirations', function () {
     $this->call('probation:process-expirations');
 })->describe('Process employee probation expirations')->daily();
+Schedule::command('hrx:transfer-newbiz-ccare')->daily(); 
+ 

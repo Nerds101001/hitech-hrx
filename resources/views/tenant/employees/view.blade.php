@@ -64,7 +64,9 @@
     @php
         $settings = \App\Models\Settings::first();
         $allPerformance = $user->salesTargets;
+        \Illuminate\Support\Facades\Log::info("DEBUG view: user_id={$user->id}, tenant_id=" . ($user->tenant_id ?? 'null') . ", auth_tenant_id=" . (auth()->check() ? auth()->user()->tenant_id : 'guest') . ", targets_count=" . $allPerformance->count());
         $kraPerformance = $allPerformance->filter(fn($t) => str_contains($t->description, 'Type: KRA'));
+        $kpiPerformance = $allPerformance->filter(fn($t) => str_contains($t->description, 'Type: KPI'));
 
         // Helper to extract metric from description
         if (!function_exists('getMetric')) {
@@ -574,6 +576,10 @@
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab"><i
                                         class="bx bx-bullseye me-1"></i> Key Result Areas (KRAs)</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#kpis-tab"><i
+                                        class="bx bx-trending-up me-1"></i> Key Performance Indicators (KPIs)</a>
                             </li>
                             
                             <li class="nav-item">
@@ -2326,7 +2332,6 @@
                                             @endif
                                         </div>
                                     </div>
-
                                     <div class="table-responsive rounded-3 border" style="background:#fff;">
                                         <table class="table table-hover table-borderless mb-0 align-middle">
                                             <thead style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
@@ -2337,14 +2342,131 @@
                                                         style="font-size:0.75rem;text-transform:uppercase;">KRA Focus &
                                                         Objectives</th>
                                                     <th class="text-muted fw-bold py-3"
-                                                        style="font-size:0.75rem;text-transform:uppercase;">Due Date</th>
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Max Points</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Earned Points</th>
                                                     <th class="text-muted fw-bold py-3"
                                                         style="font-size:0.75rem;text-transform:uppercase;">Status</th>
                                                     <th class="pe-4 text-end text-muted fw-bold py-3"
                                                         style="font-size:0.75rem;text-transform:uppercase;">Actions</th>
+                                                </tr>
                                             </thead>
                                             <tbody>
                                                 @forelse($kraPerformance as $index => $task)
+                                                    @php
+                                                        $kraName = getMetric($task->description);
+                                                    @endphp
+                                                    <tr style="border-bottom:1px solid #F1F5F9;">
+                                                        <td class="ps-4 fw-medium text-muted">{{ $index + 1 }}</td>
+                                                        <td>
+                                                            <div class="d-flex align-items-center">
+                                                                <div class="avatar avatar-sm me-3" style="width:38px;height:38px;">
+                                                                    <span class="avatar-initial rounded-circle bg-label-success fw-bold" style="font-size:0.85rem;">{{ substr($kraName, 0, 2) }}</span>
+                                                                </div>
+                                                                <div>
+                                                                    <h6 class="mb-0 fw-bold text-dark" style="font-size:0.9rem;">
+                                                                        {{ $kraName }}</h6>
+                                                                    <small class="text-muted d-block text-truncate" style="max-width:250px;">{{ $task->description ? explode("\n\n", $task->description)[1] ?? '' : '' }}</small>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-dark small">
+                                                            {{ $task->target_amount }} Pts
+                                                        </td>
+                                                        <td class="text-dark small">
+                                                            <strong>{{ $task->achieved_amount }} Pts</strong>
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge rounded-pill fw-bold px-3 py-2 {{ $task->status->badgeClass() }}" style="font-size:0.70rem;">
+                                                                {{ strtoupper($task->status->value) }}
+                                                            </span>
+                                                        </td>
+                                                        <td class="pe-4 text-end">
+                                                            <div class="d-flex align-items-center justify-content-end gap-2">
+                                                                <button
+                                                                    class="btn btn-sm btn-icon rounded-circle btn-hitech-secondary btn-edit-kpi"
+                                                                    data-id="{{ $task->id }}"
+                                                                    data-metric="{{ $kraName }}"
+                                                                    data-category="KRA"
+                                                                    data-goal="{{ $task->target_amount }}"
+                                                                    data-type="{{ $task->incentive_type->value }}"
+                                                                    data-description="{{ $task->description }}"
+                                                                    title="View/Edit KRA">
+                                                                    <i class="bx bx-show-alt"></i>
+                                                                </button>
+                                                                @if(auth()->user()->can('user-edit') || auth()->user()->hasRole(['hr', 'accounts']))
+                                                                    <button
+                                                                        class="btn btn-sm btn-icon rounded-circle btn-hitech-alert"
+                                                                        title="Delete" onclick="deleteKpi({{ $task->id }})">
+                                                                        <i class="bx bx-trash"></i>
+                                                                    </button>
+                                                                @endif
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                @empty
+                                                    <tr>
+                                                        <td colspan="6" class="text-center py-5">
+                                                            <i class="bx bx-target-lock text-muted"
+                                                                style="font-size:3rem;opacity:0.3;"></i>
+                                                            <h6 class="mt-3 text-muted fw-medium">No Key Result Areas (KRAs)
+                                                                defined for this employee.</h6>
+                                                        </td>
+                                                    </tr>
+                                                @endforelse
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- KPIs Tab -->
+                        <div class="tab-pane fade" id="kpis-tab">
+                            <div class="card border-0 shadow-sm rounded-3">
+                                <div class="card-body p-5">
+                                    <div class="d-flex justify-content-between align-items-center mb-4">
+                                        <div class="d-flex align-items-center">
+                                            <div class="hitech-icon-wrap me-3"
+                                                style="background: rgba(18, 116, 100, 0.1); color: #127464; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border-radius: 10px;">
+                                                <i class="bx bx-trending-up fs-4"></i>
+                                            </div>
+                                            <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Key Performance Indicators (KPIs)
+                                            </h6>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            @if(auth()->user()->hasRole(['admin', 'Admin', 'hr', 'manager', 'accounts', 'super_admin']) || auth()->user()->can('user-edit'))
+                                                <button class="btn btn-hitech px-4 rounded-pill shadow-sm"
+                                                    data-bs-toggle="modal" data-bs-target="#modalAddKpi" onclick="openAddKpi('', '', '', 'percentage', '', 'KPI')">
+                                                    <i class="bx bx-plus-circle me-1"></i> Add KPI Objective
+                                                </button>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive rounded-3 border" style="background:#fff;">
+                                        <table class="table table-hover table-borderless mb-0 align-middle">
+                                            <thead style="background:#F8FAFC;border-bottom:1px solid #E2E8F0;">
+                                                <tr>
+                                                    <th class="ps-4 text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">#</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">KPI Focus &
+                                                        Objectives</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Target Goal</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Value Achieved</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Points Earned</th>
+                                                    <th class="text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Status</th>
+                                                    <th class="pe-4 text-end text-muted fw-bold py-3"
+                                                        style="font-size:0.75rem;text-transform:uppercase;">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @forelse($kpiPerformance as $index => $task)
                                                     <tr style="border-bottom:1px solid #F1F5F9;">
                                                         <td class="ps-4 fw-medium text-muted">{{ $index + 1 }}</td>
                                                         <td>
@@ -2360,25 +2482,35 @@
                                                                         style="font-size:0.9rem;">
                                                                         {{ getMetric($task->description) }}</h6>
                                                                     <small class="text-muted d-block text-truncate"
-                                                                        style="max-width:250px;">{{ \Illuminate\Support\Str::limit($task->description, 50) }}</small>
+                                                                        style="max-width:250px;">{{ $task->description ? explode("\n\n", $task->description)[1] ?? '' : '' }}</small>
                                                                 </div>
                                                             </div>
                                                         </td>
                                                         <td class="text-dark small">
-                                                            {{ $task->expiry_date ? $task->expiry_date->format('d M, Y') : 'N/A' }}
+                                                            {{ $task->target_amount }}
+                                                        </td>
+                                                        <td class="text-dark small">
+                                                            {{ $task->achieved_amount }}
+                                                        </td>
+                                                        <td class="text-dark small">
+                                                            <strong>{{ $task->incentive_amount }}</strong>
                                                         </td>
                                                         <td>
-                                                            <span class="badge rounded-pill fw-bold px-3 py-2"
-                                                                style="background:#E0F2FE;color:#0284C7;font-size:0.70rem;">
+                                                            <span class="badge rounded-pill fw-bold px-3 py-2 {{ $task->status->badgeClass() }}" style="font-size:0.70rem;">
                                                                 {{ strtoupper($task->status->value) }}
                                                             </span>
                                                         </td>
                                                         <td class="pe-4 text-end">
                                                             <div class="d-flex align-items-center justify-content-end gap-2">
                                                                 <button
-                                                                    class="btn btn-sm btn-icon rounded-circle btn-hitech-secondary"
-                                                                    title="View"
-                                                                    onclick="editKpi({{ $task->id }}, '{{ getMetric($task->description) }}', 'KRA', 'Standard', {{ $task->target_amount }}, '{{ $task->incentive_type->value }}', '{{ addslashes($task->description) }}')">
+                                                                    class="btn btn-sm btn-icon rounded-circle btn-hitech-secondary btn-edit-kpi"
+                                                                    data-id="{{ $task->id }}"
+                                                                    data-metric="{{ getMetric($task->description) }}"
+                                                                    data-category="KPI"
+                                                                    data-goal="{{ $task->target_amount }}"
+                                                                    data-type="{{ $task->incentive_type->value }}"
+                                                                    data-description="{{ $task->description }}"
+                                                                    title="View/Edit KPI">
                                                                     <i class="bx bx-show-alt"></i>
                                                                 </button>
                                                                 @if(auth()->user()->can('user-edit') || auth()->user()->hasRole(['hr', 'accounts']))
@@ -2393,10 +2525,10 @@
                                                     </tr>
                                                 @empty
                                                     <tr>
-                                                        <td colspan="5" class="text-center py-5">
+                                                        <td colspan="7" class="text-center py-5">
                                                             <i class="bx bx-target-lock text-muted"
                                                                 style="font-size:3rem;opacity:0.3;"></i>
-                                                            <h6 class="mt-3 text-muted fw-medium">No Key Result Areas (KRAs)
+                                                            <h6 class="mt-3 text-muted fw-medium">No Key Performance Indicators (KPIs)
                                                                 defined for this employee.</h6>
                                                         </td>
                                                     </tr>
@@ -4002,16 +4134,6 @@
             // ── KRA & KPI Strategic Management ────────────────────────────────────
 
             // Toggle grade system field visibility based on category selection
-            $(document).on('change', '#modalKpiCategory', function () {
-                if ($(this).val() === 'KRA') {
-                    $('#gradeSystemContainer').hide();
-                    $('#modalKpiGrade').prop('required', false);
-                } else {
-                    $('#gradeSystemContainer').show();
-                    $('#modalKpiGrade').prop('required', true);
-                }
-            });
-
             window.openAddKpi = function (id = '', metric = '', goal = '', type = 'percentage', description = '', category = 'KPI') {
                 $('#modalKpiId').val(id);
                 $('#modalKpiMetric').val(metric);
@@ -4022,19 +4144,66 @@
                 let cleanDescription = description.replace(/^Type:\s*.*?\n\n/i, '');
                 $('#modalKpiDescription').val(cleanDescription);
 
-                $('#modalKpiCategory').val(category).trigger('change');
+                $('#modalKpiCategory').val(category);
 
-                $('.modal-title-hitech').text(id ? 'Refine Strategy Details' : (category === 'KRA' ? 'Define Strategic KRA' : 'Define Strategic KPI'));
-                $('.btn-hitech-modal-submit').html(id ? 'Update Strategy <i class="bx bx-check-circle ms-1"></i>' : 'Deploy Strategy <i class="bx bx-rocket ms-1"></i>');
+                $('.modal-title-hitech').text(id ? `Refine ${category} Details` : `Define Strategic ${category}`);
+                $('.btn-hitech-modal-submit').html(id ? `Update ${category} <i class="bx bx-check-circle ms-1"></i>` : `Deploy ${category} <i class="bx bx-rocket ms-1"></i>`);
 
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAddKpi')).show();
             };
 
             window.editKpi = function (id, metric, category, grade, goal, type, description) {
                 window.openAddKpi(id, metric, goal, type, description, category);
-                if (category !== 'KRA') {
-                    $('#modalKpiGrade').val(grade);
-                }
+            };
+
+            $(document).on('click', '.btn-edit-kpi', function () {
+                const id = $(this).data('id');
+                const metric = $(this).data('metric');
+                const category = $(this).data('category');
+                const goal = $(this).data('goal');
+                const type = $(this).data('type');
+                const description = $(this).data('description');
+                
+                window.openAddKpi(id, metric, goal, type, description, category);
+            });
+
+            window.deleteKpi = function (id) {
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "You won't be able to revert this performance metric!",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, delete it!',
+                    customClass: { confirmButton: 'btn btn-primary me-3', cancelButton: 'btn btn-label-secondary' },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $.ajax({
+                            url: `/employees/destroySalesTarget/${id}`,
+                            method: 'DELETE',
+                            data: {
+                                _token: '{{ csrf_token() }}'
+                            },
+                            success: function (resp) {
+                                if (resp.success) {
+                                    Swal.fire({
+                                        icon: 'success',
+                                        title: 'Deleted!',
+                                        text: 'The performance target has been deleted.',
+                                        timer: 1500,
+                                        showConfirmButton: false
+                                    });
+                                    setTimeout(() => location.reload(), 1500);
+                                } else {
+                                    Swal.fire('Error', resp.message || 'Failed to delete target', 'error');
+                                }
+                            },
+                            error: function () {
+                                Swal.fire('Error', 'Unable to delete performance target', 'error');
+                            }
+                        });
+                    }
+                });
             };
 
             // KPI Form Submission Handler

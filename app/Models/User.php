@@ -681,6 +681,11 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->hasMany(ProbationEvaluation::class, 'user_id');
   }
 
+  public function workControlRoutines()
+  {
+    return $this->hasMany(WorkControlRoutine::class, 'user_id');
+  }
+
   public function team()
   {
     return $this->belongsTo(Team::class, 'team_id');

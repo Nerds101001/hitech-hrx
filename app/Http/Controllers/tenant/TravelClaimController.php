@@ -96,6 +96,8 @@ class TravelClaimController extends Controller
             'claim_month' => 'required|string',
             'company' => 'required|string',
             'sales_collection' => 'nullable|numeric',
+            'month_start_odometer_proof' => $isDraft ? 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120' : 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+            'month_end_odometer_proof' => $isDraft ? 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120' : 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
             'items' => $isDraft ? 'nullable|array' : 'required|array|min:1',
             'items.*.date' => 'required|date',
             'items.*.mode_of_travel' => 'nullable|string',
@@ -128,12 +130,30 @@ class TravelClaimController extends Controller
 
             $targetStatus = $isDraft ? 'draft' : 'submitted';
 
+            $monthStartProofPath = $request->hasFile('month_start_odometer_proof')
+                ? $request->file('month_start_odometer_proof')->store('travel_claims', 'public')
+                : ($existingClaim->month_start_odometer_proof ?? null);
+
+            $monthEndProofPath = $request->hasFile('month_end_odometer_proof')
+                ? $request->file('month_end_odometer_proof')->store('travel_claims', 'public')
+                : ($existingClaim->month_end_odometer_proof ?? null);
+
+            if (!$isDraft) {
+                if (!$monthStartProofPath || !$monthEndProofPath) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'month_start_odometer_proof' => 'Month Start Odometer and Month End Odometer proofs are required for submission.',
+                    ]);
+                }
+            }
+
             if ($existingClaim) {
                 $claim = $existingClaim;
                 $claim->forceFill([
                     'claim_month' => $request->claim_month,
                     'company' => $request->company,
                     'sales_collection' => $request->sales_collection ?? 0,
+                    'month_start_odometer_proof' => $monthStartProofPath,
+                    'month_end_odometer_proof' => $monthEndProofPath,
                     'status' => $targetStatus,
                     'late_penalty_applied' => $latePenalty,
                 ])->save();
@@ -143,6 +163,8 @@ class TravelClaimController extends Controller
                     'claim_month' => $request->claim_month,
                     'company' => $request->company,
                     'sales_collection' => $request->sales_collection ?? 0,
+                    'month_start_odometer_proof' => $monthStartProofPath,
+                    'month_end_odometer_proof' => $monthEndProofPath,
                     'bank_account_name' => 'On File',
                     'bank_account_no' => 'On File',
                     'bank_ifsc' => 'On File',
@@ -175,25 +197,7 @@ class TravelClaimController extends Controller
                         ? $request->file("items.{$index}.special_approval_proof")->store('travel_claims_special', 'public')
                         : ($item['existing_special_approval_proof'] ?? null);
 
-                    $transportProofPath = $request->hasFile("items.{$index}.transport_proof")
-                        ? $request->file("items.{$index}.transport_proof")->store('travel_claims_transport', 'public')
-                        : ($item['existing_transport_proof'] ?? null);
-
-                    $billsProofPath = $request->hasFile("items.{$index}.bills_proof")
-                        ? $request->file("items.{$index}.bills_proof")->store('travel_claims_bills', 'public')
-                        : ($item['existing_bills_proof'] ?? null);
-
-                    $freightProofPath = $request->hasFile("items.{$index}.freight_proof")
-                        ? $request->file("items.{$index}.freight_proof")->store('travel_claims_freight', 'public')
-                        : ($item['existing_freight_proof'] ?? null);
-
-                    $courierProofPath = $request->hasFile("items.{$index}.courier_proof")
-                        ? $request->file("items.{$index}.courier_proof")->store('travel_claims_courier', 'public')
-                        : ($item['existing_courier_proof'] ?? null);
-
-                    $autoTaxiProofPath = $request->hasFile("items.{$index}.auto_taxi_proof")
-                        ? $request->file("items.{$index}.auto_taxi_proof")->store('travel_claims_taxi', 'public')
-                        : ($item['existing_auto_taxi_proof'] ?? null);
+                    // Deleted proof paths handled dynamically below to null
 
                     $distance = floatval($item['distance_km'] ?? 0);
                     $mode = $item['mode_of_travel'] ?? null;
@@ -216,26 +220,29 @@ class TravelClaimController extends Controller
 
                     $penalty_applied = false;
 
-                    if (in_array($mode, ['Personal Bike', 'Personal Car', 'Bike', 'Car']) && !$photoPath) {
-                        $conveyance = $conveyance * 0.70; // 30% reduction
-                        $penalty_applied = true;
-                    }
+                    // Penalty logic completely removed as per user request
+
                     
-                    // If the user checked outstation, apply 300
                     $food_allowance = isset($item['is_outstation']) && $item['is_outstation'] ? 300 : floatval($item['food_allowance'] ?? 0);
 
                     $lodging = floatval($item['lodging_amount'] ?? 0);
                     $courier = floatval($item['courier_amount'] ?? 0);
                     $other = floatval($item['other_amount'] ?? 0);
                     $toll_amount = floatval($item['toll_amount'] ?? 0);
-                    $add_food_amount = floatval($item['additional_food_amount'] ?? 0);
                     $special_approval_amount = floatval($item['special_approval_amount'] ?? 0);
-                    $transport_amount = floatval($item['transport_amount'] ?? 0);
-                    $bills_amount = floatval($item['bills_amount'] ?? 0);
-                    $freight_amount = floatval($item['freight_amount'] ?? 0);
-                    $auto_taxi_amount = floatval($item['auto_taxi_amount'] ?? 0);
+                    
+                    // Columns removed from UI, hardcode to 0 for DB backward compatibility
+                    $add_food_amount = 0;
+                    $transport_amount = 0;
+                    $bills_amount = 0;
+                    $freight_amount = 0;
+                    $auto_taxi_amount = 0;
+                    $transportProofPath = null;
+                    $billsProofPath = null;
+                    $freightProofPath = null;
+                    $autoTaxiProofPath = null;
 
-                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount + $transport_amount + $bills_amount + $freight_amount + $auto_taxi_amount;
+                    $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount;
                     $total_amount += $row_total;
 
                     TravelClaimItem::forceCreate([
@@ -491,20 +498,36 @@ public function update(Request $request, $id)
         }
 
         $proofFields = [
-            'photo_path' => 'odometer_proof',
-            'toll_proof' => 'toll_proof',
-            'additional_food_proof' => 'additional_food_proof',
-            'special_approval_proof' => 'special_approval_proof',
-            'transport_proof' => 'transport_proof',
-            'bills_proof' => 'bills_proof',
-            'freight_proof' => 'freight_proof',
-            'courier_proof' => 'courier_proof',
-            'petrol_slip_proof' => 'petrol_slip_proof',
-            'auto_taxi_proof' => 'auto_taxi_proof'
+            'petrol_slip_proof' => 'Conveyance_Bill_Proof',
+            'toll_proof' => 'Toll_Parking_Proof',
+            'additional_food_proof' => 'Food_Bill_Proof',
+            'special_approval_proof' => 'Customer_Expense_Proof',
+            'courier_proof' => 'Courier_Transport_Proof',
+            'auto_taxi_proof' => 'Auto_Taxi_Proof'
         ];
 
         // Find all attachments
         $filesToAdd = [];
+
+        // Add Header level proofs
+        if ($claim->month_start_odometer_proof && Storage::disk('public')->exists($claim->month_start_odometer_proof)) {
+            $path = Storage::disk('public')->path($claim->month_start_odometer_proof);
+            $ext = pathinfo($path, PATHINFO_EXTENSION);
+            $filesToAdd[] = [
+                'path' => $path,
+                'zipPath' => "Header/month_start_odometer_proof.{$ext}"
+            ];
+        }
+
+        if ($claim->month_end_odometer_proof && Storage::disk('public')->exists($claim->month_end_odometer_proof)) {
+            $path = Storage::disk('public')->path($claim->month_end_odometer_proof);
+            $ext = pathinfo($path, PATHINFO_EXTENSION);
+            $filesToAdd[] = [
+                'path' => $path,
+                'zipPath' => "Header/month_end_odometer_proof.{$ext}"
+            ];
+        }
+
         foreach ($claim->items as $item) {
             foreach ($proofFields as $field => $folderName) {
                 if ($item->$field) {
@@ -556,21 +579,24 @@ public function update(Request $request, $id)
         try {
             DB::beginTransaction();
 
+            // Delete header level proofs
+            if ($claim->month_start_odometer_proof) {
+                Storage::disk('public')->delete($claim->month_start_odometer_proof);
+            }
+            if ($claim->month_end_odometer_proof) {
+                Storage::disk('public')->delete($claim->month_end_odometer_proof);
+            }
+
             // Delete proof files associated with the items
             foreach ($claim->items as $item) {
                 $proofFields = [
-                    'photo_path',
-                    'toll_proof',
-                    'additional_food_proof',
-                    'special_approval_proof',
-                    'transport_proof',
-                    'bills_proof',
-                    'freight_proof',
-                    'courier_proof',
-                    'petrol_slip_proof',
-                    'auto_taxi_proof'
+                    'petrol_slip_proof' => 'Conveyance_Bill_Proof',
+                    'toll_proof' => 'Toll_Parking_Proof',
+                    'additional_food_proof' => 'Food_Bill_Proof',
+                    'special_approval_proof' => 'Customer_Expense_Proof',
+                    'courier_proof' => 'Courier_Transport_Proof',
                 ];
-                foreach ($proofFields as $field) {
+                foreach ($proofFields as $field => $folderName) {
                     if ($item->$field) {
                         Storage::disk('public')->delete($item->$field);
                     }

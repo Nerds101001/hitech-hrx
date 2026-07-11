@@ -139,16 +139,20 @@
                 @if(Auth::user()->hasRole(['admin', 'hr', 'manager']))
                 <div class="mt-4">
                     <h5>Manager Review Input (Only visible to managers)</h5>
-                    <form action="" method="POST">
+                    <form action="{{ route('tenant.scorecards.update-review', $scorecard->id) }}" method="POST">
                         @csrf
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Manager Comments</label>
                                 <textarea name="manager_comments" class="form-control" rows="3">{{ $scorecard->manager_comments }}</textarea>
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-4 mb-3">
                                 <label class="form-label">Sales Pitch Score (out of 20)</label>
                                 <input type="number" name="sales_pitch_score_raw" class="form-control" value="{{ $scorecard->sales_pitch_score_raw }}" max="20" min="0">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Market Share Percentage (%)</label>
+                                <input type="number" name="market_share_percentage" class="form-control" value="{{ $scorecard->market_share_percentage }}" max="100" min="0" step="0.1">
                             </div>
                         </div>
                         <button type="submit" class="btn btn-success">Save Review</button>

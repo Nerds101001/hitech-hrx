@@ -62,9 +62,34 @@
                         </select>
                     </div>
                 </div>
+            
+                <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month Start Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the start of the month"></i></label>
+                        <input type="file" name="month_start_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                        @if(isset($claim) && $claim->month_start_odometer_proof)
+                            <div class="mt-2 text-primary small">
+                                <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->month_start_odometer_proof) }}" target="_blank">View File</a>
+                            </div>
+                        @endif
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month End Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the end of the month"></i></label>
+                        <input type="file" name="month_end_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                        @if(isset($claim) && $claim->month_end_odometer_proof)
+                            <div class="mt-2 text-primary small">
+                                <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->month_end_odometer_proof) }}" target="_blank">View File</a>
+                            </div>
+                        @endif
+                    </div>
+                    </div>
+                </div>
             </div>
         </div>
-
+        
         <div class="d-flex justify-content-between align-items-center mb-3 mt-4">
             <h5 class="mb-0 fw-bold">Daily Travel Expenses</h5>
             <span class="text-muted small">Fill out your expenses for the month. Blank rows will be ignored automatically.</span>
@@ -80,29 +105,19 @@
                         <th style="min-width: 80px;">Meter<br>Start</th>
                         <th style="min-width: 80px;">Meter<br>End</th>
                         <th style="min-width: 60px;">Total<br>KM</th>
-                        <th style="min-width: 180px;">Odometer<br>Proof</th>
-                        <th style="min-width: 160px;">Petrol Slip</th>
-                        <th style="min-width: 95px;">Conveyance<br>(₹)</th>
-                        <th style="min-width: 95px;">Auto/Taxi<br>Amount (₹)</th>
-                        <th style="min-width: 160px;">Auto/Taxi Proof</th>
+                        <th style="min-width: 110px;">Conveyance/<br>Amount (₹)</th>
+                        <th style="min-width: 160px;">Conveyance/<br>Bill Proof</th>
                         <th style="min-width: 95px;">Outstation<br>>5hrs</th>
                         <th style="min-width: 100px;">Food<br>(₹)</th>
-                        <th style="min-width: 110px;">Additional<br>Food (₹)</th>
-                        <th style="min-width: 160px;">Additional Food Proof</th>
-                        <th style="min-width: 90px;">Toll<br>(₹)</th>
-                        <th style="min-width: 140px;">Toll Proof</th>
-                        <th style="min-width: 110px;">Special<br>Approval (₹)</th>
-                        <th style="min-width: 160px;">Special Approval Proof</th>
-                        <th style="min-width: 95px;">Transport<br>(₹)</th>
-                        <th style="min-width: 160px;">Transport Proof</th>
-                        <th style="min-width: 95px;">Bills<br>(₹)</th>
-                        <th style="min-width: 160px;">Bills Proof</th>
-                        <th style="min-width: 95px;">Freight<br>(₹)</th>
-                        <th style="min-width: 160px;">Freight Proof</th>
+                        <th style="min-width: 160px;">Food Bill<br>Proof</th>
+                        <th style="min-width: 100px;">Toll/Parking<br>(₹)</th>
+                        <th style="min-width: 160px;">Toll/Parking<br>Proof</th>
+                        <th style="min-width: 110px;">Customer<br>Expense (₹)</th>
+                        <th style="min-width: 160px;">Customer Expense Proof</th>
+                        <th style="min-width: 120px;">Courier (Transport/<br>Freight) etc (₹)</th>
+                        <th style="min-width: 160px;">Courier / Transport<br>Proof</th>
                         <th style="min-width: 90px;">Lodging<br>(₹)</th>
-                        <th style="min-width: 90px;">Courier<br>(₹)</th>
-                        <th style="min-width: 160px;">Courier Proof</th>
-                        <th style="min-width: 90px;">Other<br>(₹)</th>
+                        <th style="min-width: 120px;">Other (Photocopy/<br>Misc) etc (₹)</th>
                         <th style="min-width: 120px;">Remarks</th>
                     </tr>
                 </thead>
@@ -237,27 +252,15 @@
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][start_meter]" class="form-control form-control-sm start-meter p-1 text-center" style="font-size: 0.8rem;" oninput="calculateRow(${d})" value="${ex.start_meter || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][end_meter]" class="form-control form-control-sm end-meter p-1 text-center" style="font-size: 0.8rem;" oninput="calculateRow(${d})" value="${ex.end_meter || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][distance_km]" class="form-control form-control-sm distance bg-light p-1 text-center" style="font-size: 0.8rem;" readonly value="${ex.distance_km || ''}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][photo]" class="form-control form-control-sm photo p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.photo_path ? `<input type="hidden" name="items[${d}][existing_photo]" value="${ex.photo_path}"><a href="/storage/${ex.photo_path}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][conveyance_amount]" class="form-control form-control-sm conveyance text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][petrol_slip]" class="form-control form-control-sm petrol-slip p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.petrol_slip_proof ? `<input type="hidden" name="items[${d}][existing_petrol_slip]" value="${ex.petrol_slip_proof}"><a href="/storage/${ex.petrol_slip_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][conveyance_amount]" class="form-control form-control-sm conveyance text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="number" step="0.01" name="items[${d}][auto_taxi_amount]" class="form-control form-control-sm auto-taxi-amount text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.auto_taxi_amount || 0).toFixed(2)}">
-                </td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][auto_taxi_proof]" class="form-control form-control-sm auto-taxi-proof p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.auto_taxi_proof ? `<input type="hidden" name="items[${d}][existing_auto_taxi_proof]" value="${ex.auto_taxi_proof}"><a href="/storage/${ex.auto_taxi_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
                 <td class="text-center align-middle p-1">
                     <input class="form-check-input" type="checkbox" name="items[${d}][is_outstation]" value="1" onchange="toggleOutstation(${d}, this)" ${ex.is_outstation ? 'checked' : ''}>
                 </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][food_allowance]" class="form-control form-control-sm food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.food_allowance || 0).toFixed(2)}" ${ex.is_outstation ? 'readonly' : ''}></td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][additional_food_amount]" class="form-control form-control-sm add-food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.additional_food_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][additional_food_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.additional_food_proof ? `<input type="hidden" name="items[${d}][existing_additional_food_proof]" value="${ex.additional_food_proof}"><a href="/storage/${ex.additional_food_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
@@ -272,27 +275,12 @@
                     <input type="file" name="items[${d}][special_approval_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.special_approval_proof ? `<input type="hidden" name="items[${d}][existing_special_approval_proof]" value="${ex.special_approval_proof}"><a href="/storage/${ex.special_approval_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][transport_amount]" class="form-control form-control-sm transport text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.transport_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][transport_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.transport_proof ? `<input type="hidden" name="items[${d}][existing_transport_proof]" value="${ex.transport_proof}"><a href="/storage/${ex.transport_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][bills_amount]" class="form-control form-control-sm bills text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.bills_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][bills_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.bills_proof ? `<input type="hidden" name="items[${d}][existing_bills_proof]" value="${ex.bills_proof}"><a href="/storage/${ex.bills_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][freight_amount]" class="form-control form-control-sm freight text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.freight_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][freight_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.freight_proof ? `<input type="hidden" name="items[${d}][existing_freight_proof]" value="${ex.freight_proof}"><a href="/storage/${ex.freight_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
-                <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.lodging_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.courier_amount || 0).toFixed(2)}"></td>
                 <td class="p-1">
                     <input type="file" name="items[${d}][courier_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
                     ${ex.courier_proof ? `<input type="hidden" name="items[${d}][existing_courier_proof]" value="${ex.courier_proof}"><a href="/storage/${ex.courier_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
                 </td>
+                <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.lodging_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.other_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="text" name="items[${d}][remarks]" class="form-control form-control-sm p-1" style="font-size: 0.8rem;" placeholder="..." value="${ex.remarks || ''}"></td>
             </tr>`;
@@ -335,12 +323,6 @@
         let conveyance = 0;
         if (isPersonal) {
             conveyance = dist * rate;
-            let photoVal = row.find('.photo').val();
-            let hasExistingPhoto = row.find('input[name*="[existing_photo]"]').length > 0;
-            
-            if (!photoVal && !hasExistingPhoto && conveyance > 0) {
-                conveyance = conveyance * 0.70; // 30% penalty
-            }
             row.find('.conveyance').val(conveyance.toFixed(2)).prop('readonly', true).addClass('bg-light');
         } else {
             row.find('.conveyance').prop('readonly', false).removeClass('bg-light');
@@ -359,8 +341,7 @@
     }
 
     function calculateTotals() {
-        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tAddFood = 0, tSpecialAppr = 0;
-        let tTransport = 0, tBills = 0, tFreight = 0, tAutoTaxi = 0;
+        let tConv = 0, tFood = 0, tLodg = 0, tCour = 0, tOth = 0, tToll = 0, tSpecialAppr = 0;
         
         $('.expense-row').each(function() {
             tConv += parseFloat($(this).find('.conveyance').val()) || 0;
@@ -369,15 +350,10 @@
             tCour += parseFloat($(this).find('.courier').val()) || 0;
             tOth  += parseFloat($(this).find('.other').val()) || 0;
             tToll += parseFloat($(this).find('.toll').val()) || 0;
-            tAddFood += parseFloat($(this).find('.add-food').val()) || 0;
             tSpecialAppr += parseFloat($(this).find('.special-appr').val()) || 0;
-            tTransport += parseFloat($(this).find('.transport').val()) || 0;
-            tBills += parseFloat($(this).find('.bills').val()) || 0;
-            tFreight += parseFloat($(this).find('.freight').val()) || 0;
-            tAutoTaxi += parseFloat($(this).find('.auto-taxi-amount').val()) || 0;
         });
 
-        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tAddFood + tSpecialAppr + tTransport + tBills + tFreight + tAutoTaxi;
+        let grandTotal = tConv + tFood + tLodg + tCour + tOth + tToll + tSpecialAppr;
         $('#grandTotal').text('₹' + grandTotal.toFixed(2));
         
         let net = grandTotal;
@@ -434,27 +410,17 @@
                 let courier = parseFloat(row.find('.courier').val()) || 0;
                 let other = parseFloat(row.find('.other').val()) || 0;
                 let toll = parseFloat(row.find('.toll').val()) || 0;
-                let addFood = parseFloat(row.find('.add-food').val()) || 0;
                 let specialAppr = parseFloat(row.find('.special-appr').val()) || 0;
-                let transport = parseFloat(row.find('.transport').val()) || 0;
-                let bills = parseFloat(row.find('.bills').val()) || 0;
-                let freight = parseFloat(row.find('.freight').val()) || 0;
-                let autoTaxiAmount = parseFloat(row.find('.auto-taxi-amount').val()) || 0;
                 let conveyanceAmount = parseFloat(row.find('.conveyance').val()) || 0;
                 
-                let hasPhoto = row.find('.photo').val() || row.find('input[name*="[existing_photo]"]').length > 0;
                 let hasPetrolSlip = row.find('.petrol-slip').val() || row.find('input[name*="[existing_petrol_slip]"]').length > 0;
+                let hasFoodProof = row.find('input[name*="[additional_food_proof]"]').val() || row.find('input[name*="[existing_additional_food_proof]"]').length > 0;
                 let hasTollProof = row.find('input[name*="[toll_proof]"]').val() || row.find('input[name*="[existing_toll_proof]"]').length > 0;
-                let hasAddFoodProof = row.find('input[name*="[additional_food_proof]"]').val() || row.find('input[name*="[existing_additional_food_proof]"]').length > 0;
                 let hasSpecialApprProof = row.find('input[name*="[special_approval_proof]"]').val() || row.find('input[name*="[existing_special_approval_proof]"]').length > 0;
-                let hasTransportProof = row.find('input[name*="[transport_proof]"]').val() || row.find('input[name*="[existing_transport_proof]"]').length > 0;
-                let hasBillsProof = row.find('input[name*="[bills_proof]"]').val() || row.find('input[name*="[existing_bills_proof]"]').length > 0;
-                let hasFreightProof = row.find('input[name*="[freight_proof]"]').val() || row.find('input[name*="[existing_freight_proof]"]').length > 0;
                 let hasCourierProof = row.find('input[name*="[courier_proof]"]').val() || row.find('input[name*="[existing_courier_proof]"]').length > 0;
-                let hasAutoTaxiProof = row.find('.auto-taxi-proof').val() || row.find('input[name*="[existing_auto_taxi_proof]"]').length > 0;
                 
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && addFood === 0 && specialAppr === 0 && transport === 0 && bills === 0 && freight === 0 && autoTaxiAmount === 0 && conveyanceAmount === 0 && !hasPhoto && !hasPetrolSlip && !hasTollProof && !hasAddFoodProof && !hasSpecialApprProof && !hasTransportProof && !hasBillsProof && !hasFreightProof && !hasCourierProof && !hasAutoTaxiProof) {
+                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0 && !hasPetrolSlip && !hasTollProof && !hasSpecialApprProof && !hasCourierProof && !hasFoodProof) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

@@ -33,7 +33,7 @@
                             <td>{{ $sc->grade }}</td>
                             <td>{{ ucfirst($sc->status) }}</td>
                             <td>
-                                <a href="{{ route('tenant.performance.scorecards.show', $sc->id) }}" class="btn btn-sm btn-info">View Report</a>
+                                <a href="{{ route('performance.scorecards.show', $sc->id) }}" class="btn btn-sm btn-info">View Report</a>
                             </td>
                         </tr>
                         @endforeach
@@ -48,7 +48,7 @@
 <!-- Generate Modal -->
 <div class="modal fade" id="generateScorecardModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog" role="document">
-        <form action="{{ route('tenant.performance.scorecards.generate') }}" method="POST">
+        <form action="{{ route('performance.scorecards.generate') }}" method="POST">
             @csrf
             <div class="modal-content">
                 <div class="modal-header">
