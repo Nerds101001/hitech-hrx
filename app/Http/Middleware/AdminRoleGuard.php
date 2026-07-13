@@ -33,6 +33,7 @@ class AdminRoleGuard
         'employees/changeEmployeeProfilePicture',
         'auth/logout',
         'lang',
+        'work-control',
     ];
 
     public function handle(Request $request, Closure $next): Response
