@@ -166,3 +166,11 @@ users_dump.txt
 hrx_db_backup_pre_granular_permissions.sql
 # Unneeded root scripts
 upload_hr_policies.ps1
+
+# Local development and AI junk
+.claude
+instruction
+policy
+training_files
+permissions_list.json
+payr.code-workspace

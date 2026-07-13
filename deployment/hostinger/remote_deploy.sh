@@ -79,4 +79,5 @@ echo "[8/8] Setting permissions..."
 chmod -R 775 "$APP_ROOT/storage" "$APP_ROOT/bootstrap/cache" || true
 
 rm -f "$ARCHIVE_PATH"
+rm -rf "$APP_ROOT/deployment"
 echo "Deployment completed successfully at: $APP_ROOT"
