@@ -236,6 +236,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('onboardingSubmitBtn');
     
     if (form) {
+        // Fix Select2 closing issue inside Bootstrap Modal
+        $('#onboardingInviteModal').on('shown.bs.modal', function () {
+            $(this).find('.select2').each(function() {
+                $(this).select2({
+                    dropdownParent: $('#onboardingInviteModal')
+                });
+            });
+        });
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
