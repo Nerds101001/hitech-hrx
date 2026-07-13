@@ -28,8 +28,10 @@ class BrandTrainingCurriculumSeeder extends Seeder
     {
         $this->removeWronglyCreatedModulesAndPhases();
 
-        // Attach bank questions to the existing catalogue modules.
-        foreach ($this->catalogueQuestions() as $titlePattern => $questions) {
+        // Attach bank questions to the existing catalogue modules. A module's
+        // questions may be a flat list, or grouped by category (string keys) —
+        // categories drive the segment-wise selection in getAssessment().
+        foreach ($this->catalogueQuestions() as $titlePattern => $groups) {
             $module = TrainingModule::where('content_type', 'catalog')
                 ->where('title', 'like', $titlePattern)
                 ->orderBy('id')
@@ -40,12 +42,26 @@ class BrandTrainingCurriculumSeeder extends Seeder
                 continue;
             }
 
+            $questions = [];
+            foreach ($groups as $key => $value) {
+                if (is_string($key)) {
+                    foreach ($value as $q) {
+                        $q['category'] = $key;
+                        $questions[] = $q;
+                    }
+                } else {
+                    $value['category'] = null;
+                    $questions[] = $value;
+                }
+            }
+
             foreach ($questions as $q) {
                 TrainingQuestion::updateOrCreate(
                     ['module_id' => $module->id, 'question' => $q['q']],
                     [
                         'options' => $q['options'],
                         'correct_option_index' => $q['correct'],
+                        'category' => $q['category'],
                         'marks' => 1,
                     ]
                 );
@@ -73,6 +89,18 @@ class BrandTrainingCurriculumSeeder extends Seeder
                       ->orWhere('question', 'like', '%AI-Powered Analytics%');
                 })
                 ->delete();
+
+            // Categorise the questions moved over from Eva Bags so the
+            // segment-wise selection covers them too.
+            TrainingQuestion::where('module_id', $rustx->id)
+                ->where(function ($q) {
+                    $q->where('question', 'like', '%water based acrylic%')
+                      ->orWhere('question', 'like', '%powder cleaner%');
+                })
+                ->update(['category' => 'oils_coatings']);
+            TrainingQuestion::where('module_id', $rustx->id)
+                ->where('question', 'like', '%manufacturing location%')
+                ->update(['category' => 'commercial']);
         }
     }
 
@@ -124,20 +152,22 @@ class BrandTrainingCurriculumSeeder extends Seeder
     {
         return [
             '%Rust-X%' => [
-                // — VCI & SMP science —
+                'vci_smp' => [
                 ['q' => 'VCI stands for:', 'options' => ['Vacuum Coated Iron', 'Volatile Corrosion Inhibitor', 'Very Clean Interior', 'Vapour Coating Industry'], 'correct' => 1],
                 ['q' => 'SMP technology stands for:', 'options' => ['Speedy Moisture Passivation', 'Standard Metal Protection', 'Surface Membrane Plating', 'Sealed Metal Packaging'], 'correct' => 0],
                 ['q' => 'VCI molecules stop rust by:', 'options' => ['Heating the metal', 'Depositing a molecular layer and inhibiting anode-cathode electron flow', 'Removing the metal', 'Painting it'], 'correct' => 1],
                 ['q' => 'About how much of the VCI chemical activates within the first 6 hours?', 'options' => ['~5%', '~20%', '~80%', '100%'], 'correct' => 1],
                 ['q' => 'The two internationally recognised tests for VCI efficacy are:', 'options' => ['Taste & drop test', 'VIA test & Razor Blade test', 'pH & burn test', 'Weight & colour test'], 'correct' => 1],
                 ['q' => 'In the Razor Blade test, effectiveness is confirmed when there is no corrosion after:', 'options' => ['1 hour', '48 hours', '30 days', '1 year'], 'correct' => 1],
-                // — Corrosion control —
+                ],
+                'corrosion_control' => [
                 ['q' => 'Which is NOT a valid way to control corrosion?', 'options' => ['Control moisture/humidity', 'Apply a VCI or barrier protective layer', 'Keep metal clean and dry', 'Spray the metal with salt water'], 'correct' => 3],
                 ['q' => 'A standard VCI film/bag alone provides protection for up to:', 'options' => ['1 week', 'Up to 2 years', '50 years', 'No time limit'], 'correct' => 1],
                 ['q' => 'VCI protection can be extended to 5–15 years by combining film with:', 'options' => ['Sunlight', 'Emitters, desiccants and/or rust-preventive oils', 'Salt', 'More air'], 'correct' => 1],
                 ['q' => '"Container rain" is:', 'options' => ['A type of VCI spray', 'Condensation inside shipping containers dripping onto goods', 'A cleaning method', 'A printing defect'], 'correct' => 1],
                 ['q' => 'VCI fogging is used to:', 'options' => ['Cool a warehouse', 'Apply VCI vapour into large enclosed cavities/volumes', 'Clean floors', 'Print bags'], 'correct' => 1],
-                // — Films, papers & emitters —
+                ],
+                'films_papers' => [
                 ['q' => 'A 200-micron VCI film / pallet liner can handle a load up to about:', 'options' => ['10 kg', '25 kg', '100 kg', '1,000 kg'], 'correct' => 2],
                 ['q' => 'For small components up to ~10 kg, the typical film thickness is:', 'options' => ['50–75 micron', '200 micron', '500 micron', '1 mm'], 'correct' => 0],
                 ['q' => 'VCI Paper (vs VCI Film) is preferred when you need:', 'options' => ['A sealed see-through barrier', 'Breathability, interleaving between metal sheets, or steel-coil packaging', 'To inflate a cushion', 'To absorb ethylene'], 'correct' => 1],
@@ -145,7 +175,8 @@ class BrandTrainingCurriculumSeeder extends Seeder
                 ['q' => 'VCI 19000 is:', 'options' => ['A spray', 'A combined moisture + VCI desiccant', 'A tarpaulin', 'A cutting oil'], 'correct' => 1],
                 ['q' => 'An anti-static VCI bag is used mainly for:', 'options' => ['Fruit', 'Electronics / ESD-sensitive components', 'Tarpaulins', 'Cooking'], 'correct' => 1],
                 ['q' => 'VCI Emitter 5 and Emitter 11 differ mainly by:', 'options' => ['Colour', 'The enclosure volume they protect', 'Their smell', 'Their price only'], 'correct' => 1],
-                // — Oils, coatings & cleaners —
+                ],
+                'oils_coatings' => [
                 ['q' => 'A "dry-film" rust preventive differs from a "non-dry" one in that it:', 'options' => ['Leaves a touch-dry film vs an oily/wet film', 'Is always cheaper', 'Contains water only', 'Cannot protect steel'], 'correct' => 0],
                 ['q' => 'VCI Jelly Wax is ideal for:', 'options' => ['Fruit coating', 'Exposed metal, flanges and threaded connections (oil & gas / outdoor)', 'Electronics cooling', 'Void fill'], 'correct' => 1],
                 ['q' => 'RUST-X Cold Zinc / Clear Coat spray provides:', 'options' => ['A thick grease', 'A dry, invisible coating for painted or machined parts', 'An edible layer', 'An air cushion'], 'correct' => 1],
@@ -153,7 +184,8 @@ class BrandTrainingCurriculumSeeder extends Seeder
                 ['q' => 'VCI Coatings and Jelly Wax are removed using:', 'options' => ['Plain water only', 'RUST-X Aqueous Cleaner or Solvent Cleaner', 'Sandpaper', 'Nothing works'], 'correct' => 1],
                 ['q' => 'Aquaflush is a:', 'options' => ['Solvent cleaner', 'Water-based, solvent-free cleaner (dosed 5–10% in water), safe for oil & gas', 'Rust-preventive oil', 'Desiccant'], 'correct' => 1],
                 ['q' => 'In the grade name "135A-EX", the "EX" indicates it is the:', 'options' => ['Extra-cheap grade', 'Export grade', 'Expired grade', 'Experimental grade'], 'correct' => 1],
-                // — Ordering, pricing & lead time —
+                ],
+                'commercial' => [
                 ['q' => 'Standard payment term for a NEW customer is:', 'options' => ['30-day credit', '100% advance before production', 'Pay on delivery', 'No payment'], 'correct' => 1],
                 ['q' => 'RUST-X prices are quoted:', 'options' => ['Delivered, freight free', 'Ex-factory (EXW) — freight is chargeable to the client', 'Always inclusive of freight', 'In USD only'], 'correct' => 1],
                 ['q' => 'Ready-stock items are dispatched within about:', 'options' => ['7 working days', '3 months', '1 hour', '60 days'], 'correct' => 0],
@@ -161,7 +193,8 @@ class BrandTrainingCurriculumSeeder extends Seeder
                 ['q' => 'Total lead time for custom print (1–8 colours) can be up to:', 'options' => ['1 day', '30 days', '6 months', '1 year'], 'correct' => 1],
                 ['q' => 'A corrosion audit is:', 'options' => ['A financial check', "A systematic assessment of a customer's process to find corrosion risks and recommend solutions", 'A safety drill', 'A printing proof'], 'correct' => 1],
                 ['q' => 'Within the director-approved maximum discount, a Sales Manager:', 'options' => ['Needs extra approval each time', 'Can quote directly with no further approval', 'Cannot quote at all', "Must email the customer's bank"], 'correct' => 1],
-                // — Compliance, storage & safety —
+                ],
+                'compliance' => [
                 ['q' => 'RUST-X VCI films and papers are formulated to be free from:', 'options' => ['Nitrites and secondary amines (and heavy metals)', 'Plastic', 'Paper', 'All chemicals'], 'correct' => 0],
                 ['q' => 'TRGS 615 is a:', 'options' => ['German occupational safety standard (nitrite-free)', 'Type of film', 'Printing machine', 'Packing box size'], 'correct' => 0],
                 ['q' => 'Which is NOT a RUST-X certification/approval?', 'options' => ['ISO 9001:2015 (TUV)', 'REACH / RoHS', 'BFSV Germany', 'USDA Organic'], 'correct' => 3],
@@ -169,6 +202,7 @@ class BrandTrainingCurriculumSeeder extends Seeder
                 ['q' => 'Shelf life of VCI films and bags (sealed, cool, dry) is about:', 'options' => ['2 years', '10 years', '1 week', 'Unlimited'], 'correct' => 0],
                 ['q' => 'VCI aerosol sprays must NOT be exposed to temperatures above:', 'options' => ['10°C', '50°C', '200°C', 'No limit'], 'correct' => 1],
                 ['q' => 'Ideal storage temperature for VCI packaging is:', 'options' => ['15–25°C, away from sunlight', 'Above 40°C', 'Below 0°C only', 'In direct sun'], 'correct' => 0],
+                ],
             ],
 
             '%Dr%Bio%' => [

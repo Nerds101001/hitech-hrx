@@ -184,11 +184,38 @@ class TrainingController extends Controller
     public function getAssessment($id)
     {
         $module = TrainingModule::findOrFail($id);
-        
-        $questions = $module->questions()
-            ->inRandomOrder()
-            ->limit($module->questions_per_test ?? 5)
-            ->get()
+
+        // When a module's question bank is segmented into categories (e.g. the
+        // Rust-X catalogue: VCI/SMP, corrosion control, films & papers, oils &
+        // coatings, commercial, compliance), draw a few random questions from
+        // EVERY segment so each attempt covers the whole catalogue, capped at 25.
+        $categories = $module->questions()
+            ->whereNotNull('category')
+            ->distinct()
+            ->pluck('category');
+
+        if ($categories->count() > 1) {
+            $perCategory = (int) min(5, max(3, floor(25 / $categories->count())));
+            $questions = collect();
+            foreach ($categories as $category) {
+                $questions = $questions->merge(
+                    $module->questions()
+                        ->where('category', $category)
+                        ->inRandomOrder()
+                        ->limit($perCategory)
+                        ->get()
+                );
+            }
+            $questions = $questions->shuffle()->take(25)->values();
+        } else {
+            // Uncategorised modules: show up to 20 randomly picked questions.
+            $questions = $module->questions()
+                ->inRandomOrder()
+                ->limit(20)
+                ->get();
+        }
+
+        $questions = $questions
             ->map(function($q) {
                 return [
                     'id' => $q->id,

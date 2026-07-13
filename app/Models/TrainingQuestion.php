@@ -9,7 +9,7 @@ class TrainingQuestion extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['module_id', 'question', 'options', 'correct_option_index', 'tenant_id', 'marks'];
+    protected $fillable = ['module_id', 'question', 'options', 'correct_option_index', 'category', 'tenant_id', 'marks'];
 
     protected $casts = [
         'options' => 'array',
