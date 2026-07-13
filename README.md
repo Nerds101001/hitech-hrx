@@ -1,134 +1,94 @@
-# HRX Portal - Daily Work & Human Resource Management System
+# 🌟 The HRX Project
 
-HRX is a premium multi-tenant Human Resource Management (HRMS) and Sales Tracking web application built with Laravel, MySQL, Bootstrap, and Javascript. 
+Welcome to the HRX Project! This is a website made to help companies manage their work and employees. 
 
----
-
-## 📋 Table of Contents
-1. [Prerequisites](#-prerequisites)
-2. [Local Installation Steps](#-local-installation-steps)
-3. [Environment Configuration (.env)](#-environment-configuration-env)
-4. [Build & Development Commands](#-build--development-commands)
-5. [Azure DevOps CI/CD Setup](#-azure-devops-cicd-setup)
-6. [Live Server Deployment (Hostinger)](#-live-server-deployment-hostinger)
+If you want to run this website on your own computer, don't worry! Just follow these super simple steps. It's written so even a 5th grader can understand it!
 
 ---
 
-## 🛠️ Prerequisites
-Ensure your system meets the following requirements before installing:
-- **PHP**: 8.2 or 8.3
-- **Database**: MySQL 8.0+ / MariaDB
-- **Dependency Manager**: Composer 2.x
-- **Build Tools**: Node.js 18+ & NPM
+## 🛠️ What You Need First
+Before we start, you need to have a few helper programs installed on your computer. Ask an adult or IT person if you don't have them:
+1. **PHP** (Think of it as the engine for the website)
+2. **Node.js** (This helps make the website look pretty and interactive)
+3. **Composer** (This helps PHP get the extra pieces it needs)
+4. **MySQL** (This is where all the data is saved, like a giant filing cabinet)
 
 ---
 
-## 🚀 Local Installation Steps
+## 🚀 How to Start the Website on Your Computer
 
-Follow these simple steps to configure and run the application locally:
+Follow these steps one by one. You will type these commands into a program called "Terminal" or "Command Prompt".
 
-### Step 1: Clone the Repository
+### Step 1: Download the Project
+First, we need to download the project files from the internet to your computer.
 ```bash
 git clone https://csenerds@dev.azure.com/csenerds/HRX/_git/HRX
 cd HRX
 ```
 
-### Step 2: Install Backend Dependencies
+### Step 2: Get the PHP Helpers
+Now, let's ask Composer to get all the backend pieces we need.
 ```bash
 composer install
 ```
 
-### Step 3: Install Frontend Dependencies
+### Step 3: Get the Visual Helpers
+Next, let's ask Node.js to get all the pieces that make the website look good on the screen.
 ```bash
 npm install
 ```
 
-### Step 4: Configure Environment File
-Copy the example environment template to create your active `.env` file:
+### Step 4: Setup Your Secret File
+We need a secret file that tells the website where to save data. We have an example file ready, so let's just make a copy of it!
 ```bash
 cp .env.example .env
 ```
-*(Open `.env` and fill in your Database details, Mail configuration, and App URL)*
+*(After this, open the `.env` file with Notepad. Find the part that says Database and type in your MySQL database name, username, and password!)*
 
-### Step 5: Generate Application Key
+### Step 5: Make a Secret Key
+Every website needs a secret key to keep passwords safe. Let's make one!
 ```bash
 php artisan key:generate
 ```
 
-### Step 6: Run Database Migrations & Seeders
-Run the migrations to build the tables and insert base seed data (roles, permissions, settings):
+### Step 6: Build the Filing Cabinet
+Now we tell the website to set up the database tables (the filing cabinet drawers) and put some starter data inside.
 ```bash
 php artisan migrate --seed
 ```
 
-### Step 7: Start the Servers
-Open two terminal windows/tabs:
-- **Terminal 1: Laravel Backend**
-  ```bash
-  php artisan serve
-  ```
-- **Terminal 2: Vite Assets Bundler**
-  ```bash
-  npm run dev
-  ```
+### Step 7: Turn it On! 🟢
+You are almost done! We just need to turn on the engine and the visuals. You will need to open **two** Terminal windows.
 
----
-
-## ⚙️ Environment Configuration (.env)
-Make sure your database config matches your local environment:
-```ini
-DB_CONNECTION=mysql
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_DATABASE=hrx_db
-DB_USERNAME=root
-DB_PASSWORD=your_password
+**In Terminal Window 1, type:**
+```bash
+php artisan serve
 ```
 
----
-
-## 📦 Build & Development Commands
-
-### Development Server
-Run Vite with hot-reload:
+**In Terminal Window 2, type:**
 ```bash
 npm run dev
 ```
 
-### Production Build
-Compile and minify assets for deployment:
-```bash
-npm run build
-```
+**You did it! 🎉** Now open your web browser (like Google Chrome) and go to `http://localhost:8000`. You will see the HRX website!
 
 ---
 
-## ☁️ Azure DevOps CI/CD Setup
-To build a standard continuous integration pipeline in Azure DevOps:
+## ☁️ For the Tech Team: Azure DevOps
+We use **Azure DevOps** to automatically check our code. We have a file called `azure-pipelines.yml` that tells Azure exactly what to do. It runs tests and prepares the code automatically!
 
-1. Add an `azure-pipelines.yml` file to the root.
-2. In Azure DevOps, go to **Pipelines** -> **Create Pipeline** -> select **Azure Repos Git** -> select your repository -> select **Existing Azure Pipelines YAML file**.
-3. Use a standard Laravel CI configuration to run tests, compile assets, and publish build artifacts.
+## 🌍 For the Tech Team: Live Server Deployment
+> ⚠️ **Important Note:** Azure Deployment and Live Server Deployment (Hostinger) are **TWO COMPLETELY DIFFERENT TASKS!** 
 
-Example configuration is provided in the repository's `azure-pipelines.yml` file.
+If you want to put the website on the real internet (on our Hostinger Server), we have special scripts for that located in `deployment/hostinger/`.
 
----
-
-## 🚀 Live Server Deployment (Hostinger)
-
-> [!IMPORTANT]
-> **Azure DevOps Pipeline** and **Live Server (Hostinger) Deployment** are two separate environments. The deployment script in this repository targets Hostinger via SSH.
-
-All scripts related to production deployments are located in the `deployment/hostinger` directory.
-
-### Quick Local Deployment (PowerShell)
-To deploy current local files directly to the Hostinger production server:
+### Send Website to the Internet
+Open PowerShell and run this:
 ```powershell
-powershell -ExecutionPolicy Bypass -File deployment/hostinger/deploy.ps1 -SshPassword "YOUR_SSH_PASSWORD"
+powershell -ExecutionPolicy Bypass -File deployment/hostinger/deploy.ps1 -SshPassword "YOUR_SSH_PASSWORD_HERE"
 ```
 
-### Deployment with Database Import
-To deploy files and simultaneously import your local database to the production database:
+### Send Website to the Internet AND Copy Database
 ```powershell
-powershell -ExecutionPolicy Bypass -File deployment/hostinger/deploy.ps1 -SshPassword "YOUR_SSH_PASSWORD" -ImportDatabase -DbPassword "YOUR_PRODUCTION_DB_PASSWORD"
+powershell -ExecutionPolicy Bypass -File deployment/hostinger/deploy.ps1 -SshPassword "YOUR_SSH_PASSWORD_HERE" -ImportDatabase -DbPassword "YOUR_DB_PASSWORD_HERE"
 ```
