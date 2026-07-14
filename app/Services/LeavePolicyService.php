@@ -96,16 +96,17 @@ class LeavePolicyService
 
         // Short Leave Check
         if ($leaveType && $leaveType->is_short_leave) {
-            $limit = ($rule && $rule->short_leave_per_month) ? $rule->short_leave_per_month : 1;
             $usedThisMonth = LeaveRequest::where('user_id', $user->id)
-                ->where('leave_type_id', $leaveTypeId)
-                ->whereIn('status', ['pending', 'approved'])
+                ->whereHas('leaveType', function($q) {
+                    $q->where('is_short_leave', true);
+                })
+                ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
                 ->whereYear('from_date', $from->year)
                 ->whereMonth('from_date', $from->month)
                 ->count();
             
-            if ($usedThisMonth >= $limit) {
-                return "You have reached the monthly short leave limit of {$limit}.";
+            if ($usedThisMonth >= 1) {
+                return "You cannot apply for more than 1 short leave in a month.";
             }
 
             if ($hours && $rule && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {

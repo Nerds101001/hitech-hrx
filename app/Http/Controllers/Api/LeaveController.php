@@ -172,18 +172,24 @@ class LeaveController extends Controller
       return Error::response($policyError);
     }
 
+    $isShort = $leaveType && (bool)$leaveType->is_short_leave;
+
     $leaveRequest = LeaveRequest::create([
       'from_date'        => $finalFromDate,
       'to_date'          => $finalToDate,
       'leave_type_id'    => $leaveTypeId,
       'user_notes'       => $remarks,
       'user_id'          => $user->id,
-      'is_short_leave'   => $leaveType->is_short_leave,
+      'is_short_leave'   => $isShort,
       'duration_hours'   => $hours,
       'start_time'       => $startTime,
       'end_time'         => $endTime,
       'is_half_day'      => $isHalfDay,
       'half_day_session' => $isHalfDay ? ($halfDaySession ?? 'first_half') : null,
+      'status'           => $isShort ? LeaveRequestStatus::APPROVED : LeaveRequestStatus::PENDING,
+      'approved_by_id'   => $isShort ? null : null,
+      'approved_at'      => $isShort ? now() : null,
+      'approval_notes'   => $isShort ? 'System auto-approved first monthly short leave' : null,
     ]);
 
     // LWP Detection at submission time

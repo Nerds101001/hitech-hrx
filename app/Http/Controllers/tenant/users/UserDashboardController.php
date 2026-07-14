@@ -468,6 +468,9 @@ class UserDashboardController extends Controller
             'document'      => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
             'is_half_day'   => 'nullable|boolean',
             'half_day_session' => 'nullable|string|in:first_half,second_half',
+            'start_time'    => 'nullable|string',
+            'end_time'      => 'nullable|string',
+            'duration_hours'=> 'nullable|numeric',
         ]);
 
         $leaveType = LeaveType::find($validated['leave_type_id']);
@@ -475,8 +478,9 @@ class UserDashboardController extends Controller
         // HDL (Half Day Leave) always forces half-day regardless of form value
         $isHdl     = $leaveType && strtoupper($leaveType->code) === 'HDL';
         $isHalfDay = $isHdl ? true : $request->boolean('is_half_day');
+        $isShort   = $leaveType && (bool)$leaveType->is_short_leave;
 
-        if ($isHalfDay) {
+        if ($isHalfDay || $isShort) {
             $validated['to_date'] = $validated['from_date'];
         }
 
@@ -516,7 +520,7 @@ class UserDashboardController extends Controller
             $validated['leave_type_id'],
             $validated['from_date'],
             $validated['to_date'],
-            null,
+            $isShort ? ($request->input('duration_hours') ?? 2.0) : null,
             $isHalfDay
         );
         if ($error) {
@@ -529,18 +533,33 @@ class UserDashboardController extends Controller
         $leaveRequest->from_date        = $validated['from_date'];
         $leaveRequest->to_date          = $validated['to_date'];
         $leaveRequest->user_notes       = $validated['user_notes'];
-        $leaveRequest->status           = LeaveRequestStatus::PENDING;
-        $leaveRequest->is_half_day      = $isHalfDay;
-        $leaveRequest->half_day_session = $isHalfDay ? ($validated['half_day_session'] ?? 'first_half') : null;
+        $leaveRequest->tenant_id        = $user->tenant_id;
 
-        // LWP Detection — check if balance is insufficient at submission time
-        $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
-        $workingDays = LeavePolicyService::calculateWorkingDays($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
-        $availableBalance = $impact['available'] ?? 0;
-        if ($leaveType->is_paid && $availableBalance < $workingDays) {
-            $lwpDays = max(0, $workingDays - $availableBalance);
-            $leaveRequest->is_lwp   = true;
-            $leaveRequest->lwp_days = $lwpDays;
+        if ($isShort) {
+            $leaveRequest->status           = LeaveRequestStatus::APPROVED;
+            $leaveRequest->approved_by_id   = null;
+            $leaveRequest->approved_at      = now();
+            $leaveRequest->approval_notes   = 'System auto-approved first monthly short leave';
+            $leaveRequest->is_short_leave   = true;
+            $leaveRequest->duration_hours   = $request->input('duration_hours') ?? 2.0;
+            $leaveRequest->start_time       = $request->input('start_time');
+            $leaveRequest->end_time         = $request->input('end_time');
+        } else {
+            $leaveRequest->status           = LeaveRequestStatus::PENDING;
+            $leaveRequest->is_half_day      = $isHalfDay;
+            $leaveRequest->half_day_session = $isHalfDay ? ($validated['half_day_session'] ?? 'first_half') : null;
+        }
+
+        // LWP Detection — check if balance is insufficient at submission time (Only for regular leaves)
+        if (!$isShort) {
+            $impact = LeavePolicyService::getBalanceImpact($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
+            $workingDays = LeavePolicyService::calculateWorkingDays($user, $validated['leave_type_id'], $validated['from_date'], $validated['to_date'], $isHalfDay);
+            $availableBalance = $impact['available'] ?? 0;
+            if ($leaveType->is_paid && $availableBalance < $workingDays) {
+                $lwpDays = max(0, $workingDays - $availableBalance);
+                $leaveRequest->is_lwp   = true;
+                $leaveRequest->lwp_days = $lwpDays;
+            }
         }
 
         if ($request->hasFile('document')) {
@@ -552,10 +571,10 @@ class UserDashboardController extends Controller
 
         $leaveRequest->save();
 
-        // Notify Admin/HR as before
+        // Notify Admin/HR
         NotificationHelper::notifyAdminHR(new NewLeaveRequest($leaveRequest));
 
-        return redirect()->back()->with('success', 'Leave request submitted successfully.');
+        return redirect()->back()->with('success', $isShort ? 'Short leave request submitted and auto-approved.' : 'Leave request submitted successfully.');
     }
 
     /**
@@ -719,7 +738,9 @@ class UserDashboardController extends Controller
             ->where(function($q) use ($periodStart, $periodEnd) {
                 $q->whereBetween('check_in_time', [$periodStart, $periodEnd])
                   ->orWhereBetween('created_at', [$periodStart, $periodEnd]);
-            })->get();
+            })
+            ->with(['leaveRequest.leaveType'])
+            ->get();
             
         // Fetch Approved Leaves
         $leavesDb = LeaveRequest::where('user_id', $user->id)
@@ -804,12 +825,25 @@ class UserDashboardController extends Controller
 
                 $dayData['dynamic_status'] = $s;
 
-                if ($s === 'late' || $s === 'half-day') {
-                    $dayData['status'] = ($s === 'late') ? 'Late' : 'Half Day';
+                if ($s === 'late') {
+                    $dayData['status'] = 'Late';
                     $lateDays++;
+                    $presentDays++;
+                } elseif ($s === 'half-day' || $s === 'half-Day') {
+                    $dayData['status'] = 'Half Day';
+                    $presentDays += 0.5;
+                    $absentDays += 0.5;
                 } elseif (in_array($s, ['work_from_home', 'wfh'])) {
                     $dayData['status'] = 'WFH';
                     $presentDays++;
+                } elseif (in_array($s, ['leave', 'paid_leave', 'unpaid_leave'])) {
+                    $isPaid = $attendance->leaveRequest->leaveType->is_paid ?? false;
+                    $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
+                    if ($isPaid) {
+                        $presentDays++;
+                    } else {
+                        $absentDays++;
+                    }
                 } else {
                     $dayData['status'] = 'Present';
                     $presentDays++;
@@ -897,7 +931,7 @@ class UserDashboardController extends Controller
         $attendances = Attendance::where('user_id', $user->id)
             ->whereMonth('check_in_time', $month)
             ->whereYear('check_in_time', $year)
-            ->with(['updatedBy'])
+            ->with(['updatedBy', 'leaveRequest.leaveType'])
             ->get();
             
         // Fetch Approved Leaves for the month
@@ -986,9 +1020,23 @@ class UserDashboardController extends Controller
                         $dayData['class'] = 'bg-teal text-white border-0';
                         break;
                     case 'late':
-                    case 'half-day':
                         $dayData['status'] = 'Late';
                         $dayData['icon'] = 'bx-time-five';
+                        $dayData['class'] = 'bg-orange text-white border-0';
+                        break;
+                    case 'half-day':
+                    case 'half-Day':
+                        $leaveDetail = '';
+                        if ($attendance->leaveRequest) {
+                            if ($attendance->leaveRequest->is_short_leave) {
+                                $leaveDetail = ' (Short Leave)';
+                            } elseif ($attendance->leaveRequest->is_half_day) {
+                                $session = $attendance->leaveRequest->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                                $leaveDetail = ' (Half Day - ' . $session . ')';
+                            }
+                        }
+                        $dayData['status'] = 'Half Day' . $leaveDetail;
+                        $dayData['icon'] = 'bx-time';
                         $dayData['class'] = 'bg-orange text-white border-0';
                         break;
                     case 'absent':
@@ -1001,6 +1049,23 @@ class UserDashboardController extends Controller
                         $dayData['status'] = 'WFH';
                         $dayData['icon'] = 'bx-home';
                         $dayData['class'] = 'bg-indigo-vibrant text-white border-0';
+                        break;
+                    case 'leave':
+                    case 'paid_leave':
+                    case 'unpaid_leave':
+                        $isPaid = $attendance->leaveRequest->leaveType->is_paid ?? false;
+                        $leaveDetail = '';
+                        if ($attendance->leaveRequest) {
+                            if ($attendance->leaveRequest->is_short_leave) {
+                                $leaveDetail = ' (Short Leave)';
+                            } elseif ($attendance->leaveRequest->is_half_day) {
+                                $session = $attendance->leaveRequest->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                                $leaveDetail = ' (Half Day - ' . $session . ')';
+                            }
+                        }
+                        $dayData['status'] = ($isPaid ? 'Paid Leave' : 'Unpaid Leave') . $leaveDetail;
+                        $dayData['icon'] = 'bx-calendar';
+                        $dayData['class'] = ($isPaid ? 'bg-teal' : 'bg-orange') . ' text-white border-0';
                         break;
                 }
             } else {

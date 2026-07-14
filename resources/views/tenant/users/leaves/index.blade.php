@@ -142,15 +142,35 @@
                     <tbody>
                         @foreach($leaves as $item)
                         @php
+                            $req = $item->raw_request ?? null;
                             if (!$item->is_adjustment) {
                                 $typeLabel = 'Leave Deducted';
                                 $typeColor = 'danger';
                                 $from = \Carbon\Carbon::parse($item->from_date);
                                 $to   = \Carbon\Carbon::parse($item->to_date);
-                                $days = $from->diffInDays($to) + 1;
-                                $amountDisplay = '-' . number_format($days, 1);
+                                
+                                $leaveTypeDetail = 'Full Day';
+                                if ($req) {
+                                    if ($req->is_short_leave) {
+                                        $leaveTypeDetail = 'Short Leave (' . ($req->duration_hours ?? 0) . ' hrs' . ($req->start_time ? ': ' . substr($req->start_time, 0, 5) . '-' . substr($req->end_time, 0, 5) : '') . ')';
+                                    } elseif ($req->is_half_day) {
+                                        $sessionName = $req->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                                        $leaveTypeDetail = 'Half Day (' . $sessionName . ')';
+                                    }
+                                }
+
+                                if ($req && $req->is_half_day) {
+                                    $days = 0.5;
+                                    $amountDisplay = '-' . number_format($days, 1);
+                                } elseif ($req && $req->is_short_leave) {
+                                    $days = 0.0;
+                                    $amountDisplay = '-1.0 count';
+                                } else {
+                                    $days = $from->diffInDays($to) + 1;
+                                    $amountDisplay = '-' . number_format($days, 1);
+                                }
                                 $amountClass   = 'text-danger';
-                                $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
+                                $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ') - ' . $leaveTypeDetail;
                                 if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
                                 $isBackdated = $item->from_date && \Carbon\Carbon::parse($item->from_date)->lt($item->created_at->startOfDay());
                             } else {
@@ -184,6 +204,15 @@
                             <td class="ps-4 py-3">
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-label-{{ $typeColor }}">{{ $typeLabel }}</span>
+                                    @if($req ?? false)
+                                        @if($req->is_short_leave)
+                                            <span class="badge bg-label-info" style="font-size: 0.6rem;">SHORT LEAVE</span>
+                                        @elseif($req->is_half_day)
+                                            <span class="badge bg-label-primary" style="font-size: 0.6rem;">HALF DAY ({{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }})</span>
+                                        @else
+                                            <span class="badge bg-label-secondary" style="font-size: 0.6rem;">FULL DAY</span>
+                                        @endif
+                                    @endif
                                     @if($isBackdated ?? false)
                                         <span class="badge bg-label-warning" style="font-size: 0.6rem;">BACK DATED</span>
                                     @endif
@@ -449,6 +478,25 @@
                             </div>
                         </div>
 
+                        <!-- Short Leave Session / Time Picker -->
+                        <div class="col-12 d-none" id="short_leave_container">
+                            <label class="form-label-hitech mb-2">Short Leave Details</label>
+                            <div class="row g-3">
+                                <div class="col-4">
+                                    <label for="start_time" class="form-label-hitech" style="font-size:0.75rem;">Start Time</label>
+                                    <input type="time" id="start_time" name="start_time" class="form-control form-control-hitech">
+                                </div>
+                                <div class="col-4">
+                                    <label for="end_time" class="form-label-hitech" style="font-size:0.75rem;">End Time</label>
+                                    <input type="time" id="end_time" name="end_time" class="form-control form-control-hitech">
+                                </div>
+                                <div class="col-4">
+                                    <label for="duration_hours" class="form-label-hitech" style="font-size:0.75rem;">Duration (Hrs)</label>
+                                    <input type="number" id="duration_hours" name="duration_hours" class="form-control form-control-hitech" step="0.5" readonly placeholder="Calculated">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="col-12">
                             <div class="row g-3">
                                 <div class="col-6" id="from_date_container">
@@ -600,16 +648,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function handleHalfDayToggle() {
-        if (isHalfDaySelected()) {
+        const typeId = typeSelect.value;
+        const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
+        const selectedType = leaveTypesArr.find(t => t.id == typeId);
+        const isSHL = selectedType && selectedType.code.toUpperCase() === 'SHL';
+
+        const shortLeaveContainer = document.getElementById('short_leave_container');
+        const startTimeEl = document.getElementById('start_time');
+        const endTimeEl = document.getElementById('end_time');
+
+        if (isSHL) {
+            if (shortLeaveContainer) shortLeaveContainer.classList.remove('d-none');
+            if (startTimeEl) startTimeEl.setAttribute('required', 'required');
+            if (endTimeEl) endTimeEl.setAttribute('required', 'required');
+            
+            halfDaySessionContainer.classList.add('d-none');
+            toDateContainer.classList.add('d-none');
+            fromDateContainer.className = 'col-12';
+            
+            const fromLabel = document.querySelector("label[for='from_date']");
+            if (fromLabel) fromLabel.innerText = 'Date';
+            
+            toDateInput.value = fromDateInput.value;
+        } else if (isHalfDaySelected()) {
+            if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
+            if (startTimeEl) startTimeEl.removeAttribute('required');
+            if (endTimeEl) endTimeEl.removeAttribute('required');
+
             halfDaySessionContainer.classList.remove('d-none');
             toDateContainer.classList.add('d-none');
             fromDateContainer.className = 'col-12';
+            
+            const fromLabel = document.querySelector("label[for='from_date']");
+            if (fromLabel) fromLabel.innerText = 'Date';
+            
             toDateInput.value = fromDateInput.value;
             checkAttendance();
         } else {
+            if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
+            if (startTimeEl) startTimeEl.removeAttribute('required');
+            if (endTimeEl) endTimeEl.removeAttribute('required');
+
             halfDaySessionContainer.classList.add('d-none');
             toDateContainer.classList.remove('d-none');
             fromDateContainer.className = 'col-6';
+            
+            const fromLabel = document.querySelector("label[for='from_date']");
+            if (fromLabel) fromLabel.innerText = 'Start Date';
+            
             const warnEl = document.getElementById('att_warning');
             if (warnEl) warnEl.classList.add('d-none');
         }
@@ -749,9 +835,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
     fromDateInput.addEventListener('change', function() {
         if (this.value) {
-            if (isHalfDaySelected()) {
+            const typeId = typeSelect.value;
+            const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
+            const selectedType = leaveTypesArr.find(t => t.id == typeId);
+            const isSHL = selectedType && selectedType.code.toUpperCase() === 'SHL';
+
+            if (isHalfDaySelected() || isSHL) {
                 toDateInput.value = this.value;
-                checkAttendance();
+                if (!isSHL) {
+                    checkAttendance();
+                }
             } else {
                 toDateInput.setAttribute('min', this.value);
                 if (toDateInput.value && toDateInput.value < this.value) {
@@ -766,6 +859,29 @@ document.addEventListener('DOMContentLoaded', function() {
     toDateInput.addEventListener('change', updateLeaveDetails);
 
     if (typeSelect) typeSelect.addEventListener('change', updateLeaveDetails);
+
+    // Duration calculation for short leave times
+    const startTimeEl = document.getElementById('start_time');
+    const endTimeEl = document.getElementById('end_time');
+    const durationEl = document.getElementById('duration_hours');
+
+    function calculateDuration() {
+        if (startTimeEl && endTimeEl && durationEl && startTimeEl.value && endTimeEl.value) {
+            const start = startTimeEl.value.split(':');
+            const end = endTimeEl.value.split(':');
+            const startDate = new Date(0, 0, 0, start[0], start[1], 0);
+            const endDate = new Date(0, 0, 0, end[0], end[1], 0);
+            let diff = endDate.getTime() - startDate.getTime();
+            if (diff < 0) {
+                diff += 24 * 60 * 60 * 1000; // Next day
+            }
+            const hours = diff / (1000 * 60 * 60);
+            durationEl.value = hours.toFixed(2);
+        }
+    }
+
+    if (startTimeEl) startTimeEl.addEventListener('change', calculateDuration);
+    if (endTimeEl) endTimeEl.addEventListener('change', calculateDuration);
 
     // Initial state
     if (typeSelect && typeSelect.value) {
