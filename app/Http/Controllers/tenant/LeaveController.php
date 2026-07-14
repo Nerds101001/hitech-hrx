@@ -107,8 +107,24 @@ class LeaveController extends Controller
       // Get collections
       $leaves = $leaveQuery->get()->map(function($item) {
           $name = $item->leaveType->name ?? 'N/A';
+          
+          if ($item->leaveType) {
+              if ($item->leaveType->is_short_leave) {
+                  $name .= ' <span class="badge bg-label-primary ms-1" style="font-size:0.65rem; font-weight:600;">SHORT LEAVE</span>';
+              } elseif ($item->is_half_day) {
+                  $sessionStr = $item->half_day_session ? str_replace('_', ' ', $item->half_day_session) : 'Half Day';
+                  $name .= ' <span class="badge bg-label-info ms-1" style="font-size:0.65rem; font-weight:600;">HALF DAY (' . strtoupper($sessionStr) . ')</span>';
+              }
+              
+              if ($item->leaveType->is_paid) {
+                  $name .= ' <span class="badge bg-label-success ms-1" style="font-size:0.65rem; font-weight:600;">PAID</span>';
+              } else {
+                  $name .= ' <span class="badge bg-label-danger ms-1" style="font-size:0.65rem; font-weight:600;">UNPAID</span>';
+              }
+          }
+
           if ($item->from_date && $item->from_date->lt($item->created_at->startOfDay())) {
-              $name .= ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>';
+              $name .= ' <span class="badge bg-label-warning ms-1" style="font-size:0.65rem; font-weight:600;">BACK DATED</span>';
           }
           
           $dept = $item->user && $item->user->department ? $item->user->department->name : 'N/A';

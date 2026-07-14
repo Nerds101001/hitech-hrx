@@ -101,7 +101,9 @@
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
                         <th style="min-width: 110px;">Mode</th>
-                        <th style="min-width: 120px;">Customer Name</th>
+                        <th style="min-width: 140px;">Customer Name</th>
+                        <th style="min-width: 140px;">From Address<br><small class="fw-normal text-muted">(Source)</small></th>
+                        <th style="min-width: 140px;">To Address<br><small class="fw-normal text-muted">(Destination)</small></th>
                         <th style="min-width: 80px;">Meter<br>Start</th>
                         <th style="min-width: 80px;">Meter<br>End</th>
                         <th style="min-width: 60px;">Total<br>KM</th>
@@ -248,7 +250,9 @@
                         <option value="Flight" ${ex.mode_of_travel == 'Flight' ? 'selected' : ''}>Flight</option>
                     </select>
                 </td>
-                <td class="p-1"><input type="text" name="items[${d}][to_location]" class="form-control form-control-sm p-1" style="font-size: 0.8rem;" value="${ex.to_location || ''}"></td>
+                <td class="p-1"><input type="text" name="items[${d}][party_visited]" class="form-control form-control-sm p-1 customer-name" style="font-size: 0.8rem;" placeholder="Customer..." value="${ex.party_visited || ''}"></td>
+                <td class="p-1"><input type="text" name="items[${d}][from_location]" class="form-control form-control-sm p-1 from-location" style="font-size: 0.8rem;" placeholder="From..." value="${ex.from_location || ''}"></td>
+                <td class="p-1"><input type="text" name="items[${d}][to_location]" class="form-control form-control-sm p-1 to-location" style="font-size: 0.8rem;" placeholder="To..." value="${ex.to_location || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][start_meter]" class="form-control form-control-sm start-meter p-1 text-center" style="font-size: 0.8rem;" oninput="calculateRow(${d})" value="${ex.start_meter || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][end_meter]" class="form-control form-control-sm end-meter p-1 text-center" style="font-size: 0.8rem;" oninput="calculateRow(${d})" value="${ex.end_meter || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][distance_km]" class="form-control form-control-sm distance bg-light p-1 text-center" style="font-size: 0.8rem;" readonly value="${ex.distance_km || ''}"></td>
@@ -403,6 +407,7 @@
             $('.expense-row').each(function() {
                 let row = $(this);
                 let mode = row.find('.mode-select').val();
+                let fromLoc = row.find('input[name*="[from_location]"]').val();
                 let toLoc = row.find('input[name*="[to_location]"]').val();
                 let remarks = row.find('input[name*="[remarks]"]').val();
                 let food = parseFloat(row.find('.food').val()) || 0;
@@ -420,7 +425,7 @@
                 let hasCourierProof = row.find('input[name*="[courier_proof]"]').val() || row.find('input[name*="[existing_courier_proof]"]').length > 0;
                 
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0 && !hasPetrolSlip && !hasTollProof && !hasSpecialApprProof && !hasCourierProof && !hasFoodProof) {
+                if (!mode && !fromLoc && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0 && !hasPetrolSlip && !hasTollProof && !hasSpecialApprProof && !hasCourierProof && !hasFoodProof) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

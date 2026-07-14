@@ -206,11 +206,11 @@
                                     <span class="badge bg-label-{{ $typeColor }}">{{ $typeLabel }}</span>
                                     @if($req ?? false)
                                         @if($req->is_short_leave)
-                                            <span class="badge bg-label-info" style="font-size: 0.6rem;">SHORT LEAVE</span>
+                                            <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#0dcaf0; color:#000 !important;">SHORT LEAVE</span>
                                         @elseif($req->is_half_day)
-                                            <span class="badge bg-label-primary" style="font-size: 0.6rem;">HALF DAY ({{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }})</span>
+                                            <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#6610f2; color:#fff !important;">HALF DAY &bull; {{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }}</span>
                                         @else
-                                            <span class="badge bg-label-secondary" style="font-size: 0.6rem;">FULL DAY</span>
+                                            <span class="badge bg-label-secondary" style="font-size: 0.65rem; font-weight:600;">FULL DAY</span>
                                         @endif
                                     @endif
                                     @if($isBackdated ?? false)
