@@ -22,6 +22,9 @@ class AttendanceAdjustmentService
      */
     public static function autoOffsetSundayWorking(User $user, $month, $year)
     {
+        // Disabled per user request (Sunday present credits paid leave directly, no auto-adjustment of absences)
+        return;
+
         $startDate = Carbon::create($year, $month, 1)->startOfMonth();
         $endDate = Carbon::create($year, $month, 1)->endOfMonth();
         

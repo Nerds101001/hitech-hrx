@@ -115,4 +115,108 @@ class Attendance extends Model
   {
     return $this->belongsTo(User::class, 'updated_by_id');
   }
+
+  protected static function booted()
+  {
+      static::saved(function ($attendance) {
+          $checkIn = $attendance->check_in_time;
+          if (!$checkIn || !$checkIn->isSunday()) {
+              return;
+          }
+
+          $user = $attendance->user;
+          if (!$user) return;
+
+          $compOffType = \App\Models\LeaveType::where('code', 'ALP')
+              ->orWhere('name', 'like', '%All Purpose%')
+              ->orWhere('code', 'PL')
+              ->first();
+
+          if (!$compOffType) return;
+
+          $checkOut = $attendance->check_out_time;
+          $hasFourHours = false;
+
+          if ($checkOut) {
+              $mins = $checkIn->diffInMinutes($checkOut);
+              if ($mins >= 240) {
+                  $hasFourHours = true;
+              }
+          }
+
+          $reasonStr = "Sunday Working Credit (Auto-credited)";
+          $hasAlreadyCredited = $attendance->admin_reason && str_contains($attendance->admin_reason, "Sunday Working Credit");
+
+          if ($hasFourHours) {
+              if (!$hasAlreadyCredited) {
+                  // Credit 1.0 day to balance
+                  $balance = \App\Models\LeaveBalance::firstOrCreate(
+                      ['user_id' => $user->id, 'leave_type_id' => $compOffType->id],
+                      ['tenant_id' => $user->tenant_id ?? $attendance->tenant_id, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
+                  );
+
+                  \App\Models\LeaveBalance::$auditReason = "Earned via Sunday Working on " . $checkIn->format('d-m-Y');
+                  $balance->increment('balance', 1);
+                  $balance->increment('accrued_this_year', 1);
+
+                  // Update attendance record without triggering events again
+                  $attendance->withoutEvents(function () use ($attendance, $reasonStr) {
+                      $currentReason = $attendance->admin_reason;
+                      $newReason = $currentReason ? $currentReason . " | " . $reasonStr : $reasonStr;
+                      $attendance->updateQuietly(['admin_reason' => $newReason]);
+                  });
+              }
+          } else {
+              if ($hasAlreadyCredited) {
+                  // Reverse/debit 1.0 day
+                  $balance = \App\Models\LeaveBalance::where('user_id', $user->id)
+                      ->where('leave_type_id', $compOffType->id)
+                      ->first();
+
+                  if ($balance) {
+                      \App\Models\LeaveBalance::$auditReason = "Sunday Working Credit Reversed on " . $checkIn->format('d-m-Y');
+                      $balance->decrement('balance', 1);
+                      $balance->decrement('accrued_this_year', 1);
+                  }
+
+                  $attendance->withoutEvents(function () use ($attendance, $reasonStr) {
+                      $currentReason = $attendance->admin_reason;
+                      $newReason = trim(str_replace([$reasonStr, " | " . $reasonStr], "", $currentReason));
+                      $attendance->updateQuietly(['admin_reason' => $newReason ?: null]);
+                  });
+              }
+          }
+      });
+
+      static::deleted(function ($attendance) {
+          $checkIn = $attendance->check_in_time;
+          if (!$checkIn || !$checkIn->isSunday()) {
+              return;
+          }
+
+          $user = $attendance->user;
+          if (!$user) return;
+
+          $compOffType = \App\Models\LeaveType::where('code', 'ALP')
+              ->orWhere('name', 'like', '%All Purpose%')
+              ->orWhere('code', 'PL')
+              ->first();
+
+          if (!$compOffType) return;
+
+          $hasAlreadyCredited = $attendance->admin_reason && str_contains($attendance->admin_reason, "Sunday Working Credit");
+
+          if ($hasAlreadyCredited) {
+              $balance = \App\Models\LeaveBalance::where('user_id', $user->id)
+                  ->where('leave_type_id', $compOffType->id)
+                  ->first();
+
+              if ($balance) {
+                  \App\Models\LeaveBalance::$auditReason = "Sunday Working Credit Reversed (Attendance Deleted) on " . $checkIn->format('d-m-Y');
+                  $balance->decrement('balance', 1);
+                  $balance->decrement('accrued_this_year', 1);
+              }
+          }
+      });
+  }
 }

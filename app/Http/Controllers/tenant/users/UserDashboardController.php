@@ -1003,10 +1003,12 @@ class UserDashboardController extends Controller
                     $dayData['duration'] = sprintf('%d:%02dh', $diff->h, $diff->i);
                 }
 
+                $isSunday = $dateObj->isSunday();
                 $s = strtolower($attendance->status ?: 'present');
                 
-                // Dynamic threshold check (465 mins)
-                if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+                if ($isSunday && $attendance->check_in_time) {
+                    $s = 'sp';
+                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
                     $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
                     if ($mins < 465 && $s === 'present') {
                         $s = 'half-day';
@@ -1018,6 +1020,11 @@ class UserDashboardController extends Controller
                         $dayData['status'] = 'Present';
                         $dayData['icon'] = 'bx-check-circle';
                         $dayData['class'] = 'bg-teal text-white border-0';
+                        break;
+                    case 'sp':
+                        $dayData['status'] = 'SP';
+                        $dayData['icon'] = 'bx-check-circle';
+                        $dayData['class'] = 'bg-success text-white border-0';
                         break;
                     case 'late':
                         $dayData['status'] = 'Late';

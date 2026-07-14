@@ -325,19 +325,6 @@ function loadMonthlyRegistry() {
                 
                 for(let i=1; i<=resp.daysInMonth; i++) {
                     const dayName = moment().year(resp.year).month(resp.month-1).date(i).format('ddd');
-                    const isSunday = dayName === 'Sun';
-
-                    if (isSunday) {
-                        if (rowIndex === 0) {
-                            let repeatCount = Math.max(1, Math.floor(resp.data.length / 2));
-                            let sundayText = Array(repeatCount).fill('SUNDAY').join('&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;');
-                            
-                            html += `<td rowspan="${resp.data.length}" class="text-center align-middle" style="background-color: #f8f9fa; border-right: 1px solid #dee2e6; border-left: 1px solid #dee2e6; width: 32px; padding: 0; overflow: hidden;">
-                                        <div style="writing-mode: vertical-rl; transform: rotate(180deg); margin: auto; height: 100%; display: flex; align-items: center; justify-content: center; opacity: 0.5;" class="text-secondary fw-black ls-2">${sundayText}</div>
-                                     </td>`;
-                        }
-                        continue;
-                    }
 
                     const day = row['day_'+i];
                     // Pass 24h format if needed or original
@@ -349,6 +336,7 @@ function loadMonthlyRegistry() {
                     if(day.status === 'Absent') inner = '<small class="fw-bold text-white" style="font-size:0.5rem;">ABS</small>';
                     if(day.status === 'Holiday') inner = '<small class="fw-bold text-info" style="font-size:0.55rem;">HOL</small>';
                     if(day.status === 'OFF') inner = '<small class="fw-bold text-muted" style="font-size:0.55rem;">OFF</small>';
+                    if(day.status && day.status.startsWith('SP')) inner = '<small class="fw-bold text-white" style="font-size:0.55rem;">SP</small>';
                     if(day.status === 'Leave' || day.status === 'Paid Leave' || day.status === 'Unpaid Leave') inner = `<small class="fw-bold text-white" style="font-size:0.45rem;">${day.hours}</small>`;
                     if(day.status === 'WFH') inner = '<small class="fw-bold text-white" style="font-size:0.45rem;">WFH</small>';
                     if(day.status === 'Scheduled') inner = '<i class="bx bx-calendar-event opacity-25"></i>';
