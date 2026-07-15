@@ -263,6 +263,12 @@ try {
             echo "✅ [PASS] {$sc['name']} -> Result: {$result}\n";
         } else {
             echo "❌ [FAIL] {$sc['name']} -> Expected: {$sc['expected']}, Got: {$result}\n";
+            if ($leave) {
+                echo "      Leave request details: id={$leave->id}, is_short_leave=" . ($leave->is_short_leave ? '1':'0') . ", is_half_day=" . ($leave->is_half_day ? '1':'0') . ", is_lwp=" . ($leave->is_lwp ? '1':'0') . "\n";
+                echo "      LeaveType details: id=" . ($leave->leaveType?->id ?? 'null') . ", is_paid=" . ($leave->leaveType?->is_paid ? '1':'0') . "\n";
+            } else {
+                echo "      No leave request.\n";
+            }
             $success = false;
         }
     }
