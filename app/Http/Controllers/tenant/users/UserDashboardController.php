@@ -847,7 +847,7 @@ class UserDashboardController extends Controller
                     } elseif ($shortMins > 0) {
                         $s = 'half-day';
                     } else {
-                        $s = 'paid_leave';
+                        $s = 'absent';
                     }
                 } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && !$attendance->check_out_time
                     && $date->isPast() && !$date->isToday() && in_array($s, ['present', 'late'])) {
@@ -859,6 +859,9 @@ class UserDashboardController extends Controller
 
                 if ($s === 'miss-punch') {
                     $dayData['status'] = 'Miss Punch';
+                } elseif ($s === 'absent') {
+                    $dayData['status'] = 'Absent';
+                    $absentDays++;
                 } elseif ($s === 'late') {
                     $dayData['status'] = 'Late';
                     $lateDays++;
@@ -892,9 +895,16 @@ class UserDashboardController extends Controller
                 }
 
             } elseif ($leave) {
-                $dayData['status'] = 'On Leave';
-                $dayData['dynamic_status'] = 'on_leave';
-                $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                $isShort = $leave->is_short_leave || ($leave->leaveType->is_short_leave ?? false);
+                if ($isShort) {
+                    $dayData['status'] = 'Absent';
+                    $dayData['dynamic_status'] = 'absent';
+                    $absentDays++;
+                } else {
+                    $dayData['status'] = 'On Leave';
+                    $dayData['dynamic_status'] = 'on_leave';
+                    $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                }
             } elseif (!$isWorkingDay) {
                 $dayData['status'] = 'Weekly Off';
                 $dayData['dynamic_status'] = 'weekly_off';
