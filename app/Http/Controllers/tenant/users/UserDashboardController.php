@@ -807,52 +807,85 @@ class UserDashboardController extends Controller
                        Carbon::parse($l->to_date)->toDateString() >= $dateStr;
             });
 
-            if ($holiday) {
-                $dayData['status'] = 'Holiday';
-                $dayData['dynamic_status'] = 'holiday';
-                $dayData['holiday_name'] = $holiday->name;
-            } elseif ($attendance && (strtolower($attendance->status) !== 'absent' || ($attendance->check_in_time && $attendance->check_out_time))) {
+            $isSunday = $date->isSunday();
+            $isHoliday = !empty($holiday);
+
+            $hasRealPunch = $attendance && $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
+            $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
+
+            $isShort = $attendance && $attendance->leaveRequest && ($attendance->leaveRequest->is_short_leave || $attendance->leaveRequest->leaveType?->is_short_leave);
+            if (!$isShort && $leave) {
+                if ($leave->is_short_leave || $leave->leaveType?->is_short_leave) {
+                    $isShort = true;
+                }
+            }
+
+            $isHalfDay = $attendance && $attendance->leaveRequest && ($attendance->leaveRequest->is_half_day || $attendance->leaveRequest->leaveType?->is_half_day);
+            if (!$isHalfDay && $leave) {
+                if ($leave->is_half_day || $leave->leaveType?->is_half_day) {
+                    $isHalfDay = true;
+                }
+            }
+
+            $isFullDayLeave = ($attendance && $attendance->leaveRequest && !$isShort && !$isHalfDay) || ($leave && !$isShort && !$isHalfDay);
+            $leaveReq = ($attendance && $attendance->leaveRequest) ? $attendance->leaveRequest : ($leave ?? null);
+            $isPaid = $leaveReq && $leaveReq->leaveType?->is_paid && !$leaveReq->is_lwp;
+
+            if ($attendance && (strtolower($attendance->status) !== 'absent' || ($attendance->check_in_time && $attendance->check_out_time))) {
                 $dayData['check_in_time'] = $attendance->check_in_time;
                 $dayData['check_out_time'] = $attendance->check_out_time;
                 $dayData['admin_reason'] = $attendance->admin_reason;
 
                 $s = strtolower($attendance->status ?: 'present');
-                
-                // Dynamic enforcement of 7:45 threshold rule (465 mins) and leave mapping
-                if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time && !in_array($s, ['paid_leave', 'unpaid_leave', 'on_leave', 'leave', 'wfh', 'work_from_home'])) {
-                    $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                    if ($mins >= 465) {
-                        // Keep original status
+
+                if ($isSunday) {
+                    if ($workMins >= 240) {
+                        $s = 'sp';
                     } else {
-                        $halfLeave = ($attendance->leaveRequest && $attendance->leaveRequest->is_half_day) ? $attendance->leaveRequest : null;
-                        if ($halfLeave && $halfLeave->leaveType?->is_paid && !$halfLeave->is_lwp) {
-                            $s = 'half-day-paid';
-                        } else {
+                        $s = 'weekly_off';
+                    }
+                } elseif ($isHoliday) {
+                    if ($workMins >= 240) {
+                        $s = 'hp';
+                    } else {
+                        $s = 'holiday';
+                    }
+                } elseif (empty($attendance->admin_reason)) {
+                    if ($isShort) {
+                        if ($workMins >= 360) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
                             $s = 'half-day';
+                        } else {
+                            $s = 'absent';
+                        }
+                    } elseif ($isHalfDay) {
+                        if ($workMins >= 240) {
+                            $s = $isPaid ? 'half-day-paid' : 'half-day';
+                        } else {
+                            $s = $isPaid ? 'paid_leave' : 'absent';
+                        }
+                    } elseif ($isFullDayLeave) {
+                        if ($workMins >= 465) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
+                            $s = $isPaid ? 'half-day-paid' : 'half-day';
+                        } else {
+                            $s = $isPaid ? 'paid_leave' : 'absent';
+                        }
+                    } else {
+                        if ($workMins >= 465) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
+                            $s = 'half-day';
+                        } else {
+                            $s = 'absent';
+                        }
+
+                        if ($attendance->check_in_time && !$attendance->check_out_time && $date->isPast() && !$date->isToday() && in_array($s, ['present', 'late'])) {
+                            $s = 'miss-punch';
                         }
                     }
-                }
-
-                $isShortLeaveDay = ($attendance->leaveRequest
-                        && ($attendance->leaveRequest->is_short_leave || ($attendance->leaveRequest->leaveType->is_short_leave ?? false)))
-                    || ($leave
-                        && ($leave->is_short_leave || ($leave->leaveType->is_short_leave ?? false)));
-
-                if ($isShortLeaveDay) {
-                    /* Short leave: check actual punch >= 350 min (5h 50m) */
-                    $hasRealPunch = $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
-                    $shortMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
-                    if ($shortMins >= 350) {
-                        $s = 'present';
-                    } elseif ($shortMins > 0) {
-                        $s = 'half-day';
-                    } else {
-                        $s = 'absent';
-                    }
-                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && !$attendance->check_out_time
-                    && $date->isPast() && !$date->isToday() && in_array($s, ['present', 'late'])) {
-                    /* Punched in but never punched out on a past day = missed punch, not a full Present */
-                    $s = 'miss-punch';
                 }
 
                 $dayData['dynamic_status'] = $s;
@@ -862,6 +895,17 @@ class UserDashboardController extends Controller
                 } elseif ($s === 'absent') {
                     $dayData['status'] = 'Absent';
                     $absentDays++;
+                } elseif ($s === 'sp') {
+                    $dayData['status'] = 'Weekly Off Worked (SP)';
+                    $presentDays++;
+                } elseif ($s === 'hp') {
+                    $dayData['status'] = 'Holiday Worked (HP)';
+                    $presentDays++;
+                } elseif ($s === 'weekly_off') {
+                    $dayData['status'] = 'Weekly Off';
+                } elseif ($s === 'holiday') {
+                    $dayData['status'] = 'Holiday';
+                    $dayData['holiday_name'] = $holiday->name;
                 } elseif ($s === 'late') {
                     $dayData['status'] = 'Late';
                     $lateDays++;
@@ -877,7 +921,6 @@ class UserDashboardController extends Controller
                     $dayData['status'] = 'WFH';
                     $presentDays++;
                 } elseif (in_array($s, ['leave', 'paid_leave', 'unpaid_leave'])) {
-                    $isPaid = $attendance->leaveRequest->leaveType->is_paid ?? false;
                     $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
                     if ($isPaid) {
                         $presentDays++;
@@ -895,16 +938,35 @@ class UserDashboardController extends Controller
                 }
 
             } elseif ($leave) {
-                $isShort = $leave->is_short_leave || ($leave->leaveType->is_short_leave ?? false);
                 if ($isShort) {
                     $dayData['status'] = 'Absent';
                     $dayData['dynamic_status'] = 'absent';
                     $absentDays++;
+                } elseif ($isHalfDay) {
+                    if ($isPaid) {
+                        $dayData['status'] = 'Paid Leave';
+                        $dayData['dynamic_status'] = 'paid_leave';
+                        $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                        $presentDays++;
+                    } else {
+                        $dayData['status'] = 'Absent';
+                        $dayData['dynamic_status'] = 'absent';
+                        $absentDays++;
+                    }
                 } else {
-                    $dayData['status'] = 'On Leave';
-                    $dayData['dynamic_status'] = 'on_leave';
+                    $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
+                    $dayData['dynamic_status'] = $isPaid ? 'paid_leave' : 'unpaid_leave';
                     $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                    if ($isPaid) {
+                        $presentDays++;
+                    } else {
+                        $absentDays++;
+                    }
                 }
+            } elseif ($isHoliday) {
+                $dayData['status'] = 'Holiday';
+                $dayData['dynamic_status'] = 'holiday';
+                $dayData['holiday_name'] = $holiday->name;
             } elseif (!$isWorkingDay) {
                 $dayData['status'] = 'Weekly Off';
                 $dayData['dynamic_status'] = 'weekly_off';
@@ -1027,14 +1089,8 @@ class UserDashboardController extends Controller
             $holiday = $holidays->first(function($h) use ($dateStr) {
                 return Carbon::parse($h->date)->toDateString() === $dateStr;
             });
-            if ($holiday) {
-                $dayData['status'] = 'Holiday';
-                $dayData['holiday_name'] = $holiday->name;
-                $dayData['icon'] = 'bx-star';
-                $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
-                $calendarData[$day] = $dayData;
-                continue;
-            }
+            $holidayName = $holiday ? $holiday->name : null;
+            $isHoliday = !empty($holidayName);
             
             // Check for Attendance
             $attendance = $attendances->first(function($a) use ($dateStr) {
@@ -1060,32 +1116,80 @@ class UserDashboardController extends Controller
                 $isSunday = $dateObj->isSunday();
                 $s = strtolower($attendance->status ?: 'present');
 
-                $isShortLeave = ($attendance->leaveRequest
+                $hasRealPunch = $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
+                $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
+
+                $isShort = ($attendance->leaveRequest
                         && ($attendance->leaveRequest->is_short_leave || ($attendance->leaveRequest->leaveType->is_short_leave ?? false)))
                     || ($dayLeave
                         && ($dayLeave->is_short_leave || ($dayLeave->leaveType->is_short_leave ?? false)));
 
-                if ($isSunday && $attendance->check_in_time) {
-                    $s = 'sp';
-                } elseif ($isShortLeave) {
-                    /* Short leave: employee was present, just left early - always show as Present */
-                    $s = 'present';
-                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && !$attendance->check_out_time
-                    && $dateObj->isPast() && !$dateObj->isToday() && in_array($s, ['present', 'late'])) {
-                    /* Punched in but never punched out on a past day = missed punch, not a full Present */
-                    $s = 'miss-punch';
-                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
-                    $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                    if ($mins < 465 && $s === 'present') {
-                        $s = 'half-day';
+                $isHalfDay = ($attendance->leaveRequest
+                        && ($attendance->leaveRequest->is_half_day || ($attendance->leaveRequest->leaveType->is_half_day ?? false)))
+                    || ($dayLeave
+                        && ($dayLeave->is_half_day || ($dayLeave->leaveType->is_half_day ?? false)));
+
+                $isFullDayLeave = ($attendance->leaveRequest && !$isShort && !$isHalfDay)
+                    || ($dayLeave && !$isShort && !$isHalfDay);
+
+                $leaveReq = $attendance->leaveRequest ?: ($dayLeave ?? null);
+                $isPaid = $leaveReq && $leaveReq->leaveType?->is_paid && !$leaveReq->is_lwp;
+
+                if ($isSunday) {
+                    if ($workMins >= 240) {
+                        $s = 'sp';
+                    } else {
+                        $s = 'weekly_off';
+                    }
+                } elseif ($isHoliday) {
+                    if ($workMins >= 240) {
+                        $s = 'hp';
+                    } else {
+                        $s = 'holiday';
+                    }
+                } elseif (empty($attendance->admin_reason)) {
+                    if ($isShort) {
+                        if ($workMins >= 360) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
+                            $s = 'half-day';
+                        } else {
+                            $s = 'absent';
+                        }
+                    } elseif ($isHalfDay) {
+                        if ($workMins >= 240) {
+                            $s = $isPaid ? 'half-day-paid' : 'half-day';
+                        } else {
+                            $s = $isPaid ? 'paid_leave' : 'absent';
+                        }
+                    } elseif ($isFullDayLeave) {
+                        if ($workMins >= 465) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
+                            $s = $isPaid ? 'half-day-paid' : 'half-day';
+                        } else {
+                            $s = $isPaid ? 'paid_leave' : 'absent';
+                        }
+                    } else {
+                        if ($workMins >= 465) {
+                            $s = 'present';
+                        } elseif ($workMins >= 240) {
+                            $s = 'half-day';
+                        } else {
+                            $s = 'absent';
+                        }
+
+                        if ($attendance->check_in_time && !$attendance->check_out_time && $dateObj->isPast() && !$dateObj->isToday() && in_array($s, ['present', 'late'])) {
+                            $s = 'miss-punch';
+                        }
                     }
                 }
 
                 switch($s) {
                     case 'present':
-                        $dayData['status'] = $isShortLeave ? 'Present (Short Leave)' : 'Present';
+                        $dayData['status'] = $isShort ? 'Present (Short Leave)' : 'Present';
                         $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = ($isShortLeave ? 'bg-short-leave' : 'bg-teal') . ' text-white border-0';
+                        $dayData['class'] = ($isShort ? 'bg-short-leave' : 'bg-teal') . ' text-white border-0';
                         break;
                     case 'miss-punch':
                         $dayData['status'] = 'Miss Punch';
@@ -1097,25 +1201,52 @@ class UserDashboardController extends Controller
                         $dayData['icon'] = 'bx-check-circle';
                         $dayData['class'] = 'bg-success text-white border-0';
                         break;
+                    case 'hp':
+                        $dayData['status'] = 'HP';
+                        $dayData['icon'] = 'bx-check-circle';
+                        $dayData['class'] = 'bg-success text-white border-0';
+                        break;
+                    case 'weekly_off':
+                        $dayData['status'] = 'Weekly Off';
+                        $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
+                        $dayData['icon'] = 'bx-calendar-minus';
+                        break;
+                    case 'holiday':
+                        $dayData['status'] = 'Holiday';
+                        $dayData['icon'] = 'bx-star';
+                        $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
+                        $dayData['holiday_name'] = $holidayName;
+                        break;
                     case 'late':
                         $dayData['status'] = 'Late';
                         $dayData['icon'] = 'bx-time-five';
                         $dayData['class'] = 'bg-orange text-white border-0';
                         break;
                     case 'half-day':
-                    case 'half-Day':
                         $leaveDetail = '';
-                        if ($attendance->leaveRequest) {
-                            if ($attendance->leaveRequest->is_short_leave) {
+                        if ($leaveReq) {
+                            if ($leaveReq->is_short_leave) {
                                 $leaveDetail = ' (Short Leave)';
-                            } elseif ($attendance->leaveRequest->is_half_day) {
-                                $session = $attendance->leaveRequest->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                            } elseif ($leaveReq->is_half_day) {
+                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
                                 $leaveDetail = ' (Half Day - ' . $session . ')';
                             }
                         }
                         $dayData['status'] = 'Half Day' . $leaveDetail;
                         $dayData['icon'] = 'bx-time';
                         $dayData['class'] = 'bg-orange text-white border-0';
+                        break;
+                    case 'half-day-paid':
+                        $leaveDetail = '';
+                        if ($leaveReq) {
+                            if ($leaveReq->is_half_day) {
+                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                                $leaveDetail = ' (Half Day - ' . $session . ')';
+                            }
+                        }
+                        $dayData['status'] = 'Present' . $leaveDetail . ' (Paid)';
+                        $dayData['icon'] = 'bx-check-circle';
+                        $dayData['class'] = 'bg-teal text-white border-0';
                         break;
                     case 'absent':
                         $dayData['status'] = 'Absent';
@@ -1131,13 +1262,13 @@ class UserDashboardController extends Controller
                     case 'leave':
                     case 'paid_leave':
                     case 'unpaid_leave':
-                        $isPaid = $attendance->leaveRequest->leaveType->is_paid ?? false;
+                        $isPaid = $leaveReq && $leaveReq->leaveType && $leaveReq->leaveType->is_paid && !$leaveReq->is_lwp;
                         $leaveDetail = '';
-                        if ($attendance->leaveRequest) {
-                            if ($attendance->leaveRequest->is_short_leave) {
+                        if ($leaveReq) {
+                            if ($leaveReq->is_short_leave) {
                                 $leaveDetail = ' (Short Leave)';
-                            } elseif ($attendance->leaveRequest->is_half_day) {
-                                $session = $attendance->leaveRequest->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                            } elseif ($leaveReq->is_half_day) {
+                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
                                 $leaveDetail = ' (Half Day - ' . $session . ')';
                             }
                         }
@@ -1151,10 +1282,38 @@ class UserDashboardController extends Controller
                 $leave = $dayLeave;
 
                 if ($leave) {
-                    $dayData['status'] = 'Leave';
-                    $dayData['icon'] = 'bx-calendar';
-                    $dayData['class'] = 'bg-purple-vibrant text-white border-0';
-                    $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                    $isShortLeave = $leave->leaveType?->is_short_leave ?? false;
+                    $isHalfDay = $leave->is_half_day || ($leave->leaveType?->is_half_day ?? false);
+                    $isPaid = $leave->leaveType?->is_paid && !$leave->is_lwp;
+                    
+                    if ($isShortLeave) {
+                        $dayData['status'] = 'Absent';
+                        $dayData['icon'] = 'bx-x-circle';
+                        $dayData['class'] = 'bg-red text-white border-0';
+                        $dayData['holiday_name'] = 'No Log Found';
+                    } elseif ($isHalfDay) {
+                        if ($isPaid) {
+                            $dayData['status'] = 'Paid Leave';
+                            $dayData['icon'] = 'bx-calendar';
+                            $dayData['class'] = 'bg-indigo-vibrant text-white border-0';
+                            $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                        } else {
+                            $dayData['status'] = 'Absent';
+                            $dayData['icon'] = 'bx-x-circle';
+                            $dayData['class'] = 'bg-red text-white border-0';
+                            $dayData['holiday_name'] = 'No Log Found';
+                        }
+                    } else {
+                        $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
+                        $dayData['icon'] = 'bx-calendar';
+                        $dayData['class'] = ($isPaid ? 'bg-indigo-vibrant' : 'bg-purple-vibrant') . ' text-white border-0';
+                        $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
+                    }
+                } elseif ($isHoliday) {
+                    $dayData['status'] = 'Holiday';
+                    $dayData['holiday_name'] = $holidayName;
+                    $dayData['icon'] = 'bx-star';
+                    $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
                 } elseif (!$dayData['is_working_day']) {
                     $dayData['status'] = 'Weekly Off';
                     $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
