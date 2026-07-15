@@ -16,7 +16,7 @@ DB::beginTransaction();
 
 try {
     // 1. Setup a test user
-    $tenantId = \App\Models\Tenant::first()?->id ?? 1;
+    $tenantId = User::first()?->tenant_id ?? 1;
     $user = User::create([
         'first_name' => 'Test',
         'last_name' => 'Employee',
