@@ -121,19 +121,26 @@ class LeaveRequest extends Model implements AuditableContract
                       }
                   }
 
-                  Attendance::updateOrCreate(
-                      [
-                          'user_id'        => $leaveRequest->user_id,
-                          'tenant_id'      => $leaveRequest->tenant_id,
-                          'check_in_time'  => $tempDate->copy()->startOfDay(),
-                      ],
-                      [
+                  $attendance = Attendance::where('user_id', $leaveRequest->user_id)
+                      ->whereDate('check_in_time', $tempDate)
+                      ->first();
+
+                  if ($attendance) {
+                      $attendance->update([
+                          'leave_request_id' => $leaveRequest->id,
+                          'status'           => ($attendance->check_in_time && $attendance->check_in_time->format('H:i') !== '00:00') ? $attendance->status : $attendanceStatus,
+                      ]);
+                  } else {
+                      Attendance::create([
+                          'user_id'          => $leaveRequest->user_id,
+                          'tenant_id'        => $leaveRequest->tenant_id,
+                          'check_in_time'    => $tempDate->copy()->startOfDay(),
                           'status'           => $attendanceStatus,
                           'shift_id'         => $user->shift_id,
                           'leave_request_id' => $leaveRequest->id,
                           'created_by_id'    => auth()->id() ?? $user->id,
-                      ]
-                  );
+                      ]);
+                  }
               }
               $tempDate->addDay();
           }

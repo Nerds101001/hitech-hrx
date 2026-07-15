@@ -792,11 +792,14 @@ class UserDashboardController extends Controller
                 return Carbon::parse($h->date)->toDateString() === $dateStr;
             });
 
-            // 2. Check Attendance
-            $attendance = $attendancesDb->first(function($a) use ($dateStr) {
+            // 2. Check Attendance (prioritize real punches over dummy 00:00 leave logs)
+            $attendance = $attendancesDb->filter(function($a) use ($dateStr) {
                 return ($a->check_in_time && $a->check_in_time->toDateString() === $dateStr) || 
                        (!$a->check_in_time && $a->created_at->toDateString() === $dateStr);
-            });
+            })->sortByDesc(function($a) {
+                $isDummy = $a->check_in_time && $a->check_in_time->format('H:i') === '00:00';
+                return $isDummy ? 0 : 1;
+            })->first();
 
             // 3. Check Leave
             $leave = $leavesDb->first(function($l) use ($dateStr) {
@@ -808,27 +811,61 @@ class UserDashboardController extends Controller
                 $dayData['status'] = 'Holiday';
                 $dayData['dynamic_status'] = 'holiday';
                 $dayData['holiday_name'] = $holiday->name;
-            } elseif ($attendance && strtolower($attendance->status) !== 'absent') {
+            } elseif ($attendance && (strtolower($attendance->status) !== 'absent' || ($attendance->check_in_time && $attendance->check_out_time))) {
                 $dayData['check_in_time'] = $attendance->check_in_time;
                 $dayData['check_out_time'] = $attendance->check_out_time;
                 $dayData['admin_reason'] = $attendance->admin_reason;
 
                 $s = strtolower($attendance->status ?: 'present');
                 
-                // Dynamic enforcement of 7:45 threshold rule (465 mins)
-                if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
+                // Dynamic enforcement of 7:45 threshold rule (465 mins) and leave mapping
+                if (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time && !in_array($s, ['paid_leave', 'unpaid_leave', 'on_leave', 'leave', 'wfh', 'work_from_home'])) {
                     $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-                    if ($mins < 465 && $s === 'present') {
-                        $s = 'half-day';
+                    if ($mins >= 465) {
+                        // Keep original status
+                    } else {
+                        $halfLeave = ($attendance->leaveRequest && $attendance->leaveRequest->is_half_day) ? $attendance->leaveRequest : null;
+                        if ($halfLeave && $halfLeave->leaveType?->is_paid && !$halfLeave->is_lwp) {
+                            $s = 'half-day-paid';
+                        } else {
+                            $s = 'half-day';
+                        }
                     }
+                }
+
+                $isShortLeaveDay = ($attendance->leaveRequest
+                        && ($attendance->leaveRequest->is_short_leave || ($attendance->leaveRequest->leaveType->is_short_leave ?? false)))
+                    || ($leave
+                        && ($leave->is_short_leave || ($leave->leaveType->is_short_leave ?? false)));
+
+                if ($isShortLeaveDay) {
+                    /* Short leave: check actual punch >= 350 min (5h 50m) */
+                    $hasRealPunch = $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
+                    $shortMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
+                    if ($shortMins >= 350) {
+                        $s = 'present';
+                    } elseif ($shortMins > 0) {
+                        $s = 'half-day';
+                    } else {
+                        $s = 'paid_leave';
+                    }
+                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && !$attendance->check_out_time
+                    && $date->isPast() && !$date->isToday() && in_array($s, ['present', 'late'])) {
+                    /* Punched in but never punched out on a past day = missed punch, not a full Present */
+                    $s = 'miss-punch';
                 }
 
                 $dayData['dynamic_status'] = $s;
 
-                if ($s === 'late') {
+                if ($s === 'miss-punch') {
+                    $dayData['status'] = 'Miss Punch';
+                } elseif ($s === 'late') {
                     $dayData['status'] = 'Late';
                     $lateDays++;
                     $presentDays++;
+                } elseif ($s === 'half-day-paid') {
+                    $dayData['status'] = 'Half Day (HD-PL)';
+                    $presentDays += 1;
                 } elseif ($s === 'half-day' || $s === 'half-Day') {
                     $dayData['status'] = 'Half Day';
                     $presentDays += 0.5;
@@ -993,7 +1030,14 @@ class UserDashboardController extends Controller
             $attendance = $attendances->first(function($a) use ($dateStr) {
                 return $a->check_in_time->toDateString() === $dateStr;
             });
-            
+
+            // Approved leave covering this date (needed in both branches: an
+            // approved short leave may not be linked on the attendance row)
+            $dayLeave = $leaves->first(function($l) use ($dateStr) {
+                return Carbon::parse($l->from_date)->toDateString() <= $dateStr &&
+                       Carbon::parse($l->to_date)->toDateString() >= $dateStr;
+            });
+
             if ($attendance) {
                 $dayData['in'] = $attendance->check_in_time->format('h:i A');
                 $dayData['out'] = $attendance->check_out_time ? $attendance->check_out_time->format('h:i A') : '--:--';
@@ -1005,9 +1049,21 @@ class UserDashboardController extends Controller
 
                 $isSunday = $dateObj->isSunday();
                 $s = strtolower($attendance->status ?: 'present');
-                
+
+                $isShortLeave = ($attendance->leaveRequest
+                        && ($attendance->leaveRequest->is_short_leave || ($attendance->leaveRequest->leaveType->is_short_leave ?? false)))
+                    || ($dayLeave
+                        && ($dayLeave->is_short_leave || ($dayLeave->leaveType->is_short_leave ?? false)));
+
                 if ($isSunday && $attendance->check_in_time) {
                     $s = 'sp';
+                } elseif ($isShortLeave) {
+                    /* Short leave: employee was present, just left early - always show as Present */
+                    $s = 'present';
+                } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && !$attendance->check_out_time
+                    && $dateObj->isPast() && !$dateObj->isToday() && in_array($s, ['present', 'late'])) {
+                    /* Punched in but never punched out on a past day = missed punch, not a full Present */
+                    $s = 'miss-punch';
                 } elseif (empty($attendance->admin_reason) && $attendance->check_in_time && $attendance->check_out_time) {
                     $mins = $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
                     if ($mins < 465 && $s === 'present') {
@@ -1017,9 +1073,14 @@ class UserDashboardController extends Controller
 
                 switch($s) {
                     case 'present':
-                        $dayData['status'] = 'Present';
+                        $dayData['status'] = $isShortLeave ? 'Present (Short Leave)' : 'Present';
                         $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = 'bg-teal text-white border-0';
+                        $dayData['class'] = ($isShortLeave ? 'bg-short-leave' : 'bg-teal') . ' text-white border-0';
+                        break;
+                    case 'miss-punch':
+                        $dayData['status'] = 'Miss Punch';
+                        $dayData['icon'] = 'bx-error-circle';
+                        $dayData['class'] = 'bg-miss-punch text-white border-0';
                         break;
                     case 'sp':
                         $dayData['status'] = 'SP';
@@ -1072,16 +1133,13 @@ class UserDashboardController extends Controller
                         }
                         $dayData['status'] = ($isPaid ? 'Paid Leave' : 'Unpaid Leave') . $leaveDetail;
                         $dayData['icon'] = 'bx-calendar';
-                        $dayData['class'] = ($isPaid ? 'bg-teal' : 'bg-orange') . ' text-white border-0';
+                        $dayData['class'] = ($isPaid ? 'bg-indigo-vibrant' : 'bg-purple-vibrant') . ' text-white border-0';
                         break;
                 }
             } else {
                 // Check for Leaves
-                $leave = $leaves->first(function($l) use ($dateStr) {
-                    return Carbon::parse($l->from_date)->toDateString() <= $dateStr && 
-                           Carbon::parse($l->to_date)->toDateString() >= $dateStr;
-                });
-                
+                $leave = $dayLeave;
+
                 if ($leave) {
                     $dayData['status'] = 'Leave';
                     $dayData['icon'] = 'bx-calendar';
