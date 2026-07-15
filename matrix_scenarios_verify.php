@@ -16,6 +16,7 @@ DB::beginTransaction();
 
 try {
     // 1. Setup a test user
+    $tenantId = \App\Models\Tenant::first()?->id ?? 1;
     $user = User::create([
         'first_name' => 'Test',
         'last_name' => 'Employee',
@@ -24,6 +25,7 @@ try {
         'code' => 'TEST999',
         'biometric_id' => '99999',
         'status' => \App\Enums\UserAccountStatus::ACTIVE,
+        'tenant_id' => $tenantId,
     ]);
 
     // 2. Fetch or create leave types
@@ -48,7 +50,7 @@ try {
         LeaveBalance::firstOrCreate([
             'user_id' => $user->id,
             'leave_type_id' => $lt->id,
-            'tenant_id' => $user->tenant_id
+            'tenant_id' => $tenantId
         ], [
             'balance' => 10.0,
             'used' => 0.0
@@ -248,7 +250,8 @@ try {
                 'is_short_leave' => $sc['leave']['short'] ?? false,
                 'is_half_day' => $sc['leave']['half'] ?? false,
                 'is_lwp' => !($sc['leave']['paid'] ?? true),
-                'status' => LeaveRequestStatus::APPROVED
+                'status' => LeaveRequestStatus::APPROVED,
+                'tenant_id' => $tenantId,
             ]);
             $leave->load('leaveType');
         }
