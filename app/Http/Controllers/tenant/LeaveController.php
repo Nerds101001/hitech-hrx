@@ -43,7 +43,9 @@ class LeaveController extends Controller
       $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
       $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
       
-      $leaveQuery = LeaveRequest::query()->with(['user', 'leaveType', 'user.department', 'approvedBy']);
+      $leaveQuery = LeaveRequest::query()->with(['user', 'user.department', 'approvedBy', 'leaveType' => function ($q) {
+        $q->withTrashed(); // old requests may point to soft-deleted types; still show their name
+      }]);
       $odQuery = OutdoorDuty::query()->with(['user', 'user.department', 'approvedBy']);
 
       if ($isManager) {
@@ -106,16 +108,24 @@ class LeaveController extends Controller
 
       // Get collections
       $leaves = $leaveQuery->get()->map(function($item) {
-          $name = $item->leaveType->name ?? 'N/A';
-          
+          // Short leave is detected from the type OR the request's own flag,
+          // so rows whose type record is missing still classify correctly
+          $isShortItem = $item->is_short_leave || ($item->leaveType->is_short_leave ?? false);
+
           if ($item->leaveType) {
-              if ($item->leaveType->is_short_leave) {
-                  $name .= ' <span class="badge bg-label-primary ms-1" style="font-size:0.65rem; font-weight:600;">SHORT LEAVE</span>';
-              } elseif ($item->is_half_day) {
-                  $sessionStr = $item->half_day_session ? str_replace('_', ' ', $item->half_day_session) : 'Half Day';
-                  $name .= ' <span class="badge bg-label-info ms-1" style="font-size:0.65rem; font-weight:600;">HALF DAY (' . strtoupper($sessionStr) . ')</span>';
-              }
-              
+              $name = $item->leaveType->name;
+          } else {
+              $name = $isShortItem ? 'Short Leave' : 'N/A';
+          }
+
+          if ($isShortItem) {
+              $name .= ' <span class="badge ms-1" style="font-size:0.65rem; font-weight:700; background:#0dcaf0; color:#000;">SHORT LEAVE</span>';
+          } elseif ($item->is_half_day) {
+              $sessionStr = $item->half_day_session ? str_replace('_', ' ', $item->half_day_session) : 'Half Day';
+              $name .= ' <span class="badge ms-1" style="font-size:0.65rem; font-weight:700; background:#6610f2; color:#fff;">HALF DAY (' . strtoupper($sessionStr) . ')</span>';
+          }
+
+          if ($item->leaveType) {
               if ($item->leaveType->is_paid) {
                   $name .= ' <span class="badge bg-label-success ms-1" style="font-size:0.65rem; font-weight:600;">PAID</span>';
               } else {
