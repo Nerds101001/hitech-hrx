@@ -27,11 +27,11 @@ try {
     ]);
 
     // 2. Fetch or create leave types
-    $paidType = LeaveType::where('is_paid', true)->where('is_short_leave', false)->where('is_half_day', false)->first();
+    $paidType = LeaveType::where('is_paid', true)->where('is_short_leave', false)->first();
     if (!$paidType) {
         $paidType = LeaveType::create(['name' => 'Paid Leave', 'code' => 'PL', 'is_paid' => true]);
     }
-    $unpaidType = LeaveType::where('is_paid', false)->where('is_short_leave', false)->where('is_half_day', false)->first();
+    $unpaidType = LeaveType::where('is_paid', false)->where('is_short_leave', false)->first();
     if (!$unpaidType) {
         $unpaidType = LeaveType::create(['name' => 'Unpaid Leave', 'code' => 'LWP', 'is_paid' => false]);
     }
@@ -41,10 +41,7 @@ try {
         $shortType = LeaveType::create(['name' => 'Short Leave', 'code' => 'SL', 'is_short_leave' => true, 'is_paid' => true]);
     }
 
-    $halfPaidType = LeaveType::where('is_paid', true)->where('is_half_day', true)->first();
-    if (!$halfPaidType) {
-        $halfPaidType = LeaveType::create(['name' => 'Half Paid Leave', 'code' => 'HPL', 'is_paid' => true, 'is_half_day' => true]);
-    }
+    $halfPaidType = $paidType;
 
     // Set balances
     LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $paidType->id, 'balance' => 10, 'used' => 0]);
