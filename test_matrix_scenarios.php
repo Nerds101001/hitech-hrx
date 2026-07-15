@@ -11,10 +11,17 @@ use App\Models\Holiday;
 use App\Enums\LeaveRequestStatus;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Event;
 
 DB::beginTransaction();
 
 try {
+    Mail::fake();
+    Notification::fake();
+    Event::fake();
+
     // 1. Setup a test user
     $user = User::create([
         'first_name' => 'Test',
