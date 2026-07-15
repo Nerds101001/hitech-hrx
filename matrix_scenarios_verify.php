@@ -221,8 +221,15 @@ try {
     echo "Running " . count($scenarios) . " scenarios...\n";
     $success = true;
     
+    $dayOffset = 10;
     foreach ($scenarios as $idx => $sc) {
-        $dateStr = '2026-07-' . sprintf('%02d', 10 + $idx);
+        $dateObj = Carbon::create(2026, 7, $dayOffset);
+        while ($dateObj->isSunday()) {
+            $dayOffset++;
+            $dateObj = Carbon::create(2026, 7, $dayOffset);
+        }
+        $dateStr = $dateObj->toDateString();
+        $dayOffset++;
         
         $leave = null;
         if ($sc['leave']) {
@@ -236,6 +243,7 @@ try {
                 'is_lwp' => !($sc['leave']['paid'] ?? true),
                 'status' => LeaveRequestStatus::APPROVED
             ]);
+            $leave->load('leaveType');
         }
 
         $att = Attendance::create([
