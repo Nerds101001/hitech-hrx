@@ -43,10 +43,17 @@ try {
 
     $halfPaidType = $paidType;
 
-    // Set balances
-    LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $paidType->id, 'balance' => 10, 'used' => 0]);
-    LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $shortType->id, 'balance' => 10, 'used' => 0]);
-    LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $halfPaidType->id, 'balance' => 10, 'used' => 0]);
+    // Set balances for all leave types to guarantee no LWP auto-assignment
+    foreach (LeaveType::all() as $lt) {
+        LeaveBalance::firstOrCreate([
+            'user_id' => $user->id,
+            'leave_type_id' => $lt->id,
+            'tenant_id' => $user->tenant_id
+        ], [
+            'balance' => 10.0,
+            'used' => 0.0
+        ]);
+    }
 
     // 3. Define the scenarios
     $scenarios = [
