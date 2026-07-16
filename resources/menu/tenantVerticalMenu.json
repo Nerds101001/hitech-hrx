@@ -293,11 +293,7 @@
                     "name": "Scorecards",
                     "slug": "performance.scorecards.index",
                     "roles": [
-                        "admin",
-                        "hr",
-                        "manager",
-                        "employee",
-                        "accounts"
+                        "admin"
                     ]
                 },
                 {
@@ -305,10 +301,7 @@
                     "name": "90-Day Goals",
                     "slug": "performance.ninety-day-goals.index",
                     "roles": [
-                        "admin",
-                        "hr",
-                        "manager",
-                        "employee"
+                        "admin"
                     ]
                 },
                 {

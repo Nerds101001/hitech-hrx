@@ -915,14 +915,16 @@ Route::middleware([
 
 
     Route::prefix('performance')->name('performance.')->group(function () {
-        Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
-        Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
-        Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
-        Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
-        
-        Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
-        Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
-        Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
-        Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
+        Route::middleware(['role:admin'])->group(function () {
+            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
+            
+            Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
+            Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
+            Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
+            Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
+        });
     });
 });
