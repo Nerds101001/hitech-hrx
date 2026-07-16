@@ -281,11 +281,7 @@
                 "performance.ninety-day-goals.index"
             ],
             "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
+                "admin"
             ],
             "submenu": [
                 {
@@ -309,9 +305,7 @@
                     "name": "KPI / KRA (Manage)",
                     "slug": "tenant.kpi.manage",
                     "roles": [
-                        "admin",
-                        "hr",
-                        "manager"
+                        "admin"
                     ]
                 },
                 {
@@ -319,10 +313,7 @@
                     "name": "My KPI / KRA",
                     "slug": "tenant.kpi.my",
                     "roles": [
-                        "admin",
-                        "hr",
-                        "manager",
-                        "employee"
+                        "admin"
                     ]
                 }
             ]

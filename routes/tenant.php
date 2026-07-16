@@ -797,18 +797,15 @@ Route::middleware([
             Route::post('/store', [\App\Http\Controllers\tenant\WorkControlController::class, 'store'])->name('store');
         });
 
-        // KPI / KRA (DWM-driven). Employee self-view + HR/Manager management.
-        Route::prefix('kpi')->name('tenant.kpi.')->group(function () {
+        // KPI / KRA (DWM-driven). Restricted to Admin only.
+        Route::middleware(['role:admin'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/my', [\App\Http\Controllers\tenant\KpiController::class, 'my'])->name('my');
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
-
-            Route::middleware('role:admin|hr|manager')->group(function () {
-                Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
-                Route::post('/store', [\App\Http\Controllers\tenant\KpiController::class, 'store'])->name('store');
-                Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
-                Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
-                Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
-            });
+            Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
+            Route::post('/store', [\App\Http\Controllers\tenant\KpiController::class, 'store'])->name('store');
+            Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
+            Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
+            Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
         });
     });
 
