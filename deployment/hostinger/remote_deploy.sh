@@ -61,6 +61,8 @@ fi
 
 echo "[7/8] Running framework optimizations and migrations..."
 php artisan optimize:clear
+php artisan cache:clear
+php artisan config:clear
 if ! php artisan migrate --force --no-interaction; then
   echo "[7.0/8] migrate skipped due existing schema conflict; continuing deployment."
 fi

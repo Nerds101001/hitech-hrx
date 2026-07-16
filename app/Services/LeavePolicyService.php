@@ -46,6 +46,23 @@ class LeavePolicyService
             return 'You already have an active leave request (Pending or Approved) that overlaps with these dates. Please wait for the current one to be processed or cancelled.';
         }
 
+        // --- Short Leave: strictly one per month, enforced even when no
+        // policy rule is configured for the type ---
+        if ($leaveType && $leaveType->is_short_leave) {
+            $usedThisMonth = LeaveRequest::where('user_id', $user->id)
+                ->whereHas('leaveType', function($q) {
+                    $q->where('is_short_leave', true);
+                })
+                ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
+                ->whereYear('from_date', $from->year)
+                ->whereMonth('from_date', $from->month)
+                ->count();
+
+            if ($usedThisMonth >= 1) {
+                return 'You have already consumed your short leave for this month.';
+            }
+        }
+
         // --- 3. Policy Enforcement ---
         $rule = null;
         if ($profile) {
@@ -94,21 +111,8 @@ class LeavePolicyService
             }
         }
 
-        // Short Leave Check
+        // Short Leave hours cap (monthly limit already enforced above)
         if ($leaveType && $leaveType->is_short_leave) {
-            $usedThisMonth = LeaveRequest::where('user_id', $user->id)
-                ->whereHas('leaveType', function($q) {
-                    $q->where('is_short_leave', true);
-                })
-                ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
-                ->whereYear('from_date', $from->year)
-                ->whereMonth('from_date', $from->month)
-                ->count();
-            
-            if ($usedThisMonth >= 1) {
-                return "You cannot apply for more than 1 short leave in a month.";
-            }
-
             if ($hours && $rule && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {
                 return "You can only apply for a maximum of {$rule->short_leave_hours} hours for this short leave.";
             }

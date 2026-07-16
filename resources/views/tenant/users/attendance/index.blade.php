@@ -107,15 +107,6 @@
                     </div>
                 </div>
 
-                <div class="calendar-only-controls d-none align-items-center gap-2 ms-1 border-start ps-3">
-                    <div class="calendar-legend-mini d-none d-xl-flex gap-2">
-                        <span class="l-dot bg-teal" title="Present"></span>
-                        <span class="l-dot bg-orange" title="Late"></span>
-                        <span class="l-dot bg-red" title="Absent"></span>
-                        <span class="l-dot bg-indigo" title="Leave"></span>
-                    </div>
-                </div>
-
                 {{-- 4. Options (Right) --}}
                 <div class="ms-auto d-flex align-items-center gap-2">
                     <button type="button" class="btn btn-label-secondary hitech-btn-sm-compact px-2" title="Export as Excel">
@@ -124,6 +115,8 @@
                 </div>
             </div>
         </div>
+
+        @include('_partials.attendance_legend')
 
         <div class="tab-content border-0 p-0">
             {{-- LIST VIEW --}}
@@ -187,6 +180,7 @@
                                     $label = 'Present';
                                     
                                     if ($ds === 'absent') { $bgClass = 'danger'; $label = 'Absent'; }
+                                    elseif ($ds === 'miss-punch') { $bgClass = 'miss-punch'; $label = 'Miss Punch'; }
                                     elseif ($ds === 'late') { $bgClass = 'warning'; $label = 'Late'; }
                                     elseif ($ds === 'half-day') { $bgClass = 'warning'; $label = 'Half Day'; }
                                     elseif ($ds === 'on_leave' || $ds === 'leave') { $bgClass = 'info'; $label = $attendance->holiday_name ?? 'On Leave'; }
@@ -380,19 +374,23 @@
         const calendarControls = document.querySelector('.calendar-only-controls');
 
         listTab.addEventListener('shown.bs.tab', function () {
-            calendarControls.classList.add('d-none');
+            if (calendarControls) calendarControls.classList.add('d-none');
         });
 
         calendarTab.addEventListener('shown.bs.tab', function () {
-            calendarControls.classList.remove('d-none');
-            calendarControls.classList.add('d-flex');
+            if (calendarControls) {
+                calendarControls.classList.remove('d-none');
+                calendarControls.classList.add('d-flex');
+            }
             fetchCalendarData(currentMonth, currentYear);
         });
 
         // Initialize display for current state
         if (calendarTab.classList.contains('active')) {
-            calendarControls.classList.remove('d-none');
-            calendarControls.classList.add('d-flex');
+            if (calendarControls) {
+                calendarControls.classList.remove('d-none');
+                calendarControls.classList.add('d-flex');
+            }
             fetchCalendarData(currentMonth, currentYear);
         }
     });

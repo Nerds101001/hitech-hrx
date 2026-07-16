@@ -129,10 +129,7 @@ $customizerHidden = 'customizer-hide';
                 <div style="font-size: 14px;">{{ session('error') }}</div>
               </div>
               @if(str_contains(session('error'), 'locked') || str_contains(session('error'), 'blocked'))
-                <form action="{{ route('auth.unlock.request') }}" method="POST" class="ms-2">
-                  @csrf
-                  <button type="submit" class="btn btn-sm btn-outline-danger" style="border-radius: 8px; font-size: 12px; white-space: nowrap;">Request Unlock</button>
-                </form>
+                <a href="{{ route('auth.unlock.request.form') }}" target="_blank" class="btn btn-sm btn-outline-danger ms-2" style="border-radius: 8px; font-size: 12px; white-space: nowrap;">Request Unlock</a>
               @endif
             </div>
           @endif

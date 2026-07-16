@@ -25,7 +25,8 @@ Route::middleware('web')->group(function () {
   Route::post('two-factor/resend', [AuthController::class, 'resendOtp'])->name('auth.otp.resend');
 
   // Unlock Routes
-  Route::post('account/unlock-request', [AuthController::class, 'requestUnlock'])->name('auth.unlock.request');
+  Route::get('account/unlock-request', [AuthController::class, 'showUnlockRequestForm'])->name('auth.unlock.request.form');
+  Route::post('account/unlock-request', [AuthController::class, 'requestUnlock'])->middleware('throttle:5,15')->name('auth.unlock.request');
   Route::get('account/unlock/{user}', [AuthController::class, 'unlockAccount'])->name('auth.unlock');
 
   // Secure Document Proxy

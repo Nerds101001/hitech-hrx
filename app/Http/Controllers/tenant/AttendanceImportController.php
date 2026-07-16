@@ -40,9 +40,10 @@ class AttendanceImportController extends Controller
             }
         }
 
-        // Preload users into memory
-        $usersByBiometric = \App\Models\User::whereNotNull('biometric_id')->get()->keyBy('biometric_id');
-        $usersByCode = \App\Models\User::whereNotNull('code')->get()->keyBy('code');
+        // Preload users into memory (terminated staff excluded — they must
+        // not receive imported attendance)
+        $usersByBiometric = \App\Models\User::notTerminated()->whereNotNull('biometric_id')->get()->keyBy('biometric_id');
+        $usersByCode = \App\Models\User::notTerminated()->whereNotNull('code')->get()->keyBy('code');
 
         if ($isReportFormat) {
             // Smart Parser for DLF Manesar style reports
@@ -128,19 +129,23 @@ class AttendanceImportController extends Controller
 
     public function storeBiometricImport(Request $request)
     {
+        // Large imports on shared hosting were being cut short by execution
+        // limits and, more often, a transient DB disconnect mid-loop which
+        // (with no per-row guard) aborted every remaining row silently.
+        @set_time_limit(0);
+        @ini_set('memory_limit', '1024M');
+
         $records = \Illuminate\Support\Facades\Cache::get('biometric_import_' . auth()->id());
         if (!$records) {
             return redirect()->back()->with('error', 'Import session expired or invalid. Please upload the file again.');
         }
         \Illuminate\Support\Facades\Cache::forget('biometric_import_' . auth()->id());
-        
-        $count = 0;
 
         // Preload User Data
         $userIds = collect($records)->pluck('user_id')->filter()->unique();
         $usersById = \App\Models\User::with(['department', 'designation', 'shift'])->whereIn('id', $userIds)->get()->keyBy('id');
         $salesUserIds = \App\Models\CcSalespersonMap::whereIn('sales_user_id', $userIds)->pluck('sales_user_id')->toArray();
-        
+
         // Parse dates safely for preloading attendances
         $dates = collect($records)->pluck('date')->map(function($dateStr) {
             try {
@@ -167,106 +172,162 @@ class AttendanceImportController extends Controller
 
         $attendanceService = new \App\Services\Api\Attendance\AttendanceService();
 
+        $created = 0; $updated = 0; $skippedSales = 0; $skippedLeave = 0; $notFound = 0;
+        $failed = [];
+
         foreach ($records as $record) {
-            if (empty($record['user_id'])) continue;
-
-            // Robust Date Parsing for Indian Standard (d/m/Y) or others
-            $dateStr = $record['date'];
-            try {
-                if (str_contains($dateStr, '/')) {
-                    $date = Carbon::createFromFormat('d/m/Y', $dateStr)->format('Y-m-d');
-                } else {
-                    $date = Carbon::parse($dateStr)->format('Y-m-d');
-                }
-            } catch (\Exception $e) {
+            // Each row is isolated: a bad row or a transient DB drop must not
+            // abort the rest of the import. Transient DB errors are retried
+            // once after reconnecting.
+            for ($attempt = 1; $attempt <= 2; $attempt++) {
                 try {
-                    $date = Carbon::parse($dateStr)->format('Y-m-d');
-                } catch (\Exception $e2) {
-                    continue; // Skip invalid date
+                    $result = $this->syncOneBiometric($record, $usersById, $salesUserIds, $existingAttendancesGroup, $attendanceService);
+                    switch ($result) {
+                        case 'created': $created++; break;
+                        case 'updated': $updated++; break;
+                        case 'skipped_sales': $skippedSales++; break;
+                        case 'skipped_leave': $skippedLeave++; break;
+                        case 'not_found': $notFound++; break;
+                    }
+                    break; // success, stop retrying
+                } catch (\Illuminate\Database\QueryException $e) {
+                    $transient = in_array((string)$e->getCode(), ['2002', '2006', 'HY000', '1205', '1213', '40001'], true);
+                    if ($attempt === 1 && $transient) {
+                        try { \Illuminate\Support\Facades\DB::reconnect(); } catch (\Throwable $ignore) {}
+                        usleep(250000); // 0.25s backoff, then retry this row
+                        continue;
+                    }
+                    $failed[] = ($record['biometric_id'] ?? '?') . ' / ' . ($record['date'] ?? '?') . ' — ' . substr($e->getMessage(), 0, 100);
+                    break;
+                } catch (\Throwable $e) {
+                    $failed[] = ($record['biometric_id'] ?? '?') . ' / ' . ($record['date'] ?? '?') . ' — ' . substr($e->getMessage(), 0, 100);
+                    break;
                 }
             }
-
-            $checkIn = !empty($record['check_in']) && $record['check_in'] !== '--' ? Carbon::parse($date . ' ' . $record['check_in']) : null;
-            $checkOut = !empty($record['check_out']) && $record['check_out'] !== '--' ? Carbon::parse($date . ' ' . $record['check_out']) : null;
-
-            $user = $usersById->get($record['user_id']);
-            if (!$user) continue;
-            
-            // ----------------------------------------------------
-            // 1. Skip Salesperson (they are marked manually by CCARE)
-            // ----------------------------------------------------
-            $isSales = false;
-            if ($user->department && stripos($user->department->name, 'Sales') !== false) {
-                $isSales = true;
-            }
-            if ($user->designation && stripos($user->designation->name, 'Sales') !== false) {
-                $isSales = true;
-            }
-            if (in_array($user->id, $salesUserIds)) {
-                $isSales = true;
-            }
-
-            if ($isSales) {
-                \Illuminate\Support\Facades\Log::info("Biometric Import: Skipped Salesperson " . $user->code);
-                continue;
-            }
-
-            // ----------------------------------------------------
-            // 2. Prevent overriding approved leaves and duplicates
-            // ----------------------------------------------------
-            $attendanceGroup = $existingAttendancesGroup->get($user->id . '_' . $date);
-            $attendance = $attendanceGroup ? $attendanceGroup->first() : null;
-
-            $leaveStatuses = ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-day'];
-            if ($attendance && in_array(strtolower(str_replace('_', '-', $attendance->status)), $leaveStatuses)) {
-                \Illuminate\Support\Facades\Log::info("Biometric Import: Skipped {$user->code} for $date because of existing leave: {$attendance->status}");
-                continue;
-            }
-
-            // Centralized calculation logic (replaces 60+ individual lines)
-            $calc = $attendanceService->calculateDayStatus($user, $date, $checkIn, $checkOut);
-
-            $safeCheckIn = $checkIn ?: \Carbon\Carbon::parse($date)->startOfDay();
-
-            if ($attendance) {
-                $attendance->update([
-                    'check_in_time' => $safeCheckIn,
-                    'check_out_time' => $checkOut ?: $attendance->check_out_time,
-                    'status' => $calc['status'],
-                    'tenant_id' => auth()->user()->tenant_id,
-                    'is_policy_late' => $calc['is_policy_late'] ?? false,
-                    'leave_request_id' => $calc['leave_request_id'] ?? null,
-                ]);
-            } else {
-                $attendance = \App\Models\Attendance::create([
-                    'user_id' => $record['user_id'],
-                    'check_in_time' => $safeCheckIn,
-                    'check_out_time' => $checkOut,
-                    'status' => $calc['status'],
-                    'tenant_id' => auth()->user()->tenant_id,
-                    'is_policy_late' => $calc['is_policy_late'] ?? false,
-                    'leave_request_id' => $calc['leave_request_id'] ?? null,
-                    'created_at' => \Carbon\Carbon::parse($date)->startOfDay()
-                ]);
-            }
-
-            if ($checkIn) {
-                \App\Models\AttendanceLog::updateOrCreate(
-                    ['attendance_id' => $attendance->id, 'type' => 'check_in'],
-                    ['created_at' => $checkIn, 'tenant_id' => auth()->user()->tenant_id]
-                );
-            }
-
-            if ($checkOut) {
-                \App\Models\AttendanceLog::updateOrCreate(
-                    ['attendance_id' => $attendance->id, 'type' => 'check_out'],
-                    ['created_at' => $checkOut, 'tenant_id' => auth()->user()->tenant_id]
-                );
-            }
-            $count++;
         }
 
-        return redirect()->route('attendance.index')->with('success', "$count Attendance records synced successfully.");
+        $synced = $created + $updated;
+        $msg = "Import finished: {$synced} records synced ({$created} new, {$updated} updated).";
+        if ($skippedSales) $msg .= " Skipped {$skippedSales} sales (marked by CCare).";
+        if ($skippedLeave) $msg .= " Skipped {$skippedLeave} on approved leave.";
+        if ($notFound) $msg .= " {$notFound} rows had no matching employee.";
+
+        if (!empty($failed)) {
+            \Illuminate\Support\Facades\Log::warning('Biometric Import failures (' . count($failed) . '): ' . implode(' | ', array_slice($failed, 0, 50)));
+            $msg .= " " . count($failed) . " rows FAILED and were NOT imported — re-upload the file to retry only those.";
+            return redirect()->route('attendance.index')
+                ->with('warning', $msg)
+                ->with('import_failures', array_slice($failed, 0, 100));
+        }
+
+        return redirect()->route('attendance.index')->with('success', $msg);
+    }
+
+    /**
+     * Sync a single biometric preview record. Returns a result code:
+     * created | updated | skipped_sales | skipped_leave | not_found.
+     * Throws on DB errors so the caller can retry/report per-row.
+     */
+    private function syncOneBiometric(array $record, $usersById, array $salesUserIds, $existingAttendancesGroup, $attendanceService): string
+    {
+        if (empty($record['user_id'])) return 'not_found';
+
+        // Robust Date Parsing for Indian Standard (d/m/Y) or others
+        $dateStr = $record['date'];
+        try {
+            $date = str_contains($dateStr, '/')
+                ? Carbon::createFromFormat('d/m/Y', $dateStr)->format('Y-m-d')
+                : Carbon::parse($dateStr)->format('Y-m-d');
+        } catch (\Exception $e) {
+            $date = Carbon::parse($dateStr)->format('Y-m-d'); // final attempt (throws -> caught by caller)
+        }
+
+        $checkIn = !empty($record['check_in']) && $record['check_in'] !== '--' ? Carbon::parse($date . ' ' . $record['check_in']) : null;
+        $checkOut = !empty($record['check_out']) && $record['check_out'] !== '--' ? Carbon::parse($date . ' ' . $record['check_out']) : null;
+
+        $user = $usersById->get($record['user_id']);
+        if (!$user) return 'not_found';
+
+        // 1. Skip Salesperson (marked manually by CCARE)
+        $isSales = ($user->department && stripos($user->department->name, 'Sales') !== false)
+            || ($user->designation && stripos($user->designation->name, 'Sales') !== false)
+            || in_array($user->id, $salesUserIds);
+        if ($isSales) return 'skipped_sales';
+
+        $tenantId = auth()->user()->tenant_id;
+
+        $attendanceGroup = $existingAttendancesGroup->get($user->id . '_' . $date);
+        $attendance = $attendanceGroup ? $attendanceGroup->first() : null;
+
+        // 2. Do not override approved leaves; only attach punch times to them
+        $leaveStatuses = ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-day'];
+        if ($attendance && in_array(strtolower(str_replace('_', '-', $attendance->status)), $leaveStatuses)) {
+            if ($checkIn || $checkOut) {
+                $attendance->update([
+                    'check_in_time' => $checkIn ?: $attendance->check_in_time,
+                    'check_out_time' => $checkOut ?: $attendance->check_out_time,
+                ]);
+                if ($checkIn) {
+                    \App\Models\AttendanceLog::updateOrCreate(
+                        ['attendance_id' => $attendance->id, 'type' => 'check_in'],
+                        ['created_at' => $checkIn, 'tenant_id' => $tenantId]
+                    );
+                }
+                if ($checkOut) {
+                    \App\Models\AttendanceLog::updateOrCreate(
+                        ['attendance_id' => $attendance->id, 'type' => 'check_out'],
+                        ['created_at' => $checkOut, 'tenant_id' => $tenantId]
+                    );
+                }
+                return 'updated';
+            }
+            return 'skipped_leave';
+        }
+
+        $calc = $attendanceService->calculateDayStatus($user, $date, $checkIn, $checkOut);
+        $safeCheckIn = $checkIn ?: Carbon::parse($date)->startOfDay();
+
+        if ($attendance) {
+            $attendance->update([
+                'check_in_time' => $safeCheckIn,
+                'check_out_time' => $checkOut ?: $attendance->check_out_time,
+                'status' => $calc['status'],
+                'tenant_id' => $tenantId,
+                'is_policy_late' => $calc['is_policy_late'] ?? false,
+                'leave_request_id' => $calc['leave_request_id'] ?? null,
+            ]);
+            $wasCreated = false;
+        } else {
+            $attendance = \App\Models\Attendance::create([
+                'user_id' => $record['user_id'],
+                'check_in_time' => $safeCheckIn,
+                'check_out_time' => $checkOut,
+                'status' => $calc['status'],
+                'tenant_id' => $tenantId,
+                'is_policy_late' => $calc['is_policy_late'] ?? false,
+                'leave_request_id' => $calc['leave_request_id'] ?? null,
+                'created_at' => Carbon::parse($date)->startOfDay()
+            ]);
+            // Track in the in-memory group so a duplicate row in the same file
+            // updates instead of creating a second record.
+            $existingAttendancesGroup->put($user->id . '_' . $date, collect([$attendance]));
+            $wasCreated = true;
+        }
+
+        if ($checkIn) {
+            \App\Models\AttendanceLog::updateOrCreate(
+                ['attendance_id' => $attendance->id, 'type' => 'check_in'],
+                ['created_at' => $checkIn, 'tenant_id' => $tenantId]
+            );
+        }
+        if ($checkOut) {
+            \App\Models\AttendanceLog::updateOrCreate(
+                ['attendance_id' => $attendance->id, 'type' => 'check_out'],
+                ['created_at' => $checkOut, 'tenant_id' => $tenantId]
+            );
+        }
+
+        return $wasCreated ? 'created' : 'updated';
     }
 
     public function downloadSample()

@@ -162,11 +162,11 @@
                             </div>
                             <div class="col-md-4 d-flex gap-2">
                                 <div class="position-relative w-50">
-                                    <input type="number" class="form-control duration-hours pe-4 text-dark" name="routines[{{ $index }}][duration_hours]" value="{{ floor($routine->duration_minutes / 60) }}" placeholder="0" min="0" step="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" required oninput="calculateTotals()">
+                                    <input type="number" class="form-control duration-hours pe-4 text-dark" name="routines[{{ $index }}][duration_hours]" value="{{ intdiv((int) round($routine->duration_minutes), 60) }}" placeholder="0" min="0" step="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" required oninput="calculateTotals()">
                                     <span class="position-absolute text-muted fw-bold" style="right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 0.9rem;">h</span>
                                 </div>
                                 <div class="position-relative w-50">
-                                    <input type="number" class="form-control duration-mins pe-4 text-dark" name="routines[{{ $index }}][duration_mins]" value="{{ $routine->duration_minutes % 60 }}" placeholder="0" min="0" max="59" step="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" required oninput="if(this.value > 59) this.value = 59; calculateTotals()">
+                                    <input type="number" class="form-control duration-mins pe-4 text-dark" name="routines[{{ $index }}][duration_mins]" value="{{ ((int) round($routine->duration_minutes)) % 60 }}" placeholder="0" min="0" max="59" step="1" onkeypress="return event.charCode >= 48 && event.charCode <= 57" required oninput="if(this.value > 59) this.value = 59; calculateTotals()">
                                     <span class="position-absolute text-muted fw-bold" style="right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; font-size: 0.9rem;">m</span>
                                 </div>
                             </div>
@@ -294,21 +294,34 @@
             const minsVal = row.querySelector('.duration-mins').value;
             const minutes = (parseInt(hoursVal) || 0) * 60 + (parseInt(minsVal) || 0);
             
+            let dailyEquivalent = 0;
             if (frequency === 'daily') {
-                totalMinutes += minutes;
+                dailyEquivalent = minutes;
+            } else if (frequency === 'weekly') {
+                dailyEquivalent = minutes / 6;
+            } else if (frequency === 'fortnightly') {
+                dailyEquivalent = minutes / 13;
+            } else if (frequency === 'monthly') {
+                dailyEquivalent = minutes / 26;
+            } else if (frequency === 'quarterly') {
+                dailyEquivalent = minutes / 78;
+            } else if (frequency === 'yearly') {
+                dailyEquivalent = minutes / 312;
             }
+            totalMinutes += dailyEquivalent;
         });
         
-        const hours = Math.floor(totalMinutes / 60);
-        const mins = totalMinutes % 60;
+        const totalMinsRounded = Math.round(totalMinutes);
+        const hours = Math.floor(totalMinsRounded / 60);
+        const mins = totalMinsRounded % 60;
         
         document.getElementById('dailyTotalDisplay').textContent = `${hours}h ${mins}m`;
         
         const badge = document.getElementById('headroomBadge');
-        if (totalMinutes > 480) { // 8 hours
+        if (totalMinsRounded > 480) { // 8 hours
             badge.className = 'badge bg-label-danger rounded-pill px-3 py-1';
             badge.textContent = 'OVER SHIFT';
-        } else if (totalMinutes >= 420) { // 7 hours
+        } else if (totalMinsRounded >= 420) { // 7 hours
             badge.className = 'badge bg-label-warning rounded-pill px-3 py-1';
             badge.textContent = 'NEAR LIMIT';
         } else {

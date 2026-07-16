@@ -73,6 +73,20 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   }
 
   /**
+   * Exclude terminated employees. Apply to operational selectors / dropdowns
+   * so terminated staff never appear where work is assigned or listed, while
+   * HR employee-management pages keep showing them for records.
+   */
+  public function scopeNotTerminated($query)
+  {
+    $table = $this->getTable();
+    return $query->where(function ($q) use ($table) {
+      $q->where($table . '.status', '!=', UserAccountStatus::TERMINATED->value)
+        ->orWhereNull($table . '.status');
+    });
+  }
+
+  /**
    * The attributes that are mass assignable.
    *
    * @var array<int, string>

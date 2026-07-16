@@ -334,6 +334,7 @@ function loadMonthlyRegistry() {
                     if(day.status === 'Present') inner = '<i class="bx bx-check text-white"></i>';
                     if(day.status === 'Half Day') inner = '<i class="bx bx-time text-white"></i>';
                     if(day.status === 'Absent') inner = '<small class="fw-bold text-white" style="font-size:0.5rem;">ABS</small>';
+                    if(day.status === 'Miss Punch') inner = '<small class="fw-bold text-white" style="font-size:0.5rem;" title="Punch-out missing - HR/Admin must correct with remarks">MP</small>';
                     if(day.status === 'Holiday') inner = '<small class="fw-bold text-info" style="font-size:0.55rem;">HOL</small>';
                     if(day.status === 'OFF') inner = '<small class="fw-bold text-muted" style="font-size:0.55rem;">OFF</small>';
                     if(day.status && day.status.startsWith('SP')) inner = '<small class="fw-bold text-white" style="font-size:0.55rem;">SP</small>';
@@ -403,6 +404,7 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
     if(status === 'Present' || status === 'Full Day' || status === 'Paid Leave') badgeClass = 'teal';
     if(status === 'Late' || status === 'Half Day') badgeClass = 'orange';
     if(status === 'Absent') badgeClass = 'danger';
+    if(status === 'Miss Punch') badgeClass = 'danger';
     if(status === 'Holiday') badgeClass = 'info';
     if(status === 'Leave' || status === 'Unpaid Leave') badgeClass = 'purple-vibrant';
     if(status === 'WFH') badgeClass = 'indigo-vibrant';

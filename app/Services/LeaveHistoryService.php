@@ -24,7 +24,9 @@ class LeaveHistoryService
         $userId = $user->id;
 
         // 1. Fetch Leave Requests via relationship to ensure scopes are handled
-        $requests = $user->leaveRequests()->with('leaveType')->get();
+        $requests = $user->leaveRequests()->with(['leaveType' => function ($q) {
+            $q->withTrashed(); // old requests may reference soft-deleted types
+        }])->get();
         foreach ($requests as $leave) {
             $history->push((object)[
                 'id'         => 'REQ-' . $leave->id,

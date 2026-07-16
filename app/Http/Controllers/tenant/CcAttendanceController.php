@@ -63,7 +63,7 @@ class CcAttendanceController extends Controller
         $request->validate([
             'date' => 'required|date',
             'attendance' => 'required|array',
-            'attendance.*' => 'in:Present,Absent,Work from home half day,Sunday working',
+            'attendance.*' => 'in:Present,Absent,Work from home,Half day,Sunday working',
             'notes' => 'nullable|array',
             'notes.*' => 'nullable|string'
         ]);
@@ -97,24 +97,26 @@ class CcAttendanceController extends Controller
             }
 
             $dbStatus = $status;
-            $checkIn = Carbon::parse($date)->startOfDay();
-            $checkOut = null;
             $note = $request->notes[$userId] ?? null;
 
-            $adminReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
-
-            if ($dbStatus === 'Present') {
-                $checkIn = Carbon::parse($date . ' 09:30:00');
-                $checkOut = Carbon::parse($date . ' 18:30:00');
-            }
+            $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
+            [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $date);
+            $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
 
             if ($attendance) {
-                $attendance->update([
+                $updateData = [
                     'status' => $dbStatus,
                     'notes' => $note,
                     'admin_reason' => $adminReason,
                     'updated_by_id' => $authId
-                ]);
+                ];
+                // Keep real biometric punches if the row already has them
+                $hasRealPunch = $attendance->check_in_time && $attendance->check_in_time->format('H:i') !== '00:00';
+                if (!$hasRealPunch) {
+                    $updateData['check_in_time'] = $checkIn;
+                    $updateData['check_out_time'] = $checkOut;
+                }
+                $attendance->update($updateData);
             } else {
                 Attendance::create([
                     'user_id' => $userId,
@@ -220,24 +222,26 @@ class CcAttendanceController extends Controller
                 }
 
                 $dbStatus = $status;
-                $checkIn = Carbon::parse($dateStr)->startOfDay();
-                $checkOut = null;
                 $note = $request->notes[$userId][$dateStr] ?? null;
-                
-                $adminReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
-                
-                if ($dbStatus === 'Present') {
-                    $checkIn = Carbon::parse($dateStr . ' 09:30:00');
-                    $checkOut = Carbon::parse($dateStr . ' 18:30:00');
-                }
+
+                $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
+                [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $dateStr);
+                $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
 
                 if ($existing) {
-                    $existing->update([
+                    $updateData = [
                         'status' => $dbStatus,
                         'notes' => $note,
                         'admin_reason' => $adminReason,
                         'updated_by_id' => $authId
-                    ]);
+                    ];
+                    // Keep real biometric punches if the row already has them
+                    $hasRealPunch = $existing->check_in_time && $existing->check_in_time->format('H:i') !== '00:00';
+                    if (!$hasRealPunch) {
+                        $updateData['check_in_time'] = $checkIn;
+                        $updateData['check_out_time'] = $checkOut;
+                    }
+                    $existing->update($updateData);
                 } else {
                     Attendance::create([
                         'user_id' => $userId,
@@ -271,14 +275,10 @@ class CcAttendanceController extends Controller
         if (!$compOffType) return null;
 
         if ($dbStatus === 'Sunday working') {
-            // Credit one day to All Purpose Leave
-            $balance = \App\Models\LeaveBalance::firstOrCreate(
-                ['user_id' => $userId, 'leave_type_id' => $compOffType->id],
-                ['tenant_id' => $tenantId, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
-            );
-            \App\Models\LeaveBalance::$auditReason = "Earned via Sunday Working";
-            $balance->increment('balance', 1);
-            $balance->increment('accrued_this_year', 1);
+            // Credit is granted by the Attendance saved-hook (Sunday/Holiday
+            // Working Credit) once the record is stored with >= 4h punches,
+            // exactly like biometric users. No manual credit here or it
+            // would be applied twice.
             return null;
         }
 
@@ -291,12 +291,48 @@ class CcAttendanceController extends Controller
             if ($balance && ($balance->balance - $balance->used) >= 1) {
                 \App\Models\LeaveBalance::$auditReason = "Auto-adjusted against Earned Leave (Sunday)";
                 $balance->increment('used', 1);
-                
+
                 $dbStatus = 'paid-leave';
                 return 'Auto-adjusted against Earned Leave (Sunday Working)';
             }
         }
 
         return null;
+    }
+
+    /**
+     * Normalize a CCare-marked status to the Decision Matrix vocabulary and
+     * synthesize punch times so the matrix thresholds (7:45h full / 4h half)
+     * classify the day exactly as marked. Every manual mark carries an admin
+     * reason so the matrix honors it instead of recomputing from punches.
+     *
+     * @return array [status, checkIn, checkOut, adminReason]
+     */
+    private function alignWithDecisionMatrix(string $status, string $date): array
+    {
+        $reason = 'Marked by CCare';
+
+        switch ($status) {
+            case 'Present':
+                return ['present', Carbon::parse($date . ' 09:30:00'), Carbon::parse($date . ' 18:30:00'), $reason];
+            case 'Sunday working':
+                // Stored as present with >= 4h punches on the Sunday/holiday:
+                // the matrix derives SP/HP from the date, and the Attendance
+                // saved-hook grants the working credit
+                return ['present', Carbon::parse($date . ' 09:30:00'), Carbon::parse($date . ' 18:30:00'), $reason];
+            case 'Half day':
+                // No admin reason on purpose: the matrix then applies the
+                // half-day leave check itself - if a paid half-day leave is
+                // approved for the other half it upgrades to HD-PL (counts
+                // full present), otherwise it stays a plain Half Day
+                return ['half-day', Carbon::parse($date . ' 09:30:00'), Carbon::parse($date . ' 14:00:00'), ''];
+            case 'Work from home':
+                return ['work_from_home', Carbon::parse($date . ' 09:30:00'), Carbon::parse($date . ' 18:30:00'), $reason];
+            case 'paid-leave': // Absent converted by comp-off adjustment above
+                return ['paid_leave', Carbon::parse($date)->startOfDay(), null, $reason];
+            case 'Absent':
+            default:
+                return ['absent', Carbon::parse($date)->startOfDay(), null, $reason];
+        }
     }
 }

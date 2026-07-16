@@ -2051,7 +2051,7 @@ class EmployeeController extends Controller
     $thirtyDaysLaterMd = now()->addDays(30)->format('md');
 
     // Show all employees as requested
-    $users = User::all()
+    $users = User::notTerminated()->get()
       ->unique('id');
 
     $birthdays = $users->filter(function($u) use ($todayMd, $thirtyDaysLaterMd) {
@@ -2207,6 +2207,7 @@ class EmployeeController extends Controller
       'siteId'               => 'nullable|exists:sites,id',
       'doj'                  => 'nullable|date',
       'baseSalary'           => 'nullable|numeric',
+      'annualCtc'            => 'nullable|numeric',
       'is_training_required' => 'nullable|boolean',
     ]);
 
@@ -2248,6 +2249,7 @@ class EmployeeController extends Controller
         'site_id'                => $request->siteId ?: null,
         'date_of_joining'        => $request->doj ?: null,
         'base_salary'            => $request->baseSalary ?: null,
+        'ctc_offered'            => $request->annualCtc ?: null,
         'status'                 => UserAccountStatus::ONBOARDING,
         'onboarding_at'          => now(),
         'onboarding_deadline'    => now()->addDays(3),

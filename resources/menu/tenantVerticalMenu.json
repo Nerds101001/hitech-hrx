@@ -107,7 +107,6 @@
             "roles": [
                 "admin",
                 "hr",
-                "manager",
                 "accounts"
             ]
         },
@@ -305,6 +304,27 @@
                     "url": "/performance/ninety-day-goals",
                     "name": "90-Day Goals",
                     "slug": "performance.ninety-day-goals.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee"
+                    ]
+                },
+                {
+                    "url": "/kpi/manage",
+                    "name": "KPI / KRA (Manage)",
+                    "slug": "tenant.kpi.manage",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
+                    "url": "/kpi/my",
+                    "name": "My KPI / KRA",
+                    "slug": "tenant.kpi.my",
                     "roles": [
                         "admin",
                         "hr",

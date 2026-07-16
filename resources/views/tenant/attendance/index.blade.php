@@ -26,10 +26,22 @@
 
 @section('content')
 <div class="px-4">
+@if(session('import_failures'))
+  <div class="alert alert-warning alert-dismissible mt-3" role="alert">
+    <h6 class="alert-heading mb-2"><i class="bx bx-error-circle me-1"></i> {{ count(session('import_failures')) }} attendance row(s) failed to import</h6>
+    <p class="mb-2 small">These rows were <strong>not</strong> saved. Re-upload the same file to retry only the missing ones (already-imported rows are updated harmlessly).</p>
+    <div class="small" style="max-height: 180px; overflow-y: auto;">
+      @foreach(session('import_failures') as $f)
+        <div class="border-bottom py-1"><code>{{ $f }}</code></div>
+      @endforeach
+    </div>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+@endif
 <div class="row g-6 mb-6">
   <!-- Hero Banner -->
   <div class="col-lg-12">
-    <x-hero-banner 
+    <x-hero-banner
       title="Attendance Management" 
       subtitle="Track, monitor and optimize employee presence in real-time"
       icon="bx-time-five"
@@ -211,6 +223,8 @@
           @endif
         </div>
       </div>
+
+      @include('_partials.attendance_legend')
 
       <div class="tab-content border-0 p-0" id="attendanceTabs">
         {{-- Monthly Registry --}}

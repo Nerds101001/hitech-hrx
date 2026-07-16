@@ -56,9 +56,23 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Delay a bit to ensure everything is loaded and wow the user
+            // Once dismissed, never show again for the same pending employees.
+            // Only a NEW employee becoming due for evaluation re-triggers it.
+            const dismissKey = 'hrxProbationDismissed_{{ auth()->id() }}';
+            const currentIds = @json($globalPendingProbations->pluck('id')->sort()->values());
+            let dismissedIds = [];
+            try { dismissedIds = JSON.parse(localStorage.getItem(dismissKey)) || []; } catch (e) {}
+
+            const hasNew = currentIds.some(id => !dismissedIds.includes(id));
+            if (!hasNew) return;
+
             setTimeout(() => {
-                const myModal = new bootstrap.Modal(document.getElementById('probationAlertModal'));
+                const modalEl = document.getElementById('probationAlertModal');
+                const myModal = new bootstrap.Modal(modalEl);
+                modalEl.addEventListener('hidden.bs.modal', function() {
+                    const merged = Array.from(new Set(dismissedIds.concat(currentIds)));
+                    localStorage.setItem(dismissKey, JSON.stringify(merged));
+                });
                 myModal.show();
             }, 1000);
         });

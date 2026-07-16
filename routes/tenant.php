@@ -396,7 +396,10 @@ Route::middleware([
 
     // Employees
     Route::prefix('employees')->group(function () {
-      Route::name('employees.')->group(function() {
+      // Employee-management screens & data are restricted to Admin / HR / Accounts
+      // only. (Managers and regular employees must NOT see other employees' data.)
+      // Self-service profile routes live in the separate group further below.
+      Route::middleware(['role:admin|hr|accounts'])->name('employees.')->group(function() {
         Route::get('', [EmployeeController::class, 'index'])->name('index');
         Route::get('view/{id}', [EmployeeController::class, 'show'])->name('show');
         Route::match(['get', 'post'], 'indexAjax', [EmployeeController::class, 'userListAjax'])->name('indexAjax');
@@ -410,7 +413,6 @@ Route::middleware([
         Route::get('checkEmployeeCodeValidationAjax', [EmployeeController::class, 'checkEmployeeCodeValidationAjax'])->name('checkEmployeeCodeValidationAjax');
         Route::delete('deleteEmployeeAjax/{id}', [EmployeeController::class, 'deleteEmployeeAjax'])->name('deleteEmployeeAjax');
         Route::post('store', [EmployeeController::class, 'store'])->name('store');
-        Route::post('changeEmployeeProfilePicture', [EmployeeController::class, 'changeEmployeeProfilePicture'])->name('changeEmployeeProfilePicture');
         Route::post('addHrLocation', [EmployeeController::class, 'addHrLocation'])->name('addHrLocation');
         Route::delete('deleteHrLocation/{id}', [EmployeeController::class, 'deleteHrLocation'])->name('deleteHrLocation');
         Route::post('addOrUpdateBankAccount', [EmployeeController::class, 'addOrUpdateBankAccount'])->name('addOrUpdateBankAccount');
@@ -793,6 +795,20 @@ Route::middleware([
             Route::get('/export', [\App\Http\Controllers\tenant\WorkControlController::class, 'export'])->name('export');
             Route::get('/my-routines', [\App\Http\Controllers\tenant\WorkControlController::class, 'myRoutines'])->name('my-routines');
             Route::post('/store', [\App\Http\Controllers\tenant\WorkControlController::class, 'store'])->name('store');
+        });
+
+        // KPI / KRA (DWM-driven). Employee self-view + HR/Manager management.
+        Route::prefix('kpi')->name('tenant.kpi.')->group(function () {
+            Route::get('/my', [\App\Http\Controllers\tenant\KpiController::class, 'my'])->name('my');
+            Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
+
+            Route::middleware('role:admin|hr|manager')->group(function () {
+                Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
+                Route::post('/store', [\App\Http\Controllers\tenant\KpiController::class, 'store'])->name('store');
+                Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
+                Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
+                Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
+            });
         });
     });
 

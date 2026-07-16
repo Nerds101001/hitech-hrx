@@ -168,10 +168,10 @@
                 </div>
                 <div>
                     @php
-                        $totalMinutes = $users->sum(function($u) {
-                            return $u->workControlRoutines->where('frequency', 'daily')->sum('duration_minutes');
+                        $totalMins = $users->sum(function($u) {
+                            return $u->workControlRoutines->sum('daily_equivalent_minutes');
                         });
-                        $totalHours = floor($totalMinutes / 60);
+                        $totalHours = floor($totalMins / 60);
                     @endphp
                     <h3 class="stat-value mb-1">{{ $totalHours }}h</h3>
                     <small class="stat-label">Daily Committed</small>
@@ -227,9 +227,9 @@
                     <tbody>
                         @forelse($users as $user)
                             @php
-                                $dailyMins = $user->workControlRoutines->where('frequency', 'daily')->sum('duration_minutes');
+                                $dailyMins = $user->workControlRoutines->sum('daily_equivalent_minutes');
                                 $hours = floor($dailyMins / 60);
-                                $mins = $dailyMins % 60;
+                                $mins = round($dailyMins % 60);
                                 
                                 // Max visualization is 10 hours (600 mins)
                                 $percent = min(100, ($dailyMins / 600) * 100);

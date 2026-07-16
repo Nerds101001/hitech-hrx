@@ -32,12 +32,20 @@ class AppServiceProvider extends ServiceProvider
 
 
     \Illuminate\Support\Facades\Gate::define('access-sales-ops', function ($user) {
+        // Admins and HR see everything
         if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
             return true;
         }
-        return \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
+        // Mapped salespeople / CC agents from the salesperson map
+        if (\App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
             ->orWhere('sales_user_id', $user->id)
-            ->exists();
+            ->exists()) {
+            return true;
+        }
+        // Allow users from sales-adjacent departments:
+        // Customer Care (10), New Biz (13), Customer Excellence (20), Pre Sales (21), Channel Sales (22), Sales (30)
+        $salesDeptIds = [2, 10, 13, 20, 21, 22, 30];
+        return in_array($user->department_id, $salesDeptIds);
     });
 
     Paginator::useBootstrapFive();

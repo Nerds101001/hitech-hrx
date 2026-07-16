@@ -41,7 +41,7 @@ class SalesVisitController extends Controller
                   ->orWhere('cc_user_id', $user->id);
             });
         } else {
-            // CC or salesperson
+            // CC, salesperson, or department-based user — see own data only
             $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
             $allowedSpIds = array_unique(array_merge([$user->id], $mappedIds));
 
@@ -128,12 +128,18 @@ class SalesVisitController extends Controller
         } else {
             $mappedIds = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
             if ($mappedIds->isEmpty()) {
-                abort(403, 'You must be assigned as a CC agent to book visits.');
+                // No explicit mapping — allow booking for salespeople in sales-adjacent departments
+                $salesDeptIds = [2, 13, 21, 22, 30]; // Sales Dept, New Biz, Pre Sales, Channel Sales, Sales
+                $salespersons = User::whereIn('department_id', $salesDeptIds)
+                    ->select('id', 'first_name', 'last_name', 'code')
+                    ->orderBy('first_name')
+                    ->get();
+            } else {
+                $salespersons = User::whereIn('id', $mappedIds)
+                    ->select('id', 'first_name', 'last_name', 'code')
+                    ->orderBy('first_name')
+                    ->get();
             }
-            $salespersons = User::whereIn('id', $mappedIds)
-                ->select('id', 'first_name', 'last_name', 'code')
-                ->orderBy('first_name')
-                ->get();
         }
 
         return view('tenant.sales-visits.create', compact('clients', 'salespersons'))

@@ -95,7 +95,11 @@
             <span class="text-muted small">Fill out your expenses for the month. Blank rows will be ignored automatically.</span>
         </div>
 
-        <div class="table-responsive bg-white rounded shadow-sm border mb-3">
+        {{-- Top horizontal scrollbar, kept in sync with the table below --}}
+        <div id="claimTopScroll" style="overflow-x: auto; overflow-y: hidden; height: 16px;" class="mb-1">
+            <div id="claimTopScrollInner" style="height: 1px;"></div>
+        </div>
+        <div class="table-responsive bg-white rounded shadow-sm border mb-3" id="claimTableScroll">
             <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 3600px; font-size: 0.85rem;">
                 <thead class="bg-light">
                     <tr class="text-center align-middle" style="line-height: 1.2;">
@@ -306,8 +310,11 @@
         let dist = 0;
         
         let isPersonal = ['Personal Bike', 'Personal Car', 'Bike', 'Car'].includes(mode);
-        
-        if (isPersonal) {
+        let isOfficial = ['Official Bike', 'Official Car'].includes(mode);
+
+        if (isPersonal || isOfficial) {
+            // Meter readings are recorded for both personal and office vehicles;
+            // only the conveyance amount differs (auto rate vs actual expense)
             if (end > start && end !== 0) {
                 dist = end - start;
                 row.find('.distance').val(dist.toFixed(2));
@@ -400,6 +407,31 @@
         // Trigger grid generation on load if month is already set (e.g. edit mode or validation redirect)
         if ($('#claimMonthInput').val()) {
             generateMonthGrid();
+        }
+
+        // Keep the top scrollbar in sync with the wide expense table so users
+        // can scroll horizontally without going to the bottom of the page
+        var topScroll = document.getElementById('claimTopScroll');
+        var tableScroll = document.getElementById('claimTableScroll');
+        if (topScroll && tableScroll) {
+            var syncTopScrollWidth = function() {
+                document.getElementById('claimTopScrollInner').style.width = tableScroll.scrollWidth + 'px';
+            };
+            syncTopScrollWidth();
+            window.addEventListener('resize', syncTopScrollWidth);
+            setInterval(syncTopScrollWidth, 1500); // grid rows are injected dynamically
+
+            var syncing = false;
+            topScroll.addEventListener('scroll', function() {
+                if (syncing) { syncing = false; return; }
+                syncing = true;
+                tableScroll.scrollLeft = topScroll.scrollLeft;
+            });
+            tableScroll.addEventListener('scroll', function() {
+                if (syncing) { syncing = false; return; }
+                syncing = true;
+                topScroll.scrollLeft = tableScroll.scrollLeft;
+            });
         }
         
         // Form submit intercept to disable totally blank rows so they don't bloat the POST payload

@@ -387,7 +387,7 @@
                                 <td class="p-1">
                                     <select id="new_salesperson_id" class="form-select form-select-sm">
                                         <option value="">-SP-</option>
-                                        @foreach($assignedUsers as $u)
+                                        @foreach($salespersons as $u)
                                             <option value="{{ $u->id }}">{{ $u->name }}</option>
                                         @endforeach
                                     </select>
@@ -395,7 +395,7 @@
                                 <td class="p-1">
                                     <select id="new_new_biz_id" class="form-select form-select-sm">
                                         <option value="">-NB-</option>
-                                        @foreach($assignedUsers as $u)
+                                        @foreach($newBizUsers as $u)
                                             <option value="{{ $u->id }}">{{ $u->name }}</option>
                                         @endforeach
                                     </select>
@@ -496,7 +496,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($assignedUsers as $u)
+                                @foreach($salespersons as $u)
                                     <tr>
                                         <td class="fw-bold text-start ps-3">{{ $u->name }}</td>
                                         <td>

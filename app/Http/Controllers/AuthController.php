@@ -46,14 +46,6 @@ class AuthController extends Controller
       $request->validate($rules);
 
       $ip = $request->ip();
-      $ipKey = 'login_lock_ip:' . $ip;
-
-      // 1. Check if IP is blocked
-      if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($ipKey, 0)) {
-        $seconds = \Illuminate\Support\Facades\RateLimiter::availableIn($ipKey);
-        $minutes = ceil($seconds / 60);
-        return redirect()->back()->with('error', "Your IP address is temporarily blocked due to multiple failed attempts. Please try again in $minutes minutes.");
-      }
 
       $user = User::where('email', $request->email)
                   ->orWhere('phone', $request->email)
@@ -89,10 +81,12 @@ class AuthController extends Controller
             Log::warning("DB Mirror Error: login_attempts column likely missing. " . $updateError->getMessage());
             $user->update(['locked_until' => null]);
           }
-          \Illuminate\Support\Facades\RateLimiter::clear($ipKey);
 
           // --- TRUSTED DEVICE CHECK ---
-          $deviceToken = Cookie::get('hrx_device_token');
+          // Per-user cookie name so people sharing one computer don't
+          // overwrite each other's trusted-device token (legacy shared
+          // cookie kept as a fallback for devices trusted before this fix)
+          $deviceToken = Cookie::get('hrx_device_token_' . $user->id) ?: Cookie::get('hrx_device_token');
           if ($deviceToken) {
               $trusted = UserTrustedDevice::where('user_id', $user->id)
                   ->where('device_token', hash('sha256', (string)$deviceToken))
@@ -146,9 +140,6 @@ class AuthController extends Controller
           if ($user->login_attempts >= 3) {
             $lockTime = 40;
             $user->update(['locked_until' => now()->addMinutes($lockTime)]);
-            
-            // Block IP as well
-            \Illuminate\Support\Facades\RateLimiter::hit($ipKey, $lockTime * 60);
 
             // Send Security Alert to Admin
             try {
@@ -157,7 +148,7 @@ class AuthController extends Controller
                         'email' => $user->email,
                         'ip' => $ip,
                         'reason' => 'Multiple Failed Login Attempts',
-                        'action' => 'User Account and IP Address Blocked'
+                        'action' => 'User Account Locked'
                     ]));
             } catch (Exception $e) {
                 Log::error("Security Alert Email Failed: " . $e->getMessage());
@@ -182,7 +173,7 @@ class AuthController extends Controller
                 Log::error("Audit Log Creation Failed: " . $e->getMessage());
             }
 
-            return redirect()->back()->with('error', "Your account and IP have been blocked for $lockTime minutes due to 3 failed attempts.");
+            return redirect()->back()->with('error', "Your account has been locked for $lockTime minutes due to 3 failed attempts. You can request an unlock link by email.");
           }
 
           $remaining = 3 - $user->login_attempts;
@@ -250,8 +241,8 @@ class AuthController extends Controller
                     'last_used_at' => now(),
                 ]);
 
-                // Set secure cookie for 7 days
-                Cookie::queue('hrx_device_token', $rawToken, 60 * 24 * 7, null, null, true, true, false, 'Lax');
+                // Set secure per-user cookie for 7 days
+                Cookie::queue('hrx_device_token_' . $user->id, $rawToken, 60 * 24 * 7, null, null, true, true, false, 'Lax');
             }
             // ---------------------------
 
@@ -322,6 +313,12 @@ class AuthController extends Controller
     }
 
     return redirect()->route('login')->with('error', 'Session expired. Please login again.');
+  }
+
+  public function showUnlockRequestForm()
+  {
+      $pageConfigs = ['myLayout' => 'blank'];
+      return view('auth.unlock-request', ['pageConfigs' => $pageConfigs]);
   }
 
   public function requestUnlock(Request $request)

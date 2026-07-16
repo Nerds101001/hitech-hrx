@@ -27,8 +27,17 @@
 
             <div class="col-md-6">
               <label class="form-label-hitech" for="ctcOffered">@lang('Annual CTC Offered') (₹)</label>
-              <input type="number" name="ctcOffered" id="ctcOffered" class="form-control form-control-hitech" placeholder="0.00" value="{{$user->ctc_offered}}" />
+              <input type="number" name="ctcOffered" id="ctcOffered" class="form-control form-control-hitech" placeholder="0.00" value="{{$user->ctc_offered}}" oninput="calcCompMonthly()" />
             </div>
+            
+            <script>
+            function calcCompMonthly() {
+                const ctc = parseFloat(document.getElementById('ctcOffered').value) || 0;
+                if (ctc > 0) {
+                    document.getElementById('baseSalary').value = (ctc / 12).toFixed(2);
+                }
+            }
+            </script>
             
             <div class="col-md-12">
               <label class="form-label-hitech">@lang('Leave Policy Profile') (Auto-Synced from Employment)</label>

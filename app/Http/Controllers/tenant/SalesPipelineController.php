@@ -85,7 +85,16 @@ class SalesPipelineController extends Controller
         } else {
             $assignedUsers = User::where('status', 'active')->get();
         }
-        
+
+        // Department-scoped lists for the assignment dropdowns: the Salesperson
+        // dropdown must only show Sales-department people, New Biz only New Biz.
+        $salespersons = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
+            ->orderBy('first_name')->get();
+        $newBizUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
+            ->orderBy('first_name')->get();
+
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
         // Calculate YoY totals
@@ -126,7 +135,7 @@ class SalesPipelineController extends Controller
 
         \Illuminate\Support\Facades\Log::info('PIPELINES COUNT: ' . $pipelines->count() . ' User Dept: ' . ($user->department->name ?? 'none'));
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -203,7 +212,16 @@ class SalesPipelineController extends Controller
         } else {
             $assignedUsers = User::where('status', 'active')->get();
         }
-        
+
+        // Department-scoped lists for the assignment dropdowns: the Salesperson
+        // dropdown must only show Sales-department people, New Biz only New Biz.
+        $salespersons = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
+            ->orderBy('first_name')->get();
+        $newBizUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
+            ->orderBy('first_name')->get();
+
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
         // Calculate YoY totals
@@ -235,7 +253,7 @@ class SalesPipelineController extends Controller
 
         $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey'));
     }
 
     public function store(Request $request)

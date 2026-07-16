@@ -21,17 +21,19 @@ class SalesTargetImportController extends Controller
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
-        $query = User::where('status', 'active');
+        // Salesperson dropdown must only list Sales-department (non-terminated)
+        // people, never all employees.
+        $query = User::where('status', 'active')
+            ->notTerminated()
+            ->whereHas('department', function($q) {
+                $q->where('name', 'like', '%Sales%');
+            });
         if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            // Admin and HR can see all active users
+            // Admin and HR see all active Sales-department users
         } elseif (($isCcare || $isNewBiz)) {
             $taggedSalespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
                 ->pluck('sales_user_id')->filter()->unique();
             $query->whereIn('id', $taggedSalespersonIds);
-        } else {
-            $query->whereHas('department', function($q) {
-                $q->where('name', 'like', '%Sales%');
-            });
         }
         $salespersons = $query->orderBy('first_name')->get();
 

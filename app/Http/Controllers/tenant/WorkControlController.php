@@ -28,7 +28,15 @@ class WorkControlController extends Controller
                 ->with(['department', 'workControlRoutines']);
 
             if ($request->filled('search')) {
-                $query->where('name', 'like', '%' . $request->search . '%');
+                // `name` is a computed accessor, not a DB column — searching it
+                // directly threw a SQL error, so the search button did nothing.
+                $s = $request->search;
+                $query->where(function ($q) use ($s) {
+                    $q->where('first_name', 'like', "%{$s}%")
+                      ->orWhere('last_name', 'like', "%{$s}%")
+                      ->orWhere('code', 'like', "%{$s}%")
+                      ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$s}%"]);
+                });
             }
 
             if ($request->filled('department_id')) {
@@ -60,8 +68,10 @@ class WorkControlController extends Controller
             'routines.*.id' => 'nullable|exists:work_control_routines,id',
             'routines.*.title' => 'required|string|max:255',
             'routines.*.frequency' => 'required|in:daily,weekly,fortnightly,monthly,quarterly,yearly',
-            'routines.*.duration_hours' => 'nullable|integer|min:0',
-            'routines.*.duration_mins' => 'nullable|integer|min:0|max:59',
+            // Accept numeric (may arrive as "10.0"/"" from the browser); the
+            // store loop casts to int, so decimals/blanks no longer error out.
+            'routines.*.duration_hours' => 'nullable|numeric|min:0',
+            'routines.*.duration_mins' => 'nullable|numeric|min:0|max:59',
         ]);
 
         $user = Auth::user();

@@ -137,9 +137,8 @@
                             @if($isAdmin)
                                 <th class="align-middle">Salesperson</th>
                                 <th class="align-middle">New Biz</th>
-                                <th class="align-middle">Cust. Care</th>
                             @elseif($isSalesperson)
-                                <th class="align-middle" title="CCare name if type=CCare · New Biz name if type=New Biz">Representative</th>
+                                <th class="align-middle" title="New Biz representative">Representative</th>
                             @else
                                 {{-- CCare / New Biz see the salesperson --}}
                                 <th class="align-middle">Salesperson</th>
@@ -156,7 +155,6 @@
                                 // Determine single rep column value for salesperson view
                                 if ($isSalesperson) {
                                     $reps = [];
-                                    if ($row->ccare->name ?? null) { $reps[] = $row->ccare->name . ' (CC)'; }
                                     if ($row->newBiz->name ?? null) { $reps[] = $row->newBiz->name . ' (NB)'; }
                                     $repDisplay = !empty($reps) ? implode(' / ', $reps) : '-';
                                 } elseif ($isCcare || $isNewBiz) {
@@ -169,7 +167,6 @@
                                     ? implode(' | ', array_filter([
                                         $row->salesperson->name ?? '',
                                         $row->newBiz->name      ?? '',
-                                        $row->ccare->name       ?? '',
                                       ]))
                                     : $repDisplay;
                                 $rowMonthSales = $row->months->pluck('sale_amount', 'month_year')->toArray();
@@ -210,7 +207,7 @@
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="salesperson_id">
                                             <option value="">-SP-</option>
-                                            @foreach($assignedUsers as $u)
+                                            @foreach($salespersons as $u)
                                                 <option value="{{ $u->id }}" {{ $row->salesperson_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
                                             @endforeach
                                         </select>
@@ -218,16 +215,8 @@
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="new_biz_id">
                                             <option value="">-NB-</option>
-                                            @foreach($assignedUsers as $u)
+                                            @foreach($newBizUsers as $u)
                                                 <option value="{{ $u->id }}" {{ $row->new_biz_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
-                                            @endforeach
-                                        </select>
-                                    </td>
-                                    <td class="p-0 align-middle">
-                                        <select class="excel-select row-field" data-field="ccare_id">
-                                            <option value="">-CC-</option>
-                                            @foreach($assignedUsers as $u)
-                                                <option value="{{ $u->id }}" {{ $row->ccare_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
                                             @endforeach
                                         </select>
                                     </td>
@@ -313,7 +302,7 @@
                                 <td class="p-1">
                                     <select id="new_salesperson_id" class="form-select form-select-sm">
                                         <option value="">-SP-</option>
-                                        @foreach($assignedUsers as $u)
+                                        @foreach($salespersons as $u)
                                             <option value="{{ $u->id }}">{{ $u->name }}</option>
                                         @endforeach
                                     </select>
@@ -321,15 +310,7 @@
                                 <td class="p-1">
                                     <select id="new_new_biz_id" class="form-select form-select-sm">
                                         <option value="">-NB-</option>
-                                        @foreach($assignedUsers as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="p-1">
-                                    <select id="new_ccare_id" class="form-select form-select-sm">
-                                        <option value="">-CC-</option>
-                                        @foreach($assignedUsers as $u)
+                                        @foreach($newBizUsers as $u)
                                             <option value="{{ $u->id }}">{{ $u->name }}</option>
                                         @endforeach
                                     </select>
@@ -571,7 +552,7 @@ function cancelNewPipeline() {
     document.getElementById('addRowTriggerBtn').style.display = '';
     ['new_party_name','new_product','new_potential',
      'new_status_stage','new_remarks',
-     'new_salesperson_id','new_new_biz_id','new_ccare_id']
+     'new_salesperson_id','new_new_biz_id']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 }
 
@@ -591,7 +572,6 @@ function saveNewPipeline() {
         status_remarks:           document.getElementById('new_remarks')?.value     || '',
         salesperson_id:           document.getElementById('new_salesperson_id')?.value || '',
         new_biz_id:               document.getElementById('new_new_biz_id')?.value  || '',
-        ccare_id:                 document.getElementById('new_ccare_id')?.value    || '',
     };
 
     const saveBtn = document.querySelector('#addNewRowActions .btn-success');

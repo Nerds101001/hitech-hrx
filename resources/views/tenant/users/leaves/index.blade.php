@@ -149,9 +149,13 @@
                                 $from = \Carbon\Carbon::parse($item->from_date);
                                 $to   = \Carbon\Carbon::parse($item->to_date);
                                 
+                                // Short leave is detected from the request flag OR the leave type,
+                                // so older requests saved before the flag existed still show correctly
+                                $isShortReq = $req && ($req->is_short_leave || ($req->leaveType->is_short_leave ?? false));
+
                                 $leaveTypeDetail = 'Full Day';
                                 if ($req) {
-                                    if ($req->is_short_leave) {
+                                    if ($isShortReq) {
                                         $leaveTypeDetail = 'Short Leave (' . ($req->duration_hours ?? 0) . ' hrs' . ($req->start_time ? ': ' . substr($req->start_time, 0, 5) . '-' . substr($req->end_time, 0, 5) : '') . ')';
                                     } elseif ($req->is_half_day) {
                                         $sessionName = $req->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
@@ -162,7 +166,7 @@
                                 if ($req && $req->is_half_day) {
                                     $days = 0.5;
                                     $amountDisplay = '-' . number_format($days, 1);
-                                } elseif ($req && $req->is_short_leave) {
+                                } elseif ($isShortReq) {
                                     $days = 0.0;
                                     $amountDisplay = '-1.0 count';
                                 } else {
@@ -205,7 +209,7 @@
                                 <div class="d-flex align-items-center gap-2">
                                     <span class="badge bg-label-{{ $typeColor }}">{{ $typeLabel }}</span>
                                     @if($req ?? false)
-                                        @if($req->is_short_leave)
+                                        @if($isShortReq)
                                             <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#0dcaf0; color:#000 !important;">SHORT LEAVE</span>
                                         @elseif($req->is_half_day)
                                             <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#6610f2; color:#fff !important;">HALF DAY &bull; {{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }}</span>

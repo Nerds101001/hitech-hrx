@@ -64,7 +64,27 @@ class AttendanceImport implements ToCollection, WithHeadingRow
             // ----------------------------------------------------
             $leaveStatuses = ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-day'];
             if ($attendance && in_array(strtolower(str_replace('_', '-', $attendance->status)), $leaveStatuses)) {
-                Log::info("Attendance Import: Skipped {$user->code} for $date because of existing leave: {$attendance->status}");
+                if ($checkIn || $checkOut) {
+                    $attendance->update([
+                        'check_in_time' => $checkIn ?: $attendance->check_in_time,
+                        'check_out_time' => $checkOut ?: $attendance->check_out_time,
+                    ]);
+                    if ($checkIn) {
+                        \App\Models\AttendanceLog::updateOrCreate(
+                            ['attendance_id' => $attendance->id, 'type' => 'check_in'],
+                            ['created_at' => $checkIn, 'tenant_id' => $attendance->tenant_id]
+                        );
+                    }
+                    if ($checkOut) {
+                        \App\Models\AttendanceLog::updateOrCreate(
+                            ['attendance_id' => $attendance->id, 'type' => 'check_out'],
+                            ['created_at' => $checkOut, 'tenant_id' => $attendance->tenant_id]
+                        );
+                    }
+                    Log::info("Attendance Import: Updated checkin/checkout for {$user->code} on $date but kept leave status: {$attendance->status}");
+                } else {
+                    Log::info("Attendance Import: Skipped {$user->code} for $date because of existing leave: {$attendance->status}");
+                }
                 continue;
             }
 

@@ -20,4 +20,25 @@ class WorkControlRoutine extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function getDailyEquivalentMinutesAttribute()
+    {
+        $mins = $this->duration_minutes;
+        switch ($this->frequency) {
+            case 'daily':
+                return $mins;
+            case 'weekly':
+                return $mins / 6;
+            case 'fortnightly':
+                return $mins / 13;
+            case 'monthly':
+                return $mins / 26;
+            case 'quarterly':
+                return $mins / 78;
+            case 'yearly':
+                return $mins / 312;
+            default:
+                return $mins;
+        }
+    }
 }

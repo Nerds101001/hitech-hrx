@@ -154,7 +154,7 @@ class DashboardController extends Controller
 
       [$upcomingBirthdays, $upcomingAnniversaries] =
           Cache::remember("dashboard.celebrations.{$tenantId}.{$todayDate}", 3600, function () use ($todayMd) {
-              $birthdays = User::whereNotNull('dob')
+              $birthdays = User::notTerminated()->whereNotNull('dob')
                   ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                   ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
                   ->take(15)->get()->unique('id')
@@ -163,7 +163,7 @@ class DashboardController extends Controller
                       return $u;
                   });
 
-              $anniversaries = User::whereNotNull('date_of_joining')
+              $anniversaries = User::notTerminated()->whereNotNull('date_of_joining')
                   ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                   ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
                   ->take(15)->get()->unique('id')

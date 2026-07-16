@@ -195,8 +195,17 @@
               <label class="form-label-hitech">Annual CTC (₹)</label>
               <div class="input-group input-group-merge hitech-input-group">
                 <span class="input-group-text"><i class="bx bx-rupee"></i></span>
-                <input type="number" name="baseSalary" class="form-control form-control-hitech" placeholder="Optional CTC">
+                <input type="number" name="annualCtc" id="invite_annual_ctc" class="form-control form-control-hitech" placeholder="e.g. 360000" oninput="calcInviteMonthly()">
               </div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech">Monthly Salary (₹) <small class="text-muted fw-normal">(Auto = Annual ÷ 12)</small></label>
+              <div class="input-group input-group-merge hitech-input-group">
+                <span class="input-group-text"><i class="bx bx-calendar-check"></i></span>
+                <input type="number" name="baseSalary" id="invite_monthly_salary" class="form-control form-control-hitech" placeholder="Auto-calculated" step="0.01">
+              </div>
+              <small class="text-muted" style="font-size:0.75rem;">You can override this manually if needed.</small>
             </div>
 
             <div class="col-md-6">
@@ -231,6 +240,15 @@
 </div>
 
 <script>
+function calcInviteMonthly() {
+    const ctc = parseFloat(document.getElementById('invite_annual_ctc').value) || 0;
+    if (ctc > 0) {
+        document.getElementById('invite_monthly_salary').value = (ctc / 12).toFixed(2);
+    } else {
+        document.getElementById('invite_monthly_salary').value = '';
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('onboardingInviteForm');
     const submitBtn = document.getElementById('onboardingSubmitBtn');

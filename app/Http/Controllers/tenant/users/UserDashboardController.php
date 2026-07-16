@@ -199,7 +199,7 @@ class UserDashboardController extends Controller
             $todayMd = now()->format('md');
             
             // Birthdays
-            $allBirthdays = User::whereNotNull('dob')
+            $allBirthdays = User::notTerminated()->whereNotNull('dob')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
@@ -210,7 +210,7 @@ class UserDashboardController extends Controller
             $upcomingBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') !== $todayMd)->take(3);
 
             // Anniversaries
-            $allAnniversaries = User::whereNotNull('date_of_joining')
+            $allAnniversaries = User::notTerminated()->whereNotNull('date_of_joining')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
@@ -306,7 +306,7 @@ class UserDashboardController extends Controller
             $todayMd = now()->format('md');
             
             // Birthdays
-            $allBirthdays = User::whereNotNull('dob')
+            $allBirthdays = User::notTerminated()->whereNotNull('dob')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(dob, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(dob, '%m%d') ASC")
@@ -317,7 +317,7 @@ class UserDashboardController extends Controller
             $upcomingBirthdays = $allBirthdays->filter(fn($u) => Carbon::parse($u->dob)->format('md') !== $todayMd)->take(2);
 
             // Anniversaries
-            $allAnniversaries = User::whereNotNull('date_of_joining')
+            $allAnniversaries = User::notTerminated()->whereNotNull('date_of_joining')
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->orderByRaw("CASE WHEN DATE_FORMAT(date_of_joining, '%m%d') >= ? THEN 0 ELSE 1 END", [$todayMd])
                 ->orderByRaw("DATE_FORMAT(date_of_joining, '%m%d') ASC")
@@ -882,7 +882,12 @@ class UserDashboardController extends Controller
                             $s = 'absent';
                         }
 
-                        if ($attendance->check_in_time && !$attendance->check_out_time && $date->isPast() && !$date->isToday() && in_array($s, ['present', 'late'])) {
+                        // A real punch-in with no punch-out on a past day is a
+                        // missed punch, not Absent (workMins is 0 without both
+                        // punches, so this must override the <4h bucket)
+                        if ($attendance->check_in_time && !$attendance->check_out_time
+                            && $attendance->check_in_time->format('H:i') !== '00:00'
+                            && $date->isPast() && !$date->isToday()) {
                             $s = 'miss-punch';
                         }
                     }
@@ -892,6 +897,8 @@ class UserDashboardController extends Controller
 
                 if ($s === 'miss-punch') {
                     $dayData['status'] = 'Miss Punch';
+                    $dayData['holiday_name'] = 'HR/Admin remark required';
+                    $absentDays++; // counted absent until HR corrects the punch with remarks
                 } elseif ($s === 'absent') {
                     $dayData['status'] = 'Absent';
                     $absentDays++;
@@ -1179,7 +1186,12 @@ class UserDashboardController extends Controller
                             $s = 'absent';
                         }
 
-                        if ($attendance->check_in_time && !$attendance->check_out_time && $dateObj->isPast() && !$dateObj->isToday() && in_array($s, ['present', 'late'])) {
+                        // A real punch-in with no punch-out on a past day is a
+                        // missed punch, not Absent (workMins is 0 without both
+                        // punches, so this must override the <4h bucket)
+                        if ($attendance->check_in_time && !$attendance->check_out_time
+                            && $attendance->check_in_time->format('H:i') !== '00:00'
+                            && $dateObj->isPast() && !$dateObj->isToday()) {
                             $s = 'miss-punch';
                         }
                     }

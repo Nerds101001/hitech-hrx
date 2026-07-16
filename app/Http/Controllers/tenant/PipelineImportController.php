@@ -19,20 +19,23 @@ class PipelineImportController extends Controller
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
-        $query = User::where('status', 'active');
+        // Salesperson dropdown must only list people tagged in a Sales
+        // department (never all employees), and never terminated staff.
+        $query = User::where('status', 'active')
+            ->notTerminated()
+            ->whereHas('department', function($q) {
+                $q->where('name', 'like', '%Sales%');
+            });
 
         if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            // Admin and HR can see all active users
+            // Admin and HR see all active Sales-department users
         } elseif (($isCcare || $isNewBiz)) {
             $taggedSalespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
                 ->pluck('sales_user_id')->filter()->unique();
 
             $query->whereIn('id', $taggedSalespersonIds);
-        } else {
-            $query->whereHas('department', function($q) {
-                $q->where('name', 'like', '%Sales%');
-            });
         }
+        // Any other role: still limited to Sales-department users above
 
         $salespersons = $query->orderBy('first_name')->get();
 
@@ -51,24 +54,42 @@ class PipelineImportController extends Controller
 
     public function downloadTemplate(Request $request)
     {
+        // Streamed directly (no file on disk) so the download never depends on
+        // deployment — *.csv files are excluded from the release archive.
         $type = $request->input('type', 'report');
+
         if ($type === 'target') {
-            $path = public_path('templates/sales_target_template.csv');
             $name = 'sales_target_template.csv';
+            $header = ['Month/Year', 'Kingo Target', 'Bingo Target'];
+            $rows = [
+                ['2026-06', '250000.00', '150000.00'],
+                ['2026-07', '260000.00', '160000.00'],
+            ];
         } elseif ($type === 'pipeline') {
-            $path = public_path('templates/sales_actual_pipeline_template.csv');
             $name = 'sales_pipeline_template.csv';
+            $header = ['S.No.', 'Start Date', 'Customer Name', 'Product', 'Salesperson', 'New Biz', 'Potential/Month (Lakhs)', 'Stage', 'Status Remarks', 'Action'];
+            $rows = [
+                ['1', '01/07/2026', 'Alpha Industries Ltd', 'Premium Line', 'Rajesh Kumar', 'Priya Sharma', '15.00', 'Prospect', 'Initial contact made', ''],
+                ['2', '10/07/2026', 'Beta Technologies', 'Standard Line', 'Rajesh Kumar', 'Priya Sharma', '20.00', 'Negotiation', 'Awaiting response', ''],
+            ];
         } else {
-            $path = public_path('templates/sales_pipeline_template.csv');
             $name = 'sales_report_template.csv';
+            $header = ['S.No.', 'Party Name', 'Type', 'Potential (Lakhs)', 'Brand', 'Salesperson', 'New Biz', 'JUNE 26-27', 'MAY 26-27', 'APRIL 26-27'];
+            $rows = [
+                ['1', 'Alpha Industries Ltd', 'Dealer', '15.00', 'Premium Line', 'Rajesh Kumar', 'Priya Sharma', '500000', '450000', '400000'],
+            ];
         }
 
-        if (!file_exists($path)) {
-            return back()->with('error', 'Template file not found.');
-        }
-
-        return response()->download($path, $name, [
+        return response()->streamDownload(function () use ($header, $rows) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $header);
+            foreach ($rows as $row) {
+                fputcsv($file, $row);
+            }
+            fclose($file);
+        }, $name, [
             'Content-Type' => 'text/csv',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
         ]);
     }
 
@@ -434,6 +455,7 @@ class PipelineImportController extends Controller
             ->with(['ccUser.department'])
             ->get();
 
+        // 1. First assign CCare mapping
         foreach ($mappedCcMaps as $map) {
             $ccUser = $map->ccUser;
             if ($ccUser && $ccUser->department) {
@@ -442,9 +464,20 @@ class PipelineImportController extends Controller
                     if (!$ccareId) {
                         $ccareId = $ccUser->id;
                     }
-                } elseif (str_contains($deptName, 'new biz') || str_contains($deptName, 'newbiz')) {
-                    if (!$newBizId) {
-                        $newBizId = $ccUser->id;
+                }
+            }
+        }
+
+        // 2. Only if no CCare is selected or mapped, assign New Biz mapping
+        if (!$ccareId) {
+            foreach ($mappedCcMaps as $map) {
+                $ccUser = $map->ccUser;
+                if ($ccUser && $ccUser->department) {
+                    $deptName = strtolower($ccUser->department->name);
+                    if (str_contains($deptName, 'new biz') || str_contains($deptName, 'newbiz')) {
+                        if (!$newBizId) {
+                            $newBizId = $ccUser->id;
+                        }
                     }
                 }
             }
