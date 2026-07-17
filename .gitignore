@@ -86,3 +86,6 @@ vite.config.js.timestamp-*
 /*.xlsx
 /MAPPING_REPORT*
 /import*.csv
+
+# Local tool config — contains plaintext SSH/DB credentials, must never be committed
+/.claude

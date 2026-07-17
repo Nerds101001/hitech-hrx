@@ -47,6 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'role_or_permission' => RoleOrPermissionMiddleware::class,
       'onboarding' => \App\Http\Middleware\OnboardingMiddleware::class,
       'admin.guard' => \App\Http\Middleware\AdminRoleGuard::class,
+      'sales.guard' => \App\Http\Middleware\SalesAccessGuard::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {
@@ -74,15 +75,19 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
     $exceptions->render(function (AuthenticationException $e, Request $request) {
-      if ($request->is('api/*')) {
+      // AJAX/fetch callers must get JSON. Redirecting them to the login page
+      // makes fetch() follow the 302 and hand back an HTML document, which
+      // then blows up as "Unexpected token '<'" in the caller's .json().
+      if ($request->is('api/*') || $request->expectsJson()) {
         return response()->json([
           'statusCode' => 401,
           'status' => 'failed',
-          'data' => 'Unauthorized'
+          'data' => 'Unauthorized',
+          'error' => 'Your session has expired. Please refresh the page and sign in again.',
         ], 401);
-      } else {
-        return redirect()->guest('auth/login');
       }
+
+      return redirect()->guest('auth/login');
     });
 
     //Validation exception of api response
@@ -98,6 +103,19 @@ return Application::configure(basePath: dirname(__DIR__))
 
     $exceptions->render(function (\Throwable $e, Request $request) {
       if ($e instanceof UnauthorizedException) {
+        // Spatie throws this for a missing role AND for an expired session
+        // (notLoggedIn). Serving the HTML 403 view to a fetch()/XHR caller is
+        // what produced "Unexpected token '<'" on the digital-library upload.
+        if ($request->expectsJson()) {
+          $guest = auth()->guest();
+          return response()->json([
+            'status' => 'failed',
+            'error' => $guest
+              ? 'Your session has expired. Please refresh the page and sign in again.'
+              : 'You do not have permission to perform this action.',
+          ], $guest ? 401 : 403);
+        }
+
         return response()->view("errors.403", [
           "exception" => $e
         ], 403);

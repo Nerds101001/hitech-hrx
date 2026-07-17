@@ -711,16 +711,45 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
     submitBtn.disabled = true;
     
     try {
+        const csrf = document.querySelector('meta[name="csrf-token"]');
         const response = await fetch(this.action, {
             method: 'POST',
             body: formData,
             headers: {
-                'X-Requested-With': 'XMLHttpRequest'
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                ...(csrf ? { 'X-CSRF-TOKEN': csrf.getAttribute('content') } : {})
             }
         });
-        
-        const data = await response.json();
-        
+
+        // Parse defensively: a session timeout, gateway error or login redirect
+        // hands back an HTML page, which would otherwise throw a cryptic
+        // "Unexpected token '<'" when we blindly call response.json().
+        // Note fetch() follows redirects silently, so a bounce to the login
+        // page arrives here as status 200 with an HTML body.
+        const raw = await response.text();
+        let data = null;
+        try { data = raw ? JSON.parse(raw) : {}; } catch (_) { data = null; }
+
+        if (data === null) {
+            if (response.redirected) {
+                throw new Error('Your session expired. Please refresh the page and sign in again.');
+            }
+            if (response.status === 413) {
+                throw new Error('File is too large to upload. Please use a smaller file.');
+            }
+            if (response.status === 401 || response.status === 419) {
+                throw new Error('Your session expired. Please refresh the page and sign in again.');
+            }
+            if (response.status === 403) {
+                throw new Error('You do not have permission to upload to the vault.');
+            }
+            if (response.status === 502 || response.status === 504 || response.status === 524) {
+                throw new Error('The upload timed out on the server. Please try again.');
+            }
+            throw new Error('Upload failed (server returned a non-JSON response, code ' + response.status + '). Please refresh and try again.');
+        }
+
         if (!response.ok) {
             throw new Error(data.error || data.message || 'Failed to upload asset');
         }
