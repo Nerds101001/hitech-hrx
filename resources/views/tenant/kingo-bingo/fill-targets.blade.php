@@ -47,6 +47,7 @@ td.td-lbl {
     font-size:10px; font-weight:700; text-align:center; padding:0 4px;
     position:sticky; left:155px; z-index:3; border-right:2px solid #d1d5db; min-width:50px;
 }
+td.td-lbl.sk { background:#fef2f2; color:#991b1b; }
 td.td-lbl.k { background:#eef2ff; color:#3730a3; }
 td.td-lbl.b { background:#f0fdf4; color:#166534; }
 
@@ -76,7 +77,8 @@ td.ok     input { background:#dcfce7 !important; }
 td.err    input { background:#fee2e2 !important; color:#dc2626 !important; }
 
 /* row lines */
-tr.row-k td { border-bottom:none; }
+tr.row-sk td { border-bottom:none; }
+tr.row-k td { border-bottom:none; border-top:1px dashed #e5e7eb; }
 tr.row-b td { border-top:1px dashed #e5e7eb; }
 tr.row-sep td { height:4px; background:#f1f5f9; border:none; }
 
@@ -150,9 +152,45 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
     $getV  = fn($key, $field) => optional($spT->firstWhere('month_year', $key))->{$field};
 @endphp
 
+{{-- SUPER KINGO row --}}
+<tr class="row-sk">
+    <td class="td-sp" rowspan="3" title="{{ $sp->name }}">{{ $sp->name }}</td>
+    <td class="td-lbl sk">SUPER<br>KINGO</td>
+
+    {{-- Annual --}}
+    @php $v = $getV($annualKey, 'super_kingo_target'); @endphp
+    <td class="v-ann {{ $v > 0 ? 'filled' : '' }}"
+        data-sp="{{ $sp->id }}" data-month="{{ $annualKey }}" data-field="super_kingo_target">
+        <input type="number" step="0.01" min="0"
+               value="{{ $v > 0 ? $v + 0 : '' }}" placeholder="—"
+               data-sp="{{ $sp->id }}" data-month="{{ $annualKey }}" data-field="super_kingo_target">
+    </td>
+
+    {{-- Quarters --}}
+    @foreach($quarterKeys as $qk)
+    @php $v = $getV($qk, 'super_kingo_target'); @endphp
+    <td class="v-qtr {{ $v > 0 ? 'filled' : '' }}"
+        data-sp="{{ $sp->id }}" data-month="{{ $qk }}" data-field="super_kingo_target">
+        <input type="number" step="0.01" min="0"
+               value="{{ $v > 0 ? $v + 0 : '' }}" placeholder="—"
+               data-sp="{{ $sp->id }}" data-month="{{ $qk }}" data-field="super_kingo_target">
+    </td>
+    @endforeach
+
+    {{-- Monthly --}}
+    @foreach($months as $m)
+    @php $v = $getV($m['key'], 'super_kingo_target'); $isCur = $m['key'] === $currentMonthKey; @endphp
+    <td class="v {{ $isCur ? 'v-cur' : '' }} {{ $v > 0 ? 'filled' : '' }}"
+        data-sp="{{ $sp->id }}" data-month="{{ $m['key'] }}" data-field="super_kingo_target">
+        <input type="number" step="0.01" min="0"
+               value="{{ $v > 0 ? $v + 0 : '' }}" placeholder="—"
+               data-sp="{{ $sp->id }}" data-month="{{ $m['key'] }}" data-field="super_kingo_target">
+    </td>
+    @endforeach
+</tr>
+
 {{-- KINGO row --}}
 <tr class="row-k">
-    <td class="td-sp" rowspan="2" title="{{ $sp->name }}">{{ $sp->name }}</td>
     <td class="td-lbl k">KINGO</td>
 
     {{-- Annual --}}
@@ -247,6 +285,7 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 <script>
 const SAVE_URL = "{{ route('sales-visits.targets.update') }}";
 const CSRF     = "{{ csrf_token() }}";
+const TARGET_FIELDS = ['super_kingo_target', 'kingo_target', 'bingo_target'];
 let toastTimer;
 
 function toast(msg, ok = true) {
@@ -268,20 +307,21 @@ function saveCell(input) {
     td.classList.remove('ok', 'err');
     td.classList.add('saving');
 
-    const otherField = field === 'kingo_target' ? 'bingo_target' : 'kingo_target';
-    const otherInput = document.querySelector(
-        `input[data-sp="${spId}"][data-month="${month}"][data-field="${otherField}"]`
-    );
+    // The endpoint does updateOrCreate on the whole row, so every tier must be
+    // sent — otherwise saving one would blank the other two.
+    const payload = { salesperson_id: spId, month_year: month };
+    TARGET_FIELDS.forEach(f => {
+        if (f === field) { payload[f] = val; return; }
+        const sibling = document.querySelector(
+            `input[data-sp="${spId}"][data-month="${month}"][data-field="${f}"]`
+        );
+        payload[f] = sibling ? sibling.value.trim() : '';
+    });
 
     fetch(SAVE_URL, {
         method : 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
-        body   : JSON.stringify({
-            salesperson_id: spId,
-            month_year    : month,
-            kingo_target  : field === 'kingo_target' ? val : (otherInput ? otherInput.value.trim() : ''),
-            bingo_target  : field === 'bingo_target' ? val : (otherInput ? otherInput.value.trim() : ''),
-        })
+        body   : JSON.stringify(payload)
     })
     .then(r => r.json())
     .then(data => {

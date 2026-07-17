@@ -242,7 +242,7 @@ class KingoBingoController extends Controller
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'month_year'     => 'required|string|size:7',
-            'field'          => 'required|in:bingo_target,kingo_target',
+            'field'          => 'required|in:bingo_target,kingo_target,super_kingo_target',
             'value'          => 'nullable|numeric',
         ]);
 

@@ -21,6 +21,7 @@ class SalesTargetController extends Controller
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'month_year' => 'required|string',
+            'super_kingo_target' => 'nullable|numeric',
             'kingo_target' => 'nullable|numeric',
             'bingo_target' => 'nullable|numeric'
         ]);
@@ -31,6 +32,7 @@ class SalesTargetController extends Controller
                 'month_year' => $request->month_year,
             ],
             [
+                'super_kingo_target' => $request->super_kingo_target ?: 0,
                 'kingo_target' => $request->kingo_target ?: 0,
                 'bingo_target' => $request->bingo_target ?: 0,
             ]

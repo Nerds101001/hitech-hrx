@@ -14,6 +14,7 @@ class SalespersonTarget extends Model
         'tenant_id',
         'salesperson_id',
         'month_year',
+        'super_kingo_target',
         'kingo_target',
         'bingo_target'
     ];
