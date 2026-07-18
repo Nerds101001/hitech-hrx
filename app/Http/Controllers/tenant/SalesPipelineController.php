@@ -65,11 +65,12 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
-        // Which salespersons may this user see? null = no restriction (admin/hr/manager).
-        // CCare / New Biz users are limited to the salespersons mapped to them;
-        // a plain salesperson sees only themselves.
+        // Which salespersons may this user see? null = no restriction — only
+        // ADMIN and HR see every salesperson's data. Managers (including sales
+        // managers) are scoped like anyone else: a Sales-dept manager sees only
+        // their own rows, a CCare/New Biz manager sees their mapped salespersons.
         $allowedSpIds = null;
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
             if ($isCcare || $isNewBiz) {
                 // Salespersons this rep is connected to: those explicitly mapped
                 // to them in cc_salesperson_map, PLUS any whose pipeline/report
@@ -306,11 +307,12 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
-        // Which salespersons may this user see? null = no restriction (admin/hr/manager).
-        // CCare / New Biz users are limited to the salespersons mapped to them;
-        // a plain salesperson sees only themselves.
+        // Which salespersons may this user see? null = no restriction — only
+        // ADMIN and HR see every salesperson's data. Managers (including sales
+        // managers) are scoped like anyone else: a Sales-dept manager sees only
+        // their own rows, a CCare/New Biz manager sees their mapped salespersons.
         $allowedSpIds = null;
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
             if ($isCcare || $isNewBiz) {
                 // Salespersons this rep is connected to: those explicitly mapped
                 // to them in cc_salesperson_map, PLUS any whose pipeline/report

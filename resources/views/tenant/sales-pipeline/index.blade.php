@@ -86,7 +86,7 @@
                 </select>
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
-                @php $showBothFilters = $isAdmin || $user->hasRole(['hr','HR','manager','Manager']); @endphp
+                @php $showBothFilters = $isAdmin || $user->hasRole(['hr','HR']); @endphp
                 {{-- Salesperson filter: admin/HR and CCare/New Biz users --}}
                 @if($showBothFilters || $isCcare || $isNewBiz)
                     <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
