@@ -11,6 +11,16 @@
 @endsection
 
 @section('content')
+<style>
+  /* Keep the show/hide toggle inside the password box */
+  .hitech-input-group { position: relative; }
+  .hitech-input-group .form-control { padding-right: 44px; }
+  .hitech-input-group .password-toggle-btn {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    z-index: 3; display: flex; align-items: center; height: 24px;
+  }
+  .hitech-input-group .password-toggle-btn i { font-size: 1.15rem; }
+</style>
 <div class="hitech-gateway-wrapper">
   <div class="gateway-container">
     <div class="gateway-card">

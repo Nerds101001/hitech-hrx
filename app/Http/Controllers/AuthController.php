@@ -557,8 +557,10 @@ class AuthController extends Controller
   {
     $request->validate(['email' => 'required|email']);
     $status = Password::sendResetLink($request->only('email'));
+    // On success, send the user to the login page with an alert (instead of
+    // staying on the forgot-password form).
     return $status === Password::RESET_LINK_SENT
-      ? back()->with('success', __($status))
+      ? redirect()->route('login')->with('success', 'We have emailed your password reset link. Please check your email.')
       : back()->withErrors(['email' => __($status)]);
   }
 
@@ -573,7 +575,11 @@ class AuthController extends Controller
     $request->validate([
       'token' => 'required',
       'email' => 'required|email',
-      'password' => 'required|min:8|confirmed',
+      // Strong password: >=8 chars, upper + lower case, a number and a symbol.
+      'password' => ['required', 'confirmed',
+        \Illuminate\Validation\Rules\Password::min(8)->mixedCase()->numbers()->symbols()],
+    ], [
+      'password.min' => 'Password must be at least 8 characters.',
     ]);
 
     $status = Password::reset(

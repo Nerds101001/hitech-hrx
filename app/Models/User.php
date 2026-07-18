@@ -28,6 +28,15 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
 {
   use UserTenantOptionsTrait, HasFactory, HasApiTokens, Notifiable, HasRoles, Auditable, UserActionsTrait, SoftDeletes;
 
+  /**
+   * Send the password reset notification using the HRX-branded email template
+   * instead of Laravel's default plain mail.
+   */
+  public function sendPasswordResetNotification($token)
+  {
+    $this->notify(new \App\Notifications\Auth\ResetPasswordNotification($token));
+  }
+
   protected static function boot()
   {
     parent::boot();
