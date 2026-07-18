@@ -208,7 +208,48 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare'));
+        // ── This-month target achievement (per salesperson) for the popup ──
+        // Compares each salesperson's current-month actual sale (locked report
+        // rows) against their Bingo / Kingo / Super-Kingo targets. All in lakhs.
+        $targetAchievers = [];
+        $kAchieved = 0; $bAchieved = 0; $skAchieved = 0;
+        $cmTargets = $salespersonTargets->where('month_year', $currentMonthKey);
+        if ($allowedSpIds !== null) {
+            $cmTargets = $cmTargets->whereIn('salesperson_id', $allowedSpIds);
+        }
+        if ($cmTargets->isNotEmpty()) {
+            $actualByS = SalesPipelineMonth::query()
+                ->join('sales_pipelines', 'sales_pipelines.id', '=', 'sales_pipeline_months.sales_pipeline_id')
+                ->where('sales_pipeline_months.month_year', $currentMonthKey)
+                ->where('sales_pipelines.is_locked', true)
+                ->whereNull('sales_pipelines.deleted_at')
+                ->when($allowedSpIds !== null, fn($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
+                ->groupBy('sales_pipelines.salesperson_id')
+                ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual')
+                ->pluck('actual', 'sp');
+            $nameMap = User::whereIn('id', $cmTargets->pluck('salesperson_id')->unique()->all())
+                ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
+            foreach ($cmTargets as $t) {
+                $spId   = $t->salesperson_id;
+                $actual = (float) ($actualByS[$spId] ?? 0);
+                $bingo  = (float) $t->bingo_target;
+                $kingo  = (float) $t->kingo_target;
+                $super  = (float) $t->super_kingo_target;
+                if ($bingo > 0 && $actual >= $bingo) $bAchieved++;
+                if ($kingo > 0 && $actual >= $kingo) $kAchieved++;
+                if ($super > 0 && $actual >= $super) $skAchieved++;
+                $targetAchievers[] = [
+                    'name'   => $nameMap[$spId] ?? ('#' . $spId),
+                    'actual' => $actual,
+                    'bingo'  => $bingo,
+                    'kingo'  => $kingo,
+                    'super'  => $super,
+                ];
+            }
+            usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
+        }
+
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved'));
     }
 
     public function actualPipelineIndex(Request $request)

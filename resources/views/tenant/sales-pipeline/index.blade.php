@@ -54,7 +54,14 @@
         <div class="stat-chip"><span class="stat-label">YoY 24-25</span><span class="stat-value" id="cardYoy24_25">₹{{ number_format($totals['24_25'] ?? 0, 2) }}<em>L</em></span></div>
         <div class="stat-chip"><span class="stat-label">YoY 25-26</span><span class="stat-value" id="cardYoy25_26">₹{{ number_format($totals['25_26'] ?? 0, 2) }}<em>L</em></span></div>
         <div class="stat-chip" style="border-left-color:#10b981;"><span class="stat-label">YoY {{ $currentFyLabel }}</span><span class="stat-value" id="fyTotalCard">₹{{ number_format($currentFyActualTotal, 2) }}<em>L</em></span></div>
-        <div class="stat-chip" style="border-left-color:#22c55e;min-width:200px;"><span class="stat-label">This Month Target</span><span class="stat-value"><span class="badge bg-warning text-dark" id="kingoTargetBadge" style="font-size:0.65rem;">K ₹{{ number_format(($monthlyTargets[$currentMonthKey]['kingo'] ?? 0) / 100000, 2) }}L</span> <span class="badge bg-info text-dark" id="bingoTargetBadge" style="font-size:0.65rem;">B ₹{{ number_format(($monthlyTargets[$currentMonthKey]['bingo'] ?? 0) / 100000, 2) }}L</span></span></div>
+        <div class="stat-chip" style="border-left-color:#22c55e;min-width:210px;cursor:pointer;" onclick="openTargetModal()" title="Click to see who achieved their targets this month">
+            <span class="stat-label">This Month — Achieved <i class="bx bx-chevron-right"></i></span>
+            <span class="stat-value">
+                <span class="badge bg-info text-dark" style="font-size:0.7rem;" title="Bingo achievers">B {{ $bAchieved ?? 0 }}</span>
+                <span class="badge bg-warning text-dark" style="font-size:0.7rem;" title="Kingo achievers">K {{ $kAchieved ?? 0 }}</span>
+                <span class="badge bg-success" style="font-size:0.7rem;" title="Super Kingo achievers">SK {{ $skAchieved ?? 0 }}</span>
+            </span>
+        </div>
         <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $totalNewClients }}</span></div>
         <div class="stat-chip" style="border-left-color:#f97316;"><span class="stat-label">Pending</span><span class="stat-value" id="pendingCard" style="color:#ea580c;">₹{{ number_format($totalPendingCurrentMonth ?? 0, 2) }}<em>L</em></span></div>
     </div>
@@ -138,11 +145,6 @@
 
                             @foreach($months as $m)
                                 @php
-                                    $actual      = $monthlyActuals[$m['key']] ?? 0;
-                                    $tKingo      = $monthlyTargets[$m['key']]['kingo'] ?? 0;
-                                    $tBingo      = $monthlyTargets[$m['key']]['bingo'] ?? 0;
-                                    $achKingo    = $tKingo > 0 && $actual >= $tKingo;
-                                    $achBingo    = $tBingo > 0 && $actual >= $tBingo;
                                     $isThisMonth = ($m['key'] === $currentMonthKey);
                                     // Past: 1 col (Sale only). Current: 4 (Forecast + Sale + Pending + Remarks).
                                     $colspan     = $isThisMonth ? 4 : 1;
@@ -150,14 +152,6 @@
                                 <th colspan="{{ $colspan }}" class="text-center align-middle border-bottom border-white"
                                     style="background-color:#0d9488;">
                                     {{ $m['display'] }}
-                                    @if($achKingo)
-                                        <span class="badge bg-warning text-dark ms-1 rounded-circle border border-white"
-                                              style="padding:0.2em 0.35em" title="Kingo Achieved!">K</span>
-                                    @endif
-                                    @if($achBingo)
-                                        <span class="badge bg-info text-dark ms-1 rounded-circle border border-white"
-                                              style="padding:0.2em 0.35em" title="Bingo Achieved!">B</span>
-                                    @endif
                                 </th>
                             @endforeach
                         </tr>
@@ -488,6 +482,68 @@
     </div>
 </div>
 
+{{-- ─── THIS-MONTH TARGET ACHIEVEMENT MODAL ──────────────────────────── --}}
+@php
+    // Colour a target cell by how close the actual sale is to that target.
+    $tgtCell = function ($actual, $target) {
+        if ($target <= 0) return ['cls' => 'text-muted', 'style' => ''];                       // no target
+        $p = $actual / $target;
+        if ($p >= 1)    return ['cls' => 'text-white fw-bold', 'style' => 'background:#16a34a;']; // achieved → green
+        if ($p >= 0.75) return ['cls' => 'text-dark fw-bold',  'style' => 'background:#fde047;']; // ≥75% → yellow
+        if ($p >= 0.50) return ['cls' => 'text-white',         'style' => 'background:#fb923c;']; // 50–75% → orange
+        return ['cls' => 'text-white', 'style' => 'background:#dc2626;'];                          // <50% → red
+    };
+@endphp
+<div class="modal fade" id="targetAchieveModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header" style="background:linear-gradient(90deg,#0d9488,#0f766e);">
+                <h5 class="modal-title text-white fw-bold mb-0">This Month — Target Achievement</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="d-flex gap-3 px-3 py-2 small text-muted border-bottom flex-wrap">
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#16a34a;border-radius:2px;"></span> Achieved</span>
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#fde047;border-radius:2px;"></span> ≥75%</span>
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#fb923c;border-radius:2px;"></span> 50–75%</span>
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#dc2626;border-radius:2px;"></span> &lt;50%</span>
+                    <span class="ms-auto">All figures ₹ Lakh</span>
+                </div>
+                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;">
+                    <thead class="table-light" style="position:sticky;top:0;">
+                        <tr>
+                            <th>Salesperson</th>
+                            <th class="text-end">Actual Sale</th>
+                            <th class="text-end">Bingo</th>
+                            <th class="text-end">Kingo</th>
+                            <th class="text-end">Super Kingo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($targetAchievers ?? [] as $r)
+                            <tr>
+                                <td class="fw-semibold">{{ $r['name'] }}</td>
+                                <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
+                                @foreach(['bingo','kingo','super'] as $tier)
+                                    @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
+                                    <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
+                                        @if($r[$tier] > 0)
+                                            {{ number_format($r[$tier], 2) }}
+                                            @if($r['actual'] >= $r[$tier])<i class="bx bx-check"></i>@endif
+                                        @else — @endif
+                                    </td>
+                                @endforeach
+                            </tr>
+                        @empty
+                            <tr><td colspan="5" class="text-center text-muted py-4">No targets set for this month.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ─── TARGETS MODAL ────────────────────────────────────────────────── --}}
 <div class="modal fade" id="targetsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -751,6 +807,10 @@ function clearFilters() {
 }
 
 // ── Inline add row ────────────────────────────────────────────────────
+function openTargetModal() {
+    new bootstrap.Modal(document.getElementById('targetAchieveModal')).show();
+}
+
 function showAddNewRow() {
     document.getElementById('addNewRow').style.display       = '';
     document.getElementById('addNewRowActions').style.display = '';
