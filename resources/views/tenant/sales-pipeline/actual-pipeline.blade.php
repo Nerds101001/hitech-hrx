@@ -83,41 +83,41 @@
         </div>
         <div class="stat-chip" style="border-left-color:#3b82f6;">
             <span class="stat-label">Total Customers</span>
-            <span class="stat-value text-primary" id="totalCustomersCard">{{ $pipelines->count() }}</span>
+            <span class="stat-value text-primary" id="totalCustomersCard">{{ $totalNewClients }}</span>
         </div>
     </div>
 
-    {{-- ─── FILTER BAR ─────────────────────────────────────────────────── --}}
+    {{-- ─── FILTER BAR (server-side; submits a GET request) ──────────────── --}}
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">
-            <div class="d-flex flex-wrap align-items-center gap-3">
+            <form method="GET" action="{{ route('sales-visits.actual-pipeline.index') }}" class="d-flex flex-wrap align-items-center gap-3">
+                <input type="hidden" name="fy" value="{{ $selectedFy }}">
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
-                <input type="text" class="form-control form-control-sm" id="filterParty"
-                       placeholder="Search customer…" style="width:200px;" oninput="applyFilters()">
-                <select class="form-select form-select-sm" id="filterStage" style="width:170px;"
-                        onchange="applyFilters()">
+                <input type="text" class="form-control form-control-sm" name="party" value="{{ $fParty }}"
+                       placeholder="Search customer…" style="width:200px;">
+                <select class="form-select form-select-sm" name="stage" style="width:170px;" onchange="this.form.submit()">
                     <option value="">All Stages</option>
                     @foreach($statuses as $st)
-                        <option value="{{ strtolower($st) }}">{{ $st }}</option>
+                        <option value="{{ $st }}" {{ strtolower($fStage) === strtolower($st) ? 'selected' : '' }}>{{ $st }}</option>
                     @endforeach
                 </select>
-                <select class="form-select form-select-sm" id="filterRep" style="width:210px;"
-                        onchange="applyFilters()">
+                <select class="form-select form-select-sm" name="rep" style="width:210px;" onchange="this.form.submit()">
                     <option value="">
                         @if($isCcare || $isNewBiz) All Salespersons
                         @else All Representatives @endif
                     </option>
                     @foreach($repFilterUsers as $au)
-                        <option value="{{ strtolower($au->name) }}">{{ $au->name }}</option>
+                        <option value="{{ $au->id }}" {{ (string)$fRep === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bx bx-search"></i> Search</button>
+                <a href="{{ route('sales-visits.actual-pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
-                </button>
-                <span class="text-muted ms-auto" style="font-size:0.8rem">
-                    Showing: <strong id="filterCount">{{ $pipelines->count() }}</strong>
+                </a>
+                <span class="text-muted ms-auto text-nowrap" style="font-size:0.8rem">
+                    Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong> of <strong>{{ $pipelines->total() }}</strong>
                 </span>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -355,6 +355,14 @@
                 </table>
             </div>
 
+            {{-- ─── PAGINATION (server-side, 50 per page) ────────────────── --}}
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-3 px-2">
+                <span class="text-muted small">
+                    Showing {{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }} of {{ $pipelines->total() }}
+                </span>
+                <div>{{ $pipelines->onEachSide(1)->links() }}</div>
+            </div>
+
             {{-- Add New Entry trigger --}}
             <div class="d-flex justify-content-center py-2 border-top" style="background:#f8fafc;">
                 <button class="btn btn-sm btn-outline-success rounded-pill px-4"
@@ -480,71 +488,16 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    applyFilters();
+    // Filtering / pagination / totals are server-side now — nothing to init here.
 });
 
-// ── Filters ───────────────────────────────────────────────────────────
-function applyFilters() {
-    const partyVal = document.getElementById('filterParty').value.toLowerCase().trim();
-    const stageVal = document.getElementById('filterStage').value.toLowerCase();
-    const repVal   = document.getElementById('filterRep').value.toLowerCase().trim();
-
-    let visible = 0;
-    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => {
-        const matchParty = !partyVal || (tr.dataset.party || '').includes(partyVal);
-        const matchStage = !stageVal || (tr.dataset.stage || '').includes(stageVal);
-        const matchRep   = !repVal   || (tr.dataset.rep   || '').includes(repVal);
-        const show = matchParty && matchStage && matchRep;
-        tr.classList.toggle('pipeline-row-hidden', !show);
-        if (show) visible++;
-    });
-    document.getElementById('filterCount').textContent = visible;
-    updateDynamicStats();
-}
-
-function updateDynamicStats() {
-    let selectedFyTotal = 0, potential = 0, count = 0;
-    const salespersonsSeen = new Set();
-
-    document.querySelectorAll('#pipelineBody tr[data-id]:not(.pipeline-row-hidden)').forEach(tr => {
-        potential += parseFloat(tr.dataset.potential || 0);
-        count++;
-        if (tr.dataset.salesperson) salespersonsSeen.add(tr.dataset.salesperson);
-        try {
-            const months = JSON.parse(tr.dataset.months || '{}');
-            activeMonthKeys.forEach(mk => { selectedFyTotal += parseFloat(months[mk] || 0); });
-        } catch(e) {}
-    });
-
-    // YoY from per-salesperson annual figures (same as the Sales Report page):
-    // no filter -> the user's scoped grand total; a single salesperson filter ->
-    // that person's annual; a CCare/New Biz name -> sum of the visible salespersons.
-    const repVal = (document.getElementById('filterRep').value || '').toLowerCase().trim();
-    let yoy = [0, 0, 0, 0];
-    if (!repVal) {
-        yoy = [ANNUAL_GRAND['22_23'], ANNUAL_GRAND['23_24'], ANNUAL_GRAND['24_25'], ANNUAL_GRAND['25_26']];
-    } else if (ANNUAL_MAP[repVal]) {
-        yoy = ANNUAL_MAP[repVal].slice();
-    } else {
-        salespersonsSeen.forEach(sp => { const a = ANNUAL_MAP[sp]; if (a) { yoy[0]+=a[0]; yoy[1]+=a[1]; yoy[2]+=a[2]; yoy[3]+=a[3]; } });
-    }
-
-    function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
-
-    const elY22 = document.getElementById('cardYoy22_23'); if (elY22) elY22.innerHTML = fmtL(yoy[0]);
-    const elY23 = document.getElementById('cardYoy23_24'); if (elY23) elY23.innerHTML = fmtL(yoy[1]);
-    const elY24 = document.getElementById('cardYoy24_25'); if (elY24) elY24.innerHTML = fmtL(yoy[2]);
-    const elY25 = document.getElementById('cardYoy25_26'); if (elY25) elY25.innerHTML = fmtL(yoy[3]);
-    const elFy  = document.getElementById('fyTotalCard');    if (elFy)  elFy.innerHTML  = fmtL(selectedFyTotal);
-    const elPot = document.getElementById('potentialMonthCard'); if (elPot) elPot.innerHTML = fmtL(potential);
-    const elCnt = document.getElementById('totalCustomersCard');  if (elCnt) elCnt.textContent = count;
-}
-
+// Filtering, pagination and the stat cards are computed SERVER-SIDE now (the
+// controller renders 50 rows per page and pre-computes every card over the full
+// filtered set). These stubs keep old inline callers safe.
+function applyFilters() {}
+function updateDynamicStats() {}
 function clearFilters() {
-    document.getElementById('filterParty').value = '';
-    document.getElementById('filterStage').value = '';
-    document.getElementById('filterRep').value   = '';
-    applyFilters();
+    window.location.href = @json(route('sales-visits.actual-pipeline.index')) + '?fy=' + encodeURIComponent(@json($selectedFy));
 }
 
 // ── Inline Add ────────────────────────────────────────────────────────

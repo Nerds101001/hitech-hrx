@@ -112,10 +112,9 @@ class SalesPipelineController extends Controller
         //    stat cards and month-totals row stay correct across all pages ──
         $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
         $monthKeys = array_column($months, 'key');
-        $aggIds = (clone $query)->pluck('sales_pipelines.id');
-        $totalNewClients = $aggIds->count();
+        $totalNewClients = (clone $query)->count();
         $totalPotential  = (float) (clone $query)->sum('total_business_potential');
-        $monthAgg = SalesPipelineMonth::whereIn('sales_pipeline_id', $aggIds)
+        $monthAgg = SalesPipelineMonth::whereIn('sales_pipeline_id', (clone $query)->select('sales_pipelines.id'))
             ->whereIn('month_year', $monthKeys)
             ->selectRaw('month_year, SUM(sale_amount) AS sale, SUM(pending_amount) AS pending, SUM(forecast_amount) AS forecast')
             ->groupBy('month_year')->get()->keyBy('month_year');
@@ -304,7 +303,47 @@ class SalesPipelineController extends Controller
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
 
-        $pipelines = $query->orderBy('id', 'desc')->get();
+        // ── Server-side filters (search customer / stage / salesperson) ──
+        $fParty = trim((string) $request->input('party', ''));
+        $fStage = trim((string) $request->input('stage', ''));
+        $fRep   = $request->input('rep');   // salesperson/rep user id
+        if ($fParty !== '') {
+            $query->where('party_name', 'like', '%' . $fParty . '%');
+        }
+        if ($fStage !== '') {
+            $query->where('status_stage', 'like', '%' . $fStage . '%');
+        }
+        if (!empty($fRep)) {
+            $query->where(function ($q) use ($fRep) {
+                $q->where('salesperson_id', $fRep)
+                  ->orWhere('ccare_id', $fRep)
+                  ->orWhere('new_biz_id', $fRep);
+            });
+        }
+
+        // ── Aggregates over the FULL filtered set (before pagination) ──
+        $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
+        $monthKeys = array_column($months, 'key');
+        $totalNewClients = (clone $query)->count();
+        $totalPotential  = (float) (clone $query)->sum('total_business_potential');
+        $monthAgg = SalesPipelineMonth::whereIn('sales_pipeline_id', (clone $query)->select('sales_pipelines.id'))
+            ->whereIn('month_year', $monthKeys)
+            ->selectRaw('month_year, SUM(sale_amount) AS sale, SUM(pending_amount) AS pending, SUM(forecast_amount) AS forecast')
+            ->groupBy('month_year')->get()->keyBy('month_year');
+
+        $monthlyActuals = [];
+        $monthlyForecast = [];
+        $monthlyPending = [];
+        foreach ($months as $m) {
+            $mk = $m['key'];
+            $monthlyActuals[$mk]  = (float) ($monthAgg[$mk]->sale ?? 0);
+            $monthlyForecast[$mk] = (float) ($monthAgg[$mk]->forecast ?? 0);
+            $monthlyPending[$mk]  = (float) ($monthAgg[$mk]->pending ?? 0);
+        }
+        $totalPendingCurrentMonth = (float) ($monthAgg[$currentMonthKey]->pending ?? 0);
+
+        // ── Paginate (50 per page) ──
+        $pipelines = $query->orderBy('id', 'desc')->paginate(50)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)
             ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()
@@ -375,35 +414,26 @@ class SalesPipelineController extends Controller
         // name, so the client filter can update the target chip per salesperson.
         $kbByName = [];
         foreach ($assignedUsers as $au) {
-            $t = $salespersonTargets->where('salesperson_id', $au->id)->where('month_year', \Carbon\Carbon::now()->format('Y-m'));
+            $t = $salespersonTargets->where('salesperson_id', $au->id)->where('month_year', $currentMonthKey);
             $kbByName[strtolower(trim($au->name))] = [
                 'kingo' => (float) $t->sum('kingo_target'),
                 'bingo' => (float) $t->sum('bingo_target'),
             ];
         }
 
-        $monthlyActuals = [];
         $monthlyTargets = [];
         foreach ($months as $m) {
-            $monthlyActuals[$m['key']] = $pipelines->map(function($p) use ($m) {
-                $mData = $p->months->firstWhere('month_year', $m['key']);
-                return $mData ? $mData->sale_amount : 0;
-            })->sum();
-
             $targetsForMonth = $salespersonTargets->where('month_year', $m['key']);
             if ($allowedSpIds !== null) {
                 $targetsForMonth = $targetsForMonth->whereIn('salesperson_id', $allowedSpIds);
             }
-
             $monthlyTargets[$m['key']] = [
                 'kingo' => $targetsForMonth->sum('kingo_target'),
                 'bingo' => $targetsForMonth->sum('bingo_target'),
             ];
         }
 
-        $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
-
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName', 'fParty', 'fStage', 'fRep'));
     }
 
     public function store(Request $request)
