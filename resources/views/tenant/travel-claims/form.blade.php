@@ -39,6 +39,17 @@
         </div>
     @endif
 
+    {{-- Submission & attachment guidelines --}}
+    <div class="alert border-0 shadow-sm mb-4" style="background:#f0f9ff; border-left:4px solid #0ea5e9 !important;">
+        <h6 class="fw-bold mb-2" style="color:#075985;"><i class="bx bx-info-circle me-1"></i> Before you submit — please read</h6>
+        <ul class="mb-0 small" style="color:#0c4a6e; line-height:1.7;">
+            <li><strong>Last date of submission:</strong> the <strong>7th of the following month</strong>. Claims submitted after the 7th incur a <strong>10% late-submission penalty</strong> on the net payable amount.</li>
+            <li><strong>Bill attachments are now uploaded once for the whole month</strong> at the bottom of this form — <em>not</em> per day. Combine all of a category's bills into a single file (PDF or image).</li>
+            <li>For every category where you have claimed an amount, the matching consolidated bill file is <strong>mandatory</strong> — e.g. if your Food total is above ₹0 you must attach the combined Food bills. <strong>The form will not submit</strong> until each claimed category has its bill attached.</li>
+            <li>Month Start &amp; Month End odometer photos remain required for submission.</li>
+        </ul>
+    </div>
+
     <form action="{{ isset($claim) ? route('travel-claims.update', $claim->id) : route('travel-claims.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
         <div class="card shadow-sm border-0 mb-4">
@@ -100,7 +111,7 @@
             <div id="claimTopScrollInner" style="height: 1px;"></div>
         </div>
         <div class="table-responsive bg-white rounded shadow-sm border mb-3" id="claimTableScroll">
-            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 3600px; font-size: 0.85rem;">
+            <table class="table table-bordered table-hover table-sm mb-0 align-middle text-nowrap" style="min-width: 2400px; font-size: 0.85rem;">
                 <thead class="bg-light">
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
@@ -112,16 +123,11 @@
                         <th style="min-width: 80px;">Meter<br>End</th>
                         <th style="min-width: 60px;">Total<br>KM</th>
                         <th style="min-width: 110px;">Conveyance/<br>Amount (₹)</th>
-                        <th style="min-width: 160px;">Conveyance/<br>Bill Proof</th>
                         <th style="min-width: 95px;">Outstation<br>>5hrs</th>
                         <th style="min-width: 100px;">Food<br>(₹)</th>
-                        <th style="min-width: 160px;">Food Bill<br>Proof</th>
                         <th style="min-width: 100px;">Toll/Parking<br>(₹)</th>
-                        <th style="min-width: 160px;">Toll/Parking<br>Proof</th>
                         <th style="min-width: 110px;">Customer<br>Expense (₹)</th>
-                        <th style="min-width: 160px;">Customer Expense Proof</th>
                         <th style="min-width: 120px;">Courier (Transport/<br>Freight) etc (₹)</th>
-                        <th style="min-width: 160px;">Courier / Transport<br>Proof</th>
                         <th style="min-width: 90px;">Lodging<br>(₹)</th>
                         <th style="min-width: 120px;">Other (Photocopy/<br>Misc) etc (₹)</th>
                         <th style="min-width: 120px;">Remarks</th>
@@ -131,6 +137,41 @@
                     <!-- Rows inserted by JS -->
                 </tbody>
             </table>
+        </div>
+
+        {{-- Consolidated monthly bill uploads (one file each, replacing per-day proofs) --}}
+        <div class="card shadow-sm border-0 mb-4 mt-3">
+            <div class="card-header bg-white border-bottom pt-4 pb-3">
+                <h5 class="card-title mb-1">Monthly Bill Attachments</h5>
+                <p class="text-muted small mb-0">Upload <strong>one combined file per category</strong> covering all days of the month. Any category you have claimed an amount for must have its bill attached, or the claim cannot be submitted.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @php
+                        $consolidated = [
+                            ['name' => 'food_bill_proof',         'label' => 'Food Bills',              'hint' => 'All food/meal bills for the month'],
+                            ['name' => 'conveyance_petrol_proof', 'label' => 'Conveyance / Petrol',     'hint' => 'All petrol slips & conveyance bills'],
+                            ['name' => 'toll_parking_proof',      'label' => 'Toll / Parking',          'hint' => 'All toll & parking receipts'],
+                            ['name' => 'customer_courier_proof',  'label' => 'Customer Expense / Courier', 'hint' => 'Customer expense & courier/transport bills'],
+                        ];
+                    @endphp
+                    @foreach($consolidated as $c)
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label fw-semibold text-secondary small mb-1">{{ $c['label'] }} Bill
+                                    <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="{{ $c['hint'] }}"></i>
+                                </label>
+                                <input type="file" name="{{ $c['name'] }}" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                                @if(isset($claim) && $claim->{$c['name']})
+                                    <div class="mt-2 text-primary small">
+                                        <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->{$c['name']}) }}" target="_blank">View File</a>
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
         </div>
 
         <div class="card shadow-sm border-0 mb-4 bg-white mt-3">
@@ -261,33 +302,13 @@
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][end_meter]" class="form-control form-control-sm end-meter p-1 text-center" style="font-size: 0.8rem;" oninput="calculateRow(${d})" value="${ex.end_meter || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][distance_km]" class="form-control form-control-sm distance bg-light p-1 text-center" style="font-size: 0.8rem;" readonly value="${ex.distance_km || ''}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][conveyance_amount]" class="form-control form-control-sm conveyance text-primary fw-bold text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.conveyance_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][petrol_slip]" class="form-control form-control-sm petrol-slip p-1" style="font-size: 0.75rem;" onchange="calculateRow(${d})" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.petrol_slip_proof ? `<input type="hidden" name="items[${d}][existing_petrol_slip]" value="${ex.petrol_slip_proof}"><a href="/storage/${ex.petrol_slip_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
                 <td class="text-center align-middle p-1">
                     <input class="form-check-input" type="checkbox" name="items[${d}][is_outstation]" value="1" onchange="toggleOutstation(${d}, this)" ${ex.is_outstation ? 'checked' : ''}>
                 </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][food_allowance]" class="form-control form-control-sm food text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.food_allowance || 0).toFixed(2)}" ${ex.is_outstation ? 'readonly' : ''}></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][additional_food_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.additional_food_proof ? `<input type="hidden" name="items[${d}][existing_additional_food_proof]" value="${ex.additional_food_proof}"><a href="/storage/${ex.additional_food_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][toll_amount]" class="form-control form-control-sm toll text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.toll_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][toll_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.toll_proof ? `<input type="hidden" name="items[${d}][existing_toll_proof]" value="${ex.toll_proof}"><a href="/storage/${ex.toll_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][special_approval_amount]" class="form-control form-control-sm special-appr text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.special_approval_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][special_approval_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.special_approval_proof ? `<input type="hidden" name="items[${d}][existing_special_approval_proof]" value="${ex.special_approval_proof}"><a href="/storage/${ex.special_approval_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][courier_amount]" class="form-control form-control-sm courier text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.courier_amount || 0).toFixed(2)}"></td>
-                <td class="p-1">
-                    <input type="file" name="items[${d}][courier_proof]" class="form-control form-control-sm p-1" style="font-size: 0.75rem;" accept="image/jpeg,image/png,image/jpg,application/pdf">
-                    ${ex.courier_proof ? `<input type="hidden" name="items[${d}][existing_courier_proof]" value="${ex.courier_proof}"><a href="/storage/${ex.courier_proof}" target="_blank" class="small d-block mt-1">View File</a>` : ''}
-                </td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][lodging_amount]" class="form-control form-control-sm lodging text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.lodging_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="number" step="0.01" name="items[${d}][other_amount]" class="form-control form-control-sm other text-end p-1" style="font-size: 0.8rem;" oninput="calculateTotals()" value="${parseFloat(ex.other_amount || 0).toFixed(2)}"></td>
                 <td class="p-1"><input type="text" name="items[${d}][remarks]" class="form-control form-control-sm p-1" style="font-size: 0.8rem;" placeholder="..." value="${ex.remarks || ''}"></td>
@@ -449,15 +470,11 @@
                 let toll = parseFloat(row.find('.toll').val()) || 0;
                 let specialAppr = parseFloat(row.find('.special-appr').val()) || 0;
                 let conveyanceAmount = parseFloat(row.find('.conveyance').val()) || 0;
-                
-                let hasPetrolSlip = row.find('.petrol-slip').val() || row.find('input[name*="[existing_petrol_slip]"]').length > 0;
-                let hasFoodProof = row.find('input[name*="[additional_food_proof]"]').val() || row.find('input[name*="[existing_additional_food_proof]"]').length > 0;
-                let hasTollProof = row.find('input[name*="[toll_proof]"]').val() || row.find('input[name*="[existing_toll_proof]"]').length > 0;
-                let hasSpecialApprProof = row.find('input[name*="[special_approval_proof]"]').val() || row.find('input[name*="[existing_special_approval_proof]"]').length > 0;
-                let hasCourierProof = row.find('input[name*="[courier_proof]"]').val() || row.find('input[name*="[existing_courier_proof]"]').length > 0;
-                
+
+                // Bills are now uploaded once at the bottom (not per day), so a row
+                // counts as empty purely on its own text/amount fields.
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !fromLoc && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0 && !hasPetrolSlip && !hasTollProof && !hasSpecialApprProof && !hasCourierProof && !hasFoodProof) {
+                if (!mode && !fromLoc && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

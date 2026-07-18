@@ -95,15 +95,38 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
+        // Rep filter dropdown: only Sales / Customer Care / New Biz staff (A–Z),
+        // never every employee.
+        $repFilterUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', function ($q) {
+                $q->where('name', 'like', '%Sales%')
+                  ->orWhere('name', 'like', '%Customer Care%')
+                  ->orWhere('name', 'like', '%CCARE%')
+                  ->orWhere('name', 'like', '%New Biz%')
+                  ->orWhere('name', 'like', '%New Business%');
+            })->orderBy('first_name')->get();
+
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
-        // Calculate YoY totals
-        $totals = [
-            '25_26' => $pipelines->sum('yoy_25_26'),
-            '24_25' => $pipelines->sum('yoy_24_25'),
-            '23_24' => $pipelines->sum('yoy_23_24'),
-            '22_23' => $pipelines->sum('yoy_22_23'),
-        ];
+        // Per-salesperson annual (YoY) sales — independent of pipeline rows so
+        // salespersons with annual figures but no pipeline entries still show.
+        $annualMap = [];
+        $annualGrand = ['22_23' => 0.0, '23_24' => 0.0, '24_25' => 0.0, '25_26' => 0.0];
+        if (\Illuminate\Support\Facades\Schema::hasTable('salesperson_annual_sales')) {
+            foreach (\Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
+                    ->join('users as u', 'u.id', '=', 'a.user_id')
+                    ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26')
+                    ->get() as $a) {
+                $key = strtolower(trim($a->first_name . ' ' . $a->last_name));
+                $annualMap[$key] = [(float)$a->fy_22_23, (float)$a->fy_23_24, (float)$a->fy_24_25, (float)$a->fy_25_26];
+                $annualGrand['22_23'] += $a->fy_22_23;
+                $annualGrand['23_24'] += $a->fy_23_24;
+                $annualGrand['24_25'] += $a->fy_24_25;
+                $annualGrand['25_26'] += $a->fy_25_26;
+            }
+        }
+        // Cards default to company-wide annual totals; client filter narrows them.
+        $totals = $annualGrand;
 
         $monthlyActuals = [];
         $monthlyTargets = [];
@@ -135,7 +158,7 @@ class SalesPipelineController extends Controller
 
         \Illuminate\Support\Facades\Log::info('PIPELINES COUNT: ' . $pipelines->count() . ' User Dept: ' . ($user->department->name ?? 'none'));
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'annualMap', 'annualGrand', 'repFilterUsers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -222,15 +245,38 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
+        // Rep filter dropdown: only Sales / Customer Care / New Biz staff (A–Z),
+        // never every employee.
+        $repFilterUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', function ($q) {
+                $q->where('name', 'like', '%Sales%')
+                  ->orWhere('name', 'like', '%Customer Care%')
+                  ->orWhere('name', 'like', '%CCARE%')
+                  ->orWhere('name', 'like', '%New Biz%')
+                  ->orWhere('name', 'like', '%New Business%');
+            })->orderBy('first_name')->get();
+
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
-        // Calculate YoY totals
-        $totals = [
-            '25_26' => $pipelines->sum('yoy_25_26'),
-            '24_25' => $pipelines->sum('yoy_24_25'),
-            '23_24' => $pipelines->sum('yoy_23_24'),
-            '22_23' => $pipelines->sum('yoy_22_23'),
-        ];
+        // Per-salesperson annual (YoY) sales — independent of pipeline rows so
+        // salespersons with annual figures but no pipeline entries still show.
+        $annualMap = [];
+        $annualGrand = ['22_23' => 0.0, '23_24' => 0.0, '24_25' => 0.0, '25_26' => 0.0];
+        if (\Illuminate\Support\Facades\Schema::hasTable('salesperson_annual_sales')) {
+            foreach (\Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
+                    ->join('users as u', 'u.id', '=', 'a.user_id')
+                    ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26')
+                    ->get() as $a) {
+                $key = strtolower(trim($a->first_name . ' ' . $a->last_name));
+                $annualMap[$key] = [(float)$a->fy_22_23, (float)$a->fy_23_24, (float)$a->fy_24_25, (float)$a->fy_25_26];
+                $annualGrand['22_23'] += $a->fy_22_23;
+                $annualGrand['23_24'] += $a->fy_23_24;
+                $annualGrand['24_25'] += $a->fy_24_25;
+                $annualGrand['25_26'] += $a->fy_25_26;
+            }
+        }
+        // Cards default to company-wide annual totals; client filter narrows them.
+        $totals = $annualGrand;
 
         $monthlyActuals = [];
         $monthlyTargets = [];
@@ -253,7 +299,7 @@ class SalesPipelineController extends Controller
 
         $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'annualMap', 'annualGrand', 'repFilterUsers'));
     }
 
     public function store(Request $request)

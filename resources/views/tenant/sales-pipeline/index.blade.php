@@ -80,16 +80,27 @@
                         @elseif($isSalesperson) All Representatives
                         @else All Reps @endif
                     </option>
-                    @foreach($assignedUsers as $au)
+                    @foreach($repFilterUsers as $au)
                         <option value="{{ strtolower($au->name) }}">{{ $au->name }}</option>
                     @endforeach
                 </select>
                 <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">
                     <i class="bx bx-x"></i> Clear
                 </button>
-                <span class="text-muted ms-auto" style="font-size:0.8rem">
-                    Showing: <strong id="filterCount">{{ $pipelines->count() }}</strong>
-                </span>
+                <div class="d-flex align-items-center gap-2 ms-auto" style="font-size:0.8rem">
+                    <span class="text-muted">Rows/page:</span>
+                    <select class="form-select form-select-sm" id="perPageSelect" style="width:72px;" onchange="changePerPage(this.value)">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                    <span class="text-muted text-nowrap">
+                        <strong id="pageInfo">—</strong> of <strong id="filterCount">{{ $pipelines->count() }}</strong>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="pagePrev" onclick="pagePrev()" title="Previous page">‹</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="pageNext" onclick="pageNext()" title="Next page">›</button>
+                </div>
             </div>
         </div>
     </div>
@@ -107,8 +118,8 @@
                             <th rowspan="2" class="align-middle col-status">Type</th>
                             <th rowspan="2" class="align-middle col-category" style="min-width:90px;">Category</th>
                             <th rowspan="2" class="align-middle col-repname" style="min-width:130px;">Representative</th>
-                            <th rowspan="2" class="text-end align-middle col-potential">
-                                Potential<br><small class="fw-normal opacity-75" style="font-size:0.65rem">₹ Lakh</small>
+                            <th rowspan="2" class="text-end align-middle col-potential" style="cursor:pointer;" onclick="sortPipeline('potential', this)" title="Click to sort">
+                                Potential<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.65rem">₹ Lakh/Month</small>
                             </th>
                             @if($isAdmin)
                                 <th rowspan="2" class="align-middle col-salesperson">Salesperson</th>
@@ -150,17 +161,18 @@
                             @foreach($months as $m)
                                 @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
                                 @if($isThisMonth)
-                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;">
-                                        Fcst<br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
+                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;cursor:pointer;" onclick="sortPipeline('forecast', this)" title="Click to sort">
+                                        Fcst<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                     </th>
                                 @endif
                                 <th class="text-end align-middle {{ !$isThisMonth ? 'block-end' : '' }}"
-                                    style="min-width:55px;max-width:55px;">
-                                    Sale<br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
+                                    style="min-width:55px;max-width:55px;cursor:pointer;"
+                                    onclick="sortPipeline('{{ $isThisMonth ? 'sale' : 'month:'.$m['key'] }}', this)" title="Click to sort">
+                                    Sale<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                 </th>
                                 @if($isThisMonth)
-                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;">
-                                        Pend<br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
+                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;cursor:pointer;" onclick="sortPipeline('pending', this)" title="Click to sort">
+                                        Pend<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                     </th>
                                     <th class="align-middle block-end" style="min-width:95px;max-width:95px;">Remarks</th>
                                 @endif
@@ -226,6 +238,7 @@
                                       ]))
                                     : $repDisplay;
                                 $rowCurrentMonthPending = $row->months->firstWhere('month_year', $currentMonthKey)?->pending_amount ?? 0;
+                                $rowCurrentMonthForecast = $row->months->firstWhere('month_year', $currentMonthKey)?->forecast_amount ?? 0;
                                 $rowMonthSales = $row->months->pluck('sale_amount', 'month_year')->toArray();
                             @endphp
                             <tr data-id="{{ $row->id }}"
@@ -237,7 +250,9 @@
                                 data-yoy24="{{ $row->yoy_24_25 ?? 0 }}"
                                 data-yoy25="{{ $row->yoy_25_26 ?? 0 }}"
                                 data-pending="{{ $rowCurrentMonthPending }}"
+                                data-forecast="{{ $rowCurrentMonthForecast }}"
                                 data-potential="{{ $row->total_business_potential ?? 0 }}"
+                                data-salesperson="{{ strtolower($row->salesperson->name ?? '') }}"
                                 data-months='@json($rowMonthSales)'
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
@@ -680,37 +695,91 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ── Filters ───────────────────────────────────────────────────────────
+// --- Column sorting (Potential, current-month Fcst/Sale/Pend, and any month's Sale) ---
+const SORT_CURRENT_MONTH = @json($currentMonthKey);
+const ANNUAL_MAP  = @json($annualMap);
+const ANNUAL_GRAND = @json($annualGrand);
+let sortState = { key: null, dir: 1 };
+function sortPipeline(key, el) {
+    sortState.dir = (sortState.key === key) ? -sortState.dir : 1;
+    sortState.key = key;
+    const body = document.getElementById('pipelineBody');
+    const totalsRow = document.getElementById('monthTotalsRow');
+    const rows = Array.from(body.querySelectorAll('tr[data-id]'));
+    const monthVal = (tr, mk) => { try { return parseFloat((JSON.parse(tr.dataset.months || '{}'))[mk] || 0); } catch (e) { return 0; } };
+    const val = (tr) => {
+        if (key === 'potential') return parseFloat(tr.dataset.potential || 0);
+        if (key === 'pending')   return parseFloat(tr.dataset.pending || 0);
+        if (key === 'forecast')  return parseFloat(tr.dataset.forecast || 0);
+        if (key === 'sale')      return monthVal(tr, SORT_CURRENT_MONTH);
+        if (key.indexOf('month:') === 0) return monthVal(tr, key.slice(6)); // any month's sale
+        return 0;
+    };
+    rows.sort((a, b) => (val(a) - val(b)) * sortState.dir);
+    rows.forEach(r => body.appendChild(r));                 // re-append in new order
+    if (totalsRow) body.insertBefore(totalsRow, body.firstChild); // keep totals on top
+    document.querySelectorAll('.sort-caret').forEach(c => c.textContent = '');
+    if (el) { const c = el.querySelector('.sort-caret'); if (c) c.textContent = sortState.dir > 0 ? ' ▲' : ' ▼'; }
+    if (typeof renderPage === 'function') renderPage(); // re-apply pagination to sorted order
+}
+
+// --- Pagination state (client-side; works together with the filters) ---
+let currentPage = 1;
+let perPage = 10;
+
 function applyFilters() {
     const typeVal  = document.getElementById('filterType').value.toLowerCase();
     const partyVal = document.getElementById('filterParty').value.toLowerCase().trim();
     const repVal   = document.getElementById('filterRep').value.toLowerCase().trim();
 
-    let visible = 0;
     document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => {
         const matchType  = !typeVal  || (tr.dataset.type  || '').toLowerCase() === typeVal;
         const matchParty = !partyVal || (tr.dataset.party || '').includes(partyVal);
         const matchRep   = !repVal   || (tr.dataset.rep   || '').includes(repVal);
-        const show = matchType && matchParty && matchRep;
-        tr.classList.toggle('pipeline-row-hidden', !show);
-        if (show) visible++;
+        tr.dataset.filtermatch = (matchType && matchParty && matchRep) ? '1' : '0';
     });
-    document.getElementById('filterCount').textContent = visible;
-    updateDynamicStats();
+    currentPage = 1;
+    renderPage();          // slice to the current page
+    updateDynamicStats();  // totals from ALL filtered rows (not just the page)
 }
 
+// Reveal only the current page's slice of filter-matched rows.
+function renderPage() {
+    const matched = Array.from(document.querySelectorAll('#pipelineBody tr[data-id]'))
+                         .filter(tr => tr.dataset.filtermatch !== '0');
+    const totalPages = Math.max(1, Math.ceil(matched.length / perPage));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
+    const start = (currentPage - 1) * perPage, end = start + perPage;
+
+    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => tr.classList.add('pipeline-row-hidden'));
+    matched.forEach((tr, i) => { if (i >= start && i < end) tr.classList.remove('pipeline-row-hidden'); });
+
+    const fc = document.getElementById('filterCount'); if (fc) fc.textContent = matched.length;
+    const info = document.getElementById('pageInfo');
+    if (info) info.textContent = matched.length ? ((start + 1) + '–' + Math.min(end, matched.length)) : '0';
+    const prev = document.getElementById('pagePrev'), next = document.getElementById('pageNext');
+    if (prev) prev.disabled = currentPage <= 1;
+    if (next) next.disabled = currentPage >= totalPages;
+}
+
+function changePerPage(v) { perPage = parseInt(v) || 10; currentPage = 1; renderPage(); }
+function pagePrev() { if (currentPage > 1) { currentPage--; renderPage(); } }
+function pageNext() { currentPage++; renderPage(); }
+
 function updateDynamicStats() {
-    let yoy22 = 0, yoy23 = 0, yoy24 = 0, yoy25 = 0, pending = 0, potential = 0;
+    let pending = 0, potential = 0, forecast = 0;
     const monthTotals = {};
     let count = 0;
+    const salespersonsSeen = new Set();
 
-    document.querySelectorAll('#pipelineBody tr[data-id]:not(.pipeline-row-hidden)').forEach(tr => {
-        yoy22     += parseFloat(tr.dataset.yoy22 || 0);
-        yoy23     += parseFloat(tr.dataset.yoy23 || 0);
-        yoy24     += parseFloat(tr.dataset.yoy24 || 0);
-        yoy25     += parseFloat(tr.dataset.yoy25 || 0);
+    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => {
+        if (tr.dataset.filtermatch === '0') return; // every filtered row, across all pages
         pending   += parseFloat(tr.dataset.pending || 0);
+        forecast  += parseFloat(tr.dataset.forecast || 0);
         potential += parseFloat(tr.dataset.potential || 0);
         count++;
+        if (tr.dataset.salesperson) salespersonsSeen.add(tr.dataset.salesperson);
         try {
             const months = JSON.parse(tr.dataset.months || '{}');
             for (const [mk, val] of Object.entries(months)) {
@@ -719,29 +788,43 @@ function updateDynamicStats() {
         } catch(e) {}
     });
 
-    const fyTotal = Object.values(monthTotals).reduce((a, b) => a + b, 0);
+    // YoY comes from per-salesperson annual figures (not pipeline rows), so a
+    // salesperson with no pipeline rows still shows their annual on filter.
+    const repVal = (document.getElementById('filterRep').value || '').toLowerCase().trim();
+    let yoy = [0, 0, 0, 0];
+    if (!repVal) {
+        yoy = [ANNUAL_GRAND['22_23'], ANNUAL_GRAND['23_24'], ANNUAL_GRAND['24_25'], ANNUAL_GRAND['25_26']];
+    } else if (ANNUAL_MAP[repVal]) {
+        yoy = ANNUAL_MAP[repVal].slice();
+    } else {
+        // A CCare / New Biz rep: sum the annuals of the salespersons under them
+        salespersonsSeen.forEach(sp => { const a = ANNUAL_MAP[sp]; if (a) { yoy[0]+=a[0]; yoy[1]+=a[1]; yoy[2]+=a[2]; yoy[3]+=a[3]; } });
+    }
 
-    // yoy, sale, pending are stored in LAKH units — display as-is
-    // potential is stored in rupees — divide by 100000 to get lakhs
+    const fyTotal = Object.values(monthTotals).reduce((a, b) => a + b, 0);
     function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
-    document.getElementById('cardYoy22_23').innerHTML  = fmtL(yoy22);
-    document.getElementById('cardYoy23_24').innerHTML  = fmtL(yoy23);
-    document.getElementById('cardYoy24_25').innerHTML  = fmtL(yoy24);
-    document.getElementById('cardYoy25_26').innerHTML  = fmtL(yoy25);
-    document.getElementById('fyTotalCard').innerHTML   = fmtL(fyTotal);
-    document.getElementById('pendingCard').innerHTML   = fmtL(pending);
+    document.getElementById('cardYoy22_23').innerHTML = fmtL(yoy[0]);
+    document.getElementById('cardYoy23_24').innerHTML = fmtL(yoy[1]);
+    document.getElementById('cardYoy24_25').innerHTML = fmtL(yoy[2]);
+    document.getElementById('cardYoy25_26').innerHTML = fmtL(yoy[3]);
+    document.getElementById('fyTotalCard').innerHTML  = fmtL(fyTotal);
+    document.getElementById('pendingCard').innerHTML  = fmtL(pending);
     document.getElementById('totalCustomersCard').textContent = count;
     const potEl = document.getElementById('totalPotential');
     if (potEl) potEl.textContent = potential.toFixed(2);
 
-    // Update monthly sale totals row
+    // Past-month sale totals
     for (const [mk, total] of Object.entries(monthTotals)) {
         const cell = document.getElementById('mtotal-' + mk);
-        if (cell) cell.textContent = total > 0 ? total.toFixed(2) : '—';
+        if (cell) cell.textContent = (total > 0 || mk === SORT_CURRENT_MONTH) ? total.toFixed(2) : '—';
     }
-    // Update current month pending total in totals row
-    const pendingTotalCell = document.querySelector('[id^="mtotal-pending-"]');
-    if (pendingTotalCell) pendingTotalCell.textContent = pending > 0 ? pending.toFixed(2) : '—';
+    // Current month Forecast / Sale / Pending totals (always show the sum, even 0.00)
+    const fcEl = document.getElementById('mtotal-forecast-' + SORT_CURRENT_MONTH);
+    if (fcEl) fcEl.textContent = forecast.toFixed(2);
+    const saleEl = document.getElementById('mtotal-' + SORT_CURRENT_MONTH);
+    if (saleEl) saleEl.textContent = (monthTotals[SORT_CURRENT_MONTH] || 0).toFixed(2);
+    const pendEl = document.getElementById('mtotal-pending-' + SORT_CURRENT_MONTH);
+    if (pendEl) pendEl.textContent = pending.toFixed(2);
 }
 
 function clearFilters() {

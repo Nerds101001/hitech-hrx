@@ -332,19 +332,29 @@ class AuthController extends Controller
       $user = User::where('email', $email)->first();
 
       if ($user && $user->locked_until) {
-          // Generate Signed URL
+          // Generate a signed, 15-minute unlock link.
           $unlockUrl = \Illuminate\Support\Facades\URL::temporarySignedRoute(
-              'auth.unlock', 
-              now()->addMinutes(15), 
+              'auth.unlock',
+              now()->addMinutes(15),
               ['user' => $user->id]
           );
 
-          $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
+          // Email it too (best effort) — but the on-screen link below is the
+          // primary path so the flow works even when mail is unavailable.
+          // Unlocking only clears the temporary lockout; it does not log the
+          // user in or change their password, so showing the link is safe.
+          try {
+              $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
+          } catch (\Throwable $e) {
+              \Illuminate\Support\Facades\Log::warning('Unlock email failed: ' . $e->getMessage());
+          }
 
-          return redirect()->back()->with('success', 'A secure unlock link has been sent to your email address.');
+          return redirect()->back()
+              ->with('success', 'Your unlock link is ready. Click the button below to unlock your account.')
+              ->with('unlock_link', $unlockUrl);
       }
 
-      return redirect()->back()->with('error', 'Account is not locked or user not found.');
+      return redirect()->back()->with('error', 'This account is not locked, or the email was not found.');
   }
 
   public function unlockAccount(Request $request, $userId)

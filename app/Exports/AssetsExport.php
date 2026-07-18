@@ -14,13 +14,15 @@ class AssetsExport implements FromCollection, WithHeadings, WithMapping, ShouldA
     protected $category;
     protected $status;
     protected $userId;
+    protected $departmentId;
 
-    public function __construct($searchTerm = null, $category = null, $status = null, $userId = null)
+    public function __construct($searchTerm = null, $category = null, $status = null, $userId = null, $departmentId = null)
     {
         $this->searchTerm = $searchTerm;
         $this->category = $category;
         $this->status = $status;
         $this->userId = $userId;
+        $this->departmentId = $departmentId;
     }
 
     public function collection()
@@ -47,6 +49,12 @@ class AssetsExport implements FromCollection, WithHeadings, WithMapping, ShouldA
         
         if ($this->userId) {
             $query->where('assigned_to', $this->userId);
+        }
+
+        if ($this->departmentId) {
+            $query->whereHas('assignedUser', function ($qu) {
+                $qu->where('department_id', $this->departmentId);
+            });
         }
 
         return $query->get();

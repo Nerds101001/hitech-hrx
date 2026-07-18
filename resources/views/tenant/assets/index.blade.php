@@ -190,6 +190,16 @@
             </select>
           </div>
 
+          {{-- Department Filter --}}
+          <div class="compact-select" style="min-width: 160px;">
+            <select id="filterDepartment" class="form-select select2 filter-item-hitech">
+              <option value="">Department: All</option>
+              @foreach($departments as $department)
+                <option value="{{ $department->id }}">{{ $department->name }}</option>
+              @endforeach
+            </select>
+          </div>
+
           {{-- User Filter --}}
           <div class="compact-select" style="min-width: 160px;">
             <select id="filterUser" class="form-select select2 filter-item-hitech">
@@ -246,6 +256,7 @@
             d.category = $('#filterCategory').val();
             d.status = $('#filterStatus').val();
             d.user_id = $('#filterUser').val();
+            d.department_id = $('#filterDepartment').val();
           }
         },
         columns: [
@@ -277,7 +288,7 @@
         }
       });
 
-      $('#customSearchBtn, #filterCategory, #filterStatus, #filterUser').on('click change', function () {
+      $('#customSearchBtn, #filterCategory, #filterStatus, #filterUser, #filterDepartment').on('click change', function () {
         dt.draw();
       });
 
@@ -287,12 +298,14 @@
           const category = $('#filterCategory').val();
           const status = $('#filterStatus').val();
           const user_id = $('#filterUser').val();
-          
+          const department_id = $('#filterDepartment').val();
+
           let url = `{{ route('assets.exportExcel') }}?`;
           if (search) url += `searchTerm=${search}&`;
           if (category) url += `category=${category}&`;
           if (status) url += `status=${status}&`;
           if (user_id) url += `user_id=${user_id}&`;
+          if (department_id) url += `department_id=${department_id}&`;
           
           window.location.href = url;
       });

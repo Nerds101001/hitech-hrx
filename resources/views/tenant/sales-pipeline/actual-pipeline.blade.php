@@ -107,7 +107,7 @@
                         @if($isCcare || $isNewBiz) All Salespersons
                         @else All Representatives @endif
                     </option>
-                    @foreach($assignedUsers as $au)
+                    @foreach($repFilterUsers as $au)
                         <option value="{{ strtolower($au->name) }}">{{ $au->name }}</option>
                     @endforeach
                 </select>

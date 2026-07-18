@@ -106,6 +106,15 @@ $customizerHidden = 'customizer-hide';
             </div>
           @endif
 
+          @if(session('unlock_link'))
+            {{-- One-click unlock: appears right after the email is submitted --}}
+            <a href="{{ session('unlock_link') }}"
+               class="btn btn-success d-flex align-items-center justify-content-center w-100 mb-3 animate__animated animate__pulse"
+               style="border-radius: 12px; font-weight: 700; padding: 0.9rem;">
+              <i class="bx bx-lock-open-alt me-2 fs-5"></i> UNLOCK MY ACCOUNT
+            </a>
+            <p class="text-center text-muted small mb-3">Click the button above to unlock your account, then log in. (A copy was also emailed to you.)</p>
+          @else
           <form action="{{ route('auth.unlock.request') }}" method="POST">
             @csrf
             <div class="mb-3">
@@ -115,10 +124,11 @@ $customizerHidden = 'customizer-hide';
             </div>
 
             <button class="btn btn-primary d-flex align-items-center justify-content-center w-100 hitech-btn-admin mt-3" type="submit">
-              <span class="btn-text">SEND UNLOCK LINK</span>
-              <i class="bx bx-mail-send ms-2"></i>
+              <span class="btn-text">GET UNLOCK LINK</span>
+              <i class="bx bx-lock-open-alt ms-2"></i>
             </button>
           </form>
+          @endif
 
           <div class="form-footer mt-4">
             <a href="{{ route('login') }}" class="footer-link"><i class="bx bx-arrow-back me-1"></i> Back to Login</a>

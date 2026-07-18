@@ -64,7 +64,15 @@
     @php
         $settings = \App\Models\Settings::first();
         $allPerformance = $user->salesTargets;
-        \Illuminate\Support\Facades\Log::info("DEBUG view: user_id={$user->id}, tenant_id=" . ($user->tenant_id ?? 'null') . ", auth_tenant_id=" . (auth()->check() ? auth()->user()->tenant_id : 'guest') . ", targets_count=" . $allPerformance->count());
+        // DWM (Daily Work Management) tasks this employee logs — surfaced in the KPI tab.
+        $dwmRoutines = \App\Models\WorkControlRoutine::where('user_id', $user->id)
+            ->orderByRaw("FIELD(frequency,'daily','weekly','fortnightly','monthly','quarterly','yearly')")
+            ->get();
+        // Existing KRA/KPI assignments made from those DWM tasks (keyed by routine id).
+        $dwmAssignments = \App\Models\KpiAssignment::where('user_id', $user->id)
+            ->where('is_active', true)
+            ->whereNotNull('work_control_routine_id')
+            ->get()->keyBy('work_control_routine_id');
         $kraPerformance = $allPerformance->filter(fn($t) => str_contains($t->description, 'Type: KRA'));
         $kpiPerformance = $allPerformance->filter(fn($t) => str_contains($t->description, 'Type: KPI'));
 
@@ -2423,6 +2431,109 @@
 
                         <!-- KPIs Tab -->
                         <div class="tab-pane fade" id="kpis-tab">
+                            {{-- DWM logged tasks (from Daily Work Management) --}}
+                            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                                <div class="card-body p-4">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bx bx-list-check fs-4 me-2" style="color:#127464;"></i>
+                                            <h6 class="mb-0 fw-bold">Daily Work Management (DWM) Tasks
+                                                <span class="badge bg-label-info ms-1">{{ $dwmRoutines->count() }}</span></h6>
+                                        </div>
+                                    </div>
+                                    <p class="text-muted small mb-3">All recurring tasks this employee logs in DWM. Pick <strong>KRA</strong> or <strong>KPI</strong> for any task and a check date — the timeline is picked automatically from the task's frequency. Assigned tasks become scored objectives on the <a href="/kpi/manage?user_id={{ $user->id }}">KPI / KRA management page</a>.</p>
+                                    @if($dwmRoutines->isNotEmpty())
+                                        @php $canAssignDwm = auth()->user()->hasRole(['admin','Admin','hr','manager','super_admin']); @endphp
+                                        <div class="table-responsive rounded-3 border" style="background:#fff;">
+                                            <table class="table table-sm table-hover mb-0 align-middle">
+                                                <thead style="background:#F8FAFC;">
+                                                    <tr>
+                                                        <th class="ps-3 py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">#</th>
+                                                        <th class="py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">Task</th>
+                                                        <th class="py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">Frequency</th>
+                                                        <th class="py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">Time / cycle</th>
+                                                        <th class="py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">Assign as</th>
+                                                        <th class="py-2 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;">Check date</th>
+                                                        @if($canAssignDwm)<th class="py-2 pe-3 text-muted fw-bold" style="font-size:0.72rem;text-transform:uppercase;"></th>@endif
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($dwmRoutines as $i => $r)
+                                                        @php $asg = $dwmAssignments->get($r->id); @endphp
+                                                        <tr data-dwm-row="{{ $r->id }}">
+                                                            <td class="ps-3 text-muted">{{ $i + 1 }}</td>
+                                                            <td class="fw-semibold">{{ $r->title }}
+                                                                @if($asg)<span class="badge bg-label-success ms-1">{{ $asg->category }}</span>@endif
+                                                            </td>
+                                                            <td><span class="badge bg-label-primary text-capitalize">{{ $r->frequency }}</span></td>
+                                                            <td>{{ intdiv((int)$r->duration_minutes, 60) }}h {{ (int)$r->duration_minutes % 60 }}m</td>
+                                                            <td>
+                                                                <select class="form-select form-select-sm dwm-cat" style="min-width:110px;" {{ $canAssignDwm ? '' : 'disabled' }}>
+                                                                    <option value="none" {{ !$asg ? 'selected' : '' }}>— None —</option>
+                                                                    <option value="KRA" {{ $asg && $asg->category === 'KRA' ? 'selected' : '' }}>KRA</option>
+                                                                    <option value="KPI" {{ $asg && $asg->category === 'KPI' ? 'selected' : '' }}>KPI</option>
+                                                                </select>
+                                                            </td>
+                                                            <td>
+                                                                <input type="date" class="form-control form-control-sm dwm-date" style="min-width:150px;" {{ $canAssignDwm ? '' : 'disabled' }}>
+                                                            </td>
+                                                            @if($canAssignDwm)
+                                                                <td class="pe-3">
+                                                                    <button type="button" class="btn btn-sm btn-hitech dwm-save"><i class="bx bx-save"></i></button>
+                                                                    <span class="dwm-status small ms-1"></span>
+                                                                </td>
+                                                            @endif
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <script>
+                                        (function(){
+                                            var URL_ASSIGN = "{{ route('tenant.kpi.assignFromRoutine') }}";
+                                            var CSRF = "{{ csrf_token() }}";
+                                            var USER_ID = {{ $user->id }};
+                                            document.querySelectorAll('.dwm-save').forEach(function(btn){
+                                                btn.addEventListener('click', function(){
+                                                    var row = btn.closest('[data-dwm-row]');
+                                                    var routineId = row.getAttribute('data-dwm-row');
+                                                    var cat = row.querySelector('.dwm-cat').value;
+                                                    var date = row.querySelector('.dwm-date').value;
+                                                    var status = row.querySelector('.dwm-status');
+                                                    btn.disabled = true;
+                                                    status.textContent = 'Saving…';
+                                                    status.className = 'dwm-status small ms-1 text-muted';
+                                                    fetch(URL_ASSIGN, {
+                                                        method: 'POST',
+                                                        headers: {'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},
+                                                        body: JSON.stringify({user_id: USER_ID, work_control_routine_id: routineId, category: cat, check_date: date || null})
+                                                    })
+                                                    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+                                                    .then(function(res){
+                                                        btn.disabled = false;
+                                                        if(res.ok && res.j.status === 'success'){
+                                                            status.textContent = '✓ ' + (res.j.message || 'Saved');
+                                                            status.className = 'dwm-status small ms-1 text-success';
+                                                        } else {
+                                                            status.textContent = res.j.message || 'Error';
+                                                            status.className = 'dwm-status small ms-1 text-danger';
+                                                        }
+                                                    })
+                                                    .catch(function(){
+                                                        btn.disabled = false;
+                                                        status.textContent = 'Network error';
+                                                        status.className = 'dwm-status small ms-1 text-danger';
+                                                    });
+                                                });
+                                            });
+                                        })();
+                                        </script>
+                                    @else
+                                        <p class="text-muted small mb-0"><i class="bx bx-info-circle me-1"></i>This employee has not logged any DWM tasks yet.</p>
+                                    @endif
+                                </div>
+                            </div>
+
                             <div class="card border-0 shadow-sm rounded-3">
                                 <div class="card-body p-5">
                                     <div class="d-flex justify-content-between align-items-center mb-4">

@@ -98,6 +98,11 @@ class TravelClaimController extends Controller
             'sales_collection' => 'nullable|numeric',
             'month_start_odometer_proof' => $isDraft ? 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120' : 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
             'month_end_odometer_proof' => $isDraft ? 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120' : 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
+            // Consolidated monthly bill files (one per category).
+            'food_bill_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
+            'conveyance_petrol_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
+            'toll_parking_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
+            'customer_courier_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
             'items' => $isDraft ? 'nullable|array' : 'required|array|min:1',
             'items.*.date' => 'required|date',
             'items.*.mode_of_travel' => 'nullable|string',
@@ -146,9 +151,52 @@ class TravelClaimController extends Controller
                 }
             }
 
+            // ── Consolidated monthly bill files (replace the old per-day proofs) ──
+            // Each keeps its previously-stored file on edit unless a new one is uploaded.
+            $consolidatedProofs = [
+                'food_bill_proof'         => 'travel_claims_food',
+                'conveyance_petrol_proof' => 'travel_claims_conveyance',
+                'toll_parking_proof'      => 'travel_claims_tolls',
+                'customer_courier_proof'  => 'travel_claims_customer',
+            ];
+            $proofPaths = [];
+            foreach ($consolidatedProofs as $field => $dir) {
+                $proofPaths[$field] = $request->hasFile($field)
+                    ? $request->file($field)->store($dir, 'public')
+                    : ($existingClaim->{$field} ?? null);
+            }
+
+            // Block submission when a claimed category has no consolidated bill.
+            // A category is "claimed" when its month total is above zero.
+            if (!$isDraft) {
+                $sum = ['food' => 0, 'conveyance' => 0, 'toll' => 0, 'custcourier' => 0];
+                foreach (($request->items ?? []) as $it) {
+                    $foodVal = (isset($it['is_outstation']) && $it['is_outstation']) ? 300 : floatval($it['food_allowance'] ?? 0);
+                    $sum['food']        += $foodVal;
+                    $sum['conveyance']  += floatval($it['conveyance_amount'] ?? 0);
+                    $sum['toll']        += floatval($it['toll_amount'] ?? 0);
+                    $sum['custcourier'] += floatval($it['special_approval_amount'] ?? 0) + floatval($it['courier_amount'] ?? 0);
+                }
+                $required = [
+                    'food'        => ['food_bill_proof',         'Food'],
+                    'conveyance'  => ['conveyance_petrol_proof', 'Conveyance / Petrol'],
+                    'toll'        => ['toll_parking_proof',      'Toll / Parking'],
+                    'custcourier' => ['customer_courier_proof',  'Customer Expense / Courier'],
+                ];
+                $missing = [];
+                foreach ($required as $key => [$field, $label]) {
+                    if ($sum[$key] > 0 && empty($proofPaths[$field])) {
+                        $missing[$field] = "The combined {$label} bill file is required because you have claimed an amount in that category.";
+                    }
+                }
+                if (!empty($missing)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages($missing);
+                }
+            }
+
             if ($existingClaim) {
                 $claim = $existingClaim;
-                $claim->forceFill([
+                $claim->forceFill(array_merge([
                     'claim_month' => $request->claim_month,
                     'company' => $request->company,
                     'sales_collection' => $request->sales_collection ?? 0,
@@ -156,9 +204,9 @@ class TravelClaimController extends Controller
                     'month_end_odometer_proof' => $monthEndProofPath,
                     'status' => $targetStatus,
                     'late_penalty_applied' => $latePenalty,
-                ])->save();
+                ], $proofPaths))->save();
             } else {
-                $claim = TravelClaim::forceCreate([
+                $claim = TravelClaim::forceCreate(array_merge([
                     'user_id' => auth()->id(),
                     'claim_month' => $request->claim_month,
                     'company' => $request->company,
@@ -170,7 +218,7 @@ class TravelClaimController extends Controller
                     'bank_ifsc' => 'On File',
                     'status' => $targetStatus,
                     'late_penalty_applied' => $latePenalty,
-                ]);
+                ], $proofPaths));
             }
 
             $total_amount = 0;

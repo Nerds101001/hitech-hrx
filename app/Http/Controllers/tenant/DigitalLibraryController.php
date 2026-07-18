@@ -253,8 +253,10 @@ class DigitalLibraryController extends Controller
 
             return response()->json(['success' => 'Asset secured to Hitech Vault. Type: ' . $category]);
 
-        } catch (\Exception $e) {
-            Log::error("DIGITALLIBRARY_STORE_ERROR: " . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error("DIGITALLIBRARY_STORE_ERROR: " . $e->getMessage(), [
+                'file' => $e->getFile(), 'line' => $e->getLine(),
+            ]);
             return response()->json(['error' => 'Server Error: ' . $e->getMessage()], 500);
         }
     }

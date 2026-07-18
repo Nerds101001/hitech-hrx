@@ -89,3 +89,6 @@ vite.config.js.timestamp-*
 
 # Local tool config — contains plaintext SSH/DB credentials, must never be committed
 /.claude
+
+# Import payloads containing live customer/employee data — keep out of git
+/database/data

@@ -139,6 +139,66 @@ class KpiController extends Controller
         return response()->json(['status' => 'success', 'message' => 'KPI/KRA deactivated.']);
     }
 
+    /**
+     * Assign a DWM routine as a KRA/KPI straight from the employee page.
+     * Frequency (timeline) is taken from the routine; the picked check date
+     * sets when within each period it is evaluated. category "none" removes it.
+     */
+    public function assignFromRoutine(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
+        }
+        $data = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'work_control_routine_id' => 'required|exists:work_control_routines,id',
+            'category' => 'required|in:KRA,KPI,none',
+            'check_date' => 'nullable|date',
+        ]);
+
+        $routine = WorkControlRoutine::findOrFail($data['work_control_routine_id']);
+
+        if ($data['category'] === 'none') {
+            KpiAssignment::where('work_control_routine_id', $routine->id)
+                ->where('user_id', $data['user_id'])->update(['is_active' => false]);
+            return response()->json(['status' => 'success', 'message' => 'Removed from KPI/KRA.']);
+        }
+
+        // Derive check_day / check_month from the chosen date, per frequency.
+        $checkDay = null; $checkMonth = null;
+        if (!empty($data['check_date'])) {
+            $d = \Carbon\Carbon::parse($data['check_date']);
+            switch ($routine->frequency) {
+                case 'weekly':
+                case 'fortnightly': $checkDay = $d->dayOfWeekIso; break;        // 1-7
+                case 'monthly':     $checkDay = $d->day; break;                 // 1-31
+                case 'quarterly':   $checkDay = $d->day; $checkMonth = (($d->month - 1) % 3) + 1; break;
+                case 'yearly':      $checkDay = $d->day; $checkMonth = $d->month; break;
+            }
+        }
+
+        $target = User::find($data['user_id']);
+        KpiAssignment::updateOrCreate(
+            ['work_control_routine_id' => $routine->id, 'user_id' => $data['user_id']],
+            [
+                'tenant_id'    => $target->tenant_id,
+                'title'        => $routine->title,
+                'category'     => $data['category'],
+                'frequency'    => $routine->frequency,
+                'scoring_type' => 'timeline',
+                'max_marks'    => 5,
+                'late_score'   => 0,
+                'check_day'    => $checkDay,
+                'check_month'  => $checkMonth,
+                'is_active'    => true,
+                'created_by_id'=> $user->id,
+            ]
+        );
+
+        return response()->json(['status' => 'success', 'message' => strtoupper($data['category']) . ' assigned (checked ' . $routine->frequency . ').']);
+    }
+
     /** HR/Manager records an achieved value for a target KPI's current period. */
     public function evaluate(Request $request, $id)
     {

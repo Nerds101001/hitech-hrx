@@ -44,11 +44,14 @@ class AssetController extends Controller
                 ->orderBy('first_name')
                 ->get(['id', 'first_name', 'last_name']);
 
+            $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
+
             return view('tenant.assets.index', [
                 'pageConfigs' => ['contentLayout' => 'wide'],
                 'assets' => $assets,
                 'categories' => $categories,
                 'users' => $users,
+                'departments' => $departments,
                 'stats' => $stats
             ]);
 
@@ -317,6 +320,14 @@ class AssetController extends Controller
                 $query->where('assigned_to', $userId);
             }
 
+            // Department filter: assets have no department of their own, so scope
+            // by the department of the user the asset is assigned to.
+            if ($deptId = $request->input('department_id')) {
+                $query->whereHas('assignedUser', function ($qu) use ($deptId) {
+                    $qu->where('department_id', $deptId);
+                });
+            }
+
             $statusBadgeMap = [
                 'available'   => 'bg-success',
                 'assigned'    => 'bg-primary',
@@ -414,8 +425,9 @@ class AssetController extends Controller
             $category = $request->input('category');
             $status = $request->input('status');
             $userId = $request->input('user_id');
+            $departmentId = $request->input('department_id');
 
-            return Excel::download(new AssetsExport($searchTerm, $category, $status, $userId), 'assets_export_' . date('Y_m_d_H_i_s') . '.xlsx');
+            return Excel::download(new AssetsExport($searchTerm, $category, $status, $userId, $departmentId), 'assets_export_' . date('Y_m_d_H_i_s') . '.xlsx');
         } catch (\Exception $e) {
             Log::error('Asset Export failed: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Failed to export assets. Please try again.');

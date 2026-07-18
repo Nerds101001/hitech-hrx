@@ -194,6 +194,32 @@
                         </tbody>
                     </table>
                 </div>
+
+                {{-- Consolidated monthly bill attachments --}}
+                @php
+                    $monthlyProofs = [
+                        'Food Bills'                    => $claim->food_bill_proof,
+                        'Conveyance / Petrol'           => $claim->conveyance_petrol_proof,
+                        'Toll / Parking'                => $claim->toll_parking_proof,
+                        'Customer Expense / Courier'    => $claim->customer_courier_proof,
+                        'Month Start Odometer'          => $claim->month_start_odometer_proof,
+                        'Month End Odometer'            => $claim->month_end_odometer_proof,
+                    ];
+                @endphp
+                <div class="p-3 border-top bg-light">
+                    <h6 class="fw-bold text-muted text-uppercase small mb-2"><i class="bx bx-paperclip"></i> Monthly Bill Attachments</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach($monthlyProofs as $label => $path)
+                            @if($path)
+                                <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($path) }}" class="btn btn-sm btn-outline-primary btn-preview-attachment">
+                                    <i class="bx bx-file"></i> {{ $label }}
+                                </button>
+                            @else
+                                <span class="btn btn-sm btn-outline-secondary disabled text-muted" style="opacity:.5;">{{ $label }}: none</span>
+                            @endif
+                        @endforeach
+                    </div>
+                </div>
             </div>
             <div class="modal-footer border-top d-block">
                 <form id="verifyForm{{ $claim->id }}" method="POST" action="" class="w-100 m-0">

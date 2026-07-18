@@ -49,10 +49,13 @@ Route::middleware('web')->group(function () {
 
   Route::get('/', [AuthController::class, 'rootRedirect'])->name('root');
 
-  Route::get('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware(['guest', 'throttle:5,15'])->name('password.request');
-  Route::post('/forgot-password', [AuthController::class, 'forgotPasswordPost'])->middleware(['guest', 'throttle:5,15'])->name('password.email');
-  Route::get('/reset-password/{token}', [AuthController::class, 'resetPassword'])->middleware(['guest', 'throttle:5,15'])->name('password.reset');
-  Route::post('/reset-password', [AuthController::class, 'resetPasswordPost'])->middleware(['guest', 'throttle:5,15'])->name('password.update');
+  // GET pages carry no throttle: email clients pre-fetch the reset link, which
+  // used to burn the 5/15min limit and lock the real user out ("too many
+  // requests"). Only the POST actions are throttled, and generously.
+  Route::get('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('guest')->name('password.request');
+  Route::post('/forgot-password', [AuthController::class, 'forgotPasswordPost'])->middleware(['guest', 'throttle:15,10'])->name('password.email');
+  Route::get('/reset-password/{token}', [AuthController::class, 'resetPassword'])->middleware('guest')->name('password.reset');
+  Route::post('/reset-password', [AuthController::class, 'resetPasswordPost'])->middleware(['guest', 'throttle:15,10'])->name('password.update');
 
   Route::get('/email/verify', [AuthController::class, 'verifyEmail'])->name('verification.notice');
 

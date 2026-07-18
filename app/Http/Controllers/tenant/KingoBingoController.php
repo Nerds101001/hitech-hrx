@@ -204,12 +204,35 @@ class KingoBingoController extends Controller
         $monthKeys      = array_column($months, 'key');
         $currentMonthKey = $now->format('Y-m');
 
-        if ($isAdmin) {
-            $salespersons = User::where('status', 'active')->orderBy('name')->get();
-        } else {
+        // This page is only ever about Sales / New Biz / Customer Care people --
+        // match on EITHER department or designation, and never list anyone else.
+        $salesScope = function ($q) {
+            $like = ['%Sales%', '%New Biz%', '%New Business%', '%Customer Care%', '%CCARE%'];
+            $q->whereHas('department', function ($d) use ($like) {
+                $d->where(function ($w) use ($like) {
+                    foreach ($like as $l) $w->orWhere('name', 'like', $l);
+                });
+            })->orWhereHas('designation', function ($d) use ($like) {
+                $d->where(function ($w) use ($like) {
+                    foreach ($like as $l) $w->orWhere('name', 'like', $l);
+                });
+            });
+        };
+
+        $spQuery = User::with(['department', 'designation'])
+            ->where('status', 'active')->notTerminated()
+            ->where($salesScope);
+
+        if (!$isAdmin) {
             $spIds = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->unique();
-            $salespersons = User::whereIn('id', $spIds)->orderBy('name')->get();
+            $spQuery->whereIn('id', $spIds);
         }
+
+        $salespersons = $spQuery->orderBy('first_name')->get();
+
+        // Filter dropdown options, built from who is actually on the page.
+        $filterDepartments = $salespersons->pluck('department.name')->filter()->unique()->sort()->values();
+        $filterDesignations = $salespersons->pluck('designation.name')->filter()->unique()->sort()->values();
 
         $annualKey    = $fyStartYear . '-ANN';
         $quarterKeys  = [
@@ -232,7 +255,8 @@ class KingoBingoController extends Controller
 
         return view('tenant.kingo-bingo.fill-targets', compact(
             'salespersons', 'months', 'targets', 'monthKeys',
-            'annualKey', 'quarterKeys', 'currentMonthKey', 'selectedFy', 'fyOptions'
+            'annualKey', 'quarterKeys', 'currentMonthKey', 'selectedFy', 'fyOptions',
+            'filterDepartments', 'filterDesignations'
         ));
     }
 

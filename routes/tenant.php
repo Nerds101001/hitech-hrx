@@ -619,7 +619,9 @@ Route::middleware([
         });
 
         // --- SALES FIELD OPERATIONS & CRM ---
-        Route::prefix('sales-visits')->name('sales-visits.')->group(function () {
+        // Sales pipeline / performance pages are limited to sales staff and
+        // management (see SalesAccessGuard) — not visible to all employees.
+        Route::middleware('sales.guard')->prefix('sales-visits')->name('sales-visits.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\tenant\SalesVisitController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'store'])->name('store');
@@ -806,6 +808,7 @@ Route::middleware([
             Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
             Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
+            Route::post('/assign-from-routine', [\App\Http\Controllers\tenant\KpiController::class, 'assignFromRoutine'])->name('assignFromRoutine');
         });
     });
 

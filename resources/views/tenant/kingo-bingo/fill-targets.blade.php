@@ -47,6 +47,18 @@ td.td-lbl {
     font-size:10px; font-weight:700; text-align:center; padding:0 4px;
     position:sticky; left:155px; z-index:3; border-right:2px solid #d1d5db; min-width:50px;
 }
+/* filters */
+.ft-filters {
+    display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+    margin:0 0 10px; padding:10px 12px; background:#fff;
+    border:1px solid #e5e7eb; border-radius:10px;
+}
+.ft-filters #fRep   { max-width:230px; }
+.ft-filters #fDept,
+.ft-filters #fDesig { max-width:190px; }
+.ft-count { margin-left:auto; font-size:12px; color:#6b7280; }
+tbody.sp-block.hidden { display:none; }
+
 td.td-lbl.sk { background:#fef2f2; color:#991b1b; }
 td.td-lbl.k { background:#eef2ff; color:#3730a3; }
 td.td-lbl.b { background:#f0fdf4; color:#166534; }
@@ -108,6 +120,23 @@ tr.row-sep td { height:4px; background:#f1f5f9; border:none; }
     </a>
 </div>
 
+{{-- filters --}}
+<div class="ft-filters">
+    <input type="text" id="fRep" class="form-control form-control-sm" placeholder="Search representative…" autocomplete="off">
+    <select id="fDept" class="form-select form-select-sm">
+        <option value="">All Departments</option>
+        @foreach($filterDepartments as $d)<option value="{{ strtolower($d) }}">{{ $d }}</option>@endforeach
+    </select>
+    <select id="fDesig" class="form-select form-select-sm">
+        <option value="">All Designations</option>
+        @foreach($filterDesignations as $d)<option value="{{ strtolower($d) }}">{{ $d }}</option>@endforeach
+    </select>
+    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="clearFilters()">
+        <i class="bx bx-x"></i> Clear
+    </button>
+    <span class="ft-count">Showing <strong id="fCount">{{ $salespersons->count() }}</strong> of {{ $salespersons->count() }}</span>
+</div>
+
 @if($salespersons->isEmpty())
     <div class="alert alert-warning">No salespersons found.</div>
 @else
@@ -144,18 +173,23 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 </tr>
 </thead>
 
-{{-- BODY --}}
-<tbody>
+{{-- BODY — one <tbody> per salesperson so a filter hides all three tiers together --}}
 @foreach($salespersons as $sp)
 @php
-    $spT   = $targets[$sp->id] ?? collect();
-    $getV  = fn($key, $field) => optional($spT->firstWhere('month_year', $key))->{$field};
+    $spT     = $targets[$sp->id] ?? collect();
+    $getV    = fn($key, $field) => optional($spT->firstWhere('month_year', $key))->{$field};
+    $spDept  = $sp->department->name ?? '';
+    $spDesig = $sp->designation->name ?? '';
 @endphp
+<tbody class="sp-block"
+       data-name="{{ strtolower($sp->name) }}"
+       data-dept="{{ strtolower($spDept) }}"
+       data-desig="{{ strtolower($spDesig) }}">
 
-{{-- SUPER KINGO row --}}
+{{-- S. KINGO row --}}
 <tr class="row-sk">
-    <td class="td-sp" rowspan="3" title="{{ $sp->name }}">{{ $sp->name }}</td>
-    <td class="td-lbl sk">SUPER<br>KINGO</td>
+    <td class="td-sp" rowspan="3" title="{{ $sp->name }}{{ $spDept ? ' — '.$spDept : '' }}{{ $spDesig ? ' / '.$spDesig : '' }}">{{ $sp->name }}</td>
+    <td class="td-lbl sk">S.<br>KINGO</td>
 
     {{-- Annual --}}
     @php $v = $getV($annualKey, 'super_kingo_target'); @endphp
@@ -262,8 +296,8 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 </tr>
 
 <tr class="row-sep"><td colspan="{{ 2 + 1 + count($quarterKeys) + count($months) }}"></td></tr>
-@endforeach
 </tbody>
+@endforeach
 </table>
 </div>
 
@@ -347,6 +381,38 @@ document.querySelectorAll('table.ft input[type="number"]').forEach(inp => {
     inp.addEventListener('change', function() { saveCell(this); });
     inp.addEventListener('focus',  function() { this.placeholder = ''; });
     inp.addEventListener('blur',   function() { if (!this.value) this.placeholder = '—'; });
+});
+
+// ── Filters (rep name / department / designation) ─────────────────────
+const fRep = document.getElementById('fRep');
+const fDept = document.getElementById('fDept');
+const fDesig = document.getElementById('fDesig');
+const blocks = Array.from(document.querySelectorAll('tbody.sp-block'));
+
+function applyFilters() {
+    const rep   = (fRep.value || '').toLowerCase().trim();
+    const dept  = fDept.value;
+    const desig = fDesig.value;
+    let shown = 0;
+
+    blocks.forEach(b => {
+        const ok = (!rep   || (b.dataset.name  || '').includes(rep))
+                && (!dept  || (b.dataset.dept  || '') === dept)
+                && (!desig || (b.dataset.desig || '') === desig);
+        b.classList.toggle('hidden', !ok);
+        if (ok) shown++;
+    });
+    document.getElementById('fCount').textContent = shown;
+}
+
+function clearFilters() {
+    fRep.value = ''; fDept.value = ''; fDesig.value = '';
+    applyFilters();
+}
+
+[fRep, fDept, fDesig].forEach(el => {
+    el.addEventListener('input', applyFilters);
+    el.addEventListener('change', applyFilters);
 });
 </script>
 @endsection
