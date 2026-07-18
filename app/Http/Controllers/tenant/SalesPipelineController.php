@@ -71,8 +71,17 @@ class SalesPipelineController extends Controller
         $allowedSpIds = null;
         if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
             if ($isCcare || $isNewBiz) {
-                $allowedSpIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
-                    ->pluck('sales_user_id')->unique()->values()->all();
+                // Salespersons this rep is connected to: those explicitly mapped
+                // to them in cc_salesperson_map, PLUS any whose pipeline/report
+                // rows already list them as the ccare/new_biz rep. The map is not
+                // reliably maintained on import, so we derive from the data too —
+                // otherwise a rep with no map row (e.g. Jasleen) sees nothing.
+                $mapped = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
+                $asRep = SalesPipeline::whereNull('deleted_at')
+                    ->where(function ($q) use ($user) {
+                        $q->where('ccare_id', $user->id)->orWhere('new_biz_id', $user->id);
+                    })->distinct()->pluck('salesperson_id');
+                $allowedSpIds = $mapped->merge($asRep)->filter()->unique()->values()->all();
             } else {
                 $allowedSpIds = [$user->id];
             }
@@ -252,8 +261,17 @@ class SalesPipelineController extends Controller
         $allowedSpIds = null;
         if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
             if ($isCcare || $isNewBiz) {
-                $allowedSpIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
-                    ->pluck('sales_user_id')->unique()->values()->all();
+                // Salespersons this rep is connected to: those explicitly mapped
+                // to them in cc_salesperson_map, PLUS any whose pipeline/report
+                // rows already list them as the ccare/new_biz rep. The map is not
+                // reliably maintained on import, so we derive from the data too —
+                // otherwise a rep with no map row (e.g. Jasleen) sees nothing.
+                $mapped = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
+                $asRep = SalesPipeline::whereNull('deleted_at')
+                    ->where(function ($q) use ($user) {
+                        $q->where('ccare_id', $user->id)->orWhere('new_biz_id', $user->id);
+                    })->distinct()->pluck('salesperson_id');
+                $allowedSpIds = $mapped->merge($asRep)->filter()->unique()->values()->all();
             } else {
                 $allowedSpIds = [$user->id];
             }
