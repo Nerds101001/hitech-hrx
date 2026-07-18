@@ -55,53 +55,43 @@
         <div class="stat-chip"><span class="stat-label">YoY 25-26</span><span class="stat-value" id="cardYoy25_26">₹{{ number_format($totals['25_26'] ?? 0, 2) }}<em>L</em></span></div>
         <div class="stat-chip" style="border-left-color:#10b981;"><span class="stat-label">YoY {{ $currentFyLabel }}</span><span class="stat-value" id="fyTotalCard">₹{{ number_format($currentFyActualTotal, 2) }}<em>L</em></span></div>
         <div class="stat-chip" style="border-left-color:#22c55e;min-width:200px;"><span class="stat-label">This Month Target</span><span class="stat-value"><span class="badge bg-warning text-dark" id="kingoTargetBadge" style="font-size:0.65rem;">K ₹{{ number_format(($monthlyTargets[$currentMonthKey]['kingo'] ?? 0) / 100000, 2) }}L</span> <span class="badge bg-info text-dark" id="bingoTargetBadge" style="font-size:0.65rem;">B ₹{{ number_format(($monthlyTargets[$currentMonthKey]['bingo'] ?? 0) / 100000, 2) }}L</span></span></div>
-        <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $pipelines->count() }}</span></div>
+        <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $totalNewClients }}</span></div>
         <div class="stat-chip" style="border-left-color:#f97316;"><span class="stat-label">Pending</span><span class="stat-value" id="pendingCard" style="color:#ea580c;">₹{{ number_format($totalPendingCurrentMonth ?? 0, 2) }}<em>L</em></span></div>
     </div>
 
-    {{-- ─── FILTER BAR ─────────────────────────────────────────────────── --}}
+    {{-- ─── FILTER BAR (server-side; submits a GET request) ──────────────── --}}
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">
-            <div class="d-flex flex-wrap align-items-center gap-3">
+            <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="d-flex flex-wrap align-items-center gap-3">
+                <input type="hidden" name="fy" value="{{ $selectedFy }}">
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
-                <select class="form-select form-select-sm" id="filterType" style="width:130px;"
-                        onchange="applyFilters()">
+                <select class="form-select form-select-sm" name="type" style="width:130px;" onchange="this.form.submit()">
                     <option value="">All Types</option>
-                    <option value="Distributor">Distributor</option>
-                    <option value="Dealer">Dealer</option>
-                    <option value="Customer">Customer</option>
+                    <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
+                    <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
+                    <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
                 </select>
-                <input type="text" class="form-control form-control-sm" id="filterParty"
-                       placeholder="Search customer…" style="width:200px;" oninput="applyFilters()">
-                <select class="form-select form-select-sm" id="filterRep" style="width:210px;"
-                        onchange="applyFilters()">
+                <input type="text" class="form-control form-control-sm" name="party" value="{{ $fParty }}"
+                       placeholder="Search customer…" style="width:200px;">
+                <select class="form-select form-select-sm" name="rep" style="width:210px;" onchange="this.form.submit()">
                     <option value="">
                         @if($isCcare || $isNewBiz) All Salespersons
                         @elseif($isSalesperson) All Representatives
                         @else All Reps @endif
                     </option>
                     @foreach($repFilterUsers as $au)
-                        <option value="{{ strtolower($au->name) }}">{{ $au->name }}</option>
+                        <option value="{{ $au->id }}" {{ (string)$fRep === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <button class="btn btn-sm btn-outline-secondary" onclick="clearFilters()">
+                <button type="submit" class="btn btn-sm btn-primary"><i class="bx bx-search"></i> Search</button>
+                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
-                </button>
-                <div class="d-flex align-items-center gap-2 ms-auto" style="font-size:0.8rem">
-                    <span class="text-muted">Rows/page:</span>
-                    <select class="form-select form-select-sm" id="perPageSelect" style="width:72px;" onchange="changePerPage(this.value)">
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
-                    <span class="text-muted text-nowrap">
-                        <strong id="pageInfo">—</strong> of <strong id="filterCount">{{ $pipelines->count() }}</strong>
-                    </span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="pagePrev" onclick="pagePrev()" title="Previous page">‹</button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" id="pageNext" onclick="pageNext()" title="Next page">›</button>
+                </a>
+                <div class="d-flex align-items-center gap-2 ms-auto text-muted text-nowrap" style="font-size:0.8rem">
+                    Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
+                    of <strong>{{ $pipelines->total() }}</strong> customers
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 
@@ -187,7 +177,7 @@
                             <td class="col-status" style="background:#d1fae5!important;"></td>
                             <td class="col-category" style="background:#d1fae5!important;"></td>
                             <td class="col-repname" style="background:#d1fae5!important;"></td>
-                            <td class="col-potential text-end font-monospace" style="background:#d1fae5!important;color:#065f46;" id="totalPotential">—</td>
+                            <td class="col-potential text-end font-monospace" style="background:#d1fae5!important;color:#065f46;" id="totalPotential">{{ number_format($totalPotential ?? 0, 2) }}</td>
                             @if($isAdmin)
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
                             @elseif($isSalesperson)
@@ -200,7 +190,7 @@
                                 @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
                                 @if($isThisMonth)
                                     <td class="text-end" id="mtotal-forecast-{{ $m['key'] }}"
-                                        style="background:#d1fae5!important;color:#1e40af;">—</td>
+                                        style="background:#d1fae5!important;color:#1e40af;">{{ number_format($monthlyForecast[$m['key']] ?? 0, 2) }}</td>
                                 @endif
                                 <td class="text-end {{ !$isThisMonth ? 'block-end' : '' }}" id="mtotal-{{ $m['key'] }}"
                                     style="background:#d1fae5!important;color:#065f46;">
@@ -466,6 +456,14 @@
         </table>
     </div>
 
+    {{-- ─── PAGINATION (server-side, 50 per page) ────────────────────────── --}}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+        <span class="text-muted small">
+            Showing {{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }} of {{ $pipelines->total() }}
+        </span>
+        <div>{{ $pipelines->onEachSide(1)->links() }}</div>
+    </div>
+
     {{-- Add New Entry trigger --}}
     <div class="d-flex justify-content-center py-2 mt-1">
         <button class="btn btn-sm btn-outline-success rounded-pill px-4" id="addRowTriggerBtn"
@@ -690,8 +688,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
-    // Trigger initial filter and stats calculation on page load
-    applyFilters();
+    // Filtering / pagination / totals are server-side now — nothing to init here.
 });
 
 // ── Filters ───────────────────────────────────────────────────────────
@@ -724,130 +721,18 @@ function sortPipeline(key, el) {
     if (typeof renderPage === 'function') renderPage(); // re-apply pagination to sorted order
 }
 
-// --- Pagination state (client-side; works together with the filters) ---
-let currentPage = 1;
-let perPage = 10;
-
-function applyFilters() {
-    const typeVal  = document.getElementById('filterType').value.toLowerCase();
-    const partyVal = document.getElementById('filterParty').value.toLowerCase().trim();
-    const repVal   = document.getElementById('filterRep').value.toLowerCase().trim();
-
-    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => {
-        const matchType  = !typeVal  || (tr.dataset.type  || '').toLowerCase() === typeVal;
-        const matchParty = !partyVal || (tr.dataset.party || '').includes(partyVal);
-        const matchRep   = !repVal   || (tr.dataset.rep   || '').includes(repVal);
-        tr.dataset.filtermatch = (matchType && matchParty && matchRep) ? '1' : '0';
-    });
-    currentPage = 1;
-    renderPage();          // slice to the current page
-    updateDynamicStats();  // totals from ALL filtered rows (not just the page)
-}
-
-// Reveal only the current page's slice of filter-matched rows.
-function renderPage() {
-    const matched = Array.from(document.querySelectorAll('#pipelineBody tr[data-id]'))
-                         .filter(tr => tr.dataset.filtermatch !== '0');
-    const totalPages = Math.max(1, Math.ceil(matched.length / perPage));
-    if (currentPage > totalPages) currentPage = totalPages;
-    if (currentPage < 1) currentPage = 1;
-    const start = (currentPage - 1) * perPage, end = start + perPage;
-
-    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => tr.classList.add('pipeline-row-hidden'));
-    matched.forEach((tr, i) => { if (i >= start && i < end) tr.classList.remove('pipeline-row-hidden'); });
-
-    const fc = document.getElementById('filterCount'); if (fc) fc.textContent = matched.length;
-    const info = document.getElementById('pageInfo');
-    if (info) info.textContent = matched.length ? ((start + 1) + '–' + Math.min(end, matched.length)) : '0';
-    const prev = document.getElementById('pagePrev'), next = document.getElementById('pageNext');
-    if (prev) prev.disabled = currentPage <= 1;
-    if (next) next.disabled = currentPage >= totalPages;
-}
-
-function changePerPage(v) { perPage = parseInt(v) || 10; currentPage = 1; renderPage(); }
-function pagePrev() { if (currentPage > 1) { currentPage--; renderPage(); } }
-function pageNext() { currentPage++; renderPage(); }
-
-function updateDynamicStats() {
-    let pending = 0, potential = 0, forecast = 0;
-    const monthTotals = {};
-    let count = 0;
-    const salespersonsSeen = new Set();
-
-    document.querySelectorAll('#pipelineBody tr[data-id]').forEach(tr => {
-        if (tr.dataset.filtermatch === '0') return; // every filtered row, across all pages
-        pending   += parseFloat(tr.dataset.pending || 0);
-        forecast  += parseFloat(tr.dataset.forecast || 0);
-        potential += parseFloat(tr.dataset.potential || 0);
-        count++;
-        if (tr.dataset.salesperson) salespersonsSeen.add(tr.dataset.salesperson);
-        try {
-            const months = JSON.parse(tr.dataset.months || '{}');
-            for (const [mk, val] of Object.entries(months)) {
-                monthTotals[mk] = (monthTotals[mk] || 0) + parseFloat(val || 0);
-            }
-        } catch(e) {}
-    });
-
-    // YoY comes from per-salesperson annual figures (not pipeline rows), so a
-    // salesperson with no pipeline rows still shows their annual on filter.
-    const repVal = (document.getElementById('filterRep').value || '').toLowerCase().trim();
-    let yoy = [0, 0, 0, 0];
-    if (!repVal) {
-        yoy = [ANNUAL_GRAND['22_23'], ANNUAL_GRAND['23_24'], ANNUAL_GRAND['24_25'], ANNUAL_GRAND['25_26']];
-    } else if (ANNUAL_MAP[repVal]) {
-        yoy = ANNUAL_MAP[repVal].slice();
-    } else {
-        // A CCare / New Biz rep: sum the annuals of the salespersons under them
-        salespersonsSeen.forEach(sp => { const a = ANNUAL_MAP[sp]; if (a) { yoy[0]+=a[0]; yoy[1]+=a[1]; yoy[2]+=a[2]; yoy[3]+=a[3]; } });
-    }
-
-    const fyTotal = Object.values(monthTotals).reduce((a, b) => a + b, 0);
-    function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
-    document.getElementById('cardYoy22_23').innerHTML = fmtL(yoy[0]);
-    document.getElementById('cardYoy23_24').innerHTML = fmtL(yoy[1]);
-    document.getElementById('cardYoy24_25').innerHTML = fmtL(yoy[2]);
-    document.getElementById('cardYoy25_26').innerHTML = fmtL(yoy[3]);
-    document.getElementById('fyTotalCard').innerHTML  = fmtL(fyTotal);
-    document.getElementById('pendingCard').innerHTML  = fmtL(pending);
-
-    // Kingo/Bingo target chip: on a single-salesperson filter show that
-    // person's target; otherwise sum the visible salespersons' targets.
-    let kingoT = 0, bingoT = 0;
-    if (repVal && KB_MAP[repVal]) {
-        kingoT = KB_MAP[repVal].kingo; bingoT = KB_MAP[repVal].bingo;
-    } else {
-        const seen = repVal ? [] : Object.keys(KB_MAP);
-        if (repVal) salespersonsSeen.forEach(sp => { if (KB_MAP[sp]) seen.push(sp); });
-        seen.forEach(sp => { kingoT += KB_MAP[sp].kingo; bingoT += KB_MAP[sp].bingo; });
-    }
-    const kBadge = document.getElementById('kingoTargetBadge');
-    const bBadge = document.getElementById('bingoTargetBadge');
-    if (kBadge) kBadge.textContent = 'K ₹' + (kingoT / 100000).toFixed(2) + 'L';
-    if (bBadge) bBadge.textContent = 'B ₹' + (bingoT / 100000).toFixed(2) + 'L';
-    document.getElementById('totalCustomersCard').textContent = count;
-    const potEl = document.getElementById('totalPotential');
-    if (potEl) potEl.textContent = potential.toFixed(2);
-
-    // Past-month sale totals
-    for (const [mk, total] of Object.entries(monthTotals)) {
-        const cell = document.getElementById('mtotal-' + mk);
-        if (cell) cell.textContent = (total > 0 || mk === SORT_CURRENT_MONTH) ? total.toFixed(2) : '—';
-    }
-    // Current month Forecast / Sale / Pending totals (always show the sum, even 0.00)
-    const fcEl = document.getElementById('mtotal-forecast-' + SORT_CURRENT_MONTH);
-    if (fcEl) fcEl.textContent = forecast.toFixed(2);
-    const saleEl = document.getElementById('mtotal-' + SORT_CURRENT_MONTH);
-    if (saleEl) saleEl.textContent = (monthTotals[SORT_CURRENT_MONTH] || 0).toFixed(2);
-    const pendEl = document.getElementById('mtotal-pending-' + SORT_CURRENT_MONTH);
-    if (pendEl) pendEl.textContent = pending.toFixed(2);
-}
-
+// Filtering, pagination and the stat/month-totals are now computed SERVER-SIDE:
+// the controller renders 50 rows per page and pre-computes every card and the
+// totals row over the full filtered set. These stubs keep any old inline callers
+// safe. sortPipeline() above still reorders the current page's rows in the DOM.
+function applyFilters() {}
+function renderPage() {}
+function changePerPage() {}
+function pagePrev() {}
+function pageNext() {}
+function updateDynamicStats() {}
 function clearFilters() {
-    document.getElementById('filterType').value  = '';
-    document.getElementById('filterParty').value = '';
-    document.getElementById('filterRep').value   = '';
-    applyFilters();
+    window.location.href = @json(route('sales-visits.pipeline.index')) + '?fy=' + encodeURIComponent(@json($selectedFy));
 }
 
 // ── Inline add row ────────────────────────────────────────────────────
