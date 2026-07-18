@@ -60,20 +60,26 @@
     </div>
 
     {{-- ─── FILTER BAR (server-side; submits a GET request) ──────────────── --}}
+    <style>
+        .sales-filter .form-select,
+        .sales-filter .form-control,
+        .sales-filter .btn { height:36px; border-radius:9px; font-size:0.8rem; }
+        .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
+    </style>
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">
-            <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="d-flex flex-wrap align-items-center gap-3">
+            <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
-                <select class="form-select form-select-sm" name="type" style="width:130px;" onchange="this.form.submit()">
+                <select class="form-select" name="type" style="width:130px;" onchange="this.form.submit()">
                     <option value="">All Types</option>
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
                     <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
                     <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
                 </select>
-                <input type="text" class="form-control form-control-sm" name="party" value="{{ $fParty }}"
+                <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
-                <select class="form-select form-select-sm" name="rep" style="width:210px;" onchange="this.form.submit()">
+                <select class="form-select" name="rep" style="width:210px;" onchange="this.form.submit()">
                     <option value="">
                         @if($isCcare || $isNewBiz) All Salespersons
                         @elseif($isSalesperson) All Representatives
@@ -83,8 +89,8 @@
                         <option value="{{ $au->id }}" {{ (string)$fRep === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bx bx-search"></i> Search</button>
-                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-sm btn-outline-secondary">
+                <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
+                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
                 </a>
                 <div class="d-flex align-items-center gap-2 ms-auto text-muted text-nowrap" style="font-size:0.8rem">
@@ -277,7 +283,7 @@
 
                                 {{-- Category column --}}
                                 <td class="col-category align-middle text-center">
-                                    @if($isAdmin)
+                                    @if($isAdmin || $isCcare || $isNewBiz)
                                         <select class="excel-select row-field status-select text-truncate" data-field="category" style="width:85px;">
                                             <option value="">-Select-</option>
                                             <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>

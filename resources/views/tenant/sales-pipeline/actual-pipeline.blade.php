@@ -88,20 +88,26 @@
     </div>
 
     {{-- ─── FILTER BAR (server-side; submits a GET request) ──────────────── --}}
+    <style>
+        .sales-filter .form-select,
+        .sales-filter .form-control,
+        .sales-filter .btn { height:36px; border-radius:9px; font-size:0.8rem; }
+        .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
+    </style>
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">
-            <form method="GET" action="{{ route('sales-visits.actual-pipeline.index') }}" class="d-flex flex-wrap align-items-center gap-3">
+            <form method="GET" action="{{ route('sales-visits.actual-pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
-                <input type="text" class="form-control form-control-sm" name="party" value="{{ $fParty }}"
+                <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
-                <select class="form-select form-select-sm" name="stage" style="width:170px;" onchange="this.form.submit()">
+                <select class="form-select" name="stage" style="width:170px;" onchange="this.form.submit()">
                     <option value="">All Stages</option>
                     @foreach($statuses as $st)
                         <option value="{{ $st }}" {{ strtolower($fStage) === strtolower($st) ? 'selected' : '' }}>{{ $st }}</option>
                     @endforeach
                 </select>
-                <select class="form-select form-select-sm" name="rep" style="width:210px;" onchange="this.form.submit()">
+                <select class="form-select" name="rep" style="width:210px;" onchange="this.form.submit()">
                     <option value="">
                         @if($isCcare || $isNewBiz) All Salespersons
                         @else All Representatives @endif
@@ -110,8 +116,8 @@
                         <option value="{{ $au->id }}" {{ (string)$fRep === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <button type="submit" class="btn btn-sm btn-primary"><i class="bx bx-search"></i> Search</button>
-                <a href="{{ route('sales-visits.actual-pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-sm btn-outline-secondary">
+                <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
+                <a href="{{ route('sales-visits.actual-pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
                 </a>
                 <span class="text-muted ms-auto text-nowrap" style="font-size:0.8rem">

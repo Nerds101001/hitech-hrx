@@ -516,8 +516,8 @@ class SalesPipelineController extends Controller
             $data['is_locked'] = true;
         }
 
-        // ── Handle Category change (Admin/HR only) ──────────────────────────
-        if ($request->has('category') && $isPrivileged) {
+        // ── Handle Category change (Admin/HR/Manager + CCare/New Biz) ───────
+        if ($request->has('category') && ($isPrivileged || $isCcare || $isNewBiz)) {
             $newCategory = $request->input('category');
 
             if ($newCategory === 'CCare') {
