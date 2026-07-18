@@ -52,6 +52,12 @@ class KingoBingoController extends Controller
         // Single source of truth in SalesScope.
         $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
 
+        // A sales manager defaults to their OWN scorecard. They can switch to
+        // the whole team (?team=1) or jump to one member (?salesperson_id=X).
+        $isManager = $user->hasRole(['manager', 'Manager']);
+        $teamView  = $request->boolean('team');
+        $hasTeam   = $isManager && $allowedSpIds !== null && count($allowedSpIds) > 1;
+
         // Honour an explicit salesperson filter only if the requester may see that person
         if ($request->filled('salesperson_id')) {
             $reqId = (int) $request->salesperson_id;
@@ -60,6 +66,9 @@ class KingoBingoController extends Controller
             } else {
                 $salespersons = collect(); // silently deny
             }
+        } elseif ($isManager && !$teamView) {
+            // Default manager view: only their own card.
+            $salespersons = User::where('id', $user->id)->get();
         } elseif ($allowedSpIds === null) {
             $salespersons = User::where('status', 'active')->orderBy('name')->get();
         } else {
@@ -169,9 +178,9 @@ class KingoBingoController extends Controller
 
         // Dropdown for salesperson filter — respect the same access scope
         if ($allowedSpIds === null) {
-            $allUsers = User::where('status', 'active')->orderBy('name')->get();
+            $allUsers = User::where('status', 'active')->orderBy('first_name')->get();
         } elseif (!empty($allowedSpIds)) {
-            $allUsers = User::whereIn('id', $allowedSpIds)->orderBy('name')->get();
+            $allUsers = User::whereIn('id', $allowedSpIds)->orderBy('first_name')->get();
         } else {
             $allUsers = collect();
         }
@@ -184,7 +193,8 @@ class KingoBingoController extends Controller
         return view('tenant.kingo-bingo.index', compact(
             'salespersons', 'months', 'targets', 'kbTargets', 'autoAchieved',
             'selectedFy', 'defaultFy', 'fyOptions', 'currentMonthKey',
-            'isAdmin', 'isCcare', 'isNewBiz', 'allUsers', 'canEditTargets'
+            'isAdmin', 'isCcare', 'isNewBiz', 'allUsers', 'canEditTargets',
+            'isManager', 'teamView', 'hasTeam'
         ));
     }
 

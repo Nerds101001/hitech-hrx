@@ -85,6 +85,29 @@ tr.kpi-gap td{height:4px;background:#f8fafc;border:none;}
         <i class="bx bx-upload me-1"></i> Import Targets
     </a>
     @endif
+    {{-- Sales-manager view switch: own card by default, team, or a specific member --}}
+    @if($isManager && $hasTeam)
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        @php $inTeamOrMember = ($teamView ?? false) || request('salesperson_id'); @endphp
+        <a href="{{ route('sales-visits.kingo-bingo.index', ['fy' => $selectedFy]) }}"
+           class="btn btn-sm rounded-pill fw-bold shadow-sm {{ $inTeamOrMember ? 'btn-outline-secondary' : 'btn-primary' }}">
+            <i class="bx bx-user me-1"></i> My Scorecard
+        </a>
+        <a href="{{ route('sales-visits.kingo-bingo.index', ['team' => 1, 'fy' => $selectedFy]) }}"
+           class="btn btn-sm rounded-pill fw-bold shadow-sm {{ ($teamView ?? false) && !request('salesperson_id') ? 'btn-primary' : 'btn-outline-primary' }}">
+            <i class="bx bx-group me-1"></i> View Team
+        </a>
+        <form method="GET" class="d-inline">
+            <input type="hidden" name="fy" value="{{ $selectedFy }}">
+            <select name="salesperson_id" class="form-select form-select-sm" style="min-width:180px" onchange="this.form.submit()">
+                <option value="">— Select Member —</option>
+                @foreach($allUsers as $u)
+                <option value="{{ $u->id }}" {{ request('salesperson_id') == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
+                @endforeach
+            </select>
+        </form>
+    </div>
+    @endif
     <form method="GET" class="d-flex gap-2 align-items-center flex-wrap">
         @if($isAdmin || $isCcare || $isNewBiz)
         <select name="salesperson_id" class="form-select form-select-sm" style="min-width:180px" onchange="this.form.submit()">
