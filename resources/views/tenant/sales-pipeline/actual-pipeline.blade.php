@@ -180,6 +180,7 @@
                                 data-yoy24="{{ $row->yoy_24_25 ?? 0 }}"
                                 data-yoy25="{{ $row->yoy_25_26 ?? 0 }}"
                                 data-potential="{{ $row->total_business_potential ?? 0 }}"
+                                data-salesperson="{{ strtolower($row->salesperson->name ?? '') }}"
                                 data-months='@json($rowMonthSales)'
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
@@ -430,6 +431,8 @@
 
 <script>
 const activeMonthKeys = @json(array_column($months, 'key'));
+const ANNUAL_MAP  = @json($annualMap ?? []);      // salesperson name -> [yoy22,23,24,25]
+const ANNUAL_GRAND = @json($annualGrand ?? ['22_23'=>0,'23_24'=>0,'24_25'=>0,'25_26'=>0]);
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -499,35 +502,40 @@ function applyFilters() {
 }
 
 function updateDynamicStats() {
-    let yoy22 = 0, yoy23 = 0, yoy24 = 0, yoy25 = 0, selectedFyTotal = 0, potential = 0;
-    let count = 0;
+    let selectedFyTotal = 0, potential = 0, count = 0;
+    const salespersonsSeen = new Set();
 
     document.querySelectorAll('#pipelineBody tr[data-id]:not(.pipeline-row-hidden)').forEach(tr => {
-        yoy22     += parseFloat(tr.dataset.yoy22 || 0);
-        yoy23     += parseFloat(tr.dataset.yoy23 || 0);
-        yoy24     += parseFloat(tr.dataset.yoy24 || 0);
-        yoy25     += parseFloat(tr.dataset.yoy25 || 0);
         potential += parseFloat(tr.dataset.potential || 0);
         count++;
-
+        if (tr.dataset.salesperson) salespersonsSeen.add(tr.dataset.salesperson);
         try {
             const months = JSON.parse(tr.dataset.months || '{}');
-            activeMonthKeys.forEach(mk => {
-                selectedFyTotal += parseFloat(months[mk] || 0);
-            });
+            activeMonthKeys.forEach(mk => { selectedFyTotal += parseFloat(months[mk] || 0); });
         } catch(e) {}
     });
 
-    const potentialPerMonth = potential;
+    // YoY from per-salesperson annual figures (same as the Sales Report page):
+    // no filter -> the user's scoped grand total; a single salesperson filter ->
+    // that person's annual; a CCare/New Biz name -> sum of the visible salespersons.
+    const repVal = (document.getElementById('filterRep').value || '').toLowerCase().trim();
+    let yoy = [0, 0, 0, 0];
+    if (!repVal) {
+        yoy = [ANNUAL_GRAND['22_23'], ANNUAL_GRAND['23_24'], ANNUAL_GRAND['24_25'], ANNUAL_GRAND['25_26']];
+    } else if (ANNUAL_MAP[repVal]) {
+        yoy = ANNUAL_MAP[repVal].slice();
+    } else {
+        salespersonsSeen.forEach(sp => { const a = ANNUAL_MAP[sp]; if (a) { yoy[0]+=a[0]; yoy[1]+=a[1]; yoy[2]+=a[2]; yoy[3]+=a[3]; } });
+    }
 
     function fmtL(v) { return '₹' + parseFloat(v).toFixed(2) + '<em>L</em>'; }
 
-    const elY22 = document.getElementById('cardYoy22_23'); if (elY22) elY22.innerHTML = fmtL(yoy22);
-    const elY23 = document.getElementById('cardYoy23_24'); if (elY23) elY23.innerHTML = fmtL(yoy23);
-    const elY24 = document.getElementById('cardYoy24_25'); if (elY24) elY24.innerHTML = fmtL(yoy24);
-    const elY25 = document.getElementById('cardYoy25_26'); if (elY25) elY25.innerHTML = fmtL(yoy25);
+    const elY22 = document.getElementById('cardYoy22_23'); if (elY22) elY22.innerHTML = fmtL(yoy[0]);
+    const elY23 = document.getElementById('cardYoy23_24'); if (elY23) elY23.innerHTML = fmtL(yoy[1]);
+    const elY24 = document.getElementById('cardYoy24_25'); if (elY24) elY24.innerHTML = fmtL(yoy[2]);
+    const elY25 = document.getElementById('cardYoy25_26'); if (elY25) elY25.innerHTML = fmtL(yoy[3]);
     const elFy  = document.getElementById('fyTotalCard');    if (elFy)  elFy.innerHTML  = fmtL(selectedFyTotal);
-    const elPot = document.getElementById('potentialMonthCard'); if (elPot) elPot.innerHTML = fmtL(potentialPerMonth);
+    const elPot = document.getElementById('potentialMonthCard'); if (elPot) elPot.innerHTML = fmtL(potential);
     const elCnt = document.getElementById('totalCustomersCard');  if (elCnt) elCnt.textContent = count;
 }
 

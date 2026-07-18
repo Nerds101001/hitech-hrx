@@ -65,26 +65,27 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
+        // Which salespersons may this user see? null = no restriction (admin/hr/manager).
+        // CCare / New Biz users are limited to the salespersons mapped to them;
+        // a plain salesperson sees only themselves.
+        $allowedSpIds = null;
         if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
             if ($isCcare || $isNewBiz) {
-                $mappedSalespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
-                $query->whereIn('salesperson_id', $mappedSalespersonIds);
+                $allowedSpIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
+                    ->pluck('sales_user_id')->unique()->values()->all();
             } else {
-                $query->where('salesperson_id', $user->id);
+                $allowedSpIds = [$user->id];
             }
+        }
+        if ($allowedSpIds !== null) {
+            $query->whereIn('salesperson_id', $allowedSpIds);
         }
 
         $pipelines = $query->orderBy('id', 'desc')->get();
-        
-        if (($isCcare || $isNewBiz) && !$user->hasRole('Admin')) {
-            $salespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
-                ->pluck('sales_user_id')
-                ->unique()
-                ->toArray();
-            $assignedUsers = User::where('status', 'active')->whereIn('id', $salespersonIds)->get();
-        } else {
-            $assignedUsers = User::where('status', 'active')->get();
-        }
+
+        $assignedUsers = ($allowedSpIds !== null)
+            ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()
+            : User::where('status', 'active')->get();
 
         // Department-scoped lists for the assignment dropdowns: the Salesperson
         // dropdown must only show Sales-department people, New Biz only New Biz.
@@ -95,28 +96,47 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
-        // Rep filter dropdown: only Sales / Customer Care / New Biz staff (A–Z),
-        // never every employee.
-        $repFilterUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', function ($q) {
-                $q->where('name', 'like', '%Sales%')
-                  ->orWhere('name', 'like', '%Customer Care%')
-                  ->orWhere('name', 'like', '%CCARE%')
-                  ->orWhere('name', 'like', '%New Biz%')
-                  ->orWhere('name', 'like', '%New Business%');
-            })->orderBy('first_name')->get();
+        // Rep filter dropdown ids, per role:
+        //  - admin/hr/manager : the full A–Z Sales / Customer Care / New Biz list
+        //  - CCare / New Biz  : only the salespersons mapped to them
+        //  - Salesperson      : themselves + the CCare/New Biz reps linked to them
+        //                       (via cc_salesperson_map), never other salespersons
+        $repDropdownIds = $allowedSpIds;
+        if ($allowedSpIds !== null && !$isCcare && !$isNewBiz) {
+            $linkedReps = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+                ->pluck('cc_user_id')->all();
+            $repDropdownIds = array_values(array_unique(array_merge([$user->id], $linkedReps)));
+        }
+
+        if ($repDropdownIds !== null) {
+            $repFilterUsers = User::where('status', 'active')->notTerminated()
+                ->whereIn('id', $repDropdownIds)->orderBy('first_name')->get();
+        } else {
+            $repFilterUsers = User::where('status', 'active')->notTerminated()
+                ->whereHas('department', function ($q) {
+                    $q->where('name', 'like', '%Sales%')
+                      ->orWhere('name', 'like', '%Customer Care%')
+                      ->orWhere('name', 'like', '%CCARE%')
+                      ->orWhere('name', 'like', '%New Biz%')
+                      ->orWhere('name', 'like', '%New Business%');
+                })->orderBy('first_name')->get();
+        }
 
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
-        // Per-salesperson annual (YoY) sales — independent of pipeline rows so
-        // salespersons with annual figures but no pipeline entries still show.
+        // Per-salesperson annual (YoY) sales — scoped to the salespersons this
+        // user may see, so CCare/New Biz cards reflect their own book, not the
+        // whole company. Independent of pipeline rows.
         $annualMap = [];
         $annualGrand = ['22_23' => 0.0, '23_24' => 0.0, '24_25' => 0.0, '25_26' => 0.0];
         if (\Illuminate\Support\Facades\Schema::hasTable('salesperson_annual_sales')) {
-            foreach (\Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
-                    ->join('users as u', 'u.id', '=', 'a.user_id')
-                    ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26')
-                    ->get() as $a) {
+            $annualQuery = \Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
+                ->join('users as u', 'u.id', '=', 'a.user_id')
+                ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26');
+            if ($allowedSpIds !== null) {
+                $annualQuery->whereIn('a.user_id', $allowedSpIds);
+            }
+            foreach ($annualQuery->get() as $a) {
                 $key = strtolower(trim($a->first_name . ' ' . $a->last_name));
                 $annualMap[$key] = [(float)$a->fy_22_23, (float)$a->fy_23_24, (float)$a->fy_24_25, (float)$a->fy_25_26];
                 $annualGrand['22_23'] += $a->fy_22_23;
@@ -125,8 +145,19 @@ class SalesPipelineController extends Controller
                 $annualGrand['25_26'] += $a->fy_25_26;
             }
         }
-        // Cards default to company-wide annual totals; client filter narrows them.
+        // Cards default to the user's scoped annual total; client filter narrows further.
         $totals = $annualGrand;
+
+        // Per-salesperson Kingo/Bingo for the current month, keyed by lowercased
+        // name, so the client filter can update the target chip per salesperson.
+        $kbByName = [];
+        foreach ($assignedUsers as $au) {
+            $t = $salespersonTargets->where('salesperson_id', $au->id)->where('month_year', \Carbon\Carbon::now()->format('Y-m'));
+            $kbByName[strtolower(trim($au->name))] = [
+                'kingo' => (float) $t->sum('kingo_target'),
+                'bingo' => (float) $t->sum('bingo_target'),
+            ];
+        }
 
         $monthlyActuals = [];
         $monthlyTargets = [];
@@ -137,8 +168,8 @@ class SalesPipelineController extends Controller
             })->sum();
 
             $targetsForMonth = $salespersonTargets->where('month_year', $m['key']);
-            if (!$isCcare && !$user->hasRole('Admin')) {
-                $targetsForMonth = $targetsForMonth->where('salesperson_id', $user->id);
+            if ($allowedSpIds !== null) {
+                $targetsForMonth = $targetsForMonth->whereIn('salesperson_id', $allowedSpIds);
             }
 
             $monthlyTargets[$m['key']] = [
@@ -158,7 +189,7 @@ class SalesPipelineController extends Controller
 
         \Illuminate\Support\Facades\Log::info('PIPELINES COUNT: ' . $pipelines->count() . ' User Dept: ' . ($user->department->name ?? 'none'));
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'annualMap', 'annualGrand', 'repFilterUsers'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -215,26 +246,27 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
+        // Which salespersons may this user see? null = no restriction (admin/hr/manager).
+        // CCare / New Biz users are limited to the salespersons mapped to them;
+        // a plain salesperson sees only themselves.
+        $allowedSpIds = null;
         if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
             if ($isCcare || $isNewBiz) {
-                $mappedSalespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
-                $query->whereIn('salesperson_id', $mappedSalespersonIds);
+                $allowedSpIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
+                    ->pluck('sales_user_id')->unique()->values()->all();
             } else {
-                $query->where('salesperson_id', $user->id);
+                $allowedSpIds = [$user->id];
             }
+        }
+        if ($allowedSpIds !== null) {
+            $query->whereIn('salesperson_id', $allowedSpIds);
         }
 
         $pipelines = $query->orderBy('id', 'desc')->get();
-        
-        if (($isCcare || $isNewBiz) && !$user->hasRole('Admin')) {
-            $salespersonIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
-                ->pluck('sales_user_id')
-                ->unique()
-                ->toArray();
-            $assignedUsers = User::where('status', 'active')->whereIn('id', $salespersonIds)->get();
-        } else {
-            $assignedUsers = User::where('status', 'active')->get();
-        }
+
+        $assignedUsers = ($allowedSpIds !== null)
+            ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()
+            : User::where('status', 'active')->get();
 
         // Department-scoped lists for the assignment dropdowns: the Salesperson
         // dropdown must only show Sales-department people, New Biz only New Biz.
@@ -245,28 +277,47 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
-        // Rep filter dropdown: only Sales / Customer Care / New Biz staff (A–Z),
-        // never every employee.
-        $repFilterUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', function ($q) {
-                $q->where('name', 'like', '%Sales%')
-                  ->orWhere('name', 'like', '%Customer Care%')
-                  ->orWhere('name', 'like', '%CCARE%')
-                  ->orWhere('name', 'like', '%New Biz%')
-                  ->orWhere('name', 'like', '%New Business%');
-            })->orderBy('first_name')->get();
+        // Rep filter dropdown ids, per role:
+        //  - admin/hr/manager : the full A–Z Sales / Customer Care / New Biz list
+        //  - CCare / New Biz  : only the salespersons mapped to them
+        //  - Salesperson      : themselves + the CCare/New Biz reps linked to them
+        //                       (via cc_salesperson_map), never other salespersons
+        $repDropdownIds = $allowedSpIds;
+        if ($allowedSpIds !== null && !$isCcare && !$isNewBiz) {
+            $linkedReps = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+                ->pluck('cc_user_id')->all();
+            $repDropdownIds = array_values(array_unique(array_merge([$user->id], $linkedReps)));
+        }
+
+        if ($repDropdownIds !== null) {
+            $repFilterUsers = User::where('status', 'active')->notTerminated()
+                ->whereIn('id', $repDropdownIds)->orderBy('first_name')->get();
+        } else {
+            $repFilterUsers = User::where('status', 'active')->notTerminated()
+                ->whereHas('department', function ($q) {
+                    $q->where('name', 'like', '%Sales%')
+                      ->orWhere('name', 'like', '%Customer Care%')
+                      ->orWhere('name', 'like', '%CCARE%')
+                      ->orWhere('name', 'like', '%New Biz%')
+                      ->orWhere('name', 'like', '%New Business%');
+                })->orderBy('first_name')->get();
+        }
 
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
-        // Per-salesperson annual (YoY) sales — independent of pipeline rows so
-        // salespersons with annual figures but no pipeline entries still show.
+        // Per-salesperson annual (YoY) sales — scoped to the salespersons this
+        // user may see, so CCare/New Biz cards reflect their own book, not the
+        // whole company. Independent of pipeline rows.
         $annualMap = [];
         $annualGrand = ['22_23' => 0.0, '23_24' => 0.0, '24_25' => 0.0, '25_26' => 0.0];
         if (\Illuminate\Support\Facades\Schema::hasTable('salesperson_annual_sales')) {
-            foreach (\Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
-                    ->join('users as u', 'u.id', '=', 'a.user_id')
-                    ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26')
-                    ->get() as $a) {
+            $annualQuery = \Illuminate\Support\Facades\DB::table('salesperson_annual_sales as a')
+                ->join('users as u', 'u.id', '=', 'a.user_id')
+                ->select('u.first_name', 'u.last_name', 'a.fy_22_23', 'a.fy_23_24', 'a.fy_24_25', 'a.fy_25_26');
+            if ($allowedSpIds !== null) {
+                $annualQuery->whereIn('a.user_id', $allowedSpIds);
+            }
+            foreach ($annualQuery->get() as $a) {
                 $key = strtolower(trim($a->first_name . ' ' . $a->last_name));
                 $annualMap[$key] = [(float)$a->fy_22_23, (float)$a->fy_23_24, (float)$a->fy_24_25, (float)$a->fy_25_26];
                 $annualGrand['22_23'] += $a->fy_22_23;
@@ -275,8 +326,19 @@ class SalesPipelineController extends Controller
                 $annualGrand['25_26'] += $a->fy_25_26;
             }
         }
-        // Cards default to company-wide annual totals; client filter narrows them.
+        // Cards default to the user's scoped annual total; client filter narrows further.
         $totals = $annualGrand;
+
+        // Per-salesperson Kingo/Bingo for the current month, keyed by lowercased
+        // name, so the client filter can update the target chip per salesperson.
+        $kbByName = [];
+        foreach ($assignedUsers as $au) {
+            $t = $salespersonTargets->where('salesperson_id', $au->id)->where('month_year', \Carbon\Carbon::now()->format('Y-m'));
+            $kbByName[strtolower(trim($au->name))] = [
+                'kingo' => (float) $t->sum('kingo_target'),
+                'bingo' => (float) $t->sum('bingo_target'),
+            ];
+        }
 
         $monthlyActuals = [];
         $monthlyTargets = [];
@@ -287,8 +349,8 @@ class SalesPipelineController extends Controller
             })->sum();
 
             $targetsForMonth = $salespersonTargets->where('month_year', $m['key']);
-            if (!$isCcare && !$user->hasRole('Admin')) {
-                $targetsForMonth = $targetsForMonth->where('salesperson_id', $user->id);
+            if ($allowedSpIds !== null) {
+                $targetsForMonth = $targetsForMonth->whereIn('salesperson_id', $allowedSpIds);
             }
 
             $monthlyTargets[$m['key']] = [
@@ -299,7 +361,7 @@ class SalesPipelineController extends Controller
 
         $currentMonthKey = \Carbon\Carbon::now()->format('Y-m');
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'annualMap', 'annualGrand', 'repFilterUsers'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyTargets', 'currentMonthKey', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName'));
     }
 
     public function store(Request $request)

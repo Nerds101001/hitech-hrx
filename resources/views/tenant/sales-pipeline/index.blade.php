@@ -54,7 +54,7 @@
         <div class="stat-chip"><span class="stat-label">YoY 24-25</span><span class="stat-value" id="cardYoy24_25">₹{{ number_format($totals['24_25'] ?? 0, 2) }}<em>L</em></span></div>
         <div class="stat-chip"><span class="stat-label">YoY 25-26</span><span class="stat-value" id="cardYoy25_26">₹{{ number_format($totals['25_26'] ?? 0, 2) }}<em>L</em></span></div>
         <div class="stat-chip" style="border-left-color:#10b981;"><span class="stat-label">YoY {{ $currentFyLabel }}</span><span class="stat-value" id="fyTotalCard">₹{{ number_format($currentFyActualTotal, 2) }}<em>L</em></span></div>
-        <div class="stat-chip" style="border-left-color:#22c55e;min-width:200px;"><span class="stat-label">This Month Target</span><span class="stat-value"><span class="badge bg-warning text-dark" style="font-size:0.65rem;">K ₹{{ number_format(($monthlyTargets[$currentMonthKey]['kingo'] ?? 0) / 100000, 2) }}L</span> <span class="badge bg-info text-dark" style="font-size:0.65rem;">B ₹{{ number_format(($monthlyTargets[$currentMonthKey]['bingo'] ?? 0) / 100000, 2) }}L</span></span></div>
+        <div class="stat-chip" style="border-left-color:#22c55e;min-width:200px;"><span class="stat-label">This Month Target</span><span class="stat-value"><span class="badge bg-warning text-dark" id="kingoTargetBadge" style="font-size:0.65rem;">K ₹{{ number_format(($monthlyTargets[$currentMonthKey]['kingo'] ?? 0) / 100000, 2) }}L</span> <span class="badge bg-info text-dark" id="bingoTargetBadge" style="font-size:0.65rem;">B ₹{{ number_format(($monthlyTargets[$currentMonthKey]['bingo'] ?? 0) / 100000, 2) }}L</span></span></div>
         <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $pipelines->count() }}</span></div>
         <div class="stat-chip" style="border-left-color:#f97316;"><span class="stat-label">Pending</span><span class="stat-value" id="pendingCard" style="color:#ea580c;">₹{{ number_format($totalPendingCurrentMonth ?? 0, 2) }}<em>L</em></span></div>
     </div>
@@ -699,6 +699,7 @@ document.addEventListener('DOMContentLoaded', function() {
 const SORT_CURRENT_MONTH = @json($currentMonthKey);
 const ANNUAL_MAP  = @json($annualMap);
 const ANNUAL_GRAND = @json($annualGrand);
+const KB_MAP = @json($kbByName ?? []);   // salesperson name -> {kingo, bingo} (current month)
 let sortState = { key: null, dir: 1 };
 function sortPipeline(key, el) {
     sortState.dir = (sortState.key === key) ? -sortState.dir : 1;
@@ -809,6 +810,21 @@ function updateDynamicStats() {
     document.getElementById('cardYoy25_26').innerHTML = fmtL(yoy[3]);
     document.getElementById('fyTotalCard').innerHTML  = fmtL(fyTotal);
     document.getElementById('pendingCard').innerHTML  = fmtL(pending);
+
+    // Kingo/Bingo target chip: on a single-salesperson filter show that
+    // person's target; otherwise sum the visible salespersons' targets.
+    let kingoT = 0, bingoT = 0;
+    if (repVal && KB_MAP[repVal]) {
+        kingoT = KB_MAP[repVal].kingo; bingoT = KB_MAP[repVal].bingo;
+    } else {
+        const seen = repVal ? [] : Object.keys(KB_MAP);
+        if (repVal) salespersonsSeen.forEach(sp => { if (KB_MAP[sp]) seen.push(sp); });
+        seen.forEach(sp => { kingoT += KB_MAP[sp].kingo; bingoT += KB_MAP[sp].bingo; });
+    }
+    const kBadge = document.getElementById('kingoTargetBadge');
+    const bBadge = document.getElementById('bingoTargetBadge');
+    if (kBadge) kBadge.textContent = 'K ₹' + (kingoT / 100000).toFixed(2) + 'L';
+    if (bBadge) bBadge.textContent = 'B ₹' + (bingoT / 100000).toFixed(2) + 'L';
     document.getElementById('totalCustomersCard').textContent = count;
     const potEl = document.getElementById('totalPotential');
     if (potEl) potEl.textContent = potential.toFixed(2);
