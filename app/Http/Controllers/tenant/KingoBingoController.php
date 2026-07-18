@@ -69,6 +69,24 @@ class KingoBingoController extends Controller
         $monthKeys      = array_column($months, 'key');
         $salespersonIds = $salespersons->pluck('id')->toArray();
 
+        // Order the scorecards so salespersons who actually have data (imported
+        // targets, then pipeline rows) appear first, and the rest fall to the
+        // bottom. The users.name column is frequently NULL (the display name is
+        // built from first_name/last_name), so orderBy('name') gave a random
+        // order that could lead with an empty, brand-new salesperson.
+        if ($salespersons->count() > 1) {
+            $idsWithTargets = SalespersonTarget::whereIn('salesperson_id', $salespersonIds)
+                ->whereIn('month_year', $monthKeys)->distinct()->pluck('salesperson_id')->flip();
+            $idsWithPipeline = SalesPipeline::whereNull('deleted_at')
+                ->whereIn('salesperson_id', $salespersonIds)->distinct()->pluck('salesperson_id')->flip();
+            $salespersons = $salespersons->sortBy(function ($sp) use ($idsWithTargets, $idsWithPipeline) {
+                $t = $idsWithTargets->has($sp->id) ? 0 : 1;
+                $p = $idsWithPipeline->has($sp->id) ? 0 : 1;
+                return sprintf('%d-%d-%s', $t, $p, strtolower(trim(($sp->first_name ?? '') . ' ' . ($sp->last_name ?? ''))));
+            })->values();
+            $salespersonIds = $salespersons->pluck('id')->toArray();
+        }
+
         // Bingo/Kingo targets
         $targets = SalespersonTarget::whereIn('salesperson_id', $salespersonIds)
             ->whereIn('month_year', $monthKeys)
