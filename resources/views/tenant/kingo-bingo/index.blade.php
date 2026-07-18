@@ -14,7 +14,7 @@
 /* Card */
 .kb-card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.09);margin-bottom:32px;overflow:hidden;}
 .kb-card-header{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-.kb-card-header h3{margin:0;font-size:1.05rem;font-weight:700;}
+.kb-card-header h3{margin:0;font-size:1.18rem;font-weight:800;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4);letter-spacing:.2px;}
 
 /* Summary chips */
 .kb-chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:5px 12px;font-size:11px;line-height:1.4;text-align:center;min-width:90px;}
@@ -158,11 +158,12 @@ $getKb = fn($mk) => $spKb->firstWhere('month_year', $mk);
 $getA  = fn($mk, $key) => $spAuto[$mk][$key] ?? 0;
 
 // Annual totals
-$bingoAnn=0; $kingoAnn=0; $actAnn=0;
+$bingoAnn=0; $kingoAnn=0; $superAnn=0; $actAnn=0;
 foreach ($months as $m) {
     $t=$getT($m['key']);
     $bingoAnn += $t ? (float)$t->bingo_target : 0;
     $kingoAnn += $t ? (float)$t->kingo_target  : 0;
+    $superAnn += $t ? (float)$t->super_kingo_target : 0;
     $actAnn   += $spAuto[$m['key']]['actual_sale'] ?? 0;
 }
 $fyScoreArr=[];
@@ -192,6 +193,7 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     <h3>{{ $sp->name }}</h3>
     <div class="kb-chip"><span class="cl">Bingo Annual</span><span class="cv">{{ $bingoAnn>0?number_format($bingoAnn,1):'—' }}</span></div>
     <div class="kb-chip"><span class="cl">Kingo Annual</span><span class="cv">{{ $kingoAnn>0?number_format($kingoAnn,1):'—' }}</span></div>
+    <div class="kb-chip"><span class="cl">Super Kingo Annual</span><span class="cv">{{ $superAnn>0?number_format($superAnn,1):'—' }}</span></div>
     <div class="kb-chip {{ $actAnn>=$bingoAnn&&$bingoAnn>0?'good':($actAnn>0?'mid':'') }}">
         <span class="cl">Actual Annual</span><span class="cv">{{ $actAnn>0?number_format($actAnn,1):'—' }}</span>
     </div>
@@ -263,6 +265,17 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     @php $t=$getT($m['key']); $v=$t?$t->kingo_target:null; @endphp
     @if($canEditTargets)
     <td class="tc" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="kingo_target">{{ $v!==null?$v+0:'' }}</td>
+    @else
+    <td class="ac" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
+    @endif
+    @endforeach
+</tr>
+<tr class="r-target">
+    <td class="rl">Super Kingo Target <small style="opacity:.7;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;color:#b45309;">{{ $canEditTargets?'click to edit':'admin/CC only' }}</small></td>
+    @foreach($months as $m)
+    @php $t=$getT($m['key']); $v=$t?$t->super_kingo_target:null; @endphp
+    @if($canEditTargets)
+    <td class="tc" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="super_kingo_target">{{ $v!==null?$v+0:'' }}</td>
     @else
     <td class="ac" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
     @endif

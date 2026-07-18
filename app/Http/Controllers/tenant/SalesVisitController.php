@@ -31,25 +31,18 @@ class SalesVisitController extends Controller
         $query = SalesVisit::with(['client', 'salesperson', 'ccAgent'])
             ->orderBy('scheduled_at', 'desc');
 
-        // Role-based scoping
-        if ($user->hasRole(['admin', 'hr', 'accounts'])) {
-            // See all
-        } elseif ($user->hasRole('manager')) {
-            // Managers see their own as salesperson + any CC bookings they made
-            $query->where(function ($q) use ($user) {
-                $q->where('salesperson_id', $user->id)
-                  ->orWhere('cc_user_id', $user->id);
-            });
-        } else {
-            // CC, salesperson, or department-based user — see own data only
-            $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
-            $allowedSpIds = array_unique(array_merge([$user->id], $mappedIds));
-
-            $query->where(function ($q) use ($user, $allowedSpIds) {
-                $q->whereIn('salesperson_id', $allowedSpIds)
-                  ->orWhere('cc_user_id', $user->id);
-            });
-        }
+        // Role-based scoping — single source of truth (admin/hr = all,
+        // manager = self + team, ccare/newbiz = self + mapped, else = self).
+        $allowed = \App\Support\SalesScope::allowedUserIds($user);
+        $scopeVisits = function ($q) use ($allowed) {
+            if ($allowed !== null) {
+                $q->where(function ($w) use ($allowed) {
+                    $w->whereIn('salesperson_id', $allowed)
+                      ->orWhereIn('cc_user_id', $allowed);
+                });
+            }
+        };
+        $scopeVisits($query);
 
         // Filters
         if ($request->filled('status')) {
@@ -77,29 +70,17 @@ class SalesVisitController extends Controller
         $visits = $query->paginate(20)->withQueryString();
 
         // Filter dropdowns — scope salesperson list to what the current user may see
-        if ($user->hasRole(['admin', 'hr', 'accounts'])) {
+        if ($allowed === null) {
             $salespersons = User::whereHas('roles', fn($q) => $q->whereIn('name', ['employee', 'manager']))->get();
         } else {
-            // CC agent: only their mapped salespersons; salesperson: only themselves
-            $mappedIds = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
-            $salespersons = $mappedIds->isNotEmpty()
-                ? User::whereIn('id', $mappedIds)->get()
-                : User::where('id', $user->id)->get();
+            $salespersons = User::whereIn('id', $allowed)->get();
         }
         $ccAgents = User::whereHas('mappedSalespersons')->orWhereHas('roles', fn($q) => $q->whereIn('name', ['hr', 'accounts', 'admin']))->get();
 
         // Stats for header — scoped to the same records the user can see
         $today = Carbon::today();
         $statsQuery = SalesVisit::query();
-        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
-            $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
-            $allowedSpIds = array_unique(array_merge([$user->id], $mappedIds));
-            
-            $statsQuery->where(function ($q) use ($user, $allowedSpIds) {
-                $q->whereIn('salesperson_id', $allowedSpIds)
-                  ->orWhere('cc_user_id', $user->id);
-            });
-        }
+        $scopeVisits($statsQuery);
         $stats = [
             'total'     => (clone $statsQuery)->count(),
             'today'     => (clone $statsQuery)->whereDate('scheduled_at', $today)->count(),
@@ -217,6 +198,15 @@ class SalesVisitController extends Controller
     public function show($id)
     {
         $visit = SalesVisit::with(['client', 'salesperson', 'ccAgent'])->findOrFail($id);
+
+        // Ownership check — only people allowed to see this visit's salesperson/CC agent.
+        $allowed = \App\Support\SalesScope::allowedUserIds(Auth::user());
+        if ($allowed !== null
+            && !in_array($visit->salesperson_id, $allowed)
+            && !in_array($visit->cc_user_id, $allowed)) {
+            abort(403, 'You are not authorized to view this visit.');
+        }
+
         return view('tenant.sales-visits.show', compact('visit'))
             ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
@@ -340,7 +330,9 @@ class SalesVisitController extends Controller
         $newBizDeptIds  = [13];
         $allowedDeptIds = array_merge($salesDeptIds, $ccareDeptIds, $newBizDeptIds);
 
-        $isAdmin = $user->hasRole(['admin', 'hr', 'manager', 'accounts']);
+        // Only admin/hr/accounts see every client. Managers are scoped to their
+        // own team, ccare/newbiz to their mapped salespersons, salespersons to self.
+        $canSeeAll = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'accounts']);
         $inAllowedDept = in_array($user->department_id, $allowedDeptIds);
 
         // Also allow users who are directly assigned in any CRM mapping role
@@ -351,40 +343,31 @@ class SalesVisitController extends Controller
             ->orWhere('finance_id', $user->id)
             ->exists();
 
-        if (!$isAdmin && !$inAllowedDept && !$hasAnyMapping) {
+        if (!$canSeeAll && !$user->hasRole(['manager', 'Manager']) && !$inAllowedDept && !$hasAnyMapping) {
             abort(403, 'You are not authorized to view the Client Master.');
         }
 
-        // Build query — admins see all, dept users see only their clients
+        // Build query — admin/hr see all; everyone else is scoped to the
+        // salespersons they are allowed to see (self / team / mapped).
         $query = \App\Models\CrmClientMapping::with([
             'salesperson', 'ccare', 'newBiz', 'billing', 'finance',
         ]);
 
-        if (!$isAdmin) {
-            // Filter by department role
-            if (in_array($user->department_id, $salesDeptIds)) {
-                // Sales: see clients where they are salesperson
-                $query->where('salesperson_id', $user->id);
-            } elseif (in_array($user->department_id, $ccareDeptIds) || in_array($user->department_id, $newBizDeptIds)) {
-                // CCare & New Biz: see clients for salespersons they are mapped to
-                $mappedIds = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->toArray();
-                $query->whereIn('salesperson_id', $mappedIds);
-            } else {
-                // Fallback: any role assignment
-                $query->where(function($q) use ($user) {
-                    $q->where('salesperson_id', $user->id)
-                      ->orWhere('ccare_id', $user->id)
-                      ->orWhere('new_biz_id', $user->id)
-                      ->orWhere('billing_id', $user->id)
-                      ->orWhere('finance_id', $user->id);
-                });
-            }
+        $allowed = \App\Support\SalesScope::allowedUserIds($user);
+        if ($allowed !== null) {
+            $query->where(function ($q) use ($allowed) {
+                $q->whereIn('salesperson_id', $allowed)
+                  ->orWhereIn('ccare_id', $allowed)
+                  ->orWhereIn('new_biz_id', $allowed)
+                  ->orWhereIn('billing_id', $allowed)
+                  ->orWhereIn('finance_id', $allowed);
+            });
         }
 
         $mappings = $query->orderBy('crm_company_name')->paginate(25);
 
         // Employees for dropdowns (admins only — dept users don't need to reassign)
-        $employees = $isAdmin
+        $employees = $canSeeAll
             ? \App\Models\User::select('id', 'first_name', 'last_name', 'code')
                 ->where('status', 'active')
                 ->orderBy('first_name')
@@ -458,7 +441,20 @@ class SalesVisitController extends Controller
         $dateFrom = $request->date_from ? Carbon::parse($request->date_from)->startOfDay() : Carbon::now()->subDays(30)->startOfDay();
         $dateTo   = $request->date_to   ? Carbon::parse($request->date_to)->endOfDay()   : Carbon::now()->endOfDay();
 
-        $baseQuery = SalesVisit::whereBetween('scheduled_at', [$dateFrom, $dateTo]);
+        // Owner-scope: admin/hr/accounts see the whole company; a manager sees
+        // only their own team's visits (self + direct reports).
+        $allowed = \App\Support\SalesScope::allowedUserIds(Auth::user());
+        $scope = function ($q) use ($allowed) {
+            if ($allowed !== null) {
+                $q->where(function ($w) use ($allowed) {
+                    $w->whereIn('salesperson_id', $allowed)
+                      ->orWhereIn('cc_user_id', $allowed);
+                });
+            }
+            return $q;
+        };
+
+        $baseQuery = $scope(SalesVisit::whereBetween('scheduled_at', [$dateFrom, $dateTo]));
 
         // KPI cards
         $kpis = [
@@ -473,43 +469,43 @@ class SalesVisitController extends Controller
             : 0;
 
         // Per-salesperson breakdown
-        $bySalesperson = SalesVisit::with('salesperson')
+        $bySalesperson = $scope(SalesVisit::with('salesperson')
             ->selectRaw('salesperson_id, count(*) as total,
                 sum(case when status="completed" then 1 else 0 end) as completed,
                 sum(case when status="pending" then 1 else 0 end) as pending,
                 sum(case when status="cancelled" then 1 else 0 end) as cancelled,
                 sum(case when visit_type="product_trial" then 1 else 0 end) as trials')
-            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo]))
             ->groupBy('salesperson_id')
             ->orderByDesc('total')
             ->get();
 
         // Per-CC-agent breakdown
-        $byCcAgent = SalesVisit::with('ccAgent')
+        $byCcAgent = $scope(SalesVisit::with('ccAgent')
             ->selectRaw('cc_user_id, count(*) as total,
                 sum(case when status="completed" then 1 else 0 end) as completed')
-            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo]))
             ->groupBy('cc_user_id')
             ->orderByDesc('total')
             ->get();
 
         // Visit type breakdown for chart
-        $byType = SalesVisit::selectRaw('visit_type, count(*) as total')
-            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+        $byType = $scope(SalesVisit::selectRaw('visit_type, count(*) as total')
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo]))
             ->groupBy('visit_type')
             ->pluck('total', 'visit_type');
 
         // Daily visits for line chart (last 14 days)
-        $dailyVisits = SalesVisit::selectRaw('DATE(scheduled_at) as date, count(*) as total')
-            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+        $dailyVisits = $scope(SalesVisit::selectRaw('DATE(scheduled_at) as date, count(*) as total')
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo]))
             ->groupBy('date')
             ->orderBy('date')
             ->get();
 
         // Client Feedback data
-        $reviewsQuery = SalesVisit::with(['client', 'salesperson'])
+        $reviewsQuery = $scope(SalesVisit::with(['client', 'salesperson'])
             ->whereNotNull('rating')
-            ->whereBetween('scheduled_at', [$dateFrom, $dateTo])
+            ->whereBetween('scheduled_at', [$dateFrom, $dateTo]))
             ->orderBy('completed_at', 'desc');
 
         $reviews = $reviewsQuery->get();

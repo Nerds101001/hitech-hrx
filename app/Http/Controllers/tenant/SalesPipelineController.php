@@ -65,28 +65,10 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
-        // Which salespersons may this user see? null = no restriction — only
-        // ADMIN and HR see every salesperson's data. Managers (including sales
-        // managers) are scoped like anyone else: a Sales-dept manager sees only
-        // their own rows, a CCare/New Biz manager sees their mapped salespersons.
-        $allowedSpIds = null;
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            if ($isCcare || $isNewBiz) {
-                // Salespersons this rep is connected to: those explicitly mapped
-                // to them in cc_salesperson_map, PLUS any whose pipeline/report
-                // rows already list them as the ccare/new_biz rep. The map is not
-                // reliably maintained on import, so we derive from the data too —
-                // otherwise a rep with no map row (e.g. Jasleen) sees nothing.
-                $mapped = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
-                $asRep = SalesPipeline::whereNull('deleted_at')
-                    ->where(function ($q) use ($user) {
-                        $q->where('ccare_id', $user->id)->orWhere('new_biz_id', $user->id);
-                    })->distinct()->pluck('salesperson_id');
-                $allowedSpIds = $mapped->merge($asRep)->filter()->unique()->values()->all();
-            } else {
-                $allowedSpIds = [$user->id];
-            }
-        }
+        // Which salespersons may this user see? null = no restriction (admin/HR).
+        // manager = self + direct-report team; ccare/newbiz = self + mapped
+        // salespersons; salesperson = self. Single source of truth in SalesScope.
+        $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
         if ($allowedSpIds !== null) {
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
@@ -312,28 +294,10 @@ class SalesPipelineController extends Controller
         $isCcare = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
         
-        // Which salespersons may this user see? null = no restriction — only
-        // ADMIN and HR see every salesperson's data. Managers (including sales
-        // managers) are scoped like anyone else: a Sales-dept manager sees only
-        // their own rows, a CCare/New Biz manager sees their mapped salespersons.
-        $allowedSpIds = null;
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            if ($isCcare || $isNewBiz) {
-                // Salespersons this rep is connected to: those explicitly mapped
-                // to them in cc_salesperson_map, PLUS any whose pipeline/report
-                // rows already list them as the ccare/new_biz rep. The map is not
-                // reliably maintained on import, so we derive from the data too —
-                // otherwise a rep with no map row (e.g. Jasleen) sees nothing.
-                $mapped = \App\Models\CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id');
-                $asRep = SalesPipeline::whereNull('deleted_at')
-                    ->where(function ($q) use ($user) {
-                        $q->where('ccare_id', $user->id)->orWhere('new_biz_id', $user->id);
-                    })->distinct()->pluck('salesperson_id');
-                $allowedSpIds = $mapped->merge($asRep)->filter()->unique()->values()->all();
-            } else {
-                $allowedSpIds = [$user->id];
-            }
-        }
+        // Which salespersons may this user see? null = no restriction (admin/HR).
+        // manager = self + direct-report team; ccare/newbiz = self + mapped
+        // salespersons; salesperson = self. Single source of truth in SalesScope.
+        $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
         if ($allowedSpIds !== null) {
             $query->whereIn('salesperson_id', $allowedSpIds);
         }

@@ -45,18 +45,12 @@ class KingoBingoController extends Controller
         $currentMonthKey = $now->format('Y-m');
 
         // ── Determine which salespersons this user may view ──
-        // Admin/HR/Manager → everyone
-        // CCare            → only their mapped salespersons (cc_salesperson_map)
-        // New Biz          → salespersons on pipelines where new_biz_id = user->id
-        // Salesperson      → only themselves
-        if ($isAdmin) {
-            $allowedSpIds = null; // null = no restriction
-        } elseif ($isCcare || $isNewBiz) {
-            $allowedSpIds = CcSalespersonMap::where('cc_user_id', $user->id)
-                ->pluck('sales_user_id')->unique()->values()->toArray();
-        } else {
-            $allowedSpIds = [$user->id];
-        }
+        //   Admin/HR      → everyone (null)
+        //   Manager       → self + their direct-report team
+        //   CCare/New Biz → self + their mapped salespersons (+ derived from data)
+        //   Salesperson   → only themselves
+        // Single source of truth in SalesScope.
+        $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
 
         // Honour an explicit salesperson filter only if the requester may see that person
         if ($request->filled('salesperson_id')) {
