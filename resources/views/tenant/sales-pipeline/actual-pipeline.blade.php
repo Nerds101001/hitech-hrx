@@ -304,68 +304,80 @@
                             </tr>
                         @endforelse
 
-                        {{-- ── Inline Add New Row (hidden) ── --}}
+                        {{-- ── Add New Entry — full-width form, works for every role ── --}}
                         <tr id="addNewRow" style="display:none;background:#f0fdf4;">
-                            <td class="text-center text-success fw-bold">+</td>
-                            <td class="text-muted small align-middle">Today</td>
-                            <td class="p-1">
-                                <input type="text" id="new_party_name"
-                                       class="form-control form-control-sm" placeholder="Customer Name *">
-                            </td>
-                            <td class="p-1">
-                                <input type="text" id="new_product"
-                                       class="form-control form-control-sm" placeholder="Product">
-                            </td>
-                            @if($isAdmin)
-                                <td class="p-1">
-                                    <select id="new_salesperson_id" class="form-select form-select-sm">
-                                        <option value="">-SP-</option>
-                                        @foreach($salespersons as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="p-1">
-                                    <select id="new_new_biz_id" class="form-select form-select-sm">
-                                        <option value="">-NB-</option>
-                                        @foreach($newBizUsers as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                            @else
-                                {{-- Salesperson / CCare / NewBiz: auto-assigned from auth user --}}
-                                <td class="p-2 text-muted small align-middle">Auto-assigned</td>
-                            @endif
-                            <td class="p-1">
-                                <input type="number" id="new_potential" step="0.01"
-                                       class="form-control form-control-sm text-end" placeholder="Potential (L)">
-                            </td>
-                            <td class="p-1">
-                                <select id="new_status_stage" class="form-select form-select-sm">
-                                    <option value="Prospect">Prospect</option>
-                                    @foreach($statuses as $st)
-                                        <option value="{{ $st }}">{{ $st }}</option>
-                                    @endforeach
-                                </select>
-                            </td>
-                            <td class="p-1">
-                                <input type="text" id="new_remarks"
-                                       class="form-control form-control-sm" placeholder="Remarks">
-                            </td>
-                            <td></td>
-                        </tr>
-                        {{-- Save / Cancel --}}
-                        <tr id="addNewRowActions" style="display:none;background:#f0fdf4;">
-                            <td colspan="20" class="p-2 text-center">
-                                <button class="btn btn-sm btn-success px-4 me-2"
-                                        onclick="saveNewPipeline()">
-                                    <i class="bx bx-save me-1"></i>Save
-                                </button>
-                                <button class="btn btn-sm btn-outline-secondary"
-                                        onclick="cancelNewPipeline()">
-                                    <i class="bx bx-x me-1"></i>Cancel
-                                </button>
+                            <td colspan="20" class="p-3">
+                                <div class="d-flex flex-wrap align-items-end gap-3">
+                                    <div style="min-width:180px;">
+                                        <label class="form-label small fw-bold mb-1 text-success">Customer Name *</label>
+                                        <input type="text" id="new_party_name" class="form-control form-control-sm" placeholder="Customer Name">
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Product</label>
+                                        <input type="text" id="new_product" class="form-control form-control-sm" style="min-width:130px;" placeholder="Product">
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Type</label>
+                                        <select id="new_type" class="form-select form-select-sm" style="min-width:120px;">
+                                            <option value="">-Type-</option>
+                                            <option value="Customer">Customer</option>
+                                            <option value="Distributor">Distributor</option>
+                                            <option value="Dealer">Dealer</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Salesperson</label>
+                                        <select id="new_salesperson_id" class="form-select form-select-sm" style="min-width:150px;">
+                                            <option value="">-Salesperson-</option>
+                                            @foreach($salespersons as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">New Biz</label>
+                                        <select id="new_new_biz_id" class="form-select form-select-sm" style="min-width:140px;">
+                                            <option value="">-New Biz-</option>
+                                            @foreach($newBizUsers as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">CCare</label>
+                                        <select id="new_ccare_id" class="form-select form-select-sm" style="min-width:140px;">
+                                            <option value="">-CCare-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Potential (L)</label>
+                                        <input type="number" id="new_potential" step="0.01" class="form-control form-control-sm text-end" style="width:110px;" placeholder="0.00">
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Stage</label>
+                                        <select id="new_status_stage" class="form-select form-select-sm" style="min-width:130px;">
+                                            <option value="Prospect">Prospect</option>
+                                            @foreach($statuses as $st)
+                                                <option value="{{ $st }}">{{ $st }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div style="min-width:180px;">
+                                        <label class="form-label small fw-bold mb-1">Remarks</label>
+                                        <input type="text" id="new_remarks" class="form-control form-control-sm" placeholder="Status remarks">
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-success px-3" onclick="saveNewPipeline()">
+                                            <i class="bx bx-save me-1"></i>Save
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="cancelNewPipeline()">
+                                            <i class="bx bx-x me-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -520,18 +532,16 @@ function clearFilters() {
 // ── Inline Add ────────────────────────────────────────────────────────
 function showAddNewRow() {
     document.getElementById('addNewRow').style.display        = '';
-    document.getElementById('addNewRowActions').style.display = '';
     document.getElementById('addRowTriggerBtn').style.display = 'none';
     document.getElementById('new_party_name').focus();
 }
 
 function cancelNewPipeline() {
     document.getElementById('addNewRow').style.display        = 'none';
-    document.getElementById('addNewRowActions').style.display = 'none';
     document.getElementById('addRowTriggerBtn').style.display = '';
-    ['new_party_name','new_product','new_potential',
+    ['new_party_name','new_product','new_type','new_potential',
      'new_status_stage','new_remarks',
-     'new_salesperson_id','new_new_biz_id']
+     'new_salesperson_id','new_new_biz_id','new_ccare_id']
         .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 }
 
@@ -546,15 +556,17 @@ function saveNewPipeline() {
     const payload = {
         party_name:               partyName,
         product:                  document.getElementById('new_product')?.value     || '',
+        type:                     document.getElementById('new_type')?.value        || '',
         total_business_potential: document.getElementById('new_potential')?.value   || 0,
         status_stage:             document.getElementById('new_status_stage')?.value || 'Prospect',
         status_remarks:           document.getElementById('new_remarks')?.value     || '',
         salesperson_id:           document.getElementById('new_salesperson_id')?.value || '',
         new_biz_id:               document.getElementById('new_new_biz_id')?.value  || '',
+        ccare_id:                 document.getElementById('new_ccare_id')?.value    || '',
         is_locked:                false,  // Pipeline (prospect) rows stay unlocked
     };
 
-    const saveBtn = document.querySelector('#addNewRowActions .btn-success');
+    const saveBtn = document.querySelector('#addNewRow .btn-success');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
     fetch('{{ route("sales-visits.pipeline.store") }}', {
