@@ -69,4 +69,39 @@ class SalesScope
 
         return $ids->filter()->unique()->values()->all();
     }
+
+    /**
+     * viewIds — the ids to actually SHOW on a list page, applying the sales
+     * manager's default-to-own behaviour (mirrors the Kingo Bingo scorecard):
+     *   - admin/hr                    → null (everyone)
+     *   - manager, default            → only themselves
+     *   - manager + ?team=1           → their whole team
+     *   - manager + member selected   → just that member (if on their team)
+     *   - ccare/newbiz/salesperson    → their normal allowed set (unchanged)
+     *
+     * $memberParam is the request key that carries a chosen teammate's id
+     * (e.g. 'sp' on Sales Report/Pipeline, 'salesperson_id' on Visits).
+     */
+    public static function viewIds($user, $request, string $memberParam = 'sp'): ?array
+    {
+        $allowed = self::allowedUserIds($user);
+        if ($allowed === null) {
+            return null; // admin/hr — no restriction
+        }
+
+        $isManager = $user->hasRole(['manager', 'Manager']);
+        if (!$isManager || count($allowed) <= 1) {
+            return $allowed; // salesperson / ccare / newbiz — unchanged
+        }
+
+        // Manager: a specific teammate takes priority, else team vs. own default.
+        if ($request->filled($memberParam)) {
+            $member = (int) $request->input($memberParam);
+            return in_array($member, $allowed) ? [$member] : [$user->id];
+        }
+        if ($request->boolean('team')) {
+            return $allowed;
+        }
+        return [$user->id];
+    }
 }

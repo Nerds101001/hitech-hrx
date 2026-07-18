@@ -15,7 +15,8 @@
 @section('title', 'Sales Report')
 
 @section('navbar-actions')
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.pipeline.index', 'mvMemberParam' => 'sp'])
         <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="d-flex gap-2 mb-0">
             @php $startYear = 2023; $endYear = (int)date('Y') + 1; @endphp
             <select name="fy" class="form-select form-select-sm border-0 fw-bold"

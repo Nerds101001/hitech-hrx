@@ -147,7 +147,8 @@
                         Sync clients from Rustx CRM (api-crm.rustx.net) — name, email, phone, address, and all 5 team roles mapped to HRX staff.
                     </p>
                 </div>
-                <div class="d-flex gap-2 flex-wrap">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.clients.index', 'mvMemberParam' => 'salesperson_id'])
                     {{-- Test: fetch latest 20 only --}}
                     <button class="btn btn-warning fw-bold rounded-pill px-3 shadow-sm" id="testSyncBtn" onclick="startSync('full', 20)" title="Fetch only 20 companies for testing">
                         <i class="bx bx-test-tube me-1"></i> Test 20

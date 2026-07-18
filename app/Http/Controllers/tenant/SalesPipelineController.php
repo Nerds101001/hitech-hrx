@@ -68,7 +68,16 @@ class SalesPipelineController extends Controller
         // Which salespersons may this user see? null = no restriction (admin/HR).
         // manager = self + direct-report team; ccare/newbiz = self + mapped
         // salespersons; salesperson = self. Single source of truth in SalesScope.
-        $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
+        // A sales manager defaults to their OWN rows; ?team=1 shows the whole
+        // team and ?sp=<id> focuses on one teammate (mirrors Kingo Bingo).
+        $teamMemberIds = \App\Support\SalesScope::allowedUserIds($user); // full team (for the dropdown)
+        $isManager     = $user->hasRole(['manager', 'Manager']);
+        $teamView      = $request->boolean('team');
+        $hasTeam       = $isManager && $teamMemberIds !== null && count($teamMemberIds) > 1;
+        $teamMembers   = ($teamMemberIds !== null)
+            ? User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
+            : collect();
+        $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
         if ($allowedSpIds !== null) {
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
@@ -237,7 +246,7 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -297,7 +306,16 @@ class SalesPipelineController extends Controller
         // Which salespersons may this user see? null = no restriction (admin/HR).
         // manager = self + direct-report team; ccare/newbiz = self + mapped
         // salespersons; salesperson = self. Single source of truth in SalesScope.
-        $allowedSpIds = \App\Support\SalesScope::allowedUserIds($user);
+        // A sales manager defaults to their OWN rows; ?team=1 shows the whole
+        // team and ?sp=<id> focuses on one teammate (mirrors Kingo Bingo).
+        $teamMemberIds = \App\Support\SalesScope::allowedUserIds($user); // full team (for the dropdown)
+        $isManager     = $user->hasRole(['manager', 'Manager']);
+        $teamView      = $request->boolean('team');
+        $hasTeam       = $isManager && $teamMemberIds !== null && count($teamMemberIds) > 1;
+        $teamMembers   = ($teamMemberIds !== null)
+            ? User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
+            : collect();
+        $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
         if ($allowedSpIds !== null) {
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
@@ -419,7 +437,7 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers'));
     }
 
     public function store(Request $request)

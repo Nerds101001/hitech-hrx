@@ -174,7 +174,8 @@
         <h1 class="sv-hero-title">📍 Sales Field Visits & Trials</h1>
         <p class="sv-hero-subtitle">Track, schedule and manage all client visits, product trials and service calls in one place.</p>
       </div>
-      <div>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.index', 'mvMemberParam' => 'salesperson_id'])
         <a href="{{ route('sales-visits.create') }}" class="btn btn-new-visit">
           <i class="bx bx-plus me-1"></i> Book New Visit
         </a>

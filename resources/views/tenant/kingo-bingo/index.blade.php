@@ -342,9 +342,10 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
 </tr>
 
 <tr class="r-achieved">
-    <td class="rl">Achieved <small style="opacity:.8;font-size:9px;background:#dcfce7;padding:1px 4px;border-radius:3px;color:#166534;">auto from visits</small></td>
+    <td class="rl">Achieved <small style="opacity:.8;font-size:9px;background:#dcfce7;padding:1px 4px;border-radius:3px;color:#166534;">{{ $kpi['key']==='payment' ? 'enter manually' : 'auto from visits' }}</small></td>
     @foreach($months as $m)
-    @php $av = $spAuto[$m['key']][$autoKey] ?? 0; if($kpi['key']==='payment') $av=round($av,2); @endphp
+    {{-- Payment collection auto-value is unreliable — leave it blank for now. --}}
+    @php $av = $kpi['key']==='payment' ? 0 : ($spAuto[$m['key']][$autoKey] ?? 0); @endphp
     <td class="ac">{{ $av>0?$av:'' }}</td>
     @endforeach
 </tr>
@@ -355,7 +356,7 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     @php
         $kb=$getKb($m['key']); $tf=$km['tf'];
         $tv=$kb?(float)$kb->$tf:0;
-        $av=(float)($spAuto[$m['key']][$autoKey]??0);
+        $av=$kpi['key']==='payment' ? 0 : (float)($spAuto[$m['key']][$autoKey]??0);
         $s=$tv>0?round(($av/$tv)*$km['mult'],1):0;
     @endphp
     <td class="sb {{ $sc($s) }}">{{ $s>0?$s:'' }}</td>

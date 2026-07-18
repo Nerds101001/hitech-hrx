@@ -33,7 +33,16 @@ class SalesVisitController extends Controller
 
         // Role-based scoping — single source of truth (admin/hr = all,
         // manager = self + team, ccare/newbiz = self + mapped, else = self).
-        $allowed = \App\Support\SalesScope::allowedUserIds($user);
+        // A manager defaults to their OWN visits; ?team=1 shows the whole team
+        // and ?salesperson_id=<id> focuses on one teammate (mirrors Kingo Bingo).
+        $teamMemberIds = \App\Support\SalesScope::allowedUserIds($user); // full team (for dropdown)
+        $isManager     = $user->hasRole(['manager', 'Manager']);
+        $teamView      = $request->boolean('team');
+        $hasTeam       = $isManager && $teamMemberIds !== null && count($teamMemberIds) > 1;
+        $teamMembers   = ($teamMemberIds !== null)
+            ? User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
+            : collect();
+        $allowed = \App\Support\SalesScope::viewIds($user, $request, 'salesperson_id');
         $scopeVisits = function ($q) use ($allowed) {
             if ($allowed !== null) {
                 $q->where(function ($w) use ($allowed) {
@@ -69,11 +78,12 @@ class SalesVisitController extends Controller
 
         $visits = $query->paginate(20)->withQueryString();
 
-        // Filter dropdowns — scope salesperson list to what the current user may see
-        if ($allowed === null) {
+        // Filter dropdowns — list the full team (not just the current view) so a
+        // manager can still pick any teammate while defaulting to their own data.
+        if ($teamMemberIds === null) {
             $salespersons = User::whereHas('roles', fn($q) => $q->whereIn('name', ['employee', 'manager']))->get();
         } else {
-            $salespersons = User::whereIn('id', $allowed)->get();
+            $salespersons = User::whereIn('id', $teamMemberIds)->get();
         }
         $ccAgents = User::whereHas('mappedSalespersons')->orWhereHas('roles', fn($q) => $q->whereIn('name', ['hr', 'accounts', 'admin']))->get();
 
@@ -88,7 +98,8 @@ class SalesVisitController extends Controller
             'completed' => (clone $statsQuery)->where('status', 'completed')->count(),
         ];
 
-        return view('tenant.sales-visits.index', compact('visits', 'salespersons', 'ccAgents', 'stats'))
+        return view('tenant.sales-visits.index', compact('visits', 'salespersons', 'ccAgents', 'stats',
+            'isManager', 'teamView', 'hasTeam', 'teamMembers'))
             ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
@@ -318,7 +329,7 @@ class SalesVisitController extends Controller
     // CLIENT MANAGEMENT
     // =========================================================
 
-    public function clientIndex()
+    public function clientIndex(Request $request)
     {
         $user = Auth::user();
 
@@ -353,7 +364,17 @@ class SalesVisitController extends Controller
             'salesperson', 'ccare', 'newBiz', 'billing', 'finance',
         ]);
 
-        $allowed = \App\Support\SalesScope::allowedUserIds($user);
+        // A manager defaults to their OWN clients; ?team=1 shows the whole team
+        // and ?salesperson_id=<id> focuses on one teammate (mirrors Kingo Bingo).
+        $teamMemberIds = \App\Support\SalesScope::allowedUserIds($user); // full team (for dropdown)
+        $isManager     = $user->hasRole(['manager', 'Manager']);
+        $teamView      = $request->boolean('team');
+        $hasTeam       = $isManager && $teamMemberIds !== null && count($teamMemberIds) > 1;
+        $teamMembers   = ($teamMemberIds !== null)
+            ? \App\Models\User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
+            : collect();
+
+        $allowed = \App\Support\SalesScope::viewIds($user, $request, 'salesperson_id');
         if ($allowed !== null) {
             $query->where(function ($q) use ($allowed) {
                 $q->whereIn('salesperson_id', $allowed)
@@ -364,7 +385,7 @@ class SalesVisitController extends Controller
             });
         }
 
-        $mappings = $query->orderBy('crm_company_name')->paginate(25);
+        $mappings = $query->orderBy('crm_company_name')->paginate(25)->withQueryString();
 
         // Employees for dropdowns (admins only — dept users don't need to reassign)
         $employees = $canSeeAll
@@ -378,7 +399,8 @@ class SalesVisitController extends Controller
                 ])
             : collect();
 
-        return view('tenant.crm-clients.index', compact('mappings', 'employees'))
+        return view('tenant.crm-clients.index', compact('mappings', 'employees',
+            'isManager', 'teamView', 'hasTeam', 'teamMembers'))
             ->with('pageConfigs', ['contentLayout' => 'wide']);
     }
 
