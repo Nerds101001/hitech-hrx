@@ -72,6 +72,11 @@ td.tc input{width:100%;border:none;background:transparent;text-align:right;font-
 td.ac{text-align:right;padding-right:8px!important;font-size:11.5px;color:#374151;}
 
 tr.kpi-gap td{height:4px;background:#f8fafc;border:none;}
+/* Target achievement backgrounds (actual vs that target) */
+td.ach-green{background:#dcfce7!important;}
+td.ach-yellow{background:#fef9c3!important;}
+td.ach-orange{background:#ffedd5!important;}
+td.ach-red{background:#fee2e2!important;}
 </style>
 
 <div class="kb-page">
@@ -167,6 +172,18 @@ $sc = function($s) {
     if ($s > 0)    return 'sr';
     return 'sz';
 };
+
+// Background for a target cell based on how the month's ACTUAL sale compares
+// to that target: >=100% soft green, >=75% soft yellow, >50% soft orange,
+// <=50% soft red. No colour until there is an actual sale to judge against.
+$achClass = function($actual, $target) {
+    if (!$target || $target <= 0 || $actual <= 0) return '';
+    $p = ($actual / $target) * 100;
+    if ($p >= 100) return 'ach-green';
+    if ($p >= 75)  return 'ach-yellow';
+    if ($p > 50)   return 'ach-orange';
+    return 'ach-red';
+};
 @endphp
 
 @foreach($salespersons as $sp)
@@ -218,7 +235,7 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     <div class="kb-chip"><span class="cl">Kingo Annual</span><span class="cv">{{ $kingoAnn>0?number_format($kingoAnn,1):'—' }}</span></div>
     <div class="kb-chip"><span class="cl">Super Kingo Annual</span><span class="cv">{{ $superAnn>0?number_format($superAnn,1):'—' }}</span></div>
     <div class="kb-chip {{ $actAnn>=$bingoAnn&&$bingoAnn>0?'good':($actAnn>0?'mid':'') }}">
-        <span class="cl">Actual Annual</span><span class="cv">{{ $actAnn>0?number_format($actAnn,1):'—' }}</span>
+        <span class="cl">Actual Annual</span><span class="cv">{{ $actAnn>0?number_format($actAnn,1):'0' }}</span>
     </div>
     @if($fyScore>0)
     <div class="kb-chip {{ $fyScoreCls }}"><span class="cl">FY Avg Score</span><span class="cv">{{ $fyScore }}%</span></div>
@@ -252,8 +269,12 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     @if($canEditTargets)
     <span style="background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;padding:2px 8px;border-radius:4px;font-weight:600;">Target — click to edit (admin/CC only)</span>
     @endif
-    <span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;padding:2px 8px;border-radius:4px;font-weight:600;">Achieved — auto from completed visits &amp; pipeline</span>
     <span style="background:#fffbeb;color:#92400e;border:1px solid #fde68a;padding:2px 8px;border-radius:4px;font-weight:600;">Score</span>
+    <span style="color:#64748b;font-weight:600;margin-left:6px;">Target vs actual:</span>
+    <span style="background:#dcfce7;border:1px solid #86efac;padding:2px 8px;border-radius:4px;font-weight:600;color:#166534;">Achieved ≥100%</span>
+    <span style="background:#fef9c3;border:1px solid #fde047;padding:2px 8px;border-radius:4px;font-weight:600;color:#854d0e;">≥75%</span>
+    <span style="background:#ffedd5;border:1px solid #fdba74;padding:2px 8px;border-radius:4px;font-weight:600;color:#9a3412;">&gt;50%</span>
+    <span style="background:#fee2e2;border:1px solid #fca5a5;padding:2px 8px;border-radius:4px;font-weight:600;color:#991b1b;">≤50%</span>
 </div>
 
 {{-- Table --}}
@@ -274,38 +295,38 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
 <tr class="r-target">
     <td class="rl">Bingo Target <small style="opacity:.7;font-size:9px;background:#dbeafe;padding:1px 4px;border-radius:3px;color:#1d4ed8;">{{ $canEditTargets?'click to edit':'admin/CC only' }}</small></td>
     @foreach($months as $m)
-    @php $t=$getT($m['key']); $v=$t?$t->bingo_target:null; @endphp
+    @php $t=$getT($m['key']); $v=$t?$t->bingo_target:null; $act=(float)($spAuto[$m['key']]['actual_sale']??0); $cls=$achClass($act,(float)($v??0)); @endphp
     @if($canEditTargets)
-    <td class="tc" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="bingo_target">{{ $v!==null?$v+0:'' }}</td>
+    <td class="tc {{ $cls }}" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="bingo_target">{{ $v!==null?$v+0:'' }}</td>
     @else
-    <td class="ac" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
+    <td class="ac {{ $cls }}" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
     @endif
     @endforeach
 </tr>
 <tr class="r-target">
     <td class="rl">Kingo Target <small style="opacity:.7;font-size:9px;background:#dbeafe;padding:1px 4px;border-radius:3px;color:#1d4ed8;">{{ $canEditTargets?'click to edit':'admin/CC only' }}</small></td>
     @foreach($months as $m)
-    @php $t=$getT($m['key']); $v=$t?$t->kingo_target:null; @endphp
+    @php $t=$getT($m['key']); $v=$t?$t->kingo_target:null; $act=(float)($spAuto[$m['key']]['actual_sale']??0); $cls=$achClass($act,(float)($v??0)); @endphp
     @if($canEditTargets)
-    <td class="tc" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="kingo_target">{{ $v!==null?$v+0:'' }}</td>
+    <td class="tc {{ $cls }}" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="kingo_target">{{ $v!==null?$v+0:'' }}</td>
     @else
-    <td class="ac" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
+    <td class="ac {{ $cls }}" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
     @endif
     @endforeach
 </tr>
 <tr class="r-target">
     <td class="rl">Super Kingo Target <small style="opacity:.7;font-size:9px;background:#fef3c7;padding:1px 4px;border-radius:3px;color:#b45309;">{{ $canEditTargets?'click to edit':'admin/CC only' }}</small></td>
     @foreach($months as $m)
-    @php $t=$getT($m['key']); $v=$t?$t->super_kingo_target:null; @endphp
+    @php $t=$getT($m['key']); $v=$t?$t->super_kingo_target:null; $act=(float)($spAuto[$m['key']]['actual_sale']??0); $cls=$achClass($act,(float)($v??0)); @endphp
     @if($canEditTargets)
-    <td class="tc" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="super_kingo_target">{{ $v!==null?$v+0:'' }}</td>
+    <td class="tc {{ $cls }}" data-sp="{{ $spId }}" data-month="{{ $m['key'] }}" data-route="target" data-field="super_kingo_target">{{ $v!==null?$v+0:'' }}</td>
     @else
-    <td class="ac" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
+    <td class="ac {{ $cls }}" style="text-align:right;">{{ $v!==null?$v+0:'' }}</td>
     @endif
     @endforeach
 </tr>
 <tr class="r-achieved">
-    <td class="rl" style="color:#065f46;">Actual Monthly <small style="opacity:.8;font-size:9px;background:#dcfce7;padding:1px 4px;border-radius:3px;color:#166534;">auto from pipeline</small></td>
+    <td class="rl" style="color:#065f46;">Actual Monthly</td>
     @foreach($months as $m)
     @php $v=round($spAuto[$m['key']]['actual_sale']??0,2); @endphp
     <td class="ac">{{ $v>0?number_format($v,2):'' }}</td>
