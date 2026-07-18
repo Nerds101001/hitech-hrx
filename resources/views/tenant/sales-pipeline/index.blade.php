@@ -79,16 +79,25 @@
                 </select>
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
-                <select class="form-select" name="rep" style="width:210px;" onchange="this.form.submit()">
-                    <option value="">
-                        @if($isCcare || $isNewBiz) All Salespersons
-                        @elseif($isSalesperson) All Representatives
-                        @else All Reps @endif
-                    </option>
-                    @foreach($repFilterUsers as $au)
-                        <option value="{{ $au->id }}" {{ (string)$fRep === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
-                    @endforeach
-                </select>
+                @php $showBothFilters = $isAdmin || $user->hasRole(['hr','HR','manager','Manager']); @endphp
+                {{-- Salesperson filter: admin/HR and CCare/New Biz users --}}
+                @if($showBothFilters || $isCcare || $isNewBiz)
+                    <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
+                        <option value="">All Salespersons</option>
+                        @foreach($salespersonFilterUsers as $au)
+                            <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
+                {{-- CCare filter: admin/HR and salespersons --}}
+                @if($showBothFilters || $isSalesperson)
+                    <select class="form-select" name="ccare" style="width:190px;" onchange="this.form.submit()">
+                        <option value="">All CCare</option>
+                        @foreach($ccareFilterUsers as $au)
+                            <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                        @endforeach
+                    </select>
+                @endif
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear

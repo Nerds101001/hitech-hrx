@@ -90,22 +90,24 @@ class SalesPipelineController extends Controller
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
 
-        // ── Server-side filters (search customer / type / salesperson) ──
-        $fParty = trim((string) $request->input('party', ''));
-        $fType  = trim((string) $request->input('type', ''));
-        $fRep   = $request->input('rep');   // salesperson/rep user id
+        // ── Server-side filters ──
+        //   Sales Report filters by Salesperson and by CCare. The blade shows the
+        //   dropdowns per role (admin/HR: both; salesperson: CCare; CCare: Salesperson).
+        $fParty  = trim((string) $request->input('party', ''));
+        $fType   = trim((string) $request->input('type', ''));
+        $fSp     = $request->input('sp');      // salesperson_id
+        $fCcare  = $request->input('ccare');   // ccare_id
         if ($fParty !== '') {
             $query->where('party_name', 'like', '%' . $fParty . '%');
         }
         if ($fType !== '') {
             $query->where('type', $fType);
         }
-        if (!empty($fRep)) {
-            $query->where(function ($q) use ($fRep) {
-                $q->where('salesperson_id', $fRep)
-                  ->orWhere('ccare_id', $fRep)
-                  ->orWhere('new_biz_id', $fRep);
-            });
+        if (!empty($fSp)) {
+            $query->where('salesperson_id', $fSp);
+        }
+        if (!empty($fCcare)) {
+            $query->where('ccare_id', $fCcare);
         }
 
         // ── Aggregates over the FULL filtered set (before pagination) so the
@@ -146,31 +148,16 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
-        // Rep filter dropdown ids, per role:
-        //  - admin/hr/manager : the full A–Z Sales / Customer Care / New Biz list
-        //  - CCare / New Biz  : only the salespersons mapped to them
-        //  - Salesperson      : themselves + the CCare/New Biz reps linked to them
-        //                       (via cc_salesperson_map), never other salespersons
-        $repDropdownIds = $allowedSpIds;
-        if ($allowedSpIds !== null && !$isCcare && !$isNewBiz) {
-            $linkedReps = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
-                ->pluck('cc_user_id')->all();
-            $repDropdownIds = array_values(array_unique(array_merge([$user->id], $linkedReps)));
+        // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
+        // the people who actually appear on the rows this user may see. The blade
+        // shows the appropriate dropdown(s) per role and page.
+        $optBase = SalesPipeline::whereNull('deleted_at');
+        if ($allowedSpIds !== null) {
+            $optBase->whereIn('salesperson_id', $allowedSpIds);
         }
-
-        if ($repDropdownIds !== null) {
-            $repFilterUsers = User::where('status', 'active')->notTerminated()
-                ->whereIn('id', $repDropdownIds)->orderBy('first_name')->get();
-        } else {
-            $repFilterUsers = User::where('status', 'active')->notTerminated()
-                ->whereHas('department', function ($q) {
-                    $q->where('name', 'like', '%Sales%')
-                      ->orWhere('name', 'like', '%Customer Care%')
-                      ->orWhere('name', 'like', '%CCARE%')
-                      ->orWhere('name', 'like', '%New Biz%')
-                      ->orWhere('name', 'like', '%New Business%');
-                })->orderBy('first_name')->get();
-        }
+        $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
+        $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
 
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
@@ -221,7 +208,7 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName', 'fParty', 'fType', 'fRep'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -303,22 +290,24 @@ class SalesPipelineController extends Controller
             $query->whereIn('salesperson_id', $allowedSpIds);
         }
 
-        // ── Server-side filters (search customer / stage / salesperson) ──
-        $fParty = trim((string) $request->input('party', ''));
-        $fStage = trim((string) $request->input('stage', ''));
-        $fRep   = $request->input('rep');   // salesperson/rep user id
+        // ── Server-side filters ──
+        //   Sales Pipeline filters by Salesperson and by New Biz. The blade shows
+        //   the dropdowns per role (admin/HR: both; salesperson: New Biz; New Biz: Salesperson).
+        $fParty  = trim((string) $request->input('party', ''));
+        $fStage  = trim((string) $request->input('stage', ''));
+        $fSp     = $request->input('sp');       // salesperson_id
+        $fNewBiz = $request->input('newbiz');   // new_biz_id
         if ($fParty !== '') {
             $query->where('party_name', 'like', '%' . $fParty . '%');
         }
         if ($fStage !== '') {
             $query->where('status_stage', 'like', '%' . $fStage . '%');
         }
-        if (!empty($fRep)) {
-            $query->where(function ($q) use ($fRep) {
-                $q->where('salesperson_id', $fRep)
-                  ->orWhere('ccare_id', $fRep)
-                  ->orWhere('new_biz_id', $fRep);
-            });
+        if (!empty($fSp)) {
+            $query->where('salesperson_id', $fSp);
+        }
+        if (!empty($fNewBiz)) {
+            $query->where('new_biz_id', $fNewBiz);
         }
 
         // ── Aggregates over the FULL filtered set (before pagination) ──
@@ -358,31 +347,16 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
 
-        // Rep filter dropdown ids, per role:
-        //  - admin/hr/manager : the full A–Z Sales / Customer Care / New Biz list
-        //  - CCare / New Biz  : only the salespersons mapped to them
-        //  - Salesperson      : themselves + the CCare/New Biz reps linked to them
-        //                       (via cc_salesperson_map), never other salespersons
-        $repDropdownIds = $allowedSpIds;
-        if ($allowedSpIds !== null && !$isCcare && !$isNewBiz) {
-            $linkedReps = \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
-                ->pluck('cc_user_id')->all();
-            $repDropdownIds = array_values(array_unique(array_merge([$user->id], $linkedReps)));
+        // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
+        // the people who actually appear on the rows this user may see. The blade
+        // shows the appropriate dropdown(s) per role and page.
+        $optBase = SalesPipeline::whereNull('deleted_at');
+        if ($allowedSpIds !== null) {
+            $optBase->whereIn('salesperson_id', $allowedSpIds);
         }
-
-        if ($repDropdownIds !== null) {
-            $repFilterUsers = User::where('status', 'active')->notTerminated()
-                ->whereIn('id', $repDropdownIds)->orderBy('first_name')->get();
-        } else {
-            $repFilterUsers = User::where('status', 'active')->notTerminated()
-                ->whereHas('department', function ($q) {
-                    $q->where('name', 'like', '%Sales%')
-                      ->orWhere('name', 'like', '%Customer Care%')
-                      ->orWhere('name', 'like', '%CCARE%')
-                      ->orWhere('name', 'like', '%New Biz%')
-                      ->orWhere('name', 'like', '%New Business%');
-                })->orderBy('first_name')->get();
-        }
+        $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
+        $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
 
         $salespersonTargets = \App\Models\SalespersonTarget::all();
 
@@ -433,7 +407,7 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'repFilterUsers', 'kbByName', 'fParty', 'fStage', 'fRep'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz'));
     }
 
     public function store(Request $request)
