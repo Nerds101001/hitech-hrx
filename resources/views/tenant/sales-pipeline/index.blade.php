@@ -145,10 +145,20 @@
                                     $isThisMonth = ($m['key'] === $currentMonthKey);
                                     // Past: 1 col (Sale only). Current: 4 (Forecast + Sale + Pending + Remarks).
                                     $colspan     = $isThisMonth ? 4 : 1;
+                                    // Salesperson login: badge the month if their own sale beat their target.
+                                    $mActual = $monthlyActuals[$m['key']] ?? 0;
+                                    $mKingo  = $monthlyTargets[$m['key']]['kingo'] ?? 0;
+                                    $mBingo  = $monthlyTargets[$m['key']]['bingo'] ?? 0;
                                 @endphp
                                 <th colspan="{{ $colspan }}" class="text-center align-middle border-bottom border-white"
                                     style="background-color:#0d9488;">
                                     {{ $m['display'] }}
+                                    @if($isSalesperson && $mKingo > 0 && $mActual >= $mKingo)
+                                        <span class="badge bg-warning text-dark ms-1 rounded-circle border border-white" style="padding:0.2em 0.35em" title="Kingo Achieved!">K</span>
+                                    @endif
+                                    @if($isSalesperson && $mBingo > 0 && $mActual >= $mBingo)
+                                        <span class="badge bg-info text-dark ms-1 rounded-circle border border-white" style="padding:0.2em 0.35em" title="Bingo Achieved!">B</span>
+                                    @endif
                                 </th>
                             @endforeach
                         </tr>
@@ -249,17 +259,23 @@
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
                                 <td class="text-center col-sno">{{ $index + 1 }}</td>
-                                <td class="col-party fw-semibold text-dark text-truncate"
-                                    title="{{ $row->party_name }}">{{ $row->party_name }}</td>
+                                <td class="col-party text-dark" title="{{ $row->party_name }}"><span class="party-name">{{ $row->party_name }}</span></td>
 
                                 <td class="col-status p-0 align-middle">
+                                    @php
+                                        // "Customer" and "Direct Customer" are treated as one type.
+                                        $typeNorm = strtolower(trim($row->type ?? ''));
+                                        $isCustomer   = in_array($typeNorm, ['customer', 'direct customer']);
+                                        $isDistributor = $typeNorm === 'distributor';
+                                        $isDealer      = $typeNorm === 'dealer';
+                                    @endphp
                                     <select class="excel-select row-field status-select text-truncate"
                                             data-field="type">
                                         <option value="">-Select-</option>
-                                        <option value="Distributor" {{ $row->type === 'Distributor' ? 'selected' : '' }}>Distributor</option>
-                                        <option value="Dealer"      {{ $row->type === 'Dealer'      ? 'selected' : '' }}>Dealer</option>
-                                        <option value="Customer"    {{ $row->type === 'Customer'    ? 'selected' : '' }}>Customer</option>
-                                        @if($row->type && !in_array($row->type, ['Distributor', 'Dealer', 'Customer']))
+                                        <option value="Distributor" {{ $isDistributor ? 'selected' : '' }}>Distributor</option>
+                                        <option value="Dealer"      {{ $isDealer ? 'selected' : '' }}>Dealer</option>
+                                        <option value="Customer"    {{ $isCustomer ? 'selected' : '' }}>Customer</option>
+                                        @if($row->type && !$isCustomer && !$isDistributor && !$isDealer)
                                             <option value="{{ $row->type }}" selected>{{ $row->type }}</option>
                                         @endif
                                     </select>
@@ -664,7 +680,11 @@
         background-color: #fff !important; z-index: 20;
     }
     .col-sno        { position:sticky; left:0;     min-width:40px;  max-width:40px; }
-    .col-party      { position:sticky; left:40px;  min-width:150px; max-width:150px; overflow:hidden; }
+    .col-party      { position:sticky; left:40px;  min-width:150px; max-width:150px; overflow:hidden; white-space:normal !important; vertical-align:middle; }
+    .col-party .party-name {
+        display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+        font-size:0.7rem; line-height:1.15; font-weight:600; word-break:break-word;
+    }
     .col-status     { position:sticky; left:190px; min-width:110px; max-width:110px; }
     .col-potential  { position:sticky; left:300px; min-width:95px;  max-width:95px; }
     .col-salesperson{ position:sticky; left:395px; min-width:120px; max-width:120px; overflow:hidden; }

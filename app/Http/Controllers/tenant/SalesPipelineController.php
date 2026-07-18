@@ -102,7 +102,12 @@ class SalesPipelineController extends Controller
             $query->where('party_name', 'like', '%' . $fParty . '%');
         }
         if ($fType !== '') {
-            $query->where('type', $fType);
+            // "Customer" and "Direct Customer" are treated as the same type.
+            if ($fType === 'Customer') {
+                $query->whereRaw('LOWER(type) IN (?, ?)', ['customer', 'direct customer']);
+            } else {
+                $query->where('type', $fType);
+            }
         }
         if (!empty($fSp)) {
             $query->where('salesperson_id', $fSp);

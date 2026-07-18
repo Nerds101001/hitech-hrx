@@ -18,7 +18,7 @@ class KingoBingoController extends Controller
     public function index(Request $request)
     {
         $user     = auth()->user();
-        $isAdmin  = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('kingo_bingo.manage');
+        $isAdmin  = $user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('kingo_bingo.manage');
         $isCcare  = $user->department && $user->department->name === 'Customer Care';
         $isNewBiz = $user->department && $user->department->name === 'New Biz';
 
@@ -179,7 +179,7 @@ class KingoBingoController extends Controller
     public function fillTargets(Request $request)
     {
         $user    = auth()->user();
-        $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('kingo_bingo.manage');
+        $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('kingo_bingo.manage');
         $isCcare = ($user->department && $user->department->name === 'Customer Care') || $user->can('kingo_bingo.manage');
         $isNewBiz= ($user->department && $user->department->name === 'New Biz') || $user->can('kingo_bingo.manage');
 
