@@ -133,14 +133,11 @@
                             <th rowspan="2" class="text-end align-middle col-potential" style="cursor:pointer;" onclick="sortPipeline('potential', this)" title="Click to sort">
                                 Potential<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.65rem">₹ Lakh/Month</small>
                             </th>
-                            @if($isAdmin)
+                            {{-- Salesperson column: hidden for a salesperson login (they only see
+                                 their own rows, so it would just repeat the Representative column). --}}
+                            @unless($isSalesperson)
                                 <th rowspan="2" class="align-middle col-salesperson">Salesperson</th>
-                            @elseif($isSalesperson)
-                                <th rowspan="2" class="align-middle col-salesperson"
-                                    title="Shows CCare name if type=CCare, New Biz name if type=New Biz">Representative</th>
-                            @else
-                                <th rowspan="2" class="align-middle col-salesperson">Salesperson</th>
-                            @endif
+                            @endunless
                             <th rowspan="2" class="align-middle block-end" style="min-width:150px;">Brand</th>
 
                             @foreach($months as $m)
@@ -187,13 +184,9 @@
                             <td class="col-category" style="background:#d1fae5!important;"></td>
                             <td class="col-repname" style="background:#d1fae5!important;"></td>
                             <td class="col-potential text-end font-monospace" style="background:#d1fae5!important;color:#065f46;" id="totalPotential">{{ number_format($totalPotential ?? 0, 2) }}</td>
-                            @if($isAdmin)
+                            @unless($isSalesperson)
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
-                            @elseif($isSalesperson)
-                                <td class="col-salesperson" style="background:#d1fae5!important;"></td>
-                            @else
-                                <td class="col-salesperson" style="background:#d1fae5!important;"></td>
-                            @endif
+                            @endunless
                             <td class="block-end" style="background:#d1fae5!important;"></td>
                             @foreach($months as $m)
                                 @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
@@ -308,13 +301,9 @@
                                     {{ number_format($row->total_business_potential ?? 0, 2) }}
                                 </td>
 
-                                @if($isAdmin)
+                                @unless($isSalesperson)
                                     <td class="col-salesperson text-truncate" title="{{ $row->salesperson->name ?? '-' }}">{{ $row->salesperson->name ?? '-' }}</td>
-                                @elseif($isSalesperson)
-                                    <td class="col-salesperson text-truncate" title="{{ $repDisplay }}">{{ $repDisplay }}</td>
-                                @else
-                                    <td class="col-salesperson text-truncate" title="{{ $row->salesperson->name ?? '-' }}">{{ $row->salesperson->name ?? '-' }}</td>
-                                @endif
+                                @endunless
 
                                 <td class="p-0 align-middle block-end" style="max-width:150px;">
                                     <select class="excel-select row-field status-select text-truncate"
