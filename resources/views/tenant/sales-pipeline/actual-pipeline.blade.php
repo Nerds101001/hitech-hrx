@@ -551,6 +551,7 @@ function saveNewPipeline() {
         status_remarks:           document.getElementById('new_remarks')?.value     || '',
         salesperson_id:           document.getElementById('new_salesperson_id')?.value || '',
         new_biz_id:               document.getElementById('new_new_biz_id')?.value  || '',
+        is_locked:                false,  // Pipeline (prospect) rows stay unlocked
     };
 
     const saveBtn = document.querySelector('#addNewRowActions .btn-success');

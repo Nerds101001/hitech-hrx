@@ -344,7 +344,9 @@
                                         $mData       = $row->months->firstWhere('month_year', $m['key']);
                                         $isPast      = $m['key'] < $currentMonthKey;
                                         $isThisMonth = ($m['key'] === $currentMonthKey);
-                                        $roAttr      = $isPast ? 'readonly title="Past entries cannot be edited"' : '';
+                                        // Past months are editable too — users need to correct
+                                        // imported / historical figures.
+                                        $roAttr      = '';
                                     @endphp
                                     @if($isThisMonth)
                                         <td class="p-0 bg-forecast-light" style="max-width:52px;">
@@ -384,87 +386,94 @@
                             </tr>
                         @endforelse
 
-                        {{-- ── Inline Add New Row (hidden) ── --}}
+                        {{-- ── Add New Entry — full-width form, works for every role ── --}}
                         <tr id="addNewRow" style="display:none;background:#f0fdf4;">
-                            <td class="text-center text-success fw-bold">+</td>
-                            <td class="p-1">
-                                <input type="text" id="new_party_name" class="form-control form-control-sm"
-                                       placeholder="Customer Name *">
-                            </td>
-                            <td class="p-1">
-                                <select id="new_type" class="form-select form-select-sm">
-                                    <option value="">-Type-</option>
-                                    <option value="Distributor">Distributor</option>
-                                    <option value="Dealer">Dealer</option>
-                                    <option value="Customer">Customer</option>
-                                </select>
-                            </td>
-                            <td class="p-1">
-                                <input type="number" id="new_potential" step="0.01"
-                                       class="form-control form-control-sm text-end" placeholder="Potential ₹">
-                            </td>
-                            @if($isAdmin)
-                                <td class="p-1">
-                                    <select id="new_salesperson_id" class="form-select form-select-sm">
-                                        <option value="">-SP-</option>
-                                        @foreach($salespersons as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="p-1">
-                                    <select id="new_new_biz_id" class="form-select form-select-sm">
-                                        <option value="">-NB-</option>
-                                        @foreach($newBizUsers as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                                <td class="p-1">
-                                    <select id="new_ccare_id" class="form-select form-select-sm">
-                                        <option value="">-CC-</option>
-                                        @foreach($assignedUsers as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                </td>
-                            @else
-                                <td class="p-2 text-muted small align-middle">Auto-assigned</td>
-                            @endif
-                            <td class="p-1">
-                                <select id="new_product" class="form-select form-select-sm">
-                                    <option value="">-Brand-</option>
-                                    <option value="Rust-X">Rust-X</option>
-                                    <option value="Dr.Bio">Dr.Bio</option>
-                                    <option value="Fillezy">Fillezy</option>
-                                    <option value="KIF">KIF</option>
-                                    <option value="Zorbit">Zorbit</option>
-                                    <option value="Tuffpaulin">Tuffpaulin</option>
-                                    <option value="HITECH">HITECH</option>
-                                </select>
-                            </td>
-                            {{-- Empty cells for month columns --}}
-                            @foreach($months as $m)
-                                @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
-                                @if($isThisMonth)
-                                    <td class="p-0 bg-forecast-light"></td>
-                                @endif
-                                <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}"></td>
-                                @if($isThisMonth)
-                                    <td class="p-0 bg-pending-light"></td>
-                                    <td class="p-0 block-end"></td>
-                                @endif
-                            @endforeach
-                        </tr>
-                        {{-- Save / Cancel for inline add --}}
-                        <tr id="addNewRowActions" style="display:none;background:#f0fdf4;">
-                            <td colspan="100" class="p-2 text-center">
-                                <button class="btn btn-sm btn-success px-4 me-2" onclick="saveNewPipeline()">
-                                    <i class="bx bx-save me-1"></i>Save
-                                </button>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="cancelNewPipeline()">
-                                    <i class="bx bx-x me-1"></i>Cancel
-                                </button>
+                            <td colspan="100" class="p-3">
+                                <div class="d-flex flex-wrap align-items-end gap-3">
+                                    <div style="min-width:180px;">
+                                        <label class="form-label small fw-bold mb-1 text-success">Customer Name *</label>
+                                        <input type="text" id="new_party_name" class="form-control form-control-sm" placeholder="Customer Name">
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Type</label>
+                                        <select id="new_type" class="form-select form-select-sm" style="min-width:120px;">
+                                            <option value="">-Type-</option>
+                                            <option value="Customer">Customer</option>
+                                            <option value="Distributor">Distributor</option>
+                                            <option value="Dealer">Dealer</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Salesperson</label>
+                                        <select id="new_salesperson_id" class="form-select form-select-sm" style="min-width:150px;">
+                                            <option value="">-Salesperson-</option>
+                                            @foreach($salespersons as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">New Biz</label>
+                                        <select id="new_new_biz_id" class="form-select form-select-sm" style="min-width:140px;">
+                                            <option value="">-New Biz-</option>
+                                            @foreach($newBizUsers as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">CCare</label>
+                                        <select id="new_ccare_id" class="form-select form-select-sm" style="min-width:140px;">
+                                            <option value="">-CCare-</option>
+                                            @foreach($assignedUsers as $u)
+                                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Brand</label>
+                                        <select id="new_product" class="form-select form-select-sm" style="min-width:120px;">
+                                            <option value="">-Brand-</option>
+                                            <option value="Rust-X">Rust-X</option>
+                                            <option value="Dr.Bio">Dr.Bio</option>
+                                            <option value="Fillezy">Fillezy</option>
+                                            <option value="KIF">KIF</option>
+                                            <option value="Zorbit">Zorbit</option>
+                                            <option value="Tuffpaulin">Tuffpaulin</option>
+                                            <option value="HITECH">HITECH</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label small fw-bold mb-1">Potential ₹L</label>
+                                        <input type="number" id="new_potential" step="0.01" class="form-control form-control-sm text-end" style="width:110px;" placeholder="0.00">
+                                    </div>
+                                    {{-- Month sale figures (+ current-month forecast/pending) --}}
+                                    @foreach($months as $m)
+                                        @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
+                                        <div>
+                                            <label class="form-label small fw-bold mb-1" style="color:#065f46;">{{ $m['display'] }} Sale</label>
+                                            <input type="number" step="0.01" class="form-control form-control-sm text-end new-month" data-month="{{ $m['key'] }}" data-field="sale_amount" style="width:80px;" placeholder="₹L">
+                                        </div>
+                                        @if($isThisMonth)
+                                        <div>
+                                            <label class="form-label small fw-bold mb-1" style="color:#1e40af;">{{ $m['display'] }} Fcst</label>
+                                            <input type="number" step="0.01" class="form-control form-control-sm text-end new-month" data-month="{{ $m['key'] }}" data-field="forecast_amount" style="width:80px;" placeholder="₹L">
+                                        </div>
+                                        <div>
+                                            <label class="form-label small fw-bold mb-1" style="color:#9a3412;">{{ $m['display'] }} Pend</label>
+                                            <input type="number" step="0.01" class="form-control form-control-sm text-end new-month" data-month="{{ $m['key'] }}" data-field="pending_amount" style="width:80px;" placeholder="₹L">
+                                        </div>
+                                        @endif
+                                    @endforeach
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-success px-3" onclick="saveNewPipeline()">
+                                            <i class="bx bx-save me-1"></i>Save
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="cancelNewPipeline()">
+                                            <i class="bx bx-x me-1"></i>Cancel
+                                        </button>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -823,19 +832,18 @@ function openTargetModal() {
 
 function showAddNewRow() {
     document.getElementById('addNewRow').style.display       = '';
-    document.getElementById('addNewRowActions').style.display = '';
     document.getElementById('addRowTriggerBtn').style.display = 'none';
     document.getElementById('new_party_name').focus();
 }
 
 function cancelNewPipeline() {
     document.getElementById('addNewRow').style.display       = 'none';
-    document.getElementById('addNewRowActions').style.display = 'none';
     document.getElementById('addRowTriggerBtn').style.display = '';
     // Clear inputs
     ['new_party_name','new_type','new_potential','new_product',
      'new_salesperson_id','new_new_biz_id','new_ccare_id']
         .forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+    document.querySelectorAll('#addNewRow .new-month').forEach(el => el.value = '');
 }
 
 function saveNewPipeline() {
@@ -846,6 +854,15 @@ function saveNewPipeline() {
         return;
     }
 
+    // Collect the month figures into { 'YYYY-MM': { sale_amount, forecast_amount, pending_amount } }
+    const months = {};
+    document.querySelectorAll('#addNewRow .new-month').forEach(el => {
+        const v = el.value;
+        if (v === '' || v === null) return;
+        const mk = el.dataset.month, f = el.dataset.field;
+        (months[mk] = months[mk] || {})[f] = v;
+    });
+
     const payload = {
         party_name:               partyName,
         type:                     document.getElementById('new_type')?.value        || '',
@@ -854,9 +871,11 @@ function saveNewPipeline() {
         salesperson_id:           document.getElementById('new_salesperson_id')?.value || '',
         new_biz_id:               document.getElementById('new_new_biz_id')?.value  || '',
         ccare_id:                 document.getElementById('new_ccare_id')?.value    || '',
+        months:                   months,
+        is_locked:                true,   // Sales Report rows are locked
     };
 
-    const saveBtn = document.querySelector('#addNewRowActions .btn-success');
+    const saveBtn = document.querySelector('#addNewRow .btn-success');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
 
     fetch('{{ route("sales-visits.pipeline.store") }}', {

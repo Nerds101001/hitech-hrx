@@ -451,21 +451,25 @@ class SalesPipelineController extends Controller
         $isNewBizUser = $user->department && $user->department->name === 'New Biz';
         $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'manager']);
 
-        $salespersonId = $request->salesperson_id;
-        $ccareId = $request->ccare_id;
-        $newBizId = $request->new_biz_id;
+        $salespersonId = $request->salesperson_id ?: null;
+        $ccareId = $request->ccare_id ?: null;
+        $newBizId = $request->new_biz_id ?: null;
 
-        // Auto-assign the current user to their role column if not admin
+        // Lock the current user into their own role column so they cannot spoof
+        // another person's data; admin/hr/manager may assign any of the three.
         if (!$isAdmin) {
             if ($isCcareUser) {
-                $ccareId = $ccareId ?: $user->id;
+                $ccareId = $user->id;
             } elseif ($isNewBizUser) {
-                $newBizId = $newBizId ?: $user->id;
+                $newBizId = $user->id;
             } else {
-                // Salesperson
-                $salespersonId = $salespersonId ?: $user->id;
+                $salespersonId = $user->id;
             }
         }
+
+        // Sales Report rows are "locked" (is_locked = true) — that is exactly
+        // what the Sales Report page lists. Pipeline rows pass is_locked = 0.
+        $isLocked = filter_var($request->input('is_locked', true), FILTER_VALIDATE_BOOLEAN);
 
         $pipeline = SalesPipeline::create([
             'party_name'               => $request->party_name,
@@ -478,7 +482,21 @@ class SalesPipelineController extends Controller
             'total_business_potential' => $request->total_business_potential ?? 0,
             'product'                  => $request->product,
             'address'                  => $request->address,
+            'is_locked'                => $isLocked,
         ]);
+
+        // Persist any month figures entered on the add form.
+        foreach ((array) $request->input('months', []) as $mk => $fields) {
+            if (!preg_match('/^\d{4}-\d{2}$/', (string) $mk)) continue;
+            \App\Models\SalesPipelineMonth::create([
+                'sales_pipeline_id' => $pipeline->id,
+                'month_year'        => $mk,
+                'sale_amount'       => $fields['sale_amount'] ?? 0,
+                'forecast_amount'   => $fields['forecast_amount'] ?? 0,
+                'pending_amount'    => $fields['pending_amount'] ?? 0,
+                'tenant_id'         => null,
+            ]);
+        }
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['success' => true, 'id' => $pipeline->id]);
