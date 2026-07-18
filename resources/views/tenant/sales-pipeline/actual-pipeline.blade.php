@@ -431,8 +431,9 @@
 
 <script>
 const activeMonthKeys = @json(array_column($months, 'key'));
-const ANNUAL_MAP  = @json($annualMap ?? []);      // salesperson name -> [yoy22,23,24,25]
-const ANNUAL_GRAND = @json($annualGrand ?? ['22_23'=>0,'23_24'=>0,'24_25'=>0,'25_26'=>0]);
+// ANNUAL_MAP: salesperson name -> yoy figures. ANNUAL_GRAND: scoped totals.
+const ANNUAL_MAP  = @json($annualMap);
+const ANNUAL_GRAND = @json($annualGrand);
 
 document.addEventListener('DOMContentLoaded', function () {
 
