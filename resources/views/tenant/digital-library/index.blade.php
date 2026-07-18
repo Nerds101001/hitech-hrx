@@ -134,10 +134,13 @@
             <h1>AI Digital Library</h1>
             <p>Secure documents & intelligent assistant powered by Nerds Bot.</p>
         </div>
+        @php $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR']); @endphp
+        @if($vaultCanManage)
         <div class="banner-btns">
             <button class="btn btn-white bg-white text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">AI Bulk Upload</button>
             <button class="btn btn-outline-white border-white text-white rounded-pill px-4" onclick="openAddDocumentModal('{{ request('category') }}')">Add Document</button>
         </div>
+        @endif
     </div>
 
     <!-- User Requested Navigation Bar Above Brands -->
@@ -204,7 +207,8 @@
             </div>
         @endforeach
         
-        <!-- Add Brand Trigger -->
+        <!-- Add Brand Trigger (admin/HR only) -->
+        @if($vaultCanManage ?? auth()->user()->hasRole(['admin','Admin','hr','HR']))
         <div class="brand-card add-trigger border-dashed" onclick="openAddModal('brand')">
             <div class="brand-dot bg-light d-flex align-items-center justify-content-center">
                 <i class="ti ti-plus fs-6 text-muted"></i>
@@ -212,6 +216,7 @@
             <h6>Add Brand</h6>
             <div class="doc-count">New Ecosystem</div>
         </div>
+        @endif
     </div>
 
     <!-- Main Content Matrix -->
@@ -327,10 +332,12 @@
                         </div>
                     @endforeach
                     
+                    @if($vaultCanManage ?? auth()->user()->hasRole(['admin','Admin','hr','HR']))
                     <hr class="my-2 opacity-25">
                     <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $b->id }})">
                         <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
                     </div>
+                    @endif
                 </div>
 
                 <!-- Products View Area -->

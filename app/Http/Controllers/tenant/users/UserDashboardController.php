@@ -327,7 +327,22 @@ class UserDashboardController extends Controller
             $todayAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
             $upcomingAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') !== $todayMd)->take(2);
 
+            // Team Deployment: EVERY direct report with their status today
+            // (Present / On Leave / Absent), not only those who are away.
+            $presentTeamIds = $todayPresentUsersList->pluck('user_id')->unique();
+            $onLeaveTeamIds = LeaveRequest::whereIn('user_id', $teamMemberIds)
+                ->whereDate('from_date', '<=', now())
+                ->whereDate('to_date', '>=', now())
+                ->where('status', LeaveRequestStatus::APPROVED)
+                ->pluck('user_id')->unique();
+            $teamDeployment = $teamMembers->map(function ($m) use ($presentTeamIds, $onLeaveTeamIds) {
+                $status = $presentTeamIds->contains($m->id) ? 'present'
+                        : ($onLeaveTeamIds->contains($m->id) ? 'leave' : 'absent');
+                return (object) ['user' => $m, 'deploy_status' => $status];
+            });
+
             return view('tenant.users.dashboard.manager-index', [
+                'teamDeployment' => $teamDeployment,
                 'pendingLeaveRequests' => $pendingLeaveRequests,
                 'pendingExpenseRequests' => $pendingExpenseRequests,
                 'pendingDocumentRequests' => $pendingDocumentRequests,

@@ -370,7 +370,25 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
+        // Team Deployment: EVERY direct report with their status today
+        $deployMembers = User::where('reporting_to_id', $user->id)
+            ->where('status', UserAccountStatus::ACTIVE)
+            ->with('designation')
+            ->get();
+        $deployMemberIds = $deployMembers->pluck('id');
+        $presentTeamIds = Attendance::whereIn('user_id', $deployMemberIds)
+            ->whereDate('check_in_time', now())->pluck('user_id')->unique();
+        $onLeaveTeamIds = LeaveRequest::whereIn('user_id', $deployMemberIds)
+            ->whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())
+            ->where('status', LeaveRequestStatus::APPROVED)->pluck('user_id')->unique();
+        $teamDeployment = $deployMembers->map(function ($m) use ($presentTeamIds, $onLeaveTeamIds) {
+            $status = $presentTeamIds->contains($m->id) ? 'present'
+                    : ($onLeaveTeamIds->contains($m->id) ? 'leave' : 'absent');
+            return (object) ['user' => $m, 'deploy_status' => $status];
+        });
+
         return view('tenant.users.dashboard.manager-index', [
+            'teamDeployment' => $teamDeployment,
             'todayVisits' => $todayVisits,
             'totalUser' => $totalUser,
             'activeEmployees' => $active,

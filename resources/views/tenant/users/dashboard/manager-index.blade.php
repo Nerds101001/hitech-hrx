@@ -286,28 +286,35 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse($teamOutToday as $req)
+                            @forelse(($teamDeployment ?? collect()) as $row)
+                            @php
+                                $badge = $row->deploy_status === 'present'
+                                    ? ['bg-label-success', 'Present']
+                                    : ($row->deploy_status === 'leave'
+                                        ? ['bg-label-warning', 'Away (On Leave)']
+                                        : ['bg-label-secondary', 'Absent']);
+                            @endphp
                             <tr>
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center gap-3">
                                         <div class="avatar avatar-sm">
-                                            <span class="avatar-initial rounded-circle bg-label-primary">{{ $req->user->getInitials() }}</span>
+                                            <span class="avatar-initial rounded-circle bg-label-primary">{{ $row->user->getInitials() }}</span>
                                         </div>
                                         <div>
-                                            <div class="fw-bold">{{ $req->user->full_name }}</div>
-                                            <small class="text-muted">{{ $req->user->code }}</small>
+                                            <div class="fw-bold">{{ $row->user->full_name }}</div>
+                                            <small class="text-muted">{{ $row->user->code }}</small>
                                         </div>
                                     </div>
                                 </td>
-                                <td><span class="small fw-bold text-muted">{{ $req->user->designation->name ?? 'Staff' }}</span></td>
+                                <td><span class="small fw-bold text-muted">{{ $row->user->designation->name ?? 'Staff' }}</span></td>
                                 <td class="text-end pe-4">
-                                    <span class="badge bg-label-warning">Away (On Leave)</span>
+                                    <span class="badge {{ $badge[0] }}">{{ $badge[1] }}</span>
                                 </td>
                             </tr>
                             @empty
                             <tr>
                                 <td colspan="3" class="text-center py-5">
-                                    <div class="text-muted">All team members are present or active.</div>
+                                    <div class="text-muted">No team members are assigned to you yet.</div>
                                 </td>
                             </tr>
                             @endforelse
