@@ -96,25 +96,26 @@
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
                 </select>
-                @php $showBothFilters = $isAdmin || $user->hasRole(['hr','HR']); @endphp
-                {{-- Salesperson filter: admin/HR and CCare/New Biz users --}}
-                @if($showBothFilters || $isCcare || $isNewBiz)
-                    <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
-                        <option value="">All Salespersons</option>
-                        @foreach($salespersonFilterUsers as $au)
-                            <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
-                        @endforeach
-                    </select>
-                @endif
-                {{-- CCare filter: admin/HR and salespersons --}}
-                @if($showBothFilters || $isSalesperson)
-                    <select class="form-select" name="ccare" style="width:190px;" onchange="this.form.submit()">
-                        <option value="">All CCare</option>
-                        @foreach($ccareFilterUsers as $au)
-                            <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
-                        @endforeach
-                    </select>
-                @endif
+                {{-- Full directory filters for every role: rows stay scoped, so an
+                     out-of-scope pick simply shows only what the user may see. --}}
+                <select class="form-select" name="sp" style="width:180px;" onchange="this.form.submit()">
+                    <option value="">All Salespersons</option>
+                    @foreach($salespersonFilterUsers as $au)
+                        <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                    @endforeach
+                </select>
+                <select class="form-select" name="ccare" style="width:170px;" onchange="this.form.submit()">
+                    <option value="">All CCare</option>
+                    @foreach($ccareFilterUsers as $au)
+                        <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                    @endforeach
+                </select>
+                <select class="form-select" name="nb" style="width:170px;" onchange="this.form.submit()">
+                    <option value="">All New Biz</option>
+                    @foreach($newBizFilterUsers as $au)
+                        <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                    @endforeach
+                </select>
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
@@ -534,14 +535,16 @@
                     <span class="ms-auto">All figures ₹ Lakh</span>
                 </div>
                 <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;">
-                    <thead class="table-light" style="position:sticky;top:0;">
+                    {{-- Sticky header needs its own stacking context + solid bg,
+                         otherwise the coloured rows paint OVER it while scrolling. --}}
+                    <thead class="table-light">
                         <tr>
-                            <th>Salesperson</th>
-                            <th class="text-end">Actual Sale</th>
-                            <th class="text-end">Pending</th>
-                            <th class="text-end">Bingo</th>
-                            <th class="text-end">Kingo</th>
-                            <th class="text-end">Super Kingo</th>
+                            <th style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Salesperson</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Actual Sale</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Pending</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Bingo</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Kingo</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Super Kingo</th>
                         </tr>
                     </thead>
                     <tbody>

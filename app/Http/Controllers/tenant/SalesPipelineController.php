@@ -110,6 +110,10 @@ class SalesPipelineController extends Controller
         if (!empty($fCcare)) {
             $query->where('ccare_id', $fCcare);
         }
+        $fNb = $request->input('nb');      // new_biz_id
+        if (!empty($fNb)) {
+            $query->where('new_biz_id', $fNb);
+        }
         // Category filter — mirrors the Category column: "New Biz" when a New Biz
         // rep is set, "CCare" when only a CCare rep is set, "None" when neither.
         $fCat = trim((string) $request->input('cat', ''));
@@ -203,16 +207,15 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
             ->orderBy('first_name')->get();
 
-        // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
-        // the people who actually appear on the rows this user may see. The blade
-        // shows the appropriate dropdown(s) per role and page.
-        $optBase = SalesPipeline::whereNull('deleted_at');
-        \App\Support\SalesScope::applyScope($optBase, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
-        ]);
-        $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
-        $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
+        // Filter dropdown option lists — the FULL directory of salespersons,
+        // CCare and New Biz agents (not just people on visible rows): a rep can
+        // hold one-off customers under a salesperson who isn't linked to them,
+        // and filtering by that salesperson must be possible. Row visibility
+        // itself stays scoped, so nothing leaks — an out-of-scope pick simply
+        // returns only the rows the user may see.
+        $salespersonFilterUsers = $salespersons;
+        $ccareFilterUsers       = $ccareUsers;
+        $newBizFilterUsers      = $newBizUsers;
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -309,7 +312,7 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -449,16 +452,15 @@ class SalesPipelineController extends Controller
             ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
             ->orderBy('first_name')->get();
 
-        // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
-        // the people who actually appear on the rows this user may see. The blade
-        // shows the appropriate dropdown(s) per role and page.
-        $optBase = SalesPipeline::whereNull('deleted_at');
-        \App\Support\SalesScope::applyScope($optBase, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
-        ]);
-        $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
-        $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
+        // Filter dropdown option lists — the FULL directory of salespersons,
+        // CCare and New Biz agents (not just people on visible rows): a rep can
+        // hold one-off customers under a salesperson who isn't linked to them,
+        // and filtering by that salesperson must be possible. Row visibility
+        // itself stays scoped, so nothing leaks — an out-of-scope pick simply
+        // returns only the rows the user may see.
+        $salespersonFilterUsers = $salespersons;
+        $ccareFilterUsers       = $ccareUsers;
+        $newBizFilterUsers      = $newBizUsers;
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
