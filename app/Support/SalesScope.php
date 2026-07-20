@@ -71,8 +71,11 @@ class SalesScope
 
     /**
      * applyScope — apply row visibility to a query on a sales row table.
-     * Salesperson-level access (viewIds) OR, for a CCare/New Biz rep, the
-     * individual rows they are personally assigned to.
+     * Salesperson-level access (viewIds) OR, for a CCare/New Biz rep, the rows
+     * assigned to them. For a CCare/New Biz MANAGER the rep set is their whole
+     * team (viewIds already returns self / self+team / a chosen member based on
+     * the manager toggle), so a manager sees every customer assigned to the
+     * reps reporting to them — and only their team's, not the whole company.
      *
      *   $cols = ['sp' => 'salesperson_id', 'rep' => ['ccare_id','new_biz_id'],
      *            'member' => 'sp']   // 'member' = manager's teammate filter key
@@ -84,12 +87,12 @@ class SalesScope
             return; // admin/hr — no restriction
         }
         $repCols = $cols['rep'] ?? [];
-        $isRep = self::isRep($user) && !empty($repCols);
-        $query->where(function ($q) use ($ids, $user, $isRep, $cols, $repCols) {
+        $isRep = (self::isRep($user) || $user->hasRole(['manager', 'Manager'])) && !empty($repCols);
+        $query->where(function ($q) use ($ids, $isRep, $cols, $repCols) {
             $q->whereIn($cols['sp'], $ids);
             if ($isRep) {
                 foreach ($repCols as $rc) {
-                    $q->orWhere($rc, $user->id);
+                    $q->orWhereIn($rc, $ids);
                 }
             }
         });
