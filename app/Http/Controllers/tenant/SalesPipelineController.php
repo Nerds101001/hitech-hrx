@@ -616,7 +616,13 @@ class SalesPipelineController extends Controller
         }
 
         // ── Handle Category change (Admin/HR/Manager + CCare/New Biz) ───────
-        if ($request->has('category') && ($isPrivileged || $isCcare || $isNewBiz)) {
+        if ($request->has('category') && ($isPrivileged || $isCcare || $isNewBiz || $pipeline->salesperson_id === $user->id)) {
+            // Apply any other fields sent along with the category first — this
+            // branch returns early, and they must not be silently dropped.
+            if (!empty($data)) {
+                $pipeline->update($data);
+                $pipeline->refresh();
+            }
             $newCategory = $request->input('category');
 
             if ($newCategory === 'CCare') {

@@ -270,7 +270,10 @@
                                 class="{{ $row->converted_from_newbiz ? 'converted-row' : '' }}">
 
                                 <td class="text-center col-sno">{{ $index + 1 }}</td>
-                                <td class="col-party text-dark" title="{{ $row->party_name }}"><span class="party-name">{{ $row->party_name }}</span></td>
+                                <td class="col-party text-dark p-0" title="{{ $row->party_name }}">
+                                    <input type="text" class="excel-input row-field fw-semibold" data-field="party_name"
+                                           value="{{ $row->party_name }}" style="font-size:0.72rem;">
+                                </td>
 
                                 <td class="col-status p-0 align-middle">
                                     @php
@@ -304,32 +307,30 @@
                                     }
                                 @endphp
 
-                                {{-- Category column --}}
+                                {{-- Category column — editable by every role on this page --}}
                                 <td class="col-category align-middle text-center">
-                                    @if($isAdmin || $isCcare || $isNewBiz)
-                                        <select class="excel-select row-field status-select text-truncate" data-field="category" style="width:85px;">
-                                            <option value="">-Select-</option>
-                                            <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>
-                                            <option value="CCare" {{ $catDisplay === 'CCare' ? 'selected' : '' }}>CCare</option>
-                                        </select>
-                                    @elseif($catDisplay === 'New Biz')
-                                        <span class="badge bg-primary fw-normal" style="font-size:0.75rem;">New Biz</span>
-                                    @elseif($catDisplay === 'CCare')
-                                        <span class="badge bg-info text-dark fw-normal" style="font-size:0.75rem;">CCare</span>
-                                    @else
-                                        -
-                                    @endif
+                                    <select class="excel-select row-field status-select text-truncate" data-field="category" style="width:85px;">
+                                        <option value="">-Select-</option>
+                                        <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>
+                                        <option value="CCare" {{ $catDisplay === 'CCare' ? 'selected' : '' }}>CCare</option>
+                                    </select>
                                 </td>
 
-                                {{-- Representative name column --}}
-                                <td class="col-repname text-truncate" title="{{ $catPerson }}">{{ $catPerson }}</td>
+                                {{-- Representative — click to pick any CCare/New Biz agent --}}
+                                <td class="col-repname text-truncate rep-cell" title="{{ $catPerson }} (click to change)"
+                                    style="cursor:pointer;"
+                                    data-cc="{{ $row->ccare_id }}" data-nb="{{ $row->new_biz_id }}">{{ $catPerson }}</td>
 
-                                <td class="col-potential text-end font-monospace fw-bold text-dark">
-                                    {{ number_format($row->total_business_potential ?? 0, 2) }}
+                                <td class="col-potential p-0">
+                                    <input type="number" step="0.01" class="excel-input row-field text-end font-monospace fw-bold"
+                                           data-field="total_business_potential"
+                                           value="{{ ($row->total_business_potential ?? 0) + 0 }}">
                                 </td>
 
                                 @unless($isSalesperson)
-                                    <td class="col-salesperson text-truncate" title="{{ $row->salesperson->name ?? '-' }}">{{ $row->salesperson->name ?? '-' }}</td>
+                                    {{-- Salesperson — click to reassign --}}
+                                    <td class="col-salesperson text-truncate sp-cell" title="{{ $row->salesperson->name ?? '-' }} (click to change)"
+                                        style="cursor:pointer;" data-sp="{{ $row->salesperson_id }}">{{ $row->salesperson->name ?? '-' }}</td>
                                 @endunless
 
                                 <td class="p-0 align-middle block-end" style="max-width:150px;">
@@ -734,6 +735,26 @@
     .pipeline-row-hidden { display: none !important; }
 </style>
 
+{{-- Shared dropdown templates for click-to-edit cells (rendered ONCE — the
+     rows carry plain text, so 50 rows don't each embed an 80-option select) --}}
+<template id="tplRepSelect">
+    <select class="excel-select" style="width:100%;min-width:120px;">
+        <option value="">— No Rep —</option>
+        <optgroup label="CCare">
+            @foreach($ccareUsers as $u)<option value="cc:{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        </optgroup>
+        <optgroup label="New Biz">
+            @foreach($newBizUsers as $u)<option value="nb:{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        </optgroup>
+    </select>
+</template>
+<template id="tplSpSelect">
+    <select class="excel-select" style="width:100%;min-width:120px;">
+        <option value="">— Select —</option>
+        @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+    </select>
+</template>
+
 {{-- ─── SCRIPTS ─────────────────────────────────────────────────────── --}}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -798,6 +819,55 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
+    // ── Click-to-edit: Representative & Salesperson cells (shared templates,
+    //    so the page doesn't carry a dropdown per row) ──────────────────────
+    function swapEdit(cell, tplId, currentVal, onChange) {
+        if (cell.querySelector('select')) return;
+        const tpl = document.getElementById(tplId);
+        if (!tpl) return;
+        const sel = tpl.content.firstElementChild.cloneNode(true);
+        sel.value = currentVal;
+        const old = cell.innerHTML;
+        cell.innerHTML = ''; cell.appendChild(sel); sel.focus();
+        let done = false;
+        sel.addEventListener('change', function() { done = true; onChange(cell, sel); });
+        sel.addEventListener('blur', function() { if (!done) cell.innerHTML = old; });
+    }
+    const putRow = (id, payload) => fetch(`{{ url('sales-visits/sales-report') }}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        body: JSON.stringify(payload)
+    }).then(r => r.json());
+    document.querySelectorAll('.rep-cell').forEach(cell => cell.addEventListener('click', function() {
+        const cur = this.dataset.nb ? ('nb:' + this.dataset.nb) : (this.dataset.cc ? ('cc:' + this.dataset.cc) : '');
+        swapEdit(this, 'tplRepSelect', cur, (c, sel) => {
+            const v = sel.value, kind = v ? v.split(':')[0] : '', uid = v ? v.split(':')[1] : '';
+            const name = v ? sel.options[sel.selectedIndex].text : '-';
+            const tr = c.closest('tr');
+            putRow(tr.dataset.id, { ccare_id: kind === 'cc' ? uid : null, new_biz_id: kind === 'nb' ? uid : null })
+                .then(() => {
+                    c.dataset.cc = kind === 'cc' ? uid : '';
+                    c.dataset.nb = kind === 'nb' ? uid : '';
+                    c.innerHTML = name; c.title = name + ' (click to change)';
+                    c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
+                    const cat = tr.querySelector('select[data-field="category"]');
+                    if (cat) cat.value = kind === 'nb' ? 'New Biz' : (kind === 'cc' ? 'CCare' : '');
+                });
+        });
+    }));
+    document.querySelectorAll('.sp-cell').forEach(cell => cell.addEventListener('click', function() {
+        swapEdit(this, 'tplSpSelect', this.dataset.sp || '', (c, sel) => {
+            const uid = sel.value;
+            const name = uid ? sel.options[sel.selectedIndex].text : '-';
+            const tr = c.closest('tr');
+            putRow(tr.dataset.id, { salesperson_id: uid || null }).then(() => {
+                c.dataset.sp = uid;
+                c.innerHTML = name; c.title = name + ' (click to change)';
+                c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
+            });
+        });
+    }));
+
     // Filtering / pagination / totals are server-side now — nothing to init here.
 });
 
