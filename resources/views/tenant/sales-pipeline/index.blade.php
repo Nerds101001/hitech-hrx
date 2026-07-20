@@ -78,12 +78,19 @@
         <div class="card-body py-2 px-3">
             <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
+                @if(request('sort'))<input type="hidden" name="sort" value="{{ request('sort') }}"><input type="hidden" name="dir" value="{{ request('dir') }}">@endif
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
                 <select class="form-select" name="type" style="width:130px;" onchange="this.form.submit()">
                     <option value="">All Types</option>
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
                     <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
                     <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
+                </select>
+                <select class="form-select" name="cat" style="width:130px;" onchange="this.form.submit()">
+                    <option value="">All Category</option>
+                    <option value="New Biz" {{ request('cat') === 'New Biz' ? 'selected' : '' }}>New Biz</option>
+                    <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
+                    <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
                 </select>
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
@@ -127,19 +134,19 @@
                         {{-- Top Header Row --}}
                         <tr>
                             <th rowspan="2" class="text-center align-middle col-sno">S.No.</th>
-                            <th rowspan="2" class="align-middle col-party">Party Name</th>
-                            <th rowspan="2" class="align-middle col-status">Type</th>
-                            <th rowspan="2" class="align-middle col-category" style="min-width:90px;">Category</th>
-                            <th rowspan="2" class="align-middle col-repname" style="min-width:130px;">Representative</th>
+                            <th rowspan="2" class="align-middle col-party" style="cursor:pointer;" onclick="sortPipeline('party', this)" title="Click to sort">Party Name<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle col-status" style="cursor:pointer;" onclick="sortPipeline('type', this)" title="Click to sort">Type<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle col-category" style="min-width:90px;cursor:pointer;" onclick="sortPipeline('category', this)" title="Click to sort">Category<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle col-repname" style="min-width:130px;cursor:pointer;" onclick="sortPipeline('rep', this)" title="Click to sort">Representative<span class="sort-caret"></span></th>
                             <th rowspan="2" class="text-end align-middle col-potential" style="cursor:pointer;" onclick="sortPipeline('potential', this)" title="Click to sort">
                                 Potential<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.65rem">₹ Lakh/Month</small>
                             </th>
                             {{-- Salesperson column: hidden for a salesperson login (they only see
                                  their own rows, so it would just repeat the Representative column). --}}
                             @unless($isSalesperson)
-                                <th rowspan="2" class="align-middle col-salesperson">Salesperson</th>
+                                <th rowspan="2" class="align-middle col-salesperson" style="cursor:pointer;" onclick="sortPipeline('salesperson', this)" title="Click to sort">Salesperson<span class="sort-caret"></span></th>
                             @endunless
-                            <th rowspan="2" class="align-middle block-end" style="min-width:150px;">Brand</th>
+                            <th rowspan="2" class="align-middle block-end" style="min-width:150px;cursor:pointer;" onclick="sortPipeline('brand', this)" title="Click to sort">Brand<span class="sort-caret"></span></th>
 
                             @foreach($months as $m)
                                 @php
@@ -789,10 +796,12 @@ const SORT_CURRENT_MONTH = @json($currentMonthKey);
 const ANNUAL_MAP  = @json($annualMap);
 const ANNUAL_GRAND = @json($annualGrand);
 const KB_MAP = @json($kbByName ?? []);   // salesperson name -> {kingo, bingo} (current month)
+const TEXT_SORT_KEYS = ['party', 'type', 'category', 'rep', 'salesperson', 'brand'];
 function sortPipeline(key) {
     const p = new URLSearchParams(window.location.search);
-    let dir = 'desc';                                  // first click: biggest first
-    if (p.get('sort') === key) dir = (p.get('dir') === 'desc' ? 'asc' : 'desc');
+    // Text columns: first click A->Z. Numeric columns: first click biggest-first.
+    let dir = TEXT_SORT_KEYS.includes(key) ? 'asc' : 'desc';
+    if (p.get('sort') === key) dir = (p.get('dir') === dir ? (dir === 'asc' ? 'desc' : 'asc') : dir);
     p.set('sort', key); p.set('dir', dir); p.delete('page');
     window.location.search = p.toString();
 }

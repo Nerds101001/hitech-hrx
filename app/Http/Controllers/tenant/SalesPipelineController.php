@@ -110,6 +110,16 @@ class SalesPipelineController extends Controller
         if (!empty($fCcare)) {
             $query->where('ccare_id', $fCcare);
         }
+        // Category filter — mirrors the Category column: "New Biz" when a New Biz
+        // rep is set, "CCare" when only a CCare rep is set, "None" when neither.
+        $fCat = trim((string) $request->input('cat', ''));
+        if ($fCat === 'New Biz') {
+            $query->whereNotNull('new_biz_id');
+        } elseif ($fCat === 'CCare') {
+            $query->whereNull('new_biz_id')->whereNotNull('ccare_id');
+        } elseif ($fCat === 'None') {
+            $query->whereNull('new_biz_id')->whereNull('ccare_id');
+        }
 
         // ── Aggregates over the FULL filtered set (before pagination) so the
         //    stat cards and month-totals row stay correct across all pages ──
@@ -134,10 +144,31 @@ class SalesPipelineController extends Controller
         $totalPendingCurrentMonth = (float) ($monthAgg[$currentMonthKey]->pending ?? 0);
 
         // ── Column sorting (server-side, across ALL pages — the header carets).
-        //    sort: potential | forecast | sale | pending | month:YYYY-MM ──
+        //    sort: party | type | category | rep | salesperson | brand |
+        //          potential | forecast | sale | pending | month:YYYY-MM ──
         $sort = (string) $request->input('sort', '');
         $dir  = strtolower((string) $request->input('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-        if ($sort === 'potential') {
+        $spNameSub  = "(SELECT TRIM(CONCAT(u.first_name,' ',COALESCE(u.last_name,''))) FROM users u WHERE u.id = sales_pipelines.salesperson_id)";
+        $repNameSub = "COALESCE((SELECT TRIM(CONCAT(un.first_name,' ',COALESCE(un.last_name,''))) FROM users un WHERE un.id = sales_pipelines.new_biz_id),"
+                    . "(SELECT TRIM(CONCAT(uc.first_name,' ',COALESCE(uc.last_name,''))) FROM users uc WHERE uc.id = sales_pipelines.ccare_id), '')";
+        // Text sorts keep empty values at the BOTTOM in either direction, so an
+        // A→Z click starts at the A's, not at the blank rows.
+        $textSort = function ($expr) use ($query, $dir) {
+            $query->orderByRaw("CASE WHEN COALESCE($expr,'') = '' THEN 1 ELSE 0 END, COALESCE($expr,'') $dir");
+        };
+        if ($sort === 'party') {
+            $textSort('party_name');
+        } elseif ($sort === 'type') {
+            $textSort('type');
+        } elseif ($sort === 'brand') {
+            $textSort('product');
+        } elseif ($sort === 'category') {
+            $textSort("CASE WHEN new_biz_id IS NOT NULL THEN 'New Biz' WHEN ccare_id IS NOT NULL THEN 'CCare' ELSE '' END");
+        } elseif ($sort === 'rep') {
+            $textSort($repNameSub);
+        } elseif ($sort === 'salesperson') {
+            $textSort($spNameSub);
+        } elseif ($sort === 'potential') {
             $query->orderBy('total_business_potential', $dir);
         } elseif (in_array($sort, ['forecast', 'sale', 'pending']) || str_starts_with($sort, 'month:')) {
             // Whitelisted field + validated month key, so the raw subquery is safe.
