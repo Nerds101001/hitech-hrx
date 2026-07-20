@@ -11,21 +11,20 @@ use App\Models\SalesPipeline;
  * across every Sales field-ops page (Client Master, Visits, Analytics,
  * Attendance, Sales Report, Sales Pipeline, Kingo Bingo).
  *
- * Rules:
+ * Rules (salesperson-LEVEL access — see a salesperson's whole book):
  *   - admin / hr            → null  (no restriction — see everyone)
  *   - sales manager         → themselves + their direct reports (reporting_to_id)
- *   - customer care / newbiz→ themselves + their mapped salespersons
- *                             (cc_salesperson_map PLUS any salesperson whose
- *                              pipeline rows already list them as ccare/new_biz)
+ *   - customer care / newbiz→ themselves + salespersons EXPLICITLY mapped to
+ *                             them in cc_salesperson_map (their coordinator book)
  *   - salesperson / other   → only themselves
  *
- * The returned list is a set of USER ids. It is used for both user-keyed
- * tables (attendance, visits — column user_id) and salesperson-keyed tables
- * (sales_pipelines, salesperson_targets — column salesperson_id): a
- * salesperson's own id lives in both, a ccare rep's own id simply matches no
- * salesperson rows, so the same set is correct everywhere.
+ * NOTE: a CCare/New Biz rep also sees the individual customer rows they are
+ * assigned to (ccare_id / new_biz_id = them) even when the salesperson is not
+ * in their map — but that is ROW-level and handled by applyScope(), not here.
+ * We deliberately do NOT grant a rep the salesperson's whole book just because
+ * they appear on a few of its rows (that over-shared every rep's view).
  *
- * null  == unrestricted (admin/HR).
+ * The returned list is a set of USER ids. null == unrestricted (admin/HR).
  */
 class SalesScope
 {
@@ -48,26 +47,52 @@ class SalesScope
             );
         }
 
-        // Customer Care / New Biz: their mapped salespersons. The map is not
-        // reliably maintained on import, so derive from pipeline rows too —
-        // otherwise a rep with no map row (e.g. Jasleen) would see nothing.
-        $dept = strtolower(optional($user->department)->name ?? '');
-        $isCcareOrNewBiz = str_contains($dept, 'customer care')
-            || str_contains($dept, 'new biz')
-            || str_contains($dept, 'new business');
-
-        if ($isCcareOrNewBiz) {
-            $mapped = CcSalespersonMap::where('cc_user_id', $user->id)
-                ->pluck('sales_user_id');
-            $derived = SalesPipeline::whereNull('deleted_at')
-                ->where(function ($q) use ($user) {
-                    $q->where('ccare_id', $user->id)
-                      ->orWhere('new_biz_id', $user->id);
-                })->distinct()->pluck('salesperson_id');
-            $ids = $ids->merge($mapped)->merge($derived);
+        // Customer Care / New Biz: only salespersons EXPLICITLY mapped to them.
+        // (Row-level access to their own assigned customers is added separately
+        // by applyScope.)
+        if (self::isRep($user)) {
+            $ids = $ids->merge(
+                CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')
+            );
         }
 
         return $ids->filter()->unique()->values()->all();
+    }
+
+    /** True when the user is a Customer Care / New Biz representative. */
+    public static function isRep($user): bool
+    {
+        if (!$user) return false;
+        $dept = strtolower(optional($user->department)->name ?? '');
+        return str_contains($dept, 'customer care')
+            || str_contains($dept, 'new biz')
+            || str_contains($dept, 'new business');
+    }
+
+    /**
+     * applyScope — apply row visibility to a query on a sales row table.
+     * Salesperson-level access (viewIds) OR, for a CCare/New Biz rep, the
+     * individual rows they are personally assigned to.
+     *
+     *   $cols = ['sp' => 'salesperson_id', 'rep' => ['ccare_id','new_biz_id'],
+     *            'member' => 'sp']   // 'member' = manager's teammate filter key
+     */
+    public static function applyScope($query, $user, $request, array $cols): void
+    {
+        $ids = self::viewIds($user, $request, $cols['member'] ?? 'sp');
+        if ($ids === null) {
+            return; // admin/hr — no restriction
+        }
+        $repCols = $cols['rep'] ?? [];
+        $isRep = self::isRep($user) && !empty($repCols);
+        $query->where(function ($q) use ($ids, $user, $isRep, $cols, $repCols) {
+            $q->whereIn($cols['sp'], $ids);
+            if ($isRep) {
+                foreach ($repCols as $rc) {
+                    $q->orWhere($rc, $user->id);
+                }
+            }
+        });
     }
 
     /**

@@ -77,10 +77,14 @@ class SalesPipelineController extends Controller
         $teamMembers   = ($teamMemberIds !== null)
             ? User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
             : collect();
+        // Salesperson-level list (self / team / explicitly-mapped) drives the
+        // filter dropdowns and per-salesperson aggregates below.
         $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
-        if ($allowedSpIds !== null) {
-            $query->whereIn('salesperson_id', $allowedSpIds);
-        }
+        // Row visibility: that list OR — for a CCare/New Biz rep — the individual
+        // customer rows they are personally assigned to (ccare_id / new_biz_id).
+        \App\Support\SalesScope::applyScope($query, $user, $request, [
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+        ]);
 
         // ── Server-side filters ──
         //   Sales Report filters by Salesperson and by CCare. The blade shows the
@@ -149,9 +153,9 @@ class SalesPipelineController extends Controller
         // the people who actually appear on the rows this user may see. The blade
         // shows the appropriate dropdown(s) per role and page.
         $optBase = SalesPipeline::whereNull('deleted_at');
-        if ($allowedSpIds !== null) {
-            $optBase->whereIn('salesperson_id', $allowedSpIds);
-        }
+        \App\Support\SalesScope::applyScope($optBase, $user, $request, [
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+        ]);
         $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
         $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
@@ -315,10 +319,14 @@ class SalesPipelineController extends Controller
         $teamMembers   = ($teamMemberIds !== null)
             ? User::whereIn('id', $teamMemberIds)->orderBy('first_name')->get()
             : collect();
+        // Salesperson-level list (self / team / explicitly-mapped) drives the
+        // filter dropdowns and per-salesperson aggregates below.
         $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
-        if ($allowedSpIds !== null) {
-            $query->whereIn('salesperson_id', $allowedSpIds);
-        }
+        // Row visibility: that list OR — for a CCare/New Biz rep — the individual
+        // customer rows they are personally assigned to (ccare_id / new_biz_id).
+        \App\Support\SalesScope::applyScope($query, $user, $request, [
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+        ]);
 
         // ── Server-side filters ──
         //   Sales Pipeline filters by Salesperson and by New Biz. The blade shows
@@ -381,9 +389,9 @@ class SalesPipelineController extends Controller
         // the people who actually appear on the rows this user may see. The blade
         // shows the appropriate dropdown(s) per role and page.
         $optBase = SalesPipeline::whereNull('deleted_at');
-        if ($allowedSpIds !== null) {
-            $optBase->whereIn('salesperson_id', $allowedSpIds);
-        }
+        \App\Support\SalesScope::applyScope($optBase, $user, $request, [
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+        ]);
         $salespersonFilterUsers = User::whereIn('id', (clone $optBase)->whereNotNull('salesperson_id')->distinct()->pluck('salesperson_id'))->orderBy('first_name')->get();
         $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
