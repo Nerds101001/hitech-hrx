@@ -62,8 +62,8 @@ class SalesPipelineController extends Controller
         }])->where('is_locked', true);
 
         $user = auth()->user();
-        $isCcare = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        $isCcare = $user->isCcareAgent();
+        $isNewBiz = $user->isNewBizAgent();
         
         // Which salespersons may this user see? null = no restriction (admin/HR).
         // manager = self + direct-report team; ccare/newbiz = self + mapped
@@ -304,8 +304,8 @@ class SalesPipelineController extends Controller
         }])->where('is_locked', false);
 
         $user = auth()->user();
-        $isCcare = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        $isCcare = $user->isCcareAgent();
+        $isNewBiz = $user->isNewBizAgent();
         
         // Which salespersons may this user see? null = no restriction (admin/HR).
         // manager = self + direct-report team; ccare/newbiz = self + mapped
@@ -455,8 +455,8 @@ class SalesPipelineController extends Controller
         ]);
 
         $user = auth()->user();
-        $isCcareUser = $user->department && $user->department->name === 'Customer Care';
-        $isNewBizUser = $user->department && $user->department->name === 'New Biz';
+        $isCcareUser = $user->isCcareAgent();
+        $isNewBizUser = $user->isNewBizAgent();
         $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'manager']);
 
         $salespersonId = $request->salesperson_id ?: null;
@@ -518,8 +518,8 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare  = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        $isCcare  = $user->isCcareAgent();
+        $isNewBiz = $user->isNewBizAgent();
         if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
             if ($request->ajax()) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
@@ -631,8 +631,8 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($request->sales_pipeline_id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare  = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        $isCcare  = $user->isCcareAgent();
+        $isNewBiz = $user->isNewBizAgent();
         if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
@@ -669,8 +669,8 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare  = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz = $user->department && $user->department->name === 'New Biz';
+        $isCcare  = $user->isCcareAgent();
+        $isNewBiz = $user->isNewBizAgent();
         if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
             return redirect()->back()->with('error', 'Unauthorized.');
         }

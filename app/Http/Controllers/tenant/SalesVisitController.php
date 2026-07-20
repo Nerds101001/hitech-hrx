@@ -337,9 +337,12 @@ class SalesVisitController extends Controller
         // Sales dept IDs: 2 (Sales Department), 26 (Sales)
         // Customer Care: 10, New Biz: 13
         $salesDeptIds   = [2, 26];
-        $ccareDeptIds   = [10];
-        $newBizDeptIds  = [13];
-        $allowedDeptIds = array_merge($salesDeptIds, $ccareDeptIds, $newBizDeptIds);
+        // The combined "Customer Care + New Biz" department counts as both.
+        $comboDeptIds   = \App\Models\Department::withoutGlobalScopes()
+            ->where('name', 'like', '%Customer Care + New Biz%')->pluck('id')->all();
+        $ccareDeptIds   = array_merge([10], $comboDeptIds);
+        $newBizDeptIds  = array_merge([13], $comboDeptIds);
+        $allowedDeptIds = array_unique(array_merge($salesDeptIds, $ccareDeptIds, $newBizDeptIds));
 
         // Only admin/hr/accounts see every client. Managers are scoped to their
         // own team, ccare/newbiz to their mapped salespersons, salespersons to self.

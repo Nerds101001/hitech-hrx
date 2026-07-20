@@ -669,6 +669,28 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->belongsTo(Department::class, 'department_id');
   }
 
+  /**
+   * Does this user function as a Customer Care agent?
+   * True for the "Customer Care" department AND for the combined
+   * "Customer Care + New Biz" department (dual-role people).
+   */
+  public function isCcareAgent(): bool
+  {
+    $d = strtolower(optional($this->department)->name ?? '');
+    return str_contains($d, 'customer care') || str_contains($d, 'ccare');
+  }
+
+  /**
+   * Does this user function as a New Biz agent?
+   * True for the "New Biz" department AND for the combined
+   * "Customer Care + New Biz" department (dual-role people).
+   */
+  public function isNewBizAgent(): bool
+  {
+    $d = strtolower(optional($this->department)->name ?? '');
+    return str_contains($d, 'new biz') || str_contains($d, 'new business');
+  }
+
   public function leavePolicyProfile()
   {
     return $this->belongsTo(LeavePolicyProfile::class, 'leave_policy_profile_id');

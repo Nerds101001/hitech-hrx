@@ -12,8 +12,8 @@ class SalesTargetController extends Controller
     {
         $user = auth()->user();
         $isAdmin   = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare   = $user->department && $user->department->name === 'Customer Care';
-        $isNewBiz  = $user->department && $user->department->name === 'New Biz';
+        $isCcare   = $user->isCcareAgent();
+        $isNewBiz  = $user->isNewBizAgent();
         if (!$isAdmin && !$isCcare && !$isNewBiz) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
