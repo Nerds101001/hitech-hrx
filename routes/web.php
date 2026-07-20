@@ -190,9 +190,12 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::post('notifications/markAsRead/{id}', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
 
 
-    //Audit Logs
-    Route::get('auditLogs', [AuditLogController::class, 'index'])->name('auditLogs.index');
-    Route::get('auditLogs/show/{id}', [AuditLogController::class, 'show'])->name('auditLogs.show');
+    //Audit Logs — admin/HR only (the log shows every user's changes). This
+    //duplicate registration overrides the tenant.php one, so gate it here too.
+    Route::middleware('role:admin|hr')->group(function () {
+        Route::get('auditLogs', [AuditLogController::class, 'index'])->name('auditLogs.index');
+        Route::get('auditLogs/show/{id}', [AuditLogController::class, 'show'])->name('auditLogs.show');
+    });
 
     //utilities Route
     Route::get('utilities', [UtilitiesController::class, 'index'])->name('utilities.index');
