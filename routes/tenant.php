@@ -858,8 +858,8 @@ Route::middleware([
 
     // --- SYSTEM UTILITIES ---
 
-    // Audit Logs
-    Route::prefix('auditLogs')->name('auditLogs.')->group(function () {
+    // Audit Logs — admin/HR only (the log shows every user's changes)
+    Route::prefix('auditLogs')->name('auditLogs.')->middleware('role:admin|hr')->group(function () {
       Route::get('', [AuditLogController::class, 'index'])->name('index');
       Route::get('show/{id}', [AuditLogController::class, 'show'])->name('show');
     });
