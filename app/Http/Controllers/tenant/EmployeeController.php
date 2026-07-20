@@ -292,8 +292,10 @@ class EmployeeController extends Controller
       'users' => $users,
       'roles' => $roles,
       'leavePolicyProfiles' => $leavePolicyProfiles,
-      'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
-      'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
+      // Full agent pool in BOTH dropdowns — a Customer Care person can also hold
+      // the New Biz role for a salesperson (and vice versa).
+      'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
+      'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
     ]);
   }
 
@@ -508,40 +510,53 @@ class EmployeeController extends Controller
     // Role Synchronization
     $user->syncRoles([$validated['role']]);
 
-    // CCARE Agent Assignment
+    // CCARE Agent Assignment — role-scoped, so the same person can also hold
+    // the New Biz role for this salesperson (two rows, one per role).
     if ($request->has('ccare_agent_id')) {
         $ccareAgentIds = (array) $request->input('ccare_agent_id');
-        // Remove any existing CCARE mapping for this salesperson
+        // Remove existing CCARE-role mappings (legacy NULL-role rows fall back
+        // to the agent's department).
         \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
-            ->whereHas('ccUser', function($q) {
-                $q->whereHas('department', function($dq) {
-                    $dq->whereIn('name', ['CCARE', 'Customer Care']);
-                });
+            ->where(function($q) {
+                $q->where('role', 'ccare')
+                  ->orWhere(function($qq) {
+                      $qq->whereNull('role')->whereHas('ccUser', function($uq) {
+                          $uq->whereHas('department', function($dq) {
+                              $dq->whereIn('name', ['CCARE', 'Customer Care']);
+                          });
+                      });
+                  });
             })->delete();
 
         foreach(array_filter($ccareAgentIds) as $agentId) {
             \App\Models\CcSalespersonMap::create([
                 'sales_user_id' => $user->id,
                 'cc_user_id' => $agentId,
+                'role' => 'ccare',
             ]);
         }
     }
 
-    // New Biz Agent Assignment
+    // New Biz Agent Assignment — role-scoped (see note above).
     if ($request->has('newbiz_agent_id')) {
         $newbizAgentIds = (array) $request->input('newbiz_agent_id');
-        // Remove any existing New Biz mapping for this salesperson
         \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
-            ->whereHas('ccUser', function($q) {
-                $q->whereHas('department', function($dq) {
-                    $dq->whereIn('name', ['New Biz', 'New Business Department']);
-                });
+            ->where(function($q) {
+                $q->where('role', 'newbiz')
+                  ->orWhere(function($qq) {
+                      $qq->whereNull('role')->whereHas('ccUser', function($uq) {
+                          $uq->whereHas('department', function($dq) {
+                              $dq->whereIn('name', ['New Biz', 'New Business Department']);
+                          });
+                      });
+                  });
             })->delete();
 
         foreach(array_filter($newbizAgentIds) as $agentId) {
             \App\Models\CcSalespersonMap::create([
                 'sales_user_id' => $user->id,
                 'cc_user_id' => $agentId,
+                'role' => 'newbiz',
             ]);
         }
     }
@@ -1602,17 +1617,30 @@ class EmployeeController extends Controller
 
     $leaveHistory = \App\Services\LeaveHistoryService::getUnifiedHistory($user);
 
-    $ccareUsers = User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
-    $newbizUsers = User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
-    
+    // Both dropdowns offer the full CCare + New Biz agent pool: in some cases a
+    // Customer Care person also handles the New Biz role (and vice versa), so
+    // they must be selectable — and shown — under either hat.
+    $agentPool = User::with(['designation', 'department'])
+        ->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care', 'New Biz', 'New Business Department']); })
+        ->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get();
+
     $currentMappings = \App\Models\CcSalespersonMap::with('ccUser.department')->where('sales_user_id', $user->id)->get();
     $currentCcareIds = [];
     $currentNewbizIds = [];
     foreach ($currentMappings as $map) {
-        $dName = strtolower($map->ccUser->department->name ?? '');
-        if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
+        // The stored role wins; legacy NULL-role rows fall back to the agent's department.
+        $role = $map->role;
+        if (!$role) {
+            $dName = strtolower($map->ccUser->department->name ?? '');
+            if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
+                $role = 'ccare';
+            } elseif (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
+                $role = 'newbiz';
+            }
+        }
+        if ($role === 'ccare') {
             $currentCcareIds[] = $map->cc_user_id;
-        } elseif (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
+        } elseif ($role === 'newbiz') {
             $currentNewbizIds[] = $map->cc_user_id;
         }
     }
@@ -1630,8 +1658,8 @@ class EmployeeController extends Controller
       'designations' => $designations,
       'allUsers' => $allUsers,
       'leaveHistory' => $leaveHistory,
-      'ccareUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['CCARE', 'Customer Care']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
-      'newbizUsers' => \App\Models\User::with(['designation', 'department'])->whereHas('department', function($q) { $q->whereIn('name', ['New Biz', 'New Business Department']); })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->orderBy('first_name')->get(),
+      'ccareUsers' => $agentPool,
+      'newbizUsers' => $agentPool,
       'currentCcMapping' => $currentMappings,
       'currentCcareIds' => $currentCcareIds,
       'currentNewbizIds' => $currentNewbizIds,
@@ -1765,15 +1793,15 @@ class EmployeeController extends Controller
 
       $user->assignRole($request->input('role'));
 
-      // CC Agent Assignment for Sales/New Biz
+      // CC Agent Assignment for Sales/New Biz (role-scoped — one person may hold both)
       if ($request->has('ccare_agent_id')) {
           foreach(array_filter((array) $request->input('ccare_agent_id')) as $agentId) {
-              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId]);
+              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId, 'role' => 'ccare']);
           }
       }
       if ($request->has('newbiz_agent_id')) {
           foreach(array_filter((array) $request->input('newbiz_agent_id')) as $agentId) {
-              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId]);
+              \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId, 'role' => 'newbiz']);
           }
       }
 

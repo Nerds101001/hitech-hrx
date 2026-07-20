@@ -145,8 +145,10 @@ class SalesPipelineController extends Controller
         $salespersons = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
             ->orderBy('first_name')->get();
+        // Includes Customer Care too: a CCare person can hold the New Biz role
+        // for some customers, so they must be selectable in the NB dropdown.
         $newBizUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%')->orWhere('name', 'like', '%Customer Care%'))
             ->orderBy('first_name')->get();
 
         // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
@@ -381,8 +383,10 @@ class SalesPipelineController extends Controller
         $salespersons = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
             ->orderBy('first_name')->get();
+        // Includes Customer Care too: a CCare person can hold the New Biz role
+        // for some customers, so they must be selectable in the NB dropdown.
         $newBizUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
+            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%')->orWhere('name', 'like', '%Customer Care%'))
             ->orderBy('first_name')->get();
 
         // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
