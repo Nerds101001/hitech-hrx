@@ -133,6 +133,24 @@ class SalesPipelineController extends Controller
         }
         $totalPendingCurrentMonth = (float) ($monthAgg[$currentMonthKey]->pending ?? 0);
 
+        // ── Column sorting (server-side, across ALL pages — the header carets).
+        //    sort: potential | forecast | sale | pending | month:YYYY-MM ──
+        $sort = (string) $request->input('sort', '');
+        $dir  = strtolower((string) $request->input('dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        if ($sort === 'potential') {
+            $query->orderBy('total_business_potential', $dir);
+        } elseif (in_array($sort, ['forecast', 'sale', 'pending']) || str_starts_with($sort, 'month:')) {
+            // Whitelisted field + validated month key, so the raw subquery is safe.
+            $field = ['forecast' => 'forecast_amount', 'sale' => 'sale_amount', 'pending' => 'pending_amount'][$sort] ?? 'sale_amount';
+            $mk = str_starts_with($sort, 'month:') ? substr($sort, 6) : $currentMonthKey;
+            if (preg_match('/^\d{4}-\d{2}$/', $mk)) {
+                $query->orderByRaw(
+                    "COALESCE((SELECT m.$field FROM sales_pipeline_months m WHERE m.sales_pipeline_id = sales_pipelines.id AND m.month_year = ? LIMIT 1), 0) $dir",
+                    [$mk]
+                );
+            }
+        }
+
         // ── Paginate (50 per page) — only these rows are rendered ──
         $pipelines = $query->orderBy('party_name')->paginate(50)->withQueryString();
 

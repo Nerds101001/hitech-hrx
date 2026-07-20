@@ -783,38 +783,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ── Filters ───────────────────────────────────────────────────────────
 // --- Column sorting (Potential, current-month Fcst/Sale/Pend, and any month's Sale) ---
+// SERVER-SIDE: clicking a header reloads with ?sort=<key>&dir=<asc|desc>, so the
+// whole dataset is sorted across every page (not just the 50 rendered rows).
 const SORT_CURRENT_MONTH = @json($currentMonthKey);
 const ANNUAL_MAP  = @json($annualMap);
 const ANNUAL_GRAND = @json($annualGrand);
 const KB_MAP = @json($kbByName ?? []);   // salesperson name -> {kingo, bingo} (current month)
-let sortState = { key: null, dir: 1 };
-function sortPipeline(key, el) {
-    sortState.dir = (sortState.key === key) ? -sortState.dir : 1;
-    sortState.key = key;
-    const body = document.getElementById('pipelineBody');
-    const totalsRow = document.getElementById('monthTotalsRow');
-    const rows = Array.from(body.querySelectorAll('tr[data-id]'));
-    const monthVal = (tr, mk) => { try { return parseFloat((JSON.parse(tr.dataset.months || '{}'))[mk] || 0); } catch (e) { return 0; } };
-    const val = (tr) => {
-        if (key === 'potential') return parseFloat(tr.dataset.potential || 0);
-        if (key === 'pending')   return parseFloat(tr.dataset.pending || 0);
-        if (key === 'forecast')  return parseFloat(tr.dataset.forecast || 0);
-        if (key === 'sale')      return monthVal(tr, SORT_CURRENT_MONTH);
-        if (key.indexOf('month:') === 0) return monthVal(tr, key.slice(6)); // any month's sale
-        return 0;
-    };
-    rows.sort((a, b) => (val(a) - val(b)) * sortState.dir);
-    rows.forEach(r => body.appendChild(r));                 // re-append in new order
-    if (totalsRow) body.insertBefore(totalsRow, body.firstChild); // keep totals on top
-    document.querySelectorAll('.sort-caret').forEach(c => c.textContent = '');
-    if (el) { const c = el.querySelector('.sort-caret'); if (c) c.textContent = sortState.dir > 0 ? ' ▲' : ' ▼'; }
-    if (typeof renderPage === 'function') renderPage(); // re-apply pagination to sorted order
+function sortPipeline(key) {
+    const p = new URLSearchParams(window.location.search);
+    let dir = 'desc';                                  // first click: biggest first
+    if (p.get('sort') === key) dir = (p.get('dir') === 'desc' ? 'asc' : 'desc');
+    p.set('sort', key); p.set('dir', dir); p.delete('page');
+    window.location.search = p.toString();
 }
+// Show the caret on the active sort column after reload.
+document.addEventListener('DOMContentLoaded', function() {
+    const p = new URLSearchParams(window.location.search);
+    const s = p.get('sort');
+    if (!s) return;
+    const caret = p.get('dir') === 'asc' ? ' ▲' : ' ▼';
+    document.querySelectorAll('th[onclick]').forEach(th => {
+        const m = (th.getAttribute('onclick') || '').match(/sortPipeline\('([^']+)'/);
+        if (m && m[1] === s) { const c = th.querySelector('.sort-caret'); if (c) c.textContent = caret; }
+    });
+});
 
 // Filtering, pagination and the stat/month-totals are now computed SERVER-SIDE:
 // the controller renders 50 rows per page and pre-computes every card and the
 // totals row over the full filtered set. These stubs keep any old inline callers
-// safe. sortPipeline() above still reorders the current page's rows in the DOM.
+// safe.
 function applyFilters() {}
 function renderPage() {}
 function changePerPage() {}
