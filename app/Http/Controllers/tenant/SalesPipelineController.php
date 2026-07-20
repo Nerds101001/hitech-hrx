@@ -186,9 +186,9 @@ class SalesPipelineController extends Controller
             }
         }
 
-        // ── Paginate — selectable 25/50/100 per page (25 keeps the page light) ──
-        $perPage = (int) $request->input('per', 25);
-        if (!in_array($perPage, [25, 50, 100])) $perPage = 25;
+        // ── Paginate — selectable 50/100/200 per page (minimum 50) ──
+        $perPage = (int) $request->input('per', 50);
+        if (!in_array($perPage, [50, 100, 200])) $perPage = 50;
         $pipelines = $query->orderBy('party_name')->paginate($perPage)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)

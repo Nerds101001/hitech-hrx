@@ -116,9 +116,9 @@
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <select class="form-select" name="per" style="width:95px;" onchange="this.form.submit()" title="Rows per page">
-                    @foreach([25,50,100] as $pp)
-                        <option value="{{ $pp }}" {{ (int)request('per', 25) === $pp ? 'selected' : '' }}>{{ $pp }} rows</option>
+                <select class="form-select" name="per" style="width:100px;" onchange="this.form.submit()" title="Rows per page">
+                    @foreach([50,100,200] as $pp)
+                        <option value="{{ $pp }}" {{ (int)request('per', 50) === $pp ? 'selected' : '' }}>{{ $pp }} rows</option>
                     @endforeach
                 </select>
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
