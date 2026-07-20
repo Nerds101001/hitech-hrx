@@ -538,6 +538,7 @@
                         <tr>
                             <th>Salesperson</th>
                             <th class="text-end">Actual Sale</th>
+                            <th class="text-end">Pending</th>
                             <th class="text-end">Bingo</th>
                             <th class="text-end">Kingo</th>
                             <th class="text-end">Super Kingo</th>
@@ -548,6 +549,7 @@
                             <tr>
                                 <td class="fw-semibold">{{ $r['name'] }}</td>
                                 <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
+                                <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
                                 @foreach(['bingo','kingo','super'] as $tier)
                                     @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
                                     <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
@@ -559,7 +561,7 @@
                                 @endforeach
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center text-muted py-4">No targets set for this month.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No targets set for this month.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -717,7 +719,9 @@
     .bg-sale-light input { color: #065f46 !important; font-weight: 600; }
     .bg-pending-light { background-color: #fff7ed !important; }
     .bg-pending-light input { color: #9a3412 !important; font-weight: 600; }
-    tr:hover td { background-color: transparent !important; }
+    /* Scoped to the main report table only — this rule used to leak into the
+       achievement modal and wipe its coloured cells on hover (white on white). */
+    #pipelineTable tbody tr:hover td { background-color: transparent !important; }
     .converted-row td { background-color: #fdf4ff !important; border-bottom: 2px solid #e879f9 !important; }
     .converted-row .col-party::after { content:' (Converted)'; color:#d946ef; font-size:0.7rem; font-weight:bold; }
     .pipeline-row-hidden { display: none !important; }

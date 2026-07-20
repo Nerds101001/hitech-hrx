@@ -283,13 +283,14 @@ class SalesPipelineController extends Controller
                 ->whereNull('sales_pipelines.deleted_at')
                 ->when($allowedSpIds !== null, fn($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
                 ->groupBy('sales_pipelines.salesperson_id')
-                ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual')
-                ->pluck('actual', 'sp');
+                ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
+                ->get()->keyBy('sp');
             $nameMap = User::whereIn('id', $cmTargets->pluck('salesperson_id')->unique()->all())
                 ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
             foreach ($cmTargets as $t) {
                 $spId   = $t->salesperson_id;
-                $actual = (float) ($actualByS[$spId] ?? 0);
+                $actual  = (float) (optional($actualByS->get($spId))->actual ?? 0);
+                $pending = (float) (optional($actualByS->get($spId))->pending ?? 0);
                 $bingo  = (float) $t->bingo_target;
                 $kingo  = (float) $t->kingo_target;
                 $super  = (float) $t->super_kingo_target;
@@ -297,11 +298,12 @@ class SalesPipelineController extends Controller
                 if ($kingo > 0 && $actual >= $kingo) $kAchieved++;
                 if ($super > 0 && $actual >= $super) $skAchieved++;
                 $targetAchievers[] = [
-                    'name'   => $nameMap[$spId] ?? ('#' . $spId),
-                    'actual' => $actual,
-                    'bingo'  => $bingo,
-                    'kingo'  => $kingo,
-                    'super'  => $super,
+                    'name'    => $nameMap[$spId] ?? ('#' . $spId),
+                    'actual'  => $actual,
+                    'pending' => $pending,
+                    'bingo'   => $bingo,
+                    'kingo'   => $kingo,
+                    'super'   => $super,
                 ];
             }
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
