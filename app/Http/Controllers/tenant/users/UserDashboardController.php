@@ -148,7 +148,7 @@ class UserDashboardController extends Controller
                 ->count();
 
             // Data for Onboarding Modal in Dashboard
-            $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get();
+            $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get();
             $roles = \Spatie\Permission\Models\Role::all();
             $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
             $managers = \App\Models\User::whereHas('roles', function($q) {
@@ -364,7 +364,7 @@ class UserDashboardController extends Controller
                 'upcomingAnniversaries' => $upcomingAnniversaries,
                 'payrollTrend' => $payrollTrend,
                 'latestNetSalary' => $latestNetSalary,
-                'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get(),
+                'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
                 'roles' => \Spatie\Permission\Models\Role::all(),
                 'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
                 'managers' => \App\Models\User::whereHas('roles', function($q) {

@@ -134,7 +134,7 @@ class SalesPipelineController extends Controller
         $totalPendingCurrentMonth = (float) ($monthAgg[$currentMonthKey]->pending ?? 0);
 
         // ── Paginate (50 per page) — only these rows are rendered ──
-        $pipelines = $query->orderBy('id', 'desc')->paginate(50)->withQueryString();
+        $pipelines = $query->orderBy('party_name')->paginate(50)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)
             ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()
@@ -370,7 +370,7 @@ class SalesPipelineController extends Controller
         $totalPendingCurrentMonth = (float) ($monthAgg[$currentMonthKey]->pending ?? 0);
 
         // ── Paginate (50 per page) ──
-        $pipelines = $query->orderBy('id', 'desc')->paginate(50)->withQueryString();
+        $pipelines = $query->orderBy('party_name')->paginate(50)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)
             ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()

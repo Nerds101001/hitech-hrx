@@ -1220,7 +1220,7 @@ class EmployeeController extends Controller
     $roles = Role::get();
     $teams = Team::withoutGlobalScopes()->select('name', 'id')->get();
     $designations = Designation::withoutGlobalScopes()->select('name', 'id')->get();
-    $departments = Department::withoutGlobalScopes()->select('name', 'id')->get();
+    $departments = Department::withoutGlobalScopes()->select('name', 'id')->orderBy('name')->get();
     $sites = Site::select('id', 'name')->orderBy('name')->get();
 
     \Illuminate\Support\Facades\Log::info('Employee Index Loaded', [
@@ -1580,7 +1580,7 @@ class EmployeeController extends Controller
     // Optimization: These are only needed for the Edit Modals. 
     // In a future step, these will be moved to an AJAX-on-demand endpoint.
     $roles = \Spatie\Permission\Models\Role::select('id', 'name')->get();
-    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
+    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->orderBy('name')->get();
     $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
     $allUsers = User::where(function($query) use ($id, $user) {
         $query->whereHas('roles', function($q) {

@@ -417,7 +417,7 @@ class DashboardController extends Controller
             'nextHoliday' => Holiday::where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
-            'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->get(),
+            'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
             'roles' => \Spatie\Permission\Models\Role::get(),
             'designations' => \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get(),
             'managers' => \App\Models\User::withoutGlobalScopes()->whereHas('roles', function($q) {
@@ -428,7 +428,7 @@ class DashboardController extends Controller
 
 
       $roles = \Spatie\Permission\Models\Role::get();
-      $departments  = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
+      $departments  = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->orderBy('name')->get();
       $teams        = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
       $designations = \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get();
       $managers     = User::withoutGlobalScopes()->whereHas('roles', function($q) {
@@ -437,7 +437,7 @@ class DashboardController extends Controller
 
       // Fallback: If no data found, try without status filter
       if ($departments->isEmpty()) {
-          $departments = Department::withoutGlobalScopes()->get();
+          $departments = Department::withoutGlobalScopes()->orderBy('name')->get();
       }
       if ($designations->isEmpty()) {
           $designations = \App\Models\Designation::withoutGlobalScopes()->get();
@@ -1221,6 +1221,7 @@ class DashboardController extends Controller
 
     $departments = Department::where('status', Status::ACTIVE)
         ->select('id', 'name', 'code')
+        ->orderBy('name')
         ->get();
 
     $departmentPerformance = $departments->map(function ($dept) use ($totalByDept, $presentByDept) {
