@@ -434,7 +434,7 @@
                                         <label class="form-label small fw-bold mb-1">CCare</label>
                                         <select id="new_ccare_id" class="form-select form-select-sm" style="min-width:140px;">
                                             <option value="">-CCare-</option>
-                                            @foreach($assignedUsers as $u)
+                                            @foreach(($ccareUsers ?? $assignedUsers) as $u)
                                                 <option value="{{ $u->id }}">{{ $u->name }}</option>
                                             @endforeach
                                         </select>

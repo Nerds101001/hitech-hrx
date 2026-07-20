@@ -197,6 +197,11 @@ class SalesPipelineController extends Controller
         $newBizUsers = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
+        // CCare agent pool for the add-form dropdown (previously every active
+        // employee was rendered there — ~190 options of dead page weight).
+        $ccareUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
+            ->orderBy('first_name')->get();
 
         // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
         // the people who actually appear on the rows this user may see. The blade
@@ -209,7 +214,10 @@ class SalesPipelineController extends Controller
         $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
 
-        $salespersonTargets = \App\Models\SalespersonTarget::all();
+        // Only the FY months on screen and only the fields the page uses — the
+        // full table serialized into the page was ~150 KB of dead weight.
+        $salespersonTargets = \App\Models\SalespersonTarget::whereIn('month_year', array_column($months, 'key'))
+            ->get(['salesperson_id', 'month_year', 'kingo_target', 'bingo_target', 'super_kingo_target']);
 
         // Per-salesperson annual (YoY) sales — scoped to the salespersons this
         // user may see, so CCare/New Biz cards reflect their own book, not the
@@ -299,7 +307,7 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -433,6 +441,11 @@ class SalesPipelineController extends Controller
         $newBizUsers = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
+        // CCare agent pool for the add-form dropdown (previously every active
+        // employee was rendered there — ~190 options of dead page weight).
+        $ccareUsers = User::where('status', 'active')->notTerminated()
+            ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
+            ->orderBy('first_name')->get();
 
         // Filter dropdown option lists (Salesperson / CCare / New Biz), built from
         // the people who actually appear on the rows this user may see. The blade
@@ -445,7 +458,10 @@ class SalesPipelineController extends Controller
         $ccareFilterUsers       = User::whereIn('id', (clone $optBase)->whereNotNull('ccare_id')->distinct()->pluck('ccare_id'))->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', (clone $optBase)->whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id'))->orderBy('first_name')->get();
 
-        $salespersonTargets = \App\Models\SalespersonTarget::all();
+        // Only the FY months on screen and only the fields the page uses — the
+        // full table serialized into the page was ~150 KB of dead weight.
+        $salespersonTargets = \App\Models\SalespersonTarget::whereIn('month_year', array_column($months, 'key'))
+            ->get(['salesperson_id', 'month_year', 'kingo_target', 'bingo_target', 'super_kingo_target']);
 
         // Per-salesperson annual (YoY) sales — scoped to the salespersons this
         // user may see, so CCare/New Biz cards reflect their own book, not the
@@ -494,7 +510,7 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function store(Request $request)
