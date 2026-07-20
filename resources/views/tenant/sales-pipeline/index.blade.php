@@ -520,13 +520,15 @@
     };
 @endphp
 <div class="modal fade" id="targetAchieveModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content border-0 shadow-lg">
             <div class="modal-header" style="background:linear-gradient(90deg,#0d9488,#0f766e);">
                 <h5 class="modal-title text-white fw-bold mb-0">This Month — Target Achievement</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
+                {{-- Legend stays static; ONLY the table below scrolls, so the
+                     title, legend and column header are always pinned. --}}
                 <div class="d-flex gap-3 px-3 py-2 small text-muted border-bottom flex-wrap">
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#16a34a;border-radius:2px;"></span> Achieved</span>
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#fde047;border-radius:2px;"></span> ≥75%</span>
@@ -534,7 +536,8 @@
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#dc2626;border-radius:2px;"></span> &lt;50%</span>
                     <span class="ms-auto">All figures ₹ Lakh</span>
                 </div>
-                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;">
+                <div style="max-height:62vh;overflow-y:auto;">
+                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;border-collapse:separate;border-spacing:0;">
                     {{-- Sticky header needs its own stacking context + solid bg,
                          otherwise the coloured rows paint OVER it while scrolling. --}}
                     <thead class="table-light">
@@ -568,6 +571,7 @@
                         @endforelse
                     </tbody>
                 </table>
+                </div>
             </div>
         </div>
     </div>
