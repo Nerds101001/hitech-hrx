@@ -56,7 +56,7 @@ class SalesPipelineController extends Controller
         // Most recent month first so users see the current month without scrolling right
         $months = array_reverse($months);
 
-        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'months' => function($q) use ($months) {
+        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'extraReps.user', 'months' => function($q) use ($months) {
             $monthKeys = array_column($months, 'key');
             $q->whereIn('month_year', $monthKeys);
         }])->where('is_locked', true);
@@ -64,7 +64,7 @@ class SalesPipelineController extends Controller
         $user = auth()->user();
         $isCcare = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
-        
+
         // Which salespersons may this user see? null = no restriction (admin/HR).
         // manager = self + direct-report team; ccare/newbiz = self + mapped
         // salespersons; salesperson = self. Single source of truth in SalesScope.
@@ -83,7 +83,7 @@ class SalesPipelineController extends Controller
         // Row visibility: that list OR — for a CCare/New Biz rep — the individual
         // customer rows they are personally assigned to (ccare_id / new_biz_id).
         \App\Support\SalesScope::applyScope($query, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
         // ── Server-side filters ──
@@ -186,8 +186,10 @@ class SalesPipelineController extends Controller
             }
         }
 
-        // ── Paginate (50 per page) — only these rows are rendered ──
-        $pipelines = $query->orderBy('party_name')->paginate(50)->withQueryString();
+        // ── Paginate — selectable 25/50/100 per page (25 keeps the page light) ──
+        $perPage = (int) $request->input('per', 25);
+        if (!in_array($perPage, [25, 50, 100])) $perPage = 25;
+        $pipelines = $query->orderBy('party_name')->paginate($perPage)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)
             ? User::where('status', 'active')->whereIn('id', $allowedSpIds)->get()
@@ -387,7 +389,7 @@ class SalesPipelineController extends Controller
         // Row visibility: that list OR — for a CCare/New Biz rep — the individual
         // customer rows they are personally assigned to (ccare_id / new_biz_id).
         \App\Support\SalesScope::applyScope($query, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp',
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
         // ── Server-side filters ──
@@ -580,6 +582,37 @@ class SalesPipelineController extends Controller
         }
 
         return redirect()->back()->with('success', 'Pipeline added successfully.');
+    }
+
+    // ── Additional representatives (multi-rep customers) — audited ─────────
+    public function addExtraRep(Request $request, $id)
+    {
+        $pipeline = SalesPipeline::findOrFail($id);
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        $request->validate(['user_id' => 'required|exists:users,id']);
+        \App\Models\SalesPipelineExtraRep::firstOrCreate([
+            'sales_pipeline_id' => $pipeline->id,
+            'user_id' => (int) $request->user_id,
+        ]);
+        return response()->json(['success' => true]);
+    }
+
+    public function removeExtraRep($id, $userId)
+    {
+        $pipeline = SalesPipeline::findOrFail($id);
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
+        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        // Delete via the model instance so the removal is audited.
+        \App\Models\SalesPipelineExtraRep::where('sales_pipeline_id', $pipeline->id)
+            ->where('user_id', (int) $userId)->get()->each->delete();
+        return response()->json(['success' => true]);
     }
 
     public function update(Request $request, $id)

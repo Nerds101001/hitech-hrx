@@ -41,4 +41,10 @@ class SalesPipeline extends Model implements AuditableContract
     {
         return $this->hasMany(SalesPipelineMonth::class);
     }
+
+    // Additional representatives — tagged users see this customer too.
+    public function extraReps()
+    {
+        return $this->hasMany(SalesPipelineExtraRep::class);
+    }
 }

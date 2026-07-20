@@ -633,6 +633,8 @@ Route::middleware([
             Route::put('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'update'])->name('pipeline.update');
             Route::delete('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'destroy'])->name('pipeline.destroy');
             Route::post('/sales-report/month', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'monthUpdate'])->name('pipeline.month.update');
+            Route::post('/sales-report/{id}/extra-rep', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'addExtraRep'])->name('pipeline.extra.add');
+            Route::delete('/sales-report/{id}/extra-rep/{userId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'removeExtraRep'])->name('pipeline.extra.remove');
 
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');

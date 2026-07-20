@@ -90,12 +90,22 @@ class SalesScope
         }
         $repCols = $cols['rep'] ?? [];
         $isRep = (self::isRep($user) || $user->hasRole(['manager', 'Manager'])) && !empty($repCols);
-        $query->where(function ($q) use ($ids, $isRep, $cols, $repCols) {
+        $extra = $cols['extra'] ?? false; // sales_pipelines only: extra-rep tags
+        $query->where(function ($q) use ($ids, $isRep, $cols, $repCols, $extra) {
             $q->whereIn($cols['sp'], $ids);
             if ($isRep) {
                 foreach ($repCols as $rc) {
                     $q->orWhereIn($rc, $ids);
                 }
+            }
+            if ($extra) {
+                // ANY user (salesperson/ccare/newbiz/manager-team) tagged as an
+                // additional representative sees the customer too.
+                $q->orWhereExists(function ($s) use ($ids) {
+                    $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                      ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                      ->whereIn('er.user_id', $ids);
+                });
             }
         });
     }

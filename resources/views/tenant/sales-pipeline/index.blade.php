@@ -116,6 +116,11 @@
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
+                <select class="form-select" name="per" style="width:95px;" onchange="this.form.submit()" title="Rows per page">
+                    @foreach([25,50,100] as $pp)
+                        <option value="{{ $pp }}" {{ (int)request('per', 25) === $pp ? 'selected' : '' }}>{{ $pp }} rows</option>
+                    @endforeach
+                </select>
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
@@ -149,7 +154,8 @@
                             @unless($isSalesperson)
                                 <th rowspan="2" class="align-middle col-salesperson" style="cursor:pointer;" onclick="sortPipeline('salesperson', this)" title="Click to sort">Salesperson<span class="sort-caret"></span></th>
                             @endunless
-                            <th rowspan="2" class="align-middle block-end" style="min-width:150px;cursor:pointer;" onclick="sortPipeline('brand', this)" title="Click to sort">Brand<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle" style="min-width:150px;cursor:pointer;" onclick="sortPipeline('brand', this)" title="Click to sort">Brand<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle block-end" style="min-width:130px;">Other Reps</th>
 
                             @foreach($months as $m)
                                 @php
@@ -208,6 +214,7 @@
                             @unless($isSalesperson)
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
                             @endunless
+                            <td style="background:#d1fae5!important;"></td>
                             <td class="block-end" style="background:#d1fae5!important;"></td>
                             @foreach($months as $m)
                                 @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
@@ -333,7 +340,7 @@
                                         style="cursor:pointer;" data-sp="{{ $row->salesperson_id }}">{{ $row->salesperson->name ?? '-' }}</td>
                                 @endunless
 
-                                <td class="p-0 align-middle block-end" style="max-width:150px;">
+                                <td class="p-0 align-middle" style="max-width:150px;">
                                     <select class="excel-select row-field status-select text-truncate"
                                             data-field="product">
                                         <option value="">-Select-</option>
@@ -348,6 +355,16 @@
                                             <option value="{{ $row->product }}" selected>{{ $row->product }}</option>
                                         @endif
                                     </select>
+                                </td>
+
+                                {{-- Other Reps — extra people who also see this customer --}}
+                                <td class="align-middle block-end extra-cell" data-id="{{ $row->id }}"
+                                    style="min-width:130px;cursor:pointer;" title="Other representatives — click to add">
+                                    @foreach($row->extraReps as $er)
+                                        <span class="badge bg-label-secondary extra-tag" data-uid="{{ $er->user_id }}" style="font-size:0.62rem;">
+                                            {{ $er->user->name ?? ('#'.$er->user_id) }} <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>
+                                        </span>
+                                    @endforeach
                                 </td>
 
                                 @foreach($months as $m)
@@ -754,6 +771,20 @@
         @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
     </select>
 </template>
+<template id="tplExtraSelect">
+    <select class="excel-select" style="width:100%;min-width:120px;">
+        <option value="">— Add person —</option>
+        <optgroup label="Salespersons">
+            @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        </optgroup>
+        <optgroup label="CCare">
+            @foreach($ccareUsers as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        </optgroup>
+        <optgroup label="New Biz">
+            @foreach($newBizUsers as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        </optgroup>
+    </select>
+</template>
 
 {{-- ─── SCRIPTS ─────────────────────────────────────────────────────── --}}
 <script>
@@ -867,6 +898,49 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     }));
+
+    // ── Other Reps: add / remove additional representatives ────────────────
+    document.querySelectorAll('.extra-cell').forEach(cell => cell.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-extra') || this.querySelector('select')) return;
+        const tpl = document.getElementById('tplExtraSelect');
+        if (!tpl) return;
+        const sel = tpl.content.firstElementChild.cloneNode(true);
+        this.appendChild(sel); sel.focus();
+        let done = false;
+        sel.addEventListener('change', () => {
+            done = true;
+            const uid = sel.value;
+            if (!uid) { sel.remove(); return; }
+            const name = sel.options[sel.selectedIndex].text;
+            const cell = sel.closest('.extra-cell');
+            fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ user_id: uid })
+            }).then(r => r.json()).then(d => {
+                sel.remove();
+                if (d.success && !cell.querySelector(`.extra-tag[data-uid="${uid}"]`)) {
+                    const s = document.createElement('span');
+                    s.className = 'badge bg-label-secondary extra-tag';
+                    s.dataset.uid = uid; s.style.fontSize = '0.62rem';
+                    s.innerHTML = name + ' <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>';
+                    cell.appendChild(s);
+                    cell.style.backgroundColor = '#e8f5e9'; setTimeout(() => cell.style.backgroundColor = '', 600);
+                }
+            });
+        });
+        sel.addEventListener('blur', () => { if (!done) sel.remove(); });
+    }));
+    document.addEventListener('click', function(e) {
+        const x = e.target.closest('.remove-extra');
+        if (!x) return;
+        const tag = x.closest('.extra-tag'), cell = x.closest('.extra-cell');
+        if (!tag || !cell) return;
+        fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep/${tag.dataset.uid}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+        }).then(r => r.json()).then(d => { if (d.success) tag.remove(); });
+    });
 
     // Filtering / pagination / totals are server-side now — nothing to init here.
 });
