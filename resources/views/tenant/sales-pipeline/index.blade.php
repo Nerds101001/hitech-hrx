@@ -72,6 +72,9 @@
         .sales-filter .form-select,
         .sales-filter .form-control,
         .sales-filter .btn { height:36px; border-radius:9px; font-size:0.8rem; }
+        /* Search box styled identically to the filter selects */
+        .sales-filter .form-select,
+        .sales-filter .form-control { border:1px solid #d9dee3; background-color:#fff; box-shadow:none; }
         .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
     </style>
     <div class="card border-0 shadow-sm rounded-3 mb-3">
@@ -79,7 +82,8 @@
             <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
                 @if(request('sort'))<input type="hidden" name="sort" value="{{ request('sort') }}"><input type="hidden" name="dir" value="{{ request('dir') }}">@endif
-                <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
+                <input type="text" class="form-control" name="party" value="{{ $fParty }}"
+                       placeholder="Search customer…" style="width:200px;">
                 <select class="form-select" name="type" style="width:130px;" onchange="this.form.submit()">
                     <option value="">All Types</option>
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
@@ -92,8 +96,6 @@
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
                 </select>
-                <input type="text" class="form-control" name="party" value="{{ $fParty }}"
-                       placeholder="Search customer…" style="width:200px;">
                 @php $showBothFilters = $isAdmin || $user->hasRole(['hr','HR']); @endphp
                 {{-- Salesperson filter: admin/HR and CCare/New Biz users --}}
                 @if($showBothFilters || $isCcare || $isNewBiz)
