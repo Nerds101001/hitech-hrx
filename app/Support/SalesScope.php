@@ -47,10 +47,12 @@ class SalesScope
             );
         }
 
-        // Customer Care / New Biz: only salespersons EXPLICITLY mapped to them.
-        // (Row-level access to their own assigned customers is added separately
-        // by applyScope.)
-        if (self::isRep($user)) {
+        // STRICT rule: only the assigned CCARE of a salesperson gets that
+        // salesperson's whole book (via cc_salesperson_map). A pure New Biz
+        // rep gets NO salesperson-level access — they see only the customers
+        // tagged to them, which applyScope adds at row level. The combined
+        // "Customer Care + New Biz" department counts as CCare here.
+        if (self::isRep($user) && method_exists($user, 'isCcareAgent') && $user->isCcareAgent()) {
             $ids = $ids->merge(
                 CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')
             );
