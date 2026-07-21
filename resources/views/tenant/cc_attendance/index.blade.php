@@ -211,7 +211,7 @@
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm" placeholder="Reporting (e.g. companies visited)">
+                                                        <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" placeholder="Reporting — required (e.g. companies visited)">
                                                     </div>
                                                 </div>
                                             @endif
@@ -232,4 +232,35 @@
         </div>
     </div>
 </div>
+
+<script>
+// Reporting/remarks is mandatory: block submit when any marked salesperson
+// has an empty reporting box (server enforces this too).
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form[action="{{ route('cc-attendance.store') }}"]');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        const bad = [];
+        form.querySelectorAll('input[type="radio"]:checked').forEach(function (r) {
+            const m = r.name.match(/^attendance\[(\d+)\]$/);
+            if (!m) return;
+            const note = form.querySelector('input[name="notes[' + m[1] + ']"]');
+            if (note && note.value.trim() === '') bad.push(note);
+        });
+        if (bad.length) {
+            e.preventDefault();
+            bad.forEach(function (n) { n.classList.add('is-invalid'); });
+            bad[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
+            bad[0].focus();
+            alert('Reporting/remarks is mandatory for every marked salesperson. Please fill the highlighted reporting box(es).');
+        }
+    });
+    // clear the red border once they type
+    form.addEventListener('input', function (e) {
+        if (e.target.classList && e.target.classList.contains('cc-note-input') && e.target.value.trim() !== '') {
+            e.target.classList.remove('is-invalid');
+        }
+    });
+});
+</script>
 @endsection

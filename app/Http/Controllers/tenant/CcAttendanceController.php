@@ -220,6 +220,21 @@ class CcAttendanceController extends Controller
             return redirect()->back()->with('error', "Attendance for {$date} is locked (deadline was {$deadline}). Please contact Admin/HR.");
         }
 
+        // Reporting/remarks is MANDATORY for every salesperson being marked.
+        $missingNotes = [];
+        foreach ($request->attendance as $userId => $status) {
+            if (empty($status)) continue;
+            if (trim((string) ($request->notes[$userId] ?? '')) === '') {
+                $missingNotes[] = $userId;
+            }
+        }
+        if ($missingNotes) {
+            $names = \App\Models\User::whereIn('id', $missingNotes)->get()
+                ->map(fn($u) => $u->name)->implode(', ');
+            return redirect()->back()->withInput()
+                ->with('error', "Reporting/remarks is mandatory — nothing was saved. Missing for: {$names}");
+        }
+
         $tenantId = Auth::user()->tenant_id;
         $authId = Auth::id();
 
@@ -341,6 +356,26 @@ class CcAttendanceController extends Controller
         $tenantId = Auth::user()->tenant_id;
         $authId = Auth::id();
         $maxDate = Carbon::today()->format('Y-m-d');
+
+        // Reporting/remarks is MANDATORY for every cell being marked.
+        $missing = [];
+        foreach ($request->attendance as $userId => $dates) {
+            foreach ($dates as $dateStr => $status) {
+                if (empty($status)) continue;
+                if (trim((string) ($request->notes[$userId][$dateStr] ?? '')) === '') {
+                    $missing[] = [$userId, $dateStr];
+                }
+            }
+        }
+        if ($missing) {
+            $sample = collect($missing)->take(3)->map(function ($m) {
+                $n = optional(\App\Models\User::find($m[0]))->name ?? ('#' . $m[0]);
+                return "$n (" . $m[1] . ")";
+            })->implode(', ');
+            $more = count($missing) > 3 ? ' and ' . (count($missing) - 3) . ' more' : '';
+            return redirect()->back()->with('error',
+                "Reporting/remarks is mandatory — nothing was saved. Use the 'Add Reporting Note' link on each marked cell. Missing: {$sample}{$more}.");
+        }
 
         $savedCount = 0;
 
