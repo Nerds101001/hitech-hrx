@@ -104,7 +104,9 @@ class TravelClaimController extends Controller
             'toll_parking_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
             'customer_courier_proof' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:10240',
             'items' => $isDraft ? 'nullable|array' : 'required|array|min:1',
-            'items.*.date' => 'required|date',
+            // A draft is work-in-progress: a half-filled row (no date yet) must
+            // not block saving. Rows without a date are skipped when storing.
+            'items.*.date' => $isDraft ? 'nullable|date' : 'required|date',
             'items.*.mode_of_travel' => 'nullable|string',
             'items.*.photo' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
             'items.*.petrol_slip' => 'nullable|file|mimes:jpeg,png,jpg,pdf|max:1024',
@@ -223,8 +225,16 @@ class TravelClaimController extends Controller
 
             $total_amount = 0;
 
+            $skippedRows = 0;
             if (!empty($request->items) && is_array($request->items)) {
                 foreach ($request->items as $index => $item) {
+                    // travel_claim_items.date is NOT NULL — a draft row with no
+                    // date yet simply isn't stored, rather than failing the save.
+                    if (empty($item['date'])) {
+                        $skippedRows++;
+                        continue;
+                    }
+
                     $photoPath = $request->hasFile("items.{$index}.photo")
                         ? $request->file("items.{$index}.photo")->store('travel_claims', 'public')
                         : ($item['existing_photo'] ?? null);
@@ -289,6 +299,12 @@ class TravelClaimController extends Controller
                     $billsProofPath = null;
                     $freightProofPath = null;
                     $autoTaxiProofPath = null;
+                    // Was referenced when creating the item but never defined —
+                    // every save containing items died with "Undefined variable
+                    // $courierProofPath" and rolled back.
+                    $courierProofPath = $request->hasFile("items.{$index}.courier_proof")
+                        ? $request->file("items.{$index}.courier_proof")->store('travel_claims_courier', 'public')
+                        : ($item['existing_courier_proof'] ?? null);
 
                     $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount;
                     $total_amount += $row_total;
@@ -361,7 +377,14 @@ class TravelClaimController extends Controller
         ])->save();
 
         DB::commit();
-        $msg = request()->routeIs('travel-claims.update') ? 'Travel claim updated successfully.' : 'Travel claim submitted successfully.';
+        if ($isDraft) {
+            $msg = 'Draft saved. You can find it under your claims list and continue editing.';
+            if (!empty($skippedRows)) {
+                $msg .= " ({$skippedRows} row(s) without a date were not saved — add the date to keep them.)";
+            }
+        } else {
+            $msg = request()->routeIs('travel-claims.update') ? 'Travel claim updated successfully.' : 'Travel claim submitted successfully.';
+        }
         return redirect()->route('travel-claims.index')->with('success', $msg);
     } catch (\Exception $e) {
         DB::rollBack();
