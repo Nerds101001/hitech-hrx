@@ -85,8 +85,15 @@
                                         <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3">Delete Draft</button>
                                     </form>
                                 @else
-                                    <div class="d-flex gap-2">
-                                        <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        @if($claim->user_id === auth()->id())
+                                            {{-- Your own claim: view only. Nobody may action their own
+                                                 claim (the controller blocks it server-side too). --}}
+                                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">View</button>
+                                            <span class="badge bg-label-secondary" style="font-size:.7rem;">Your claim</span>
+                                        @else
+                                            <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
+                                        @endif
                                         <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 d-flex align-items-center gap-1" title="Download All Attachments">
                                             <i class="bx bx-download"></i> Download All
                                         </a>
@@ -225,6 +232,14 @@
                 <form id="verifyForm{{ $claim->id }}" method="POST" action="" class="w-100 m-0">
                     @csrf
                     <div class="row g-3 align-items-center">
+                        @if($claim->user_id === auth()->id())
+                            <div class="col-12">
+                                <div class="alert alert-secondary mb-0 py-2" style="font-size:.85rem;">
+                                    <i class="bx bx-info-circle me-1"></i>
+                                    This is your own claim — it must be verified by someone else. You can view it here but cannot verify, object or reject it.
+                                </div>
+                            </div>
+                        @else
                         <div class="col-md-7">
                             <input type="text" id="remarksInput{{ $claim->id }}" name="remarks" class="form-control" placeholder="Enter remarks / objection reason / rejection reason..." style="border-radius: 8px;">
                         </div>
@@ -235,6 +250,7 @@
                                 <button type="submit" onclick="submitClaimAction({{ $claim->id }}, '{{ route('travel-claims.reject', $claim->id) }}', true)" class="btn btn-danger" style="border-radius: 8px;"><i class="bx bx-x-circle"></i> Reject</button>
                             </div>
                         </div>
+                        @endif
                     </div>
                 </form>
             </div>
