@@ -76,12 +76,9 @@ class CcAttendanceController extends Controller
      * (exact time), with the reporting remarks — filterable by salesperson,
      * marker, status and date range (weekly/monthly).
      */
-    public function report(Request $request)
+    /** Shared query for the report page and its Excel export. Returns [$q, $spPool]. */
+    private function reportQuery(Request $request, $user): array
     {
-        $user = Auth::user();
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
-            abort(403);
-        }
         $isTop = $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
 
         $from = $request->input('from', Carbon::now()->startOfMonth()->toDateString());
@@ -113,6 +110,18 @@ class CcAttendanceController extends Controller
             });
         }
 
+        return [$q, $spPool, $from, $to];
+    }
+
+    public function report(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+            abort(403);
+        }
+
+        [$q, $spPool, $from, $to] = $this->reportQuery($request, $user);
+
         $summary = (clone $q)->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
         $rows = $q->orderByDesc('check_in_time')->paginate(100)->withQueryString();
 
@@ -124,6 +133,65 @@ class CcAttendanceController extends Controller
         $markers = \App\Models\User::whereIn('id', $markerIds)->orderBy('first_name')->get();
 
         return view('tenant.cc_attendance.report', compact('rows', 'summary', 'salesList', 'markers', 'from', 'to'));
+    }
+
+    /**
+     * Excel export of the submission report — same filters as the page, so
+     * salesperson + month range = that person's monthly attendance report
+     * (salesperson, status, remarks, filled by, exact submission time).
+     */
+    public function exportReport(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+            abort(403);
+        }
+
+        [$q, $spPool, $from, $to] = $this->reportQuery($request, $user);
+        $rows = $q->orderBy('check_in_time')->get();
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Attendance Report');
+
+        $spName = $request->filled('sp') ? trim(optional(\App\Models\User::find($request->sp))->name ?? '') : 'All Salespersons';
+        $sheet->setCellValue('A1', "Salesperson Attendance Report — {$spName} ({$from} to {$to})");
+        $sheet->mergeCells('A1:I1');
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+
+        $headers = ['Date', 'Day', 'Salesperson', 'Emp Code', 'Status', 'Reporting / Remarks', 'Filled By', 'Submitted At', 'Last Updated (by)'];
+        foreach ($headers as $i => $h) {
+            $sheet->setCellValueByColumnAndRow($i + 1, 3, $h);
+        }
+        $sheet->getStyle('A3:I3')->getFont()->setBold(true);
+        $sheet->getStyle('A3:I3')->getFill()->setFillType('solid')->getStartColor()->setRGB('0D7377');
+        $sheet->getStyle('A3:I3')->getFont()->getColor()->setRGB('FFFFFF');
+
+        $r = 4;
+        foreach ($rows as $row) {
+            $wasUpdated = $row->updated_at && $row->created_at && !$row->updated_at->equalTo($row->created_at);
+            $sheet->setCellValueByColumnAndRow(1, $r, optional($row->check_in_time)->format('d-m-Y'));
+            $sheet->setCellValueByColumnAndRow(2, $r, optional($row->check_in_time)->format('D'));
+            $sheet->setCellValueByColumnAndRow(3, $r, $row->user->name ?? ('#' . $row->user_id));
+            $sheet->setCellValueByColumnAndRow(4, $r, $row->user->code ?? '');
+            $sheet->setCellValueByColumnAndRow(5, $r, ucwords(str_replace('_', ' ', $row->status ?? '')));
+            $sheet->setCellValueByColumnAndRow(6, $r, $row->notes ?? '');
+            $sheet->setCellValueByColumnAndRow(7, $r, $row->createdBy->name ?? ($row->updatedBy->name ?? 'System/Biometric'));
+            $sheet->setCellValueByColumnAndRow(8, $r, optional($row->created_at)->format('d-m-Y h:i:s A'));
+            $sheet->setCellValueByColumnAndRow(9, $r, $wasUpdated
+                ? $row->updated_at->format('d-m-Y h:i:s A') . ($row->updatedBy ? ' (' . $row->updatedBy->name . ')' : '')
+                : '');
+            $r++;
+        }
+        foreach (range('A', 'I') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $file = 'salesperson_attendance_' . str_replace(' ', '_', strtolower($spName)) . "_{$from}_to_{$to}.xlsx";
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $file, ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /**

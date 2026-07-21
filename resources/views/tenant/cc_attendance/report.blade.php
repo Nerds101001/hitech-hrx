@@ -66,6 +66,9 @@
                 </div>
                 <button class="btn btn-primary btn-sm px-3"><i class="ti ti-search me-1"></i>Apply</button>
                 <a href="{{ route('cc-attendance.report') }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                <a href="{{ route('cc-attendance.report.export', request()->query()) }}" class="btn btn-success btn-sm px-3">
+                    <i class="ti ti-file-spreadsheet me-1"></i>Export Excel
+                </a>
                 <span class="ms-auto text-muted small">Showing {{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }} of {{ $rows->total() }} entries</span>
             </form>
         </div>
