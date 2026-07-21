@@ -147,8 +147,19 @@
                                         }
                                         
                                         $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave', 'half-day']);
-                                        // Once submitted, an entry is final — the row renders read-only.
+
+                                        // Previous submissions can be corrected while the date is open
+                                        // (Admin/HR always). Approved-leave rows stay read-only.
+                                        $canEditRow = !$isLeave && empty($isLocked);
+                                        // Pre-select the existing choice.
                                         $sel = null;
+                                        if ($currentStatus) {
+                                            if ($currentStatus === 'absent') $sel = 'Absent';
+                                            elseif (str_contains($currentStatus, 'home') || str_contains($currentStatus, 'wfh')) $sel = 'Work from home';
+                                            elseif (str_contains($currentStatus, 'sunday')) $sel = 'Sunday working';
+                                            elseif (str_contains($currentStatus, 'half')) $sel = 'Half day';
+                                            elseif (str_contains($currentStatus, 'present')) $sel = 'Present';
+                                        }
                                     @endphp
                                     <tr>
                                         <td>{{ $emp->code }}</td>
@@ -171,7 +182,7 @@
                                         </td>
                                         <td>{{ $emp->designation->name ?? 'N/A' }}</td>
                                         <td>
-                                            @if($currentStatus)
+                                            @if($currentStatus && !$canEditRow)
                                                 <div class="opacity-50 pointer-events-none d-flex flex-column gap-2">
                                                     <div class="d-flex align-items-center gap-2">
                                                         @if($isLeave && $currentStatus !== 'half-day')
