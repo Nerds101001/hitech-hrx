@@ -32,6 +32,7 @@ class Attendance extends Model
     'created_by_id',
     'updated_by_id',
     'admin_reason',
+    'notes',
     'attachment',
     'is_policy_late',
     'leave_request_id',
