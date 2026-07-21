@@ -58,6 +58,16 @@ class KingoBingoController extends Controller
         $teamView  = $request->boolean('team');
         $hasTeam   = $isManager && $allowedSpIds !== null && count($allowedSpIds) > 1;
 
+        // Only the sales organisation belongs on this page — Sales, New Biz and
+        // Customer Care departments (not the whole employee directory).
+        $salesOrgDept = function ($q) {
+            $q->where('name', 'like', '%Sales%')
+              ->orWhere('name', 'like', '%New Biz%')
+              ->orWhere('name', 'like', '%New Business%')
+              ->orWhere('name', 'like', '%Customer Care%')
+              ->orWhere('name', 'CCARE');
+        };
+
         // Honour an explicit salesperson filter only if the requester may see that person
         if ($request->filled('salesperson_id')) {
             $reqId = (int) $request->salesperson_id;
@@ -70,9 +80,11 @@ class KingoBingoController extends Controller
             // Default manager view: only their own card.
             $salespersons = User::where('id', $user->id)->get();
         } elseif ($allowedSpIds === null) {
-            $salespersons = User::where('status', 'active')->orderBy('name')->get();
+            $salespersons = User::where('status', 'active')
+                ->whereHas('department', $salesOrgDept)
+                ->orderBy('first_name')->get();
         } else {
-            $salespersons = User::whereIn('id', $allowedSpIds)->orderBy('name')->get();
+            $salespersons = User::whereIn('id', $allowedSpIds)->orderBy('first_name')->get();
         }
 
         $monthKeys      = array_column($months, 'key');
@@ -176,9 +188,12 @@ class KingoBingoController extends Controller
             $user->isCcareAgent() ||
             $user->can('kingo_bingo.manage');
 
-        // Dropdown for salesperson filter — respect the same access scope
+        // Dropdown for salesperson filter — respect the same access scope, and
+        // list only the sales organisation (Sales / New Biz / Customer Care).
         if ($allowedSpIds === null) {
-            $allUsers = User::where('status', 'active')->orderBy('first_name')->get();
+            $allUsers = User::where('status', 'active')
+                ->whereHas('department', $salesOrgDept)
+                ->orderBy('first_name')->get();
         } elseif (!empty($allowedSpIds)) {
             $allUsers = User::whereIn('id', $allowedSpIds)->orderBy('first_name')->get();
         } else {
