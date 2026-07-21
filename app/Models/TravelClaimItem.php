@@ -11,6 +11,7 @@ class TravelClaimItem extends Model
     protected $casts = [
         'date' => 'date:Y-m-d',
         'penalty_applied' => 'boolean',
+        'is_flagged' => 'boolean',
     ];
 
     public function claim()

@@ -440,6 +440,8 @@ public function update(Request $request, $id)
             'verified_at' => now(),
             'remarks' => $request->remarks,
         ])->save();
+        // Objection resolved — clear any row flags raised earlier.
+        $claim->items()->update(['is_flagged' => false, 'flag_reason' => null]);
         return back()->with('success', 'Claim verified successfully.');
     }
 
@@ -552,7 +554,18 @@ public function update(Request $request, $id)
             'remarks' => 'Objection Raised: ' . $request->remarks,
             'objection_notes' => $request->remarks,
         ])->save();
-        return back()->with('success', 'Objection raised and sent back to user.');
+
+        // Flag the specific rows the verifier ticked, so the user sees exactly
+        // which entries to correct (highlighted red on their edit form).
+        $flagged = array_filter(array_map('intval', explode(',', (string) $request->input('flagged_items'))));
+        $claim->items()->update(['is_flagged' => false, 'flag_reason' => null]);
+        if ($flagged) {
+            $claim->items()->whereIn('id', $flagged)
+                ->update(['is_flagged' => true, 'flag_reason' => $request->remarks]);
+        }
+
+        return back()->with('success', 'Objection raised and sent back to user.'
+            . ($flagged ? ' ' . count($flagged) . ' row(s) flagged for correction.' : ''));
     }
 
     public function downloadAttachments($id)

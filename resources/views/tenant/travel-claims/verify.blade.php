@@ -132,6 +132,9 @@
                     <table class="table table-bordered mb-0" style="font-size: 0.8rem;">
                         <thead class="table-light">
                             <tr>
+                                @if($claim->user_id !== auth()->id())
+                                <th title="Tick the rows you are objecting to" style="width:52px;">Flag</th>
+                                @endif
                                 <th>Date</th>
                                 <th>Locations</th>
                                 <th>Party</th>
@@ -151,7 +154,14 @@
                         </thead>
                         <tbody>
                             @foreach($claim->items as $item)
-                            <tr>
+                            <tr class="{{ $item->is_flagged ? 'flagged-row' : '' }}">
+                                @if($claim->user_id !== auth()->id())
+                                <td class="text-center align-middle">
+                                    <input type="checkbox" class="form-check-input flag-item flag-item-{{ $claim->id }}"
+                                           value="{{ $item->id }}" {{ $item->is_flagged ? 'checked' : '' }}
+                                           title="Flag this row for correction">
+                                </td>
+                                @endif
                                 <td>{{ $item->date->format('d M') }}</td>
                                 <td>{{ $item->from_location }} -> {{ $item->to_location }}</td>
                                 <td>{{ $item->party_visited }}</td>
@@ -241,7 +251,11 @@
                             </div>
                         @else
                         <div class="col-md-7">
+                            <input type="hidden" id="flaggedItems{{ $claim->id }}" name="flagged_items" value="">
                             <input type="text" id="remarksInput{{ $claim->id }}" name="remarks" class="form-control" placeholder="Enter remarks / objection reason / rejection reason..." style="border-radius: 8px;">
+                            <small class="text-muted d-block mt-1" style="font-size:.72rem;">
+                                <i class="bx bx-flag"></i> Tick the <strong>Flag</strong> box on any row above before raising an objection — those rows turn red on the user's form so they know exactly what to correct.
+                            </small>
                         </div>
                         <div class="col-md-5 text-end">
                             <div class="btn-group gap-2">
@@ -277,6 +291,10 @@
 </div>
 
 @section('page-script')
+<style>
+    tr.flagged-row > td { background-color: #fdecea !important; }
+    tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
+</style>
 <script>
 function submitClaimAction(claimId, routeUrl, requireRemarks) {
     let form = document.getElementById('verifyForm' + claimId);
@@ -288,6 +306,13 @@ function submitClaimAction(claimId, routeUrl, requireRemarks) {
         return false;
     } else {
         remarksInput.setCustomValidity('');
+    }
+    // Carry the ticked row IDs across — the checkboxes live in the modal body,
+    // outside this form, so collect them into the hidden field on submit.
+    let hidden = document.getElementById('flaggedItems' + claimId);
+    if (hidden) {
+        hidden.value = Array.from(document.querySelectorAll('.flag-item-' + claimId + ':checked'))
+                            .map(cb => cb.value).join(',');
     }
     form.action = routeUrl;
 }

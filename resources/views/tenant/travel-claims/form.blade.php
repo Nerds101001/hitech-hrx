@@ -29,6 +29,29 @@
         </div>
     @endif
 
+    @if(isset($claim) && $claim->status === 'objection')
+        @php $flaggedItems = $claim->items->where('is_flagged', true); @endphp
+        <div class="alert alert-danger d-flex align-items-start" style="border-left:4px solid #dc3545;">
+            <i class="bx bx-error-circle fs-4 me-2"></i>
+            <div>
+                <div class="fw-bold mb-1">Objection raised — please correct and resubmit</div>
+                <div>{{ $claim->objection_notes }}</div>
+                @if($flaggedItems->count())
+                    <div class="mt-2 small">
+                        <strong>{{ $flaggedItems->count() }} row(s) flagged</strong> and highlighted in red below:
+                        {{ $flaggedItems->map(fn($i) => $i->date->format('d M'))->implode(', ') }}
+                    </div>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    <style>
+        tr.flagged-row > td { background-color: #fdecea !important; }
+        tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
+        tr.flagged-row input.form-control, tr.flagged-row select.form-select { border-color: #f1a9a0; }
+    </style>
+
     @if($errors->any())
         <div class="alert alert-danger">
             <ul class="mb-0">
@@ -224,6 +247,11 @@
 
     let advanceIndex = 0;
     
+    function escAttr(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     // In edit mode, store existing items so we can prefill the grid
     let existingItemsData = {};
     @if(isset($claim) && $claim->items->count() > 0)
@@ -278,9 +306,10 @@
             
             // Generate table row
             let html = `
-            <tr class="expense-row" id="row_${d}">
-                <td class="align-middle bg-light fw-bold text-center" style="font-size: 0.75rem;">
+            <tr class="expense-row${ex.is_flagged ? ' flagged-row' : ''}" id="row_${d}">
+                <td class="align-middle ${ex.is_flagged ? 'bg-transparent' : 'bg-light'} fw-bold text-center" style="font-size: 0.75rem;">
                     ${displayDate}
+                    ${ex.is_flagged ? `<div class="text-danger fw-bold" style="font-size:.65rem;" title="${escAttr(ex.flag_reason || 'Flagged by verifier')}"><i class="bx bx-flag"></i> FLAGGED</div>` : ''}
                     <input type="hidden" name="items[${d}][date]" value="${dateString}">
                 </td>
                 <td class="p-1">
