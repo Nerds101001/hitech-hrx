@@ -80,6 +80,11 @@
             the filling window closed on {{ $lockDeadline->format('d M Y, h:i A') }} (each date stays open until 2 days later, 12:00 PM).
             Only Admin/HR can mark it now.</div>
         </div>
+    @elseif(isset($openWindow) && $date >= $openWindow[0] && $date <= $openWindow[1] && !$user->hasRole(['admin','hr']))
+        <div class="alert alert-success py-2 d-flex align-items-center" role="alert" style="font-size:.85rem;">
+            <i class="ti ti-lock-open me-2"></i>
+            <div><strong>July back-fill is open</strong> — you can complete attendance for any date in July 2026, including past dates. (Time restrictions resume next month.)</div>
+        </div>
     @elseif(isset($lockDeadline) && !$user->hasRole(['admin','hr']))
         <div class="alert alert-info py-2 d-flex align-items-center" role="alert" style="font-size:.85rem;">
             <i class="ti ti-clock me-2"></i>
@@ -94,7 +99,7 @@
                 <div>
                     <label class="form-label text-muted fw-bold" for="date" style="font-size: 0.8rem; text-transform:uppercase; letter-spacing: 0.5px;">Select Date</label>
                     <input type="date" id="date" name="date" class="form-control form-control-lg shadow-sm" value="{{ $date }}"
-                           @unless($user->hasRole(['admin','hr'])) min="{{ \Carbon\Carbon::today()->subDays(2)->format('Y-m-d') }}" @endunless
+                           @unless($user->hasRole(['admin','hr'])) min="{{ $minDate ?? \Carbon\Carbon::today()->subDays(2)->format('Y-m-d') }}" @endunless
                            max="{{ \Carbon\Carbon::today()->format('Y-m-d') }}">
                 </div>
                 <div>
@@ -142,6 +147,20 @@
                                         }
                                         
                                         $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave', 'half-day']);
+
+                                        // An already-marked row stays CORRECTABLE while the date is
+                                        // still open (and always for Admin/HR). Approved-leave rows
+                                        // come from the leave module and remain read-only.
+                                        $canEditRow = !$isLeave && empty($isLocked);
+                                        // Pre-select the existing choice.
+                                        $sel = null;
+                                        if ($currentStatus) {
+                                            if ($currentStatus === 'absent') $sel = 'Absent';
+                                            elseif (str_contains($currentStatus, 'home') || str_contains($currentStatus, 'wfh')) $sel = 'Work from home';
+                                            elseif (str_contains($currentStatus, 'sunday')) $sel = 'Sunday working';
+                                            elseif (str_contains($currentStatus, 'half')) $sel = 'Half day';
+                                            elseif (str_contains($currentStatus, 'present')) $sel = 'Present';
+                                        }
                                     @endphp
                                     <tr>
                                         <td>{{ $emp->code }}</td>
@@ -164,7 +183,7 @@
                                         </td>
                                         <td>{{ $emp->designation->name ?? 'N/A' }}</td>
                                         <td>
-                                            @if($currentStatus)
+                                            @if($currentStatus && !$canEditRow)
                                                 <div class="opacity-50 pointer-events-none d-flex flex-column gap-2">
                                                     <div class="d-flex align-items-center gap-2">
                                                         @if($isLeave && $currentStatus !== 'half-day')
@@ -186,32 +205,35 @@
                                                         <div class="text-muted small"><strong>Report:</strong> {{ $record->notes }}</div>
                                                     @endif
                                                 </div>
+                                            @elseif(!empty($isLocked))
+                                                {{-- Date closed (D+2 12:00 PM) — nothing can be marked here. --}}
+                                                <span class="text-muted fst-italic"><i class="ti ti-lock me-1"></i>Locked — contact Admin/HR</span>
                                             @else
                                                 <div class="d-flex flex-column gap-2">
                                                     <div class="d-flex gap-2">
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="present_{{ $emp->id }}" value="Present">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="present_{{ $emp->id }}" value="Present" {{ $sel === 'Present' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-success fw-bold px-3" for="present_{{ $emp->id }}">P</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="absent_{{ $emp->id }}" value="Absent">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="absent_{{ $emp->id }}" value="Absent" {{ $sel === 'Absent' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-danger fw-bold px-3" for="absent_{{ $emp->id }}">A</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="hd_{{ $emp->id }}" value="Half day">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="hd_{{ $emp->id }}" value="Half day" {{ $sel === 'Half day' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-warning fw-bold px-3" for="hd_{{ $emp->id }}">HD</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="wfh_{{ $emp->id }}" value="Work from home">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="wfh_{{ $emp->id }}" value="Work from home" {{ $sel === 'Work from home' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-primary fw-bold px-3" for="wfh_{{ $emp->id }}">WFH</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="sunday_{{ $emp->id }}">PS</label>
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" placeholder="Reporting — required (e.g. companies visited)">
+                                                        <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" value="{{ $record->notes ?? '' }}" placeholder="Reporting — required (e.g. companies visited)">
                                                     </div>
                                                 </div>
                                             @endif

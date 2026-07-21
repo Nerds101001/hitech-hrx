@@ -59,18 +59,40 @@ class CcAttendanceController extends Controller
         // Lock state for the banner: date D closes at D+2, 12:00 PM (Admin/HR exempt).
         $isLocked = $this->isLockedFor($date, $user);
         $lockDeadline = Carbon::parse($date)->addDays(2)->setTime(12, 0);
+        // Earliest date a non-admin may load (July back-fill window is open).
+        $minDate = min(self::OPEN_FROM, Carbon::today()->subDays(2)->toDateString());
+        $openWindow = [self::OPEN_FROM, self::OPEN_TO];
 
-        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user', 'isLocked', 'lockDeadline'));
+        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user', 'isLocked', 'lockDeadline', 'minDate', 'openWindow'));
     }
 
     /**
      * Filling window: date D stays open until D+2 at 12:00 PM (app time / IST).
      * Admin/HR are never locked.
      */
+    /** Approved-leave style statuses are managed by the leave module, not here. */
+    private function isLeaveStatus(?string $status): bool
+    {
+        if (!$status) return false;
+        $s = strtolower(str_replace('_', '-', $status));
+        return in_array($s, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave']);
+    }
+
+    /**
+     * PHASE 1 (temporary): the whole of July 2026 is open for back-dated filling
+     * so the teams can complete the month. Remove this window in the next phase
+     * to enforce the D+2 12:00 PM deadline everywhere.
+     */
+    private const OPEN_FROM = '2026-07-01';
+    private const OPEN_TO   = '2026-07-31';
+
     private function isLockedFor(string $date, $user): bool
     {
         if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
             return false;
+        }
+        if ($date >= self::OPEN_FROM && $date <= self::OPEN_TO) {
+            return false; // July back-fill window
         }
         return now()->greaterThan(Carbon::parse($date)->addDays(2)->setTime(12, 0));
     }
@@ -253,8 +275,10 @@ class CcAttendanceController extends Controller
 
             $attendance = $existingAttendances->get($userId);
 
-            // If attendance is already marked and has a status, do not allow update
-            if ($attendance && $attendance->status) {
+            // Already-marked rows stay CORRECTABLE while the date is open (the
+            // window check above already blocked locked dates; Admin/HR always
+            // pass). Approved leave, however, is owned by the leave module.
+            if ($attendance && $this->isLeaveStatus($attendance->status)) {
                 continue;
             }
 
@@ -402,8 +426,9 @@ class CcAttendanceController extends Controller
                     ->whereDate('check_in_time', $dateStr)
                     ->first();
 
-                // Prevent override if status is not empty
-                if ($existing && $existing->status) {
+                // Corrections allowed while the date is open; approved leave is
+                // owned by the leave module and never overwritten here.
+                if ($existing && $this->isLeaveStatus($existing->status)) {
                     continue;
                 }
 
