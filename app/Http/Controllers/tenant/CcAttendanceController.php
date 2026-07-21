@@ -30,7 +30,9 @@ class CcAttendanceController extends Controller
         
         if ($user->hasRole(['admin', 'hr'])) {
             $mappings = \App\Models\CcSalespersonMap::with(['salesUser' => function ($q) {
+                // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
+                  ->notTerminated()
                   ->with('designation');
             }, 'ccUser'])->get();
             $salespeople = $mappings->pluck('salesUser')->filter()->map(function($salesUser) use ($mappings) {
@@ -41,7 +43,9 @@ class CcAttendanceController extends Controller
         } else {
             // Fetch salespeople tagged to this CCARE user
             $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
+                // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
+                  ->notTerminated()
                   ->with('designation');
             }])->get()->pluck('salesUser')->filter();
         }
@@ -314,7 +318,9 @@ class CcAttendanceController extends Controller
         
         if ($user->hasRole(['admin', 'hr'])) {
             $mappings = \App\Models\CcSalespersonMap::with(['salesUser' => function ($q) {
+                // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
+                  ->notTerminated()
                   ->with('designation');
             }, 'ccUser'])->get();
             $salespeople = $mappings->pluck('salesUser')->filter()->map(function($salesUser) use ($mappings) {
@@ -324,7 +330,9 @@ class CcAttendanceController extends Controller
             })->unique('id');
         } else {
             $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
+                // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
+                  ->notTerminated()
                   ->with('designation');
             }])->get()->pluck('salesUser')->filter();
         }
