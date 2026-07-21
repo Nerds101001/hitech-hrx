@@ -66,7 +66,26 @@
         <li class="nav-item">
             <a class="nav-link" href="{{ route('cc-attendance.monthly') }}"><i class="ti ti-calendar-stats me-1"></i> Monthly View</a>
         </li>
+        @if($user->hasRole(['admin', 'hr', 'manager']))
+        <li class="nav-item">
+            <a class="nav-link" href="{{ route('cc-attendance.report') }}"><i class="ti ti-report-search me-1"></i> Submission Report</a>
+        </li>
+        @endif
     </ul>
+
+    @if(!empty($isLocked) && $isLocked)
+        <div class="alert alert-warning d-flex align-items-center" role="alert">
+            <i class="ti ti-lock me-2"></i>
+            <div>Attendance for <strong>{{ \Carbon\Carbon::parse($date)->format('d M Y') }}</strong> is <strong>locked</strong> —
+            the filling window closed on {{ $lockDeadline->format('d M Y, h:i A') }} (each date stays open until 2 days later, 12:00 PM).
+            Only Admin/HR can mark it now.</div>
+        </div>
+    @elseif(isset($lockDeadline) && !$user->hasRole(['admin','hr']))
+        <div class="alert alert-info py-2 d-flex align-items-center" role="alert" style="font-size:.85rem;">
+            <i class="ti ti-clock me-2"></i>
+            <div>This date can be filled until <strong>{{ $lockDeadline->format('d M Y, h:i A') }}</strong>, after which it locks (Admin/HR only).</div>
+        </div>
+    @endif
 
     <!-- Date Selection Filter -->
     <div class="card cc-filter-bar mb-4">
@@ -74,7 +93,9 @@
             <form action="{{ route('cc-attendance.index') }}" method="GET" class="d-flex align-items-end gap-3">
                 <div>
                     <label class="form-label text-muted fw-bold" for="date" style="font-size: 0.8rem; text-transform:uppercase; letter-spacing: 0.5px;">Select Date</label>
-                    <input type="date" id="date" name="date" class="form-control form-control-lg shadow-sm" value="{{ $date }}" min="{{ \Carbon\Carbon::today()->subDays(3)->format('Y-m-d') }}" max="{{ \Carbon\Carbon::today()->format('Y-m-d') }}">
+                    <input type="date" id="date" name="date" class="form-control form-control-lg shadow-sm" value="{{ $date }}"
+                           @unless($user->hasRole(['admin','hr'])) min="{{ \Carbon\Carbon::today()->subDays(2)->format('Y-m-d') }}" @endunless
+                           max="{{ \Carbon\Carbon::today()->format('Y-m-d') }}">
                 </div>
                 <div>
                     <button type="submit" class="btn btn-primary btn-lg shadow-sm px-4">Load Register</button>

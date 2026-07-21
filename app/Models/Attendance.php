@@ -116,6 +116,11 @@ class Attendance extends Model
     return $this->belongsTo(User::class, 'updated_by_id');
   }
 
+  public function createdBy()
+  {
+    return $this->belongsTo(User::class, 'created_by_id');
+  }
+
   protected static function booted()
   {
       static::saved(function ($attendance) {

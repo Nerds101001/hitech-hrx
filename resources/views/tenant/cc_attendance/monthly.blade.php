@@ -98,7 +98,16 @@
         <li class="nav-item">
             <a class="nav-link active" href="{{ route('cc-attendance.monthly') }}"><i class="ti ti-calendar-stats me-1"></i> Monthly View</a>
         </li>
+        @if($user->hasRole(['admin', 'hr', 'manager']))
+        <li class="nav-item">
+            <a class="nav-link" href="{{ route('cc-attendance.report') }}"><i class="ti ti-report-search me-1"></i> Submission Report</a>
+        </li>
+        @endif
     </ul>
+    @unless($user->hasRole(['admin','hr']))
+        <div class="alert alert-info py-2" style="font-size:.85rem;"><i class="ti ti-clock me-1"></i>
+            Each date stays open until <strong>2 days later, 12:00 PM</strong> — after that it locks and only Admin/HR can mark it.</div>
+    @endunless
 
     <!-- Month Selection Filter -->
     <div class="card cc-filter-bar mb-4">

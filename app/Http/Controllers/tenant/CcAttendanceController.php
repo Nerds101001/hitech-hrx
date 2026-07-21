@@ -52,7 +52,78 @@ class CcAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user'));
+        // Lock state for the banner: date D closes at D+2, 12:00 PM (Admin/HR exempt).
+        $isLocked = $this->isLockedFor($date, $user);
+        $lockDeadline = Carbon::parse($date)->addDays(2)->setTime(12, 0);
+
+        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user', 'isLocked', 'lockDeadline'));
+    }
+
+    /**
+     * Filling window: date D stays open until D+2 at 12:00 PM (app time / IST).
+     * Admin/HR are never locked.
+     */
+    private function isLockedFor(string $date, $user): bool
+    {
+        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            return false;
+        }
+        return now()->greaterThan(Carbon::parse($date)->addDays(2)->setTime(12, 0));
+    }
+
+    /**
+     * Submission report for Admin/HR/Manager: who marked what, for whom, when
+     * (exact time), with the reporting remarks — filterable by salesperson,
+     * marker, status and date range (weekly/monthly).
+     */
+    public function report(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+            abort(403);
+        }
+        $isTop = $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
+
+        $from = $request->input('from', Carbon::now()->startOfMonth()->toDateString());
+        $to   = $request->input('to', Carbon::today()->toDateString());
+
+        $q = Attendance::with(['user.designation', 'createdBy', 'updatedBy'])
+            ->whereDate('check_in_time', '>=', $from)
+            ->whereDate('check_in_time', '<=', $to);
+
+        if ($isTop) {
+            $spPool = CcSalespersonMap::pluck('sales_user_id')->unique()->values();
+            $q->whereIn('user_id', $spPool);
+        } else {
+            // Manager: their team's rows — as the salesperson OR as the marker.
+            $teamIds = \App\Models\User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id);
+            $q->where(function ($w) use ($teamIds) {
+                $w->whereIn('user_id', $teamIds)
+                  ->orWhereIn('created_by_id', $teamIds)
+                  ->orWhereIn('updated_by_id', $teamIds);
+            });
+            $spPool = $teamIds;
+        }
+
+        if ($request->filled('sp'))     $q->where('user_id', $request->sp);
+        if ($request->filled('status')) $q->where('status', $request->status);
+        if ($request->filled('cc')) {
+            $q->where(function ($w) use ($request) {
+                $w->where('created_by_id', $request->cc)->orWhere('updated_by_id', $request->cc);
+            });
+        }
+
+        $summary = (clone $q)->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
+        $rows = $q->orderByDesc('check_in_time')->paginate(100)->withQueryString();
+
+        $salesList = \App\Models\User::whereIn('id', $spPool)->orderBy('first_name')->get();
+        $markerIds = Attendance::whereIn('user_id', $spPool)->whereNotNull('created_by_id')
+            ->distinct()->pluck('created_by_id')
+            ->merge(Attendance::whereIn('user_id', $spPool)->whereNotNull('updated_by_id')->distinct()->pluck('updated_by_id'))
+            ->unique()->values();
+        $markers = \App\Models\User::whereIn('id', $markerIds)->orderBy('first_name')->get();
+
+        return view('tenant.cc_attendance.report', compact('rows', 'summary', 'salesList', 'markers', 'from', 'to'));
     }
 
     /**
@@ -69,12 +140,16 @@ class CcAttendanceController extends Controller
         ]);
 
         $date = Carbon::parse($request->date)->format('Y-m-d');
-        
-        // 3-day restriction
-        $minDate = Carbon::today()->subDays(3)->format('Y-m-d');
+
+        // Filling window: date D stays open until D+2 at 12:00 PM (IST). After
+        // that it is locked for CCare — only Admin/HR can still mark it.
         $maxDate = Carbon::today()->format('Y-m-d');
-        if ($date < $minDate || $date > $maxDate) {
-            return redirect()->back()->with('error', 'Attendance can only be marked for the past 3 days.');
+        if ($date > $maxDate) {
+            return redirect()->back()->with('error', 'Attendance cannot be marked for a future date.');
+        }
+        if ($this->isLockedFor($date, Auth::user())) {
+            $deadline = Carbon::parse($date)->addDays(2)->setTime(12, 0)->format('d M Y, h:i A');
+            return redirect()->back()->with('error', "Attendance for {$date} is locked (deadline was {$deadline}). Please contact Admin/HR.");
         }
 
         $tenantId = Auth::user()->tenant_id;
@@ -197,17 +272,17 @@ class CcAttendanceController extends Controller
 
         $tenantId = Auth::user()->tenant_id;
         $authId = Auth::id();
-        $minDate = Carbon::today()->subDays(3)->format('Y-m-d');
         $maxDate = Carbon::today()->format('Y-m-d');
-        
+
         $savedCount = 0;
 
         foreach ($request->attendance as $userId => $dates) {
             foreach ($dates as $dateStr => $status) {
                 if (empty($status)) continue;
-                
-                // 3-day window validation
-                if ($dateStr < $minDate || $dateStr > $maxDate) continue;
+
+                // Window: open until D+2 12:00 PM; Admin/HR always open. No future dates.
+                if ($dateStr > $maxDate) continue;
+                if ($this->isLockedFor($dateStr, Auth::user())) continue;
                 
                 // Allowed statuses
                 if (!in_array($status, ['Present', 'Absent', 'Half day', 'Work from home', 'Sunday working'])) continue;
