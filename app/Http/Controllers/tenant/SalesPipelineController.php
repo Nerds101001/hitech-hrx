@@ -186,9 +186,14 @@ class SalesPipelineController extends Controller
             }
         }
 
-        // ── Paginate — selectable 50/100/200 per page (minimum 50) ──
-        $perPage = (int) $request->input('per', 50);
-        if (!in_array($perPage, [50, 100, 200])) $perPage = 50;
+        // ── Paginate — selectable 50/100/200/500/1000/All (minimum 50) ──
+        $perInput = $request->input('per', 50);
+        if ($perInput === 'all') {
+            $perPage = max(1, (clone $query)->count());
+        } else {
+            $perPage = (int) $perInput;
+            if (!in_array($perPage, [50, 100, 200, 500, 1000])) $perPage = 50;
+        }
         $pipelines = $query->orderBy('party_name')->paginate($perPage)->withQueryString();
 
         $assignedUsers = ($allowedSpIds !== null)

@@ -116,10 +116,11 @@
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
                     @endforeach
                 </select>
-                <select class="form-select" name="per" style="width:100px;" onchange="this.form.submit()" title="Rows per page">
-                    @foreach([50,100,200] as $pp)
-                        <option value="{{ $pp }}" {{ (int)request('per', 50) === $pp ? 'selected' : '' }}>{{ $pp }} rows</option>
+                <select class="form-select" name="per" style="width:105px;" onchange="this.form.submit()" title="Rows per page">
+                    @foreach([50,100,200,500,1000] as $pp)
+                        <option value="{{ $pp }}" {{ (string)request('per', 50) === (string)$pp ? 'selected' : '' }}>{{ $pp }} rows</option>
                     @endforeach
+                    <option value="all" {{ request('per') === 'all' ? 'selected' : '' }}>All rows</option>
                 </select>
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
