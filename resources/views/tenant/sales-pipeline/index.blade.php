@@ -711,19 +711,11 @@
         text-align: center !important; vertical-align: middle !important;
     }
     #pipelineTable thead th.col-sno,
-    #pipelineTable thead th.col-party,
-    #pipelineTable thead th.col-status,
-    #pipelineTable thead th.col-potential,
-    #pipelineTable thead th.col-salesperson,
-    #pipelineTable thead th.col-ccare {
+    #pipelineTable thead th.col-party {
         position: sticky !important; z-index: 30 !important; top: 0 !important;
     }
     #pipelineTable tbody td.col-sno,
-    #pipelineTable tbody td.col-party,
-    #pipelineTable tbody td.col-status,
-    #pipelineTable tbody td.col-potential,
-    #pipelineTable tbody td.col-salesperson,
-    #pipelineTable tbody td.col-ccare {
+    #pipelineTable tbody td.col-party {
         background-color: #fff !important; z-index: 20;
     }
     .col-sno        { position:sticky; left:0;     min-width:40px;  max-width:40px; }
@@ -732,11 +724,16 @@
         display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
         font-size:0.7rem; line-height:1.15; font-weight:600; word-break:break-word;
     }
-    .col-status     { position:sticky; left:190px; min-width:110px; max-width:110px; }
-    .col-potential  { position:sticky; left:300px; min-width:95px;  max-width:95px; }
-    .col-salesperson{ position:sticky; left:395px; min-width:120px; max-width:120px; overflow:hidden; }
-    .col-newbiz     { position:sticky; left:515px; min-width:120px; max-width:120px; overflow:hidden; }
-    .col-ccare      { position:sticky; left:635px; min-width:120px; max-width:120px; overflow:hidden; }
+    /* Only S.No + Party Name are frozen (row identity). The other leading
+       columns scroll normally — they used to be sticky with stale left offsets
+       (potential at 300px, salesperson at 395px) that no longer matched the
+       real layout once Category/Representative were added, so they painted on
+       top of the scrolling cells. */
+    .col-status     { min-width:110px; max-width:110px; }
+    .col-potential  { min-width:95px;  max-width:95px; }
+    .col-salesperson{ min-width:120px; max-width:120px; overflow:hidden; }
+    .col-category   { min-width:90px;  max-width:100px; }
+    .col-repname    { min-width:130px; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
 
     .block-end { border-right: 2px solid #64748b !important; }
     .bg-forecast-light { background-color: #eff6ff !important; }
