@@ -275,10 +275,8 @@ class CcAttendanceController extends Controller
 
             $attendance = $existingAttendances->get($userId);
 
-            // Already-marked rows stay CORRECTABLE while the date is open (the
-            // window check above already blocked locked dates; Admin/HR always
-            // pass). Approved leave, however, is owned by the leave module.
-            if ($attendance && $this->isLeaveStatus($attendance->status)) {
+            // Once submitted, an entry is final — never overwritten here.
+            if ($attendance && $attendance->status) {
                 continue;
             }
 
@@ -426,9 +424,8 @@ class CcAttendanceController extends Controller
                     ->whereDate('check_in_time', $dateStr)
                     ->first();
 
-                // Corrections allowed while the date is open; approved leave is
-                // owned by the leave module and never overwritten here.
-                if ($existing && $this->isLeaveStatus($existing->status)) {
+                // Once submitted, an entry is final — never overwritten here.
+                if ($existing && $existing->status) {
                     continue;
                 }
 
