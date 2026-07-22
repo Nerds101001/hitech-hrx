@@ -37,6 +37,13 @@ class PayrollRecord extends Model implements AuditableContract
     'epf',
     'esic',
     'month_calculation_mode',
+    // The attendance basis behind the amount. These were being assigned by
+    // PayrollService but were neither fillable nor real columns, so a payslip
+    // recorded nothing about how its figure was reached.
+    'paid_days',
+    'total_worked_days',
+    'total_absent_days',
+    'employed_days',
   ];
 
 

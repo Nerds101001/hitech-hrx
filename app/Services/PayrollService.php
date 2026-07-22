@@ -296,6 +296,8 @@ class PayrollService
                 'total_deductions' => $totalDeductions,
                 'total_benefits' => $totalBenefits,
                 'status' => $status,
+                'paid_days' => $paidDays,
+                'employed_days' => $employedDays,
                 'total_worked_days' => $workedDays,
                 'total_absent_days' => $attendanceData['absents'],
                 'total_working_days' => $daysInMonth,
