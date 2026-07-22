@@ -32,6 +32,21 @@
   .cc-nav-pills .nav-link { font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 10px; color: #5a5f71; transition: all 0.2s; }
   .cc-nav-pills .nav-link:hover { background: rgba(13, 115, 119, 0.08); color: #0d7377; }
   .cc-nav-pills .nav-link.active { background: #0d7377; color: #fff; box-shadow: 0 4px 12px rgba(13, 115, 119, 0.3); }
+
+  .cc-summary { display:flex; gap:.6rem; flex-wrap:wrap; }
+  .cc-sum { background:#fff; border:1px solid #e9eeee; border-radius:12px; padding:.55rem .9rem;
+            min-width:104px; flex:1 1 0; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .cc-sum .l { display:block; font-size:.63rem; letter-spacing:.5px; text-transform:uppercase;
+               color:#8a9a9a; font-weight:700; }
+  .cc-sum .v { display:block; font-size:1.3rem; font-weight:800; color:#0d7377; line-height:1.3; }
+  .cc-sum.ok .v { color:#15803d; }
+  .cc-sum.warn .v { color:#b45309; }
+
+  .cc-sort { color:inherit; text-decoration:none; display:inline-flex; align-items:center; gap:.25rem; white-space:nowrap; }
+  .cc-sort:hover { color:#0d7377; }
+  .cc-sort.on { color:#0d7377; font-weight:700; }
+  .cc-caret { opacity:.35; font-size:.8rem; }
+  .cc-sort.on .cc-caret { opacity:1; }
 </style>
 @endsection
 
@@ -109,6 +124,76 @@
         </div>
     </div>
 
+    {{-- Register summary. Counts cover the WHOLE register, not the filtered
+         view, so narrowing the list never makes the totals lie. --}}
+    <div class="cc-summary mb-3">
+      <div class="cc-sum"><span class="l">Salespeople</span><span class="v">{{ $summary['total'] }}</span></div>
+      <div class="cc-sum ok"><span class="l">Marked</span><span class="v">{{ $summary['marked'] }}</span></div>
+      <div class="cc-sum warn"><span class="l">Pending</span><span class="v">{{ $summary['pending'] }}</span></div>
+      <div class="cc-sum"><span class="l">Present</span><span class="v">{{ $summary['P'] }}</span></div>
+      <div class="cc-sum"><span class="l">Absent</span><span class="v">{{ $summary['A'] }}</span></div>
+      <div class="cc-sum"><span class="l">Half day</span><span class="v">{{ $summary['HD'] }}</span></div>
+      <div class="cc-sum"><span class="l">WFH</span><span class="v">{{ $summary['WFH'] }}</span></div>
+      <div class="cc-sum"><span class="l">Sun. working</span><span class="v">{{ $summary['PS'] }}</span></div>
+      <div class="cc-sum"><span class="l">On leave</span><span class="v">{{ $summary['L'] }}</span></div>
+    </div>
+
+    {{-- Find someone on the register --}}
+    <form method="GET" class="card cc-filter-bar mb-3">
+      <input type="hidden" name="date" value="{{ $date }}">
+      <input type="hidden" name="sort" value="{{ $sort }}">
+      <input type="hidden" name="dir" value="{{ $dir }}">
+      <div class="card-body py-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-lg-3 col-md-6">
+            <label class="form-label small fw-bold text-muted mb-1">SEARCH</label>
+            <input type="text" name="q" value="{{ $fSearch }}" class="form-control form-control-sm"
+                   placeholder="Salesperson name or employee ID">
+          </div>
+          @if($user->hasRole(['admin','hr']))
+          <div class="col-lg-2 col-md-6">
+            <label class="form-label small fw-bold text-muted mb-1">CC AGENT</label>
+            <select name="cc" class="form-select form-select-sm">
+              <option value="">All CC agents</option>
+              @foreach($ccOptions as $c)
+                <option value="{{ $c }}" {{ $fCc === $c ? 'selected' : '' }}>{{ $c }}</option>
+              @endforeach
+            </select>
+          </div>
+          @endif
+          <div class="col-lg-2 col-md-6">
+            <label class="form-label small fw-bold text-muted mb-1">DESIGNATION</label>
+            <select name="desig" class="form-select form-select-sm">
+              <option value="">All designations</option>
+              @foreach($desigOptions as $d)
+                <option value="{{ $d }}" {{ $fDesig === $d ? 'selected' : '' }}>{{ $d }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-6">
+            <label class="form-label small fw-bold text-muted mb-1">STATUS</label>
+            <select name="status" class="form-select form-select-sm">
+              <option value="">All</option>
+              <option value="pending" {{ $fStatus === 'pending' ? 'selected' : '' }}>Not marked yet</option>
+              <option value="marked" {{ $fStatus === 'marked' ? 'selected' : '' }}>Marked</option>
+              <option value="P" {{ $fStatus === 'P' ? 'selected' : '' }}>Present</option>
+              <option value="A" {{ $fStatus === 'A' ? 'selected' : '' }}>Absent</option>
+              <option value="HD" {{ $fStatus === 'HD' ? 'selected' : '' }}>Half day</option>
+              <option value="WFH" {{ $fStatus === 'WFH' ? 'selected' : '' }}>Work from home</option>
+              <option value="PS" {{ $fStatus === 'PS' ? 'selected' : '' }}>Sunday working</option>
+              <option value="L" {{ $fStatus === 'L' ? 'selected' : '' }}>On leave</option>
+            </select>
+          </div>
+          <div class="col-lg-3 col-md-6 text-end">
+            <button class="btn btn-primary btn-sm px-3" type="submit"><i class="ti ti-search"></i> Search</button>
+            <a href="{{ route('cc-attendance.index', ['date' => $date]) }}" class="btn btn-outline-secondary btn-sm px-3">
+              <i class="ti ti-x"></i> Clear
+            </a>
+          </div>
+        </div>
+      </div>
+    </form>
+
     <!-- Attendance Form -->
     <div class="card cc-card">
         <div class="card-header border-bottom">
@@ -118,7 +203,12 @@
         <div class="card-body mt-4">
             @if($salespeople->isEmpty())
                 <div class="alert alert-warning">
-                    No salespeople are currently tagged to you.
+                    @if($fSearch !== '' || $fCc !== '' || $fDesig !== '' || $fStatus !== '')
+                        No salesperson on this register matches those filters.
+                        <a href="{{ route('cc-attendance.index', ['date' => $date]) }}">Clear filters</a>.
+                    @else
+                        No salespeople are currently tagged to you.
+                    @endif
                 </div>
             @else
                 <form action="{{ route('cc-attendance.store') }}" method="POST" enctype="multipart/form-data">
@@ -129,10 +219,10 @@
                         <table class="table table-bordered table-striped">
                             <thead>
                                 <tr>
-                                    <th>Employee ID</th>
-                                    <th>Salesperson Name</th>
-                                    <th>Designation</th>
-                                    <th>Attendance Status</th>
+                                    <th><a class="cc-sort {{ $sort==='code' ? 'on' : '' }}" href="{{ request()->fullUrlWithQuery(['sort'=>'code','dir'=>$sort==='code'&&$dir==='asc'?'desc':'asc']) }}">Employee ID @include('tenant.cc_attendance._caret', ['col'=>'code'])</a></th>
+                                    <th><a class="cc-sort {{ $sort==='name' ? 'on' : '' }}" href="{{ request()->fullUrlWithQuery(['sort'=>'name','dir'=>$sort==='name'&&$dir==='asc'?'desc':'asc']) }}">Salesperson Name @include('tenant.cc_attendance._caret', ['col'=>'name'])</a></th>
+                                    <th><a class="cc-sort {{ $sort==='desig' ? 'on' : '' }}" href="{{ request()->fullUrlWithQuery(['sort'=>'desig','dir'=>$sort==='desig'&&$dir==='asc'?'desc':'asc']) }}">Designation @include('tenant.cc_attendance._caret', ['col'=>'desig'])</a></th>
+                                    <th><a class="cc-sort {{ $sort==='status' ? 'on' : '' }}" href="{{ request()->fullUrlWithQuery(['sort'=>'status','dir'=>$sort==='status'&&$dir==='asc'?'desc':'asc']) }}">Attendance Status @include('tenant.cc_attendance._caret', ['col'=>'status'])</a></th>
                                 </tr>
                             </thead>
                             <tbody>

@@ -56,6 +56,67 @@ class CcAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        // ── Summary over the WHOLE register, before any filter is applied, so
+        //    the cards keep telling the truth while you narrow the list down.
+        $shortFor = function ($att) {
+            if (!$att) return null;
+            $s = strtolower(str_replace('_', '-', (string) $att->status));
+            if ($s === 'absent') return 'A';
+            if (str_contains($s, 'half')) return 'HD';
+            if (str_contains($s, 'home') || str_contains($s, 'wfh')) return 'WFH';
+            if (str_contains($s, 'sunday')) return 'PS';
+            if (in_array($s, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave'], true)) return 'L';
+            return 'P';
+        };
+        $summary = ['total' => $salespeople->count(), 'marked' => 0, 'pending' => 0,
+                    'P' => 0, 'A' => 0, 'HD' => 0, 'WFH' => 0, 'PS' => 0, 'L' => 0];
+        foreach ($salespeople as $p) {
+            $code = $shortFor($attendances->get($p->id));
+            if ($code === null) { $summary['pending']++; continue; }
+            $summary['marked']++;
+            $summary[$code]++;
+        }
+
+        // ── Register filters ──
+        $fSearch = trim((string) $request->input('q', ''));
+        $fCc     = trim((string) $request->input('cc', ''));
+        $fDesig  = trim((string) $request->input('desig', ''));
+        $fStatus = trim((string) $request->input('status', ''));
+        $sort    = (string) $request->input('sort', 'name');
+        $dir     = strtolower((string) $request->input('dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        // Option lists come from the register itself, so every choice returns rows.
+        $ccOptions    = $salespeople->pluck('mapped_cc_name')->filter()->unique()->sort()->values();
+        $desigOptions = $salespeople->map(fn($p) => optional($p->designation)->name)->filter()->unique()->sort()->values();
+
+        $filtered = $salespeople->filter(function ($p) use ($fSearch, $fCc, $fDesig, $fStatus, $attendances, $shortFor) {
+            if ($fSearch !== '') {
+                $hay = strtolower(trim($p->getFullName() . ' ' . $p->code));
+                if (!str_contains($hay, strtolower($fSearch))) return false;
+            }
+            if ($fCc !== '' && ($p->mapped_cc_name ?? '') !== $fCc) return false;
+            if ($fDesig !== '' && optional($p->designation)->name !== $fDesig) return false;
+            if ($fStatus !== '') {
+                $code = $shortFor($attendances->get($p->id));
+                if ($fStatus === 'pending' && $code !== null) return false;
+                if ($fStatus === 'marked' && $code === null) return false;
+                if (!in_array($fStatus, ['pending', 'marked'], true) && $code !== $fStatus) return false;
+            }
+            return true;
+        })->values();
+
+        $filtered = $filtered->sortBy(function ($p) use ($sort, $attendances, $shortFor) {
+            return match ($sort) {
+                'code'   => (string) $p->code,
+                'desig'  => (string) optional($p->designation)->name,
+                'cc'     => (string) ($p->mapped_cc_name ?? ''),
+                'status' => (string) ($shortFor($attendances->get($p->id)) ?? 'ZZ'), // unmarked last
+                default  => strtolower($p->getFullName()),
+            };
+        }, SORT_NATURAL | SORT_FLAG_CASE, $dir === 'desc')->values();
+
+        $salespeople = $filtered;
+
         // Lock state for the banner: date D closes at D+2, 12:00 PM (Admin/HR exempt).
         $isLocked = $this->isLockedFor($date, $user);
         $lockDeadline = Carbon::parse($date)->addDays(2)->setTime(12, 0);
@@ -63,7 +124,9 @@ class CcAttendanceController extends Controller
         $minDate = min(self::OPEN_FROM, Carbon::today()->subDays(2)->toDateString());
         $openWindow = [self::OPEN_FROM, self::OPEN_TO];
 
-        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user', 'isLocked', 'lockDeadline', 'minDate', 'openWindow'));
+        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user',
+            'isLocked', 'lockDeadline', 'minDate', 'openWindow',
+            'summary', 'ccOptions', 'desigOptions', 'fSearch', 'fCc', 'fDesig', 'fStatus', 'sort', 'dir'));
     }
 
     /**
