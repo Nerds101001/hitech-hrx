@@ -515,29 +515,25 @@ class EmployeeController extends Controller
     // "Customer Care + New Biz" department may legitimately be picked in BOTH
     // dropdowns, and processing the lists separately (deleting by the agent's
     // department) would either duplicate or orphan their single mapping row.
-    if ($request->has('ccare_agent_id') || $request->has('newbiz_agent_id')) {
-        $selected = array_unique(array_filter(array_merge(
-            (array) $request->input('ccare_agent_id', []),
-            (array) $request->input('newbiz_agent_id', [])
-        )));
+    // Each list is reconciled against its OWN role. Emptying the CCARE picker
+    // must remove the CCARE mappings even when the same agent is still selected
+    // as New Biz — the two are separate rows, so one no longer resurrects the
+    // other. The hidden agent_section marker tells us the pickers were on the
+    // submitted form at all; without it an unrelated save would wipe mappings.
+    if ($request->has('agent_section') || $request->has('ccare_agent_id') || $request->has('newbiz_agent_id')) {
+        foreach (['ccare' => 'ccare_agent_id', 'newbiz' => 'newbiz_agent_id'] as $role => $field) {
+            $selected = array_values(array_unique(array_filter((array) $request->input($field, []))));
 
-        // Wipe every agent mapping for this salesperson (CCare, New Biz and
-        // combined departments), then re-create from the current selection.
-        \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
-            ->whereHas('ccUser', function($q) {
-                $q->whereHas('department', function($dq) {
-                    $dq->where('name', 'CCARE')
-                       ->orWhere('name', 'like', '%Customer Care%')
-                       ->orWhere('name', 'like', '%New Biz%')
-                       ->orWhere('name', 'like', '%New Business%');
-                });
-            })->delete();
+            \App\Models\CcSalespersonMap::where('sales_user_id', $user->id)
+                ->where('role', $role)->delete();
 
-        foreach ($selected as $agentId) {
-            \App\Models\CcSalespersonMap::create([
-                'sales_user_id' => $user->id,
-                'cc_user_id' => $agentId,
-            ]);
+            foreach ($selected as $agentId) {
+                \App\Models\CcSalespersonMap::create([
+                    'sales_user_id' => $user->id,
+                    'cc_user_id'    => $agentId,
+                    'role'          => $role,
+                ]);
+            }
         }
     }
 
@@ -1601,14 +1597,22 @@ class EmployeeController extends Controller
     $currentCcareIds = [];
     $currentNewbizIds = [];
     foreach ($currentMappings as $map) {
-        // Independent checks (not elseif): a person in the combined
-        // "Customer Care + New Biz" department appears under BOTH chips.
-        $dName = strtolower($map->ccUser->department->name ?? '');
-        if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
+        // The mapping's own role decides which picker it belongs to. Deriving it
+        // from the agent's department instead put a combined-department agent in
+        // BOTH pickers off one row, so removing them from one never stuck.
+        if ($map->role === 'ccare') {
             $currentCcareIds[] = $map->cc_user_id;
-        }
-        if (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
+        } elseif ($map->role === 'newbiz') {
             $currentNewbizIds[] = $map->cc_user_id;
+        } else {
+            // Legacy row with no role recorded — fall back to the department.
+            $dName = strtolower($map->ccUser->department->name ?? '');
+            if (str_contains($dName, 'ccare') || str_contains($dName, 'customer care')) {
+                $currentCcareIds[] = $map->cc_user_id;
+            }
+            if (str_contains($dName, 'new biz') || str_contains($dName, 'new business')) {
+                $currentNewbizIds[] = $map->cc_user_id;
+            }
         }
     }
 
@@ -1765,12 +1769,14 @@ class EmployeeController extends Controller
       // CC / New Biz Agent Assignment — union of both lists, deduped: a
       // combined-department person may be selected in both dropdowns but only
       // needs (and should have) one mapping row.
-      $agentIds = array_unique(array_filter(array_merge(
-          (array) $request->input('ccare_agent_id', []),
-          (array) $request->input('newbiz_agent_id', [])
-      )));
-      foreach ($agentIds as $agentId) {
-          \App\Models\CcSalespersonMap::create(['sales_user_id' => $user->id, 'cc_user_id' => $agentId]);
+      foreach (['ccare' => 'ccare_agent_id', 'newbiz' => 'newbiz_agent_id'] as $role => $field) {
+          foreach (array_unique(array_filter((array) $request->input($field, []))) as $agentId) {
+              \App\Models\CcSalespersonMap::create([
+                  'sales_user_id' => $user->id,
+                  'cc_user_id'    => $agentId,
+                  'role'          => $role,
+              ]);
+          }
       }
 
       if ($user->leave_policy_profile_id) {

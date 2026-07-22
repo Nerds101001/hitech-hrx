@@ -458,7 +458,15 @@ class PipelineImportController extends Controller
         // 1. First assign CCare mapping
         foreach ($mappedCcMaps as $map) {
             $ccUser = $map->ccUser;
-            if ($ccUser && $ccUser->department) {
+            if (!$ccUser) continue;
+            // The mapping's role is authoritative; older rows without one fall
+            // back to the agent's department.
+            if ($map->role === 'ccare') {
+                if (!$ccareId) $ccareId = $ccUser->id;
+                continue;
+            }
+            if ($map->role) continue;
+            if ($ccUser->department) {
                 $deptName = strtolower($ccUser->department->name);
                 if (str_contains($deptName, 'customer care') || str_contains($deptName, 'c-care') || str_contains($deptName, 'ccare')) {
                     if (!$ccareId) {
@@ -472,7 +480,13 @@ class PipelineImportController extends Controller
         if (!$ccareId) {
             foreach ($mappedCcMaps as $map) {
                 $ccUser = $map->ccUser;
-                if ($ccUser && $ccUser->department) {
+                if (!$ccUser) continue;
+                if ($map->role === 'newbiz') {
+                    if (!$newBizId) $newBizId = $ccUser->id;
+                    continue;
+                }
+                if ($map->role) continue;
+                if ($ccUser->department) {
                     $deptName = strtolower($ccUser->department->name);
                     if (str_contains($deptName, 'new biz') || str_contains($deptName, 'newbiz')) {
                         if (!$newBizId) {

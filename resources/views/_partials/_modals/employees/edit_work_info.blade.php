@@ -88,6 +88,10 @@
               @error('reportingToId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
+            {{-- Marks that the agent pickers were part of this submit, so an
+                 emptied picker is read as "remove all" rather than "not sent". --}}
+            <input type="hidden" name="agent_section" value="1">
+
             <div class="col-md-6" id="ccAgentEditDiv" style="display: none;">
               <label class="form-label-hitech" for="ccare_agent_id">Assign CCARE Agent <i class="bx bx-info-circle text-muted" title="Customer Care agent for Sales"></i></label>
               <select class="form-select form-select-hitech select2" id="ccare_agent_id" name="ccare_agent_id[]" multiple="multiple" data-placeholder="Select CCARE Agents">

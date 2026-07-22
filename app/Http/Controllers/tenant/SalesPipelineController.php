@@ -710,7 +710,10 @@ class SalesPipelineController extends Controller
                     $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
                         ->with(['ccUser.department'])->get();
                     foreach ($maps as $map) {
-                        if ($map->ccUser && $map->ccUser->department) {
+                        if (!$map->ccUser) continue;
+                        if ($map->role === 'ccare') { $ccareId = $map->ccUser->id; break; }
+                        if ($map->role) continue;
+                        if ($map->ccUser->department) {
                             $dept = strtolower($map->ccUser->department->name);
                             if (str_contains($dept, 'customer care') || str_contains($dept, 'c-care') || str_contains($dept, 'ccare')) {
                                 $ccareId = $map->ccUser->id;
@@ -731,7 +734,10 @@ class SalesPipelineController extends Controller
                     $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
                         ->with(['ccUser.department'])->get();
                     foreach ($maps as $map) {
-                        if ($map->ccUser && $map->ccUser->department) {
+                        if (!$map->ccUser) continue;
+                        if ($map->role === 'newbiz') { $newBizId = $map->ccUser->id; break; }
+                        if ($map->role) continue;
+                        if ($map->ccUser->department) {
                             $dept = strtolower($map->ccUser->department->name);
                             if (str_contains($dept, 'new biz') || str_contains($dept, 'newbiz')) {
                                 $newBizId = $map->ccUser->id;

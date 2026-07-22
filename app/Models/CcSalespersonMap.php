@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 class CcSalespersonMap extends Model {
     use HasFactory;
     protected $table = 'cc_salesperson_map';
-    protected $fillable = ['cc_user_id', 'sales_user_id', 'tenant_id'];
+    // role: 'ccare' | 'newbiz' — which capacity this agent serves the
+    // salesperson in. A combined-department agent holds one row per capacity,
+    // so they can be removed from one list without affecting the other.
+    protected $fillable = ['cc_user_id', 'sales_user_id', 'role', 'tenant_id'];
     public function ccUser() { return $this->belongsTo(User::class, 'cc_user_id'); }
     public function salesUser() { return $this->belongsTo(User::class, 'sales_user_id'); }
 }
