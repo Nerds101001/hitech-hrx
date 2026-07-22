@@ -9,6 +9,94 @@
 @endsection
 
 @section('content')
+<style>
+    /* --- Claims list: keep rows one line tall and actions on a common baseline --- */
+    .claims-table thead th {
+        background: #f6f8f9;
+        color: #6b7a7a;
+        font-size: .7rem;
+        font-weight: 600;
+        letter-spacing: .4px;
+        text-transform: uppercase;
+        white-space: nowrap;
+        padding: .65rem .75rem;
+        border-bottom: 1px solid #e6ecec;
+    }
+    .claims-table tbody td {
+        padding: .7rem .75rem;
+        font-size: .82rem;
+        vertical-align: middle;
+        border-bottom: 1px solid #f0f3f3;
+    }
+    .claims-table tbody tr:hover { background: #fafbfb; }
+
+    .claim-company {
+        max-width: 170px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Remarks stay to two lines — the full text is in the title tooltip */
+    .claim-remarks { max-width: 320px; min-width: 200px; }
+    .claim-note {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-size: .78rem;
+        line-height: 1.35;
+    }
+    .claim-note-objection {
+        color: #b02a37;
+        padding-left: .5rem;
+        border-left: 2px solid #dc3545;
+    }
+    .claim-note-objection i { display: none; }
+
+    .claim-own-tag {
+        display: inline-block;
+        margin-top: .15rem;
+        font-size: .65rem;
+        font-weight: 600;
+        letter-spacing: .3px;
+        text-transform: uppercase;
+        color: #8a9a9a;
+    }
+
+    .claim-status {
+        display: inline-block;
+        min-width: 84px;
+        text-align: center;
+        font-weight: 600;
+        font-size: .7rem;
+    }
+
+    /* Every row's buttons align right, same size, never wrap */
+    .claim-actions {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: .4rem;
+        flex-wrap: nowrap;
+    }
+    .claim-actions form { margin: 0; }
+    .claim-actions .btn {
+        white-space: nowrap;
+        font-size: .75rem;
+        padding: .3rem .7rem;
+        border-radius: 6px;
+        min-width: 86px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .25rem;
+    }
+    .claim-actions .btn i { font-size: .9rem; }
+
+    tr.flagged-row > td { background-color: #fdecea !important; }
+    tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
+</style>
 <div class="container-fluid animate__animated animate__fadeIn">
     {{-- Hero Header --}}
     <div class="hitech-page-hero mb-6">
@@ -38,73 +126,95 @@
         </div>
         <div class="card-body p-4">
             <div class="table-responsive">
-                <table class="table table-flush-spacing align-middle mb-0">
-                    <thead class="bg-light">
+                <table class="table align-middle mb-0 claims-table">
+                    <thead>
                         <tr>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Claim ID</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Employee</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Month</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Company</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Net Payable</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Remarks / Objection</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Status</th>
-                            <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Action</th>
+                            <th style="width:80px;">Claim</th>
+                            <th style="width:170px;">Employee</th>
+                            <th style="width:90px;">Month</th>
+                            <th style="width:170px;">Company</th>
+                            <th style="width:120px;" class="text-end">Net Payable</th>
+                            <th>Remarks / Objection</th>
+                            <th style="width:110px;">Status</th>
+                            <th style="width:200px;" class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($claims as $claim)
                         <tr>
-                            <td><strong>#{{ $claim->id }}</strong></td>
-                            <td>{{ $claim->user->name }}</td>
-                            <td>{{ $claim->claim_month }}</td>
-                            <td>{{ $claim->company }}</td>
+                            <td class="text-nowrap fw-semibold">#{{ $claim->id }}</td>
                             <td>
-                                <strong>₹{{ number_format($claim->net_payable, 2) }}</strong>
+                                <div class="text-nowrap">{{ $claim->user->name }}</div>
+                                @if($claim->user_id === auth()->id())
+                                    <span class="claim-own-tag">Your claim</span>
+                                @endif
+                            </td>
+                            <td class="text-nowrap">{{ $claim->claim_month }}</td>
+                            <td class="claim-company">{{ $claim->company }}</td>
+                            <td class="text-nowrap text-end">
+                                <span class="fw-semibold">₹{{ number_format($claim->net_payable, 2) }}</span>
                                 @if($claim->late_penalty_applied)
-                                    <br><span class="badge bg-danger">Late Penalty Applied</span>
+                                    <div><span class="badge bg-label-danger mt-1" style="font-size:.65rem;">Late penalty</span></div>
                                 @endif
                             </td>
-                            <td>
+                            <td class="claim-remarks">
                                 @if($claim->objection_notes)
-                                    <div class="text-danger fw-bold"><i class="bx bx-error-circle"></i> {{ $claim->objection_notes }}</div>
-                                @elseif($claim->remarks)
-                                    <div class="text-muted small">{{ $claim->remarks }}</div>
-                                @else
-                                    <span class="text-muted">-</span>
-                                @endif
-                            </td>
-                            <td>
-                                <span class="badge bg-{{ $claim->status == 'submitted' ? 'info' : ($claim->status == 'objection' ? 'warning text-dark' : 'secondary') }}">{{ ucfirst($claim->status) }}</span>
-                            </td>
-                            <td>
-                                @if($claim->status === 'draft')
-                                    <a href="{{ route('travel-claims.edit', $claim->id) }}" class="btn btn-sm btn-outline-warning rounded-pill px-3">Continue Draft</a>
-                                    <form action="{{ route('travel-claims.destroy', $claim->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this draft claim? This action cannot be undone.');">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-3">Delete Draft</button>
-                                    </form>
-                                @else
-                                    <div class="d-flex gap-2 align-items-center">
-                                        @if($claim->user_id === auth()->id())
-                                            {{-- Your own claim: view only. Nobody may action their own
-                                                 claim (the controller blocks it server-side too). --}}
-                                            <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">View</button>
-                                            <span class="badge bg-label-secondary" style="font-size:.7rem;">Your claim</span>
-                                        @else
-                                            <button type="button" class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">Review</button>
-                                        @endif
-                                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 d-flex align-items-center gap-1" title="Download All Attachments">
-                                            <i class="bx bx-download"></i> Download All
-                                        </a>
+                                    <div class="claim-note claim-note-objection" title="{{ $claim->objection_notes }}">
+                                        <i class="bx bx-error-circle"></i>
+                                        <span>{{ $claim->objection_notes }}</span>
                                     </div>
+                                @elseif($claim->remarks)
+                                    <div class="claim-note text-muted" title="{{ $claim->remarks }}">{{ $claim->remarks }}</div>
+                                @else
+                                    <span class="text-muted">—</span>
                                 @endif
+                            </td>
+                            <td class="text-nowrap">
+                                @php
+                                    $statusStyles = [
+                                        'draft'     => 'bg-label-secondary',
+                                        'submitted' => 'bg-label-info',
+                                        'objection' => 'bg-label-danger',
+                                        'verified'  => 'bg-label-primary',
+                                        'approved'  => 'bg-label-success',
+                                        'rejected'  => 'bg-label-danger',
+                                        'paid'      => 'bg-label-success',
+                                    ];
+                                @endphp
+                                <span class="badge {{ $statusStyles[$claim->status] ?? 'bg-label-secondary' }} claim-status">{{ ucfirst($claim->status) }}</span>
+                            </td>
+                            <td>
+                                <div class="claim-actions">
+                                    @if($claim->status === 'draft')
+                                        <a href="{{ route('travel-claims.edit', $claim->id) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="bx bx-edit-alt"></i> Continue
+                                        </a>
+                                        <form action="{{ route('travel-claims.destroy', $claim->id) }}" method="POST" onsubmit="return confirm('Delete this draft claim? This action cannot be undone.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bx bx-trash"></i> Delete
+                                            </button>
+                                        </form>
+                                    @else
+                                        {{-- Your own claim: view only. Nobody may action their own
+                                             claim (the controller blocks it server-side too). --}}
+                                        <button type="button" class="btn btn-sm {{ $claim->user_id === auth()->id() ? 'btn-outline-secondary' : 'btn-primary' }}"
+                                                data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">
+                                            <i class="bx {{ $claim->user_id === auth()->id() ? 'bx-show' : 'bx-check-shield' }}"></i>
+                                            {{ $claim->user_id === auth()->id() ? 'View' : 'Review' }}
+                                        </button>
+                                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-secondary" title="Download all attachments">
+                                            <i class="bx bx-download"></i> Files
+                                        </a>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
 
                         @empty
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">No claims pending verification.</td>
+                            <td colspan="8" class="text-center py-5 text-muted">No claims pending verification.</td>
                         </tr>
                         @endforelse
                     </tbody>
@@ -291,10 +401,6 @@
 </div>
 
 @section('page-script')
-<style>
-    tr.flagged-row > td { background-color: #fdecea !important; }
-    tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
-</style>
 <script>
 function submitClaimAction(claimId, routeUrl, requireRemarks) {
     let form = document.getElementById('verifyForm' + claimId);
