@@ -220,9 +220,19 @@ class SalesPipelineController extends Controller
         // and filtering by that salesperson must be possible. Row visibility
         // itself stays scoped, so nothing leaks — an out-of-scope pick simply
         // returns only the rows the user may see.
+        // The filter lists are the department pool UNION everyone actually
+        // tagged in that role on a customer. Departments and real tagging drift
+        // (e.g. a New Biz agent still sitting in the Customer Care department),
+        // and when they do, a department-only list silently hides that person —
+        // their customers become unreachable by any filter.
+        $taggedNewBizIds = SalesPipeline::whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id');
+        $taggedCcareIds  = SalesPipeline::whereNotNull('ccare_id')->distinct()->pluck('ccare_id');
+
         $salespersonFilterUsers = $salespersons;
-        $ccareFilterUsers       = $ccareUsers;
-        $newBizFilterUsers      = $newBizUsers;
+        $ccareFilterUsers       = User::whereIn('id', $ccareUsers->pluck('id')->merge($taggedCcareIds)->unique()->all())
+            ->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', $newBizUsers->pluck('id')->merge($taggedNewBizIds)->unique()->all())
+            ->orderBy('first_name')->get();
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -465,9 +475,19 @@ class SalesPipelineController extends Controller
         // and filtering by that salesperson must be possible. Row visibility
         // itself stays scoped, so nothing leaks — an out-of-scope pick simply
         // returns only the rows the user may see.
+        // The filter lists are the department pool UNION everyone actually
+        // tagged in that role on a customer. Departments and real tagging drift
+        // (e.g. a New Biz agent still sitting in the Customer Care department),
+        // and when they do, a department-only list silently hides that person —
+        // their customers become unreachable by any filter.
+        $taggedNewBizIds = SalesPipeline::whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id');
+        $taggedCcareIds  = SalesPipeline::whereNotNull('ccare_id')->distinct()->pluck('ccare_id');
+
         $salespersonFilterUsers = $salespersons;
-        $ccareFilterUsers       = $ccareUsers;
-        $newBizFilterUsers      = $newBizUsers;
+        $ccareFilterUsers       = User::whereIn('id', $ccareUsers->pluck('id')->merge($taggedCcareIds)->unique()->all())
+            ->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', $newBizUsers->pluck('id')->merge($taggedNewBizIds)->unique()->all())
+            ->orderBy('first_name')->get();
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
