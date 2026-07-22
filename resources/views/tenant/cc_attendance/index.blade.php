@@ -236,7 +236,11 @@
                                             $currentStatus = strtolower(str_replace('_', '-', $currentStatus));
                                         }
                                         
-                                        $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave', 'half-day']);
+                                        {{-- Half day is one of the buttons on this very form, not an
+                                             approved leave. Listing it here locked those rows as "Not
+                                             Editable" even though the server would have accepted the
+                                             change. Kept in step with isLeaveStatus() in the controller. --}}
+                                        $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave']);
 
                                         // Previous submissions can be corrected while the date is open
                                         // (Admin/HR always). Approved-leave rows stay read-only.
@@ -275,7 +279,7 @@
                                             @if($currentStatus && !$canEditRow)
                                                 <div class="opacity-50 pointer-events-none d-flex flex-column gap-2">
                                                     <div class="d-flex align-items-center gap-2">
-                                                        @if($isLeave && $currentStatus !== 'half-day')
+                                                        @if($isLeave)
                                                             <span class="badge bg-label-warning px-3 py-2"><i class="ti ti-plane-departure me-1"></i> {{ ucwords(str_replace('-', ' ', $currentStatus)) }} (Approved)</span>
                                                         @else
                                                             @php
