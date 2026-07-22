@@ -99,21 +99,21 @@
                 {{-- Full directory filters for every role: rows stay scoped, so an
                      out-of-scope pick simply shows only what the user may see. --}}
                 <select class="form-select" name="sp" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All Salespersons</option>
+                    <option value="">All Salespersons ({{ $spFilterCounts->sum() }})</option>
                     @foreach($salespersonFilterUsers as $au)
-                        <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                        <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $spFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
                 </select>
                 <select class="form-select" name="ccare" style="width:170px;" onchange="this.form.submit()">
-                    <option value="">All CCare</option>
+                    <option value="">All CCare ({{ $ccareFilterCounts->sum() }})</option>
                     @foreach($ccareFilterUsers as $au)
-                        <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                        <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $ccareFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
                 </select>
                 <select class="form-select" name="nb" style="width:170px;" onchange="this.form.submit()">
-                    <option value="">All New Biz</option>
+                    <option value="">All New Biz ({{ $nbFilterCounts->sum() }})</option>
                     @foreach($newBizFilterUsers as $au)
-                        <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                        <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $nbFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
                 </select>
                 <select class="form-select" name="per" style="width:105px;" onchange="this.form.submit()" title="Rows per page">

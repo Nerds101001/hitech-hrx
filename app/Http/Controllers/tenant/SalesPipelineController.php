@@ -86,6 +86,11 @@ class SalesPipelineController extends Controller
             'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
+        // Snapshot of what this user may see, BEFORE the filters below. The filter
+        // dropdowns are built from this so the option list stays stable while
+        // filtering, and every option is guaranteed to return rows.
+        $optionBase = clone $query;
+
         // ── Server-side filters ──
         //   Sales Report filters by Salesperson and by CCare. The blade shows the
         //   dropdowns per role (admin/HR: both; salesperson: CCare; CCare: Salesperson).
@@ -220,19 +225,25 @@ class SalesPipelineController extends Controller
         // and filtering by that salesperson must be possible. Row visibility
         // itself stays scoped, so nothing leaks — an out-of-scope pick simply
         // returns only the rows the user may see.
-        // The filter lists are the department pool UNION everyone actually
-        // tagged in that role on a customer. Departments and real tagging drift
-        // (e.g. a New Biz agent still sitting in the Customer Care department),
-        // and when they do, a department-only list silently hides that person —
-        // their customers become unreachable by any filter.
-        $taggedNewBizIds = SalesPipeline::whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id');
-        $taggedCcareIds  = SalesPipeline::whereNotNull('ccare_id')->distinct()->pluck('ccare_id');
+        // Filter dropdowns list ONLY people who actually hold customers on this
+        // page, each with their count. Building them from the department instead
+        // was the cause of endless empty results: someone could sit in the CCare
+        // department while all their customers are tagged New Biz (or live in the
+        // Pipeline book, not this one), so picking them returned nothing with no
+        // explanation. Counts come from $optionBase, so they respect this user's
+        // own visibility — a rep sees their own numbers, admin/HR see everything.
+        $countsFor = function (string $column) use ($optionBase) {
+            return (clone $optionBase)->whereNotNull($column)
+                ->selectRaw("$column as uid, COUNT(*) as c")
+                ->groupBy($column)->pluck('c', 'uid');
+        };
+        $spFilterCounts    = $countsFor('salesperson_id');
+        $ccareFilterCounts = $countsFor('ccare_id');
+        $nbFilterCounts    = $countsFor('new_biz_id');
 
-        $salespersonFilterUsers = $salespersons;
-        $ccareFilterUsers       = User::whereIn('id', $ccareUsers->pluck('id')->merge($taggedCcareIds)->unique()->all())
-            ->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', $newBizUsers->pluck('id')->merge($taggedNewBizIds)->unique()->all())
-            ->orderBy('first_name')->get();
+        $salespersonFilterUsers = User::whereIn('id', $spFilterCounts->keys()->all())->orderBy('first_name')->get();
+        $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -329,7 +340,7 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -407,6 +418,9 @@ class SalesPipelineController extends Controller
             'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
+        // Snapshot for the filter dropdowns — see the note in index().
+        $optionBase = clone $query;
+
         // ── Server-side filters ──
         //   Sales Pipeline filters by Salesperson and by New Biz. The blade shows
         //   the dropdowns per role (admin/HR: both; salesperson: New Biz; New Biz: Salesperson).
@@ -475,19 +489,25 @@ class SalesPipelineController extends Controller
         // and filtering by that salesperson must be possible. Row visibility
         // itself stays scoped, so nothing leaks — an out-of-scope pick simply
         // returns only the rows the user may see.
-        // The filter lists are the department pool UNION everyone actually
-        // tagged in that role on a customer. Departments and real tagging drift
-        // (e.g. a New Biz agent still sitting in the Customer Care department),
-        // and when they do, a department-only list silently hides that person —
-        // their customers become unreachable by any filter.
-        $taggedNewBizIds = SalesPipeline::whereNotNull('new_biz_id')->distinct()->pluck('new_biz_id');
-        $taggedCcareIds  = SalesPipeline::whereNotNull('ccare_id')->distinct()->pluck('ccare_id');
+        // Filter dropdowns list ONLY people who actually hold customers on this
+        // page, each with their count. Building them from the department instead
+        // was the cause of endless empty results: someone could sit in the CCare
+        // department while all their customers are tagged New Biz (or live in the
+        // Pipeline book, not this one), so picking them returned nothing with no
+        // explanation. Counts come from $optionBase, so they respect this user's
+        // own visibility — a rep sees their own numbers, admin/HR see everything.
+        $countsFor = function (string $column) use ($optionBase) {
+            return (clone $optionBase)->whereNotNull($column)
+                ->selectRaw("$column as uid, COUNT(*) as c")
+                ->groupBy($column)->pluck('c', 'uid');
+        };
+        $spFilterCounts    = $countsFor('salesperson_id');
+        $ccareFilterCounts = $countsFor('ccare_id');
+        $nbFilterCounts    = $countsFor('new_biz_id');
 
-        $salespersonFilterUsers = $salespersons;
-        $ccareFilterUsers       = User::whereIn('id', $ccareUsers->pluck('id')->merge($taggedCcareIds)->unique()->all())
-            ->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', $newBizUsers->pluck('id')->merge($taggedNewBizIds)->unique()->all())
-            ->orderBy('first_name')->get();
+        $salespersonFilterUsers = User::whereIn('id', $spFilterCounts->keys()->all())->orderBy('first_name')->get();
+        $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
+        $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -541,7 +561,7 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function store(Request $request)

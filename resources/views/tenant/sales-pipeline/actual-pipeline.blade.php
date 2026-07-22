@@ -112,18 +112,18 @@
                 {{-- Salesperson filter: admin/HR and CCare/New Biz users --}}
                 @if($showBothFilters || $isCcare || $isNewBiz)
                     <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
-                        <option value="">All Salespersons</option>
+                        <option value="">All Salespersons ({{ $spFilterCounts->sum() }})</option>
                         @foreach($salespersonFilterUsers as $au)
-                            <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                            <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $spFilterCounts[$au->id] ?? 0 }})</option>
                         @endforeach
                     </select>
                 @endif
                 {{-- New Biz filter: admin/HR and salespersons --}}
                 @if($showBothFilters || $isSalesperson)
                     <select class="form-select" name="newbiz" style="width:190px;" onchange="this.form.submit()">
-                        <option value="">All New Biz</option>
+                        <option value="">All New Biz ({{ $nbFilterCounts->sum() }})</option>
                         @foreach($newBizFilterUsers as $au)
-                            <option value="{{ $au->id }}" {{ (string)$fNewBiz === (string)$au->id ? 'selected' : '' }}>{{ $au->name }}</option>
+                            <option value="{{ $au->id }}" {{ (string)$fNewBiz === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $nbFilterCounts[$au->id] ?? 0 }})</option>
                         @endforeach
                     </select>
                 @endif
