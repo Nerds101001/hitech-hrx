@@ -119,6 +119,14 @@ class PayrollService
                 ? 0
                 : (int) $periodStart->copy()->startOfDay()->diffInDays($periodEnd->copy()->startOfDay()) + 1;
 
+            // Not employed for any part of this period — someone who joins next
+            // month, or left before it started, has no payroll here at all. They
+            // were previously given a record whose only content was the global
+            // adjustments, producing a bonus and a tax on a salary of nothing.
+            if ($employedDays <= 0) {
+                return null;
+            }
+
             // 1. Calculate Attendance Stats
             $attendanceData = $this->calculateAttendanceStats($user, $periodStart, $periodEnd);
             $workedDays     = $attendanceData['worked_days'];
@@ -235,7 +243,7 @@ class PayrollService
             }
 
             // 2. Fetch Adjustments (Benefits & Deductions)
-            $adjustments = $this->getAdjustments($user, $baseSalary);
+            $adjustments = $this->getAdjustments($user, $baseSalary, $actualGross);
             $totalBenefits = $adjustments['benefits_total'];
             $totalDeductions = $adjustments['deductions_total'];
 
@@ -248,14 +256,22 @@ class PayrollService
 
             // Final Gross and Net Salary
             $grossSalary = $actualGross + $totalBenefits;
-            $netSalary = $grossSalary - $totalDeductions;
+            $netSalary   = $grossSalary - $totalDeductions;
+            // Deductions cannot exceed what is being paid; the shortfall stays
+            // visible in the deduction figures rather than turning pay negative.
+            if ($netSalary < 0) {
+                $netSalary = 0.00;
+            }
 
             // 4. Create Payroll Record
             $record = PayrollRecord::create([
                 'user_id' => $user->id,
                 'payroll_cycle_id' => $cycleId,
                 'period' => $periodName,
-                'basic_salary' => $baseSalary,
+                // The pro-rated basic actually being paid. This stored the full
+                // monthly base salary, so every payslip showed a basic that did
+                // not match its own gross.
+                'basic_salary' => $payableBasic,
                 'gross_salary' => $grossSalary,
                 'net_salary' => $netSalary,
                 'status' => $status,
@@ -441,8 +457,13 @@ class PayrollService
     /**
      * Get benefits and deductions for the user.
      */
-    private function getAdjustments($user, $baseSalary)
+    private function getAdjustments($user, $baseSalary, $payableGross = null)
     {
+        // A percentage adjustment used to be taken on the FULL monthly salary
+        // even when only part of the month was payable, so a 10% deduction on a
+        // 2-day salary took 21,000 out of 14,100 and produced a negative net.
+        // Percentages now follow what is actually being paid.
+        $percentBase = $payableGross !== null ? $payableGross : $baseSalary;
         $benefitsTotal = 0;
         $deductionsTotal = 0;
 
@@ -454,7 +475,7 @@ class PayrollService
         foreach ($adjustments as $adj) {
             $amount = $adj->amount;
             if ($adj->percentage > 0) {
-                $amount = ($baseSalary * $adj->percentage) / 100;
+                $amount = ($percentBase * $adj->percentage) / 100;
             }
 
             if ($adj->type === 'benefit') {
