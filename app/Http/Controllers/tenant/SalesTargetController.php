@@ -10,12 +10,11 @@ class SalesTargetController extends Controller
 {
     public function update(Request $request)
     {
-        $user = auth()->user();
-        $isAdmin   = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare   = $user->isCcareAgent();
-        $isNewBiz  = $user->isNewBizAgent();
-        if (!$isAdmin && !$isCcare && !$isNewBiz) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        // Targets are set by Admin/HR only. Managers, CCare and New Biz agents
+        // may read them everywhere but must never be able to change their own
+        // or anyone else's numbers.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            return response()->json(['success' => false, 'message' => 'Only Admin/HR can set targets.'], 403);
         }
 
         $request->validate([

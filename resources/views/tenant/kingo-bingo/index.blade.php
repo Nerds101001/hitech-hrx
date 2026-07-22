@@ -82,7 +82,8 @@ td.ach-red{background:#fee2e2!important;}
 <div class="kb-page">
 <div class="kb-topbar">
     <h1 class="kb-page-title">Kingo Bingo ScoreCard</h1>
-    @if($isAdmin || $isCcare || $isNewBiz)
+    {{-- Targets are Admin/HR only — everyone else sees them read-only. --}}
+    @if($isAdmin)
     <a href="{{ route('sales-visits.kingo-bingo.fill-targets') }}" class="btn btn-sm btn-success rounded-pill fw-bold shadow-sm d-flex align-items-center">
         <i class="bx bx-edit me-1"></i> Fill Targets
     </a>
@@ -477,8 +478,14 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
 @endif
 </div>
 
+@unless($isAdmin)
+<style>td.tc { cursor: default !important; }</style>
+@endunless
 <script>
-// Only target cells are editable — achieved is auto-populated
+// Only target cells are editable — achieved is auto-populated. Targets are
+// Admin/HR only, so for everyone else the cells stay plain read-only text
+// (the server rejects the write regardless).
+@if($isAdmin)
 document.querySelectorAll('td.tc').forEach(td => {
     td.addEventListener('click', function () {
         if (td.classList.contains('editing')) return;
@@ -511,5 +518,6 @@ function save(td, val, old) {
     .then(d => { if (d.success) location.reload(); else { td.textContent = old; alert('Save failed'); } })
     .catch(e => { td.textContent = old; console.error(e); alert('Network error — check console'); });
 }
+@endif
 </script>
 @endsection

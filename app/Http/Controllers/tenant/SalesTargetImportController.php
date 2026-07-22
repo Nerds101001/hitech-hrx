@@ -17,6 +17,11 @@ class SalesTargetImportController extends Controller
      */
     public function showImport()
     {
+        // Importing targets is target setting — Admin/HR only.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            abort(403, 'Only Admin/HR can import targets.');
+        }
+
         $user = auth()->user();
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
@@ -48,6 +53,11 @@ class SalesTargetImportController extends Controller
      */
     public function previewImport(Request $request)
     {
+        // Importing targets is target setting — Admin/HR only.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            abort(403, 'Only Admin/HR can import targets.');
+        }
+
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'file' => 'required|mimes:xlsx,xls,csv|max:10240'
@@ -132,6 +142,11 @@ class SalesTargetImportController extends Controller
      */
     public function storeImport(Request $request)
     {
+        // Importing targets is target setting — Admin/HR only.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            abort(403, 'Only Admin/HR can import targets.');
+        }
+
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'file_path' => 'required',

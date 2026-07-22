@@ -34,7 +34,8 @@
                 <i class="bx bx-upload me-1"></i> Import Sales Report
             </a>
         @endif
-        @if($isAdmin || $isCcare)
+        {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
+        @if($isAdmin)
             <a href="{{ route('sales-visits.kingo-bingo.fill-targets') }}" class="btn btn-sm btn-success rounded-pill fw-bold shadow-sm d-flex align-items-center">
                 <i class="bx bx-edit me-1"></i> Fill Targets
             </a>
@@ -596,7 +597,8 @@
     </div>
 </div>
 
-{{-- ─── TARGETS MODAL ────────────────────────────────────────────────── --}}
+{{-- ─── TARGETS MODAL (Admin/HR only) ───────────────────────────────── --}}
+@if($isAdmin)
 <div class="modal fade" id="targetsModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -657,6 +659,7 @@
         </div>
     </div>
 </div>
+@endif
 
 {{-- ─── STYLES ──────────────────────────────────────────────────────── --}}
 <style>

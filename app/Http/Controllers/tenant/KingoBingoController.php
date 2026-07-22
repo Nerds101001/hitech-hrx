@@ -215,13 +215,10 @@ class KingoBingoController extends Controller
 
     public function fillTargets(Request $request)
     {
-        $user    = auth()->user();
-        $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('kingo_bingo.manage');
-        $isCcare = $user->isCcareAgent() || $user->can('kingo_bingo.manage');
-        $isNewBiz= $user->isNewBizAgent() || $user->can('kingo_bingo.manage');
-
-        if (!$isAdmin && !$isCcare && !$isNewBiz) {
-            abort(403);
+        $user = auth()->user();
+        // Target setting is Admin/HR only — see SalesTargetController::update.
+        if (!$this->canSetTargets()) {
+            abort(403, 'Only Admin/HR can set targets.');
         }
 
         $now         = Carbon::now();
@@ -260,11 +257,8 @@ class KingoBingoController extends Controller
             ->where('status', 'active')->notTerminated()
             ->where($salesScope);
 
-        if (!$isAdmin) {
-            $spIds = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->unique();
-            $spQuery->whereIn('id', $spIds);
-        }
-
+        // Only Admin/HR reach this page now, and they set targets for everyone —
+        // the old "restrict to my mapped salespersons" branch no longer applies.
         $salespersons = $spQuery->orderBy('first_name')->get();
 
         // Filter dropdown options, built from who is actually on the page.
@@ -298,8 +292,17 @@ class KingoBingoController extends Controller
     }
 
     // Update a manually-set target value (razor_blade_target, payment_target, etc.)
+    /** Only Admin/HR may create or change any Kingo/Bingo or sales target. */
+    private function canSetTargets(): bool
+    {
+        return auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']);
+    }
+
     public function updateTarget(Request $request)
     {
+        if (!$this->canSetTargets()) {
+            return response()->json(['success' => false, 'message' => 'Only Admin/HR can set targets.'], 403);
+        }
         $request->validate([
             'salesperson_id' => 'required|exists:users,id',
             'month_year'     => 'required|string|size:7',
@@ -322,6 +325,9 @@ class KingoBingoController extends Controller
     // Update a KPI target number (e.g. razor_blade_target = 3 per month)
     public function updateKpiTarget(Request $request)
     {
+        if (!$this->canSetTargets()) {
+            return response()->json(['success' => false, 'message' => 'Only Admin/HR can set targets.'], 403);
+        }
         $allowed = [
             'razor_blade_target', 'new_customers_target', 'upsell_target',
             'payment_target', 'rate_target', 'nif_target', 'training_target', 'mom_target',

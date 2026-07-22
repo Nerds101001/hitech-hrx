@@ -647,17 +647,22 @@ Route::middleware([
             Route::get('/pipeline', fn() => redirect()->route('sales-visits.pipeline.index'));
             Route::get('/pipeline/import', fn() => redirect()->route('sales-visits.pipeline.import'));
             
-            // Sales Targets
-            Route::post('/targets/update', [\App\Http\Controllers\tenant\SalesTargetController::class, 'update'])->name('targets.update');
-            Route::get('/sales-targets/import', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'showImport'])->name('sales-targets.import');
-            Route::post('/sales-targets/import/preview', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'previewImport'])->name('sales-targets.import.preview');
-            Route::post('/sales-targets/import/store', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'storeImport'])->name('sales-targets.import.store');
+            // Sales Targets — setting a target is Admin/HR only. Everyone else
+            // may see targets on the pages that show them, never change them.
+            Route::middleware('role:admin|hr')->group(function () {
+                Route::post('/targets/update', [\App\Http\Controllers\tenant\SalesTargetController::class, 'update'])->name('targets.update');
+                Route::get('/sales-targets/import', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'showImport'])->name('sales-targets.import');
+                Route::post('/sales-targets/import/preview', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'previewImport'])->name('sales-targets.import.preview');
+                Route::post('/sales-targets/import/store', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'storeImport'])->name('sales-targets.import.store');
+            });
 
             // Kingo Bingo ScoreCard
             Route::get('/kingo-bingo', [\App\Http\Controllers\tenant\KingoBingoController::class, 'index'])->name('kingo-bingo.index');
-            Route::get('/kingo-bingo/fill-targets', [\App\Http\Controllers\tenant\KingoBingoController::class, 'fillTargets'])->name('kingo-bingo.fill-targets');
-            Route::put('/kingo-bingo/kpi-target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateKpiTarget'])->name('kingo-bingo.kpi-target');
-            Route::put('/kingo-bingo/target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateTarget'])->name('kingo-bingo.target');
+            Route::middleware('role:admin|hr')->group(function () {
+                Route::get('/kingo-bingo/fill-targets', [\App\Http\Controllers\tenant\KingoBingoController::class, 'fillTargets'])->name('kingo-bingo.fill-targets');
+                Route::put('/kingo-bingo/kpi-target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateKpiTarget'])->name('kingo-bingo.kpi-target');
+                Route::put('/kingo-bingo/target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateTarget'])->name('kingo-bingo.target');
+            });
             
             Route::get('/reports', [\App\Http\Controllers\tenant\SalesVisitController::class, 'reportSummary'])->name('reports');
             Route::get('/clients', [\App\Http\Controllers\tenant\SalesVisitController::class, 'clientIndex'])->name('clients.index');
