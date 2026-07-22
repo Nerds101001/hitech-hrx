@@ -121,7 +121,7 @@
                     No salespeople are currently tagged to you.
                 </div>
             @else
-                <form action="{{ route('cc-attendance.store') }}" method="POST">
+                <form action="{{ route('cc-attendance.store') }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="date" value="{{ $date }}">
                     
@@ -230,9 +230,34 @@
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="sunday_{{ $emp->id }}">PS</label>
                                                         </div>
+                                                        {{-- Clear removes a wrongly-marked day so it can be
+                                                             re-marked, or left blank altogether. --}}
+                                                        @if($record)
+                                                        <div class="form-check custom-option custom-option-icon mb-0">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="clr_{{ $emp->id }}" value="__clear">
+                                                            <label class="form-check-label text-muted fw-bold px-3" for="clr_{{ $emp->id }}" title="Delete this entry">
+                                                                <i class="ti ti-trash"></i> Clear
+                                                            </label>
+                                                        </div>
+                                                        @endif
                                                     </div>
                                                     <div>
                                                         <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" value="{{ $record->notes ?? '' }}" placeholder="Reporting — required (e.g. companies visited)">
+                                                    </div>
+                                                    {{-- Work from home must carry the approval snapshot. --}}
+                                                    <div class="cc-wfh-box" id="wfhbox_{{ $emp->id }}" style="display:{{ $sel === 'Work from home' ? 'block' : 'none' }};">
+                                                        <label class="form-label small fw-semibold mb-1 text-primary">
+                                                            <i class="ti ti-paperclip"></i> WFH approval snapshot <span class="text-danger">*</span>
+                                                        </label>
+                                                        <input type="file" name="wfh_proof[{{ $emp->id }}]" accept="image/*"
+                                                               class="form-control form-control-sm cc-wfh-input" data-uid="{{ $emp->id }}">
+                                                        @if($record && $record->attachment)
+                                                            <a href="{{ \Illuminate\Support\Facades\Storage::url($record->attachment) }}" target="_blank"
+                                                               class="small d-inline-block mt-1"><i class="ti ti-photo"></i> View uploaded approval</a>
+                                                            <div class="text-muted" style="font-size:.7rem;">Leave empty to keep the existing snapshot.</div>
+                                                        @else
+                                                            <div class="text-muted" style="font-size:.7rem;">Required — screenshot of the approval from the reporting manager.</div>
+                                                        @endif
                                                     </div>
                                                 </div>
                                             @endif
@@ -260,20 +285,40 @@
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('form[action="{{ route('cc-attendance.store') }}"]');
     if (!form) return;
+    // Show the approval-snapshot box only for Work from home.
+    form.addEventListener('change', function (e) {
+        const m = e.target.name && e.target.name.match(/^attendance\[(\d+)\]$/);
+        if (!m) return;
+        const box = document.getElementById('wfhbox_' + m[1]);
+        if (box) box.style.display = (e.target.value === 'Work from home') ? 'block' : 'none';
+    });
+
     form.addEventListener('submit', function (e) {
-        const bad = [];
+        const bad = [];      // missing reporting remarks
+        const noProof = [];  // WFH with no approval snapshot
         form.querySelectorAll('input[type="radio"]:checked').forEach(function (r) {
             const m = r.name.match(/^attendance\[(\d+)\]$/);
             if (!m) return;
+            if (r.value === '__clear') return;   // clearing needs neither
             const note = form.querySelector('input[name="notes[' + m[1] + ']"]');
             if (note && note.value.trim() === '') bad.push(note);
+            if (r.value === 'Work from home') {
+                const file = form.querySelector('input[name="wfh_proof[' + m[1] + ']"]');
+                const box  = document.getElementById('wfhbox_' + m[1]);
+                const already = box && box.querySelector('a');   // snapshot already on file
+                if (file && !file.files.length && !already) noProof.push(file);
+            }
         });
-        if (bad.length) {
+        if (bad.length || noProof.length) {
             e.preventDefault();
             bad.forEach(function (n) { n.classList.add('is-invalid'); });
-            bad[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-            bad[0].focus();
-            alert('Reporting/remarks is mandatory for every marked salesperson. Please fill the highlighted reporting box(es).');
+            noProof.forEach(function (n) { n.classList.add('is-invalid'); });
+            const first = bad[0] || noProof[0];
+            first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            first.focus();
+            alert(bad.length
+                ? 'Reporting/remarks is mandatory for every marked salesperson. Please fill the highlighted reporting box(es).'
+                : 'Work From Home needs the approval snapshot. Please attach it for the highlighted salesperson(s).');
         }
     });
     // clear the red border once they type

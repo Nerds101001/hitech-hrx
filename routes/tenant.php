@@ -608,8 +608,8 @@ Route::middleware([
         Route::get('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'index'])->name('cc-attendance.index');
         Route::post('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'store'])->name('cc-attendance.store');
         
-        Route::get('/cc-attendance/report', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'report'])->name('cc-attendance.report')->middleware('role:admin|hr|manager');
-        Route::get('/cc-attendance/report/export', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'exportReport'])->name('cc-attendance.report.export')->middleware('role:admin|hr|manager');
+        Route::get('/cc-attendance/report', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'report'])->name('cc-attendance.report');
+        Route::get('/cc-attendance/report/export', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'exportReport'])->name('cc-attendance.report.export');
         Route::get('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'monthly'])->name('cc-attendance.monthly');
         Route::post('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'storeMonthly'])->name('cc-attendance.monthly.store');
 

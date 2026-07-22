@@ -39,7 +39,7 @@ class CcAttendanceController extends Controller
                 $map = $mappings->firstWhere('sales_user_id', $salesUser->id);
                 $salesUser->mapped_cc_name = $map && $map->ccUser ? $map->ccUser->name : 'N/A';
                 return $salesUser;
-            })->unique('id');
+            })->unique('id')->values();
         } else {
             // Fetch salespeople tagged to this CCARE user
             $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
@@ -47,7 +47,7 @@ class CcAttendanceController extends Controller
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
                   ->with('designation');
-            }])->get()->pluck('salesUser')->filter();
+            }])->get()->pluck('salesUser')->filter()->unique('id')->values();
         }
 
         // Fetch their attendance for the selected date
@@ -118,14 +118,13 @@ class CcAttendanceController extends Controller
             $spPool = CcSalespersonMap::pluck('sales_user_id')->unique()->values();
             $q->whereIn('user_id', $spPool);
         } else {
-            // Manager: their team's rows — as the salesperson OR as the marker.
-            $teamIds = \App\Models\User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id);
-            $q->where(function ($w) use ($teamIds) {
-                $w->whereIn('user_id', $teamIds)
-                  ->orWhereIn('created_by_id', $teamIds)
-                  ->orWhereIn('updated_by_id', $teamIds);
+            // A CCare agent sees ONLY what they submitted themselves — never
+            // another agent's submissions, and never the whole register.
+            $q->where(function ($w) use ($user) {
+                $w->where('created_by_id', $user->id)->orWhere('updated_by_id', $user->id);
             });
-            $spPool = $teamIds;
+            $spPool = CcSalespersonMap::where('cc_user_id', $user->id)
+                ->pluck('sales_user_id')->unique()->values();
         }
 
         if ($request->filled('sp'))     $q->where('user_id', $request->sp);
@@ -139,10 +138,17 @@ class CcAttendanceController extends Controller
         return [$q, $spPool, $from, $to];
     }
 
+    /** Admin/HR see every submission; a CCare agent sees only their own. */
+    private function canSeeReport($user): bool
+    {
+        return $user->hasRole(['admin', 'Admin', 'hr', 'HR'])
+            || ($user->department && stripos($user->department->name, 'Customer Care') !== false);
+    }
+
     public function report(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+        if (!$this->canSeeReport($user)) {
             abort(403);
         }
 
@@ -169,7 +175,7 @@ class CcAttendanceController extends Controller
     public function exportReport(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager'])) {
+        if (!$this->canSeeReport($user)) {
             abort(403);
         }
 
@@ -228,7 +234,9 @@ class CcAttendanceController extends Controller
         $request->validate([
             'date' => 'required|date',
             'attendance' => 'required|array',
-            'attendance.*' => 'in:Present,Absent,Work from home,Half day,Sunday working',
+            'attendance.*' => 'nullable|in:Present,Absent,Work from home,Half day,Sunday working,__clear',
+            'wfh_proof' => 'nullable|array',
+            'wfh_proof.*' => 'nullable|image|max:5120',
             'notes' => 'nullable|array',
             'notes.*' => 'nullable|string'
         ]);
@@ -247,11 +255,21 @@ class CcAttendanceController extends Controller
         }
 
         // Reporting/remarks is MANDATORY for every salesperson being marked.
+        // Unmarked people are simply skipped, so a partial submission is fine —
+        // mark 3 of 5 today and the other 2 whenever their day is confirmed.
         $missingNotes = [];
+        $missingProof = [];
         foreach ($request->attendance as $userId => $status) {
-            if (empty($status)) continue;
+            if (empty($status) || $status === '__clear') continue;
             if (trim((string) ($request->notes[$userId] ?? '')) === '') {
                 $missingNotes[] = $userId;
+            }
+            // Work from home has to be backed by the approval snapshot, unless
+            // the row already carries one from an earlier submission.
+            if ($status === 'Work from home'
+                && !$request->hasFile("wfh_proof.$userId")
+                && !$this->existingProof($userId, $date)) {
+                $missingProof[] = $userId;
             }
         }
         if ($missingNotes) {
@@ -259,6 +277,12 @@ class CcAttendanceController extends Controller
                 ->map(fn($u) => $u->name)->implode(', ');
             return redirect()->back()->withInput()
                 ->with('error', "Reporting/remarks is mandatory — nothing was saved. Missing for: {$names}");
+        }
+        if ($missingProof) {
+            $names = \App\Models\User::whereIn('id', $missingProof)->get()
+                ->map(fn($u) => $u->name)->implode(', ');
+            return redirect()->back()->withInput()
+                ->with('error', "Work From Home needs the approval snapshot — nothing was saved. Missing for: {$names}");
         }
 
         $tenantId = Auth::user()->tenant_id;
@@ -270,6 +294,7 @@ class CcAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        $cleared = 0;
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
 
@@ -282,12 +307,27 @@ class CcAttendanceController extends Controller
                 continue;
             }
 
+            // "Clear" removes a wrongly-marked day so it can be marked again,
+            // or left blank. Soft delete keeps the record for the audit trail.
+            if ($status === '__clear') {
+                if ($attendance) {
+                    $attendance->forceFill(['updated_by_id' => $authId])->save();
+                    $attendance->delete();
+                    $cleared++;
+                }
+                continue;
+            }
+
             $dbStatus = $status;
             $note = $request->notes[$userId] ?? null;
 
             $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
             [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $date);
             $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
+
+            $proofPath = $request->hasFile("wfh_proof.$userId")
+                ? $request->file("wfh_proof.$userId")->store('wfh_approvals', 'public')
+                : null;
 
             if ($attendance) {
                 $updateData = [
@@ -296,6 +336,9 @@ class CcAttendanceController extends Controller
                     'admin_reason' => $adminReason,
                     'updated_by_id' => $authId
                 ];
+                if ($proofPath) {
+                    $updateData['attachment'] = $proofPath;
+                }
                 // Keep real biometric punches if the row already has them
                 $hasRealPunch = $attendance->check_in_time && $attendance->check_in_time->format('H:i') !== '00:00';
                 if (!$hasRealPunch) {
@@ -312,13 +355,23 @@ class CcAttendanceController extends Controller
                     'status' => $dbStatus,
                     'notes' => $note,
                     'admin_reason' => $adminReason,
+                    'attachment' => $proofPath,
                     'created_by_id' => $authId
                 ]);
             }
         }
 
-        return redirect()->route('cc-attendance.index', ['date' => $date])
-            ->with('success', 'Attendance marked successfully for the selected salespeople.');
+        $msg = 'Attendance saved for the salespeople you marked.'
+             . ($cleared ? " {$cleared} entry(ies) cleared." : '');
+        return redirect()->route('cc-attendance.index', ['date' => $date])->with('success', $msg);
+    }
+
+    /** Is a WFH approval snapshot already on file for this person/date? */
+    private function existingProof($userId, string $date): bool
+    {
+        return Attendance::where('user_id', $userId)
+            ->whereDate('check_in_time', $date)
+            ->whereNotNull('attachment')->exists();
     }
 
     /**
@@ -351,14 +404,14 @@ class CcAttendanceController extends Controller
                 $map = $mappings->firstWhere('sales_user_id', $salesUser->id);
                 $salesUser->mapped_cc_name = $map && $map->ccUser ? $map->ccUser->name : 'N/A';
                 return $salesUser;
-            })->unique('id');
+            })->unique('id')->values();
         } else {
             $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
                 // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
                   ->with('designation');
-            }])->get()->pluck('salesUser')->filter();
+            }])->get()->pluck('salesUser')->filter()->unique('id')->values();
         }
 
         // Fetch their attendance for the month
