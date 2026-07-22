@@ -242,6 +242,12 @@
                                     </td>
                                 @elseif($isSalesperson)
                                     <td class="align-middle">{{ $repDisplay }}</td>
+                                @elseif($isCcare || $isNewBiz)
+                                    {{-- A CCare/New Biz rep does not own the salesperson assignment, and
+                                         their assignable list is only themselves — so the select had no
+                                         option matching the row and every salesperson rendered blank.
+                                         $repDisplay already holds the name for exactly this case. --}}
+                                    <td class="align-middle">{{ $repDisplay }}</td>
                                 @else
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="salesperson_id">

@@ -247,14 +247,26 @@ class SalesPipelineController extends Controller
                     ->distinct()->pluck('salesperson_id'));
             })
             ->notTerminated()->orderBy('first_name')->get();
-        $newBizUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
-            ->orderBy('first_name')->get();
+        // Same union as the salesperson pool: department membership OR already
+        // tagged on a customer. Jasbir Kaur does New Biz work from the Customer
+        // Care department, so a department-only list left her out and all 355 of
+        // her rows rendered the "-NB-" placeholder instead of her name.
+        $newBizUsers = User::where(function ($q) {
+                $q->whereHas('department', fn($d) => $d->where('name', 'like', '%New Biz%')
+                        ->orWhere('name', 'like', '%New Business%'))
+                  ->orWhereIn('id', SalesPipeline::whereNotNull('new_biz_id')
+                        ->distinct()->pluck('new_biz_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
         // CCare agent pool for the add-form dropdown (previously every active
         // employee was rendered there — ~190 options of dead page weight).
-        $ccareUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
-            ->orderBy('first_name')->get();
+        $ccareUsers = User::where(function ($q) {
+                $q->whereHas('department', fn($d) => $d->where('name', 'CCARE')
+                        ->orWhere('name', 'like', '%Customer Care%'))
+                  ->orWhereIn('id', SalesPipeline::whereNotNull('ccare_id')
+                        ->distinct()->pluck('ccare_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
 
         // Filter dropdown option lists — the FULL directory of salespersons,
         // CCare and New Biz agents (not just people on visible rows): a rep can
@@ -537,14 +549,26 @@ class SalesPipelineController extends Controller
                     ->distinct()->pluck('salesperson_id'));
             })
             ->notTerminated()->orderBy('first_name')->get();
-        $newBizUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
-            ->orderBy('first_name')->get();
+        // Same union as the salesperson pool: department membership OR already
+        // tagged on a customer. Jasbir Kaur does New Biz work from the Customer
+        // Care department, so a department-only list left her out and all 355 of
+        // her rows rendered the "-NB-" placeholder instead of her name.
+        $newBizUsers = User::where(function ($q) {
+                $q->whereHas('department', fn($d) => $d->where('name', 'like', '%New Biz%')
+                        ->orWhere('name', 'like', '%New Business%'))
+                  ->orWhereIn('id', SalesPipeline::whereNotNull('new_biz_id')
+                        ->distinct()->pluck('new_biz_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
         // CCare agent pool for the add-form dropdown (previously every active
         // employee was rendered there — ~190 options of dead page weight).
-        $ccareUsers = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'CCARE')->orWhere('name', 'like', '%Customer Care%'))
-            ->orderBy('first_name')->get();
+        $ccareUsers = User::where(function ($q) {
+                $q->whereHas('department', fn($d) => $d->where('name', 'CCARE')
+                        ->orWhere('name', 'like', '%Customer Care%'))
+                  ->orWhereIn('id', SalesPipeline::whereNotNull('ccare_id')
+                        ->distinct()->pluck('ccare_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
 
         // Filter dropdown option lists — the FULL directory of salespersons,
         // CCare and New Biz agents (not just people on visible rows): a rep can
