@@ -234,9 +234,19 @@ class SalesPipelineController extends Controller
 
         // Department-scoped lists for the assignment dropdowns: the Salesperson
         // dropdown must only show Sales-department people, New Biz only New Biz.
-        $salespersons = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
-            ->orderBy('first_name')->get();
+        // Sales-department people, PLUS anyone who already owns a row. A saved
+        // salesperson with no matching option makes the dropdown fall back to
+        // its placeholder, so the row looks unassigned when it is not: staff
+        // still on 'onboarding' status, or in a differently-named department,
+        // were showing blank on ~380 pipeline rows.
+        $salespersons = User::where(function ($q) {
+                $q->where(function ($w) {
+                    $w->whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
+                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%'));
+                })->orWhereIn('id', SalesPipeline::whereNotNull('salesperson_id')
+                    ->distinct()->pluck('salesperson_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
         $newBizUsers = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
@@ -514,9 +524,19 @@ class SalesPipelineController extends Controller
 
         // Department-scoped lists for the assignment dropdowns: the Salesperson
         // dropdown must only show Sales-department people, New Biz only New Biz.
-        $salespersons = User::where('status', 'active')->notTerminated()
-            ->whereHas('department', fn($q) => $q->where('name', 'like', '%Sales%'))
-            ->orderBy('first_name')->get();
+        // Sales-department people, PLUS anyone who already owns a row. A saved
+        // salesperson with no matching option makes the dropdown fall back to
+        // its placeholder, so the row looks unassigned when it is not: staff
+        // still on 'onboarding' status, or in a differently-named department,
+        // were showing blank on ~380 pipeline rows.
+        $salespersons = User::where(function ($q) {
+                $q->where(function ($w) {
+                    $w->whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
+                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%'));
+                })->orWhereIn('id', SalesPipeline::whereNotNull('salesperson_id')
+                    ->distinct()->pluck('salesperson_id'));
+            })
+            ->notTerminated()->orderBy('first_name')->get();
         $newBizUsers = User::where('status', 'active')->notTerminated()
             ->whereHas('department', fn($q) => $q->where('name', 'like', '%New Biz%')->orWhere('name', 'like', '%New Business%'))
             ->orderBy('first_name')->get();
