@@ -329,9 +329,14 @@ class LeavePolicyService
             if (!$user->shift->$dayName) {
                 return false;
             }
+            return true;
         }
 
-        return true;
+        // 5. Nothing configured at all — 31 staff have no leave policy profile and
+        //    228 have no shift, and for them every branch above falls through.
+        //    Treating Sunday as a working day for those people is never right, so
+        //    the safe default is the company's standard weekly off.
+        return !$date->isSunday();
     }
 
     public static function checkConflicts(User $user, string $fromDate, string $toDate): array

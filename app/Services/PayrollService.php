@@ -96,8 +96,31 @@ class PayrollService
                 $cycleId = $cycle->id;
             }
             
+            // Clamp the period to the days this person was actually employed.
+            // date_of_joining is set for 227 of 231 staff but payroll never read
+            // it, so a joiner mid-month — and a leaver — were both treated as
+            // present for the whole month.
+            $periodStart = $startDate->copy();
+            $periodEnd   = $endDate->copy();
+            if ($user->date_of_joining) {
+                $joined = Carbon::parse($user->date_of_joining);
+                if ($joined->gt($periodStart)) $periodStart = $joined->copy();
+            }
+            $exit = $user->last_working_day ?: $user->exit_date;
+            if ($exit) {
+                $left = Carbon::parse($exit);
+                if ($left->lt($periodEnd)) $periodEnd = $left->copy();
+            }
+            // Employed for none of this period (joined later, or already left).
+            // Compare whole days: the period ends at 23:59:59, so diffInDays on
+            // the raw timestamps returns a fraction (1.99…) and the +1 pushed a
+            // 2-day joiner to 2.99 paid days.
+            $employedDays = $periodStart->gt($periodEnd)
+                ? 0
+                : (int) $periodStart->copy()->startOfDay()->diffInDays($periodEnd->copy()->startOfDay()) + 1;
+
             // 1. Calculate Attendance Stats
-            $attendanceData = $this->calculateAttendanceStats($user, $startDate, $endDate);
+            $attendanceData = $this->calculateAttendanceStats($user, $periodStart, $periodEnd);
             $workedDays     = $attendanceData['worked_days'];
             $hasAttendance  = $attendanceData['has_attendance']; // true if ANY record exists
             
@@ -111,7 +134,7 @@ class PayrollService
             // "no records at all = full month" created a cliff where one stray
             // record cost someone most of their salary. Holidays and weekly offs
             // are paid, and only an explicit absence or unpaid leave reduces pay.
-            $paidDays = $daysInMonth - $attendanceData['unpaid_days'];
+            $paidDays = $employedDays - $attendanceData['unpaid_days'];
             if ($paidDays < 0) $paidDays = 0;
             if ($paidDays > $daysInMonth) $paidDays = $daysInMonth;
 
@@ -390,7 +413,10 @@ class PayrollService
             $tempDate->addDay();
         }
 
-        $totalDaysInPeriod = $startDate->diffInDays($endDate) + 1;
+        // Whole days only — diffInDays on timestamps ending at 23:59:59 returns
+        // a fraction, which leaked into the reported expected-days figure.
+        $totalDaysInPeriod = (int) $startDate->copy()->startOfDay()
+            ->diffInDays($endDate->copy()->startOfDay()) + 1;
         $expectedWorkingDays = $totalDaysInPeriod - $holidays - $weekends;
 
         // A missing attendance record is a gap in the data, not proof of absence,
