@@ -236,10 +236,10 @@
                                             $currentStatus = strtolower(str_replace('_', '-', $currentStatus));
                                         }
                                         
-                                        {{-- Half day is one of the buttons on this very form, not an
-                                             approved leave. Listing it here locked those rows as "Not
-                                             Editable" even though the server would have accepted the
-                                             change. Kept in step with isLeaveStatus() in the controller. --}}
+                                        // Half day is one of the buttons on this very form, not an
+                                        // approved leave. Listing it here locked those rows as "Not
+                                        // Editable" even though the server would have accepted the
+                                        // change. Kept in step with isLeaveStatus() in the controller.
                                         $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave']);
 
                                         // Previous submissions can be corrected while the date is open
