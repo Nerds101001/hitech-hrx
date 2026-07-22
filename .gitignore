@@ -92,3 +92,6 @@ vite.config.js.timestamp-*
 
 # Import payloads containing live customer/employee data — keep out of git
 /database/data
+
+# Deployment credentials — never commit
+/deployment/.env.deploy

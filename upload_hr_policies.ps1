@@ -1,5 +1,6 @@
+# Set $env:HRX_SSH_PASSWORD before running (see deployment/README.md)
 $pscp = "C:\Program Files\PuTTY\pscp.exe"
-$opts = "-P 65002 -pw "Diplo@6589#""
+$opts = "-P 65002 -pw "$env:HRX_SSH_PASSWORD""
 $remoteBase = "u989061032@89.117.188.10:/home/u989061032/domains/hitechgroup.in/public_html/hrx"
 
 & $pscp $opts "d:\live_server\app\Http\Controllers\tenant\HRPolicyController.php" "$remoteBase/app/Http/Controllers/tenant/"
