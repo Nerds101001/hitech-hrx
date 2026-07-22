@@ -59,6 +59,37 @@ table.prev-table tr:hover td { background: #f0fdf4; }
             </div>
         </div>
 
+        {{-- Which book this file lands in. Getting this wrong is expensive: in
+             July ~2,000 customers went into the Pipeline instead of the Sales
+             Report and were invisible on the Sales Report page until corrected. --}}
+        @php $isPipelineTarget = ($importTarget ?? 'report') === 'pipeline'; @endphp
+        <div class="alert {{ $isPipelineTarget ? 'alert-warning' : 'alert-info' }} d-flex align-items-start mb-3">
+            <i class="bx {{ $isPipelineTarget ? 'bx-git-branch' : 'bx-spreadsheet' }} fs-4 me-2"></i>
+            <div class="flex-grow-1">
+                <div class="fw-bold mb-1">
+                    This file will be imported into the
+                    <span class="text-decoration-underline">{{ $isPipelineTarget ? 'SALES PIPELINE' : 'SALES REPORT' }}</span>
+                </div>
+                <div class="small mb-2">
+                    @if($isPipelineTarget)
+                        These rows will appear on the <strong>Sales Pipeline</strong> page only — <strong>not</strong> on the
+                        Sales Report. Use this only for prospect/pipeline files.
+                        <a href="{{ route('sales-visits.pipeline.import') }}?target=report">Switch to Sales Report instead</a>.
+                    @else
+                        These rows will appear on the <strong>Sales Report</strong> page. This is the usual choice for
+                        sales/customer files.
+                        <a href="{{ route('sales-visits.pipeline.import') }}?target=pipeline">Switch to Sales Pipeline instead</a>.
+                    @endif
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirmTarget" required>
+                    <label class="form-check-label small fw-semibold" for="confirmTarget">
+                        I confirm this file belongs in the {{ $isPipelineTarget ? 'Sales Pipeline' : 'Sales Report' }}.
+                    </label>
+                </div>
+            </div>
+        </div>
+
         {{-- Table --}}
         <div class="card border-0 shadow-sm" style="border-radius:12px; overflow:hidden;">
             <div class="table-responsive">
