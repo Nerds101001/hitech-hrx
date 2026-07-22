@@ -44,6 +44,10 @@ class Payslip extends Model implements AuditableContract
     'epf',
     'esic',
     'month_calculation_mode',
+    // How many days of the period the person was employed, and how many
+    // of those were paid — the two figures that decide the amount.
+    'employed_days',
+    'paid_days',
   ];
 
   protected $casts = [
