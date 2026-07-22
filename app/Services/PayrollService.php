@@ -103,13 +103,17 @@ class PayrollService
             
             // If NO attendance records exist for this month, employee is assumed to be
             // working the full month (manual/non-biometric staff). Full salary paid.
-            if (!$hasAttendance) {
-                $paidDays = $daysInMonth; // full month
-            } else {
-                // We consider Worked Days + Holidays + Weekends as "Paid Days"
-                $paidDays = $workedDays + $attendanceData['holidays'] + $attendanceData['weekends'];
-                if ($paidDays > $daysInMonth) $paidDays = $daysInMonth;
-            }
+            // Pay the full month, less the days actually recorded as unpaid.
+            //
+            // This used to be worked + holidays + weekends, which made pay depend
+            // on attendance records EXISTING. 13% of working days have no record,
+            // so people who plainly worked were losing days; and the fallback
+            // "no records at all = full month" created a cliff where one stray
+            // record cost someone most of their salary. Holidays and weekly offs
+            // are paid, and only an explicit absence or unpaid leave reduces pay.
+            $paidDays = $daysInMonth - $attendanceData['unpaid_days'];
+            if ($paidDays < 0) $paidDays = 0;
+            if ($paidDays > $daysInMonth) $paidDays = $daysInMonth;
 
             // Retrieve Salary Policy
             $policy = $user->salaryPolicy;
@@ -277,6 +281,17 @@ class PayrollService
     }
 
     /**
+     * Every status the system uses for a leave day. 'on_leave' matched none of
+     * the old branches, so those days counted as neither worked nor absent and
+     * were only swept up by the unrecorded-days backfill by accident.
+     */
+    private function isLeaveStatus(string $status): bool
+    {
+        return in_array($status, ['leave', 'paid_leave', 'unpaid_leave', 'on_leave'], true)
+            || str_contains($status, '_leave');
+    }
+
+    /**
      * Calculate attendance stats for a user in a date range.
      */
     private function calculateAttendanceStats($user, $startDate, $endDate)
@@ -323,19 +338,25 @@ class PayrollService
             } elseif ($status === 'half-day') {
                 $workedDays += 0.5;
                 $absents += 0.5;
-            } elseif ($status === 'leave' || $status === 'paid_leave' || str_contains($status, 'paid')) {
-                // If Paid Leave, it counts as worked day equivalent for payroll
-                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
+            } elseif ($this->isLeaveStatus($status)) {
+                // Whether a leave is paid comes from the leave record, never from
+                // the status text. str_contains($status, 'paid') used to decide
+                // this, and "unpaid_leave" contains "paid" - so every unpaid leave
+                // was paid as a full worked day, and the unpaid branch below it
+                // could never be reached. A bare 'leave' status was likewise paid
+                // regardless of the leave type or the is_lwp flag.
+                $leave    = $att->leaveRequest;
+                $isPaid   = $leave
+                    ? ((bool) optional($leave->leaveType)->is_paid && !$leave->is_lwp)
+                    : ($status === 'paid_leave');   // no linked request: trust an explicit paid status only
+                $isHalf   = $leave && $leave->is_half_day;
+
+                if ($isHalf) {
+                    // Half the day was worked either way; the other half is paid or not.
                     $workedDays += 0.5;
-                    $absents += 0.5;
+                    $isPaid ? $workedDays += 0.5 : $absents += 0.5;
                 } else {
-                    $workedDays += 1.0;
-                }
-            } elseif ($status === 'unpaid_leave' || str_contains($status, 'unpaid')) {
-                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
-                    $absents += 0.5;
-                } else {
-                    $absents += 1.0;
+                    $isPaid ? $workedDays += 1.0 : $absents += 1.0;
                 }
             } elseif ($status === 'wfh' || str_contains($status, 'work_from_home')) {
                 $workedDays += 1.0;
@@ -358,7 +379,12 @@ class PayrollService
             $dateString = $tempDate->toDateString();
             if (in_array($dateString, $holidayDates)) {
                 $holidays++;
-            } elseif ($tempDate->isWeekend()) {
+            } elseif (!\App\Services\LeavePolicyService::isWorkingDay($user, $tempDate->copy())) {
+                // Carbon's isWeekend() was used here, treating Saturday as off for
+                // everyone. Most staff work every Saturday, and those who don't
+                // follow per-profile rules (alternate / all Saturdays). The leave
+                // module, registry and dashboards already use isWorkingDay(); this
+                // brings payroll onto the same definition.
                 $weekends++;
             }
             $tempDate->addDay();
@@ -366,22 +392,23 @@ class PayrollService
 
         $totalDaysInPeriod = $startDate->diffInDays($endDate) + 1;
         $expectedWorkingDays = $totalDaysInPeriod - $holidays - $weekends;
-        
-        // Absents should be any expected working days that were not worked.
-        // But since we already tracked $absents from explicit records (like half days or unpaid leaves),
-        // we can just ensure total recorded (worked + absents) matches expected working days.
-        $unrecordedDays = $expectedWorkingDays - ($workedDays + $absents);
-        
-        if ($unrecordedDays > 0) {
-            $absents += $unrecordedDays;
-        }
+
+        // A missing attendance record is a gap in the data, not proof of absence,
+        // so it no longer becomes one. Previously every unrecorded working day was
+        // added to $absents, which is why staff with sparse biometric data looked
+        // absent for most of the month. $absents now means what it says: days
+        // explicitly recorded as absent or unpaid leave.
+        $unrecordedDays = max(0, $expectedWorkingDays - ($workedDays + $absents));
 
         return [
-            'worked_days'    => $workedDays,
-            'has_attendance' => $hasAttendance,
-            'holidays'       => $holidays,
-            'weekends'       => $weekends,
-            'absents'        => $absents,
+            'worked_days'     => $workedDays,
+            'has_attendance'  => $hasAttendance,
+            'holidays'        => $holidays,
+            'weekends'        => $weekends,
+            'absents'         => $absents,
+            'unpaid_days'     => $absents,   // what actually reduces pay
+            'expected_days'   => $expectedWorkingDays,
+            'unrecorded_days' => $unrecordedDays,   // reporting only — never deducted
         ];
     }
 
