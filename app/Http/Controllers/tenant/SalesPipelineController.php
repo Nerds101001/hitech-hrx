@@ -634,6 +634,19 @@ class SalesPipelineController extends Controller
             }
         }
 
+        // A customer belongs to ONE category at a time — CCare or New Biz, never
+        // both. Anyone else genuinely involved is recorded under Other Reps.
+        // 27 rows had drifted into holding both, which made the Category and
+        // Representative columns disagree with the filter that found them.
+        if ($ccareId && $newBizId) {
+            if ($ccareId === $newBizId) {
+                $newBizId = null;                 // same person in both slots
+            } else {
+                $extraRepFromConflict = $newBizId; // demoted to Other Reps below
+                $newBizId = null;
+            }
+        }
+
         // Sales Report rows are "locked" (is_locked = true) — that is exactly
         // what the Sales Report page lists. Pipeline rows pass is_locked = 0.
         $isLocked = filter_var($request->input('is_locked', true), FILTER_VALIDATE_BOOLEAN);
@@ -651,6 +664,15 @@ class SalesPipelineController extends Controller
             'address'                  => $request->address,
             'is_locked'                => $isLocked,
         ]);
+
+        // The agent displaced by the one-category rule stays visible on the
+        // customer as an additional representative rather than being dropped.
+        if (!empty($extraRepFromConflict)) {
+            \App\Models\SalesPipelineExtraRep::firstOrCreate([
+                'sales_pipeline_id' => $pipeline->id,
+                'user_id'           => $extraRepFromConflict,
+            ]);
+        }
 
         // Persist any month figures entered on the add form.
         foreach ((array) $request->input('months', []) as $mk => $fields) {
@@ -734,6 +756,29 @@ class SalesPipelineController extends Controller
 
         if (isset($data['status_stage']) && in_array($data['status_stage'], ['Order', 'Repeat Order'])) {
             $data['is_locked'] = true;
+        }
+
+        // One category at a time. Setting a CCare agent clears the New Biz slot
+        // and the reverse, so the Category and Representative columns can never
+        // disagree with the filter that found the row. The person being replaced
+        // keeps visibility as an additional representative.
+        $displacedRep = null;
+        if (array_key_exists('ccare_id', $data) && !empty($data['ccare_id'])) {
+            if ($pipeline->new_biz_id && $pipeline->new_biz_id != $data['ccare_id']) {
+                $displacedRep = $pipeline->new_biz_id;
+            }
+            $data['new_biz_id'] = null;
+        } elseif (array_key_exists('new_biz_id', $data) && !empty($data['new_biz_id'])) {
+            if ($pipeline->ccare_id && $pipeline->ccare_id != $data['new_biz_id']) {
+                $displacedRep = $pipeline->ccare_id;
+            }
+            $data['ccare_id'] = null;
+        }
+        if ($displacedRep) {
+            \App\Models\SalesPipelineExtraRep::firstOrCreate([
+                'sales_pipeline_id' => $pipeline->id,
+                'user_id'           => $displacedRep,
+            ]);
         }
 
         // ── Handle Category change (Admin/HR/Manager + CCare/New Biz) ───────
