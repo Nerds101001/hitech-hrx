@@ -23,7 +23,7 @@
           <div class="app-brand justify-content-center mb-6">
             <a href="{{url('/')}}" class="app-brand-link gap-2">
                             <span class="app-brand-logo demo">
-                               <img src="{{asset('assets/img/logo.png')}}" alt="Logo" width="27">
+                               <img src="{{asset('assets/img/logo.png')}}" alt="HRX — Hitech Group" style="width: 150px; height: auto;">
                             </span>
               <span class="app-brand-text demo text-heading fw-bold">{{ config('variables.templateFullName') }}</span>
             </a>

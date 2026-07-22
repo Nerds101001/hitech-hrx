@@ -58,11 +58,8 @@ $customizerHidden = 'customizer-hide';
       {{-- LEFT IDENTITY PANEL --}}
       <div class="identity-panel animate__animated animate__fadeInLeft">
         <div class="content">
-          <div class="glass-x-logo logo-lg">
-            <div class="x-leg-1"></div>
-            <div class="x-leg-2"></div>
-            <i class="bx bx-lock-open-alt pulse-line"></i>
-          </div>
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="HRX — Hitech Group"
+               class="identity-logo" style="width: 200px; max-width: 80%; height: auto; flex-shrink: 0; margin-bottom: 1.5rem;">
           <div class="brand-section">
             <h1>ACCOUNT <span class="hrx-light">UNLOCK</span></h1>
             <div class="hitech-slogan">Self-Service Recovery</div>

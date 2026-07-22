@@ -28,7 +28,7 @@
       {{-- LEFT IDENTITY PANEL (desktop only) --}}
       <div class="identity-panel">
         <div class="content">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo">
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo" style="width: 200px; max-width: 80%; height: auto; flex-shrink: 0; margin-bottom: 1.5rem;"
           <h1>Set New Password</h1>
           <div class="features">
             <div class="feature-item">
@@ -53,7 +53,7 @@
 
         {{-- MOBILE BRAND BANNER --}}
         <div class="mobile-brand-banner">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo">
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo" style="width: 160px; max-width: 70%; height: auto; flex-shrink: 0;"
           <h2>Set New Password</h2>
           <p>Secure Gateway — Choose a strong new password below</p>
           <span class="version-badge">SYSTEM V4.2.0-ADMIN</span>

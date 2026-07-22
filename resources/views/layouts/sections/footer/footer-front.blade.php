@@ -8,7 +8,7 @@
         <div class="col-lg-5">
           <a href="javascript:;" class="app-brand-link mb-6">
             <span class="app-brand-logo demo">
-              <img src="{{asset('assets/img/logo.png')}}" alt="Logo" width="27">
+              <img src="{{asset('assets/img/logo.png')}}" alt="HRX — Hitech Group" style="height: 30px; width: auto; object-fit: contain;">
             </span>
             <span
               class="app-brand-text demo text-white fw-bold ms-2 ps-1">{{config('variables.templateFullName')}}</span>

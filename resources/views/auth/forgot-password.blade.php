@@ -20,7 +20,7 @@
       {{-- LEFT IDENTITY PANEL (desktop only) --}}
       <div class="identity-panel animate__animated animate__fadeInLeft">
         <div class="content">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo" style="width: 130px; margin-bottom: 2rem;">
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo" style="width: 200px; max-width: 80%; height: auto; flex-shrink: 0; margin-bottom: 1.5rem;">
           <h1 style="font-size: 1.75rem; font-weight: 800; letter-spacing: -0.5px;">Password<br>Recovery</h1>
           <div class="features" style="margin-top: 2rem;">
             <div class="feature-item" style="margin-bottom: 1.5rem;">
@@ -41,7 +41,7 @@
 
         {{-- MOBILE BRAND BANNER —shown only on phones --}}
         <div class="mobile-brand-banner">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo">
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo" style="width: 160px; max-width: 70%; height: auto; flex-shrink: 0;"
           <h2>Password Recovery</h2>
           <p>Secure Gateway — Enter your email to reset your password</p>
           <span class="version-badge">SYSTEM V4.2.0-ADMIN</span>

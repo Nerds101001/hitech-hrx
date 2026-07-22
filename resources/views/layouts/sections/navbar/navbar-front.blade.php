@@ -21,7 +21,7 @@ $activeClass = in_array($currentRouteName, $activeRoutes) ? 'active' : '';
         <a href="javascript:" class="app-brand-link">
           <span
             class="app-brand-logo demo">
-            <img src="{{asset('assets/img/logo.png')}}" alt="Logo" width="27">
+            <img src="{{asset('assets/img/logo.png')}}" alt="HRX — Hitech Group" style="height: 30px; width: auto; object-fit: contain;">
           </span>
           <span class="app-brand-text demo menu-text fw-bold ms-2 ps-1">{{config('variables.templateName')}}</span>
         </a>
