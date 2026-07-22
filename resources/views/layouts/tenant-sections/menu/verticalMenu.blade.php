@@ -7,12 +7,79 @@
 @endphp
 
 {{-- 1. SIDEBAR CONTAINER --}}
+{{-- Collapsed ("icon rail") state. This custom sidebar had no styling for the
+     theme's layout-menu-collapsed class at all, so minimising it left labels
+     clipped mid-word and the profile card overflowing. --}}
+<style>
+  .hitech-logo-mark { display: none; height: 34px; width: 34px; object-fit: contain; }
+
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar {
+    width: 78px !important;
+  }
+  /* Logo: full wordmark out, square mark in, centred on the rail */
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-logo-full { display: none; }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-logo-mark { display: block; }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-logo-area {
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Icons only — no labels, no submenus, no section headings */
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-menu-text,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-submenu,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .menu-lock-icon,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-menu-header,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .menu-header {
+    display: none !important;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-menu-link {
+    justify-content: center;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-menu-icon {
+    margin: 0 !important;
+    font-size: 1.35rem;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-menu-link::after {
+    display: none !important;   /* submenu caret */
+  }
+
+  /* Profile card: just the round avatar */
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-user-meta,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-profile-actions {
+    display: none !important;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-profile-card {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-profile-info {
+    justify-content: center !important;
+  }
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-avatar,
+  html.layout-menu-collapsed:not(.layout-menu-hover) .hitech-sidebar .hitech-avatar img {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 50% !important;
+    object-fit: cover;
+    margin: 0 !important;
+  }
+
+  /* Hovering the rail restores the full menu (theme adds layout-menu-hover) */
+  html.layout-menu-collapsed.layout-menu-hover .hitech-sidebar { width: 260px !important; }
+</style>
+
 <aside id="layout-menu" class="hitech-sidebar layout-menu menu-vertical menu" style="background-color: #ffffff !important;">
 
   {{-- 1. LOGO HUB --}}
   <div class="hitech-logo-area d-flex align-items-center justify-content-start px-4" style="height: 70px; background: #ffffff !important; border-bottom: 1px solid rgba(0,0,0,0.05);">
     <a href="{{url('/')}}" class="hitech-logo-link d-flex align-items-center">
-      <img src="{{ asset('assets/img/logo.png') }}" alt="HRX Logo" style="max-height: 45px; max-width: 160px; width: auto; object-fit: contain;">
+      <img src="{{ asset('assets/img/logo.png') }}" alt="HRX Logo" class="hitech-logo-full"
+           style="max-height: 45px; max-width: 160px; width: auto; object-fit: contain;">
+      {{-- Shown only when the sidebar is collapsed to the icon rail. --}}
+      <img src="{{ asset('assets/img/logo-mark.png') }}" alt="HRX" class="hitech-logo-mark">
     </a>
   </div>
 
@@ -61,21 +128,26 @@
 
         @if (!isset($menu->menuHeader))
           @php
+            // A parent was only compared against its OWN slug list, so opening a
+            // page whose route is not in that list (Sales Report, Sales Pipeline,
+            // Kingo Bingo...) left the sidebar with nothing highlighted and the
+            // group collapsed. Match the submenu slugs too, and treat
+            // "<slug>.<something>" as belonging to <slug>.
+            $currentRouteName = Route::currentRouteName() ?? '';
+            $menuMatches = function ($slug) use ($currentRouteName) {
+              foreach ((array) $slug as $s) {
+                if (!is_string($s) || $s === '') continue;
+                if ($currentRouteName === $s || str_starts_with($currentRouteName, $s . '.')) return true;
+              }
+              return false;
+            };
             $activeClass = '';
-            $currentRouteName = Route::currentRouteName();
-            if ($currentRouteName === ($menu->slug ?? '')) {
-              $activeClass = 'active';
-            } elseif (isset($menu->submenu)) {
-              if (gettype($menu->slug) === 'array') {
-                foreach($menu->slug as $slug) {
-                  if (str_contains($currentRouteName, $slug) && strpos($currentRouteName, $slug) === 0) {
-                    $activeClass = 'active open';
-                  }
-                }
-              } else {
-                if (str_contains($currentRouteName, ($menu->slug ?? '')) && strpos($currentRouteName, ($menu->slug ?? '')) === 0) {
-                  $activeClass = 'active open';
-                }
+            if ($menuMatches($menu->slug ?? '')) {
+              $activeClass = isset($menu->submenu) ? 'active open' : 'active';
+            }
+            if (isset($menu->submenu)) {
+              foreach ($menu->submenu as $sm) {
+                if ($menuMatches($sm->slug ?? '')) { $activeClass = 'active open'; break; }
               }
             }
           @endphp
@@ -111,7 +183,7 @@
                          if (!$user || !$user->can($submenu->permission)) continue;
                      }
                     @endphp
-                    <li class="hitech-submenu-item {{ Route::currentRouteName() === $submenu->slug ? 'active' : '' }}">
+                    <li class="hitech-submenu-item {{ $menuMatches($submenu->slug ?? '') ? 'active' : '' }}">
                        <a href="{{ url($submenu->url) }}" class="hitech-submenu-link">
                           {{ __($submenu->name) }}
                        </a>

@@ -11,6 +11,21 @@ use Carbon\Carbon;
 
 class SalesPipelineController extends Controller
 {
+    /**
+     * The real product brands and the spellings they appear under in the
+     * free-text `product` column, used by the Brand filter.
+     */
+    private const BRANDS = [
+        'Rust-X'     => ['rust-x', 'rustx', 'rust x'],
+        'Dr. Bio'    => ['dr.bio', 'dr. bio', 'dr bio', 'drbio'],
+        'Fillezy'    => ['fillezy', 'filezy'],
+        'KIF'        => ['kif'],
+        'Zorbit'     => ['zorbit'],
+        'Tuffpaulin' => ['tuffpaulin', 'tuff paulin'],
+        'Neutrasafe' => ['neutrasafe'],
+        'HITECH'     => ['hitech'],
+    ];
+
     public function index(Request $request)
     {
         // Get current financial year as default (April to March)
@@ -118,6 +133,18 @@ class SalesPipelineController extends Controller
         $fNb = $request->input('nb');      // new_biz_id
         if (!empty($fNb)) {
             $query->where('new_biz_id', $fNb);
+        }
+        // Brand filter. The Brand column is the free-text `product` field, which
+        // holds things like "dr. bio - fillezy - rustx", so filtering on exact
+        // values would offer hundreds of one-off options. Match the real brands
+        // by their spelling variants instead.
+        $fBrand = trim((string) $request->input('brand', ''));
+        if ($fBrand !== '' && isset(self::BRANDS[$fBrand])) {
+            $query->where(function ($w) use ($fBrand) {
+                foreach (self::BRANDS[$fBrand] as $alias) {
+                    $w->orWhere('product', 'like', '%' . $alias . '%');
+                }
+            });
         }
         // Category filter — mirrors the Category column: "New Biz" when a New Biz
         // rep is set, "CCare" when only a CCare rep is set, "None" when neither.
@@ -240,6 +267,22 @@ class SalesPipelineController extends Controller
         $spFilterCounts    = $countsFor('salesperson_id');
         $ccareFilterCounts = $countsFor('ccare_id');
         $nbFilterCounts    = $countsFor('new_biz_id');
+        // Brand options, built from the brands actually present in what this
+        // user can see, each with its row count.
+        // Bucket the free-text product values into the real brands. One grouped
+        // query, then counted in PHP — a row naming two brands counts for both.
+        $rawProducts = (clone $optionBase)->whereNotNull('product')->where('product', '<>', '')
+            ->selectRaw('product, COUNT(*) as c')->groupBy('product')->pluck('c', 'product');
+        $brandCounts = collect(self::BRANDS)->map(function ($aliases) use ($rawProducts) {
+            $n = 0;
+            foreach ($rawProducts as $name => $c) {
+                $l = strtolower((string) $name);
+                foreach ($aliases as $a) {
+                    if (str_contains($l, $a)) { $n += $c; break; }
+                }
+            }
+            return $n;
+        })->filter();
 
         $salespersonFilterUsers = User::whereIn('id', $spFilterCounts->keys()->all())->orderBy('first_name')->get();
         $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
@@ -340,7 +383,7 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function actualPipelineIndex(Request $request)

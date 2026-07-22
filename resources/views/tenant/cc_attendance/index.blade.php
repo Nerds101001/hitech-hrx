@@ -211,30 +211,30 @@
                                                 <div class="d-flex flex-column gap-2">
                                                     <div class="d-flex gap-2">
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="present_{{ $emp->id }}" value="Present" {{ $sel === 'Present' ? 'checked' : '' }}>
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="present_{{ $emp->id }}" value="Present" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Present' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-success fw-bold px-3" for="present_{{ $emp->id }}">P</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="absent_{{ $emp->id }}" value="Absent" {{ $sel === 'Absent' ? 'checked' : '' }}>
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="absent_{{ $emp->id }}" value="Absent" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Absent' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-danger fw-bold px-3" for="absent_{{ $emp->id }}">A</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="hd_{{ $emp->id }}" value="Half day" {{ $sel === 'Half day' ? 'checked' : '' }}>
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="hd_{{ $emp->id }}" value="Half day" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Half day' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-warning fw-bold px-3" for="hd_{{ $emp->id }}">HD</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="wfh_{{ $emp->id }}" value="Work from home" {{ $sel === 'Work from home' ? 'checked' : '' }}>
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="wfh_{{ $emp->id }}" value="Work from home" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Work from home' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-primary fw-bold px-3" for="wfh_{{ $emp->id }}">WFH</label>
                                                         </div>
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="sunday_{{ $emp->id }}">PS</label>
                                                         </div>
                                                         {{-- Clear removes a wrongly-marked day so it can be
                                                              re-marked, or left blank altogether. --}}
                                                         @if($record)
                                                         <div class="form-check custom-option custom-option-icon mb-0">
-                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="clr_{{ $emp->id }}" value="__clear">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="clr_{{ $emp->id }}" value="__clear" onchange="ccToggleWfh({{ $emp->id }}, this.value)">
                                                             <label class="form-check-label text-muted fw-bold px-3" for="clr_{{ $emp->id }}" title="Delete this entry">
                                                                 <i class="ti ti-trash"></i> Clear
                                                             </label>
@@ -280,18 +280,19 @@
 </div>
 
 <script>
+// Called inline from every status radio — the approval-snapshot box must appear
+// the moment WFH is picked, without depending on listener binding order.
+function ccToggleWfh(uid, value) {
+    const box = document.getElementById('wfhbox_' + uid);
+    if (box) box.style.display = (value === 'Work from home') ? 'block' : 'none';
+}
+</script>
+<script>
 // Reporting/remarks is mandatory: block submit when any marked salesperson
 // has an empty reporting box (server enforces this too).
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.querySelector('form[action="{{ route('cc-attendance.store') }}"]');
     if (!form) return;
-    // Show the approval-snapshot box only for Work from home.
-    form.addEventListener('change', function (e) {
-        const m = e.target.name && e.target.name.match(/^attendance\[(\d+)\]$/);
-        if (!m) return;
-        const box = document.getElementById('wfhbox_' + m[1]);
-        if (box) box.style.display = (e.target.value === 'Work from home') ? 'block' : 'none';
-    });
 
     form.addEventListener('submit', function (e) {
         const bad = [];      // missing reporting remarks

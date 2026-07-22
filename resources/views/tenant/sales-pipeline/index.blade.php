@@ -111,6 +111,12 @@
                         <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $ccareFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
                 </select>
+                <select class="form-select" name="brand" style="width:150px;" onchange="this.form.submit()">
+                    <option value="">All Brands ({{ $brandCounts->sum() }})</option>
+                    @foreach($brandCounts as $bName => $bCount)
+                        <option value="{{ $bName }}" {{ (string)($fBrand ?? '') === (string)$bName ? 'selected' : '' }}>{{ $bName }} ({{ $bCount }})</option>
+                    @endforeach
+                </select>
                 <select class="form-select" name="nb" style="width:170px;" onchange="this.form.submit()">
                     <option value="">All New Biz ({{ $nbFilterCounts->sum() }})</option>
                     @foreach($newBizFilterUsers as $au)
