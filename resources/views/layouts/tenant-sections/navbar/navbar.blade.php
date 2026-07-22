@@ -6,14 +6,55 @@
     $initial = Auth::user() ? Auth::user()->getInitials() : 'DU';
   @endphp
 
+  <style>
+    /* Sidebar toggle: three bars that fold into a chevron when the rail is
+       collapsed, so the button shows which way it will move. */
+    .hitech-menu-toggle { display: inline-flex; }
+    .hitech-menu-toggle .hmt-btn {
+      width: 40px; height: 40px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 12px;
+      background: #f1f6f6;
+      border: 1px solid rgba(13, 115, 119, .10);
+      transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .12s ease;
+    }
+    .hitech-menu-toggle:hover .hmt-btn {
+      background: #0d7377;
+      border-color: #0d7377;
+      box-shadow: 0 6px 16px rgba(13, 115, 119, .28);
+    }
+    .hitech-menu-toggle:active .hmt-btn { transform: scale(.94); }
+
+    .hmt-bars { position: relative; width: 18px; height: 14px; display: block; }
+    .hmt-bars i {
+      position: absolute; left: 0; height: 2px; width: 100%;
+      background: #0d7377; border-radius: 2px;
+      transition: transform .28s cubic-bezier(.4, 0, .2, 1), width .28s ease, background .18s ease;
+      transform-origin: left center;
+    }
+    .hmt-bars i:nth-child(1) { top: 0; }
+    .hmt-bars i:nth-child(2) { top: 6px; }
+    .hmt-bars i:nth-child(3) { top: 12px; }
+    .hitech-menu-toggle:hover .hmt-bars i { background: #fff; }
+
+    /* Collapsed: top and bottom bars angle in to form a ">" */
+    html.layout-menu-collapsed .hmt-bars i:nth-child(1) { transform: rotate(45deg) translate(1px, -1px); width: 62%; }
+    html.layout-menu-collapsed .hmt-bars i:nth-child(2) { width: 100%; }
+    html.layout-menu-collapsed .hmt-bars i:nth-child(3) { transform: rotate(-45deg) translate(1px, 1px); width: 62%; }
+  </style>
+
   <nav class="layout-navbar navbar navbar-expand-xl align-items-center bg-navbar-theme hitech-navbar" id="layout-navbar">
     <div class="container-fluid">
 
-          <!-- ! Menu toggle for mobile -->
+          <!-- Sidebar toggle. Keeps the .layout-menu-toggle hook the theme JS
+               binds to; the icon reflects whether the rail is collapsed. -->
           @if(!isset($navbarHideToggle))
             <div class="layout-menu-toggle navbar-nav align-items-xl-center me-3 me-xl-0">
-              <a class="nav-item nav-link px-0" href="javascript:void(0)">
-                <i class="bx bx-menu bx-md"></i>
+              <a class="nav-item nav-link px-0 hitech-menu-toggle" href="javascript:void(0)"
+                 title="Collapse / expand menu" aria-label="Collapse or expand the menu">
+                <span class="hmt-btn">
+                  <span class="hmt-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+                </span>
               </a>
             </div>
           @endif
