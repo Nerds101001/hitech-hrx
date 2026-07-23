@@ -306,7 +306,14 @@ class SalesPipelineController extends Controller
             return $n;
         })->filter();
 
-        $salespersonFilterUsers = User::whereIn('id', $spFilterCounts->keys()->all())->orderBy('first_name')->get();
+        // Salesperson filter = the FULL salesperson directory, not just those on
+        // this user's visible rows. A New Biz rep is independent — she coordinates
+        // across the whole sales org and holds one-off customers under many
+        // salespersons — so every salesperson must be filterable even when she has
+        // no rows tagged to them yet (they show a (0) count). Row visibility stays
+        // scoped by SalesScope, so an out-of-scope pick simply returns nothing new.
+        // CCare / New Biz filters stay scoped to people who actually hold rows here.
+        $salespersonFilterUsers = $salespersons;
         $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
 
@@ -592,7 +599,14 @@ class SalesPipelineController extends Controller
         $ccareFilterCounts = $countsFor('ccare_id');
         $nbFilterCounts    = $countsFor('new_biz_id');
 
-        $salespersonFilterUsers = User::whereIn('id', $spFilterCounts->keys()->all())->orderBy('first_name')->get();
+        // Salesperson filter = the FULL salesperson directory, not just those on
+        // this user's visible rows. A New Biz rep is independent — she coordinates
+        // across the whole sales org and holds one-off customers under many
+        // salespersons — so every salesperson must be filterable even when she has
+        // no rows tagged to them yet (they show a (0) count). Row visibility stays
+        // scoped by SalesScope, so an out-of-scope pick simply returns nothing new.
+        // CCare / New Biz filters stay scoped to people who actually hold rows here.
+        $salespersonFilterUsers = $salespersons;
         $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
         $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
 
