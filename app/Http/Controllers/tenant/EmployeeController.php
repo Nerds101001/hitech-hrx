@@ -60,6 +60,9 @@ class EmployeeController extends Controller
 
   public function addOrUpdateLeaveCount(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.manage_leave_balance')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'userId' => 'required|exists:users,id',
       'leaveTypeId' => 'required|exists:leave_types,id',
@@ -90,6 +93,9 @@ class EmployeeController extends Controller
 
   public function addOrUpdatePayrollAdjustment(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.manage_payroll_adjustment')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'id' => 'nullable|exists:payroll_adjustments,id',
       'adjustmentName' => 'required|string|max:255',
@@ -145,8 +151,12 @@ class EmployeeController extends Controller
       'bankDocument' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120'
     ]);
 
-    // Security check: Only allow users to update their own bank account unless they are admin/hr/manager
-    if ($validated['userId'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+    // Security check: Only allow users to update their own bank account
+    // unless they are admin/hr/manager/accounts (or hold employee.view_banking
+    // directly, for updating someone else's without that role).
+    if ($validated['userId'] != auth()->id()
+        && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])
+        && !auth()->user()->can('employee.view_banking')) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
@@ -301,6 +311,9 @@ class EmployeeController extends Controller
 
   public function deletePayrollAdjustment($id)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.manage_payroll_adjustment')) {
+      abort(403);
+    }
     $validated = validator(['id' => $id], ['id' => 'required|exists:payroll_adjustments,id'])->validate();
 
     $payrollAdjustment = PayrollAdjustment::find($validated['id']);
@@ -314,6 +327,9 @@ class EmployeeController extends Controller
 
   public function removeDevice(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.manage_device')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'userId' => 'required|exists:users,id',
     ]);
@@ -330,6 +346,9 @@ class EmployeeController extends Controller
 
   public function allotDevice(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.manage_device')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'userId' => 'required|exists:users,id',
       'deviceId' => 'nullable|string|max:255',
@@ -433,6 +452,9 @@ class EmployeeController extends Controller
 
   public function updateWorkInformation(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.edit')) {
+      abort(403);
+    }
 
     $validated = $request->validate([
       'id' => 'required|exists:users,id',
@@ -547,6 +569,9 @@ class EmployeeController extends Controller
 
   public function updateCompensationInfo(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.edit')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'id' => 'required|exists:users,id',
       'baseSalary' => 'nullable|numeric|min:0',
@@ -595,8 +620,11 @@ class EmployeeController extends Controller
       'file' => 'required|file|mimes:pdf,jpg,png,jpeg|max:10240',
     ]);
 
-    // Security check: Only allow users to upload their own document unless they are admin/hr/manager
-    if ($request->userId != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    // Security check: Only allow users to upload their own document unless
+    // they are admin/hr/manager (or hold employee.edit_document directly).
+    if ($request->userId != auth()->id()
+        && !auth()->user()->hasRole(['admin', 'hr', 'manager'])
+        && !auth()->user()->can('employee.edit_document')) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
@@ -752,8 +780,11 @@ class EmployeeController extends Controller
       'biometric_id' => 'nullable|string|max:255',
     ]);
 
-    // Security check: Only allow users to update their own records unless they are admin/hr/manager
-    if ($validated['id'] != auth()->id() && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+    // Security check: Only allow users to update their own records unless
+    // they are admin/hr/manager/accounts (or hold employee.edit directly).
+    if ($validated['id'] != auth()->id()
+        && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])
+        && !auth()->user()->can('employee.edit')) {
       return redirect()->back()->with('error', 'Unauthorized action.');
     }
 
@@ -1188,6 +1219,9 @@ class EmployeeController extends Controller
   public function index()
   {
     $currentUser = auth()->user();
+    if (!$currentUser->hasRole(['admin', 'hr', 'accounts']) && !$currentUser->can('employee.view')) {
+      abort(403);
+    }
     $scopedIds = $this->getScopedUserIds($currentUser);
 
     \Illuminate\Support\Facades\DB::enableQueryLog();
@@ -1448,6 +1482,9 @@ class EmployeeController extends Controller
 
   public function deleteEmployeeAjax($id)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.delete')) {
+      abort(403);
+    }
     if (env('APP_DEMO')) {
       return Error::response('This feature is disabled in the demo.');
     }
@@ -1478,6 +1515,9 @@ class EmployeeController extends Controller
 
   public function unlockSecurityAjax(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.reset_password')) {
+      abort(403);
+    }
     try {
       $user = User::findOrFail($request->id);
       $user->update([
@@ -1493,6 +1533,9 @@ class EmployeeController extends Controller
 
   public function resetPasswordAjax(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.reset_password')) {
+      abort(403);
+    }
     try {
       $user = User::findOrFail($request->id);
       
@@ -1616,9 +1659,24 @@ class EmployeeController extends Controller
         }
     }
 
+    $learnHitechPresented = \App\Models\LibraryFile::where('category', 'LEARN')
+      ->where('presenter_id', $id)
+      ->orderByDesc('session_date')
+      ->get(['id', 'title', 'session_date', 'youtube_url']);
+    $learnHitechLogs = \App\Models\LearnHitechLog::where('user_id', $id)
+      ->with('libraryFile:id,title,session_date')
+      ->latest()
+      ->get();
+    $latestScorecard = \App\Models\AppraisalScorecard::where('user_id', $id)
+      ->latest('id')
+      ->first();
+
     return view('tenant.employees.view', [
       'user' => $user,
       'documentTypes' => $documentTypes,
+      'learnHitechPresented' => $learnHitechPresented,
+      'learnHitechLogs' => $learnHitechLogs,
+      'latestScorecard' => $latestScorecard,
       'leaveTypes' => $leaveTypes,
       'availableAssets' => $availableAssets,
       'auditLogs' => $auditLogs,
@@ -1948,7 +2006,7 @@ class EmployeeController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
-    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin']) && !auth()->user()->can('employee.lifecycle_action')) {
       return Error::response('Unauthorized action.', 403);
     }
 
@@ -2922,7 +2980,7 @@ class EmployeeController extends Controller
    */
   public function rejectDocument(Request $request, $userId)
   {
-    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager']) && !auth()->user()->can('employee.edit_document')) {
       return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
     }
 
@@ -3010,7 +3068,7 @@ class EmployeeController extends Controller
    */
   public function deleteDocument(Request $request, $userId)
   {
-    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager']) && !auth()->user()->can('employee.edit_document')) {
       return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
     }
 
@@ -3089,7 +3147,7 @@ class EmployeeController extends Controller
    */
   public function deleteDocumentRequest(Request $request, $userId)
   {
-    if (!auth()->user()->hasRole(['admin', 'hr', 'manager'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'manager']) && !auth()->user()->can('employee.edit_document')) {
       return response()->json(['success' => false, 'message' => 'Unauthorized action.'], 403);
     }
 
@@ -3165,6 +3223,9 @@ class EmployeeController extends Controller
    */
   public function addOrUpdateSalesTarget(Request $request)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('sales_ops.manage')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'kpiId' => 'nullable|exists:sales_targets,id',
       'userId' => 'required|exists:users,id',
@@ -3213,6 +3274,9 @@ class EmployeeController extends Controller
    */
   public function destroySalesTarget($id)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('sales_ops.manage')) {
+      abort(403);
+    }
     try {
       $salesTarget = SalesTarget::findOrFail($id);
       $salesTarget->delete();
@@ -3228,6 +3292,9 @@ class EmployeeController extends Controller
    */
   public function updateKpiStatus(Request $request, $id)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.kra')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'status' => 'required|string|max:255'
     ]);
@@ -3249,6 +3316,9 @@ class EmployeeController extends Controller
    */
   public function submitKpiSelfAssessment(Request $request, $id)
   {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts']) && !auth()->user()->can('employee.kpa')) {
+      abort(403);
+    }
     $validated = $request->validate([
       'notes' => 'required|string|max:1000'
     ]);
