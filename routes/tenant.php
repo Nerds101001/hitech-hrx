@@ -183,13 +183,16 @@ Route::middleware([
 
 
 
-    // --- REPORTS ---
-    Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
-    Route::post('report/getAttendanceReport', [ReportController::class, 'getAttendanceReport'])->name('report.getAttendanceReport');
-    Route::post('report/getVisitReport', [ReportController::class, 'getVisitReport'])->name('report.getVisitReport');
-    Route::post('report/getLeaveReport', [ReportController::class, 'getLeaveReport'])->name('report.getLeaveReport');
-    Route::post('report/getExpenseReport', [ReportController::class, 'getExpenseReport'])->name('report.getExpenseReport');
-    Route::post('reports/getProductOrderReport', [ReportController::class, 'getProductOrderReport'])->name('report.getProductOrderReport');
+    // --- REPORTS --- (Admin/HR only by explicit decision; reports.view/
+    // reports.export are available to delegate to one specific person later)
+    Route::middleware(['role_or_permission:admin|hr|reports.view|reports.export'])->group(function () {
+      Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+      Route::post('report/getAttendanceReport', [ReportController::class, 'getAttendanceReport'])->name('report.getAttendanceReport');
+      Route::post('report/getVisitReport', [ReportController::class, 'getVisitReport'])->name('report.getVisitReport');
+      Route::post('report/getLeaveReport', [ReportController::class, 'getLeaveReport'])->name('report.getLeaveReport');
+      Route::post('report/getExpenseReport', [ReportController::class, 'getExpenseReport'])->name('report.getExpenseReport');
+      Route::post('reports/getProductOrderReport', [ReportController::class, 'getProductOrderReport'])->name('report.getProductOrderReport');
+    });
 
     // --- PAYROLL MANAGEMENT ---
     Route::middleware(['role:admin|hr|accounts'])->group(function () {
@@ -206,7 +209,11 @@ Route::middleware([
       Route::get('payroll/salary-import/download-sample', [SalaryImportController::class, 'downloadSample'])->name('payroll.salary-import.download-sample');
     });
 
-    // --- MASTERS ---
+    // --- MASTERS --- (explicit gate matching admin.guard's exact current
+    // role set — closes the gap where holding one of AdminRoleGuard's 6
+    // override permissions alone, with no admin/hr/accounts/manager role,
+    // would otherwise reach every module that has no gate of its own)
+    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
 
     // Shifts
     Route::prefix('shifts')->name('shifts.')->group(function () {
@@ -307,8 +314,11 @@ Route::middleware([
       Route::post('save', [\App\Http\Controllers\tenant\UnitLeavePolicyController::class, 'savePolicy'])->name('save');
     });
 
+    }); // close Masters role:admin|hr|accounts|manager gate
+
 
     // --- OPERATIONS & REQUESTS ---
+    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
 
     // Attendance
     Route::prefix('attendance')->name('attendance.')->group(function () {
@@ -350,6 +360,8 @@ Route::middleware([
       Route::get('outdoorDuty/getByIdAjax/{id}', [LeaveController::class, 'outdoorDutyGetByIdAjax'])->name('outdoorDuty.getByIdAjax');
     });
 
+    }); // close Operations & Requests role:admin|hr|accounts|manager gate
+
     // Restricted Operations — each module gated by its own permission
     // instead of one shared OR-alternation (that used to mean granting
     // ANY one of these four permissions unlocked all three modules below).
@@ -378,7 +390,7 @@ Route::middleware([
     });
 
     // Task Management
-    Route::prefix('tasks')->name('tasks.')->group(function () {
+    Route::middleware(['role:admin|hr|accounts|manager'])->prefix('tasks')->name('tasks.')->group(function () {
       Route::post('store', [TaskController::class, 'store'])->name('store');
       Route::post('update/{id}', [TaskController::class, 'update'])->name('update');
       Route::post('updateStatus/{id}', [TaskController::class, 'updateStatus'])->name('updateStatus');
@@ -515,6 +527,8 @@ Route::middleware([
       Route::post('document/{id}/reject', [ApprovalController::class, 'rejectDocument'])->name('document.reject');
     });
 
+    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
+
     // Departments
     Route::prefix('departments')->name('departments.')->group(function () {
       Route::get('', [DepartmentsController::class, 'index'])->name('index');
@@ -553,6 +567,8 @@ Route::middleware([
       Route::get('checkCodeValidationAjax', [TeamController::class, 'checkCodeValidationAjax'])->name('checkCodeValidationAjax');
     });
 
+    }); // close Departments/Designations/Teams role:admin|hr|accounts|manager gate
+
     // Organization Hierarchy already moved to universal group for accessibility
 
 
@@ -575,6 +591,7 @@ Route::middleware([
     });
 
     // --- RECRUITMENT MANAGEMENT ---
+    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
     Route::resource('job', JobController::class);
     Route::post('job/copy/{id}', [JobController::class, 'copyjob'])->name('job.copy');
 
@@ -597,6 +614,8 @@ Route::middleware([
     Route::get('interview-schedule/data', [InterviewScheduleController::class, 'get_interview_schedule_data'])->name('interview-schedule.data');
     Route::resource('interview-schedule', InterviewScheduleController::class)->except(['create']);
     Route::get('interview-schedule/create/{candidate?}', [InterviewScheduleController::class, 'create'])->name('interview-schedule.create');
+
+    }); // close Recruitment role:admin|hr|accounts|manager gate
 
     }); // Close the admin|hr|manager group starting at line 108
 

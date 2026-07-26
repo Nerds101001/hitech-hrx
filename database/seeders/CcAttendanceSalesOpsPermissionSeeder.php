@@ -8,9 +8,9 @@ use Spatie\Permission\Models\Permission;
 
 /**
  * Registers the granular "module admin" permissions that let a specific
- * user manage CCare/sales-field attendance or view all sales/CCare data
- * without being promoted to the full admin/hr role. Idempotent — safe to
- * re-run on any environment.
+ * user manage CCare/sales-field attendance, view all sales/CCare data, or
+ * view the Reports module, without being promoted to the full admin/hr
+ * role. Idempotent — safe to re-run on any environment.
  */
 class CcAttendanceSalesOpsPermissionSeeder extends Seeder
 {
@@ -19,6 +19,8 @@ class CcAttendanceSalesOpsPermissionSeeder extends Seeder
         $permissionNames = [
             'cc_attendance.manage',
             'sales_ops.view_all',
+            'reports.view',
+            'reports.export',
         ];
 
         foreach ($permissionNames as $name) {
