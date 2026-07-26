@@ -292,10 +292,10 @@ class KingoBingoController extends Controller
     }
 
     // Update a manually-set target value (razor_blade_target, payment_target, etc.)
-    /** Only Admin/HR may create or change any Kingo/Bingo or sales target. */
+    /** Admin/HR, or anyone directly granted kingo_bingo.manage, may create or change targets. */
     private function canSetTargets(): bool
     {
-        return auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']);
+        return auth()->user()->hasRole(['admin', 'hr']) || auth()->user()->can('kingo_bingo.manage');
     }
 
     public function updateTarget(Request $request)

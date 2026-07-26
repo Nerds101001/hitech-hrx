@@ -129,6 +129,7 @@ Route::middleware([
 
     // --- DASHBOARD & GENERAL ---
     Route::get('/', [DashboardController::class, 'index'])->name('tenant.dashboard');
+    Route::get('/dashboard/live-stats', [DashboardController::class, 'liveStats'])->name('dashboard.live-stats');
 
 
 
@@ -349,31 +350,31 @@ Route::middleware([
       Route::get('outdoorDuty/getByIdAjax/{id}', [LeaveController::class, 'outdoorDutyGetByIdAjax'])->name('outdoorDuty.getByIdAjax');
     });
 
-    // Restricted Operations (Admin/HR or delegated permissions)
-    Route::middleware(['role_or_permission:admin|hr|expense.approve|loans.view_all|loans.approve|onboarding.manage'])->group(function () {
-      // Expense Requests
-      Route::prefix('expenseRequests')->name('expenseRequests.')->group(function () {
-        Route::get('', [ExpenseController::class, 'index'])->name('index');
-        Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');
-        Route::get('getByIdAjax/{id}', [ExpenseController::class, 'getByIdAjax'])->name('getByIdAjax');
-        Route::post('actionAjax', [ExpenseController::class, 'actionAjax'])->name('actionAjax');
-      });
+    // Restricted Operations — each module gated by its own permission
+    // instead of one shared OR-alternation (that used to mean granting
+    // ANY one of these four permissions unlocked all three modules below).
+    // Expense Requests
+    Route::middleware(['role_or_permission:admin|hr|expense.approve'])->prefix('expenseRequests')->name('expenseRequests.')->group(function () {
+      Route::get('', [ExpenseController::class, 'index'])->name('index');
+      Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');
+      Route::get('getByIdAjax/{id}', [ExpenseController::class, 'getByIdAjax'])->name('getByIdAjax');
+      Route::post('actionAjax', [ExpenseController::class, 'actionAjax'])->name('actionAjax');
+    });
 
-      // Document Management
-      Route::prefix('documentmanagement')->name('documentmanagement.')->group(function () {
-        Route::get('', [DocumentRequestController::class, 'index'])->name('index');
-        Route::get('getListAjax', [DocumentRequestController::class, 'getListAjax'])->name('getListAjax');
-        Route::post('actionAjax', [DocumentRequestController::class, 'actionAjax'])->name('actionAjax');
-        Route::get('getByIdAjax/{id}', [DocumentRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
-      });
+    // Document Management
+    Route::middleware(['role:admin|hr'])->prefix('documentmanagement')->name('documentmanagement.')->group(function () {
+      Route::get('', [DocumentRequestController::class, 'index'])->name('index');
+      Route::get('getListAjax', [DocumentRequestController::class, 'getListAjax'])->name('getListAjax');
+      Route::post('actionAjax', [DocumentRequestController::class, 'actionAjax'])->name('actionAjax');
+      Route::get('getByIdAjax/{id}', [DocumentRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
+    });
 
-      // Loan Requests
-      Route::prefix('loan')->name('loan.')->group(function () {
-        Route::get('', [LoanRequestController::class, 'index'])->name('index');
-        Route::get('getListAjax', [LoanRequestController::class, 'getListAjax'])->name('getListAjax');
-        Route::post('actionAjax', [LoanRequestController::class, 'actionAjax'])->name('actionAjax');
-        Route::get('getByIdAjax/{id}', [LoanRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
-      });
+    // Loan Requests
+    Route::middleware(['role_or_permission:admin|hr|loans.view_all|loans.approve'])->prefix('loan')->name('loan.')->group(function () {
+      Route::get('', [LoanRequestController::class, 'index'])->name('index');
+      Route::get('getListAjax', [LoanRequestController::class, 'getListAjax'])->name('getListAjax');
+      Route::post('actionAjax', [LoanRequestController::class, 'actionAjax'])->name('actionAjax');
+      Route::get('getByIdAjax/{id}', [LoanRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
     });
 
     // Task Management
@@ -451,14 +452,6 @@ Route::middleware([
         Route::post('process-bulk-onboarding', [EmployeeController::class, 'processBulkImport'])->name('processBulkOnboarding');
         Route::get('bulk-export-onboarding', [EmployeeController::class, 'exportEmployees'])->name('bulkExportOnboarding');
         Route::get('download-onboarding-template', [EmployeeController::class, 'downloadImportTemplate'])->name('downloadOnboardingTemplate');
-      // Dedicated Onboarding Review Center routes
-      Route::prefix('onboarding')->name('onboarding.')->group(function() {
-          Route::get('review-center', [EmployeeController::class, 'reviewCenter'])->name('review_center');
-          Route::get('review/{id}', [EmployeeController::class, 'reviewOnboarding'])->name('review');
-          Route::post('approve/{id}', [EmployeeController::class, 'approveOnboarding'])->name('approve');
-          Route::post('resubmit/{id}', [EmployeeController::class, 'requestResubmission'])->name('resubmit');
-      });
-
       // Document Reject / Delete (Admin / HR only)
       Route::middleware(['role:hr|admin'])->group(function () {
           Route::post('{userId}/reject-document', [EmployeeController::class, 'rejectDocument'])->name('rejectDocument');
@@ -466,6 +459,17 @@ Route::middleware([
           Route::post('{userId}/delete-document-request', [EmployeeController::class, 'deleteDocumentRequest'])->name('deleteDocumentRequest');
       });
 
+      });
+
+      // Dedicated Onboarding Review Center routes — its own group (not
+      // nested inside the employees. role:admin|hr|accounts block above) so
+      // onboarding.manage can genuinely delegate this without that role.
+      Route::middleware(['role_or_permission:admin|hr|accounts|onboarding.manage'])
+          ->prefix('onboarding')->name('employees.onboarding.')->group(function() {
+          Route::get('review-center', [EmployeeController::class, 'reviewCenter'])->name('review_center');
+          Route::get('review/{id}', [EmployeeController::class, 'reviewOnboarding'])->name('review');
+          Route::post('approve/{id}', [EmployeeController::class, 'approveOnboarding'])->name('approve');
+          Route::post('resubmit/{id}', [EmployeeController::class, 'requestResubmission'])->name('resubmit');
       });
       
       // Singular named routes for dropdowns and profile
@@ -658,7 +662,7 @@ Route::middleware([
 
             // Kingo Bingo ScoreCard
             Route::get('/kingo-bingo', [\App\Http\Controllers\tenant\KingoBingoController::class, 'index'])->name('kingo-bingo.index');
-            Route::middleware('role:admin|hr')->group(function () {
+            Route::middleware('role_or_permission:admin|hr|kingo_bingo.manage')->group(function () {
                 Route::get('/kingo-bingo/fill-targets', [\App\Http\Controllers\tenant\KingoBingoController::class, 'fillTargets'])->name('kingo-bingo.fill-targets');
                 Route::put('/kingo-bingo/kpi-target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateKpiTarget'])->name('kingo-bingo.kpi-target');
                 Route::put('/kingo-bingo/target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateTarget'])->name('kingo-bingo.target');
@@ -764,8 +768,13 @@ Route::middleware([
         Route::get('hr-policies/view/{id}', [HRPolicyController::class, 'view'])->name('hr-policies.view');
         Route::get('hr-policies/embed-url/{id}', [HRPolicyController::class, 'getEmbedUrl'])->name('hr-policies.embed-url');
 
-        // AI Training (Admin/HR Only)
-        Route::middleware(['role:admin|hr', 'can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {
+        // AI Training — Admin/HR, or anyone directly granted vault.train
+        // ("Train AI Bot" in the role editor). ai.training.manage used to
+        // gate this with no matching registry entry / UI checkbox, and
+        // being a separate `can:` middleware after `role:admin|hr` meant
+        // hr-role users were silently 403'd unless someone also granted
+        // them that orphaned permission by hand.
+        Route::middleware(['role_or_permission:admin|hr|vault.train'])->prefix('ai-training')->name('ai-training.')->group(function() {
             Route::get('/', [AiTrainingController::class, 'index'])->name('index');
             Route::post('/store', [AiTrainingController::class, 'store'])->name('store');
             Route::post('/update-instructions', [AiTrainingController::class, 'updateInstructions'])->name('update-instructions');
@@ -854,17 +863,6 @@ Route::middleware([
     */
 
 
-    // --- ROLES & PERMISSIONS ---
-    Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
-    Route::post('roles/addOrUpdateAjax', [RoleController::class, 'addOrUpdateAjax'])->name('roles.addOrUpdateAjax');
-    Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
-    Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
-    
-    // User-specific special permissions
-    Route::get('roles/getUserPermissionsAjax/{userId}', [RoleController::class, 'getUserPermissionsAjax'])->name('roles.getUserPermissionsAjax');
-    Route::post('roles/syncUserPermissionsAjax', [RoleController::class, 'syncUserPermissionsAjax'])->name('roles.syncUserPermissionsAjax');
-
-
     // --- SYSTEM UTILITIES ---
 
     // Audit Logs — admin/HR only (the log shows every user's changes)
@@ -923,17 +921,37 @@ Route::middleware([
 
 
 
-    Route::prefix('performance')->name('performance.')->group(function () {
-        Route::middleware(['role:admin'])->group(function () {
-            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
-            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
-            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
-            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
-            
-            Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
-            Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
-            Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
-            Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
-        });
-    });
+});
+
+// --- 90-DAY GOALS / SCORECARDS ---
+// Own top-level group (not nested inside role:admin|hr|manager) so
+// goals.manage can genuinely delegate this without that role.
+Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|goals.manage'])
+    ->prefix('performance')->name('performance.')->group(function () {
+        Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+        Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+        Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+        Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
+
+        Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
+        Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
+        Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
+        Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
+});
+
+// --- ROLES & PERMISSIONS ---
+// Deliberately its own top-level group (not nested inside the
+// role:admin|hr|manager block above) so `roles.manage` can genuinely
+// delegate this to someone without that role — nesting it inside a
+// role:-gated group would mean the outer AND-check blocks a
+// roles.manage-only holder before this middleware ever runs.
+Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.manage'])->group(function () {
+    Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+    Route::post('roles/addOrUpdateAjax', [RoleController::class, 'addOrUpdateAjax'])->name('roles.addOrUpdateAjax');
+    Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
+    Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
+
+    // User-specific special permissions
+    Route::get('roles/getUserPermissionsAjax/{userId}', [RoleController::class, 'getUserPermissionsAjax'])->name('roles.getUserPermissionsAjax');
+    Route::post('roles/syncUserPermissionsAjax', [RoleController::class, 'syncUserPermissionsAjax'])->name('roles.syncUserPermissionsAjax');
 });
