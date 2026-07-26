@@ -81,7 +81,12 @@ return [
 
     'Sales Field Ops' => [
         'sales_ops.view' => 'View Sales Visits',
+        'sales_ops.view_all' => 'View All Sales/CCare Data (Unrestricted)',
         'sales_ops.manage' => 'Manage Sales Targets',
+    ],
+
+    'CCare Attendance' => [
+        'cc_attendance.manage' => 'Manage Salesperson Attendance (Full Register, All Submissions, Mark for Anyone)',
     ],
 
     'Intelligent Vault' => [

@@ -12,7 +12,7 @@ use App\Models\SalesPipeline;
  * Attendance, Sales Report, Sales Pipeline, Kingo Bingo).
  *
  * Rules (salesperson-LEVEL access — see a salesperson's whole book):
- *   - admin / hr            → null  (no restriction — see everyone)
+ *   - admin / hr / sales_ops.view_all → null  (no restriction — see everyone)
  *   - sales manager         → themselves + their direct reports (reporting_to_id)
  *   - customer care / newbiz→ themselves + salespersons EXPLICITLY mapped to
  *                             them in cc_salesperson_map (their coordinator book)
@@ -34,7 +34,7 @@ class SalesScope
             return [0]; // no user → see nothing
         }
 
-        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('sales_ops.view_all')) {
             return null; // unrestricted
         }
 
@@ -53,8 +53,15 @@ class SalesScope
         // tagged to them, which applyScope adds at row level. The combined
         // "Customer Care + New Biz" department counts as CCare here.
         if (self::isRep($user) && method_exists($user, 'isCcareAgent') && $user->isCcareAgent()) {
+            // ONLY the CCare-capacity mappings grant a salesperson's whole book.
+            // A combined "Customer Care + New Biz" agent also holds role='newbiz'
+            // rows (row-level access, added by applyScope) — those must NOT open
+            // the whole book, or she is treated as CCare for salespeople she only
+            // does New Biz for.
             $ids = $ids->merge(
-                CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')
+                CcSalespersonMap::where('cc_user_id', $user->id)
+                    ->where('role', 'ccare')
+                    ->pluck('sales_user_id')
             );
         }
 

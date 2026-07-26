@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
  * SalesAccessGuard — restricts Sales field-ops / pipeline / performance pages
  * to people who actually work with sales:
  *   - admin / hr / manager / accounts roles, OR
+ *   - a user directly granted sales_ops.view_all (module-scoped admin access
+ *     without promoting them to a full admin/hr/manager role), OR
  *   - employees whose department is Sales, Customer Care, or New Biz.
  *
  * Everyone else (regular non-sales employees) is redirected away, so sales
@@ -28,7 +30,8 @@ class SalesAccessGuard
             return redirect()->route('login');
         }
 
-        if ($user->hasAnyRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager', 'accounts'])) {
+        if ($user->hasAnyRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager', 'accounts'])
+            || $user->can('sales_ops.view_all')) {
             return $next($request);
         }
 

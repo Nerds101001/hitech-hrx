@@ -18,18 +18,18 @@ class CcAttendanceController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        
-        // Ensure only users mapped as CCARE (or Admin/HR) can access
+
+        // Ensure only users mapped as CCARE (or Admin/HR/cc_attendance.manage) can access
         $isCCare = $user->department && stripos($user->department->name, 'Customer Care') !== false;
-        if (!$isCCare && !$user->hasRole(['admin', 'hr'])) {
+        if (!$isCCare && !$this->isAttendanceAdmin($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized access.');
         }
 
         // Get the date (default to today)
         $date = $request->input('date', Carbon::today()->format('Y-m-d'));
-        
-        if ($user->hasRole(['admin', 'hr'])) {
-            $mappings = \App\Models\CcSalespersonMap::with(['salesUser' => function ($q) {
+
+        if ($this->isAttendanceAdmin($user)) {
+            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) {
                 // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
@@ -42,7 +42,7 @@ class CcAttendanceController extends Controller
             })->unique('id')->values();
         } else {
             // Fetch salespeople tagged to this CCARE user
-            $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
+            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) {
                 // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
@@ -149,9 +149,35 @@ class CcAttendanceController extends Controller
     private const OPEN_FROM = '2026-07-01';
     private const OPEN_TO   = '2026-07-31';
 
+    /**
+     * True for the classic admin/hr role, OR a user directly granted the
+     * cc_attendance.manage permission — the latter unlocks the full register,
+     * report, and lock-bypass without promoting the user to admin/hr.
+     */
+    private function isAttendanceAdmin($user): bool
+    {
+        return $user->hasRole(['admin', 'hr']) || $user->can('cc_attendance.manage');
+    }
+
+    /**
+     * The salesperson user_ids this user may write attendance for: the whole
+     * CCare register for an attendance admin, else only their own mapped
+     * salespeople. Used to stop store()/storeMonthly() from writing
+     * attendance for anyone outside the caller's authorized set.
+     */
+    private function allowedSalespersonIds($user): array
+    {
+        if ($this->isAttendanceAdmin($user)) {
+            return CcSalespersonMap::where('role', 'ccare')
+                ->pluck('sales_user_id')->unique()->values()->all();
+        }
+        return $user->mappedSalespersons()->where('role', 'ccare')
+            ->pluck('sales_user_id')->unique()->values()->all();
+    }
+
     private function isLockedFor(string $date, $user): bool
     {
-        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        if ($this->isAttendanceAdmin($user)) {
             return false;
         }
         if ($date >= self::OPEN_FROM && $date <= self::OPEN_TO) {
@@ -168,7 +194,7 @@ class CcAttendanceController extends Controller
     /** Shared query for the report page and its Excel export. Returns [$q, $spPool]. */
     private function reportQuery(Request $request, $user): array
     {
-        $isTop = $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
+        $isTop = $this->isAttendanceAdmin($user);
 
         $from = $request->input('from', Carbon::now()->startOfMonth()->toDateString());
         $to   = $request->input('to', Carbon::today()->toDateString());
@@ -178,7 +204,7 @@ class CcAttendanceController extends Controller
             ->whereDate('check_in_time', '<=', $to);
 
         if ($isTop) {
-            $spPool = CcSalespersonMap::pluck('sales_user_id')->unique()->values();
+            $spPool = CcSalespersonMap::where('role', 'ccare')->pluck('sales_user_id')->unique()->values();
             $q->whereIn('user_id', $spPool);
         } else {
             // A CCare agent sees ONLY what they submitted themselves — never
@@ -186,7 +212,7 @@ class CcAttendanceController extends Controller
             $q->where(function ($w) use ($user) {
                 $w->where('created_by_id', $user->id)->orWhere('updated_by_id', $user->id);
             });
-            $spPool = CcSalespersonMap::where('cc_user_id', $user->id)
+            $spPool = CcSalespersonMap::where('cc_user_id', $user->id)->where('role', 'ccare')
                 ->pluck('sales_user_id')->unique()->values();
         }
 
@@ -204,7 +230,7 @@ class CcAttendanceController extends Controller
     /** Admin/HR see every submission; a CCare agent sees only their own. */
     private function canSeeReport($user): bool
     {
-        return $user->hasRole(['admin', 'Admin', 'hr', 'HR'])
+        return $this->isAttendanceAdmin($user)
             || ($user->department && stripos($user->department->name, 'Customer Care') !== false);
     }
 
@@ -304,6 +330,15 @@ class CcAttendanceController extends Controller
             'notes.*' => 'nullable|string'
         ]);
 
+        // Only allow writes for salespeople actually on this user's register —
+        // an attendance admin gets the whole CCare set, everyone else only
+        // their own mapped salespeople. Anything else in the posted payload
+        // is silently dropped rather than trusted.
+        $allowedIds = $this->allowedSalespersonIds(Auth::user());
+        $request->merge(['attendance' => array_intersect_key(
+            (array) $request->attendance, array_flip($allowedIds)
+        )]);
+
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
         // Filling window: date D stays open until D+2 at 12:00 PM (IST). After
@@ -317,9 +352,10 @@ class CcAttendanceController extends Controller
             return redirect()->back()->with('error', "Attendance for {$date} is locked (deadline was {$deadline}). Please contact Admin/HR.");
         }
 
-        // Reporting/remarks is MANDATORY for every salesperson being marked.
-        // Unmarked people are simply skipped, so a partial submission is fine —
-        // mark 3 of 5 today and the other 2 whenever their day is confirmed.
+        // Reporting/remarks is MANDATORY for every salesperson being marked — a
+        // note must accompany each mark. Unmarked people are simply skipped, so a
+        // partial submission (even a SINGLE person) is fine as long as that
+        // person's note is filled. WFH also needs the approval snapshot.
         $missingNotes = [];
         $missingProof = [];
         foreach ($request->attendance as $userId => $status) {
@@ -339,7 +375,7 @@ class CcAttendanceController extends Controller
             $names = \App\Models\User::whereIn('id', $missingNotes)->get()
                 ->map(fn($u) => $u->name)->implode(', ');
             return redirect()->back()->withInput()
-                ->with('error', "Reporting/remarks is mandatory — nothing was saved. Missing for: {$names}");
+                ->with('error', "Reporting/remarks is mandatory for every marked salesperson — nothing was saved. Missing for: {$names}");
         }
         if ($missingProof) {
             $names = \App\Models\User::whereIn('id', $missingProof)->get()
@@ -443,10 +479,10 @@ class CcAttendanceController extends Controller
     public function monthly(Request $request)
     {
         $user = Auth::user();
-        
-        // Ensure only users mapped as CCARE (or Admin/HR) can access
+
+        // Ensure only users mapped as CCARE (or Admin/HR/cc_attendance.manage) can access
         $isCCare = $user->department && stripos($user->department->name, 'Customer Care') !== false;
-        if (!$isCCare && !$user->hasRole(['admin', 'hr'])) {
+        if (!$isCCare && !$this->isAttendanceAdmin($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized access.');
         }
 
@@ -455,9 +491,9 @@ class CcAttendanceController extends Controller
         $startOfMonth = Carbon::create($year, $month, 1)->startOfMonth();
         $endOfMonth = $startOfMonth->copy()->endOfMonth();
         $daysInMonth = $startOfMonth->daysInMonth;
-        
-        if ($user->hasRole(['admin', 'hr'])) {
-            $mappings = \App\Models\CcSalespersonMap::with(['salesUser' => function ($q) {
+
+        if ($this->isAttendanceAdmin($user)) {
+            $mappings = \App\Models\CcSalespersonMap::where('role', 'ccare')->with(['salesUser' => function ($q) {
                 // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
@@ -469,7 +505,7 @@ class CcAttendanceController extends Controller
                 return $salesUser;
             })->unique('id')->values();
         } else {
-            $salespeople = $user->mappedSalespersons()->with(['salesUser' => function ($q) {
+            $salespeople = $user->mappedSalespersons()->where('role', 'ccare')->with(['salesUser' => function ($q) {
                 // Terminated staff must not appear on the attendance register.
                 $q->select('id', 'first_name', 'last_name', 'code', 'status', 'designation_id', 'department_id', 'profile_picture')
                   ->notTerminated()
@@ -500,6 +536,13 @@ class CcAttendanceController extends Controller
         $request->validate([
             'attendance' => 'required|array',
         ]);
+
+        // Same register-scoping guard as store(): drop any user_id outside
+        // this caller's authorized set before touching anything.
+        $allowedIds = $this->allowedSalespersonIds(Auth::user());
+        $request->merge(['attendance' => array_intersect_key(
+            (array) $request->attendance, array_flip($allowedIds)
+        )]);
 
         $tenantId = Auth::user()->tenant_id;
         $authId = Auth::id();
