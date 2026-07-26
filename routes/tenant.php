@@ -709,8 +709,12 @@ Route::middleware([
         // Compatibility route for legacy JS calls
         Route::post('markAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsRead_legacy');
 
-        // CRM Client Mappings (api-crm.rustx.net integration)
-        Route::prefix('crm-clients')->name('crm-clients.')->group(function () {
+        // CRM Client Mappings (api-crm.rustx.net integration) — this had NO
+        // access control at all (not even a controller-internal check), so
+        // any authenticated user of any role/department could view, sync,
+        // edit, or delete customer CRM data. Gated with the same sales.guard
+        // used for the rest of Sales Field Ops as an immediate fix.
+        Route::middleware(['sales.guard'])->prefix('crm-clients')->name('crm-clients.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'store'])->name('store');
             Route::post('/auto-sync', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'autoSync'])->name('auto-sync');
