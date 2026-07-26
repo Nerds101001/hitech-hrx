@@ -76,24 +76,34 @@ class AdminRoleGuard
 
     /**
      * Check if user possesses any administrative permission override.
+     *
+     * ALLOWLIST, not blocklist: this used to be "any permission NOT on a
+     * short safe list grants override," which meant every one of the ~50
+     * module-scoped permission checkboxes in config/permissions_registry.php
+     * (most of them dead/unwired — see the 2026-07-26 permission audit) would
+     * silently unlock the entire admin.guard route tree for a plain-role
+     * employee the moment anyone ticked that box in the role editor. Verified
+     * via `php artisan route:list -v` that only these permissions actually
+     * sit behind route middleware that lives inside this guard's route tree
+     * (employee-lifecycle, approvals, and the loan/expense/onboarding
+     * "restricted operations" group) — holding one of them must let the user
+     * past this gate so that middleware gets to run. Every other permission,
+     * including cc_attendance.manage / sales_ops.view_all and anything added
+     * to the registry later, must NEVER by itself grant admin.guard passage.
      */
     private function hasAdminPermissionOverride($user): bool
     {
-        $selfServicePermissions = [
-            'leave.apply',
-            'expense.apply',
-            'attendance.view_my',
-            'payroll.view_my_slips',
-            'vault.view',
-            'vault.chat',
-            'goals.view',
-            'sales_pipeline.view_my',
-            'sales_visits.view_my',
-            'kingo_bingo.play'
+        $elevatedPermissions = [
+            'lifecycle.manage',
+            'approvals.manage',
+            'expense.approve',
+            'loans.view_all',
+            'loans.approve',
+            'onboarding.manage',
         ];
 
         foreach ($user->getAllPermissions() as $permission) {
-            if (!in_array($permission->name, $selfServicePermissions)) {
+            if (in_array($permission->name, $elevatedPermissions, true)) {
                 return true;
             }
         }
