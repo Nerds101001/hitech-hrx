@@ -768,13 +768,14 @@ Route::middleware([
         Route::get('hr-policies/view/{id}', [HRPolicyController::class, 'view'])->name('hr-policies.view');
         Route::get('hr-policies/embed-url/{id}', [HRPolicyController::class, 'getEmbedUrl'])->name('hr-policies.embed-url');
 
-        // AI Training — Admin/HR, or anyone directly granted vault.train
-        // ("Train AI Bot" in the role editor). ai.training.manage used to
-        // gate this with no matching registry entry / UI checkbox, and
-        // being a separate `can:` middleware after `role:admin|hr` meant
-        // hr-role users were silently 403'd unless someone also granted
-        // them that orphaned permission by hand.
-        Route::middleware(['role_or_permission:admin|hr|vault.train'])->prefix('ai-training')->name('ai-training.')->group(function() {
+        // AI Training — reverted to the original admin/hr + orphaned-permission
+        // gate at the user's explicit request (no live access changes without
+        // sign-off). The audit finding still stands: `ai.training.manage` has
+        // no permission row and no UI checkbox, so this route is currently
+        // reachable by the literal `admin` role only (hr is blocked by the
+        // unobtainable `can:` check) — `vault.train` is available in the
+        // registry as the fix, ready to apply once explicitly approved.
+        Route::middleware(['role:admin|hr', 'can:ai.training.manage'])->prefix('ai-training')->name('ai-training.')->group(function() {
             Route::get('/', [AiTrainingController::class, 'index'])->name('index');
             Route::post('/store', [AiTrainingController::class, 'store'])->name('store');
             Route::post('/update-instructions', [AiTrainingController::class, 'updateInstructions'])->name('update-instructions');
@@ -921,22 +922,24 @@ Route::middleware([
 
 
 
-});
+    Route::prefix('performance')->name('performance.')->group(function () {
+        // Reverted to the original admin-only gate at the user's explicit
+        // request (no live access changes without sign-off) — this was
+        // stricter than what NinetyDayGoalController itself checks
+        // (admin|hr|manager||goals.manage), so hr/manager are still blocked
+        // here pending an explicit decision to widen it.
+        Route::middleware(['role:admin'])->group(function () {
+            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
 
-// --- 90-DAY GOALS / SCORECARDS ---
-// Own top-level group (not nested inside role:admin|hr|manager) so
-// goals.manage can genuinely delegate this without that role.
-Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|goals.manage'])
-    ->prefix('performance')->name('performance.')->group(function () {
-        Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
-        Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
-        Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
-        Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
-
-        Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
-        Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
-        Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
-        Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
+            Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
+            Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
+            Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
+            Route::post('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'updateReview'])->name('scorecards.update-review');
+        });
+    });
 });
 
 // --- ROLES & PERMISSIONS ---
