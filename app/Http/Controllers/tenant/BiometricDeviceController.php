@@ -13,7 +13,7 @@ class BiometricDeviceController extends Controller
 {
     public function index()
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $devices = BiometricDevice::all();
             return view('tenant.biometric.index', compact('devices'));
         } else {
@@ -23,7 +23,7 @@ class BiometricDeviceController extends Controller
 
     public function create()
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $sites = Site::all()->pluck('name', 'id');
             return view('tenant.biometric.create', compact('sites'));
         } else {
@@ -33,7 +33,7 @@ class BiometricDeviceController extends Controller
 
     public function store(Request $request)
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $validator = Validator::make($request->all(), [
                 'name' => 'required',
                 'ip_address' => 'required',
@@ -61,7 +61,7 @@ class BiometricDeviceController extends Controller
 
     public function edit(BiometricDevice $biometric)
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $sites = Site::all()->pluck('name', 'id');
             return view('tenant.biometric.edit', compact('biometric', 'sites'));
         } else {
@@ -71,7 +71,7 @@ class BiometricDeviceController extends Controller
 
     public function update(Request $request, BiometricDevice $biometric)
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $validator = Validator::make($request->all(), [
                 'name' => 'required',
                 'ip_address' => 'required',
@@ -99,7 +99,7 @@ class BiometricDeviceController extends Controller
 
     public function destroy(BiometricDevice $biometric)
     {
-        if (Auth::user()->can('Manage Attendance')) {
+        if (Auth::user()->hasRole(['admin', 'Admin', 'super_admin']) || Auth::user()->can('biometric.manage')) {
             $biometric->delete();
             return redirect()->route('biometric.index')->with('success', __('Device deleted successfully.'));
         } else {

@@ -133,6 +133,10 @@ Route::middleware([
 
 
 
+    // --- MONITORING --- (Admin/HR/Accounts/Manager by default, matching
+    // admin.guard's own set; monitoring.* permissions available to delegate
+    // just this to one person)
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|monitoring.live_location|monitoring.card_view|monitoring.timeline'])->group(function () {
     Route::get('liveLocation', [DashboardController::class, 'liveLocationView'])->name('liveLocationView');
     Route::get('liveLocationAjax', [DashboardController::class, 'liveLocationAjax'])->name('liveLocationAjax');
     Route::get('cardView', [DashboardController::class, 'cardView'])->name('cardView');
@@ -145,6 +149,7 @@ Route::middleware([
     Route::get('getStatsForTimeLineAjax/{userId}/{date}/{attendanceLogId}', [DashboardController::class, 'getStatsForTimeLineAjax'])->name('getStatsForTimeLineAjax');
     Route::get('getActivityAjax/{userId}/{date}/{attendanceLogId}', [DashboardController::class, 'getActivityAjax'])->name('getActivityAjax');
     Route::get('getDeviceLocationAjax/{userId}/{date}/{attendanceLogId}', [DashboardController::class, 'getDeviceLocationAjax'])->name('getDeviceLocationAjax');
+    });
 
     Route::get('/lang/{locale}', [LanguageController::class, 'swap']);
     Route::get('/getSearchDataAjax', [BaseController::class, 'getSearchDataAjax'])->name('search.Ajax');
@@ -155,7 +160,7 @@ Route::middleware([
         Route::post('store/{id}', [ProbationController::class, 'storeEvaluation'])->name('store');
         
         // HR Review Routes
-        Route::group(['middleware' => ['role:hr|admin']], function() {
+        Route::group(['middleware' => ['role_or_permission:hr|admin|probation.manage']], function() {
             Route::get('evaluations', [ProbationController::class, 'index'])->name('index');
             Route::get('review/{id}', [ProbationController::class, 'review'])->name('review');
             Route::post('finalize/{id}', [ProbationController::class, 'finalize'])->name('finalize');
@@ -167,7 +172,7 @@ Route::middleware([
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
     // --- SETTINGS (ADMIN ONLY) ---
-    Route::middleware(['role:admin'])->prefix('settings/')->name('settings.')->group(function () {
+    Route::middleware(['role_or_permission:admin|settings.manage'])->prefix('settings/')->name('settings.')->group(function () {
       Route::get('', [SettingsController::class, 'index'])->name('index');
       Route::post('updateGeneralSettings', [SettingsController::class, 'updateGeneralSettings'])->name('updateGeneralSettings');
       Route::post('updateCompanySettings', [SettingsController::class, 'updateCompanySettings'])->name('updateCompanySettings');
@@ -195,7 +200,7 @@ Route::middleware([
     });
 
     // --- PAYROLL MANAGEMENT ---
-    Route::middleware(['role:admin|hr|accounts'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|payroll.view|payroll.process'])->group(function () {
       Route::get('payroll', [PayrollController::class, 'index'])->name('payroll.index');
       Route::get('payroll/indexAjax', [PayrollController::class, 'indexAjax'])->name('payroll.indexAjax');
       Route::post('payroll/generate', [PayrollController::class, 'generate'])->name('payroll.generate');
@@ -213,7 +218,7 @@ Route::middleware([
     // role set — closes the gap where holding one of AdminRoleGuard's 6
     // override permissions alone, with no admin/hr/accounts/manager role,
     // would otherwise reach every module that has no gate of its own)
-    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage|holidays.manage|leave.create_type|leave.create_policy|expense.manage_types|document_types.manage|ipgroup.manage|geofencegroup.manage|qrgroup.manage|units.manage'])->group(function () {
 
     // Shifts
     Route::prefix('shifts')->name('shifts.')->group(function () {
@@ -318,7 +323,7 @@ Route::middleware([
 
 
     // --- OPERATIONS & REQUESTS ---
-    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import|visits.manage|leave.approve|leave.view_all|outdoor_duty.approve'])->group(function () {
 
     // Attendance
     Route::prefix('attendance')->name('attendance.')->group(function () {
@@ -374,7 +379,7 @@ Route::middleware([
     });
 
     // Document Management
-    Route::middleware(['role:admin|hr'])->prefix('documentmanagement')->name('documentmanagement.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|document_request.manage'])->prefix('documentmanagement')->name('documentmanagement.')->group(function () {
       Route::get('', [DocumentRequestController::class, 'index'])->name('index');
       Route::get('getListAjax', [DocumentRequestController::class, 'getListAjax'])->name('getListAjax');
       Route::post('actionAjax', [DocumentRequestController::class, 'actionAjax'])->name('actionAjax');
@@ -390,7 +395,7 @@ Route::middleware([
     });
 
     // Task Management
-    Route::middleware(['role:admin|hr|accounts|manager'])->prefix('tasks')->name('tasks.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|tasks.manage'])->prefix('tasks')->name('tasks.')->group(function () {
       Route::post('store', [TaskController::class, 'store'])->name('store');
       Route::post('update/{id}', [TaskController::class, 'update'])->name('update');
       Route::post('updateStatus/{id}', [TaskController::class, 'updateStatus'])->name('updateStatus');
@@ -412,7 +417,11 @@ Route::middleware([
       // Employee-management screens & data are restricted to Admin / HR / Accounts
       // only. (Managers and regular employees must NOT see other employees' data.)
       // Self-service profile routes live in the separate group further below.
-      Route::middleware(['role:admin|hr|accounts'])->name('employees.')->group(function() {
+      // NOTE: the individual employee.* permissions below only get a user
+      // PAST this route gate — CcAttendanceController-style, each controller
+      // method still checks its own specific permission (see EmployeeController)
+      // so e.g. employee.view_banking alone doesn't unlock employee deletion.
+      Route::middleware(['role_or_permission:admin|hr|accounts|employee.view|employee.edit|employee.view_banking|employee.view_document|employee.edit_document|employee.kpa|employee.kra|employee.delete|employee.reset_password|employee.manage_leave_balance|employee.manage_payroll_adjustment|employee.manage_device|employee.lifecycle_action|sales_ops.manage'])->name('employees.')->group(function() {
         Route::get('', [EmployeeController::class, 'index'])->name('index');
         Route::get('view/{id}', [EmployeeController::class, 'show'])->name('show');
         Route::match(['get', 'post'], 'indexAjax', [EmployeeController::class, 'userListAjax'])->name('indexAjax');
@@ -464,8 +473,8 @@ Route::middleware([
         Route::post('process-bulk-onboarding', [EmployeeController::class, 'processBulkImport'])->name('processBulkOnboarding');
         Route::get('bulk-export-onboarding', [EmployeeController::class, 'exportEmployees'])->name('bulkExportOnboarding');
         Route::get('download-onboarding-template', [EmployeeController::class, 'downloadImportTemplate'])->name('downloadOnboardingTemplate');
-      // Document Reject / Delete (Admin / HR only)
-      Route::middleware(['role:hr|admin'])->group(function () {
+      // Document Reject / Delete (Admin / HR, or employee.edit_document)
+      Route::middleware(['role_or_permission:hr|admin|employee.edit_document'])->group(function () {
           Route::post('{userId}/reject-document', [EmployeeController::class, 'rejectDocument'])->name('rejectDocument');
           Route::post('{userId}/delete-document', [EmployeeController::class, 'deleteDocument'])->name('deleteDocument');
           Route::post('{userId}/delete-document-request', [EmployeeController::class, 'deleteDocumentRequest'])->name('deleteDocumentRequest');
@@ -527,7 +536,7 @@ Route::middleware([
       Route::post('document/{id}/reject', [ApprovalController::class, 'rejectDocument'])->name('document.reject');
     });
 
-    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|departments.manage|designations.manage|teams.manage'])->group(function () {
 
     // Departments
     Route::prefix('departments')->name('departments.')->group(function () {
@@ -575,7 +584,7 @@ Route::middleware([
     // --- ASSETS ---
 
     // Asset Management (Admin/HR)
-    Route::middleware(['role:hr|admin|manager'])->prefix('asset-management')->name('assets.')->group(function () {
+    Route::middleware(['role_or_permission:hr|admin|manager|assets.view|assets.create|assets.edit|assets.delete|assets.assign'])->prefix('asset-management')->name('assets.')->group(function () {
       Route::get('', [AssetController::class, 'index'])->name('index');
       Route::get('list-ajax', [AssetController::class, 'getListAjax'])->name('listAjax');
       Route::get('export-excel', [AssetController::class, 'exportExcel'])->name('exportExcel');
@@ -735,8 +744,8 @@ Route::middleware([
             Route::get('/access/{id}', [DigitalLibraryController::class, 'access'])->name('access');
             Route::get('/preview-frame/{id}', [DigitalLibraryController::class, 'previewFrame'])->name('previewFrame');
             
-            // AI Chat & Uploads (Admin/HR Only)
-            Route::middleware(['role:admin|hr'])->group(function() {
+            // AI Chat & Uploads (Admin/HR, or vault.chat/vault.upload)
+            Route::middleware(['role_or_permission:admin|hr|vault.chat|vault.upload'])->group(function() {
                 Route::post('chat', [DigitalLibraryController::class, 'chat'])->name('chat');
                 Route::post('store', [DigitalLibraryController::class, 'store'])->name('store');
                 Route::post('analyze', [DigitalLibraryController::class, 'analyze'])->name('analyze');
@@ -779,7 +788,7 @@ Route::middleware([
             });
         });
 
-        Route::middleware(['role:admin|hr'])->prefix('hr-policies')->name('hr-policies.')->group(function() {
+        Route::middleware(['role_or_permission:admin|hr|hr_policies.manage'])->prefix('hr-policies')->name('hr-policies.')->group(function() {
             Route::get('/', [HRPolicyController::class, 'index'])->name('index');
             Route::post('/', [HRPolicyController::class, 'store'])->name('store');
             Route::delete('/{id}', [HRPolicyController::class, 'destroy'])->name('destroy');
@@ -843,7 +852,11 @@ Route::middleware([
         });
 
         // KPI / KRA (DWM-driven). Restricted to Admin only.
-        Route::middleware(['role:admin'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
+        // NOTE: kept admin-only by default (not widened to hr|manager, even
+        // though KpiController itself allows them) to avoid a live access
+        // change without explicit sign-off — kpi.manage is available for
+        // individual delegation.
+        Route::middleware(['role_or_permission:admin|kpi.manage'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/my', [\App\Http\Controllers\tenant\KpiController::class, 'my'])->name('my');
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
             Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
@@ -859,12 +872,12 @@ Route::middleware([
     Route::middleware([
       'web',
       'auth',
-      'role:admin|hr|manager'
+      'role_or_permission:admin|hr|manager|device.manage|biometric.manage|account.manage'
     ])->group(function () {
 
 
     // Asset Categories (Admin/HR)
-    Route::middleware(['role:admin|hr|manager'])->prefix('asset-categories')->name('assetCategories.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|manager|assets.manage_categories'])->prefix('asset-categories')->name('assetCategories.')->group(function () {
         Route::get('', [AssetCategoryController::class, 'index'])->name('index');
         Route::get('list-ajax', [AssetCategoryController::class, 'getListAjax'])->name('listAjax');
         Route::post('', [AssetCategoryController::class, 'store'])->name('store');
@@ -891,7 +904,7 @@ Route::middleware([
     // --- SYSTEM UTILITIES ---
 
     // Audit Logs — admin/HR only (the log shows every user's changes)
-    Route::prefix('auditLogs')->name('auditLogs.')->middleware('role:admin|hr')->group(function () {
+    Route::prefix('auditLogs')->name('auditLogs.')->middleware('role_or_permission:admin|hr|audit.view')->group(function () {
       Route::get('', [AuditLogController::class, 'index'])->name('index');
       Route::get('show/{id}', [AuditLogController::class, 'show'])->name('show');
     });
@@ -922,7 +935,7 @@ Route::middleware([
     });
 
     // Admin Chat
-    Route::middleware(['role:admin|hr'])->get('/admin/chat', [\App\Http\Controllers\tenant\ChatController::class, 'index'])->name('chat.index');
+    Route::middleware(['role_or_permission:admin|hr|chat.access'])->get('/admin/chat', [\App\Http\Controllers\tenant\ChatController::class, 'index'])->name('chat.index');
 
     // Account Management
     Route::prefix('account')->name('account.')->group(function () {
@@ -947,12 +960,12 @@ Route::middleware([
 
 
     Route::prefix('performance')->name('performance.')->group(function () {
-        // Reverted to the original admin-only gate at the user's explicit
-        // request (no live access changes without sign-off) — this was
-        // stricter than what NinetyDayGoalController itself checks
-        // (admin|hr|manager||goals.manage), so hr/manager are still blocked
-        // here pending an explicit decision to widen it.
-        Route::middleware(['role:admin'])->group(function () {
+        // Kept admin-only by default (not widened to hr|manager, even though
+        // the controllers themselves allow them) at the user's explicit
+        // request — no live access change without sign-off. goals.manage /
+        // scorecards.manage are available for individual delegation without
+        // widening the role-based default.
+        Route::middleware(['role_or_permission:admin|goals.manage|scorecards.manage'])->group(function () {
             Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
             Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
             Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
