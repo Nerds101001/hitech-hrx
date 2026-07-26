@@ -77,6 +77,9 @@ class SalesPipelineController extends Controller
         }])->where('is_locked', true);
 
         $user = auth()->user();
+        if (!\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user) && !$user->can('sales_report.view')) {
+            abort(403);
+        }
         $isCcare = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
 
@@ -315,7 +318,13 @@ class SalesPipelineController extends Controller
         // CCare / New Biz filters stay scoped to people who actually hold rows here.
         $salespersonFilterUsers = $salespersons;
         $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
+        // New Biz filter = the FULL New Biz directory (New Biz dept + the combined
+        // "Customer Care + New Biz" dept + anyone already tagged on a new_biz row),
+        // NOT just people who hold rows in the selected FY. A rep like Dipika Das
+        // whose customers all live in an earlier FY was vanishing from the filter
+        // and her pipeline read blank; she now shows with a (0) count and stays
+        // selectable. Row visibility stays scoped by SalesScope, so nothing leaks.
+        $newBizFilterUsers      = $newBizUsers;
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -466,6 +475,9 @@ class SalesPipelineController extends Controller
         }])->where('is_locked', false);
 
         $user = auth()->user();
+        if (!\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user) && !$user->can('sales_pipeline.view')) {
+            abort(403);
+        }
         $isCcare = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
         
@@ -608,7 +620,13 @@ class SalesPipelineController extends Controller
         // CCare / New Biz filters stay scoped to people who actually hold rows here.
         $salespersonFilterUsers = $salespersons;
         $ccareFilterUsers       = User::whereIn('id', $ccareFilterCounts->keys()->all())->orderBy('first_name')->get();
-        $newBizFilterUsers      = User::whereIn('id', $nbFilterCounts->keys()->all())->orderBy('first_name')->get();
+        // New Biz filter = the FULL New Biz directory (New Biz dept + the combined
+        // "Customer Care + New Biz" dept + anyone already tagged on a new_biz row),
+        // NOT just people who hold rows in the selected FY. A rep like Dipika Das
+        // whose customers all live in an earlier FY was vanishing from the filter
+        // and her pipeline read blank; she now shows with a (0) count and stays
+        // selectable. Row visibility stays scoped by SalesScope, so nothing leaks.
+        $newBizFilterUsers      = $newBizUsers;
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -758,7 +776,7 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id) {
+        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         $request->validate(['user_id' => 'required|exists:users,id']);
@@ -774,7 +792,7 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id) {
+        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         // Delete via the model instance so the removal is audited.
@@ -790,7 +808,7 @@ class SalesPipelineController extends Controller
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
         $isCcare  = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             if ($request->ajax()) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
@@ -938,7 +956,7 @@ class SalesPipelineController extends Controller
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
         $isCcare  = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -976,7 +994,7 @@ class SalesPipelineController extends Controller
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
         $isCcare  = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id) {
+        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             return redirect()->back()->with('error', 'Unauthorized.');
         }
         $pipeline->delete();

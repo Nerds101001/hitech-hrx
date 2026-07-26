@@ -16,6 +16,9 @@ class PipelineImportController extends Controller
     {
         $importTarget = $request->input('target', 'report');
         $user = auth()->user();
+        if (!\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user) && !$user->can('sales_report.import')) {
+            abort(403);
+        }
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 

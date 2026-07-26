@@ -670,9 +670,10 @@ Route::middleware([
             Route::get('/pipeline', fn() => redirect()->route('sales-visits.pipeline.index'));
             Route::get('/pipeline/import', fn() => redirect()->route('sales-visits.pipeline.import'));
             
-            // Sales Targets — setting a target is Admin/HR only. Everyone else
-            // may see targets on the pages that show them, never change them.
-            Route::middleware('role:admin|hr')->group(function () {
+            // Sales Targets — setting a target is Admin/HR, or a direct
+            // sales_targets.manage grant. Everyone else may see targets on
+            // the pages that show them, never change them.
+            Route::middleware('role_or_permission:admin|hr|sales_targets.manage')->group(function () {
                 Route::post('/targets/update', [\App\Http\Controllers\tenant\SalesTargetController::class, 'update'])->name('targets.update');
                 Route::get('/sales-targets/import', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'showImport'])->name('sales-targets.import');
                 Route::post('/sales-targets/import/preview', [\App\Http\Controllers\tenant\SalesTargetImportController::class, 'previewImport'])->name('sales-targets.import.preview');

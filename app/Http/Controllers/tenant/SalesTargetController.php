@@ -13,7 +13,7 @@ class SalesTargetController extends Controller
         // Targets are set by Admin/HR only. Managers, CCare and New Biz agents
         // may read them everywhere but must never be able to change their own
         // or anyone else's numbers.
-        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']) && !auth()->user()->can('sales_targets.manage')) {
             return response()->json(['success' => false, 'message' => 'Only Admin/HR can set targets.'], 403);
         }
 

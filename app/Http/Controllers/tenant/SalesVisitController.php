@@ -10,6 +10,7 @@ use App\Models\CcSalespersonMap;
 use App\Models\User;
 use App\Mail\SalesVisitConfirmation;
 use App\Mail\SalesVisitSurveyMail;
+use App\Http\Middleware\SalesAccessGuard;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -27,6 +28,9 @@ class SalesVisitController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+        if (!SalesAccessGuard::isBroadSalesUser($user) && !$user->can('sales_visits.view')) {
+            abort(403);
+        }
 
         $query = SalesVisit::with(['client', 'salesperson', 'ccAgent'])
             ->orderBy('scheduled_at', 'desc');
@@ -145,8 +149,8 @@ class SalesVisitController extends Controller
     {
         $user = Auth::user();
         
-        // Authorize CC agent or Admin/HR/Accounts
-        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
+        // Authorize CC agent or Admin/HR/Accounts (or a direct sales_visits.create grant)
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) && !$user->can('sales_visits.create')) {
             $isMapped = CcSalespersonMap::where('cc_user_id', $user->id)
                 ->where('sales_user_id', $request->salesperson_id)
                 ->exists();
@@ -214,7 +218,8 @@ class SalesVisitController extends Controller
         $allowed = \App\Support\SalesScope::allowedUserIds(Auth::user());
         if ($allowed !== null
             && !in_array($visit->salesperson_id, $allowed)
-            && !in_array($visit->cc_user_id, $allowed)) {
+            && !in_array($visit->cc_user_id, $allowed)
+            && !Auth::user()->can('sales_visits.view')) {
             abort(403, 'You are not authorized to view this visit.');
         }
 
@@ -230,7 +235,7 @@ class SalesVisitController extends Controller
         $visit = SalesVisit::findOrFail($id);
 
         // Only assigned salesperson or admin can complete
-        if (Auth::id() !== $visit->salesperson_id && !Auth::user()->hasRole(['admin', 'hr'])) {
+        if (Auth::id() !== $visit->salesperson_id && !Auth::user()->hasRole(['admin', 'hr']) && !Auth::user()->can('sales_visits.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -288,7 +293,7 @@ class SalesVisitController extends Controller
 
         // Allow CC Agents who booked this, or Admin/HR/Managers
         $user = Auth::user();
-        if ($visit->cc_user_id !== $user->id && !$user->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if ($visit->cc_user_id !== $user->id && !$user->hasRole(['admin', 'hr', 'manager', 'accounts']) && !$user->can('sales_visits.verify')) {
             abort(403, 'Unauthorized to verify this visit.');
         }
 
@@ -357,7 +362,8 @@ class SalesVisitController extends Controller
             ->orWhere('finance_id', $user->id)
             ->exists();
 
-        if (!$canSeeAll && !$user->hasRole(['manager', 'Manager']) && !$inAllowedDept && !$hasAnyMapping) {
+        if (!$canSeeAll && !$user->hasRole(['manager', 'Manager']) && !$inAllowedDept && !$hasAnyMapping
+            && !$user->can('client_master.view')) {
             abort(403, 'You are not authorized to view the Client Master.');
         }
 
@@ -410,7 +416,7 @@ class SalesVisitController extends Controller
     public function clientStore(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) && !$user->can('client_master.manage')) {
             $hasMappings = CcSalespersonMap::where('cc_user_id', $user->id)->exists();
             if (!$hasMappings) {
                 abort(403, 'You are not authorized to add clients.');
@@ -439,7 +445,7 @@ class SalesVisitController extends Controller
     public function clientDestroy($id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'accounts'])) {
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) && !$user->can('client_master.manage')) {
             $hasMappings = CcSalespersonMap::where('cc_user_id', $user->id)->exists();
             if (!$hasMappings) {
                 abort(403, 'You are not authorized to delete clients.');
@@ -459,7 +465,7 @@ class SalesVisitController extends Controller
 
     public function reportSummary(Request $request)
     {
-        if (!Auth::user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!Auth::user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !Auth::user()->can('sales_analytics.view')) {
             abort(403);
         }
 

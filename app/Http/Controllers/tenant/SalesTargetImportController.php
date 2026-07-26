@@ -17,8 +17,8 @@ class SalesTargetImportController extends Controller
      */
     public function showImport()
     {
-        // Importing targets is target setting — Admin/HR only.
-        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        // Importing targets is target setting — Admin/HR, or a direct sales_targets.manage grant.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']) && !auth()->user()->can('sales_targets.manage')) {
             abort(403, 'Only Admin/HR can import targets.');
         }
 
@@ -53,8 +53,8 @@ class SalesTargetImportController extends Controller
      */
     public function previewImport(Request $request)
     {
-        // Importing targets is target setting — Admin/HR only.
-        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        // Importing targets is target setting — Admin/HR, or a direct sales_targets.manage grant.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']) && !auth()->user()->can('sales_targets.manage')) {
             abort(403, 'Only Admin/HR can import targets.');
         }
 
@@ -142,8 +142,8 @@ class SalesTargetImportController extends Controller
      */
     public function storeImport(Request $request)
     {
-        // Importing targets is target setting — Admin/HR only.
-        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+        // Importing targets is target setting — Admin/HR, or a direct sales_targets.manage grant.
+        if (!auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']) && !auth()->user()->can('sales_targets.manage')) {
             abort(403, 'Only Admin/HR can import targets.');
         }
 

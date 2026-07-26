@@ -28,6 +28,13 @@ return [
         'employee.edit_document' => 'Edit Documents',
         'employee.kpa' => 'Manage KPA',
         'employee.kra' => 'Manage KRA',
+        'employee.delete' => 'Delete Employee',
+        'employee.reset_password' => 'Reset Employee Password / Security',
+        'employee.manage_leave_balance' => 'Adjust Leave Balance',
+        'employee.manage_payroll_adjustment' => 'Manage Payroll Adjustments',
+        'employee.manage_device' => 'Allot / Remove Devices',
+        'employee.lifecycle_action' => 'Suspend / Relieve / Retire / Terminate',
+        'employee.manage_hr_location' => 'Manage HR Location Assignment',
     ],
 
     'Attendance' => [
@@ -43,6 +50,7 @@ return [
         'leave.create_type' => 'Create Leave Type',
         'leave.create_policy' => 'Create Leave Policy',
         'leave.view_all' => 'View All Leaves',
+        'outdoor_duty.approve' => 'Approve Outdoor Duty',
     ],
 
     'Travel & Expense' => [
@@ -57,7 +65,7 @@ return [
 
     'Payroll' => [
         'payroll.view' => 'View Payroll',
-        'payroll.process' => 'Process Payroll',
+        'payroll.process' => 'Process Payroll (incl. Salary Import)',
         'payroll.export' => 'Export Payroll Data',
         'payroll.view_my_slips' => 'View My Payslips',
     ],
@@ -80,9 +88,21 @@ return [
     ],
 
     'Sales Field Ops' => [
-        'sales_ops.view' => 'View Sales Visits',
-        'sales_ops.view_all' => 'View All Sales/CCare Data (Unrestricted)',
-        'sales_ops.manage' => 'Manage Sales Targets',
+        'sales_ops.view_all' => 'View All Sales/CCare Data (Unrestricted, cross-cutting)',
+        'sales_ops.manage' => "Manage Employees' Sales Targets (from Employee profile)",
+        'sales_visits.view' => 'View Field Visits',
+        'sales_visits.create' => 'Book a Field Visit',
+        'sales_visits.manage' => 'Edit / Cancel Field Visits',
+        'sales_visits.verify' => 'Verify Completed Visits',
+        'client_master.view' => 'View Client Master',
+        'client_master.manage' => 'Add / Remove Clients',
+        'sales_report.view' => 'View Sales Report',
+        'sales_report.manage' => 'Edit Sales Report Entries',
+        'sales_report.import' => 'Import Sales Report',
+        'sales_pipeline.view' => 'View Sales Pipeline',
+        'sales_targets.manage' => 'Set / Import Sales Targets',
+        'sales_analytics.view' => 'View Sales Analytics & Reports',
+        'crm_clients.manage' => 'Manage CRM Client Mappings',
     ],
 
     'CCare Attendance' => [
@@ -94,6 +114,8 @@ return [
         'vault.upload' => 'Upload Documents',
         'vault.chat' => 'Use AI Bot',
         'vault.train' => 'Train AI Bot',
+        'vault.delete' => 'Delete Library Items',
+        'vault.manage_taxonomy' => 'Manage Library Taxonomy',
     ],
 
     'Asset Management' => [
@@ -102,6 +124,7 @@ return [
         'assets.edit' => 'Edit Asset',
         'assets.delete' => 'Delete Asset',
         'assets.assign' => 'Assign/Revoke Assets',
+        'assets.manage_categories' => 'Manage Asset Categories',
     ],
 
     'Monitoring' => [
@@ -116,9 +139,12 @@ return [
         'kingo_bingo.manage' => 'Manage Kingo Bingo Targets',
     ],
 
-    '90-Day Goals' => [
+    'Performance' => [
         'goals.view' => 'View 90-Day Goals',
         'goals.manage' => 'Manage 90-Day Goals',
+        'scorecards.view' => 'View Scorecards',
+        'scorecards.manage' => 'Generate / Review Scorecards',
+        'kpi.manage' => 'Manage KPI / KRA (DWM)',
     ],
 
     'Loans & Advances' => [
@@ -139,6 +165,38 @@ return [
         'audit.view' => 'View Audit Logs',
         'audit.export' => 'Export Audit Logs',
         'settings.manage' => 'Manage General Settings',
+    ],
+
+    'Configuration Masters' => [
+        'shifts.manage' => 'Manage Shifts',
+        'holidays.manage' => 'Manage Holidays',
+        'document_types.manage' => 'Manage Document Types',
+        'ipgroup.manage' => 'Manage IP Groups',
+        'geofencegroup.manage' => 'Manage Geofence Groups',
+        'qrgroup.manage' => 'Manage QR Code Groups',
+        'units.manage' => 'Manage Units / Sites',
+        'departments.manage' => 'Manage Departments',
+        'designations.manage' => 'Manage Designations',
+        'teams.manage' => 'Manage Teams',
+    ],
+
+    'Operations' => [
+        'visits.manage' => 'Manage Visit Log (HR view)',
+        'tasks.manage' => 'Manage Tasks',
+        'document_request.manage' => 'Manage Document Requests',
+        'probation.view' => 'View Probation Status',
+        'probation.manage' => 'Manage Probation',
+    ],
+
+    'System Utilities' => [
+        'device.manage' => 'Manage Device Status',
+        'biometric.manage' => 'Manage Biometric Devices',
+        'account.manage' => 'Manage User Accounts (Suspend/Delete/Reset)',
+        'chat.access' => 'Access Admin Chat',
+    ],
+
+    'Training' => [
+        'training.manage' => 'Manage Training Portal',
     ],
 
 ];
