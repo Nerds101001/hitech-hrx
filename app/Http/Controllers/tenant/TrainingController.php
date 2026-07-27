@@ -55,7 +55,7 @@ class TrainingController extends Controller
     {
         $user = User::with(['trainingProgress.module.phase'])->findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             abort(403);
         }
 
@@ -81,7 +81,7 @@ class TrainingController extends Controller
     {
         $user = User::findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -347,7 +347,7 @@ class TrainingController extends Controller
      */
     public function activityDashboard()
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             abort(403);
         }
 
@@ -444,7 +444,7 @@ class TrainingController extends Controller
      */
     public function managementIndex()
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             abort(403);
         }
 
@@ -773,7 +773,7 @@ class TrainingController extends Controller
      */
     public function destroyPhase($id)
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             abort(403);
         }
 
@@ -793,7 +793,7 @@ class TrainingController extends Controller
      */
     public function destroyModule($id)
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
             abort(403);
         }
 

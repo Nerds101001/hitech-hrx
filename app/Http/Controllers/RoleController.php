@@ -21,12 +21,16 @@ class RoleController extends Controller
     // Read exact business logic groupings from our centralized registry
     $groupedPermissions = config('permissions_registry');
 
+    // Persona templates for one-click role setup (see config/role_presets.php)
+    $rolePresets = config('role_presets', []);
+
     return view('roles.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
       'roles' => $roles,
       'permissions' => $permissions,
       'users' => $users,
-      'groupedPermissions' => $groupedPermissions
+      'groupedPermissions' => $groupedPermissions,
+      'rolePresets' => $rolePresets
     ]);
   }
 

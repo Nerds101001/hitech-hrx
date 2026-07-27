@@ -23,10 +23,42 @@ document.addEventListener('DOMContentLoaded', function (e) {
     $('.permission-checkbox, .row-select-all').prop('checked', $(this).is(':checked'));
   });
 
+  // Re-sync the row-select-all and global-select-all checkboxes after the
+  // permission set is changed programmatically (preset pick / edit load).
+  function refreshSelectAllStates() {
+    $('.row-select-all').each(function() {
+      var module = $(this).data('module');
+      var checkboxes = $(`.${module}-checkbox`);
+      var allChecked = checkboxes.length > 0 && checkboxes.not(':checked').length === 0;
+      $(this).prop('checked', allChecked);
+    });
+    var total = $('.permission-checkbox').length;
+    var checked = $('.permission-checkbox:checked').length;
+    $('#selectAll').prop('checked', total > 0 && total === checked);
+  }
+
+  // Persona template: pick one → auto-tick exactly its permissions.
+  $(document).on('change', '#rolePreset', function() {
+    var selected = this.options[this.selectedIndex];
+    var hint = $('#rolePresetHint');
+    if (!this.value) { hint.text(''); return; }
+
+    var perms = (selected.getAttribute('data-permissions') || '').split(',').filter(Boolean);
+    // Start clean so the template is exactly what gets applied, then tweakable.
+    $('.permission-checkbox, .row-select-all, #selectAll').prop('checked', false);
+    perms.forEach(function(p) {
+      $(`.permission-checkbox[value="${p}"]`).prop('checked', true);
+    });
+    refreshSelectAllStates();
+    hint.text((selected.getAttribute('title') || '') + '  (' + perms.length + ' permissions applied — adjust below if needed)');
+  });
+
   roleAdd.onclick = function () {
     roleTitle.innerHTML = 'Add New Role';
     $('#id').val('');
     $('#name').val('');
+    $('#rolePreset').val('');
+    $('#rolePresetHint').text('');
     $('#isMultiCheckInEnabled').prop('checked', false);
     $('#mobileAppAccess').prop('checked', false);
     $('#webAppAccess').prop('checked', false);
@@ -40,6 +72,8 @@ document.addEventListener('DOMContentLoaded', function (e) {
 
       $('#id').val(role['id']);
       $('#name').val(role['name']);
+      $('#rolePreset').val('');
+      $('#rolePresetHint').text('');
       $('#isMultiCheckInEnabled').prop('checked', role['is_multiple_check_in_enabled']);
       $('#mobileAppAccess').prop('checked', role['is_mobile_app_access_enabled']);
       $('#webAppAccess').prop('checked', role['is_web_access_enabled']);

@@ -40,6 +40,30 @@
                     </div>
                 </div>
             </div>
+
+            @if(!empty($rolePresets))
+            {{-- Persona templates: one-click permission bundles for common jobs. --}}
+            <div class="row align-items-end g-4 mt-1">
+                <div class="col-lg-8">
+                    <label class="form-label fw-bold text-heading mb-2 ms-1" for="rolePreset">
+                        <i class="bx bx-magic-wand me-1 text-primary"></i>@lang('Start from a template')
+                        <span class="text-muted fw-normal small">— @lang('picks the right permissions for a common role; you can still tweak below')</span>
+                    </label>
+                    <div class="hitech-input-group-glass">
+                        <span class="input-group-text"><i class="bx bx-category-alt fs-4"></i></span>
+                        <select id="rolePreset" class="form-select">
+                            <option value="">@lang('— No template (choose permissions manually) —')</option>
+                            @foreach($rolePresets as $presetKey => $preset)
+                                <option value="{{ $presetKey }}"
+                                        data-permissions="{{ implode(',', $preset['permissions'] ?? []) }}"
+                                        title="{{ $preset['description'] ?? '' }}">{{ $preset['label'] ?? $presetKey }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <p id="rolePresetHint" class="text-muted small mt-2 mb-0 ms-1" style="min-height: 1rem;"></p>
+                </div>
+            </div>
+            @endif
           </div>
 
           {{-- Section 2: Permissions Matrix --}}
