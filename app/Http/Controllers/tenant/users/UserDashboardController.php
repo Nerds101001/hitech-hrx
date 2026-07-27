@@ -123,6 +123,13 @@ class UserDashboardController extends Controller
         $isFieldEmployee = $user->hasRole('employee') || $user->hasRole('office_employee');
         $isManager = $user->hasRole('manager');
 
+        // Accounts previously saw two DIFFERENT dashboards — the HR one at "/"
+        // and a legacy page here whose charts were dead empty divs. Both now
+        // resolve to the single Finance Command Center.
+        if ($user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']) && !$isFieldEmployee) {
+            return app(\App\Http\Controllers\tenant\DashboardController::class)->index();
+        }
+
         // Common Personal Stats
         $myLeavesCount = LeaveRequest::where('user_id', $user->id)->count();
         $myExpensesCount = ExpenseRequest::where('user_id', $user->id)->count();

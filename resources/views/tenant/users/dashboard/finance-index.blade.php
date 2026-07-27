@@ -1,0 +1,277 @@
+@extends('layouts/layoutMaster')
+
+@section('title', __('Finance Command Center'))
+
+@section('vendor-style')
+  @vite([
+    'resources/assets/vendor/libs/animate-css/animate.scss',
+    'resources/assets/vendor/libs/apex-charts/apex-charts.scss'
+  ])
+  @vite(['resources/assets/vendor/scss/pages/hitech-portal.scss'])
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap">
+@endsection
+
+@section('vendor-script')
+  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.min.js'])
+@endsection
+
+@php
+  $hour = (int) now()->format('H');
+  $greet = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+  $firstName = auth()->user()->first_name ?? (explode(' ', auth()->user()->name ?? 'Accounts')[0]);
+@endphp
+
+@section('content')
+<div class="adc">
+
+  {{-- Hero --}}
+  <div class="adc-hero d-flex flex-wrap align-items-center justify-content-between mb-4">
+    <div>
+      <h4 class="adc-hero-title mb-1">{{ $greet }}, {{ $firstName }} <span class="adc-wave">💰</span></h4>
+      <p class="adc-hero-sub mb-0">Money in motion across the company — {{ now()->format('l, d M Y') }}.</p>
+    </div>
+    <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+      <span class="adc-chip"><i class="bx bx-wallet"></i> Finance Console</span>
+      <a href="{{ url('/payroll') }}" class="adc-chip adc-chip-accent"><i class="bx bx-money"></i> Payroll</a>
+    </div>
+  </div>
+
+  {{-- KPI cards --}}
+  <div class="row g-3 mb-2">
+    @php
+      $kpis = [
+        ['label'=>'Cash-Out Queue','value'=>$money($totalCashOut),'icon'=>'bx-wallet-alt','tone'=>'danger','sub'=>$totalCashOutCount.' items awaiting payment','url'=>url('/travel-claims/admin/dashboard')],
+        ['label'=>'Payroll (This Month)','value'=>$money($payrollThisMonth),'icon'=>'bx-money','tone'=>'primary','sub'=>$payslipsPending.' payslips not yet paid','url'=>url('/payroll')],
+        ['label'=>'Monthly Salary Cost','value'=>$money($monthlySalaryCost),'icon'=>'bx-trending-up','tone'=>'info','sub'=>number_format($activeHeadcount).' active staff','url'=>url('/employees')],
+        ['label'=>'Claims to Verify','value'=>number_format($awaitingVerification['count']),'icon'=>'bx-search-alt','tone'=>'warning','sub'=>$money($awaitingVerification['amount']).' submitted','url'=>url('/travel-claims/admin/dashboard')],
+        ['label'=>'Claims to Pay','value'=>number_format($awaitingPayment['count']),'icon'=>'bx-credit-card','tone'=>'danger','sub'=>$money($awaitingPayment['amount']).' approved','url'=>url('/travel-claims/admin/dashboard')],
+        ['label'=>'On Objection','value'=>number_format($onObjection['count']),'icon'=>'bx-error-circle','tone'=>'warning','sub'=>'need claimant action','url'=>url('/travel-claims/admin/dashboard')],
+      ];
+    @endphp
+    @foreach($kpis as $k)
+      <div class="col-6 col-md-4 col-xxl-2">
+        <a href="{{ $k['url'] }}" class="adc-kpi adc-tone-{{ $k['tone'] }} h-100 d-block">
+          <div class="adc-kpi-top">
+            <span class="adc-kpi-icon"><i class="bx {{ $k['icon'] }}"></i></span>
+            <i class="bx bx-chevron-right adc-kpi-go"></i>
+          </div>
+          <div class="adc-kpi-value">{{ $k['value'] }}</div>
+          <div class="adc-kpi-label">{{ $k['label'] }}</div>
+          <div class="adc-kpi-sub">{{ $k['sub'] }}</div>
+        </a>
+      </div>
+    @endforeach
+  </div>
+
+  <div class="row g-4 mt-0">
+    {{-- MAIN --}}
+    <div class="col-xxl-9 col-lg-8">
+
+      {{-- Cash-out queue --}}
+      <div class="adc-card">
+        <div class="adc-card-head">
+          <div><h6 class="adc-card-title">Cash-Out Queue</h6><span class="adc-card-sub">Everything waiting on money to leave — total {{ $money($totalCashOut) }}</span></div>
+        </div>
+        @if($totalCashOutCount === 0)
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-check-circle text-success"></i><span>Nothing pending payment. All clear.</span></div>
+        @else
+          <div class="row g-3">
+            @foreach($cashOutQueue as $q)
+              <div class="col-6 col-xl-3">
+                <a href="{{ $q['url'] }}" class="adc-tile adc-tone-{{ $q['tone'] }} d-block h-100">
+                  <div class="adc-tile-value">{{ $money($q['amount']) }}</div>
+                  <div class="adc-tile-name">{{ $q['label'] }}</div>
+                  <div class="adc-tile-sub">{{ $q['count'] }} {{ \Illuminate\Support\Str::plural('item', $q['count']) }}</div>
+                </a>
+              </div>
+            @endforeach
+          </div>
+        @endif
+      </div>
+
+      <div class="row g-4 mt-1">
+        <div class="col-xl-8">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Payroll Cost Trend</h6><span class="adc-card-sub">Net salary paid · last 12 months</span></div><a href="{{ url('/payroll') }}" class="adc-link">Payroll</a></div>
+            <div id="finPayrollTrend"></div>
+          </div>
+        </div>
+        <div class="col-xl-4">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Claim Pipeline</h6><span class="adc-card-sub">Travel claims by stage</span></div><a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a></div>
+            <div id="finClaimPipeline"></div>
+          </div>
+        </div>
+      </div>
+
+      {{-- WFH attendance queue — accounts marks these from the tracking report --}}
+      <div class="adc-card mt-4">
+        <div class="adc-card-head">
+          <div><h6 class="adc-card-title">Work From Home — Attendance To Mark</h6><span class="adc-card-sub">Approved WFH · mark attendance from the tracking-software report</span></div>
+          <a href="{{ url('/attendance') }}" class="adc-link">Attendance</a>
+        </div>
+        @if(collect($wfhQueue)->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-laptop"></i><span>No approved work-from-home days awaiting attendance.</span></div>
+        @else
+          <div class="table-responsive">
+            <table class="table adc-table mb-0">
+              <thead><tr><th>Employee</th><th>From</th><th>To</th><th>Days</th><th class="text-end">Action</th></tr></thead>
+              <tbody>
+                @foreach($wfhQueue as $w)
+                  @php
+                    $from = \Carbon\Carbon::parse($w->from_date);
+                    $to   = \Carbon\Carbon::parse($w->to_date);
+                    $days = $w->is_half_day ? 0.5 : ($from->diffInDays($to) + 1);
+                  @endphp
+                  <tr>
+                    <td class="fw-medium">{{ optional($w->user)->getFullName() ?? '—' }}<small class="text-muted d-block" style="font-size:.7rem">{{ optional($w->user)->code }}</small></td>
+                    <td>{{ $from->format('d M Y') }}</td>
+                    <td>{{ $to->format('d M Y') }}</td>
+                    <td>{{ $days }}</td>
+                    <td class="text-end"><a href="{{ url('/attendance') }}" class="adc-badge adc-tone-primary">Mark</a></td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        @endif
+      </div>
+
+      {{-- Finance module tiles --}}
+      <div class="adc-card mt-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Finance Modules</h6><span class="adc-card-sub">Quick access</span></div></div>
+        <div class="row g-3">
+          @php
+            $tiles = [
+              ['name'=>'Payroll','icon'=>'bx-money','value'=>$money($payrollThisMonth),'sub'=>now()->format('M Y'),'url'=>url('/payroll'),'tone'=>'primary'],
+              ['name'=>'Travel Claims','icon'=>'bx-car','value'=>$awaitingPayment['count'] + $awaitingVerification['count'],'sub'=>'Awaiting action','url'=>url('/travel-claims/admin/dashboard'),'tone'=>'warning'],
+              ['name'=>'Expenses','icon'=>'bx-receipt','value'=>$cashOutQueue[2]['count'],'sub'=>'Pending','url'=>url('/expenseRequests'),'tone'=>'info'],
+              ['name'=>'Loans','icon'=>'bx-wallet','value'=>$cashOutQueue[3]['count'],'sub'=>'Pending','url'=>url('/loan'),'tone'=>'success'],
+              ['name'=>'Attendance','icon'=>'bx-time-five','value'=>number_format($presentUsersCount),'sub'=>'Present today','url'=>url('/attendance'),'tone'=>'success'],
+              ['name'=>'Leaves','icon'=>'bx-calendar-event','value'=>number_format($onLeaveUsersCount),'sub'=>'On leave today','url'=>url('/leaveRequests'),'tone'=>'warning'],
+              ['name'=>'Employees','icon'=>'bx-group','value'=>number_format($activeHeadcount),'sub'=>'Directory','url'=>url('/employees'),'tone'=>'primary'],
+              ['name'=>'Reports','icon'=>'bx-file','value'=>'','sub'=>'Export','url'=>url('/reports'),'tone'=>'info'],
+            ];
+          @endphp
+          @foreach($tiles as $t)
+            <div class="col-6 col-md-3">
+              <a href="{{ $t['url'] }}" class="adc-tile adc-tone-{{ $t['tone'] }} d-block h-100">
+                <span class="adc-tile-icon"><i class="bx {{ $t['icon'] }}"></i></span>
+                <div class="adc-tile-value">{{ $t['value'] }}</div>
+                <div class="adc-tile-name">{{ $t['name'] }}</div>
+                <div class="adc-tile-sub">{{ $t['sub'] }}</div>
+              </a>
+            </div>
+          @endforeach
+        </div>
+      </div>
+    </div>
+
+    {{-- RAIL --}}
+    <div class="col-xxl-3 col-lg-4">
+
+      {{-- Top claimants --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Top Claimants</h6><span class="adc-card-sub">{{ now()->format('M Y') }}</span></div></div>
+        @if(collect($topClaimants)->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-user"></i><span>No claims this month.</span></div>
+        @else
+          <ul class="adc-appr adc-rail-scroll">
+            @foreach($topClaimants as $tc)
+              <li>
+                <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode(optional($tc->user)->getFullName() ?? 'NA') }}&background=0d9488&color=fff&bold=true" alt="">
+                <div class="adc-appr-body">
+                  <div class="adc-appr-name">{{ optional($tc->user)->getFullName() ?? '—' }}</div>
+                  <div class="adc-appr-meta">{{ $tc->c }} {{ \Illuminate\Support\Str::plural('claim', $tc->c) }}</div>
+                </div>
+                <span class="adc-badge adc-tone-info">{{ $money($tc->amt) }}</span>
+              </li>
+            @endforeach
+          </ul>
+        @endif
+      </div>
+
+      {{-- Recent payments --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Recent Payments</h6><span class="adc-card-sub">Claims marked paid</span></div><a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a></div>
+        @if(collect($recentPayments)->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-transfer"></i><span>No payments recorded yet.</span></div>
+        @else
+          <ul class="adc-feed adc-rail-scroll">
+            @foreach($recentPayments as $p)
+              <li>
+                <span class="adc-feed-dot adc-tone-success"><i class="bx bx-check"></i></span>
+                <div class="adc-feed-body">
+                  <div class="adc-feed-title">{{ optional($p->user)->getFullName() ?? 'Claim' }} · {{ $money($p->net_payable ?? $p->total_amount) }}</div>
+                  <div class="adc-feed-meta">{{ $p->claim_month }} · paid {{ \Carbon\Carbon::parse($p->paid_at)->diffForHumans() }}</div>
+                </div>
+              </li>
+            @endforeach
+          </ul>
+        @endif
+      </div>
+
+      {{-- Quick actions --}}
+      <div class="adc-card">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
+        <div class="adc-qa">
+          <a href="{{ url('/payroll') }}" class="adc-qa-item"><i class="bx bx-money"></i><span>Run Payroll</span></a>
+          <a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-qa-item"><i class="bx bx-car"></i><span>Verify Claims</span></a>
+          <a href="{{ url('/expenseRequests') }}" class="adc-qa-item"><i class="bx bx-receipt"></i><span>Expenses</span></a>
+          <a href="{{ url('/loan') }}" class="adc-qa-item"><i class="bx bx-wallet"></i><span>Loans</span></a>
+          <a href="{{ url('/attendance') }}" class="adc-qa-item"><i class="bx bx-time-five"></i><span>Attendance</span></a>
+          <a href="{{ url('/reports') }}" class="adc-qa-item"><i class="bx bx-file"></i><span>Reports</span></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+@endsection
+
+@section('page-script')
+<script>
+(function () {
+  const payrollTrend  = @json($payrollTrendChart);
+  const claimPipeline = @json($claimPipelineChart);
+
+  function whenApex(cb, tries) {
+    tries = tries || 0;
+    if (typeof ApexCharts !== 'undefined') return cb();
+    if (tries > 100) return;
+    setTimeout(function () { whenApex(cb, tries + 1); }, 50);
+  }
+
+  whenApex(function () {
+    const trendEl = document.querySelector('#finPayrollTrend');
+    if (trendEl) {
+      new ApexCharts(trendEl, {
+        series: [{ name: 'Net Salary Paid', data: payrollTrend.data }],
+        chart: { type: 'area', height: 300, toolbar: { show: false }, fontFamily: 'Public Sans, sans-serif' },
+        colors: ['#0d9488'],
+        dataLabels: { enabled: false },
+        stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05 } },
+        xaxis: { categories: payrollTrend.labels, labels: { style: { colors: '#64748b' } } },
+        yaxis: { labels: { formatter: function (v) { return '₹' + Math.round(v).toLocaleString('en-IN'); } } },
+        tooltip: { y: { formatter: function (v) { return '₹' + Math.round(v).toLocaleString('en-IN'); } } },
+        grid: { borderColor: '#e2e8f0', strokeDashArray: 4 }
+      }).render();
+    }
+
+    const pipeEl = document.querySelector('#finClaimPipeline');
+    if (pipeEl) {
+      new ApexCharts(pipeEl, {
+        series: [{ name: 'Claims', data: claimPipeline.data }],
+        chart: { type: 'bar', height: 300, toolbar: { show: false }, fontFamily: 'Public Sans, sans-serif' },
+        plotOptions: { bar: { borderRadius: 6, horizontal: true, distributed: true, barHeight: '60%' } },
+        colors: ['#94a3b8', '#f59e0b', '#3b82f6', '#10b981', '#ef4444'],
+        dataLabels: { enabled: true },
+        legend: { show: false },
+        xaxis: { categories: claimPipeline.labels, labels: { style: { colors: '#64748b' } } },
+        grid: { borderColor: '#e2e8f0', strokeDashArray: 4 }
+      }).render();
+    }
+  });
+})();
+</script>
+@endsection

@@ -21,6 +21,7 @@ use App\Models\FormEntry;
 use App\Models\Holiday;
 use App\Models\LeaveRequest;
 use App\Models\LoanRequest;
+use App\Models\Payslip;
 use App\Models\ProductOrder;
 use App\Models\Settings;
 use App\Models\Task;
@@ -358,8 +359,18 @@ class DashboardController extends Controller
       //   • "KPI Summary" -> kpi_checks buckets, else today's workforce split
       //   • Workforce chart -> real New-Joins / Exits (transfers/promotions
       //     are not tracked, so they are not shown)
-      // HR / Accounts / Manager keep their existing dashboards untouched.
+      // HR / Manager keep their existing dashboards untouched.
       // ============================================================
+
+      // ---- FINANCE COMMAND CENTER (accounts role) -----------------
+      // Accounts used to be handed the HR dashboard at "/" and a separate
+      // legacy page at /user/dashboard — neither showed the money. This is
+      // their own finance view: cash-out queue, claim pipeline, payroll cost
+      // and the approved-WFH attendance queue they own.
+      if ($user->hasRole('accounts') && !$user->hasRole(['admin', 'hr'])) {
+        return $this->financeCommandCenter($user, $active, $presentUsersCount, $onLeaveUsersCount);
+      }
+
       if ($user->hasRole('admin')) {
 
         // Indian short-form money formatter (Cr / L / K)
@@ -1086,6 +1097,141 @@ class DashboardController extends Controller
       ->values();
 
     return Success::response($activities);
+  }
+
+  /**
+   * FINANCE COMMAND CENTER — the accounts team's own dashboard.
+   *
+   * Accounts owns payroll, reimbursements, travel claims, loans and (per the
+   * owner's WFH flow) marking attendance for approved work-from-home days
+   * from the tracking-software report. Everything below is real data.
+   */
+  private function financeCommandCenter($user, int $active, int $presentUsersCount, int $onLeaveUsersCount)
+  {
+    $money = function ($n) {
+      $n = (float) $n;
+      if ($n >= 10000000) return '₹' . number_format($n / 10000000, 2) . ' Cr';
+      if ($n >= 100000)   return '₹' . number_format($n / 100000, 2) . ' L';
+      return '₹' . number_format($n);
+    };
+
+    $monthStart = now()->copy()->startOfMonth();
+    $thisMonthKey = now()->format('Y-m');
+
+    // ---- Travel claims pipeline (draft → submitted → verified → approved → paid)
+    $claimAgg = \App\Models\TravelClaim::selectRaw('status, COUNT(*) c, SUM(COALESCE(net_payable, total_amount, 0)) amt')
+      ->groupBy('status')->get()->keyBy('status');
+    $claimStat = fn($s) => [
+      'count'  => (int) ($claimAgg[$s]->c ?? 0),
+      'amount' => (float) ($claimAgg[$s]->amt ?? 0),
+    ];
+
+    $awaitingVerification = $claimStat('submitted');
+    $awaitingApproval     = $claimStat('verified');
+    $awaitingPayment      = $claimStat('approved');
+    $onObjection          = $claimStat('objection');
+
+    // ---- Other payables
+    $expensePending = [
+      'count'  => ExpenseRequest::where('status', 'pending')->count(),
+      'amount' => (float) ExpenseRequest::where('status', 'pending')->sum('amount'),
+    ];
+    $loanPending = [
+      'count'  => LoanRequest::where('status', 'pending')->count(),
+      'amount' => (float) LoanRequest::where('status', 'pending')->sum('amount'),
+    ];
+
+    // ---- Cash-out queue: everything waiting for money to leave the company
+    $cashOutQueue = [
+      ['label' => 'Travel claims to pay',   'count' => $awaitingPayment['count'],      'amount' => $awaitingPayment['amount'],      'tone' => 'danger',  'url' => url('/travel-claims/admin/dashboard')],
+      ['label' => 'Travel claims to verify','count' => $awaitingVerification['count'], 'amount' => $awaitingVerification['amount'], 'tone' => 'warning', 'url' => url('/travel-claims/admin/dashboard')],
+      ['label' => 'Expense reimbursements', 'count' => $expensePending['count'],       'amount' => $expensePending['amount'],       'tone' => 'info',    'url' => url('/expenseRequests')],
+      ['label' => 'Loan requests',          'count' => $loanPending['count'],          'amount' => $loanPending['amount'],          'tone' => 'primary', 'url' => url('/loan')],
+    ];
+    $totalCashOut = array_sum(array_column($cashOutQueue, 'amount'));
+    $totalCashOutCount = array_sum(array_column($cashOutQueue, 'count'));
+
+    // ---- Payroll: this month's run + 12-month cost trend
+    $payrollThisMonth = (float) Payslip::whereYear('created_at', now()->year)
+      ->whereMonth('created_at', now()->month)->sum('net_salary');
+    $payslipsPending  = Payslip::where('status', '!=', 'paid')
+      ->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->count();
+    $monthlySalaryCost = (float) User::where('status', UserAccountStatus::ACTIVE)->sum('base_salary');
+
+    $payrollTrendStart = now()->copy()->startOfMonth()->subMonths(11);
+    $payrollByMonth = Payslip::where('created_at', '>=', $payrollTrendStart)
+      ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') ym, SUM(net_salary) total")
+      ->groupBy('ym')->pluck('total', 'ym');
+    $payrollTrendChart = ['labels' => [], 'data' => []];
+    for ($i = 0; $i < 12; $i++) {
+      $m = $payrollTrendStart->copy()->addMonths($i);
+      $payrollTrendChart['labels'][] = $m->format('M y');
+      $payrollTrendChart['data'][]   = round((float) ($payrollByMonth[$m->format('Y-m')] ?? 0), 2);
+    }
+
+    // ---- Claim pipeline chart (count by stage, in workflow order)
+    $claimPipelineChart = [
+      'labels' => ['Draft', 'Submitted', 'Verified', 'Approved', 'Objection'],
+      'data'   => [
+        $claimStat('draft')['count'], $awaitingVerification['count'],
+        $awaitingApproval['count'], $awaitingPayment['count'], $onObjection['count'],
+      ],
+    ];
+
+    // ---- Approved WFH awaiting attendance marking (accounts owns this).
+    // Per the owner's flow: once a WFH leave is approved, accounts marks the
+    // attendance from the external tracking-software report.
+    $wfhQueue = collect();
+    try {
+      $wfhType = \App\Models\LeaveType::where('code', 'WFH')->first();
+      if ($wfhType) {
+        $wfhQueue = LeaveRequest::with('user:id,first_name,last_name,code')
+          ->where('leave_type_id', $wfhType->id)
+          ->where('status', LeaveRequestStatus::APPROVED)
+          ->whereDate('to_date', '>=', now()->subDays(30)->toDateString())
+          ->orderByDesc('from_date')
+          ->limit(10)
+          ->get();
+      }
+    } catch (\Throwable $e) {
+      $wfhQueue = collect();
+    }
+
+    // ---- Recent money movement (claims actually paid)
+    $recentPayments = \App\Models\TravelClaim::with('user:id,first_name,last_name,code')
+      ->whereNotNull('paid_at')
+      ->orderByDesc('paid_at')
+      ->limit(8)
+      ->get();
+
+    // ---- Top claimants this financial month
+    $topClaimants = \App\Models\TravelClaim::with('user:id,first_name,last_name')
+      ->where('claim_month', $thisMonthKey)
+      ->selectRaw('user_id, SUM(COALESCE(net_payable, total_amount, 0)) amt, COUNT(*) c')
+      ->groupBy('user_id')->orderByDesc('amt')->limit(6)->get();
+
+    return view('tenant.users.dashboard.finance-index', [
+      'pageConfigs'         => ['contentLayout' => 'wide'],
+      'money'               => $money,
+      'activeHeadcount'     => $active,
+      'presentUsersCount'   => $presentUsersCount,
+      'onLeaveUsersCount'   => $onLeaveUsersCount,
+      'payrollThisMonth'    => $payrollThisMonth,
+      'payslipsPending'     => $payslipsPending,
+      'monthlySalaryCost'   => $monthlySalaryCost,
+      'totalCashOut'        => $totalCashOut,
+      'totalCashOutCount'   => $totalCashOutCount,
+      'cashOutQueue'        => $cashOutQueue,
+      'awaitingVerification'=> $awaitingVerification,
+      'awaitingApproval'    => $awaitingApproval,
+      'awaitingPayment'     => $awaitingPayment,
+      'onObjection'         => $onObjection,
+      'payrollTrendChart'   => $payrollTrendChart,
+      'claimPipelineChart'  => $claimPipelineChart,
+      'wfhQueue'            => $wfhQueue,
+      'recentPayments'      => $recentPayments,
+      'topClaimants'        => $topClaimants,
+    ]);
   }
 
   /**
