@@ -77,11 +77,13 @@ class LeaveRequest extends Model implements AuditableContract
           $isPaidType  = $leaveRequest->leaveType->is_paid;
           $leaveTypeCode = $leaveRequest->leaveType->code;
           $plType      = \App\Models\LeaveType::where('code', 'ALP')->first();
+          $legacyPaidType = \App\Models\LeaveType::where('code', 'PL')->first();
           $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
 
           // Determine which balance record to deduct from
           $deductLeaveTypeId = $leaveRequest->leave_type_id;
-          if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
+          $pooledIntoAlp = $isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes);
+          if ($pooledIntoAlp) {
               $deductLeaveTypeId = $plType->id;
           }
 
@@ -91,10 +93,24 @@ class LeaveRequest extends Model implements AuditableContract
               'tenant_id'     => $leaveRequest->tenant_id,
           ]);
 
+          // Legacy "Paid Leave" (PL) balances left over from before the ALP
+          // consolidation still hold real unused days for some employees
+          // (the type is deactivated but old accrued balance wasn't drained).
+          // Fall back to that pool when ALP itself is insufficient, instead
+          // of marking the leave unpaid while earned leave sits stranded.
+          $legacyBalance = ($pooledIntoAlp && $legacyPaidType)
+              ? LeaveBalance::firstOrCreate([
+                    'user_id'       => $user->id,
+                    'leave_type_id' => $legacyPaidType->id,
+                    'tenant_id'     => $leaveRequest->tenant_id,
+                ])
+              : null;
+
           $tempDate  = $leaveRequest->from_date->copy();
           $toDate    = $leaveRequest->to_date;
           $lwpDays   = 0.0;
           $paidDays  = 0.0;
+          $balanceChecked = false;
           $decrement = $leaveRequest->is_half_day ? 0.5 : 1.0;
 
           while ($tempDate->lte($toDate)) {
@@ -104,12 +120,32 @@ class LeaveRequest extends Model implements AuditableContract
 
                   if ($leaveRequest->is_short_leave) {
                       $attendanceStatus = 'present';
+                      // Short Leave's paid/unpaid status used to be whatever was
+                      // set at submission time and was never rechecked here at
+                      // approval, so a short leave submitted when the balance was
+                      // low stayed unpaid forever even after balance freed up.
+                      if ($isPaidType) {
+                          $balanceChecked = true;
+                          if ($availableBalance >= $decrement) {
+                              $balance->used += $decrement;
+                              $paidDays += $decrement;
+                          } else {
+                              $lwpDays += $decrement;
+                          }
+                      }
                   } elseif ($leaveRequest->is_half_day) {
                       $attendanceStatus = 'half-Day';
                   } else {
                       if ($isPaidType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
+                          $balanceChecked = true;
+                          $availableLegacy = $legacyBalance ? ((float)$legacyBalance->balance - (float)$legacyBalance->used) : 0.0;
+
                           if ($availableBalance >= $decrement) {
                               $balance->used += $decrement;
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'leave';
+                          } elseif ($legacyBalance && $availableLegacy >= $decrement) {
+                              $legacyBalance->used += $decrement;
                               $paidDays += $decrement;
                               $attendanceStatus = 'leave';
                           } else {
@@ -146,11 +182,14 @@ class LeaveRequest extends Model implements AuditableContract
           }
 
           $balance->save();
+          if ($legacyBalance) {
+              $legacyBalance->save();
+          }
 
-          if ($lwpDays > 0) {
+          if ($balanceChecked) {
               $leaveRequest->withoutEvents(function () use ($leaveRequest, $lwpDays) {
                   $leaveRequest->updateQuietly([
-                      'is_lwp'   => true,
+                      'is_lwp'   => $lwpDays > 0,
                       'lwp_days' => $lwpDays,
                   ]);
               });

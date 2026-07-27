@@ -137,7 +137,7 @@ $(function () {
           targets: 3,
           className: 'text-start',
           render: function (data, type, full, meta) {
-            return full['leave_type'] || 'N/A';
+            return full['request_type'] || 'N/A';
           }
         },
         {
@@ -145,7 +145,7 @@ $(function () {
           targets: 4,
           className: 'text-start',
           render: function (data, type, full, meta) {
-            return full['from_date'] || '';
+            return full['dates'] || '';
           }
         },
         {
@@ -192,8 +192,8 @@ $(function () {
           targets: 8,
           className: 'text-start',
           render: function (data, type, full, meta) {
-            if (full['document'] && full['document'] !== 'N/A') {
-              var docUrl = full['document'];
+            if (full['attachment'] && full['attachment'] !== 'N/A') {
+              var docUrl = full['attachment'];
               // Ensure docUrl is relative if it's a local domain to avoid mismatches
               if (docUrl.includes('http')) {
                 docUrl = '/' + docUrl.replace(/^https?:\/\/[^\/]+\//, '');

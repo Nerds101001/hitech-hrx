@@ -49,7 +49,7 @@ class LeaveController extends Controller
       $odQuery = OutdoorDuty::query()->with(['user', 'user.department', 'approvedBy']);
 
       if ($isManager) {
-          $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+          $managedSubordinateIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
           $scopedUserIds = array_merge($managedSubordinateIds, [$user->id]);
           $leaveQuery->whereIn('user_id', $scopedUserIds);
           $odQuery->whereIn('user_id', $scopedUserIds);
@@ -150,6 +150,7 @@ class LeaveController extends Controller
               'id' => $item->id,
               'item_type' => 'leave',
               'created_at' => $item->created_at,
+              'user_id' => $item->user_id,
               'user_name' => $item->user->getFullName(),
               'user_code' => $item->user->code,
               'user_profile_image' => $item->user->profile_picture ? asset('storage/' . \Constants::BaseFolderEmployeeProfileWithSlash . $item->user->profile_picture) : null,
@@ -158,9 +159,13 @@ class LeaveController extends Controller
               'request_type' => $name,
               'dates' => $dateFmt,
               'duration' => $duration . ' Days',
+              'days' => $duration,
               'reason' => $item->user_notes ?? 'N/A',
               'status' => $statusVal,
+              'is_lwp' => (bool) $item->is_lwp,
+              'lwp_days' => (float) $item->lwp_days,
               'approved_by_name' => $item->approvedBy ? $item->approvedBy->getFullName() : 'N/A',
+              'approved_at_formatted' => $item->approved_at ? $item->approved_at->format('d M, Y h:i A') : null,
               'attachment' => $item->document ? asset('storage/' . \App\Constants\Constants::BaseFolderLeaveRequestDocument . $item->document) : null,
               'sort_date' => $item->created_at->timestamp
           ];
@@ -176,6 +181,7 @@ class LeaveController extends Controller
               'id' => $item->id,
               'item_type' => 'outdoor',
               'created_at' => $item->created_at,
+              'user_id' => $item->user_id,
               'user_name' => $item->user->getFullName(),
               'user_code' => $item->user->code,
               'user_profile_image' => $item->user->profile_picture ? asset('storage/' . \Constants::BaseFolderEmployeeProfileWithSlash . $item->user->profile_picture) : null,
@@ -184,9 +190,13 @@ class LeaveController extends Controller
               'request_type' => 'Outdoor Duty',
               'dates' => $item->date->format('d M, Y'),
               'duration' => $item->expected_return_time ? "Return: " . $item->expected_return_time : '1 Day',
+              'days' => 1,
               'reason' => $reason,
               'status' => $item->status,
+              'is_lwp' => false,
+              'lwp_days' => 0,
               'approved_by_name' => $item->approvedBy ? $item->approvedBy->getFullName() : 'N/A',
+              'approved_at_formatted' => $item->approved_at ? $item->approved_at->format('d M, Y h:i A') : null,
               'attachment' => null,
               'sort_date' => $item->created_at->timestamp
           ];
@@ -194,10 +204,160 @@ class LeaveController extends Controller
 
       $merged = $leaves->concat($ods)->sortByDesc('sort_date')->values();
 
-      return \Yajra\DataTables\Facades\DataTables::of($merged)->make(true);
+      // request_type embeds real <span class="badge"> HTML built server-side
+      // (type name + PAID/UNPAID/BACK DATED markers) -- without this, Yajra's
+      // default column escaping turns it into literal text on the page.
+      return \Yajra\DataTables\Facades\DataTables::of($merged)->rawColumns(['request_type'])->make(true);
 
     } catch (Exception $e) {
       Log::error('Unified getListAjax error: ' . $e->getMessage());
+      return response()->json(['error' => $e->getMessage()], 500);
+    }
+  }
+
+  /**
+   * Employee-wise, per-month leave summary: how many leaves an employee
+   * applied for and the outcome breakdown (paid/unpaid/half-day days from
+   * leave_requests, plus an absent count sourced from attendances since
+   * "absent" isn't a leave outcome at all).
+   */
+  public function summaryAjax(Request $request)
+  {
+    try {
+      $user = auth()->user();
+      $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+
+      $month = (int) ($request->input('summaryMonth') ?: now()->month);
+      $year  = (int) ($request->input('summaryYear') ?: now()->year);
+
+      $employeesQuery = User::query()
+        ->select('id', 'first_name', 'last_name', 'code', 'department_id')
+        ->with('department:id,name')
+        ->where('status', 'active');
+
+      if ($isManager) {
+        $managedSubordinateIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
+        $employeesQuery->whereIn('id', array_merge($managedSubordinateIds, [$user->id]));
+      }
+      if ($request->filled('summaryEmployeeFilter')) {
+        $employeesQuery->where('id', $request->summaryEmployeeFilter);
+      }
+      if ($request->filled('summaryDepartmentFilter')) {
+        $employeesQuery->where('department_id', $request->summaryDepartmentFilter);
+      }
+
+      $employees = $employeesQuery->orderBy('first_name')->get();
+      $employeeIds = $employees->pluck('id');
+
+      // All statuses here, not just approved -- the per-date drill-down needs
+      // to show pending/rejected requests too, not only what's been decided.
+      $leaveRequests = LeaveRequest::query()
+        ->with(['leaveType' => fn($q) => $q->withTrashed(), 'approvedBy:id,first_name,last_name'])
+        ->whereIn('user_id', $employeeIds)
+        ->whereYear('from_date', $year)
+        ->whereMonth('from_date', $month)
+        ->orderBy('from_date')
+        ->get([
+          'id', 'user_id', 'leave_type_id', 'from_date', 'to_date', 'is_half_day',
+          'half_day_session', 'is_short_leave', 'duration_hours', 'start_time', 'end_time',
+          'document', 'user_notes', 'approved_by_id', 'approved_at', 'created_at',
+          'is_lwp', 'lwp_days', 'status',
+        ]);
+
+      $leavesByUser = $leaveRequests->groupBy('user_id');
+
+      $absentCounts = Attendance::query()
+        ->whereIn('user_id', $employeeIds)
+        ->whereYear('check_in_time', $year)
+        ->whereMonth('check_in_time', $month)
+        ->whereRaw('LOWER(status) = ?', ['absent'])
+        ->selectRaw('user_id, COUNT(*) as cnt')
+        ->groupBy('user_id')
+        ->pluck('cnt', 'user_id');
+
+      $rows = $employees->map(function ($employee) use ($leavesByUser, $absentCounts) {
+        $requests = $leavesByUser->get($employee->id, collect());
+
+        $applied = 0;
+        $pending = 0;
+        $paidDays = 0.0;
+        $unpaidDays = 0.0;
+        $halfDayCount = 0;
+        $details = [];
+
+        foreach ($requests as $req) {
+          $statusVal = $req->status instanceof \App\Enums\LeaveRequestStatus ? $req->status->value : $req->status;
+          $days = $req->is_half_day ? 0.5 : ($req->from_date->diffInDays($req->to_date) + 1);
+          $dateLabel = $req->from_date->format('d M Y');
+          if (!$req->from_date->equalTo($req->to_date)) {
+            $dateLabel = $req->from_date->format('d M') . ' - ' . $req->to_date->format('d M Y');
+          }
+
+          // The "schedule" of the request: which part of the day it covers.
+          $isShort = $req->is_short_leave || ($req->leaveType->is_short_leave ?? false);
+          if ($isShort) {
+            $schedule = 'Short Leave';
+            if ($req->duration_hours) $schedule .= ' · ' . rtrim(rtrim(number_format((float) $req->duration_hours, 1), '0'), '.') . 'h';
+            if ($req->start_time && $req->end_time) {
+              $schedule .= ' (' . substr($req->start_time, 0, 5) . ' - ' . substr($req->end_time, 0, 5) . ')';
+            }
+          } elseif ($req->is_half_day) {
+            $schedule = 'Half Day' . ($req->half_day_session ? ' · ' . ucwords(str_replace('_', ' ', $req->half_day_session)) : '');
+          } else {
+            $schedule = 'Full Day' . ($days > 1 ? ' × ' . $days : '');
+          }
+
+          if ($statusVal === 'approved') {
+            $applied++;
+            $lwp = (float) ($req->lwp_days ?? 0);
+            $unpaidDays += $lwp;
+            $paidDays += max(0, $days - $lwp);
+            if ($req->is_half_day) {
+              $halfDayCount++;
+            }
+            $outcome = $lwp > 0 ? ($lwp >= $days ? 'Unpaid' : 'Part Paid / Part Unpaid') : 'Paid';
+          } elseif ($statusVal === 'pending') {
+            $pending++;
+            $outcome = 'Pending Approval';
+          } else {
+            $outcome = ucfirst($statusVal);
+          }
+
+          $details[] = [
+            'date'       => $dateLabel,
+            'type'       => $req->leaveType->name ?? ($isShort ? 'Short Leave' : 'N/A'),
+            'days'       => $days,
+            'schedule'   => $schedule,
+            'reason'     => $req->user_notes ?: null,
+            'document'   => $req->document ? asset('storage/' . \App\Constants\Constants::BaseFolderLeaveRequestDocument . $req->document) : null,
+            'applied_on' => $req->created_at?->format('d M Y'),
+            'approved_by'=> $req->approvedBy?->getFullName(),
+            'approved_at'=> $req->approved_at?->format('d M Y'),
+            'status'     => $statusVal,
+            'outcome'    => $outcome,
+          ];
+        }
+
+        return [
+          'user_id'      => $employee->id,
+          'user_name'    => $employee->getFullName(),
+          'user_code'    => $employee->code,
+          'department'   => $employee->department?->name ?? 'N/A',
+          'applied'      => $applied,
+          'pending'      => $pending,
+          'paid_days'    => $paidDays,
+          'unpaid_days'  => $unpaidDays,
+          'total_days'   => $paidDays + $unpaidDays,
+          'half_day'     => $halfDayCount,
+          'absent'       => (int) ($absentCounts[$employee->id] ?? 0),
+          'details'      => $details,
+        ];
+      })->values();
+
+      return DataTables::of($rows)->make(true);
+
+    } catch (Exception $e) {
+      Log::error('Leave summaryAjax error: ' . $e->getMessage());
       return response()->json(['error' => $e->getMessage()], 500);
     }
   }
@@ -359,7 +519,7 @@ class LeaveController extends Controller
       $query = OutdoorDuty::with(['user', 'approvedBy'])->select('outdoor_duties.*');
 
       if ($isManager) {
-        $subIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+        $subIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
         $query->whereIn('user_id', array_merge($subIds, [$user->id]));
       } elseif (!$isAdmin) {
         $query->where('user_id', $user->id);

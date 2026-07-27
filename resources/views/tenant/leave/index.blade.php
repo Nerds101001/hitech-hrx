@@ -37,6 +37,187 @@
   <script>
     window.isAccountsRole = {{ auth()->user()->hasRole('accounts') ? 'true' : 'false' }};
   </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var summaryTable = null;
+
+      function outcomeBadge(item) {
+        var cls = 'bg-label-secondary';
+        if (item.outcome === 'Paid') cls = 'bg-label-success';
+        else if (item.outcome === 'Unpaid') cls = 'bg-label-danger';
+        else if (item.outcome === 'Pending Approval') cls = 'bg-label-warning';
+        else if (item.outcome === 'Part Paid / Part Unpaid') cls = 'bg-label-info';
+        else if (item.outcome === 'Rejected' || item.outcome === 'Cancelled') cls = 'bg-label-dark';
+        return '<span class="badge ' + cls + '">' + item.outcome + '</span>';
+      }
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function childDetailHtml(full) {
+        if (!full.details || !full.details.length) {
+          return '<div class="p-3 text-muted small">No leave requests this month.</div>';
+        }
+        var totalDays = full.total_days != null ? full.total_days : (Number(full.paid_days || 0) + Number(full.unpaid_days || 0));
+        var html = '<div class="p-3">' +
+          '<div class="d-flex align-items-center gap-3 mb-2 small">' +
+            '<span class="fw-semibold text-heading">' + esc(full.user_name) + ' — leave detail for the selected month</span>' +
+            '<span class="badge bg-label-primary">Total approved: ' + totalDays + ' day' + (totalDays === 1 ? '' : 's') + '</span>' +
+          '</div>' +
+          '<div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr>' +
+          '<th>Dates</th><th>Type</th><th>Schedule</th><th>Days</th><th style="min-width:220px;">Reason</th><th>Proof</th><th>Applied On</th><th>Approved By</th><th>Outcome</th>' +
+          '</tr></thead><tbody>';
+        full.details.forEach(function (item) {
+          var reasonHtml = item.reason
+            ? '<span class="text-wrap d-inline-block" style="max-width: 320px;">' + esc(item.reason) + '</span>'
+            : '<span class="text-muted fst-italic">No reason given</span>';
+          var docHtml = item.document
+            ? '<a href="' + esc(item.document) + '" target="_blank" rel="noopener" class="btn btn-icon btn-sm btn-label-primary" title="View attachment"><i class="bx bx-paperclip"></i></a>'
+            : '<span class="text-muted">—</span>';
+          var approverHtml = item.approved_by
+            ? esc(item.approved_by) + (item.approved_at ? '<small class="text-muted d-block">' + esc(item.approved_at) + '</small>' : '')
+            : '<span class="text-muted">—</span>';
+          html += '<tr>' +
+            '<td class="fw-medium">' + esc(item.date) + '</td>' +
+            '<td>' + esc(item.type) + '</td>' +
+            '<td><small>' + esc(item.schedule || '') + '</small></td>' +
+            '<td>' + item.days + '</td>' +
+            '<td>' + reasonHtml + '</td>' +
+            '<td>' + docHtml + '</td>' +
+            '<td><small>' + esc(item.applied_on || '') + '</small></td>' +
+            '<td><small>' + approverHtml + '</small></td>' +
+            '<td>' + outcomeBadge(item) + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div></div>';
+        return html;
+      }
+
+      function initSummaryTable() {
+        if (summaryTable) return;
+        summaryTable = $('#leaveSummaryTable').DataTable({
+          processing: true,
+          serverSide: true,
+          dom: 'rt<"row"<"col-sm-12 col-md-6"i><"col-sm-12 col-md-6"p>>',
+          ajax: {
+            url: baseUrl + 'leaveRequests/summaryAjax',
+            data: function (d) {
+              d.summaryMonth = $('#summaryMonthFilter').val();
+              d.summaryYear = $('#summaryYearFilter').val();
+              d.summaryEmployeeFilter = $('#summaryEmployeeFilter').val();
+            }
+          },
+          columns: [
+            { data: null, defaultContent: '' },
+            { data: 'user_name' },
+            { data: 'department' },
+            { data: 'applied' },
+            { data: 'pending' },
+            { data: 'paid_days' },
+            { data: 'unpaid_days' },
+            { data: 'half_day' },
+            { data: 'absent' }
+          ],
+          columnDefs: [
+            {
+              targets: 0,
+              orderable: false,
+              searchable: false,
+              className: 'text-center',
+              render: function () {
+                return '<button type="button" class="btn btn-icon btn-sm summary-expand-btn"><i class="bx bx-chevron-right"></i></button>';
+              }
+            },
+            {
+              targets: 1,
+              render: function (data, type, full) {
+                return '<div class="d-flex flex-column">' +
+                  '<span class="text-heading fw-medium">' + full['user_name'] + '</span>' +
+                  '<small class="text-muted">' + full['user_code'] + '</small>' +
+                  '</div>';
+              }
+            },
+            {
+              targets: 3,
+              render: function (data) {
+                return '<span class="badge badge-hitech-success">' + data + '</span>';
+              }
+            },
+            {
+              targets: 4,
+              render: function (data) {
+                return data > 0 ? '<span class="badge bg-label-warning">' + data + '</span>' : '<span class="text-muted">0</span>';
+              }
+            },
+            {
+              targets: 5,
+              render: function (data) {
+                return data > 0 ? '<span class="badge bg-label-success">' + data + '</span>' : '<span class="text-muted">0</span>';
+              }
+            },
+            {
+              targets: 6,
+              render: function (data) {
+                return data > 0 ? '<span class="badge bg-label-danger">' + data + '</span>' : '<span class="text-muted">0</span>';
+              }
+            },
+            {
+              targets: 7,
+              render: function (data) {
+                return data > 0 ? '<span class="badge bg-label-info">' + data + '</span>' : '<span class="text-muted">0</span>';
+              }
+            },
+            {
+              targets: 8,
+              render: function (data) {
+                return data > 0 ? '<span class="badge bg-label-secondary">' + data + '</span>' : '<span class="text-muted">0</span>';
+              }
+            }
+          ],
+          order: [[1, 'asc']],
+          pageLength: 25,
+          responsive: false
+        });
+
+        $('#leaveSummaryTable tbody').on('click', 'tr', function () {
+          var tr = $(this);
+          var row = summaryTable.row(tr);
+          var icon = tr.find('.summary-expand-btn i');
+
+          if (row.child.isShown()) {
+            row.child.hide();
+            tr.removeClass('shown');
+            icon.removeClass('bx-chevron-down').addClass('bx-chevron-right');
+          } else {
+            row.child(childDetailHtml(row.data())).show();
+            tr.addClass('shown');
+            icon.removeClass('bx-chevron-right').addClass('bx-chevron-down');
+          }
+        });
+
+        $('#summaryMonthFilter, #summaryYearFilter, #summaryEmployeeFilter').on('change', function () {
+          summaryTable.draw();
+        });
+      }
+
+      $('.main-view-toggle-btn').on('click', function () {
+        $('.main-view-toggle-btn').removeClass('active');
+        $(this).addClass('active');
+
+        if ($(this).data('view') === 'summary') {
+          $('#requestsView').hide();
+          $('#summaryView').show();
+          initSummaryTable();
+        } else {
+          $('#summaryView').hide();
+          $('#requestsView').show();
+        }
+      });
+    });
+  </script>
 @endsection
 
 @section('content')
@@ -46,6 +227,17 @@
   <div class="row g-6 mb-6">
     <div class="col-12">
       <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
+        <div class="p-4 pb-0">
+          <div class="hitech-segmented-control bg-light-soft rounded-pill p-1 d-flex" style="border: 1px solid rgba(0, 90, 90, 0.1); width: fit-content;">
+            <button type="button" class="btn btn-sm rounded-pill px-4 main-view-toggle-btn active" data-view="requests">
+              <i class="bx bx-list-ul me-1"></i>Leave Requests
+            </button>
+            <button type="button" class="btn btn-sm rounded-pill px-4 main-view-toggle-btn" data-view="summary">
+              <i class="bx bx-bar-chart-alt-2 me-1"></i>Employee Summary
+            </button>
+          </div>
+        </div>
+        <div id="requestsView">
         <div class="hitech-card-header border-bottom">
           <div class="d-flex align-items-center justify-content-between w-100">
             <div class="d-flex align-items-center gap-4">
@@ -240,6 +432,55 @@
                   @if(!auth()->user()->hasRole('accounts'))
                   <th>Actions</th>
                   @endif
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+
+        </div>{{-- /#requestsView --}}
+
+        {{-- EMPLOYEE SUMMARY VIEW --}}
+        <div id="summaryView" style="display:none;">
+          <div class="p-4 border-bottom">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div class="compact-select" style="min-width: 140px;">
+                <select id="summaryMonthFilter" class="form-select select2 filter-item-hitech">
+                  @for($m=1; $m<=12; $m++)
+                    <option value="{{ $m }}" @selected($m == now()->month)>{{ date('F', mktime(0,0,0,$m,1)) }}</option>
+                  @endfor
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 100px;">
+                <select id="summaryYearFilter" class="form-select select2 filter-item-hitech">
+                  @for($y=now()->year; $y>=now()->year-5; $y--)
+                    <option value="{{ $y }}" @selected($y == now()->year)>{{ $y }}</option>
+                  @endfor
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 200px;">
+                <select id="summaryEmployeeFilter" class="form-select select2 filter-item-hitech">
+                  <option value="">Emp: All</option>
+                  @foreach($employees as $employee)
+                    <option value="{{ $employee->id }}">{{ $employee->getFullName() }}</option>
+                  @endforeach
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="card-datatable table-responsive p-0">
+            <table id="leaveSummaryTable" class="table table-hover border-top mb-0">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Employee</th>
+                  <th>Department</th>
+                  <th>Leaves Applied</th>
+                  <th>Pending</th>
+                  <th>Paid Days</th>
+                  <th>Unpaid Days</th>
+                  <th>Half Day</th>
+                  <th>Absent</th>
                 </tr>
               </thead>
             </table>
