@@ -85,6 +85,124 @@ class ProbationController extends Controller
     }
 
     /**
+     * Probation control dashboard.
+     *
+     * The route and the blade both already existed, but this method never did,
+     * so /probation/dashboard returned a 500. It renders stat tiles plus a
+     * server-side DataTable fed by dashboardAjax() below.
+     */
+    public function dashboard()
+    {
+        return view('tenant.employees.probation.dashboard', [
+            'statCounts'  => $this->probationStatCounts(),
+            'departments' => \App\Models\Department::orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
+    /**
+     * Headline counts for the probation dashboard tiles.
+     *
+     * "on_probation" is genuinely in-flight (end date still ahead), while
+     * "overdue" is the pile that matters operationally: the end date has
+     * passed and nobody confirmed, extended or terminated the employee.
+     */
+    private function probationStatCounts(): array
+    {
+        $base = fn() => User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->whereNotNull('probation_end_date');
+
+        return [
+            'on_probation' => (clone $base())->whereNull('probation_confirmed_at')
+                ->whereDate('probation_end_date', '>=', now()->toDateString())->count(),
+            'overdue'      => (clone $base())->whereNull('probation_confirmed_at')
+                ->whereDate('probation_end_date', '<', now()->toDateString())->count(),
+            'confirmed'    => (clone $base())->whereNotNull('probation_confirmed_at')->count(),
+            'extended'     => (clone $base())->where('is_probation_extended', true)->count(),
+            'terminated'   => ProbationEvaluation::where('hr_decision', 'terminate')->count(),
+        ];
+    }
+
+    /**
+     * Server-side DataTable feed for the probation dashboard.
+     */
+    public function dashboardAjax(Request $request)
+    {
+        $query = User::query()
+            ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->whereNotNull('probation_end_date')
+            ->with(['department:id,name'])
+            // Latest evaluation per user drives the decision column.
+            ->with(['probationEvaluations' => fn($q) => $q->latest('submitted_at')->limit(1)]);
+
+        // Status filter mirrors the tiles.
+        switch ($request->input('statusFilter')) {
+            case 'on_probation':
+                $query->whereNull('probation_confirmed_at')
+                      ->whereDate('probation_end_date', '>=', now()->toDateString());
+                break;
+            case 'overdue':
+                $query->whereNull('probation_confirmed_at')
+                      ->whereDate('probation_end_date', '<', now()->toDateString());
+                break;
+            case 'confirmed':
+                $query->whereNotNull('probation_confirmed_at');
+                break;
+            case 'extended':
+                $query->where('is_probation_extended', true);
+                break;
+        }
+
+        if ($request->filled('departmentFilter')) {
+            $query->where('department_id', $request->input('departmentFilter'));
+        }
+
+        if ($search = $request->input('search.value')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('first_name', 'LIKE', "%{$search}%")
+                  ->orWhere('last_name', 'LIKE', "%{$search}%")
+                  ->orWhere('code', 'LIKE', "%{$search}%");
+            });
+        }
+
+        return \Yajra\DataTables\Facades\DataTables::eloquent($query)
+            ->addColumn('name', fn($u) => $u->getFullName())
+            ->addColumn('code', fn($u) => $u->code ?? '—')
+            ->addColumn('profile_picture', fn($u) => $u->getProfilePicture())
+            ->addColumn('department', fn($u) => optional($u->department)->name ?? '—')
+            ->addColumn('doj', fn($u) => $u->date_of_joining
+                ? \Carbon\Carbon::parse($u->date_of_joining)->format('d M Y') : '—')
+            ->addColumn('period', fn($u) => $u->probation_period_months)
+            ->addColumn('end_date', fn($u) => $u->probation_end_date
+                ? \Carbon\Carbon::parse($u->probation_end_date)->format('d M Y') : null)
+            ->addColumn('status_display', fn($u) => $u->probation_status_display)
+            ->addColumn('decision_label', function ($u) {
+                $eval = $u->probationEvaluations->first();
+                if ($u->probation_confirmed_at) return 'Confirmed';
+                if (!$eval)                      return 'No Decision Yet';
+                if ($eval->hr_status !== 'approved') return 'Awaiting HR Decision';
+                return match ($eval->hr_decision) {
+                    'confirm'   => 'Confirmed',
+                    'extend'    => 'Extended',
+                    'terminate' => 'Terminated',
+                    default     => 'Awaiting HR Decision',
+                };
+            })
+            ->addColumn('evaluation_id', fn($u) => optional($u->probationEvaluations->first())->id)
+            ->addColumn('decided_by', function ($u) {
+                $eval = $u->probationEvaluations->first();
+                return $eval && $eval->reviewed_by_id
+                    ? optional(User::find($eval->reviewed_by_id))->getFullName() : null;
+            })
+            ->addColumn('decided_at', function ($u) {
+                $eval = $u->probationEvaluations->first();
+                return $eval && $eval->reviewed_at
+                    ? \Carbon\Carbon::parse($eval->reviewed_at)->format('d M Y') : null;
+            })
+            ->rawColumns(['status_display'])
+            ->make(true);
+    }
+
+    /**
      * List evaluations for HR.
      */
     public function index()
