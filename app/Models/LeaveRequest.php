@@ -73,6 +73,14 @@ class LeaveRequest extends Model implements AuditableContract
   protected static function booted()
   {
       $processApproval = function ($leaveRequest) {
+          // Work From Home: paid, but touches neither the leave pool nor
+          // attendance. Attendance for approved WFH days is marked manually
+          // by the accounts team from the external tracking-software report
+          // (owner-specified flow), so approval only flags the request.
+          if (strtoupper($leaveRequest->leaveType->code ?? '') === 'WFH') {
+              return;
+          }
+
           $user        = $leaveRequest->user;
           $isPaidType  = $leaveRequest->leaveType->is_paid;
           $leaveTypeCode = $leaveRequest->leaveType->code;
@@ -216,6 +224,14 @@ class LeaveRequest extends Model implements AuditableContract
           if ($leaveRequest->wasChanged('status') &&
               $leaveRequest->getOriginal('status') === LeaveRequestStatus::APPROVED &&
               ($leaveRequest->status === LeaveRequestStatus::CANCELLED || $leaveRequest->status === LeaveRequestStatus::REJECTED)) {
+
+              // WFH approval touched neither balance nor attendance (see
+              // $processApproval), so there is nothing to reverse — and the
+              // attendance rows accounts marked manually from the tracking
+              // report must NOT be deleted here.
+              if (strtoupper($leaveRequest->leaveType->code ?? '') === 'WFH') {
+                  return;
+              }
 
               $user          = $leaveRequest->user;
               $isPaidType    = $leaveRequest->leaveType->is_paid;

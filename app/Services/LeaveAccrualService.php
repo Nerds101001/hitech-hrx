@@ -113,12 +113,17 @@ class LeaveAccrualService
 
     public static function grantCoff(User $user, $amount = 1)
     {
-        $coffType = \App\Models\LeaveType::where('code', 'COFF')->first();
-        if (!$coffType) return;
+        // Comp-off credit lands in the unified All Purpose Leave pool — the
+        // same place the Attendance Sunday/holiday-working hook credits it.
+        // (This used to look up code 'COFF', which has never existed — the
+        // stray type's code is literally "Comp off" — so the method was a
+        // silent no-op.)
+        $alpType = \App\Models\LeaveType::where('code', 'ALP')->first();
+        if (!$alpType) return;
 
         $balance = LeaveBalance::firstOrNew([
             'user_id'       => $user->id,
-            'leave_type_id' => $coffType->id,
+            'leave_type_id' => $alpType->id,
             'tenant_id'     => $user->tenant_id,
         ]);
 
@@ -126,8 +131,8 @@ class LeaveAccrualService
         $balance->accrued_this_year = ($balance->accrued_this_year ?? 0) + $amount;
         \App\Models\LeaveBalance::$auditReason = "Comp Off Granted (Automated)";
         $balance->save();
-        
-        Log::info("Granted {$amount} COFF to user {$user->id}.");
+
+        Log::info("Granted {$amount} comp-off day(s) into ALP for user {$user->id}.");
     }
 
     /**
