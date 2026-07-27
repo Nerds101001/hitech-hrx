@@ -1,264 +1,408 @@
 @extends('layouts/layoutMaster')
 
-@section('title', 'Employee Hub')
+@section('title', __('Employee Dashboard'))
 
 @section('vendor-style')
-@vite(['resources/assets/vendor/libs/animate-css/animate.scss'])
-@vite(['resources/assets/vendor/scss/pages/hitech-portal.scss'])
+  @vite(['resources/assets/vendor/libs/animate-css/animate.scss', 'resources/assets/vendor/libs/apex-charts/apex-charts.scss'])
+  @vite(['resources/assets/vendor/scss/pages/hitech-portal.scss'])
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap">
 @endsection
 
+@section('vendor-script')
+  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.min.js'])
+@endsection
+
+@php
+  $hour = (int) now()->format('H');
+  $greet = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
+  $me = auth()->user();
+  $firstName = $me->first_name ?? (explode(' ', $me->name ?? 'There')[0]);
+  $sp = $salesProfile ?? null;
+  $att = $todayAttendance ?? null;
+  $attIn = $att && $att->check_in_time ? \Carbon\Carbon::parse($att->check_in_time)->format('h:i A') : null;
+  $isPresent = (bool) $attIn;
+  $wkDays = max(1, (int) ($weekWorkingDays ?? 6));
+  $wkDone = min($wkDays, (int) ($presentThisWeek ?? 0));
+  $nf1 = fn($n) => rtrim(rtrim(number_format((float)$n, 1), '0'), '.');
+  $fmtL = fn($v) => ((float)$v) >= 100 ? '₹' . number_format((float)$v / 100, 2) . ' Cr' : (((float)$v) >= 1 ? '₹' . number_format((float)$v, 2) . ' L' : '₹' . number_format((float)$v * 100000));
+  $todayVisits = $sp['todayVisits'] ?? collect();
+  $visitTone = ['completed'=>'success','confirmed'=>'info','pending'=>'warning','cancelled'=>'danger'];
+@endphp
+
 @section('content')
-
-
-
-<div class="emp-hub-wrapper">
-
-  {{-- ============================================================ --}}
-  {{-- HERO SECTION                                                  --}}
-  {{-- ============================================================ --}}
-  <div class="emp-hero animate__animated animate__fadeIn">
-    <div class="emp-hero-text">
-      <div class="greeting">
-        Good {{ now()->hour < 12 ? 'Morning' : (now()->hour < 17 ? 'Afternoon' : 'Evening') }},
-        {{ auth()->user()->first_name }}! 👋
-      </div>
-      <div class="date-badge mt-2">
-        <i class="bx bx-calendar" style="font-size:0.85rem;"></i>
-        {{ now()->format('l, F jS') }}
-      </div>
-    </div>
-    <div class="emp-hero-meta">
-      <div class="hero-quick-stat">
-        <div class="stat-value">{{ auth()->user()->available_leave_count ?? 0 }}</div>
-        <div class="stat-label">Leave Days</div>
-      </div>
-      <div class="hero-quick-stat">
-        <div class="stat-value">{{ $myAttendanceCount }}</div>
-        <div class="stat-label">Attendance</div>
-      </div>
-      <div class="hero-quick-stat">
-        <div class="stat-value">{{ $settings->currency_symbol ?? '₹' }}{{ number_format($latestNetSalary, 0) }}</div>
-        <div class="stat-label">Last Pay</div>
-      </div>
-    </div>
-  </div>
-
+<div class="adc emp">
   <div class="row g-4">
+    {{-- ============ MAIN ============ --}}
+    <div class="col-xxl-9 col-lg-8">
 
-    {{-- ============================================================ --}}
-    {{-- LEFT: STAT CARDS + PAY RUN                                    --}}
-    {{-- ============================================================ --}}
-    <div class="col-xl-8 col-lg-7">
-      <div class="row g-4">
-
-        {{-- Leave Balance --}}
-        <div class="col-sm-6 animate__animated animate__fadeInUp" style="animation-delay:0.05s">
-          <div class="hitech-stat-card dashboard-variant card-teal">
-            <div class="stat-card-header">
-              <div class="stat-icon-wrap icon-teal"><i class="bx bx-calendar-check"></i></div>
-              <a href="{{ route('user.leaves.index') }}" class="stat-card-link"><i class="bx bx-right-arrow-alt"></i></a>
-            </div>
-            <div>
-              <div class="stat-card-label">Leave Balance</div>
-              <div class="stat-card-value">{{ auth()->user()->available_leave_count ?? 0 }}</div>
-              <div class="stat-card-sub">Days Available</div>
-            </div>
+      {{-- HERO --}}
+      <div class="emp-hero">
+        <div class="emp-hero-main">
+          <h3 class="emp-hero-greet">{{ $greet }}, {{ $firstName }}! <span class="adc-wave">☀️</span></h3>
+          <p class="emp-hero-sub">Have a productive day ahead.</p>
+          <div class="emp-hero-meta">
+            <div><span class="emp-meta-l">Employee ID</span><span class="emp-meta-v">{{ $me->code ?? '—' }}</span></div>
+            <div><span class="emp-meta-l">Department</span><span class="emp-meta-v">{{ $deptName ?? '—' }}</span></div>
+            <div><span class="emp-meta-l">Reporting Manager</span><span class="emp-meta-v">{{ $managerName ?? '—' }}</span></div>
+            <div><span class="emp-meta-l">Date</span><span class="emp-meta-v">{{ now()->format('d M Y, D') }}</span></div>
           </div>
         </div>
-
-        {{-- Attendance --}}
-        <div class="col-sm-6 animate__animated animate__fadeInUp" style="animation-delay:0.1s">
-          <div class="hitech-stat-card dashboard-variant card-blue">
-            <div class="stat-card-header">
-              <div class="stat-icon-wrap icon-blue"><i class="bx bx-time-five"></i></div>
-              <a href="{{ route('user.attendance.index') }}" class="stat-card-link"><i class="bx bx-right-arrow-alt"></i></a>
-            </div>
-            <div>
-              <div class="stat-card-label">Attendance</div>
-              <div class="stat-card-value">{{ $myAttendanceCount }}</div>
-              <div class="stat-card-sub">Records This Month</div>
-            </div>
+        <div class="emp-hero-illus"><i class="bx bxs-user-voice"></i></div>
+        <div class="emp-shift">
+          <div class="emp-shift-row">
+            <div><span class="emp-meta-l">Today's Shift</span><span class="emp-shift-v">{{ $shiftWindow ?? '—' }}</span></div>
+            <div><span class="emp-meta-l">Working Hours</span><span class="emp-shift-v">{{ $nf1($todayHours ?? 0) }} <small>hrs</small></span></div>
+            <div><span class="emp-meta-l">Week's Status</span><span class="emp-shift-v {{ $isPresent ? 'text-success' : 'text-danger' }}">{{ $isPresent ? 'Present' : 'Absent' }}</span></div>
+          </div>
+          <div class="emp-week">
+            <div class="d-flex justify-content-between"><span class="emp-meta-l">Weekly Progress</span><small class="fw-semibold">{{ $wkDone }} / {{ $wkDays }} days</small></div>
+            <div class="adc-bar mt-1"><span class="adc-tone-success" style="width: {{ round($wkDone / $wkDays * 100) }}%"></span></div>
           </div>
         </div>
-
-        {{-- Expenses --}}
-        <div class="col-sm-6 animate__animated animate__fadeInUp" style="animation-delay:0.15s">
-          <div class="hitech-stat-card dashboard-variant card-amber">
-            <div class="stat-card-header">
-              <div class="stat-icon-wrap icon-amber"><i class="bx bx-receipt"></i></div>
-              <a href="{{ route('user.expenses.index') }}" class="stat-card-link"><i class="bx bx-right-arrow-alt"></i></a>
-            </div>
-            <div>
-              <div class="stat-card-label">My Expenses</div>
-              <div class="stat-card-value">{{ $myExpensesCount }}</div>
-              <div class="stat-card-sub">Requests Submitted</div>
-            </div>
-          </div>
-        </div>
-
-        {{-- SOS Alerts --}}
-        <div class="col-sm-6 animate__animated animate__fadeInUp" style="animation-delay:0.2s">
-          <div class="hitech-stat-card dashboard-variant card-red">
-            <div class="stat-card-header">
-              <div class="stat-icon-wrap icon-red"><i class="bx bx-error-circle"></i></div>
-              <a href="{{ route('user.sos.index') }}" class="stat-card-link"><i class="bx bx-right-arrow-alt"></i></a>
-            </div>
-            <div>
-              <div class="stat-card-label">SOS Alerts</div>
-              <div class="stat-card-value" style="color:#dc2626;">{{ $mySOSCount }}</div>
-              <div class="stat-card-sub">Logs Sent</div>
-            </div>
-          </div>
-        </div>
-
-        {{-- Last Pay Run --}}
-        <div class="col-12 animate__animated animate__fadeInUp" style="animation-delay:0.25s">
-          <div class="payrun-card">
-            <div>
-              <div class="payrun-label">Last Pay Run</div>
-              <div class="payrun-value">
-                {{ $settings->currency_symbol ?? '₹' }}{{ number_format($latestNetSalary, 2) }}
-              </div>
-              @if($payrollTrend != 0)
-                <span class="badge mt-1 {{ $payrollTrend > 0 ? 'bg-success' : 'bg-danger' }} rounded-pill" style="font-size:0.7rem;">
-                  <i class="bx {{ $payrollTrend > 0 ? 'bx-trending-up' : 'bx-trending-down' }} me-1"></i>
-                  {{ abs(round($payrollTrend, 1)) }}% vs last month
-                </span>
-              @endif
-            </div>
-            <a href="{{ route('user.payroll.index') }}" class="btn-hitech">
-              <i class="bx bx-download"></i> View Payslips
-            </a>
-          </div>
-        </div>
-
       </div>
-    </div>
 
-    {{-- ============================================================ --}}
-    {{-- RIGHT SIDEBAR: HOLIDAY + ANNOUNCEMENTS                        --}}
-    {{-- ============================================================ --}}
-    <div class="col-xl-4 col-lg-5">
-      <div class="d-flex flex-column gap-4">
-
-        {{-- Upcoming Holiday --}}
-        <div class="holiday-card animate__animated animate__fadeInRight" style="animation-delay:0.05s">
-          <i class="bx bx-party holiday-icon"></i>
-          <div style="font-size:0.68rem; font-weight:700; color:rgba(255,255,255,0.55); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.6rem;">Upcoming Holiday</div>
-          @if($nextHoliday)
-            <div style="font-size:1.15rem; font-weight:800; color:#fff; margin-bottom:4px;">{{ $nextHoliday->name }}</div>
-            <div style="font-size:0.8rem; color:rgba(255,255,255,0.65);">{{ $nextHoliday->date->format('l, F jS') }}</div>
-            <div class="holiday-chip mt-2">In {{ (int) now()->startOfDay()->diffInDays(\Carbon\Carbon::parse($nextHoliday->date)->startOfDay()) }} Days</div>
-          @else
-            <div style="font-size:0.875rem; color:rgba(255,255,255,0.6);">No upcoming holidays scheduled.</div>
-          @endif
-        </div>
-
-        {{-- Celebrations Hub --}}
-        <div class="hitech-stat-card dashboard-variant card-teal animate__animated animate__fadeInRight" style="animation-delay:0.1s; padding: 1.5rem !important;">
-          <div class="d-flex align-items-center justify-content-between mb-4">
-            <div class="d-flex align-items-center gap-3">
-              <div class="icon-wrap-sm bg-pink-light text-pink"><i class="bx bx-cake"></i></div>
-              <h6 class="title mb-0 fw-bold">Company Celebrations</h6>
+      {{-- KPI cards --}}
+      <div class="row g-3 mt-1">
+        @php
+          $kpis = [
+            ['icon'=>'bx-calendar-check','tone'=>'success','title'=>'Attendance','value'=>$isPresent ? 'Present' : 'Absent','sub'=>'Today','btn'=>'View Attendance','url'=>url('/user/attendance'),'big'=>false],
+            ['icon'=>'bx-calendar-heart','tone'=>'info','title'=>'Leave Balance','value'=>$nf1($leaveDaysAvailable ?? 0),'sub'=>'Days Available','btn'=>'Apply Leave','url'=>url('/user/leaves'),'big'=>true],
+            ['icon'=>'bx-wallet','tone'=>'primary','title'=>'Payroll','value'=>'₹'.number_format($latestNetSalary ?? 0),'sub'=>'Take Home ('.now()->format('M').')','btn'=>'View Payslip','url'=>url('/user/payroll'),'big'=>true],
+            ['icon'=>'bx-receipt','tone'=>'warning','title'=>'Expenses','value'=>'₹'.number_format($expensesThisMonth ?? 0),'sub'=>'This Month','btn'=>'View Claims','url'=>url('/travel-claims'),'big'=>true],
+            ['icon'=>'bx-line-chart','tone'=>'danger','title'=>'Performance','value'=>($kraOverall ?? 0).'%','sub'=>'KRA Completion','btn'=>'View Performance','url'=>url('/kpi/my'),'big'=>true],
+          ];
+        @endphp
+        @foreach($kpis as $k)
+          <div class="col-6 col-md-4 col-xl">
+            <div class="emp-kpi adc-tone-{{ $k['tone'] }}">
+              <div class="emp-kpi-top"><span class="emp-kpi-icon"><i class="bx {{ $k['icon'] }}"></i></span><i class="bx bx-dots-vertical-rounded emp-kpi-menu"></i></div>
+              <div class="emp-kpi-title">{{ $k['title'] }}</div>
+              <div class="emp-kpi-value {{ $k['big'] ? 'adc-kpi-value' : '' }}">{{ $k['value'] }}</div>
+              <div class="emp-kpi-sub">{{ $k['sub'] }}</div>
+              <a href="{{ $k['url'] }}" class="emp-kpi-btn adc-tone-{{ $k['tone'] }}">{{ $k['btn'] }}</a>
             </div>
           </div>
+        @endforeach
+      </div>
 
-          {{-- Birthdays --}}
-          <div class="mb-4">
-            <div class="section-label small fw-bold text-uppercase text-muted mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Upcoming Birthdays</div>
-            @forelse($todayBirthdays as $u)
-              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=fecdd3&color=be123c' }}" class="rounded-circle border border-pink" width="35" height="35" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=fecdd3&color=be123c'">
-                <div>
-                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-danger fw-bold" style="font-size: 0.7rem; cursor: pointer;" onclick="if(typeof bootstrap !== 'undefined' && document.getElementById('colleagueBirthdayModal')) { new bootstrap.Modal(document.getElementById('colleagueBirthdayModal')).show(); }">Today 🎉
-                    @if($u->is_wished ?? false)
-                        <span class="badge bg-label-secondary ms-1 p-1" style="font-size: 0.6rem;">WISHED ✓</span>
-                    @endif
+      {{-- Sales-only: Kingo/Bingo board + recent order customers --}}
+      @if($sp && ($sp['isSalesDept'] ?? false))
+      <div class="row g-4 mt-1">
+        <div class="col-xl-7">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">🏆 Kingo · Bingo · Super Kingo</h6><span class="adc-card-sub">{{ now()->format('F Y') }} · achieved {{ $fmtL($sp['achieved']) }}</span></div><a href="{{ url('/sales-visits/kingo-bingo') }}" class="adc-link">Details</a></div>
+            @if($sp['hasTargets'])
+              <div class="adc-tier-grid">
+                @foreach($sp['kingoTiers'] as $t)
+                  @php $tone = $t['won'] ? 'success' : ($t['pct'] >= 75 ? 'warning' : 'danger'); @endphp
+                  <div class="adc-tier adc-tone-{{ $tone }} {{ $t['won'] ? 'won' : '' }}">
+                    <div class="adc-tier-top"><span class="adc-tier-name">{{ $t['name'] }}</span>@if($t['won'])<span class="adc-tier-badge">🏆 WON</span>@endif</div>
+                    <div class="adc-tier-pct">{{ round($t['pct']) }}%</div>
+                    <div class="adc-bar"><span class="adc-tone-{{ $tone }}" style="width: {{ min(100, $t['pct']) }}%"></span></div>
+                    <div class="adc-tier-target">Target {{ $fmtL($t['target']) }}</div>
                   </div>
-                </div>
+                @endforeach
               </div>
-            @empty
-            @endforelse
-
-            @forelse($upcomingBirthdays as $u)
-              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <img src="{{ $u->getProfilePicture() ?? 'https://ui-avatars.com/api/?name='.urlencode($u->name).'&background=f1f5f9&color=64748b' }}" class="rounded-circle" width="35" height="35" style="object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=f1f5f9&color=64748b'">
-                <div>
-                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->dob)->format('M d') }}</div>
-                </div>
-              </div>
-            @empty
-                @if($todayBirthdays->isEmpty())
-                    <p class="text-muted small py-2">No imminent birthdays.</p>
-                @endif
-            @endforelse
-          </div>
-
-          {{-- Anniversaries --}}
-          <div>
-            <div class="section-label small fw-bold text-uppercase text-muted mb-3" style="font-size: 0.65rem; letter-spacing: 1px;">Work Anniversaries</div>
-            @forelse($todayAnniversaries as $u)
-              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <div class="avatar avatar-sm">
-                    <span class="avatar-initial rounded-circle bg-label-info">{{ $u->getInitials() }}</span>
-                </div>
-                <div>
-                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-info fw-bold" style="font-size: 0.7rem;">Today 🎊</div>
-                </div>
-              </div>
-            @empty
-            @endforelse
-
-            @forelse($upcomingAnniversaries as $u)
-              <div class="celeb-row d-flex align-items-center gap-3 mb-3">
-                <div class="avatar avatar-sm">
-                    <span class="avatar-initial rounded-circle bg-label-secondary">{{ $u->getInitials() }}</span>
-                </div>
-                <div>
-                  <h6 class="mb-0 fw-bold" style="font-size: 0.8rem;">{{ $u->name }}</h6>
-                  <div class="small text-muted" style="font-size: 0.7rem;">{{ \Carbon\Carbon::parse($u->date_of_joining)->format('M d') }} • {{ now()->year - \Carbon\Carbon::parse($u->date_of_joining)->year }} Years</div>
-                </div>
-              </div>
-            @empty
-                @if($todayAnniversaries->isEmpty())
-                    <p class="text-muted small py-2">No upcoming anniversaries.</p>
-                @endif
-            @endforelse
+            @else
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-target-lock"></i><span>No Kingo/Bingo targets set this month.</span></div>
+            @endif
           </div>
         </div>
-
-
-        {{-- Announcements --}}
-        <div class="announce-card animate__animated animate__fadeInRight" style="animation-delay:0.12s">
-          <div class="announce-header">
-            <h6>Announcements</h6>
-            <i class="bx bx-news" style="color:#94a3b8;"></i>
-          </div>
-          <div class="announce-body">
-            @forelse($recentNotices as $notice)
-              <div class="announce-item">
-                <div class="announce-dot"></div>
-                <div>
-                  <div class="announce-title">{{ $notice->title }}</div>
-                  <div class="announce-desc">{{ $notice->description }}</div>
-                </div>
+        <div class="col-xl-5">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Recent Order Customers</h6><span class="adc-card-sub">Gave orders · {{ now()->format('M Y') }}</span></div><a href="{{ url('/sales-visits/pipeline') }}" class="adc-link">Sales Report</a></div>
+            @if(collect($sp['orderCustomers'] ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-cart"></i><span>No orders recorded yet.</span></div>
+            @else
+              <div class="adc-staff-scroll" style="max-height:290px">
+                <table class="table adc-table mb-0"><tbody>
+                  @foreach($sp['orderCustomers'] as $c)
+                    <tr>
+                      <td class="fw-medium">{{ $c['name'] }}<small class="text-muted d-block" style="font-size:.7rem">{{ $c['product'] }}</small></td>
+                      <td class="text-end"><span class="adc-badge adc-tone-success">{{ $c['stage'] ?: 'Order' }}</span></td>
+                      <td class="text-end fw-semibold" style="width:80px">{{ $c['sale'] > 0 ? $fmtL($c['sale']) : '—' }}</td>
+                    </tr>
+                  @endforeach
+                </tbody></table>
               </div>
-            @empty
-              <div style="text-align:center; padding:2rem 1rem; color:#94a3b8; font-size:0.82rem;">
-                <i class="bx bx-inbox" style="font-size:2rem; display:block; margin-bottom:0.5rem; opacity:0.4;"></i>
-                No recent announcements.
-              </div>
-            @endforelse
+            @endif
           </div>
         </div>
-
       </div>
+      @endif
+
+      {{-- Schedule + KRA + Announcements --}}
+      <div class="row g-4 mt-1">
+        <div class="col-xl-4">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">My Schedule</h6></div><a href="{{ url('/sales-visits') }}" class="adc-link">View Calendar</a></div>
+            @if(collect($todayVisits)->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-calendar"></i><span>No meetings scheduled today.</span></div>
+            @else
+              <ul class="adc-feed">
+                @foreach(collect($todayVisits)->take(4) as $v)
+                  @php $vt = $visitTone[$v->status] ?? 'primary'; @endphp
+                  <li>
+                    <span class="adc-feed-dot adc-tone-{{ $vt }}"><i class="bx bx-phone-call"></i></span>
+                    <div class="adc-feed-body"><div class="adc-feed-title">{{ optional($v->client)->name ?? 'Client Visit' }}</div><div class="adc-feed-meta">{{ \Carbon\Carbon::parse($v->scheduled_at)->format('h:i A') }} · {{ ucfirst($v->status) }}</div></div>
+                  </li>
+                @endforeach
+              </ul>
+            @endif
+          </div>
+        </div>
+        <div class="col-xl-4">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">My KRA Progress</h6></div><a href="{{ url('/kpi/my') }}" class="adc-link">View KRA</a></div>
+            @if(collect($kraItems ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-target-lock"></i><span>No KRAs assigned yet.</span></div>
+            @else
+              <div class="d-flex justify-content-center"><div id="empKra"></div></div>
+              <div class="emp-kra-list">
+                @foreach($kraItems as $kr)
+                  @php $kt = $kr['pct'] >= 85 ? 'success' : ($kr['pct'] >= 60 ? 'primary' : 'warning'); @endphp
+                  <div class="emp-kra-item">
+                    <div class="d-flex justify-content-between"><span>{{ $kr['name'] }}</span><b>{{ $kr['pct'] }}%</b></div>
+                    <div class="adc-bar mt-1"><span class="adc-tone-{{ $kt }}" style="width: {{ min(100, $kr['pct']) }}%"></span></div>
+                  </div>
+                @endforeach
+              </div>
+            @endif
+          </div>
+        </div>
+        <div class="col-xl-4">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Announcements</h6></div>@if(auth()->user()->hasRole(['admin','hr']))<a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>@endif</div>
+            @if(collect($recentNotices ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
+            @else
+              <ul class="adc-feed">
+                @foreach(collect($recentNotices)->take(4) as $n)
+                  <li>
+                    <span class="adc-feed-dot adc-tone-info"><i class="bx bx-news"></i></span>
+                    <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->created_at)->diffForHumans() }}</div></div>
+                  </li>
+                @endforeach
+              </ul>
+            @endif
+          </div>
+        </div>
+      </div>
+
+      {{-- Timeline + Upcoming Leaves + Documents + Contacts --}}
+      <div class="row g-4 mt-1">
+        <div class="col-xl-3 col-md-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">My Timeline</h6></div><a href="{{ url('/user/attendance') }}" class="adc-link">View All</a></div>
+            @if(collect($myTimeline ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-time"></i><span>No recent activity.</span></div>
+            @else
+              <ul class="adc-feed">
+                @foreach($myTimeline as $t)
+                  <li>
+                    <span class="adc-feed-dot adc-tone-{{ $t['tone'] }}"><i class="bx {{ $t['icon'] }}"></i></span>
+                    <div class="adc-feed-body"><div class="adc-feed-title">{{ $t['title'] }}</div><div class="adc-feed-meta">{{ $t['sub'] }}@if(!empty($t['time'])) · {{ $t['time'] }}@endif</div></div>
+                  </li>
+                @endforeach
+              </ul>
+            @endif
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Upcoming Leaves</h6></div><a href="{{ url('/user/leaves') }}" class="adc-link">View All</a></div>
+            @if(collect($upcomingLeaves ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-calendar-check"></i><span>No upcoming leaves.</span></div>
+            @else
+              <div class="emp-leaves">
+                @foreach($upcomingLeaves as $l)
+                  <div class="emp-leave">
+                    <div class="emp-leave-date"><b>{{ $l['day'] }}</b><small>{{ $l['mon'] }} {{ substr($l['year'],2) }}</small></div>
+                    <div class="emp-leave-body"><div class="emp-leave-type">{{ $l['type'] }}</div><span class="adc-badge adc-tone-{{ $l['status']==='approved'?'success':'warning' }}">{{ ucfirst($l['status']) }}</span></div>
+                  </div>
+                @endforeach
+              </div>
+            @endif
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">My Documents</h6></div><a href="{{ url('/my-policies') }}" class="adc-link">View All</a></div>
+            <ul class="emp-docs">
+              @foreach($myDocs ?? [] as $d)
+                <li>
+                  <span class="emp-doc-icon"><i class="bx bx-file"></i></span>
+                  <span class="emp-doc-name">{{ $d['name'] }}</span>
+                  <i class="bx {{ $d['ok'] ? 'bxs-check-circle text-success' : 'bx-time-five text-warning' }}"></i>
+                </li>
+              @endforeach
+            </ul>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Important Contacts</h6></div></div>
+            @if(collect($importantContacts ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-user-voice"></i><span>No contacts available.</span></div>
+            @else
+              <ul class="emp-contacts">
+                @foreach($importantContacts as $c)
+                  <li>
+                    <img class="emp-contact-av" src="https://ui-avatars.com/api/?name={{ urlencode($c['name']) }}&background={{ $c['bg'] ?? '0d9488' }}&color=fff" alt="">
+                    <div class="emp-contact-body"><div class="emp-contact-name">{{ $c['name'] }}</div><div class="emp-contact-role">{{ $c['role'] }}</div></div>
+                    <span class="emp-contact-act">
+                      @if(!empty($c['phone']))<a href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}" title="Call {{ $c['phone'] }}"><i class="bx bx-phone"></i></a>@endif
+                      @if(!empty($c['email']))<a href="mailto:{{ $c['email'] }}" title="Email {{ $c['email'] }}"><i class="bx bx-message-rounded"></i></a>@endif
+                    </span>
+                  </li>
+                @endforeach
+              </ul>
+            @endif
+          </div>
+        </div>
+      </div>
+
     </div>
 
+    {{-- ============ RAIL ============ --}}
+    <div class="col-xxl-3 col-lg-4">
+
+      {{-- Today's Highlights --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Highlights</h6></div></div>
+        @php
+          $todayBd = collect($todayBirthdays ?? [])->first();
+          $todayAn = collect($todayAnniversaries ?? [])->first();
+          $high = [];
+          if ($todayBd) $high[] = ['icon'=>'bx-cake','tone'=>'primary','title'=>'Birthday','sub'=>$todayBd->name,'url'=>url('/organizationHierarchy')];
+          if ($todayAn) $high[] = ['icon'=>'bx-gift','tone'=>'info','title'=>'Work Anniversary','sub'=>$todayAn->name,'url'=>url('/organizationHierarchy')];
+          if (!empty($nextHoliday)) $high[] = ['icon'=>'bx-calendar-star','tone'=>'success','title'=>'Holiday','sub'=>($nextHoliday->name ?? 'Holiday').' · '.\Carbon\Carbon::parse($nextHoliday->date)->format('d M Y'),'url'=>url('/holidays')];
+          $high[] = ['icon'=>'bx-shield-quarter','tone'=>'warning','title'=>'Policy Acknowledgement','sub'=>'Code of Conduct · Pending','url'=>url('/my-policies')];
+        @endphp
+        <ul class="adc-events">
+          @foreach($high as $h)
+            <li><a href="{{ $h['url'] }}" class="emp-hl-link"><span class="adc-ev-icon adc-tone-{{ $h['tone'] }}"><i class="bx {{ $h['icon'] }}"></i></span><div class="flex-grow-1"><div class="adc-feed-title">{{ $h['title'] }}</div><div class="adc-feed-meta">{{ $h['sub'] }}</div></div><i class="bx bx-chevron-right emp-hl-arrow"></i></a></li>
+          @endforeach
+        </ul>
+      </div>
+
+      {{-- Quick Actions --}}
+      <div class="adc-card">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
+        <div class="emp-qa">
+          <a href="{{ url('/user/leaves') }}" class="adc-qa-btn"><i class="bx bx-calendar-plus"></i><span>Apply Leave</span></a>
+          <a href="{{ url('/user/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Mark Attendance</span></a>
+          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expense Claim</span></a>
+          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-trip"></i><span>Request Travel</span></a>
+          <a href="{{ url('/user/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>My Payroll</span></a>
+          <a href="{{ url('/training') }}" class="adc-qa-btn"><i class="bx bx-book"></i><span>Training</span></a>
+          <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
+          <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
+          <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
+          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Innovation Hub</span></a>
+        </div>
+      </div>
+
+    </div>
   </div>
 </div>
 
+@include('tenant.users.dashboard._adc-styles')
+@include('tenant.users.dashboard._adc-live')
+<style>
+  .emp-hero{position:relative;overflow:hidden;background:linear-gradient(120deg,#e6f7f2 0%,#f0fdfa 55%,#ffffff 100%);border:1px solid #cdeee6;border-radius:20px;padding:26px 28px;display:grid;grid-template-columns:1.35fr .9fr;gap:20px;box-shadow:0 1px 3px rgba(15,23,42,.05);}
+  .emp-hero-greet{font-size:1.5rem;font-weight:800;color:#0f766e;margin:0 0 3px;letter-spacing:-.01em;}
+  .emp-hero-sub{color:var(--muted);margin:0 0 18px;}
+  .emp-hero-meta{display:grid;grid-template-columns:repeat(4,auto);gap:8px 28px;}
+  .emp-meta-l{display:block;font-size:.7rem;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;font-weight:600;}
+  .emp-meta-v{display:block;font-size:.9rem;font-weight:700;color:var(--ink);}
+  .emp-hero-illus{position:absolute;left:52%;top:50%;transform:translateY(-50%);font-size:6rem;color:rgba(13,148,136,.16);pointer-events:none;}
+  .emp-shift{background:#fff;border:1px solid var(--line);border-radius:15px;padding:16px 18px;align-self:center;box-shadow:0 6px 20px -12px rgba(15,23,42,.2);z-index:1;}
+  .emp-shift-row{display:flex;justify-content:space-between;gap:12px;margin-bottom:12px;}
+  .emp-shift-v{display:block;font-size:.95rem;font-weight:800;color:var(--ink);margin-top:2px;}
+  .emp-shift-v small{font-size:.7rem;color:var(--faint);font-weight:600;}
+  .emp-week .adc-bar{height:8px;}
+
+  .emp-kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;height:100%;display:flex;flex-direction:column;box-shadow:0 1px 3px rgba(15,23,42,.05);transition:transform .15s,box-shadow .15s;}
+  .emp-kpi:hover{transform:translateY(-3px);box-shadow:0 12px 26px -14px rgba(15,23,42,.22);}
+  .emp-kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .emp-kpi-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:1.35rem;color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);}
+  .emp-kpi-menu{color:var(--faint);cursor:pointer;font-size:1.2rem;}
+  .emp-kpi-title{font-size:.82rem;font-weight:600;color:var(--muted);}
+  .emp-kpi-value{font-size:1.5rem;font-weight:800;color:var(--c);line-height:1.1;letter-spacing:-.02em;margin:2px 0;}
+  .emp-kpi-sub{font-size:.72rem;color:var(--faint);margin-bottom:12px;}
+  .emp-kpi-btn{margin-top:auto;display:block;text-align:center;font-size:.78rem;font-weight:700;padding:9px;border-radius:10px;text-decoration:none;color:var(--c);background:color-mix(in srgb,var(--c) 10%,#fff);transition:all .12s;}
+  .emp-kpi-btn:hover{background:var(--c);color:#fff;}
+
+  .emp-kra-list{display:flex;flex-direction:column;gap:11px;margin-top:8px;}
+  .emp-kra-item{font-size:.8rem;font-weight:600;}
+  .emp-kra-item b{font-weight:800;}
+
+  .emp-leaves{display:flex;flex-direction:column;gap:12px;}
+  .emp-leave{display:flex;gap:12px;align-items:center;}
+  .emp-leave-date{width:52px;flex:none;text-align:center;background:var(--bg);border-radius:11px;padding:8px 4px;line-height:1.1;}
+  .emp-leave-date b{display:block;font-size:1.15rem;font-weight:800;color:var(--p);}
+  .emp-leave-date small{font-size:.62rem;color:var(--muted);text-transform:uppercase;}
+  .emp-leave-type{font-size:.85rem;font-weight:600;margin-bottom:3px;}
+
+  .emp-docs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;}
+  .emp-docs li{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:9px;transition:background .12s;}
+  .emp-docs li:hover{background:var(--bg);}
+  .emp-doc-icon{width:32px;height:32px;flex:none;border-radius:9px;display:grid;place-items:center;background:var(--bg);color:var(--muted);font-size:1.05rem;}
+  .emp-doc-name{flex:1;font-size:.83rem;font-weight:500;}
+  .emp-docs li > i{font-size:1.2rem;}
+
+  .emp-contacts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;}
+  .emp-contacts li{display:flex;gap:10px;align-items:center;}
+  .emp-contact-av{width:36px;height:36px;border-radius:50%;flex:none;}
+  .emp-contact-body{flex:1;min-width:0;}
+  .emp-contact-name{font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .emp-contact-role{font-size:.72rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .emp-contact-act{display:flex;gap:6px;flex:none;}
+  .emp-contact-act a{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--bg);color:var(--p);text-decoration:none;font-size:1rem;transition:all .12s;}
+  .emp-contact-act a:hover{background:var(--p);color:#fff;}
+
+  .emp-qa{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+  .emp-hl-link{display:flex;align-items:center;gap:11px;width:100%;text-decoration:none;color:inherit;}
+  .emp-hl-arrow{color:var(--faint);opacity:0;transition:opacity .12s,transform .12s;font-size:1.1rem;margin-left:auto;}
+  .adc-events li:hover .emp-hl-arrow{opacity:1;transform:translateX(2px);}
+
+  /* Kingo/Bingo tier board (sales) */
+  .adc-tier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .adc-tier{background:var(--bg);border:1px solid var(--line);border-radius:13px;padding:14px;}
+  .adc-tier.won{background:color-mix(in srgb,var(--success) 8%,#fff);border-color:color-mix(in srgb,var(--success) 35%,var(--line));}
+  .adc-tier-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+  .adc-tier-name{font-size:.82rem;font-weight:700;color:var(--ink);}
+  .adc-tier-badge{font-size:.6rem;font-weight:800;color:var(--success);background:color-mix(in srgb,var(--success) 15%,#fff);padding:2px 6px;border-radius:20px;}
+  .adc-tier-pct{font-size:1.7rem;font-weight:800;line-height:1;color:var(--c,var(--ink));margin:2px 0 6px;}
+  .adc-tier-target{font-size:.72rem;color:var(--faint);margin-top:5px;font-weight:600;}
+  @media (max-width:575.98px){ .adc-tier-grid{grid-template-columns:1fr;} }
+
+  @media (max-width:991.98px){ .emp-hero{grid-template-columns:1fr;} .emp-hero-illus{display:none;} .emp-hero-meta{grid-template-columns:1fr 1fr;} }
+  @media (max-width:575.98px){ .emp-hero-meta{grid-template-columns:1fr 1fr;} .emp-shift-row{flex-wrap:wrap;} }
+</style>
+@endsection
+
+@section('page-script')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var el = document.querySelector('#empKra'); if (!el) return;
+  var pct = {{ (int) ($kraOverall ?? 0) }};
+  function boot(AC){
+    try {
+      new AC(el, {
+        series:[Math.min(100,pct)],
+        chart:{type:'radialBar',height:180,fontFamily:'Public Sans'}, colors:['#0d9488'],
+        plotOptions:{radialBar:{hollow:{size:'62%'},track:{background:'#eef1f5'},dataLabels:{name:{offsetY:20,color:'#94a3b8',fontSize:'11px'},value:{offsetY:-8,fontSize:'22px',fontWeight:800,color:'#1e293b',formatter:function(v){return Math.round(v)+'%';}}}}},
+        fill:{type:'gradient',gradient:{shade:'light',shadeIntensity:.4,gradientToColors:['#5eead4'],stops:[0,100]}},
+        stroke:{lineCap:'round'}, labels:['Completed']
+      }).render();
+    } catch(e){ console.error(e); }
+  }
+  (async function(){ for(var i=0;i<200 && !window.ApexCharts;i++){ await new Promise(r=>setTimeout(r,25)); }
+    if(window.ApexCharts){ boot(window.ApexCharts); }
+    else { var s=[...document.querySelectorAll('script[src]')].find(x=>/apex-charts.*\.js/i.test(x.src)); if(s){ try{ var m=await import(s.src); boot(m.default||window.ApexCharts);}catch(e){} } }
+  })();
+});
+</script>
 @endsection

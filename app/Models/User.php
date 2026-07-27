@@ -726,6 +726,52 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->hasMany(ProbationEvaluation::class, 'user_id');
   }
 
+  /**
+   * The real employee who may log in as this account while the position is
+   * vacant (org-chart placeholder accounts with no real hire).
+   */
+  public function accessDelegate()
+  {
+    return $this->belongsTo(User::class, 'access_delegate_id');
+  }
+
+  /** Vacant-position accounts this user may log in as (header hub). */
+  public function delegatedAccounts()
+  {
+    return $this->hasMany(User::class, 'access_delegate_id');
+  }
+
+  /** @var int[]|null Per-request memo — used by view composers too. */
+  private ?array $managerIdentityIdsMemo = null;
+
+  /**
+   * Every user id whose "manager identity" this user holds: their own, plus
+   * any vacant-position accounts delegated to them. Manager-scope queries
+   * that opt in match reporting_to_id against ALL of these. One level only —
+   * delegation does not chain.
+   */
+  public function managerIdentityIds(): array
+  {
+    if ($this->managerIdentityIdsMemo === null) {
+      $this->managerIdentityIdsMemo = User::where('access_delegate_id', $this->id)
+        ->pluck('id')
+        ->push($this->id)
+        ->unique()
+        ->values()
+        ->all();
+    }
+    return $this->managerIdentityIdsMemo;
+  }
+
+  /**
+   * Who should actually be notified/act for this account: the delegate when
+   * the position is vacant and delegated, otherwise the account itself.
+   */
+  public function effectiveActor(): User
+  {
+    return $this->access_delegate_id ? ($this->accessDelegate ?? $this) : $this;
+  }
+
   public function workControlRoutines()
   {
     return $this->hasMany(WorkControlRoutine::class, 'user_id');

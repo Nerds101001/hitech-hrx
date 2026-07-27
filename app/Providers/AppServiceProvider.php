@@ -107,6 +107,30 @@ class AppServiceProvider extends ServiceProvider
       // 2. Global Probation Alerts for Managers
       if (auth()->check()) {
           $user = auth()->user();
+
+          // 2a. Delegate Access hub (top navbar): while inside a delegated
+          // account show the exit control; otherwise list the vacant-position
+          // accounts this user may log in as.
+          $switchOriginalId = session('delegate_switch_original_id');
+          if ($switchOriginalId) {
+              $originalUser = \App\Models\User::find($switchOriginalId);
+              $view->with('delegateHub', [
+                  'mode'         => 'acting',
+                  'actingAs'     => $user->getFullName(),
+                  'originalName' => $originalUser ? $originalUser->getFullName() : 'My Account',
+              ]);
+          } else {
+              $delegatedAccounts = $user->delegatedAccounts()
+                  ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+                  ->get(['id', 'first_name', 'last_name']);
+              if ($delegatedAccounts->isNotEmpty()) {
+                  $view->with('delegateHub', [
+                      'mode'     => 'available',
+                      'accounts' => $delegatedAccounts,
+                  ]);
+              }
+          }
+
           // Check if user has manager-like responsibilities
           if ($user->hasRole(['admin', 'Admin', 'hr', 'manager', 'HR', 'Manager'])) {
               $pendingProbations = \App\Models\User::where('reporting_to_id', $user->id)

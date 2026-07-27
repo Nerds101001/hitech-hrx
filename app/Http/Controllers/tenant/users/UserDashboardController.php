@@ -33,6 +33,73 @@ use App\Constants\Constants as AppConstants;
 
 class UserDashboardController extends Controller
 {
+    /**
+     * Log in AS a vacant-position account delegated to me (header hub).
+     * The original user id is kept in the session so Exit can restore it;
+     * only active accounts whose access_delegate_id points at me qualify.
+     */
+    public function switchToDelegate($id)
+    {
+        $me = auth()->user();
+
+        if (session()->has('delegate_switch_original_id')) {
+            return redirect()->back()->with('error', 'You are already in a delegate session — exit it first.');
+        }
+
+        $target = User::where('id', $id)
+            ->where('access_delegate_id', $me->id)
+            ->where('status', UserAccountStatus::ACTIVE)
+            ->first();
+
+        if (!$target) {
+            return redirect()->back()->with('error', 'This account is not delegated to you.');
+        }
+
+        // Hard security boundary: privileged accounts can never be entered via
+        // delegation, even if a delegation row was somehow created for one —
+        // blocks admin/HR privilege escalation through the switch path.
+        if ($target->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+            \Illuminate\Support\Facades\Log::warning("Delegate switch BLOCKED: user {$me->id} attempted to enter privileged account {$target->id}");
+            return redirect()->back()->with('error', 'Privileged accounts cannot be accessed by delegation.');
+        }
+
+        session(['delegate_switch_original_id' => $me->id]);
+        auth()->login($target);
+        session()->save();
+
+        \Illuminate\Support\Facades\Log::info("Delegate switch: user {$me->id} ({$me->email}) logged in as delegated account {$target->id} ({$target->email})");
+
+        return redirect('/user/dashboard')->with('success', 'You are now logged in as ' . $target->getFullName() . ' (delegate session).');
+    }
+
+    /** Exit the delegate session and return to the real user's own account. */
+    public function exitDelegate()
+    {
+        $originalId = session('delegate_switch_original_id');
+        if (!$originalId) {
+            return redirect()->back()->with('error', 'You are not in a delegate session.');
+        }
+
+        $current  = auth()->user();
+        $original = User::find($originalId);
+
+        // Integrity: the account being exited must actually be delegated to
+        // the stored original user — otherwise kill the session entirely.
+        if (!$original || (int) $current->access_delegate_id !== (int) $original->id) {
+            session()->forget('delegate_switch_original_id');
+            auth()->logout();
+            return redirect('/login');
+        }
+
+        auth()->login($original);
+        session()->forget('delegate_switch_original_id');
+        session()->save();
+
+        \Illuminate\Support\Facades\Log::info("Delegate switch: user {$original->id} exited delegated account {$current->id}");
+
+        return redirect('/user/dashboard')->with('success', 'Back on your own account.');
+    }
+
     public function index()
     {
         $user = auth()->user();
@@ -120,79 +187,25 @@ class UserDashboardController extends Controller
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
         // 1. HR/Admin Dashboard (First Priority)
-        if ($isHR || $user->hasRole('admin')) {
-            // HR-specific calculations
-            $presentUsersCountLastWeek = Attendance::whereBetween('created_at', [now()->startOfWeek()->subWeek(), now()->endOfWeek()->subWeek()])
-                ->where('check_out_time', '!=', null)
-                ->get()
-                ->sum(function ($attendance) {
-                    return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-            });
-
-            $thisWeekWorkingHours = Attendance::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                ->where('check_out_time', '!=', null)
-                ->get()
-                ->sum(function ($attendance) {
-                    return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-            });
-
-            $todayHours = Attendance::whereDate('created_at', now())
-                ->where('check_out_time', '!=', null)
-                ->get()
-                ->sum(function ($attendance) {
-                    return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
-            });
-
-            $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
-                ->where('status', LeaveRequestStatus::APPROVED)
-                ->count();
-
-            // Data for Onboarding Modal in Dashboard
-            $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get();
-            $roles = \Spatie\Permission\Models\Role::all();
-            $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
-            $managers = \App\Models\User::whereHas('roles', function($q) {
-                $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
-            })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
-
-            return view('tenant.users.dashboard.hr-index', [
-                'totalUser' => $totalUser,
-                'activeEmployees' => $active,
-                'active' => $active,
-                'presentUsersCount' => $presentUsersCount,
-                'pendingLeaveRequests' => $pendingLeaveRequests,
-                'pendingExpenseRequests' => $pendingExpenseRequests,
-                'pendingDocumentRequests' => DocumentRequest::where('status', 'pending')->count(),
-                'pendingLoanRequests' => LoanRequest::where('status', 'pending')->count(),
-                'thisWeekWorkingHours' => round($thisWeekWorkingHours, 2),
-                'todayHours' => round($todayHours, 2),
-                'tasks' => Task::where('status', 'new')->count(),
-                'onGoingTasks' => Task::where('status', 'in_progress')->count(),
-                'todayPresentUsers' => $presentUsersCount,
-                'todayAbsentUsers' => $active - $presentUsersCount,
-                'presentUsersCountLastWeek' => $presentUsersCountLastWeek,
-                'absentUsersCountLastWeek' => $active - $presentUsersCountLastWeek,
-                'onLeaveUsersCount' => $onLeaveUsersCount,
-                'isSelfService' => false,
-                'myLeavesCount' => $myLeavesCount,
-                'myExpensesCount' => $myExpensesCount,
-                'mySOSCount' => $mySOSCount,
-                'nextHoliday' => $nextHoliday,
-                'recentNotices' => $recentNotices,
-                'teamOutToday' => $teamOutToday,
-                'payrollTrend' => $payrollTrend,
-                'latestNetSalary' => $latestNetSalary,
-                'departments' => $departments,
-                'roles' => $roles,
-                'designations' => $designations,
-                'managers' => $managers
-            ]);
+        if (($isHR || $user->hasRole('admin')) && !$isFieldEmployee) {
+            // The redesigned hr-index/admin-index need the full strategic
+            // dataset that only DashboardController::index builds — delegate
+            // to that single source of truth. No recursion: it only hands
+            // back to this controller for employee-role holders, and those
+            // are excluded from this branch above.
+            return app(\App\Http\Controllers\tenant\DashboardController::class)->index();
         }
 
         // 2. Employee Dashboard — also catches users with NO role assigned yet
         // (accounts-dept bulk role assignment issue: anyone not explicitly admin/hr/manager/accounts gets employee view)
         $isPrivilegedRole = $user->hasRole(['admin', 'hr', 'accounts', 'manager']);
-        if ($isFieldEmployee || (!$isPrivilegedRole && !$isManager)) {
+        // A manager identity with real reports — their own, or via a
+        // vacant-position account delegated to them — outranks the employee
+        // view, so dual-role users land on the redesigned Team Command Center.
+        $hasTeamToManage = $isManager && User::whereIn('reporting_to_id', $user->managerIdentityIds())
+            ->where('status', UserAccountStatus::ACTIVE)
+            ->exists();
+        if (!$hasTeamToManage && ($isFieldEmployee || (!$isPrivilegedRole && !$isManager))) {
             $settings = Settings::first();
             
             // Celebrations logic
@@ -250,7 +263,7 @@ class UserDashboardController extends Controller
         // 2. Manager Dashboard
         if ($isManager) {
             // Get Subordinates (Direct Reports)
-            $teamMembers = User::where('reporting_to_id', $user->id)
+            $teamMembers = User::whereIn('reporting_to_id', $user->managerIdentityIds())
                 ->where('status', UserAccountStatus::ACTIVE)
                 ->get();
             
@@ -343,6 +356,12 @@ class UserDashboardController extends Controller
 
             return view('tenant.users.dashboard.manager-index', [
                 'teamDeployment' => $teamDeployment,
+                'teamPendingLeaveRequests' => LeaveRequest::whereIn('user_id', $teamMemberIds)
+                    ->where('status', 'pending')
+                    ->with(['user', 'leaveType'])
+                    ->latest()
+                    ->take(5)
+                    ->get(),
                 'pendingLeaveRequests' => $pendingLeaveRequests,
                 'pendingExpenseRequests' => $pendingExpenseRequests,
                 'pendingDocumentRequests' => $pendingDocumentRequests,

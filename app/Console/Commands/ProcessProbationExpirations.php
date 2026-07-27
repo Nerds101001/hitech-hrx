@@ -47,8 +47,14 @@ class ProcessProbationExpirations extends Command
             }
 
             if ($manager) {
-                $manager->notify(new ProbationEvaluationRequest($employee));
-                $this->info("Notified manager {$manager->name} for employee {$employee->name}");
+                // Vacant-position placeholder accounts route to their acting delegate
+                $actor = $manager->effectiveActor();
+                $actor->notify(new ProbationEvaluationRequest($employee));
+                if ($actor->id !== $manager->id) {
+                    $this->info("Notified delegate {$actor->name} (acting for {$manager->name}) for employee {$employee->name}");
+                } else {
+                    $this->info("Notified manager {$manager->name} for employee {$employee->name}");
+                }
                 $count++;
             } else {
                 $this->warn("No manager found for employee {$employee->name} (User ID: {$employee->id})");

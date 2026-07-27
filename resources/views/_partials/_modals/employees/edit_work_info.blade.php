@@ -88,6 +88,22 @@
               @error('reportingToId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
             </div>
 
+            <div class="col-md-6">
+              <label class="form-label-hitech" for="accessDelegateId">
+                @lang('Access Delegate (Acting)')
+                <i class="bx bx-info-circle text-muted" title="Vacant-position accounts only: the real employee who can log in as this account from the header Delegate Access icon, until the position is filled."></i>
+              </label>
+              <select class="form-select form-select-hitech select2" id="accessDelegateId" name="accessDelegateId">
+                <option value="">None — position is filled</option>
+                @foreach(\App\Models\User::where('status', \App\Enums\UserAccountStatus::ACTIVE)->where('id', '!=', $user->id)->orderBy('first_name')->get(['id','first_name','last_name']) as $delegateUser)
+                  <option value="{{ $delegateUser->id }}" {{ $user->access_delegate_id == $delegateUser->id ? 'selected' : '' }}>
+                    {{ $delegateUser->first_name }} {{ $delegateUser->last_name }}
+                  </option>
+                @endforeach
+              </select>
+              @error('accessDelegateId') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+            </div>
+
             {{-- Marks that the agent pickers were part of this submit, so an
                  emptied picker is read as "remove all" rather than "not sent". --}}
             <input type="hidden" name="agent_section" value="1">

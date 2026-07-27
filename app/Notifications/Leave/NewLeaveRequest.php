@@ -34,8 +34,10 @@ class NewLeaveRequest extends Notification
     $reportingToId = $employee ? $employee->reporting_to_id : null;
 
     if ($reportingToId) {
-        // Only send the email to the direct manager
-        if ($notifiable->id == $reportingToId) {
+        // Send the email to the direct manager — and, when the manager is a
+        // vacant-position placeholder account, to its acting delegate too.
+        $delegateId = User::where('id', $reportingToId)->value('access_delegate_id');
+        if ($notifiable->id == $reportingToId || ($delegateId && $notifiable->id == $delegateId)) {
             return ['database', 'mail', FirebaseChannel::class];
         }
     } else {

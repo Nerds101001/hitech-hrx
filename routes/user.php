@@ -12,6 +12,10 @@ Route::middleware([
 ])->prefix('user')->name('user.')->group(function () {
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
 
+  // Delegate Access hub: log in as a vacant-position account delegated to me / exit back
+  Route::post('/delegation/switch/{id}', [UserDashboardController::class, 'switchToDelegate'])->name('delegation.switch');
+  Route::post('/delegation/exit', [UserDashboardController::class, 'exitDelegate'])->name('delegation.exit');
+
   // Leaves
     Route::prefix('leaves')->name('leaves.')->group(function () {
      Route::get('/', [UserDashboardController::class, 'leaveIndex'])->name('index');

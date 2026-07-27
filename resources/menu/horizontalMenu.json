@@ -1,10 +1,10 @@
 {
   "menu": [
     {
-      "url": "/user/dashboard",
+      "url": "/",
       "name": "Dashboard",
       "icon": "menu-icon bx bx-home",
-      "slug": "user.dashboard.index"
+      "slug": ["tenant.dashboard", "user.dashboard.index"]
     },
     {
       "icon": "menu-icon bx bx-group",

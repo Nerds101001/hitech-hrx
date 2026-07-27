@@ -9,6 +9,25 @@ use Illuminate\Support\Facades\Notification;
 
 class NotificationHelper
 {
+  /**
+   * A manager plus, when that manager is a vacant-position placeholder
+   * account, the real employee its access is delegated to — so requests
+   * routed to an unmanned account still reach a human.
+   *
+   * @return array<User>
+   */
+  private static function withDelegate(?User $manager): array
+  {
+    if (!$manager) {
+      return [];
+    }
+    $out = [$manager];
+    if ($manager->access_delegate_id && $manager->accessDelegate) {
+      $out[] = $manager->accessDelegate;
+    }
+    return $out;
+  }
+
   public static function notifyAdminHR($notification, $isExceptMe = true): void
   {
     try {
@@ -21,10 +40,11 @@ class NotificationHelper
 
       $reportingTo = $authUser ? $authUser->reportingTo : null;
 
-      // Prepare list of users to notify: HR Staff + Direct Manager
+      // Prepare list of users to notify: HR Staff + Direct Manager (+ the
+      // manager's acting delegate when the position is vacant)
       $notifiables = $hrStaff;
-      if ($reportingTo) {
-          $notifiables = $notifiables->push($reportingTo);
+      foreach (self::withDelegate($reportingTo) as $m) {
+          $notifiables = $notifiables->push($m);
       }
       
       $notifiables = $notifiables->filter()->unique('id');
@@ -52,7 +72,8 @@ class NotificationHelper
     $reportingTo = $authUser ? $authUser->reportingTo : null;
 
     // Prepare list of users to notify
-    $notifiables = !$reportingTo ? $admins->merge([auth()->user()])->filter() : $admins->merge([$reportingTo, auth()->user()])->filter();
+    $managerSet = self::withDelegate($reportingTo);
+    $notifiables = empty($managerSet) ? $admins->merge([auth()->user()])->filter() : $admins->merge(array_merge($managerSet, [auth()->user()]))->filter();
 
     if ($isExceptMe && $authUser) {
       $notifiables = $notifiables->where('id', '!=', $authUser->id);
@@ -74,7 +95,8 @@ class NotificationHelper
     $reportingTo = $authUser ? $authUser->reportingTo : null;
 
     // Prepare list of users to notify
-    $notifiables = !$reportingTo ? $managers->merge([auth()->user()])->filter() : $managers->merge([$reportingTo, auth()->user()])->filter();
+    $managerSet = self::withDelegate($reportingTo);
+    $notifiables = empty($managerSet) ? $managers->merge([auth()->user()])->filter() : $managers->merge(array_merge($managerSet, [auth()->user()]))->filter();
 
     if ($isExceptMe && $authUser) {
       $notifiables = $notifiables->where('id', '!=', $authUser->id);
@@ -96,7 +118,8 @@ class NotificationHelper
     $reportingTo = $authUser ? $authUser->reportingTo : null;
 
     // Prepare list of users to notify
-    $notifiables = !$reportingTo ? $hrAdmins->merge([auth()->user()])->filter() : $hrAdmins->merge([$reportingTo, auth()->user()])->filter();
+    $managerSet = self::withDelegate($reportingTo);
+    $notifiables = empty($managerSet) ? $hrAdmins->merge([auth()->user()])->filter() : $hrAdmins->merge(array_merge($managerSet, [auth()->user()]))->filter();
 
     if ($isExceptMe && $authUser) {
       $notifiables = $notifiables->where('id', '!=', $authUser->id);

@@ -300,6 +300,10 @@
         @endif
         <!-- Quick links -->
 
+        <!-- Delegate Access Hub -->
+        @include('layouts.sections.navbar.delegate_hub')
+        <!--/ Delegate Access Hub -->
+
         <!-- Notification -->
         @if ($configData['displayNotification'] == true && auth()->user() && auth()->user()->roles()->first()?->name != 'super_admin')
             @include('layouts.sections.navbar.notifications')

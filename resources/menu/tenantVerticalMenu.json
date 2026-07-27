@@ -7,21 +7,14 @@
             "url": "/",
             "name": "Dashboard",
             "icon": "menu-icon bx bx-home",
-            "slug": "tenant.dashboard",
+            "slug": ["tenant.dashboard", "user.dashboard.index"],
             "roles": [
                 "admin",
                 "hr",
                 "manager",
-                "accounts"
-            ]
-        },
-        {
-            "url": "/user/dashboard",
-            "name": "Dashboard",
-            "icon": "menu-icon bx bx-home",
-            "slug": "user.dashboard.index",
-            "roles": [
-                "employee"
+                "accounts",
+                "employee",
+                "office_employee"
             ]
         },
         {

@@ -472,6 +472,7 @@ class EmployeeController extends Controller
       'designationId' => 'required|exists:designations,id',
       'role' => 'required|exists:roles,name',
       'reportingToId' => 'required|exists:users,id',
+      'accessDelegateId' => 'nullable|exists:users,id|different:id',
       'ccare_agent_id' => 'nullable|array',
       'ccare_agent_id.*' => 'exists:users,id',
       'newbiz_agent_id' => 'nullable|array',
@@ -494,6 +495,15 @@ class EmployeeController extends Controller
     $user->department_id = $validated['departmentId'];
     $user->designation_id = $validated['designationId'];
     $user->reporting_to_id = $validated['reportingToId'];
+    if ($request->has('accessDelegateId')) {
+      $newDelegateId = $validated['accessDelegateId'] ?? null;
+      // Privileged accounts may never be made switchable via delegation
+      // (blocks admin/HR privilege escalation at assignment time too).
+      if ($newDelegateId && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+        return redirect()->back()->with('error', 'Admin/HR accounts cannot be delegated.');
+      }
+      $user->access_delegate_id = $newDelegateId;
+    }
     $user->leave_policy_profile_id = $validated['leavePolicyProfileId'] ?? $user->leave_policy_profile_id;
     $user->work_type = $validated['work_type'] ?? $user->work_type;
     $user->biometric_id = $validated['biometric_id'] ?? $user->biometric_id;
