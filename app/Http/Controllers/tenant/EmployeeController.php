@@ -131,6 +131,15 @@ class EmployeeController extends Controller
 
   public function getPayrollAdjustmentAjax($id)
   {
+    // Salary-adjustment amounts are confidential — same gate as the write
+    // siblings (addOrUpdate/deletePayrollAdjustment). Previously this read
+    // endpoint had no check, so any /employees delegate could enumerate any
+    // employee's payroll adjustment amounts by id.
+    if (!auth()->user()->hasRole(['admin', 'hr', 'accounts'])
+        && !auth()->user()->can('employee.manage_payroll_adjustment')
+        && !auth()->user()->can('employee.view_banking')) {
+      abort(403);
+    }
     $validated = validator(['id' => $id], ['id' => 'required|exists:payroll_adjustments,id'])->validate();
 
     $payrollAdjustment = PayrollAdjustment::find($validated['id']);
