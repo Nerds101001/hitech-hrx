@@ -338,6 +338,294 @@ class DashboardController extends Controller
       ];
 
 
+      // ============================================================
+      // ADMIN COMMAND CENTER — dedicated strategic dashboard.
+      // Everything here is REAL data pulled from live tables. Where a
+      // widget in the design had no backing source, it is replaced by a
+      // real module instead of a placeholder:
+      //   • "LMS" -> the real Training module (training_modules / progress)
+      //   • "KPI Summary" -> kpi_checks buckets, else today's workforce split
+      //   • Workforce chart -> real New-Joins / Exits (transfers/promotions
+      //     are not tracked, so they are not shown)
+      // HR / Accounts / Manager keep their existing dashboards untouched.
+      // ============================================================
+      if ($user->hasRole('admin')) {
+
+        // Indian short-form money formatter (Cr / L / K)
+        $short = function ($n) {
+          $n = (float) $n;
+          if ($n >= 10000000) return number_format($n / 10000000, 2) . ' Cr';
+          if ($n >= 100000)   return number_format($n / 100000, 2) . ' L';
+          if ($n >= 1000)     return number_format($n / 1000, 1) . 'K';
+          return number_format($n);
+        };
+        // Sales figures (pipeline / targets / reports) are stored in LAKHS,
+        // so format the raw value as Cr / L, never K.
+        $shortL = function ($n) {
+          $n = (float) $n;
+          if ($n >= 100) return number_format($n / 100, 2) . ' Cr';
+          if ($n >= 1)   return number_format($n, 2) . ' L';
+          return number_format($n * 100000);
+        };
+
+        // --- KPI: net payroll for the most recent processed cycle
+        //     (payroll_records is the source of truth; payslip money columns
+        //     are not populated). Using the latest cycle rather than strictly
+        //     "this month" so the card shows the last real payroll run. ---
+        $monthlyPayroll = 0.0; $payrollPeriodLabel = now()->format('M Y');
+        try {
+          $latestCycle = \App\Models\PayrollCycle::orderByDesc('pay_period_start')->first();
+          if ($latestCycle) {
+            $monthlyPayroll = (float) \App\Models\PayrollRecord::where('payroll_cycle_id', $latestCycle->id)->sum('net_salary');
+            if ($latestCycle->pay_period_start) $payrollPeriodLabel = Carbon::parse($latestCycle->pay_period_start)->format('M Y');
+          }
+        } catch (\Throwable $e) { $monthlyPayroll = 0.0; }
+
+        // --- Sales pipeline value + stage funnel (open book, is_locked = 0) ---
+        $pipelineValue = 0.0; $salesFunnel = collect();
+        try {
+          $pipelineValue = (float) \App\Models\SalesPipeline::where('is_locked', false)->sum('total_business_potential');
+          $salesFunnel = \App\Models\SalesPipeline::where('is_locked', false)
+              ->selectRaw('COALESCE(NULLIF(status_stage, ""), "Unspecified") AS stage, COUNT(*) AS deals, SUM(total_business_potential) AS value')
+              ->groupBy('status_stage')
+              ->orderByDesc('value')
+              ->take(6)
+              ->get();
+        } catch (\Throwable $e) {}
+
+        // --- Sales target vs achievement, current month (real: salesperson_targets
+        //     for target, derived achievement from locked pipeline months) ---
+        // Company-wide target for each of the three tiers (Bingo / Kingo /
+        // Super Kingo), plus achievement derived from the Sales Report (locked
+        // pipeline rows) for the current month. The card toggles between tiers.
+        $mk = now()->format('Y-m');
+        $salesTargets = ['Bingo' => 0.0, 'Kingo' => 0.0, 'Super Kingo' => 0.0];
+        $salesAchieved = 0.0; $topPerformers = collect();
+        try {
+          $sumRow = \App\Models\SalespersonTarget::where('month_year', $mk)
+              ->selectRaw('SUM(bingo_target) b, SUM(kingo_target) k, SUM(super_kingo_target) s')->first();
+          if ($sumRow) $salesTargets = ['Bingo' => (float) $sumRow->b, 'Kingo' => (float) $sumRow->k, 'Super Kingo' => (float) $sumRow->s];
+
+          $achievedBySp = DB::table('sales_pipeline_months as m')
+              ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
+              ->where('m.month_year', $mk)
+              ->where('sp.is_locked', true)          // locked = Sales Report (realized sales)
+              ->whereNull('sp.deleted_at')
+              ->groupBy('sp.salesperson_id')
+              ->selectRaw('sp.salesperson_id AS spid, SUM(m.sale_amount) AS achieved')
+              ->pluck('achieved', 'spid');
+          $salesAchieved = (float) $achievedBySp->sum();
+
+          $topPerformers = \App\Models\SalespersonTarget::with('salesperson:id,first_name,last_name')
+              ->where('month_year', $mk)->get()
+              ->map(function ($t) use ($achievedBySp) {
+                  $ach = (float) ($achievedBySp[$t->salesperson_id] ?? 0);
+                  $tgt = (float) $t->bingo_target;
+                  return (object) [
+                      'name'     => optional($t->salesperson)->name ?? 'Unknown',
+                      'target'   => $tgt,
+                      'achieved' => $ach,
+                      'pct'      => $tgt > 0 ? round($ach / $tgt * 100, 1) : null,
+                  ];
+              })
+              ->filter(fn($r) => $r->target > 0 || $r->achieved > 0)
+              ->sortByDesc('achieved')->take(20)->values();
+        } catch (\Throwable $e) {}
+        $salesTargetPct = [];
+        foreach ($salesTargets as $type => $tgt) $salesTargetPct[$type] = $tgt > 0 ? round($salesAchieved / $tgt * 100, 1) : 0;
+        $salesAchievementPct = $salesTargetPct['Bingo'] ?? 0;
+
+        // --- Assets overview (status: available/assigned/maintenance/retired) ---
+        $assetTotal = 0; $assetAssigned = 0; $assetMaintenance = 0; $assetAvailable = 0; $assetValue = 0.0;
+        try {
+          $assetTotal       = \App\Models\Asset::count();
+          $assetAssigned    = \App\Models\Asset::where('status', 'assigned')->count();
+          $assetMaintenance = \App\Models\Asset::where('status', 'maintenance')->count();
+          $assetAvailable   = \App\Models\Asset::where('status', 'available')->count();
+          $assetValue       = (float) \App\Models\Asset::sum('purchase_cost');
+        } catch (\Throwable $e) {}
+
+        // --- Training module (there is no LMS; use the real training system) ---
+        $trainingModules = 0; $trainingEnrollments = 0; $trainingCompleted = 0; $trainingInProgress = 0;
+        try {
+          $trainingModules     = DB::table('training_modules')->whereNull('deleted_at')->count();
+          $trainingEnrollments = DB::table('user_training_progress')->count();
+          $trainingCompleted   = DB::table('user_training_progress')->where('status', 'completed')->count();
+          $trainingInProgress  = DB::table('user_training_progress')->where('status', 'in_progress')->count();
+        } catch (\Throwable $e) {}
+        $trainingCompletionPct = $trainingEnrollments > 0 ? round($trainingCompleted / $trainingEnrollments * 100) : 0;
+
+        // --- Attrition YTD ---
+        $relievedThisYear = 0; $attritionRate = 0;
+        try {
+          $relievedThisYear = User::whereYear('relieved_at', now()->year)->count();
+          $attritionRate = $active > 0 ? round($relievedThisYear / $active * 100, 1) : 0;
+        } catch (\Throwable $e) {}
+
+        // --- Leave trend: approved requests by month & type, current year ---
+        $leaveTrend = ['labels' => [], 'series' => []];
+        try {
+          $rows = DB::table('leave_requests as lr')
+              ->join('leave_types as lt', 'lt.id', '=', 'lr.leave_type_id')
+              ->selectRaw('MONTH(lr.from_date) as m, lt.name as type, COUNT(*) as total')
+              ->where('lr.status', 'approved')
+              ->whereYear('lr.from_date', now()->year)
+              ->whereNull('lr.deleted_at')
+              ->groupBy('m', 'lt.name')
+              ->get();
+          $monthsCount = (int) now()->month;
+          $labels = [];
+          for ($i = 1; $i <= $monthsCount; $i++) { $labels[] = Carbon::create(now()->year, $i, 1)->format('M'); }
+          $series = [];
+          foreach ($rows->pluck('type')->unique()->values() as $type) {
+              $data = array_fill(1, $monthsCount, 0);
+              foreach ($rows->where('type', $type) as $r) { if ($r->m <= $monthsCount) $data[(int)$r->m] = (int) $r->total; }
+              $series[] = ['name' => $type, 'data' => array_values($data)];
+          }
+          $leaveTrend = ['labels' => $labels, 'series' => $series];
+        } catch (\Throwable $e) {}
+
+        // --- "KPI Summary": real kpi_checks buckets, else today's workforce split ---
+        $kpiSummary = ['labels' => ['On Duty', 'On Leave', 'Absent'], 'values' => [(int)$presentUsersCount, (int)$onLeaveUsersCount, (int)max(0, $absentCount)], 'source' => 'workforce'];
+        try {
+          $k = DB::table('kpi_checks')
+              ->whereDate('period_end', '>=', now()->subDays(45)->toDateString())
+              ->selectRaw("SUM(status='completed_on_time') as ontrack, SUM(status IN('pending','completed_late')) as atrisk, SUM(status='missed') as offtrack, COUNT(*) as total")
+              ->first();
+          if ($k && (int) $k->total > 0) {
+              $kpiSummary = ['labels' => ['On Track', 'At Risk', 'Off Track'], 'values' => [(int)$k->ontrack, (int)$k->atrisk, (int)$k->offtrack], 'source' => 'kpi'];
+          }
+        } catch (\Throwable $e) {}
+
+        $activeApprovalsTotal = $pendingLeaveRequests + $pendingExpenseRequests + $pendingDocumentRequests + $pendingLoanRequests;
+        $attPct = $active > 0 ? round($presentUsersCount / $active * 100, 1) : 0;
+
+        // --- Attendance over the last 7 days (today alone is frequently empty) ---
+        $att7 = []; $att7pctSum = 0;
+        try {
+          for ($i = 6; $i >= 0; $i--) {
+            $d = now()->subDays($i);
+            $present = Attendance::whereDate('check_in_time', $d->toDateString())->distinct('user_id')->count('user_id');
+            $pct = $active > 0 ? (int) round($present / $active * 100) : 0;
+            $att7[] = ['label' => $d->format('D'), 'pct' => $pct, 'present' => $present];
+            $att7pctSum += $pct;
+          }
+        } catch (\Throwable $e) {}
+        $att7Avg = count($att7) ? round($att7pctSum / count($att7), 1) : 0;
+
+        $upcomingHolidays = Holiday::where('date', '>=', now()->toDateString())->orderBy('date')->take(5)->get();
+
+        // --- AI Insights: real signals derived from the numbers above ---
+        $aiInsights = [];
+        $aiInsights[] = ['icon' => 'bx-user-check', 'tone' => $attPct >= 90 ? 'success' : ($attPct >= 75 ? 'warning' : 'danger'), 'title' => $attPct . '% present today', 'sub' => $presentUsersCount . ' of ' . $active . ' active staff checked in'];
+        if ($upcomingProbationEnds->count() > 0) $aiInsights[] = ['icon' => 'bx-time-five', 'tone' => 'warning', 'title' => $upcomingProbationEnds->count() . ' probations ending', 'sub' => 'Within 30 days — review confirmations'];
+        if ($activeApprovalsTotal > 0)           $aiInsights[] = ['icon' => 'bx-check-shield', 'tone' => 'info', 'title' => $activeApprovalsTotal . ' approvals pending', 'sub' => 'Leave, expense, document & loan requests'];
+        if (($salesTargets['Bingo'] ?? 0) > 0)   $aiInsights[] = ['icon' => 'bx-trending-up', 'tone' => $salesAchievementPct >= 80 ? 'success' : 'warning', 'title' => 'Sales at ' . $salesAchievementPct . '% of target', 'sub' => 'Bingo target for ' . now()->format('F')];
+        if ($relievedThisYear > 0)               $aiInsights[] = ['icon' => 'bx-user-x', 'tone' => 'danger', 'title' => $attritionRate . '% attrition YTD', 'sub' => $relievedThisYear . ' employees relieved this year'];
+        if ($newHiresThisMonth > 0)              $aiInsights[] = ['icon' => 'bx-user-plus', 'tone' => 'success', 'title' => $newHiresThisMonth . ' new hires this month', 'sub' => 'Onboarding in progress'];
+
+        // --- Today's events (real counts) ---
+        $eventsToday = [
+          ['icon' => 'bx-cake', 'label' => 'Birthdays Today', 'count' => $todayBirthdays->count(), 'tone' => 'primary'],
+          ['icon' => 'bx-gift', 'label' => 'Work Anniversaries', 'count' => $todayAnniversaries->count(), 'tone' => 'info'],
+          ['icon' => 'bx-time', 'label' => 'Probation Ending', 'count' => $upcomingProbationEnds->count(), 'tone' => 'warning'],
+          ['icon' => 'bx-calendar-star', 'label' => 'Holidays This Month', 'count' => Holiday::whereMonth('date', now()->month)->whereYear('date', now()->year)->count(), 'tone' => 'success'],
+          ['icon' => 'bx-calendar-event', 'label' => 'Leaves Pending', 'count' => $pendingLeaveRequests, 'tone' => 'danger'],
+          ['icon' => 'bx-user-plus', 'label' => 'Joined This Month', 'count' => $newHiresThisMonth, 'tone' => 'primary'],
+        ];
+
+        // --- Recent activity feed (real: new joiners + latest approvals) ---
+        $recentFeed = collect();
+        try {
+          foreach (User::whereNotNull('date_of_joining')->where('date_of_joining', '>=', now()->subDays(30)->toDateString())->orderByDesc('date_of_joining')->take(4)->get(['id', 'first_name', 'last_name', 'date_of_joining']) as $u) {
+              $recentFeed->push(['type' => 'People', 'icon' => 'bx-user-plus', 'tone' => 'primary', 'title' => trim($u->first_name . ' ' . $u->last_name) . ' joined', 'time' => Carbon::parse($u->date_of_joining)->diffForHumans(), 'raw' => Carbon::parse($u->date_of_joining)]);
+          }
+        } catch (\Throwable $e) {}
+        foreach ($pendingApprovals->take(5) as $a) {
+          $recentFeed->push(['type' => $a['type'], 'icon' => 'bx-check-shield', 'tone' => 'warning', 'title' => ($a['user'] ?? 'Someone') . ' — ' . $a['type'] . ' request', 'time' => $a['time_ago'] ?? 'Recently', 'raw' => $a['raw_date'] ?? now()]);
+        }
+        $recentFeed = $recentFeed->sortByDesc('raw')->take(8)->values();
+
+        // --- Module tiles (all real live counts) ---
+        $moduleTiles = [
+          ['name' => 'People Mgmt',  'icon' => 'bx-group',          'value' => number_format($active),        'sub' => 'Employees',   'url' => url('/employees'),                    'tone' => 'primary'],
+          ['name' => 'Recruitment',  'icon' => 'bx-user-plus',      'value' => (string) $activeJobsCount,      'sub' => 'Open Roles',  'url' => url('/job'),                          'tone' => 'info'],
+          ['name' => 'Attendance',   'icon' => 'bx-time-five',      'value' => $attPct . '%',                  'sub' => 'Today',       'url' => url('/attendance'),                   'tone' => 'success'],
+          ['name' => 'Leave Mgmt',   'icon' => 'bx-calendar-event', 'value' => (string) $pendingLeaveRequests, 'sub' => 'Pending',     'url' => url('/leaveRequests'),                'tone' => 'warning'],
+          ['name' => 'Payroll',      'icon' => 'bx-money',          'value' => '₹' . $short($monthlyPayroll),  'sub' => $payrollPeriodLabel, 'url' => url('/payroll'),                'tone' => 'success'],
+          ['name' => 'Performance',  'icon' => 'bx-bar-chart-alt-2','value' => $trainingCompletionPct . '%',   'sub' => 'Training',    'url' => url('/performance/scorecards'),       'tone' => 'primary'],
+          ['name' => 'Sales',        'icon' => 'bx-doughnut-chart', 'value' => '₹' . $shortL($pipelineValue),  'sub' => 'Pipeline',    'url' => url('/sales-visits/sales-pipeline'),  'tone' => 'info'],
+          ['name' => 'Assets',       'icon' => 'bx-archive',        'value' => (string) $assetTotal,           'sub' => 'Total',       'url' => url('/asset-management'),             'tone' => 'warning'],
+          ['name' => 'Training',     'icon' => 'bx-book',           'value' => (string) $trainingModules,      'sub' => 'Modules',     'url' => url('/training/manage'),              'tone' => 'primary'],
+        ];
+
+        return view('tenant.users.dashboard.admin-index', [
+          'todayVisits'           => $todayVisits,
+          'pageConfigs'           => ['contentLayout' => 'wide'],
+          // headline stats
+          'activeEmployees'       => $active,
+          'totalUser'             => $totalUser,
+          'active'                => $active,
+          'presentUsersCount'     => $presentUsersCount,
+          'attPct'                => $attPct,
+          'todayAbsentUsers'      => $todayAbsentUsers,
+          'absentCount'           => $absentCount,
+          'onLeaveUsersCount'     => $onLeaveUsersCount,
+          'newHiresThisMonth'     => $newHiresThisMonth,
+          'activeJobsCount'       => $activeJobsCount,
+          'trends'                => $trends,
+          // finance / sales KPIs
+          'monthlyPayroll'        => $monthlyPayroll,
+          'monthlyPayrollShort'   => $short($monthlyPayroll),
+          'monthlyPayrollLabel'   => $payrollPeriodLabel,
+          'pipelineValue'         => $pipelineValue,
+          'pipelineValueShort'    => $shortL($pipelineValue),
+          'attritionRate'         => $attritionRate,
+          'relievedThisYear'      => $relievedThisYear,
+          'activeApprovalsTotal'  => $activeApprovalsTotal,
+          'pendingLeaveRequests'  => $pendingLeaveRequests,
+          'pendingExpenseRequests' => $pendingExpenseRequests,
+          'pendingDocumentRequests' => $pendingDocumentRequests,
+          'pendingLoanRequests'   => $pendingLoanRequests,
+          // charts
+          'hiringTrend'           => $hiringTrend,
+          'departmentData'        => $departmentData,
+          'leaveTrend'            => $leaveTrend,
+          'kpiSummary'            => $kpiSummary,
+          'salesFunnel'           => $salesFunnel,
+          'salesTargets'          => $salesTargets,
+          'salesTargetPct'        => $salesTargetPct,
+          'salesAchieved'         => $salesAchieved,
+          'salesAchievedShort'    => $shortL($salesAchieved),
+          'salesAchievementPct'   => $salesAchievementPct,
+          'topPerformers'         => $topPerformers,
+          'att7'                  => $att7,
+          'att7Avg'               => $att7Avg,
+          // assets / training
+          'assetTotal'            => $assetTotal,
+          'assetAssigned'         => $assetAssigned,
+          'assetMaintenance'      => $assetMaintenance,
+          'assetAvailable'        => $assetAvailable,
+          'assetValueShort'       => $short($assetValue),
+          'trainingModules'       => $trainingModules,
+          'trainingEnrollments'   => $trainingEnrollments,
+          'trainingCompleted'     => $trainingCompleted,
+          'trainingInProgress'    => $trainingInProgress,
+          'trainingCompletionPct' => $trainingCompletionPct,
+          // rails
+          'aiInsights'            => $aiInsights,
+          'eventsToday'           => $eventsToday,
+          'upcomingHolidays'      => $upcomingHolidays,
+          'pendingApprovals'      => $pendingApprovals->sortByDesc('raw_date'),
+          'recentFeed'            => $recentFeed,
+          'moduleTiles'           => $moduleTiles,
+          // celebrations
+          'todayBirthdays'        => $todayBirthdays,
+          'todayAnniversaries'    => $todayAnniversaries,
+          'upcomingProbationEnds' => $upcomingProbationEnds,
+        ]);
+      }
+
       // MANAGER SPECIFIC SCOPING FOR REVAMP
       if ($isManager) {
         $teamMemberIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
@@ -387,7 +675,167 @@ class DashboardController extends Controller
             return (object) ['user' => $m, 'deploy_status' => $status];
         });
 
+        // Team attendance over the last 7 days (present % of team per day)
+        $teamAtt7 = [];
+        try {
+            for ($i = 6; $i >= 0; $i--) {
+                $d = now()->subDays($i);
+                $p = Attendance::whereIn('user_id', $teamMemberIds)->whereDate('check_in_time', $d->toDateString())->distinct('user_id')->count('user_id');
+                $teamAtt7[] = ['label' => $d->format('D'), 'pct' => $active > 0 ? (int) round($p / $active * 100) : 0];
+            }
+        } catch (\Throwable $e) {}
+        // Upcoming approved team leaves
+        $teamUpcomingLeaves = LeaveRequest::whereIn('user_id', $teamMemberIds)
+            ->where('status', LeaveRequestStatus::APPROVED)
+            ->whereDate('from_date', '>', now())
+            ->with(['user', 'leaveType'])->orderBy('from_date')->take(8)->get();
+
+        // ==========================================================
+        //  SALES MANAGER intelligence — team-scoped real sales data.
+        //  Everything is keyed on the manager's direct reports.
+        //  Money values in sales_pipelines / _months are in LAKHS.
+        // ==========================================================
+        $sm = [
+            'pipelineValueL' => 0.0, 'dealsInProgress' => 0, 'newLeads' => 0,
+            'expectedClosingL' => 0.0, 'funnel' => [], 'targetL' => 0.0,
+            'achievedL' => 0.0, 'achievePct' => 0, 'onTrack' => 0, 'atRisk' => 0,
+            'offTrack' => 0, 'topPerformers' => [], 'perf' => [], 'snapshot' => [],
+            'activity' => [], 'goals' => [], 'schedule' => [], 'feed' => [], 'alerts' => [],
+        ];
+        try {
+            // Direct reports = the sales team the manager owns.
+            $repIds = $deployMembers->pluck('id')->all();
+            // Current financial year month keys (Apr–Mar), up to this month.
+            $fyStartYear = now()->month >= 4 ? now()->year : now()->year - 1;
+            $fyMonths = [];
+            $cur = \Carbon\Carbon::create($fyStartYear, 4, 1);
+            $end = now()->copy()->endOfMonth();
+            while ($cur <= $end) { $fyMonths[] = $cur->format('Y-m'); $cur->addMonth(); }
+            $thisMonthKey = now()->format('Y-m');
+
+            if (!empty($repIds)) {
+                // ---- Active pipeline (is_locked = 0) owned by the team ----
+                $pipeRows = DB::table('sales_pipelines')
+                    ->whereIn('salesperson_id', $repIds)->where('is_locked', 0)
+                    ->get(['id', 'salesperson_id', 'total_business_potential', 'status_stage']);
+                $sm['dealsInProgress'] = $pipeRows->count();
+                $sm['pipelineValueL'] = (float) $pipeRows->sum('total_business_potential');
+
+                // Bucket free-text stages into the 5 funnel stages.
+                $stageBucket = function ($s) {
+                    $s = strtolower(trim((string) $s));
+                    if ($s === '' || str_contains($s, 'prospect') || str_contains($s, 'introduction') || str_contains($s, 'to visit')) return 'New Leads';
+                    if (str_contains($s, 'quot')) return 'Proposal';
+                    if (str_contains($s, 'negoti') || str_contains($s, 'rate')) return 'Negotiation';
+                    if (str_contains($s, 'clos') || str_contains($s, 'won') || str_contains($s, 'order')) return 'Closing';
+                    return 'Qualified'; // sample, trial, under discussion, etc.
+                };
+                $funnel = ['New Leads' => ['n' => 0, 'v' => 0.0], 'Qualified' => ['n' => 0, 'v' => 0.0],
+                           'Proposal' => ['n' => 0, 'v' => 0.0], 'Negotiation' => ['n' => 0, 'v' => 0.0],
+                           'Closing' => ['n' => 0, 'v' => 0.0]];
+                foreach ($pipeRows as $r) {
+                    $b = $stageBucket($r->status_stage);
+                    $funnel[$b]['n']++; $funnel[$b]['v'] += (float) $r->total_business_potential;
+                }
+                $sm['funnel'] = $funnel;
+                $sm['newLeads'] = $funnel['New Leads']['n'];
+                $sm['expectedClosingL'] = $funnel['Closing']['v'] + $funnel['Negotiation']['v'];
+
+                // ---- Targets vs realized (this FY) per rep ----
+                $pipeIdsByRep = DB::table('sales_pipelines')->whereIn('salesperson_id', $repIds)
+                    ->select('id', 'salesperson_id')->get()->groupBy('salesperson_id');
+                $allPipeIds = DB::table('sales_pipelines')->whereIn('salesperson_id', $repIds)->pluck('id');
+                $salesByRep = [];
+                if ($allPipeIds->isNotEmpty()) {
+                    $salesByRep = DB::table('sales_pipelines as sp')
+                        ->join('sales_pipeline_months as m', 'm.sales_pipeline_id', '=', 'sp.id')
+                        ->whereIn('sp.salesperson_id', $repIds)
+                        ->whereIn('m.month_year', $fyMonths)
+                        ->groupBy('sp.salesperson_id')
+                        ->selectRaw('sp.salesperson_id uid, SUM(m.sale_amount) sold')
+                        ->pluck('sold', 'uid')->toArray();
+                }
+                $targetByRep = DB::table('salesperson_targets')
+                    ->whereIn('salesperson_id', $repIds)->whereIn('month_year', $fyMonths)
+                    ->groupBy('salesperson_id')->selectRaw('salesperson_id uid, SUM(kingo_target) tgt')
+                    ->pluck('tgt', 'uid')->toArray();
+
+                $nameOf = $deployMembers->keyBy('id');
+                $perf = [];
+                foreach ($repIds as $uid) {
+                    $sold = (float) ($salesByRep[$uid] ?? 0);
+                    $tgt  = (float) ($targetByRep[$uid] ?? 0);
+                    $pct  = $tgt > 0 ? (int) round($sold / $tgt * 100) : ($sold > 0 ? 100 : 0);
+                    $u = $nameOf->get($uid);
+                    $perf[] = [
+                        'id' => $uid,
+                        'name' => $u ? (method_exists($u, 'getFullName') ? $u->getFullName() : trim($u->first_name . ' ' . $u->last_name)) : ('#' . $uid),
+                        'desig' => $u ? optional($u->designation)->name : '',
+                        'sold' => $sold, 'target' => $tgt, 'pct' => $pct,
+                    ];
+                }
+                // Sort by amount sold desc for the leaderboard.
+                usort($perf, fn($a, $b) => $b['sold'] <=> $a['sold']);
+                $sm['perf'] = $perf;
+                $sm['topPerformers'] = array_slice($perf, 0, 5);
+                $sm['targetL'] = array_sum($targetByRep);
+                $sm['achievedL'] = array_sum($salesByRep);
+                $sm['achievePct'] = $sm['targetL'] > 0 ? (int) round($sm['achievedL'] / $sm['targetL'] * 100) : 0;
+                foreach ($perf as $p) {
+                    if ($p['pct'] >= 90) $sm['onTrack']++;
+                    elseif ($p['pct'] >= 60) $sm['atRisk']++;
+                    else $sm['offTrack']++;
+                }
+
+                // ---- Team member snapshot (status today + achievement) ----
+                $perfById = collect($perf)->keyBy('id');
+                $sm['snapshot'] = $teamDeployment->map(function ($d) use ($perfById) {
+                    $p = $perfById->get($d->user->id);
+                    return [
+                        'name' => method_exists($d->user, 'getFullName') ? $d->user->getFullName() : trim($d->user->first_name . ' ' . $d->user->last_name),
+                        'desig' => optional($d->user->designation)->name ?? '—',
+                        'status' => $d->deploy_status,
+                        'pct' => $p['pct'] ?? 0,
+                        'pic' => method_exists($d->user, 'getProfilePicture') ? $d->user->getProfilePicture() : null,
+                    ];
+                })->take(6)->values()->all();
+
+                // ---- Activity overview (this month, derived from pipeline) ----
+                $newThisMonth = DB::table('sales_pipelines')->whereIn('salesperson_id', $repIds)
+                    ->where('created_at', '>=', now()->startOfMonth())->count();
+                $wonThisMonth = DB::table('sales_pipelines as sp')
+                    ->join('sales_pipeline_months as m', 'm.sales_pipeline_id', '=', 'sp.id')
+                    ->whereIn('sp.salesperson_id', $repIds)->where('m.month_year', $thisMonthKey)
+                    ->where('m.sale_amount', '>', 0)->distinct()->count('sp.id');
+                $proposals = $funnel['Proposal']['n'];
+                $sm['activity'] = [
+                    ['icon' => 'bx-user-plus', 'label' => 'New Clients', 'value' => $newThisMonth],
+                    ['icon' => 'bx-collection', 'label' => 'Active Deals', 'value' => $sm['dealsInProgress']],
+                    ['icon' => 'bx-file', 'label' => 'Proposals (Quotation)', 'value' => $proposals],
+                    ['icon' => 'bx-handshake', 'label' => 'In Negotiation', 'value' => $funnel['Negotiation']['n']],
+                    ['icon' => 'bx-trophy', 'label' => 'Deals with Sales (MTD)', 'value' => $wonThisMonth],
+                ];
+
+                // ---- Goals vs achievement (this FY, team totals) ----
+                $sm['goals'] = [
+                    ['label' => 'Sales Target', 'target' => round($sm['targetL'], 1), 'achieved' => round($sm['achievedL'], 1)],
+                    ['label' => 'New Clients', 'target' => max(1, $sm['dealsInProgress']), 'achieved' => $newThisMonth],
+                    ['label' => 'Pipeline (L)', 'target' => round($sm['pipelineValueL'], 1), 'achieved' => round($sm['expectedClosingL'], 1)],
+                    ['label' => 'Closures', 'target' => max(1, $funnel['Negotiation']['n'] + $funnel['Closing']['n']), 'achieved' => $funnel['Closing']['n']],
+                ];
+
+                // ---- Team alerts ----
+                if ($sm['offTrack'] > 0) $sm['alerts'][] = ['icon' => 'bx-target-lock', 'tone' => 'danger', 'title' => $sm['offTrack'] . ' rep(s) below 60% of target', 'sub' => 'Coach and review pipeline'];
+                if ($sm['atRisk'] > 0) $sm['alerts'][] = ['icon' => 'bx-error-circle', 'tone' => 'warning', 'title' => $sm['atRisk'] . ' rep(s) at risk (60–90%)', 'sub' => 'Check pipeline progress'];
+                if ($pendingLeaveRequests > 0) $sm['alerts'][] = ['icon' => 'bx-calendar', 'tone' => 'info', 'title' => $pendingLeaveRequests . ' leave request(s) pending', 'sub' => 'Awaiting your approval'];
+                if ($funnel['Negotiation']['n'] > 0) $sm['alerts'][] = ['icon' => 'bx-trending-up', 'tone' => 'success', 'title' => $funnel['Negotiation']['n'] . ' deal(s) in negotiation', 'sub' => number_format($funnel['Negotiation']['v'], 1) . ' L in play'];
+            }
+        } catch (\Throwable $e) { Log::warning('Manager sales widgets: ' . $e->getMessage()); }
+
         return view('tenant.users.dashboard.manager-index', [
+            'sm' => $sm,
+            'teamAtt7' => $teamAtt7,
+            'teamUpcomingLeaves' => $teamUpcomingLeaves,
             'teamDeployment' => $teamDeployment,
             'todayVisits' => $todayVisits,
             'totalUser' => $totalUser,
@@ -499,6 +947,45 @@ class DashboardController extends Controller
     return app(\App\Http\Controllers\tenant\users\UserDashboardController::class)->index();
   }
 
+  /**
+   * Live volatile stats for dashboard auto-refresh (present / leave / absent /
+   * approvals), scoped to the viewer: managers see their team, everyone else
+   * sees the org. Returns formatted strings that drop straight into [data-live].
+   */
+  public function liveStats()
+  {
+    $user = auth()->user();
+    $isManager = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr', 'accounts']);
+
+    if ($isManager) {
+      $ids = User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id)->all();
+      $active   = User::whereIn('id', $ids)->where('status', UserAccountStatus::ACTIVE)->count();
+      $present  = Attendance::whereIn('user_id', $ids)->whereDate('check_in_time', now())->distinct('user_id')->count('user_id');
+      $onLeave  = LeaveRequest::whereIn('user_id', $ids)->whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
+      $approvals = LeaveRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
+        + DocumentRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
+        + LoanRequest::whereIn('user_id', $ids)->where('status', 'pending')->count();
+    } else {
+      $active   = User::where('status', UserAccountStatus::ACTIVE)->count();
+      $present  = Attendance::whereDate('check_in_time', now())->where('status', 'present')->count();
+      $onLeave  = LeaveRequest::whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
+      $approvals = LeaveRequest::where('status', 'pending')->count()
+        + ExpenseRequest::where('status', 'pending')->count()
+        + DocumentRequest::where('status', 'pending')->count()
+        + LoanRequest::where('status', 'pending')->count();
+    }
+
+    $pct = $active > 0 ? round($present / $active * 100, 1) : 0;
+    return response()->json([
+      'active'        => number_format($active),
+      'present_pct'   => $pct . '%',
+      'present_count' => number_format($present),
+      'on_leave'      => number_format($onLeave),
+      'absent'        => number_format(max(0, $active - $present - $onLeave)),
+      'approvals'     => number_format($approvals),
+    ]);
+  }
+
   public function getRecentActivities()
   {
     $activities = collect();
@@ -585,6 +1072,36 @@ class DashboardController extends Controller
     return Success::response($activities);
   }
 
+  /**
+   * User ids whose monitoring data (live location, activity timeline,
+   * device location) the caller may see:
+   *   - admin / hr  → everyone (null, unrestricted)
+   *   - manager     → their tagged team (direct reports via reporting_to_id) + self
+   *   - anyone else → only themselves
+   * Per the owner's instruction: live GPS/timeline of the whole company is
+   * admin/HR only; a manager sees only their own team, never all staff.
+   */
+  private function monitoringAllowedIds($user): ?array
+  {
+    if (!$user) {
+      return [0];
+    }
+    if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+      return null; // unrestricted
+    }
+    if ($user->hasRole(['manager', 'Manager'])) {
+      return User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id)->unique()->values()->all();
+    }
+    return [$user->id];
+  }
+
+  /** True when the caller may see this specific user's monitoring data. */
+  private function canMonitorUser($user, $targetUserId): bool
+  {
+    $allowed = $this->monitoringAllowedIds($user);
+    return $allowed === null || in_array((int) $targetUserId, $allowed, true);
+  }
+
   public function liveLocationView()
   {
     return view('tenant.dashboard.live_location_view', [
@@ -597,8 +1114,10 @@ class DashboardController extends Controller
 
     try {
 
+      $allowedIds = $this->monitoringAllowedIds(auth()->user());
       $todayAttendances = Attendance::with(['user.userDevice', 'user.designation'])
         ->whereDate('created_at', today())
+        ->when($allowedIds !== null, fn($q) => $q->whereIn('user_id', $allowedIds))
         ->get();
 
 
@@ -762,11 +1281,14 @@ class DashboardController extends Controller
 
   public function cardViewAjax()
   {
+    $allowedIds = $this->monitoringAllowedIds(auth()->user());
+
     $teamsList = Team::where('status', '=', 'active')
       ->get();
 
 
     $attendances = Attendance::whereDate('created_at', '=', now())
+      ->when($allowedIds !== null, fn($q) => $q->whereIn('user_id', $allowedIds))
       ->get();
 
     $trackingHelper = new TrackingHelper();
@@ -774,6 +1296,7 @@ class DashboardController extends Controller
     $users = User::where('status', '=', 'active')
       ->where('team_id', '!=', null)
       ->where('shift_id', '!=', null)
+      ->when($allowedIds !== null, fn($q) => $q->whereIn('id', $allowedIds))
       ->get();
 
     $userDevices = UserDevice::whereIn('user_id', $users->pluck('id'))
@@ -845,6 +1368,9 @@ class DashboardController extends Controller
 
   public function getDeviceLocationAjax($userId, $date, $attendanceLogId = null)
   {
+    if (!$this->canMonitorUser(auth()->user(), $userId)) {
+      abort(403);
+    }
     $logs = DeviceStatusLog::query()
       ->where('user_id', $userId)
       ->whereDate('created_at', $date)
@@ -899,6 +1425,9 @@ class DashboardController extends Controller
 
   public function getAttendanceLogAjax($userId, $date)
   {
+    if (!$this->canMonitorUser(auth()->user(), $userId)) {
+      abort(403);
+    }
     $attendance = Attendance::where('user_id', $userId)
       ->whereDate('created_at', $date)
       ->first();
@@ -927,6 +1456,9 @@ class DashboardController extends Controller
 
   public function getActivityAjax($userId, $date, $attendanceLogId = null)
   {
+    if (!$this->canMonitorUser(auth()->user(), $userId)) {
+      abort(403);
+    }
     $employeeId = $userId;
 
     $trackingHelper = new TrackingHelper();
@@ -1126,6 +1658,9 @@ class DashboardController extends Controller
 
   public function getStatsForTimeLineAjax($userId, $date, $attendanceLogId = null)
   {
+    if (!$this->canMonitorUser(auth()->user(), $userId)) {
+      abort(403);
+    }
     $attendance = Attendance::where('user_id', $userId)
       ->whereDate('created_at', $date)
       ->with('attendanceLogs')
