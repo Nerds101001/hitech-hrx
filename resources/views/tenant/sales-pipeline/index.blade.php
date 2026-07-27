@@ -208,6 +208,9 @@
                                     <th class="align-middle block-end" style="min-width:95px;max-width:95px;">Remarks</th>
                                 @endif
                             @endforeach
+                            @if($canDeleteCustomer)
+                                <th class="text-center align-middle" style="min-width:48px;max-width:48px;">Del</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody id="pipelineBody">
@@ -242,6 +245,9 @@
                                     <td class="block-end" style="background:#d1fae5!important;"></td>
                                 @endif
                             @endforeach
+                            @if($canDeleteCustomer)
+                                <td style="background:#d1fae5!important;"></td>
+                            @endif
                         </tr>
 
                         @forelse($pipelines as $index => $row)
@@ -413,6 +419,20 @@
                                         </td>
                                     @endif
                                 @endforeach
+                                @if($canDeleteCustomer)
+                                    <td class="text-center align-middle">
+                                        <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}" method="POST"
+                                              onsubmit="return confirm('Delete customer '{{ addslashes($row->party_name) }}' and all of its monthly figures? This cannot be undone.');"
+                                              style="display:inline-block;">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-icon btn-text-danger"
+                                                    style="padding:0;background:none;border:none;" title="Delete customer">
+                                                <i class="bx bx-trash text-danger" style="font-size:1.05rem;"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr id="emptyRow">

@@ -129,19 +129,29 @@ class Attendance extends Model
           if (!$checkIn) {
               return;
           }
-          $isSunday = $checkIn->isSunday();
-          $isHoliday = \App\Models\Holiday::whereDate('date', $checkIn)->exists();
-          if (!$isSunday && !$isHoliday) {
-              return;
-          }
-
           $user = $attendance->user;
           if (!$user) return;
 
-          $compOffType = \App\Models\LeaveType::where('code', 'ALP')
-              ->orWhere('name', 'like', '%All Purpose%')
-              ->orWhere('code', 'PL')
-              ->first();
+          $isSunday = $checkIn->isSunday();
+          // Site-aware: a holiday tagged to another location is a normal
+          // working day for this employee, so it must not earn a comp-off.
+          $isHoliday = \App\Models\Holiday::appliesTo($user, $checkIn);
+          // An OFF Saturday (per the employee's leave policy profile, or their
+          // site as fallback) earns a comp-off exactly like a Sunday. Working
+          // Saturdays are normal days and earn nothing.
+          $isOffSaturday = $checkIn->isSaturday()
+              && \App\Services\LeavePolicyService::saturdayOffState($user, $checkIn) === true;
+          if (!$isSunday && !$isHoliday && !$isOffSaturday) {
+              return;
+          }
+
+          // Prefer the ACTIVE canonical ALP pool. The old orWhere chain had no
+          // ordering, so first() returned the lowest id — the *inactive* legacy
+          // 'PL' type — and every Sunday/holiday credit was banked into a pool
+          // employees cannot spend.
+          $compOffType = \App\Models\LeaveType::where('code', 'ALP')->first()
+              ?: \App\Models\LeaveType::where('name', 'like', '%All Purpose%')->first()
+              ?: \App\Models\LeaveType::where('code', 'PL')->first();
 
           if (!$compOffType) return;
 
@@ -155,13 +165,14 @@ class Attendance extends Model
               }
           }
 
-          $dayName = $isSunday ? "Sunday" : "Holiday";
+          $dayName = $isSunday ? "Sunday" : ($isHoliday ? "Holiday" : "Saturday");
           $reasonStr = $dayName . " Working Credit (Auto-credited)";
           
           // Check if either Sunday or Holiday credit has already been applied
           $hasAlreadyCredited = $attendance->admin_reason && (
-              str_contains($attendance->admin_reason, "Sunday Working Credit") || 
-              str_contains($attendance->admin_reason, "Holiday Working Credit")
+              str_contains($attendance->admin_reason, "Sunday Working Credit") ||
+              str_contains($attendance->admin_reason, "Holiday Working Credit") ||
+              str_contains($attendance->admin_reason, "Saturday Working Credit")
           );
 
           if ($hasFourHours) {
@@ -200,8 +211,8 @@ class Attendance extends Model
                       $currentReason = $attendance->admin_reason;
                       // Remove both possible credit strings
                       $cleanReason = str_replace(
-                          ["Sunday Working Credit (Auto-credited)", "Holiday Working Credit (Auto-credited)", " | "],
-                          ["", "", " "],
+                          ["Sunday Working Credit (Auto-credited)", "Holiday Working Credit (Auto-credited)", "Saturday Working Credit (Auto-credited)", " | "],
+                          ["", "", "", " "],
                           $currentReason
                       );
                       $cleanReason = trim(preg_replace('/\s+/', ' ', $cleanReason));
@@ -216,26 +227,37 @@ class Attendance extends Model
           if (!$checkIn) {
               return;
           }
-          $isSunday = $checkIn->isSunday();
-          $isHoliday = \App\Models\Holiday::whereDate('date', $checkIn)->exists();
-          if (!$isSunday && !$isHoliday) {
-              return;
-          }
-
           $user = $attendance->user;
           if (!$user) return;
 
-          $compOffType = \App\Models\LeaveType::where('code', 'ALP')
-              ->orWhere('name', 'like', '%All Purpose%')
-              ->orWhere('code', 'PL')
-              ->first();
+          $isSunday = $checkIn->isSunday();
+          // Site-aware: a holiday tagged to another location is a normal
+          // working day for this employee, so it must not earn a comp-off.
+          $isHoliday = \App\Models\Holiday::appliesTo($user, $checkIn);
+          // An OFF Saturday (per the employee's leave policy profile, or their
+          // site as fallback) earns a comp-off exactly like a Sunday. Working
+          // Saturdays are normal days and earn nothing.
+          $isOffSaturday = $checkIn->isSaturday()
+              && \App\Services\LeavePolicyService::saturdayOffState($user, $checkIn) === true;
+          if (!$isSunday && !$isHoliday && !$isOffSaturday) {
+              return;
+          }
+
+          // Prefer the ACTIVE canonical ALP pool. The old orWhere chain had no
+          // ordering, so first() returned the lowest id — the *inactive* legacy
+          // 'PL' type — and every Sunday/holiday credit was banked into a pool
+          // employees cannot spend.
+          $compOffType = \App\Models\LeaveType::where('code', 'ALP')->first()
+              ?: \App\Models\LeaveType::where('name', 'like', '%All Purpose%')->first()
+              ?: \App\Models\LeaveType::where('code', 'PL')->first();
 
           if (!$compOffType) return;
 
-          $dayName = $isSunday ? "Sunday" : "Holiday";
+          $dayName = $isSunday ? "Sunday" : ($isHoliday ? "Holiday" : "Saturday");
           $hasAlreadyCredited = $attendance->admin_reason && (
-              str_contains($attendance->admin_reason, "Sunday Working Credit") || 
-              str_contains($attendance->admin_reason, "Holiday Working Credit")
+              str_contains($attendance->admin_reason, "Sunday Working Credit") ||
+              str_contains($attendance->admin_reason, "Holiday Working Credit") ||
+              str_contains($attendance->admin_reason, "Saturday Working Credit")
           );
 
           if ($hasAlreadyCredited) {

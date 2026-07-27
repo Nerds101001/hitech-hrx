@@ -275,6 +275,48 @@ class LeavePolicyService
     protected static $holidayCache = [];
 
     /**
+     * Is this Saturday an OFF day for the user, per their leave policy profile
+     * (or their site as fallback)?
+     *
+     *   true  => off Saturday (working it earns a comp-off)
+     *   false => a normal working Saturday
+     *   null  => no profile/site rule exists, caller decides
+     */
+    public static function saturdayOffState(User $user, $date): ?bool
+    {
+        $date = $date instanceof Carbon ? $date : Carbon::parse($date);
+        if (!$date->isSaturday()) {
+            return false;
+        }
+
+        $profile = $user->leavePolicyProfile;
+        $site    = $user->site;
+        if (!$profile && !$site) {
+            return null; // nothing configured
+        }
+
+        $satConfig = (array) ($profile
+            ? ($profile->saturday_off_config ?? [])
+            : ($site->saturday_off_config ?? []));
+
+        if (in_array('all', $satConfig)) {
+            return true;
+        }
+
+        if (!empty($satConfig)) {
+            $occurrence = ceil($date->day / 7);
+            $isLast = ($date->copy()->addWeek()->month != $date->month);
+            if (in_array((string) $occurrence, $satConfig) || ($isLast && in_array('last', $satConfig))) {
+                return true;
+            }
+        }
+
+        // A profile/site dictates the rules and this Saturday is not among the
+        // off ones, so it is a working Saturday.
+        return false;
+    }
+
+    /**
      * Check if a specific date is a working day for a user.
      */
     public static function isWorkingDay(User $user, $date): bool
@@ -284,13 +326,18 @@ class LeavePolicyService
         
         $siteKey = $user->site_id ?? 'global';
         if (!isset(self::$holidayCache[$siteKey])) {
-            self::$holidayCache[$siteKey] = \App\Models\Holiday::where(function($q) use ($user) {
-                $q->whereNull('site_id')
-                  ->orWhere('site_id', $user->site_id);
-            })->pluck('date')->toArray();
+            // pluck('date') yields Carbon objects (the model casts `date`), and
+            // in_array() compared those against a 'Y-m-d' string — Carbon
+            // stringifies to 'Y-m-d H:i:s', so the check NEVER matched and every
+            // holiday was treated as a working day. Normalise to date strings.
+            self::$holidayCache[$siteKey] = \App\Models\Holiday::query()
+                ->forSite($user->site_id)
+                ->pluck('date')
+                ->map(fn ($d) => Carbon::parse($d)->toDateString())
+                ->all();
         }
-        
-        if (in_array($currentDateStr, self::$holidayCache[$siteKey])) return false;
+
+        if (in_array($currentDateStr, self::$holidayCache[$siteKey], true)) return false;
 
         // 2. Check Sundays
         if ($date->isSunday()) {
@@ -301,25 +348,9 @@ class LeavePolicyService
 
         // 3. Check Saturdays (Rules from Profile or Site)
         if ($date->isSaturday()) {
-            $profile = $user->leavePolicyProfile;
-            $site    = $user->site;
-            
-            if ($profile || $site) {
-                $satConfig = $profile ? ($profile->saturday_off_config ?? []) : ($site->saturday_off_config ?? []);
-
-                if (in_array('all', (array)$satConfig)) {
-                    return false;
-                } elseif (!empty($satConfig)) {
-                    $occurrence = ceil($date->day / 7);
-                    $isLast = ($date->copy()->addWeek()->month != $date->month);
-                    
-                    if (in_array((string)$occurrence, (array)$satConfig) || ($isLast && in_array('last', (array)$satConfig))) {
-                        return false;
-                    }
-                }
-                
-                // If a profile or site dictates the rules, and this Saturday is not off, it must be a working day.
-                return true;
+            $satResult = self::saturdayOffState($user, $date);
+            if ($satResult !== null) {
+                return !$satResult; // true = it's an off Saturday => not a working day
             }
         }
 

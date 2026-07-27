@@ -16,6 +16,9 @@ Route::middleware([
   Route::post('/delegation/switch/{id}', [UserDashboardController::class, 'switchToDelegate'])->name('delegation.switch');
   Route::post('/delegation/exit', [UserDashboardController::class, 'exitDelegate'])->name('delegation.exit');
 
+  // Announcements targeted at this employee (department / location / role / team)
+  Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
+
   // Leaves
     Route::prefix('leaves')->name('leaves.')->group(function () {
      Route::get('/', [UserDashboardController::class, 'leaveIndex'])->name('index');

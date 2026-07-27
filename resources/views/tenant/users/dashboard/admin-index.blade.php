@@ -302,7 +302,10 @@
 
       {{-- Probation Ending --}}
       <div class="adc-card mb-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Probation Ending</h6><span class="adc-card-sub">Next 30 days</span></div><a href="{{ url('/probation/evaluations') }}" class="adc-link">All</a></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Probation Review</h6><span class="adc-card-sub">
+          @if(($probationOverdueCount ?? 0) > 0){{ $probationOverdueCount }} overdue@if(($probationDueSoonCount ?? 0) > 0) · {{ $probationDueSoonCount }} due in 30d@endif
+          @else Next 30 days @endif
+        </span></div><a href="{{ url('/probation/dashboard') }}" class="adc-link">All</a></div>
         @if($upcomingProbationEnds->isEmpty())
           <div class="adc-empty adc-empty-sm"><i class="bx bx-check-circle text-success"></i><span>None upcoming.</span></div>
         @else

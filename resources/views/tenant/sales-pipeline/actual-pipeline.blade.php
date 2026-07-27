@@ -293,15 +293,19 @@
                                     </span>
                                 </td>
                                 <td class="text-center align-middle">
-                                    <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}" method="POST"
-                                          onsubmit="return confirm('Are you sure you want to delete this pipeline entry?');"
-                                          style="display:inline-block;">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-sm btn-icon btn-text-danger" style="padding:0;background:none;border:none;" title="Delete Entry">
-                                            <i class="bx bx-trash text-danger" style="font-size:1.1rem;"></i>
-                                        </button>
-                                    </form>
+                                    @if($canDeleteCustomer)
+                                        <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}" method="POST"
+                                              onsubmit="return confirm('Delete customer '{{ addslashes($row->party_name) }}' and all of its monthly figures? This cannot be undone.');"
+                                              style="display:inline-block;">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-icon btn-text-danger" style="padding:0;background:none;border:none;" title="Delete customer">
+                                                <i class="bx bx-trash text-danger" style="font-size:1.1rem;"></i>
+                                            </button>
+                                        </form>
+                                    @else
+                                        <span class="text-muted" title="Only an administrator can delete a customer">&mdash;</span>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

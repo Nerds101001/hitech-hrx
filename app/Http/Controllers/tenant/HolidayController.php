@@ -5,14 +5,11 @@ namespace App\Http\Controllers\tenant;
 use Exception;
 use App\Enums\Status;
 use App\Models\Holiday;
-use App\Models\Location;
 use App\ApiClasses\Error;
 use App\ApiClasses\Success;
 use Illuminate\Http\Request;
-use App\Imports\HolidaysImport;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
-use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 use Constants;
 
@@ -34,6 +31,99 @@ class HolidayController extends Controller
       'sites' => $sites,
       'pageConfigs' => ['contentLayout' => 'wide']
     ]);
+  }
+
+  /**
+   * Holiday Dashboard — HR/admin calendar management, laid out like the
+   * Employee Directory: clickable stat cards, search, filters, sortable
+   * server-side table, and add/edit with a location (site) selector.
+   */
+  public function dashboard(Request $request)
+  {
+    $year = (int) ($request->input('year') ?: now()->year);
+
+    $base = fn () => Holiday::query()->whereYear('date', $year);
+
+    $statCounts = [
+      'total'      => $base()->count(),
+      'upcoming'   => $base()->whereDate('date', '>=', now()->toDateString())->count(),
+      'this_month' => $base()->whereMonth('date', now()->month)->count(),
+      'global'     => $base()->whereNull('site_id')->count(),
+      'location'   => $base()->whereNotNull('site_id')->count(),
+    ];
+
+    // Years that actually have holidays, so the year picker never offers empties
+    $years = Holiday::selectRaw('DISTINCT YEAR(date) as y')
+      ->orderByDesc('y')->pluck('y')->all();
+    if (!in_array($year, $years, true)) {
+      $years[] = $year;
+      rsort($years);
+    }
+
+    return view('tenant.holidays.dashboard', [
+      'pageConfigs' => ['contentLayout' => 'wide'],
+      'statCounts'  => $statCounts,
+      'sites'       => \App\Models\Site::orderBy('name')->get(['id', 'name']),
+      'year'        => $year,
+      'years'       => $years,
+    ]);
+  }
+
+  /** Server-side data for the Holiday Dashboard table. */
+  public function dashboardAjax(Request $request)
+  {
+    try {
+      $query = Holiday::with('site')->select('holidays.*');
+
+      if ($request->filled('yearFilter')) {
+        $query->whereYear('date', $request->yearFilter);
+      }
+      if ($request->filled('siteFilter')) {
+        // 'global' = company-wide rows only
+        $request->siteFilter === 'global'
+          ? $query->whereNull('site_id')
+          : $query->where('site_id', $request->siteFilter);
+      }
+      if ($request->filled('monthFilter')) {
+        $query->whereMonth('date', $request->monthFilter);
+      }
+      if ($request->filled('statusFilter')) {
+        $query->where('status', $request->statusFilter);
+      }
+      if ($request->filled('scopeFilter')) {
+        match ($request->scopeFilter) {
+          'upcoming' => $query->whereDate('date', '>=', now()->toDateString()),
+          'past'     => $query->whereDate('date', '<', now()->toDateString()),
+          'global'   => $query->whereNull('site_id'),
+          'location' => $query->whereNotNull('site_id'),
+          default    => null,
+        };
+      }
+      if ($request->filled('searchTerm')) {
+        $term = $request->searchTerm;
+        $query->where(function ($q) use ($term) {
+          $q->where('name', 'like', "%{$term}%")
+            ->orWhere('code', 'like', "%{$term}%")
+            ->orWhere('notes', 'like', "%{$term}%");
+        });
+      }
+
+      return DataTables::of($query)
+        ->addColumn('date_formatted', fn ($h) => $h->date->format('d M Y'))
+        ->addColumn('day_name', fn ($h) => $h->date->format('l'))
+        ->addColumn('site_name', fn ($h) => $h->site->name ?? 'All Locations')
+        ->addColumn('is_global', fn ($h) => is_null($h->site_id))
+        ->addColumn('status_value', fn ($h) => $h->status instanceof Status ? $h->status->value : $h->status)
+        ->addColumn('is_past', fn ($h) => $h->date->lt(now()->startOfDay()))
+        ->addColumn('notes_text', fn ($h) => $h->notes ?: '')
+        ->orderColumn('date_formatted', 'date $1')
+        ->orderColumn('site_name', 'site_id $1')
+        ->rawColumns([])
+        ->make(true);
+    } catch (\Exception $e) {
+      Log::error('Holiday dashboardAjax: ' . $e->getMessage());
+      return Error::response($e->getMessage());
+    }
   }
 
   public function indexAjax(Request $request)
@@ -111,18 +201,19 @@ class HolidayController extends Controller
   {
     $holidayId = $request->id;
     $request->validate([
-      'name' => 'required',
-      'code' => ['required', 'unique:holidays,code,' . $holidayId],
-      'date' => 'required',
+      'name' => 'required|string|max:191',
+      'code' => ['nullable', 'unique:holidays,code,' . $holidayId],
+      'date' => 'required|date',
       'site_id' => 'nullable|exists:sites,id',
-      'notes' => 'nullable',
+      'notes' => 'nullable|string|max:500',
     ]);
 
     $data = [
       'name' => $request->name,
-      'code' => $request->code,
+      // Auto-generated when left blank so HR never has to invent a code
+      'code' => $request->code ?: $this->generateHolidayCode(),
       'date' => $request->date,
-      'site_id' => $request->site_id,
+      'site_id' => $request->site_id ?: null,
       'notes' => $request->notes,
     ];
 
@@ -134,6 +225,18 @@ class HolidayController extends Controller
       Holiday::create($data);
       return Success::response('Added');
     }
+  }
+
+  /** Next free HOL#### code (the prefix in Settings when one is configured). */
+  private function generateHolidayCode(): string
+  {
+    $prefix = optional(\App\Models\Settings::first())->holiday_code_prefix ?: 'HOL';
+    do {
+      $code = $prefix . str_pad((string) (Holiday::withTrashed()->max('id') + 1 + ($i ?? 0)), 4, '0', STR_PAD_LEFT);
+      $i = ($i ?? 0) + 1;
+    } while (Holiday::withTrashed()->where('code', $code)->exists());
+
+    return $code;
   }
 
   public function getByIdAjax($id)

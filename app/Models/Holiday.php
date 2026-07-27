@@ -38,5 +38,45 @@ class Holiday extends Model implements AuditableContract
     'status' => Status::class,
   ];
 
+  /**
+   * Holidays that apply to one site: the site's own plus every company-wide
+   * one (site_id NULL). A holiday tagged to another location must never leak
+   * — Punjab's Lohri is not a holiday for Chennai staff.
+   *
+   * Every consumer (attendance grid, payroll, comp-off, dashboards) must
+   * scope through this or Holiday::appliesTo(); a bare Holiday::whereDate()
+   * silently treats a location holiday as company-wide.
+   */
+  public function scopeForSite($query, $siteId)
+  {
+    return $query->where(function ($q) use ($siteId) {
+      $q->whereNull('site_id');
+      if ($siteId) {
+        $q->orWhere('site_id', $siteId);
+      }
+    });
+  }
 
+  /** True when $date is a holiday for the given user (site-aware). */
+  public static function appliesTo(?User $user, $date): bool
+  {
+    return static::query()
+      ->forSite($user?->site_id)
+      ->whereDate('date', $date)
+      ->exists();
+  }
+
+  /**
+   * ['Y-m-d' => name] of holidays applying to $user within a date range.
+   * Keyed by date string so callers can do direct lookups.
+   */
+  public static function mapForUser(?User $user, $from, $to): array
+  {
+    return static::query()
+      ->forSite($user?->site_id)
+      ->whereBetween('date', [$from, $to])
+      ->get(['date', 'name'])
+      ->mapWithKeys(fn ($h) => [\Carbon\Carbon::parse($h->date)->toDateString() => $h->name])
+      ->all();
+  }
 }

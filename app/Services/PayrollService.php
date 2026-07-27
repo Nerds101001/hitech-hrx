@@ -411,10 +411,10 @@ class PayrollService
         $holidays = 0;
         $tempDate = clone $startDate;
         
-        // Fetch holidays from DB (assuming App\Models\Holiday exists)
-        $holidayDates = \App\Models\Holiday::whereBetween('date', [$startDate, $endDate])->pluck('date')->map(function($date) {
-            return \Carbon\Carbon::parse($date)->toDateString();
-        })->toArray();
+        // Holidays that apply to THIS employee's location (plus company-wide
+        // ones). Unscoped, a Punjab-only holiday was counted as a paid holiday
+        // for every employee in the company, inflating their paid days.
+        $holidayDates = array_keys(\App\Models\Holiday::mapForUser($user, $startDate, $endDate));
 
         while ($tempDate->lte($endDate)) {
             $dateString = $tempDate->toDateString();

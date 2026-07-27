@@ -18,6 +18,28 @@
             ]
         },
         {
+            "url": "/announcements",
+            "name": "Announcements",
+            "icon": "menu-icon bx bx-broadcast",
+            "slug": ["announcements.dashboard", "announcements.feed"],
+            "roles": [
+                "admin",
+                "hr",
+                "manager"
+            ]
+        },
+        {
+            "url": "/announcements/feed",
+            "name": "Announcements",
+            "icon": "menu-icon bx bx-broadcast",
+            "slug": "user.announcements.feed",
+            "roles": [
+                "employee",
+                "office_employee",
+                "accounts"
+            ]
+        },
+        {
             "url": "/work-control",
             "name": "DWM",
             "icon": "menu-icon bx bx-task",
@@ -1023,9 +1045,9 @@
                     ]
                 },
                 {
-                    "url": "/holidays",
+                    "url": "/holidays/dashboard",
                     "name": "Holidays",
-                    "slug": "holidays.index",
+                    "slug": ["holidays.dashboard", "holidays.index"],
                     "roles": [
                         "admin",
                         "hr"

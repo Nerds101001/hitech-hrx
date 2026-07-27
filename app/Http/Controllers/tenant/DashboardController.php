@@ -204,16 +204,27 @@ class DashboardController extends Controller
         $todayAnniversaries = $upcomingAnniversaries->filter(fn($u) => $u->is_today);
         $upcomingAnniversariesFiltered = $upcomingAnniversaries->filter(fn($u) => !$u->is_today)->take(2);
 
-      // 8. Upcoming Probation Ends — cached 30 min
-      $upcomingProbationEnds = Cache::remember("dashboard.probation.{$tenantId}", 1800, function () {
+      // 8. Probation: overdue confirmations + genuinely upcoming ends.
+      // This query used to have NO lower bound, so every employee whose
+      // probation lapsed years ago and was never confirmed was reported as
+      // "ending within 30 days" — in practice all 30 entries were overdue,
+      // the oldest from 2013. Overdue cases are real work, so they are still
+      // surfaced, but ordered first and counted separately so the widget can
+      // label them honestly instead of calling a 2013 date "upcoming".
+      $probationCutoff = now()->addDays(30)->toDateString();
+      $upcomingProbationEnds = Cache::remember("dashboard.probation.{$tenantId}", 1800, function () use ($probationCutoff) {
           return User::where('status', UserAccountStatus::ACTIVE)
               ->whereNotNull('probation_end_date')
               ->whereNull('probation_confirmed_at')
-              ->where('probation_end_date', '<=', now()->addDays(30)->toDateString())
+              ->where('probation_end_date', '<=', $probationCutoff)
               ->with('reportingTo:id,first_name,last_name')
-              ->orderBy('probation_end_date')
+              ->orderByDesc('probation_end_date')
+              ->limit(25)
               ->get();
       });
+      $probationOverdueCount = $upcomingProbationEnds
+          ->filter(fn($u) => \Carbon\Carbon::parse($u->probation_end_date)->isPast())->count();
+      $probationDueSoonCount = $upcomingProbationEnds->count() - $probationOverdueCount;
 
       // Extra Stats for Suggestions
       $absentCount = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
@@ -518,7 +529,8 @@ class DashboardController extends Controller
         // --- AI Insights: real signals derived from the numbers above ---
         $aiInsights = [];
         $aiInsights[] = ['icon' => 'bx-user-check', 'tone' => $attPct >= 90 ? 'success' : ($attPct >= 75 ? 'warning' : 'danger'), 'title' => $attPct . '% present today', 'sub' => $presentUsersCount . ' of ' . $active . ' active staff checked in'];
-        if ($upcomingProbationEnds->count() > 0) $aiInsights[] = ['icon' => 'bx-time-five', 'tone' => 'warning', 'title' => $upcomingProbationEnds->count() . ' probations ending', 'sub' => 'Within 30 days — review confirmations'];
+        if ($probationOverdueCount > 0)          $aiInsights[] = ['icon' => 'bx-error-circle', 'tone' => 'danger', 'title' => $probationOverdueCount . ' probations overdue', 'sub' => 'End date passed, still unconfirmed'];
+        if ($probationDueSoonCount > 0)          $aiInsights[] = ['icon' => 'bx-time-five', 'tone' => 'warning', 'title' => $probationDueSoonCount . ' probations ending', 'sub' => 'Within 30 days — review confirmations'];
         if ($activeApprovalsTotal > 0)           $aiInsights[] = ['icon' => 'bx-check-shield', 'tone' => 'info', 'title' => $activeApprovalsTotal . ' approvals pending', 'sub' => 'Leave, expense, document & loan requests'];
         if (($salesTargets['Bingo'] ?? 0) > 0)   $aiInsights[] = ['icon' => 'bx-trending-up', 'tone' => $salesAchievementPct >= 80 ? 'success' : 'warning', 'title' => 'Sales at ' . $salesAchievementPct . '% of target', 'sub' => 'Bingo target for ' . now()->format('F')];
         if ($relievedThisYear > 0)               $aiInsights[] = ['icon' => 'bx-user-x', 'tone' => 'danger', 'title' => $attritionRate . '% attrition YTD', 'sub' => $relievedThisYear . ' employees relieved this year'];
@@ -862,7 +874,7 @@ class DashboardController extends Controller
             'myLeavesCount' => 0,
             'myExpensesCount' => 0,
             'mySOSCount' => 0,
-            'nextHoliday' => Holiday::where('date', '>=', now())->orderBy('date')->first(),
+            'nextHoliday' => Holiday::forSite($user->site_id ?? null)->where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
             'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
@@ -935,7 +947,7 @@ class DashboardController extends Controller
         'myLeavesCount' => 0,
         'myExpensesCount' => 0,
         'mySOSCount' => 0,
-        'nextHoliday' => Holiday::where('date', '>=', now())->orderBy('date')->first(),
+        'nextHoliday' => Holiday::forSite($user->site_id ?? null)->where('date', '>=', now())->orderBy('date')->first(),
         'recentNotices' => collect(),
         'payrollTrend' => 0,
         'latestNetSalary' => 0

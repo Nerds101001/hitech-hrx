@@ -25,6 +25,7 @@ use App\Http\Controllers\tenant\EmployeeLifecycleController;
 use App\Http\Controllers\tenant\ExpenseController;
 use App\Http\Controllers\tenant\ExpenseTypeController;
 use App\Http\Controllers\tenant\GeofenceGroupController;
+use App\Http\Controllers\tenant\AnnouncementController;
 use App\Http\Controllers\tenant\HolidayController;
 use App\Http\Controllers\tenant\IpGroupController;
 use App\Http\Controllers\tenant\LeaveController;
@@ -130,6 +131,23 @@ Route::middleware([
     // --- DASHBOARD & GENERAL ---
     Route::get('/', [DashboardController::class, 'index'])->name('tenant.dashboard');
     Route::get('/dashboard/live-stats', [DashboardController::class, 'liveStats'])->name('dashboard.live-stats');
+
+    // --- ANNOUNCEMENTS ---
+    // Publishing is open to admin/HR (any audience) and managers (their own
+    // team only — enforced inside the controller). The feed is readable by
+    // everyone; the employee-facing route lives in routes/user.php.
+    Route::prefix('announcements')->name('announcements.')->group(function () {
+      Route::get('feed', [AnnouncementController::class, 'myFeed'])->name('feed');
+
+      Route::middleware(['role_or_permission:admin|hr|manager|announcements.manage'])->group(function () {
+        Route::get('', [AnnouncementController::class, 'dashboard'])->name('dashboard');
+        Route::get('dashboardAjax', [AnnouncementController::class, 'dashboardAjax'])->name('dashboardAjax');
+        Route::post('store', [AnnouncementController::class, 'store'])->name('store');
+        Route::get('getByIdAjax/{id}', [AnnouncementController::class, 'getByIdAjax'])->name('getByIdAjax');
+        Route::delete('deleteAjax/{id}', [AnnouncementController::class, 'deleteAjax'])->name('deleteAjax');
+        Route::post('toggleStatusAjax/{id}', [AnnouncementController::class, 'toggleStatusAjax'])->name('toggleStatusAjax');
+      });
+    });
 
 
 
@@ -240,6 +258,8 @@ Route::middleware([
     // Holidays
     Route::prefix('holidays')->name('holidays.')->group(function () {
       Route::get('', [HolidayController::class, 'index'])->name('index');
+      Route::get('dashboard', [HolidayController::class, 'dashboard'])->name('dashboard');
+      Route::get('dashboardAjax', [HolidayController::class, 'dashboardAjax'])->name('dashboardAjax');
       Route::get('indexAjax', [HolidayController::class, 'indexAjax'])->name('indexAjax');
       Route::post('addOrUpdateHolidayAjax', [HolidayController::class, 'addOrUpdateHolidayAjax'])->name('addOrUpdateHolidayAjax');
       Route::get('getByIdAjax/{id}', [HolidayController::class, 'getByIdAjax'])->name('getByIdAjax');

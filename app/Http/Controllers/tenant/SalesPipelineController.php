@@ -421,7 +421,12 @@ class SalesPipelineController extends Controller
             usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
         }
 
-        return view('tenant.sales-pipeline.index', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        // Deleting a customer wipes its whole sales history, so it is
+        // admin-only (plus an explicit sales_report.manage grant).
+        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
+            || auth()->user()->can('sales_report.manage');
+
+        return view('tenant.sales-pipeline.index', compact('canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -680,7 +685,12 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        // Deleting a customer wipes its whole sales history, so it is
+        // admin-only (plus an explicit sales_report.manage grant).
+        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
+            || auth()->user()->can('sales_report.manage');
+
+        return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function store(Request $request)
@@ -991,13 +1001,21 @@ class SalesPipelineController extends Controller
     {
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
-        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare  = $user->isCcareAgent();
-        $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
-            return redirect()->back()->with('error', 'Unauthorized.');
+
+        // Removing a customer destroys every monthly figure attached to it and
+        // changes reported totals, so it is restricted to admin (or an explicit
+        // sales_report.manage grant) — previously any CCare/New Biz rep or the
+        // owning salesperson could delete a customer outright.
+        if (!$user->hasRole(['admin', 'Admin', 'super_admin']) && !$user->can('sales_report.manage')) {
+            return redirect()->back()->with('error', 'Only an administrator can delete a customer.');
         }
+
+        $name = $pipeline->party_name;
+        \Illuminate\Support\Facades\Log::warning(
+            "Sales customer deleted: id={$pipeline->id} party='{$name}' by user {$user->id} ({$user->email})"
+        );
         $pipeline->delete();
-        return redirect()->back()->with('success', 'Deleted successfully.');
+
+        return redirect()->back()->with('success', "Customer '{$name}' deleted.");
     }
 }
