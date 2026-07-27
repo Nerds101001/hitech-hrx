@@ -635,6 +635,8 @@ class DashboardController extends Controller
           'todayBirthdays'        => $todayBirthdays,
           'todayAnniversaries'    => $todayAnniversaries,
           'upcomingProbationEnds' => $upcomingProbationEnds,
+          'probationOverdueCount' => $probationOverdueCount,
+          'probationDueSoonCount' => $probationDueSoonCount,
         ]);
       }
 
@@ -936,6 +938,8 @@ class DashboardController extends Controller
         'pendingApprovals' => $pendingApprovals->sortByDesc('raw_date'),
         'trends' => $trends,
         'upcomingProbationEnds' => $upcomingProbationEnds,
+        'probationOverdueCount' => $probationOverdueCount,
+        'probationDueSoonCount' => $probationDueSoonCount,
         'upcomingHolidays' => Holiday::where('date', '>=', now()->toDateString())->orderBy('date', 'asc')->take(5)->get(),
         'absentCount' => $absentCount,
         'newHiresThisMonth' => $newHiresThisMonth,

@@ -249,10 +249,14 @@
 
       {{-- Probation Ending --}}
       <div class="adc-card mb-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Probation Review</h6><span class="adc-card-sub">
-          @if(($probationOverdueCount ?? 0) > 0){{ $probationOverdueCount }} overdue@if(($probationDueSoonCount ?? 0) > 0) · {{ $probationDueSoonCount }} due in 30d@endif
-          @else Next 30 days @endif
-        </span></div><a href="{{ url('/probation/dashboard') }}" class="adc-link">All</a></div>
+        @php
+          $probOver = (int) ($probationOverdueCount ?? 0);
+          $probSoon = (int) ($probationDueSoonCount ?? 0);
+          $probSubtitle = $probOver > 0
+            ? $probOver . ' overdue' . ($probSoon > 0 ? ' · ' . $probSoon . ' due in 30d' : '')
+            : ($probSoon > 0 ? $probSoon . ' due in next 30 days' : 'Next 30 days');
+        @endphp
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Probation Review</h6><span class="adc-card-sub">{{ $probSubtitle }}</span></div><a href="{{ url('/probation/dashboard') }}" class="adc-link">All</a></div>
         @if(collect($upcomingProbationEnds ?? [])->isEmpty())
           <div class="adc-empty adc-empty-sm"><i class="bx bx-check-circle text-success"></i><span>None upcoming.</span></div>
         @else
