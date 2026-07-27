@@ -233,7 +233,14 @@ class UserDashboardController extends Controller
             $todayAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') === $todayMd);
             $upcomingAnniversaries = $allAnniversaries->filter(fn($u) => Carbon::parse($u->date_of_joining)->format('md') !== $todayMd)->take(3);
 
-            return view('tenant.users.dashboard.employee-index', compact(
+            // Everything the employee-index blade renders: department, manager,
+            // shift, today's hours, leave balance, expenses, KRA, timeline,
+            // upcoming leaves, documents and contacts. Previously none of these
+            // were passed, so every widget on the page rendered its empty state
+            // for every employee, permanently.
+            $personal = $this->buildEmployeeDashboardData($user);
+
+            return view('tenant.users.dashboard.employee-index', array_merge(compact(
                 'myLeavesCount',
                 'myExpensesCount',
                 'myAttendanceCount',
@@ -247,9 +254,8 @@ class UserDashboardController extends Controller
                 'upcomingBirthdays',
                 'todayAnniversaries',
                 'upcomingAnniversaries'
-            ));
+            ), $personal));
         }
-
 
         // Global Stats (Needed for Manager and HR)
         $totalUser = User::count();
@@ -1393,5 +1399,288 @@ class UserDashboardController extends Controller
             'year' => $year,
             'month' => $month
         ]);
+    }
+
+    /**
+     * Assemble every personal widget on the employee dashboard.
+     *
+     * The blade has always rendered these; the controller never supplied them,
+     * so all of them silently fell back to their "—" / 0 / empty state. Each
+     * block is individually try/catch-free but null-safe, and any genuinely
+     * absent module (e.g. no KPI assignments) simply yields an empty value the
+     * blade already knows how to render.
+     */
+    private function buildEmployeeDashboardData(User $user): array
+    {
+        $today = Carbon::today();
+
+        // --- Identity: department, reporting manager, shift window ---------
+        $deptName = optional($user->department)->name;
+        $managerName = null;
+        if ($user->reporting_to_id) {
+            $managerName = optional(User::find($user->reporting_to_id))->getFullName();
+        }
+
+        $shiftWindow = null;
+        if ($user->shift_id) {
+            $shift = \App\Models\Shift::find($user->shift_id);
+            if ($shift && $shift->start_time && $shift->end_time) {
+                $shiftWindow = Carbon::parse($shift->start_time)->format('h:i A')
+                    . ' - ' . Carbon::parse($shift->end_time)->format('h:i A');
+            }
+        }
+
+        // --- Today's attendance + hours worked ----------------------------
+        $todayAttendance = Attendance::where('user_id', $user->id)
+            ->whereDate('check_in_time', $today)
+            ->latest('check_in_time')
+            ->first();
+
+        $todayHours = 0.0;
+        if ($todayAttendance && $todayAttendance->check_in_time) {
+            $end = $todayAttendance->check_out_time
+                ? Carbon::parse($todayAttendance->check_out_time)
+                : now();
+            $todayHours = max(0, Carbon::parse($todayAttendance->check_in_time)->floatDiffInHours($end));
+            $todayHours = round(min($todayHours, 24), 2);
+        }
+
+        // --- This week's presence (Mon..today) ----------------------------
+        $weekStart = $today->copy()->startOfWeek();
+        $presentThisWeek = Attendance::where('user_id', $user->id)
+            ->whereBetween('check_in_time', [$weekStart, $today->copy()->endOfDay()])
+            ->whereNotNull('check_in_time')
+            ->distinct()
+            ->count(\Illuminate\Support\Facades\DB::raw('DATE(check_in_time)'));
+
+        $weekWorkingDays = 0;
+        for ($d = $weekStart->copy(); $d->lte($today); $d->addDay()) {
+            if (LeavePolicyService::isWorkingDay($user, $d)) {
+                $weekWorkingDays++;
+            }
+        }
+        $weekWorkingDays = max(1, $weekWorkingDays);
+
+        // --- Leave balance: the shared ALP pool + legacy PL fallback ------
+        $leaveDaysAvailable = 0.0;
+        try {
+            $leaveDaysAvailable = LeavePolicyService::getPoolBalance($user);
+        } catch (\Throwable $e) {
+            $leaveDaysAvailable = (float) \App\Models\LeaveBalance::where('user_id', $user->id)
+                ->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(balance,0) - COALESCE(used,0)'));
+        }
+
+        // --- Expenses claimed this month (expense claims + travel claims) --
+        $expensesThisMonth = (float) ExpenseRequest::where('user_id', $user->id)
+            ->whereYear('created_at', $today->year)
+            ->whereMonth('created_at', $today->month)
+            ->sum('amount');
+
+        // --- KRA / KPI progress for the current period --------------------
+        $kraItems = [];
+        $kraOverall = 0;
+        try {
+            $assignments = \App\Models\KpiAssignment::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->orderBy('title')
+                ->limit(6)
+                ->get();
+
+            if ($assignments->isNotEmpty()) {
+                $checks = \App\Models\KpiCheck::where('user_id', $user->id)
+                    ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
+                    ->get()
+                    ->groupBy('kpi_assignment_id');
+
+                $totalPct = 0;
+                foreach ($assignments as $a) {
+                    $mine = $checks->get($a->id, collect());
+                    $done = $mine->whereIn('status', ['completed_on_time', 'completed_late'])->count();
+                    $total = max(1, $mine->count());
+                    $pct = (int) round(($done / $total) * 100);
+                    $kraItems[] = ['name' => $a->title, 'pct' => $pct];
+                    $totalPct += $pct;
+                }
+                $kraOverall = (int) round($totalPct / max(1, count($kraItems)));
+            }
+        } catch (\Throwable $e) {
+            $kraItems = [];
+        }
+
+        // --- Upcoming approved/pending leaves ------------------------------
+        $upcomingLeaves = LeaveRequest::with('leaveType')
+            ->where('user_id', $user->id)
+            ->whereDate('to_date', '>=', $today)
+            ->whereIn('status', [LeaveRequestStatus::APPROVED, LeaveRequestStatus::PENDING])
+            ->orderBy('from_date')
+            ->limit(4)
+            ->get()
+            ->map(function ($l) {
+                $from = Carbon::parse($l->from_date);
+                $status = $l->status instanceof LeaveRequestStatus ? $l->status->value : (string) $l->status;
+                return [
+                    'day' => $from->format('d'),
+                    'mon' => $from->format('M'),
+                    'year' => $from->format('Y'),
+                    'type' => optional($l->leaveType)->name ?? 'Leave',
+                    'status' => $status,
+                ];
+            })->all();
+
+        // --- Personal activity timeline (attendance + leave + expense) -----
+        $myTimeline = [];
+        $recentAtt = Attendance::where('user_id', $user->id)
+            ->whereNotNull('check_in_time')
+            ->latest('check_in_time')->limit(3)->get();
+        foreach ($recentAtt as $a) {
+            $in = Carbon::parse($a->check_in_time);
+            $myTimeline[] = [
+                'tone' => 'success', 'icon' => 'bx-log-in-circle',
+                'title' => 'Checked in',
+                'sub' => $in->isToday() ? 'Today' : $in->format('d M'),
+                'time' => $in->format('h:i A'),
+            ];
+        }
+        $recentLeave = LeaveRequest::with('leaveType')->where('user_id', $user->id)
+            ->latest('created_at')->limit(2)->get();
+        foreach ($recentLeave as $l) {
+            $status = $l->status instanceof LeaveRequestStatus ? $l->status->value : (string) $l->status;
+            $myTimeline[] = [
+                'tone' => $status === 'approved' ? 'success' : ($status === 'pending' ? 'warning' : 'danger'),
+                'icon' => 'bx-calendar-event',
+                'title' => (optional($l->leaveType)->name ?? 'Leave') . ' · ' . ucfirst($status),
+                'sub' => Carbon::parse($l->from_date)->format('d M'),
+                'time' => '',
+            ];
+        }
+        $myTimeline = collect($myTimeline)->take(5)->all();
+
+        // --- My documents: which core documents are on file ----------------
+        // Documents live as files under the onboarding folder, not columns —
+        // the User model's getXxxUrl() helpers resolve them.
+        $myDocs = [];
+        try {
+            $myDocs = [
+                ['name' => 'Aadhaar Card',      'ok' => (bool) $user->getAadhaarUrl()],
+                ['name' => 'PAN Card',          'ok' => (bool) $user->getPanUrl()],
+                ['name' => 'Cancelled Cheque',  'ok' => (bool) $user->getChequeUrl()],
+                ['name' => 'Matriculation',     'ok' => (bool) $user->getMatricUrl()],
+                ['name' => 'Graduation',        'ok' => (bool) $user->getBachelorUrl()],
+            ];
+        } catch (\Throwable $e) {
+            $myDocs = [];
+        }
+
+        // --- Important contacts: reporting manager + HR ---------------------
+        $importantContacts = [];
+        if ($user->reporting_to_id && ($mgr = User::find($user->reporting_to_id))) {
+            $importantContacts[] = [
+                'name' => $mgr->getFullName(), 'role' => 'Reporting Manager',
+                'phone' => $mgr->phone ?? null,
+                'email' => $mgr->email, 'bg' => '0d9488',
+            ];
+        }
+        $hrContact = User::role('hr')->where('status', UserAccountStatus::ACTIVE)->first();
+        if ($hrContact && $hrContact->id !== $user->id) {
+            $importantContacts[] = [
+                'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
+                'phone' => $hrContact->phone ?? null,
+                'email' => $hrContact->email, 'bg' => '6366f1',
+            ];
+        }
+
+        // --- Sales-only board (Kingo/Bingo + today's visits) ---------------
+        $salesProfile = $this->buildEmployeeSalesProfile($user);
+
+        return compact(
+            'deptName', 'managerName', 'shiftWindow',
+            'todayAttendance', 'todayHours', 'presentThisWeek', 'weekWorkingDays',
+            'leaveDaysAvailable', 'expensesThisMonth',
+            'kraItems', 'kraOverall',
+            'upcomingLeaves', 'myTimeline', 'myDocs', 'importantContacts',
+            'salesProfile'
+        );
+    }
+
+    /**
+     * Kingo/Bingo tiers + today's visits for a salesperson. Returns null for
+     * non-sales staff so the blade skips the whole section.
+     */
+    private function buildEmployeeSalesProfile(User $user): ?array
+    {
+        $dept = strtolower(optional($user->department)->name ?? '');
+        $isSalesDept = $dept !== '' && (
+            str_contains($dept, 'sales') || str_contains($dept, 'new biz') || str_contains($dept, 'customer care')
+        );
+        if (!$isSalesDept) {
+            return null;
+        }
+
+        $todayVisits = collect();
+        try {
+            $todayVisits = \App\Models\SalesVisit::with('client')
+                ->where('salesperson_id', $user->id)
+                ->whereDate('scheduled_at', Carbon::today())
+                ->orderBy('scheduled_at')
+                ->get();
+        } catch (\Throwable $e) {
+            $todayVisits = collect();
+        }
+
+        // Monthly achieved + targets. Targets live in salesperson_targets keyed
+        // by 'YYYY-MM'; achieved comes from this month's pipeline sale amounts.
+        // Both are stored in LAKHS, matching the Kingo Bingo scorecard.
+        $achieved = 0.0;
+        $kingoTiers = [];
+        $orderCustomers = [];
+        try {
+            $monthKey = Carbon::today()->format('Y-m');
+
+            $pipelines = \App\Models\SalesPipeline::with(['months' => fn($q) => $q->where('month_year', $monthKey)])
+                ->where('salesperson_id', $user->id)
+                ->get();
+
+            foreach ($pipelines as $p) {
+                $achieved += (float) ($p->months->first()->sale_amount ?? 0);
+            }
+
+            $target = \App\Models\SalespersonTarget::where('salesperson_id', $user->id)
+                ->where('month_year', $monthKey)
+                ->first();
+
+            if ($target) {
+                foreach ([['Bingo', 'bingo_target'], ['Kingo', 'kingo_target'], ['Super Kingo', 'super_kingo_target']] as [$label, $col]) {
+                    $t = (float) ($target->{$col} ?? 0);
+                    if ($t <= 0) continue;
+                    $kingoTiers[] = [
+                        'name' => $label,
+                        'target' => $t,
+                        'pct' => ($achieved / $t) * 100,
+                        'won' => $achieved >= $t,
+                    ];
+                }
+            }
+
+            $orderCustomers = $pipelines
+                ->filter(fn($p) => (float) ($p->months->first()->sale_amount ?? 0) > 0)
+                ->take(6)
+                ->map(fn($p) => [
+                    'name' => $p->party_name ?? 'Customer',
+                    'product' => $p->product ?? '',
+                    'stage' => $p->status_stage ?? '',
+                    'sale' => (float) ($p->months->first()->sale_amount ?? 0),
+                ])->values()->all();
+        } catch (\Throwable $e) {
+            // Sales tables absent/renamed — degrade to the "no targets" state.
+        }
+
+        return [
+            'isSalesDept' => true,
+            'todayVisits' => $todayVisits,
+            'achieved' => $achieved,
+            'hasTargets' => !empty($kingoTiers),
+            'kingoTiers' => $kingoTiers,
+            'orderCustomers' => $orderCustomers,
+        ];
     }
 }
