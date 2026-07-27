@@ -56,14 +56,36 @@ class DashboardController extends Controller
 
     if (!$isEmployee && $user && ($user->hasRole(['admin', 'hr', 'accounts']) || $isManager)) {
         // admin / hr / accounts (non-employee) get the full strategic dashboard
-      // Calculate base HR stats
-      $totalUser = User::count();
+      // Calculate base HR stats.
+      //
+      // Three long-standing metric bugs are corrected here, because the cards,
+      // the 7-day chart and the insights line each used to count differently
+      // and therefore disagreed with each other on the same screen:
+      //   • "Total Employees" counted every user ever created, including
+      //     terminated staff — now excludes them.
+      //   • "Present" counted only status='present', while the chart counted
+      //     present + late + WFH. One definition now, used everywhere: anyone
+      //     who is at work in any form, deduplicated per user.
+      //   • "On Leave" only matched leaves STARTING today, so anyone in the
+      //     middle of a multi-day leave vanished — now matches leaves that
+      //     SPAN today.
+      //   • "Absent" was active − present, which silently counted people on
+      //     approved leave as absent — leave is now subtracted.
+      $totalUser = User::notTerminated()->count();
       $active = User::where('status', UserAccountStatus::ACTIVE)->count();
-      $presentUsersCount = Attendance::whereDate('check_in_time', now())->where('status', 'present')->count();
-      $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
+
+      $presentUsersCount = Attendance::whereDate('check_in_time', now())
+        ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
+        ->distinct('user_id')
+        ->count('user_id');
+
+      $onLeaveUsersCount = LeaveRequest::whereDate('from_date', '<=', now())
+        ->whereDate('to_date', '>=', now())
         ->where('status', LeaveRequestStatus::APPROVED)
-        ->count();
-      $todayAbsentUsers = $active - $presentUsersCount;
+        ->distinct('user_id')
+        ->count('user_id');
+
+      $todayAbsentUsers = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
 
       $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
       $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
@@ -527,7 +549,12 @@ class DashboardController extends Controller
         try {
           for ($i = 6; $i >= 0; $i--) {
             $d = now()->subDays($i);
-            $present = Attendance::whereDate('check_in_time', $d->toDateString())->distinct('user_id')->count('user_id');
+            // Same "present" definition as the KPI card above — previously the
+            // chart counted ANY attendance row while the card counted only
+            // status='present', so the two disagreed on the same screen.
+            $present = Attendance::whereDate('check_in_time', $d->toDateString())
+              ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
+              ->distinct('user_id')->count('user_id');
             $pct = $active > 0 ? (int) round($present / $active * 100) : 0;
             $att7[] = ['label' => $d->format('D'), 'pct' => $pct, 'present' => $present];
             $att7pctSum += $pct;
@@ -536,6 +563,90 @@ class DashboardController extends Controller
         $att7Avg = count($att7) ? round($att7pctSum / count($att7), 1) : 0;
 
         $upcomingHolidays = Holiday::where('date', '>=', now()->toDateString())->orderBy('date')->take(5)->get();
+
+        // ============================================================
+        // CEO COMMAND CENTER — the money view of the company, on top of
+        // the operational dashboard. Everything below is live data.
+        // ============================================================
+
+        // --- Cash out: every rupee awaiting a decision or a payment ---
+        $ceoCashOut = ['payroll' => 0.0, 'claims' => 0.0, 'expenses' => 0.0, 'loans' => 0.0];
+        try {
+          $ceoCashOut['payroll'] = (float) Payslip::where('status', '!=', 'paid')
+            ->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)
+            ->sum('net_salary');
+          $ceoCashOut['claims'] = (float) \App\Models\TravelClaim::whereIn('status', ['submitted', 'verified', 'approved'])
+            ->sum(DB::raw('COALESCE(net_payable, total_amount, 0)'));
+          $ceoCashOut['expenses'] = (float) ExpenseRequest::where('status', 'pending')->sum('amount');
+          $ceoCashOut['loans']    = (float) LoanRequest::where('status', 'pending')->sum('amount');
+        } catch (\Throwable $e) {}
+        $ceoCashOutTotal = array_sum($ceoCashOut);
+
+        // --- Payroll cost trend (12 months) + current monthly salary run ---
+        $ceoPayrollTrend = ['labels' => [], 'data' => []];
+        $ceoMonthlySalaryCost = 0.0;
+        try {
+          $ceoMonthlySalaryCost = (float) User::where('status', UserAccountStatus::ACTIVE)->sum('base_salary');
+          $pStart = now()->copy()->startOfMonth()->subMonths(11);
+          $pByMonth = Payslip::where('created_at', '>=', $pStart)
+            ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') ym, SUM(net_salary) total")
+            ->groupBy('ym')->pluck('total', 'ym');
+          for ($i = 0; $i < 12; $i++) {
+            $m = $pStart->copy()->addMonths($i);
+            $ceoPayrollTrend['labels'][] = $m->format('M y');
+            $ceoPayrollTrend['data'][]   = round((float) ($pByMonth[$m->format('Y-m')] ?? 0), 2);
+          }
+        } catch (\Throwable $e) {}
+
+        // --- Top & bottom performers vs target (current month) ---
+        $ceoTopReps = collect();
+        $ceoBottomReps = collect();
+        try {
+          $monthKey = now()->format('Y-m');
+          $achievedByRep = \App\Models\SalesPipeline::query()
+            ->join('sales_pipeline_months as m', 'm.sales_pipeline_id', '=', 'sales_pipelines.id')
+            ->where('m.month_year', $monthKey)
+            ->whereNotNull('sales_pipelines.salesperson_id')
+            ->selectRaw('sales_pipelines.salesperson_id sp_id, SUM(COALESCE(m.sale_amount,0)) achieved')
+            ->groupBy('sales_pipelines.salesperson_id')
+            ->pluck('achieved', 'sp_id');
+
+          $targetsByRep = \App\Models\SalespersonTarget::where('month_year', $monthKey)
+            ->pluck('bingo_target', 'salesperson_id');
+
+          $repIds = collect($achievedByRep->keys())->merge($targetsByRep->keys())->unique()->filter();
+          if ($repIds->isNotEmpty()) {
+            $repNames = User::whereIn('id', $repIds)->pluck(DB::raw("CONCAT(first_name,' ',last_name)"), 'id');
+            $rows = $repIds->map(function ($id) use ($achievedByRep, $targetsByRep, $repNames) {
+              $ach = (float) ($achievedByRep[$id] ?? 0);
+              $tgt = (float) ($targetsByRep[$id] ?? 0);
+              return [
+                'name' => $repNames[$id] ?? 'Unknown',
+                'achieved' => $ach,
+                'target' => $tgt,
+                'pct' => $tgt > 0 ? round($ach / $tgt * 100, 1) : null,
+              ];
+            })->filter(fn($r) => $r['pct'] !== null)->values();
+
+            $ceoTopReps    = $rows->sortByDesc('pct')->take(5)->values();
+            $ceoBottomReps = $rows->sortBy('pct')->take(5)->values();
+          }
+        } catch (\Throwable $e) {}
+
+        // --- Headcount cost per department (where the money goes) ---
+        $ceoDeptCost = collect();
+        try {
+          $ceoDeptCost = User::query()
+            ->where('users.status', UserAccountStatus::ACTIVE)
+            ->whereNotNull('users.department_id')
+            ->join('departments', 'departments.id', '=', 'users.department_id')
+            // Alias must not be `name` — User::getNameAttribute() would override it.
+            ->selectRaw('departments.name dept_name, COUNT(users.id) headcount, SUM(COALESCE(users.base_salary,0)) cost')
+            ->groupBy('departments.id', 'departments.name')
+            ->orderByDesc('cost')
+            ->limit(8)
+            ->get();
+        } catch (\Throwable $e) {}
 
         // --- AI Insights: real signals derived from the numbers above ---
         $aiInsights = [];
@@ -648,6 +759,14 @@ class DashboardController extends Controller
           'upcomingProbationEnds' => $upcomingProbationEnds,
           'probationOverdueCount' => $probationOverdueCount,
           'probationDueSoonCount' => $probationDueSoonCount,
+          // CEO Command Center
+          'ceoCashOut'            => $ceoCashOut,
+          'ceoCashOutTotal'       => $ceoCashOutTotal,
+          'ceoPayrollTrend'       => $ceoPayrollTrend,
+          'ceoMonthlySalaryCost'  => $ceoMonthlySalaryCost,
+          'ceoTopReps'            => $ceoTopReps,
+          'ceoBottomReps'         => $ceoBottomReps,
+          'ceoDeptCost'           => $ceoDeptCost,
         ]);
       }
 

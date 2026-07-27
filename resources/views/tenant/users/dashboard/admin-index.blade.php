@@ -23,6 +23,21 @@
   $greet = $hour < 12 ? 'Good Morning' : ($hour < 17 ? 'Good Afternoon' : 'Good Evening');
   $firstName = auth()->user()->first_name ?? (explode(' ', auth()->user()->name ?? 'Admin')[0]);
   $toneHex = ['primary' => '#0d9488', 'info' => '#2563eb', 'success' => '#16a34a', 'warning' => '#d97706', 'danger' => '#dc2626'];
+  // Rupee formatters for the CEO Command Center. $money takes raw rupees;
+  // $fmtL takes a value already expressed in LAKHS (sales figures are stored
+  // that way throughout the pipeline/target tables).
+  $money = function ($n) {
+    $n = (float) $n;
+    if ($n >= 10000000) return '₹' . number_format($n / 10000000, 2) . ' Cr';
+    if ($n >= 100000)   return '₹' . number_format($n / 100000, 2) . ' L';
+    return '₹' . number_format($n);
+  };
+  $fmtL = function ($v) {
+    $v = (float) $v;
+    if ($v >= 100) return '₹' . number_format($v / 100, 2) . ' Cr';
+    if ($v >= 1)   return '₹' . number_format($v, 2) . ' L';
+    return '₹' . number_format($v * 100000);
+  };
 @endphp
 
 @section('content')
@@ -158,6 +173,115 @@
           @endforeach
         </div>
       </div>
+
+      {{-- ================= CEO COMMAND CENTER ================= --}}
+      {{-- The money view: what is owed, what payroll costs, who is
+           carrying the number and who is behind. --}}
+      @php
+        $ceoOut   = $ceoCashOut ?? ['payroll'=>0,'claims'=>0,'expenses'=>0,'loans'=>0];
+        $ceoTotal = $ceoCashOutTotal ?? 0;
+        $ceoCards = [
+          ['label'=>'Payroll to pay','value'=>$ceoOut['payroll'],'icon'=>'bx-money','tone'=>'primary','url'=>url('/payroll')],
+          ['label'=>'Travel claims','value'=>$ceoOut['claims'],'icon'=>'bx-car','tone'=>'warning','url'=>url('/travel-claims/admin/dashboard')],
+          ['label'=>'Expense claims','value'=>$ceoOut['expenses'],'icon'=>'bx-receipt','tone'=>'info','url'=>url('/expenseRequests')],
+          ['label'=>'Loan requests','value'=>$ceoOut['loans'],'icon'=>'bx-wallet','tone'=>'success','url'=>url('/loan')],
+        ];
+      @endphp
+      <div class="adc-card mt-4">
+        <div class="adc-card-head">
+          <div>
+            <h6 class="adc-card-title">💼 CEO Command Center — Cash Out</h6>
+            <span class="adc-card-sub">Committed but not yet paid · total {{ $money($ceoTotal) }}</span>
+          </div>
+          <a href="{{ url('/payroll') }}" class="adc-link">Payroll</a>
+        </div>
+        <div class="row g-3">
+          @foreach($ceoCards as $c)
+            <div class="col-6 col-xl-3">
+              <a href="{{ $c['url'] }}" class="adc-tile adc-tone-{{ $c['tone'] }} d-block h-100">
+                <span class="adc-tile-icon"><i class="bx {{ $c['icon'] }}"></i></span>
+                <div class="adc-tile-body">
+                  <div class="adc-tile-value">{{ $money($c['value']) }}</div>
+                  <div class="adc-tile-name">{{ $c['label'] }}</div>
+                  <div class="adc-tile-sub">awaiting payment</div>
+                </div>
+              </a>
+            </div>
+          @endforeach
+        </div>
+      </div>
+
+      <div class="row g-4 mt-1">
+        <div class="col-xl-8">
+          <div class="adc-card h-100">
+            <div class="adc-card-head">
+              <div><h6 class="adc-card-title">Payroll Cost Trend</h6><span class="adc-card-sub">Net salary paid · last 12 months · current run {{ $money($ceoMonthlySalaryCost ?? 0) }}/mo</span></div>
+              <a href="{{ url('/payroll') }}" class="adc-link">View</a>
+            </div>
+            <div id="ceoPayrollTrend"></div>
+          </div>
+        </div>
+        <div class="col-xl-4">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Cost by Department</h6><span class="adc-card-sub">Monthly salary · top 8</span></div></div>
+            @if(collect($ceoDeptCost ?? [])->isEmpty())
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-building"></i><span>No salary data recorded.</span></div>
+            @else
+              <ul class="adc-appr adc-rail-scroll" style="max-height:300px">
+                @foreach($ceoDeptCost as $d)
+                  <li>
+                    <div class="adc-appr-body">
+                      <div class="adc-appr-name">{{ $d->dept_name }}</div>
+                      <div class="adc-appr-meta">{{ $d->headcount }} {{ \Illuminate\Support\Str::plural('person', $d->headcount) }}</div>
+                    </div>
+                    <span class="adc-badge adc-tone-info">{{ $money($d->cost) }}</span>
+                  </li>
+                @endforeach
+              </ul>
+            @endif
+          </div>
+        </div>
+      </div>
+
+      @if(collect($ceoTopReps ?? [])->isNotEmpty())
+      <div class="row g-4 mt-1">
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">🏆 Top Performers</h6><span class="adc-card-sub">vs Bingo target · {{ now()->format('M Y') }}</span></div><a href="{{ url('/sales-visits/kingo-bingo') }}" class="adc-link">Scorecard</a></div>
+            <ul class="adc-appr">
+              @foreach($ceoTopReps as $r)
+                <li>
+                  <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($r['name']) }}&background=10b981&color=fff&bold=true" alt="">
+                  <div class="adc-appr-body">
+                    <div class="adc-appr-name">{{ $r['name'] }}</div>
+                    <div class="adc-appr-meta">{{ $fmtL($r['achieved']) }} of {{ $fmtL($r['target']) }}</div>
+                  </div>
+                  <span class="adc-badge adc-tone-{{ $r['pct'] >= 100 ? 'success' : ($r['pct'] >= 75 ? 'warning' : 'danger') }}">{{ round($r['pct']) }}%</span>
+                </li>
+              @endforeach
+            </ul>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">⚠️ Needs Attention</h6><span class="adc-card-sub">Furthest behind target · {{ now()->format('M Y') }}</span></div><a href="{{ url('/sales-visits/kingo-bingo') }}" class="adc-link">Scorecard</a></div>
+            <ul class="adc-appr">
+              @foreach($ceoBottomReps as $r)
+                <li>
+                  <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($r['name']) }}&background=ef4444&color=fff&bold=true" alt="">
+                  <div class="adc-appr-body">
+                    <div class="adc-appr-name">{{ $r['name'] }}</div>
+                    <div class="adc-appr-meta">{{ $fmtL($r['achieved']) }} of {{ $fmtL($r['target']) }}</div>
+                  </div>
+                  <span class="adc-badge adc-tone-{{ $r['pct'] >= 100 ? 'success' : ($r['pct'] >= 75 ? 'warning' : 'danger') }}">{{ round($r['pct']) }}%</span>
+                </li>
+              @endforeach
+            </ul>
+          </div>
+        </div>
+      </div>
+      @endif
+      {{-- =============== /CEO COMMAND CENTER =============== --}}
 
       {{-- Row C: Workforce Overview + KPI donut --}}
       <div class="row g-4 mt-4">
@@ -398,6 +522,26 @@ document.addEventListener('DOMContentLoaded', function () {
         yaxis:{labels:{style:{colors:axisColor}}}, grid:{borderColor:gridColor,strokeDashArray:4}
       });
     } else empty(document.querySelector('#adcWorkforce'), 'bx-line-chart', 'No hiring activity in the last 12 months');
+
+    // 1b. CEO Command Center — payroll cost trend (12 months)
+    const ceoPay = {!! json_encode($ceoPayrollTrend ?? ['labels'=>[],'data'=>[]], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!};
+    if (document.querySelector('#ceoPayrollTrend')) {
+      if ((ceoPay.data || []).some(v => v > 0)) {
+        mk('#ceoPayrollTrend', {
+          series: [{ name:'Net Salary Paid', data: ceoPay.data }],
+          chart: { type:'area', height:300, toolbar, fontFamily:'Public Sans' },
+          colors: ['#0d9488'], stroke:{curve:'smooth',width:3},
+          fill:{type:'gradient',gradient:{shadeIntensity:1,opacityFrom:0.3,opacityTo:0.03}},
+          dataLabels:{enabled:false},
+          xaxis:{categories: ceoPay.labels, labels:{style:{colors:axisColor}}, axisBorder:{show:false}, axisTicks:{show:false}},
+          yaxis:{labels:{style:{colors:axisColor}, formatter:v => '₹'+Math.round(v).toLocaleString('en-IN')}},
+          tooltip:{y:{formatter:v => '₹'+Math.round(v).toLocaleString('en-IN')}},
+          grid:{borderColor:gridColor,strokeDashArray:4}
+        });
+      } else {
+        empty(document.querySelector('#ceoPayrollTrend'), 'bx-money', 'No payroll paid in the last 12 months');
+      }
+    }
 
     // Attendance sparkline (last 7 days)
     const att7 = {!! json_encode(array_column($att7, 'pct'), JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!};
