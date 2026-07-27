@@ -857,10 +857,7 @@
             "icon": "menu-icon tf-icons bx bx-user",
             "name": "Roles & Permissions",
             "slug": "roles.index",
-            "permission": "roles.view",
-            "roles": [
-                "admin"
-            ]
+            "permission": "roles.manage"
         },
         {
             "url": "/device",
@@ -889,10 +886,7 @@
             "icon": "menu-icon tf-icons bx bx-history",
             "name": "Audit Logs",
             "slug": "auditLogs.index",
-            "permission": "auditLogs.view",
-            "roles": [
-                "admin"
-            ]
+            "permission": "audit.view"
         },
         {
             "url": "/dataImportExport",
@@ -977,7 +971,7 @@
         {
             "name": "Settings",
             "icon": "menu-icon bx bx-cog",
-            "permission": "hr.settings.view",
+            "permission": "settings.manage",
             "roles": [
                 "admin",
                 "hr",

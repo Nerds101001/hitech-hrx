@@ -19,10 +19,7 @@ return [
 
     'Employees' => [
         'employee.view' => 'View Employee List',
-        'employee.create' => 'Create New Employee',
-        'employee.invite' => 'Invite Employee',
         'employee.edit' => 'Edit Employee Profile',
-        'employee.view_basic' => 'View Basic Details',
         'employee.view_banking' => 'View Banking Info',
         'employee.view_document' => 'View Documents',
         'employee.edit_document' => 'Edit Documents',
@@ -34,18 +31,15 @@ return [
         'employee.manage_payroll_adjustment' => 'Manage Payroll Adjustments',
         'employee.manage_device' => 'Allot / Remove Devices',
         'employee.lifecycle_action' => 'Suspend / Relieve / Retire / Terminate',
-        'employee.manage_hr_location' => 'Manage HR Location Assignment',
     ],
 
     'Attendance' => [
         'attendance.view_page' => 'View Team Attendance',
-        'attendance.view_my' => 'View My Attendance',
         'attendance.import' => 'Import Attendance',
         'attendance.manage' => 'Manage / Edit Attendance',
     ],
 
     'Leaves' => [
-        'leave.apply' => 'Apply for Leave',
         'leave.approve' => 'Approve / Reject Leave',
         'leave.create_type' => 'Create Leave Type',
         'leave.create_policy' => 'Create Leave Policy',
@@ -54,8 +48,6 @@ return [
     ],
 
     'Travel & Expense' => [
-        'expense.dashboard' => 'View Expense Dashboard',
-        'expense.apply' => 'Apply / Claim Expense',
         'expense.approve' => 'Approve / Reject Claims',
         'expense.manage_types' => 'Manage Expense Types',
         'travel_claim.verify' => 'Verify Travel Claims',
@@ -66,22 +58,15 @@ return [
     'Payroll' => [
         'payroll.view' => 'View Payroll',
         'payroll.process' => 'Process Payroll (incl. Salary Import)',
-        'payroll.export' => 'Export Payroll Data',
-        'payroll.view_my_slips' => 'View My Payslips',
     ],
 
     'Recruitment & Onboarding' => [
-        'recruitment.view' => 'View Candidates',
-        'recruitment.create' => 'Add Candidate',
-        'recruitment.edit' => 'Edit Candidate',
-        'recruitment.delete' => 'Delete Candidate',
-        'recruitment.manage_jobs' => 'Manage Job Postings',
+        'recruitment.view' => 'Access Recruitment (Jobs & Candidates)',
         'onboarding.manage' => 'Manage & Review Onboarding',
     ],
 
     'Hierarchy & Probation' => [
         'hierarchy.view' => 'View Org Chart',
-        'hierarchy.manage' => 'Manage Org Chart',
         'probation.view' => 'View Probation Status',
         'probation.manage' => 'Manage Probation',
         'lifecycle.manage' => 'Manage Employee Lifecycle',
@@ -110,12 +95,8 @@ return [
     ],
 
     'Intelligent Vault' => [
-        'vault.view' => 'Access Library',
         'vault.upload' => 'Upload Documents',
         'vault.chat' => 'Use AI Bot',
-        'vault.train' => 'Train AI Bot',
-        'vault.delete' => 'Delete Library Items',
-        'vault.manage_taxonomy' => 'Manage Library Taxonomy',
     ],
 
     'Asset Management' => [
@@ -140,9 +121,7 @@ return [
     ],
 
     'Performance' => [
-        'goals.view' => 'View 90-Day Goals',
         'goals.manage' => 'Manage 90-Day Goals',
-        'scorecards.view' => 'View Scorecards',
         'scorecards.manage' => 'Generate / Review Scorecards',
         'kpi.manage' => 'Manage KPI / KRA (DWM)',
     ],
@@ -163,7 +142,6 @@ return [
         'approvals.manage' => 'Manage Custom Approvals',
         'roles.manage' => 'Manage Roles & Permissions',
         'audit.view' => 'View Audit Logs',
-        'audit.export' => 'Export Audit Logs',
         'settings.manage' => 'Manage General Settings',
     ],
 
@@ -184,8 +162,6 @@ return [
         'visits.manage' => 'Manage Visit Log (HR view)',
         'tasks.manage' => 'Manage Tasks',
         'document_request.manage' => 'Manage Document Requests',
-        'probation.view' => 'View Probation Status',
-        'probation.manage' => 'Manage Probation',
     ],
 
     'System Utilities' => [

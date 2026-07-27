@@ -159,13 +159,16 @@ Route::middleware([
         Route::get('evaluate/{id}', [ProbationController::class, 'showEvaluationForm'])->name('evaluate');
         Route::post('store/{id}', [ProbationController::class, 'storeEvaluation'])->name('store');
         
-        // HR Review Routes
-        Route::group(['middleware' => ['role_or_permission:hr|admin|probation.manage']], function() {
+        // HR Review Routes — probation.view grants read-only access to the
+        // dashboard/list/review pages; finalizing stays manage-only.
+        Route::group(['middleware' => ['role_or_permission:hr|admin|probation.view|probation.manage']], function() {
             Route::get('dashboard', [ProbationController::class, 'dashboard'])->name('dashboard');
             Route::get('dashboardAjax', [ProbationController::class, 'dashboardAjax'])->name('dashboardAjax');
             Route::get('evaluations', [ProbationController::class, 'index'])->name('index');
             Route::get('review/{id}', [ProbationController::class, 'review'])->name('review');
-            Route::post('finalize/{id}', [ProbationController::class, 'finalize'])->name('finalize');
+            Route::post('finalize/{id}', [ProbationController::class, 'finalize'])
+                ->middleware('role_or_permission:hr|admin|probation.manage')
+                ->name('finalize');
         });
     });
 
@@ -603,7 +606,10 @@ Route::middleware([
     });
 
     // --- RECRUITMENT MANAGEMENT ---
-    Route::middleware(['role:admin|hr|accounts|manager'])->group(function () {
+    // recruitment.view lets a delegate reach the module; the recruitment
+    // controllers enforce their own finer-grained permission catalog
+    // ("Manage Job", "Create Job", ...) for mutations.
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|recruitment.view'])->group(function () {
     Route::resource('job', JobController::class);
     Route::post('job/copy/{id}', [JobController::class, 'copyjob'])->name('job.copy');
 

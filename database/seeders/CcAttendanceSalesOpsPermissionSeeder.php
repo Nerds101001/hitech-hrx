@@ -16,10 +16,10 @@ use Spatie\Permission\Models\Permission;
  * regardless of these grants. Idempotent — safe to re-run anywhere.
  *
  * Permissions intentionally granted to NO role (goals.manage,
- * scorecards.manage, kpi.manage, vault.train, settings.manage): these
- * routes remain admin-only by explicit decision — the permission exists
- * only so ONE specific person can be individually delegated access
- * without widening the role-based default.
+ * scorecards.manage, kpi.manage, settings.manage): these routes remain
+ * admin-only by explicit decision — the permission exists only so ONE
+ * specific person can be individually delegated access without widening
+ * the role-based default.
  */
 class CcAttendanceSalesOpsPermissionSeeder extends Seeder
 {
@@ -54,17 +54,17 @@ class CcAttendanceSalesOpsPermissionSeeder extends Seeder
 
         // Employees module — gated role:admin|hr|accounts.
         $adminHrAccounts = [
-            'employee.view', 'employee.create', 'employee.edit', 'employee.view_banking',
+            'employee.view', 'employee.edit', 'employee.view_banking',
             'employee.view_document', 'employee.edit_document', 'employee.kpa', 'employee.kra',
             'employee.delete', 'employee.reset_password', 'employee.manage_leave_balance',
             'employee.manage_payroll_adjustment', 'employee.manage_device',
-            'employee.manage_hr_location', 'employee.lifecycle_action', 'sales_ops.manage',
+            'employee.lifecycle_action', 'sales_ops.manage',
         ];
 
         // Stricter admin|hr-only modules.
         $adminHrOnly = [
             'document_request.manage', 'hr_policies.manage', 'audit.view',
-            'vault.chat', 'vault.upload', 'vault.delete', 'vault.manage_taxonomy',
+            'vault.chat', 'vault.upload',
             'chat.access', 'probation.view', 'probation.manage',
         ];
 
@@ -112,7 +112,7 @@ class CcAttendanceSalesOpsPermissionSeeder extends Seeder
         // Permissions that exist but are deliberately granted to no role —
         // admin-only routes preserved as-is, available only for individual
         // per-user delegation via "User Special Permissions."
-        foreach (['goals.manage', 'scorecards.manage', 'kpi.manage', 'vault.train', 'settings.manage', 'scorecards.view', 'goals.view'] as $name) {
+        foreach (['goals.manage', 'scorecards.manage', 'kpi.manage', 'settings.manage'] as $name) {
             Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
         }
 
