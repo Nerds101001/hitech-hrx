@@ -6,6 +6,14 @@
     use App\Helpers\StaticDataHelpers;
     $role = $user->roles()->first()?->name ?? '';
     $addonService = app(IAddonService::class);
+    // Banking, salary, payslips and payroll adjustments are confidential
+    // financial data — only admin/hr/accounts or a holder of the explicit
+    // employee.view_banking permission may see the Banking & Payroll tab.
+    // (Previously this tab rendered for anyone who could open the profile,
+    // so a narrow delegate — e.g. document-review or device-management —
+    // could read every employee's account number, IFSC, CTC and payslips.)
+    $canViewFinancials = auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR', 'accounts'])
+        || auth()->user()->can('employee.view_banking');
 @endphp
 @extends('layouts.layoutMaster')
 
@@ -571,10 +579,12 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#employment-assets"><i
                                         class="bx bx-briefcase me-1"></i> Employment & Assets</a>
                             </li>
+                            @if($canViewFinancials)
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#banking-payroll"><i
                                         class="bx bx-credit-card me-1"></i> Banking & Payroll</a>
                             </li>
+                            @endif
                             @if(!auth()->user()->hasRole('accounts'))
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#documents"><i class="bx bx-file me-1"></i>
@@ -1562,6 +1572,7 @@
                         </div>
 
                         <!-- Banking & Payroll Tab -->
+                        @if($canViewFinancials)
                         <div class="tab-pane fade" id="banking-payroll">
                             <div class="card mb-4 emp-card">
                                 <div class="card-body p-5">
@@ -2010,6 +2021,8 @@
                                 </div>
                             </div>
                         </div>
+                        @endif
+                        {{-- /Banking & Payroll Tab (gated by $canViewFinancials) --}}
 
                         <!-- Documents Tab -->
                         @if(!auth()->user()->hasRole('accounts'))
@@ -2431,6 +2444,62 @@
 
                         <!-- KPIs Tab -->
                         <div class="tab-pane fade" id="kpis-tab">
+                            {{-- Learn @ HiTech participation + score --}}
+                            <div class="card border-0 shadow-sm rounded-3 mb-4">
+                                <div class="card-body p-4">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <div class="d-flex align-items-center">
+                                            <i class="bx bx-graduation fs-4 me-2" style="color:#127464;"></i>
+                                            <h6 class="mb-0 fw-bold">Learn @ HiTech</h6>
+                                        </div>
+                                        @if($latestScorecard)
+                                            <span class="badge bg-label-success">Score: {{ $latestScorecard->learn_hitech_score }} · {{ $latestScorecard->learn_hitech_programs }} programs</span>
+                                        @endif
+                                    </div>
+                                    <p class="text-muted small mb-3">Sessions this employee has presented or attended, and the resulting Learn @ HiTech score on their latest appraisal scorecard.</p>
+
+                                    @if($learnHitechPresented->isEmpty() && $learnHitechLogs->isEmpty())
+                                        <p class="text-muted small mb-0">No Learn @ HiTech participation recorded yet.</p>
+                                    @endif
+
+                                    @if($learnHitechPresented->isNotEmpty())
+                                        <div class="fw-semibold small text-muted mb-1" style="text-transform:uppercase;font-size:0.72rem;">Presented</div>
+                                        <div class="table-responsive rounded-3 border mb-3" style="background:#fff;">
+                                            <table class="table table-sm mb-0 align-middle">
+                                                <tbody>
+                                                    @foreach($learnHitechPresented as $session)
+                                                        <tr>
+                                                            <td class="ps-3">{{ $session->title }}</td>
+                                                            <td class="text-muted">{{ $session->session_date?->format('d M Y') }}</td>
+                                                            <td class="pe-3 text-end">
+                                                                <a href="{{ route('library.previewFrame', $session->id) }}" target="_blank" class="btn btn-sm btn-label-primary">View</a>
+                                                            </td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    @endif
+
+                                    @if($learnHitechLogs->isNotEmpty())
+                                        <div class="fw-semibold small text-muted mb-1" style="text-transform:uppercase;font-size:0.72rem;">Attended / scored</div>
+                                        <div class="table-responsive rounded-3 border" style="background:#fff;">
+                                            <table class="table table-sm mb-0 align-middle">
+                                                <tbody>
+                                                    @foreach($learnHitechLogs as $log)
+                                                        <tr>
+                                                            <td class="ps-3">{{ $log->libraryFile->title ?? 'Session removed' }}</td>
+                                                            <td class="text-muted">{{ optional($log->libraryFile?->session_date)->format('d M Y') }}</td>
+                                                            <td class="pe-3 text-end"><span class="badge bg-label-info">+{{ $log->awarded_points }} pts</span></td>
+                                                        </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
                             {{-- DWM logged tasks (from Daily Work Management) --}}
                             <div class="card border-0 shadow-sm rounded-3 mb-4">
                                 <div class="card-body p-4">

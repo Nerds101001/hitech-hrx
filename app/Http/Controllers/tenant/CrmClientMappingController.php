@@ -28,23 +28,63 @@ class CrmClientMappingController extends Controller
     }
 
     /**
-     * Main management page — list all mappings.
+     * True for the people who may see/manage the WHOLE customer book:
+     * admin/hr/accounts, or a direct crm_clients.manage grant.
+     */
+    protected function canManageAll(): bool
+    {
+        $user = Auth::user();
+        return $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'accounts'])
+            || $user->can('crm_clients.manage');
+    }
+
+    /**
+     * Main management page — list mappings the caller is allowed to see.
+     *
+     * SECURITY: previously this returned EVERY company's CRM mapping
+     * (contacts, phone, the internal owner of each account) to any user who
+     * cleared sales.guard — i.e. every salesperson could read the whole
+     * customer book. Now scoped exactly like SalesVisitController::clientIndex:
+     * admin/hr/accounts (or crm_clients.manage) see all; everyone else sees
+     * only the accounts tied to the salespeople they're allowed to see
+     * (self / their team / their mapped reps) or that they're personally
+     * tagged on.
      */
     public function index(Request $request)
     {
-        $mappings = CrmClientMapping::with(['salesperson', 'ccare', 'newBiz', 'billing', 'finance'])
-            ->orderBy('crm_company_name')
-            ->paginate(25);
+        $user = Auth::user();
+        $query = CrmClientMapping::with(['salesperson', 'ccare', 'newBiz', 'billing', 'finance']);
 
-        // All active HRX employees for the dropdowns
-        $employees = User::select('id', 'first_name', 'last_name', 'code')
-            ->where('status', 'active')
-            ->orderBy('first_name')
-            ->get()
-            ->map(fn($u) => [
-                'id'   => $u->id,
-                'name' => trim("{$u->first_name} {$u->last_name}") . ($u->code ? " ({$u->code})" : ''),
-            ]);
+        $canSeeAll = $this->canManageAll();
+        if (!$canSeeAll) {
+            $allowed = \App\Support\SalesScope::viewIds($user, $request, 'salesperson_id');
+            // Non-privileged callers always get a concrete id list here (viewIds
+            // only returns null for admin/hr, already handled above). Restrict to
+            // accounts where they hold ANY of the five roles.
+            $allowed = $allowed ?? [$user->id];
+            $query->where(function ($q) use ($allowed) {
+                $q->whereIn('salesperson_id', $allowed)
+                  ->orWhereIn('ccare_id', $allowed)
+                  ->orWhereIn('new_biz_id', $allowed)
+                  ->orWhereIn('billing_id', $allowed)
+                  ->orWhereIn('finance_id', $allowed);
+            });
+        }
+
+        $mappings = $query->orderBy('crm_company_name')->paginate(25)->withQueryString();
+
+        // Reassignment dropdown is only meaningful for the people who may
+        // reassign accounts — never expose the full employee list otherwise.
+        $employees = $canSeeAll
+            ? User::select('id', 'first_name', 'last_name', 'code')
+                ->where('status', 'active')
+                ->orderBy('first_name')
+                ->get()
+                ->map(fn($u) => [
+                    'id'   => $u->id,
+                    'name' => trim("{$u->first_name} {$u->last_name}") . ($u->code ? " ({$u->code})" : ''),
+                ])
+            : collect();
 
         return view('tenant.crm-clients.index', compact('mappings', 'employees'));
     }
@@ -451,7 +491,19 @@ class CrmClientMappingController extends Controller
      */
     public function employeeClients($userId)
     {
-        $mappings = CrmClientMapping::forUser((int) $userId)
+        // IDOR guard: a user may only pull their OWN client list, or — if
+        // privileged — anyone's; a manager/rep may pull someone in their
+        // allowed set. Previously any sales user could read any colleague's
+        // entire client book by enumerating userId.
+        $userId = (int) $userId;
+        if (!$this->canManageAll() && $userId !== (int) Auth::id()) {
+            $allowed = \App\Support\SalesScope::allowedUserIds(Auth::user());
+            if ($allowed !== null && !in_array($userId, $allowed, true)) {
+                abort(403);
+            }
+        }
+
+        $mappings = CrmClientMapping::forUser($userId)
             ->with([
                 'salesperson:id,first_name,last_name',
                 'ccare:id,first_name,last_name',

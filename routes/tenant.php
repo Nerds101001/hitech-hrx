@@ -161,6 +161,8 @@ Route::middleware([
         
         // HR Review Routes
         Route::group(['middleware' => ['role_or_permission:hr|admin|probation.manage']], function() {
+            Route::get('dashboard', [ProbationController::class, 'dashboard'])->name('dashboard');
+            Route::get('dashboardAjax', [ProbationController::class, 'dashboardAjax'])->name('dashboardAjax');
             Route::get('evaluations', [ProbationController::class, 'index'])->name('index');
             Route::get('review/{id}', [ProbationController::class, 'review'])->name('review');
             Route::post('finalize/{id}', [ProbationController::class, 'finalize'])->name('finalize');
@@ -358,6 +360,7 @@ Route::middleware([
       Route::post('actionAjax', [LeaveController::class, 'actionAjax'])->name('actionAjax');
       Route::post('bulkActionAjax', [LeaveController::class, 'bulkActionAjax'])->name('bulkActionAjax');
       Route::get('getByIdAjax/{id}', [LeaveController::class, 'getByIdAjax'])->name('getByIdAjax');
+      Route::get('summaryAjax', [LeaveController::class, 'summaryAjax'])->name('summaryAjax');
       // Outdoor Duty (inside leave page)
       Route::get('outdoorDuty/listAjax', [LeaveController::class, 'outdoorDutyListAjax'])->name('outdoorDuty.listAjax');
       Route::post('outdoorDuty/storeAjax', [LeaveController::class, 'outdoorDutyStoreAjax'])->name('outdoorDuty.storeAjax');
@@ -719,22 +722,26 @@ Route::middleware([
         // Compatibility route for legacy JS calls
         Route::post('markAsRead', [NotificationController::class, 'markAsRead'])->name('tenant.notifications.markAsRead_legacy');
 
-        // CRM Client Mappings (api-crm.rustx.net integration) — this had NO
-        // access control at all (not even a controller-internal check), so
-        // any authenticated user of any role/department could view, sync,
-        // edit, or delete customer CRM data. Gated with the same sales.guard
-        // used for the rest of Sales Field Ops as an immediate fix.
+        // CRM Client Mappings (api-crm.rustx.net integration).
+        // Read routes (index, employee tab) are scoped INSIDE the controller
+        // so a scoped sales user sees only their own book. The mutating /
+        // sync / raw-debug routes are admin/hr/accounts (or crm_clients.manage)
+        // only — a plain salesperson must never reassign, delete, bulk-resync,
+        // or dump raw CRM API data for the whole company.
         Route::middleware(['sales.guard'])->prefix('crm-clients')->name('crm-clients.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'index'])->name('index');
-            Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'store'])->name('store');
-            Route::post('/auto-sync', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'autoSync'])->name('auto-sync');
-            Route::post('/sync-page', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncPage'])->name('sync-page');
-            Route::get('/sync-status', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncStatus'])->name('sync-status');
-            Route::put('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'update'])->name('update');
-            Route::delete('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'destroy'])->name('destroy');
-            Route::get('/search', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'searchCrm'])->name('search');
             Route::get('/employee/{userId}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'employeeClients'])->name('employee');
-            Route::get('/debug-crm', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'debugCrm'])->name('debug');
+
+            Route::middleware(['role_or_permission:admin|hr|accounts|crm_clients.manage'])->group(function () {
+                Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'store'])->name('store');
+                Route::post('/auto-sync', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'autoSync'])->name('auto-sync');
+                Route::post('/sync-page', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncPage'])->name('sync-page');
+                Route::get('/sync-status', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'syncStatus'])->name('sync-status');
+                Route::put('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'update'])->name('update');
+                Route::delete('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'destroy'])->name('destroy');
+                Route::get('/search', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'searchCrm'])->name('search');
+                Route::get('/debug-crm', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'debugCrm'])->name('debug');
+            });
         });
 
 
