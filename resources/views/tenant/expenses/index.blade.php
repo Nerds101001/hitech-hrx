@@ -34,6 +34,9 @@
 @section('page-script')
   <script>
     const currencySymbol = @json($settings->currency_symbol);
+    // Real approved-reimbursement totals for the last 6 months (see
+    // ExpenseController@index). Previously the chart used a hardcoded series.
+    const expenseTrendData = @json($expenseTrend ?? ['labels' => [], 'data' => []]);
   </script>
   @vite(['resources/assets/js/app/expense-requests-index.js'])
   <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>

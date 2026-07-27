@@ -61,11 +61,43 @@ class EmployeeLifecycleController extends Controller
         $recentTransfers = $statsQuery(EmployeeTransfer::class)->latest()->limit(5)->get();
         $recentWarnings = $statsQuery(EmployeeWarning::class)->latest()->limit(5)->get();
 
+        // Real 7-month lifecycle trend. The chart previously rendered four
+        // hardcoded demo series (the ApexCharts docs sample data) — and never
+        // even reached the browser, because it was pushed to a @stack the
+        // layout did not render.
+        $trendStart = now()->copy()->startOfMonth()->subMonths(6);
+        $monthLabels = [];
+        for ($i = 0; $i < 7; $i++) {
+            $monthLabels[$trendStart->copy()->addMonths($i)->format('Y-m')] =
+                $trendStart->copy()->addMonths($i)->format('M Y');
+        }
+
+        $seriesFor = function ($model) use ($statsQuery, $trendStart, $monthLabels) {
+            $rows = $statsQuery($model)
+                ->where('created_at', '>=', $trendStart)
+                ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as ym, COUNT(*) as total")
+                ->groupBy('ym')
+                ->pluck('total', 'ym');
+            return collect(array_keys($monthLabels))
+                ->map(fn($ym) => (int) ($rows[$ym] ?? 0))->all();
+        };
+
+        $lifecycleChart = [
+            'labels' => array_values($monthLabels),
+            'series' => [
+                ['name' => 'Promotions', 'data' => $seriesFor(EmployeePromotion::class)],
+                ['name' => 'Transfers',  'data' => $seriesFor(EmployeeTransfer::class)],
+                ['name' => 'Warnings',   'data' => $seriesFor(EmployeeWarning::class)],
+                ['name' => 'Complaints', 'data' => $seriesFor(EmployeeComplaint::class)],
+            ],
+        ];
+
         return view('tenant.employee-lifecycle.index', compact(
-            'stats', 
-            'recentPromotions', 
-            'recentTransfers', 
-            'recentWarnings'
+            'stats',
+            'recentPromotions',
+            'recentTransfers',
+            'recentWarnings',
+            'lifecycleChart'
         ));
     }
 

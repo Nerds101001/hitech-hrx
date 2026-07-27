@@ -399,12 +399,16 @@ $(function () {
     if (typeof lightbox !== 'undefined') lightbox.reload();
   });
 
-  // Expense Trend Chart
+  // Expense Trend Chart — driven by real approved totals passed from the
+  // controller as `expenseTrendData` ({labels: [...], data: [...]}).
   if ($('#expenseTrendChart').length) {
+    const trend = (typeof expenseTrendData !== 'undefined' && expenseTrendData)
+      ? expenseTrendData
+      : { labels: [], data: [] };
     const options = {
       series: [{
         name: 'Reimbursements',
-        data: [44, 55, 41, 67, 22, 43]
+        data: trend.data || []
       }],
       chart: {
         height: 350,
@@ -423,7 +427,7 @@ $(function () {
       legend: { show: false },
       colors: ['#004d4d', '#007a7a', '#00a3a3', '#0d9488', '#0f766e', '#115e59'],
       xaxis: {
-        categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        categories: trend.labels || [],
         labels: { style: { colors: '#64748b', fontWeight: 600 } }
       },
       tooltip: {

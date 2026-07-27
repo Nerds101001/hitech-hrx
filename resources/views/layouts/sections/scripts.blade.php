@@ -28,6 +28,11 @@
 
 <!-- BEGIN: Page JS-->
 @yield('page-script')
+{{-- Pages that use @push('scripts') instead of @section('page-script').
+     No layout rendered this stack, so their JS was silently dropped —
+     the lifecycle chart, promotions page and my-assets page all had
+     dead scripts because of it. --}}
+@stack('scripts')
 <!-- END: Page JS-->
 
 @include('layouts.sections.toaster')

@@ -208,22 +208,15 @@
 
 @push('scripts')
 <script>
+// Real 7-month lifecycle counts from EmployeeLifecycleController@index
+// (was four hardcoded demo series that also never rendered).
+const lifecycleChartData = @json($lifecycleChart ?? ['labels' => [], 'series' => []]);
 document.addEventListener('DOMContentLoaded', function() {
+  const el = document.querySelector("#lifecycleChart");
+  if (!el || typeof ApexCharts === 'undefined') return;
   // Lifecycle Overview Chart
-  const lifecycleChart = new ApexCharts(document.querySelector("#lifecycleChart"), {
-    series: [{
-      name: 'Promotions',
-      data: [31, 40, 28, 51, 42, 109, 100]
-    }, {
-      name: 'Transfers',
-      data: [11, 32, 45, 32, 34, 52, 41]
-    }, {
-      name: 'Warnings',
-      data: [15, 25, 18, 35, 22, 30, 28]
-    }, {
-      name: 'Complaints',
-      data: [8, 12, 15, 18, 14, 22, 19]
-    }],
+  const lifecycleChart = new ApexCharts(el, {
+    series: lifecycleChartData.series || [],
     chart: {
       height: 300,
       type: 'area',
@@ -251,16 +244,11 @@ document.addEventListener('DOMContentLoaded', function() {
       horizontalAlign: 'center'
     },
     xaxis: {
-      categories: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-    },
-    tooltip: {
-      x: {
-        format: 'dd/MM/yy'
-      },
+      categories: lifecycleChartData.labels || [],
     },
   });
 
   lifecycleChart.render();
 });
 </script>
-@endsection
+@endpush

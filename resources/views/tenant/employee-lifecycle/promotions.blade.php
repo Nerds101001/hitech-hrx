@@ -194,4 +194,4 @@ $(document).ready(function() {
   });
 });
 </script>
-@endsection
+@endpush

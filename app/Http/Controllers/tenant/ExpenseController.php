@@ -44,6 +44,24 @@ class ExpenseController extends Controller
         ->sum('approved_amount');
     $pendingAmount = (clone $baseQuery)->where('status', 'pending')->sum('amount');
 
+    // Real reimbursement trend — approved amounts for the last 6 months.
+    // The chart used to render a hardcoded [44,55,41,67,22,43] Jan-Jun demo
+    // series that never touched the database.
+    $trendStart = now()->copy()->startOfMonth()->subMonths(5);
+    $monthlyTotals = (clone $baseQuery)
+        ->where('status', 'approved')
+        ->where('for_date', '>=', $trendStart->toDateString())
+        ->selectRaw("DATE_FORMAT(for_date, '%Y-%m') as ym, SUM(COALESCE(approved_amount, amount)) as total")
+        ->groupBy('ym')
+        ->pluck('total', 'ym');
+
+    $expenseTrend = ['labels' => [], 'data' => []];
+    for ($i = 0; $i < 6; $i++) {
+        $m = $trendStart->copy()->addMonths($i);
+        $expenseTrend['labels'][] = $m->format('M Y');
+        $expenseTrend['data'][]   = round((float) ($monthlyTotals[$m->format('Y-m')] ?? 0), 2);
+    }
+
     return view('tenant.expenses.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
       'employees' => $employees,
@@ -51,7 +69,8 @@ class ExpenseController extends Controller
       'pendingRequests' => $pendingRequests,
       'approvedToday' => $approvedToday,
       'totalThisMonthAmount' => $totalThisMonthAmount,
-      'pendingAmount' => $pendingAmount
+      'pendingAmount' => $pendingAmount,
+      'expenseTrend' => $expenseTrend,
     ]);
   }
   public function indexAjax(Request $request)

@@ -18,9 +18,29 @@ class DepartmentsController extends Controller
   public function index()
   {
     $users = User::all(['id', 'first_name', 'last_name']);
+
+    // Real active-headcount per department for the distribution chart. This
+    // used to be a hardcoded [45,32,28,...] series labelled with department
+    // names (Engineering, Marketing, ...) that do not exist in this install.
+    $headcount = User::query()
+      ->where('users.status', \App\Enums\UserAccountStatus::ACTIVE)
+      ->whereNotNull('department_id')
+      ->join('departments', 'departments.id', '=', 'users.department_id')
+      // Alias must NOT be `name`: the User model defines a getNameAttribute()
+      // accessor which would override the joined column and blank every label.
+      ->selectRaw('departments.name as dept_name, COUNT(users.id) as total')
+      ->groupBy('departments.id', 'departments.name')
+      ->orderByDesc('total')
+      ->limit(10)
+      ->get();
+
     return view('tenant.departments.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
-      'users' => $users
+      'users' => $users,
+      'deptChart' => [
+        'labels' => $headcount->pluck('dept_name')->all(),
+        'data'   => $headcount->pluck('total')->map(fn($n) => (int) $n)->all(),
+      ],
     ]);
   }
 

@@ -216,12 +216,15 @@ function exportDepartments() {
   // Export department data
 }
 
-// Department Distribution Chart
+// Department Distribution Chart — real active headcount per department,
+// supplied by DepartmentsController@index (was a hardcoded demo series
+// labelled with departments that don't exist in this install).
+const deptChartData = @json($deptChart ?? ['labels' => [], 'data' => []]);
 document.addEventListener('DOMContentLoaded', function() {
   const options = {
     series: [{
       name: 'Employees',
-      data: [45, 32, 28, 25, 22, 18, 15, 12]
+      data: deptChartData.data || []
     }],
     chart: {
       height: 300,
@@ -250,7 +253,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     },
     xaxis: {
-      categories: ['Engineering', 'Sales', 'Marketing', 'HR', 'Finance', 'Operations', 'IT', 'Admin']
+      categories: deptChartData.labels || []
     },
     fill: {
       type: 'gradient',
