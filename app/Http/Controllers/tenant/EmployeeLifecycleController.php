@@ -92,12 +92,44 @@ class EmployeeLifecycleController extends Controller
             ],
         ];
 
+        // Everything the tabbed page needs in one request. The lifecycle used
+        // to be eight separate sidebar entries and eight page loads; it is now
+        // one page with tabs, so each dataset is loaded here.
+        $tabPromotions   = $statsQuery(EmployeePromotion::class)->with('user')->latest()->limit(100)->get();
+        $tabTransfers    = $statsQuery(EmployeeTransfer::class)->with('user')->latest()->limit(100)->get();
+        $tabWarnings     = $statsQuery(EmployeeWarning::class)->with('user')->latest()->limit(100)->get();
+        $tabComplaints   = $statsQuery(EmployeeComplaint::class)->with('user')->latest()->limit(100)->get();
+        $tabTrips        = $statsQuery(EmployeeTrip::class)->with('user')->latest()->limit(100)->get();
+
+        // Exits come from the users table as well as the dedicated tables —
+        // see exitRows() for why.
+        $tabResignations = $this->exitRows(true)->getCollection();
+        $tabTerminations = $this->exitRows(false)->getCollection();
+
+        $employees = User::notTerminated()
+            ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'code', 'designation_id', 'department_id']);
+
+        $departments  = \App\Models\Department::withoutGlobalScopes()->orderBy('name')->get(['id', 'name']);
+        $designations = \App\Models\Designation::orderBy('name')->get(['id', 'name']);
+
         return view('tenant.employee-lifecycle.index', compact(
             'stats',
             'recentPromotions',
             'recentTransfers',
             'recentWarnings',
-            'lifecycleChart'
+            'lifecycleChart',
+            'tabPromotions',
+            'tabTransfers',
+            'tabWarnings',
+            'tabComplaints',
+            'tabTrips',
+            'tabResignations',
+            'tabTerminations',
+            'employees',
+            'departments',
+            'designations'
         ));
     }
 

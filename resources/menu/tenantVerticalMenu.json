@@ -117,13 +117,14 @@
                 "organizationHierarchy.index",
                 "probation.dashboard",
                 "probation.index",
+                "employee-lifecycle.index",
                 "employee-lifecycle.promotions",
                 "employee-lifecycle.transfers",
                 "employee-lifecycle.resignations",
                 "employee-lifecycle.terminations",
                 "employee-lifecycle.complaints",
                 "employee-lifecycle.trips",
-                "employee-lifecycle.index",
+                "employee-lifecycle.warnings",
                 "hr-policies.index",
                 "departments.index",
                 "designations.index",
@@ -171,63 +172,18 @@
                     ]
                 },
                 {
-                    "url": "/employee-lifecycle/promotions",
-                    "name": "Promotions",
-                    "slug": "employee-lifecycle.promotions",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/employee-lifecycle/transfers",
-                    "name": "Transfers",
-                    "slug": "employee-lifecycle.transfers",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/employee-lifecycle/resignations",
-                    "name": "Resignations",
-                    "slug": "employee-lifecycle.resignations",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/employee-lifecycle/terminations",
-                    "name": "Terminations",
-                    "slug": "employee-lifecycle.terminations",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/employee-lifecycle/complaints",
-                    "name": "Complaints",
-                    "slug": "employee-lifecycle.complaints",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/employee-lifecycle/trips",
-                    "name": "Employee Trips",
-                    "slug": "employee-lifecycle.trips",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
                     "url": "/employee-lifecycle",
-                    "name": "Lifecycle Overview",
-                    "slug": "employee-lifecycle.index",
+                    "name": "Employee Lifecycle",
+                    "slug": [
+                        "employee-lifecycle.index",
+                        "employee-lifecycle.promotions",
+                        "employee-lifecycle.transfers",
+                        "employee-lifecycle.resignations",
+                        "employee-lifecycle.terminations",
+                        "employee-lifecycle.complaints",
+                        "employee-lifecycle.trips",
+                        "employee-lifecycle.warnings"
+                    ],
                     "roles": [
                         "admin",
                         "hr"
@@ -891,7 +847,10 @@
                 "sales-visits.index",
                 "sales-visits.clients.index"
             ],
-            "permission": ["access-sales-ops", "cc_attendance.manage"],
+            "permission": [
+                "access-sales-ops",
+                "cc_attendance.manage"
+            ],
             "submenu": [
                 {
                     "url": "/sales-visits",
@@ -926,7 +885,10 @@
                     "url": "/cc-attendance",
                     "name": "Attendance",
                     "slug": "cc-attendance.index",
-                    "permission": ["access-sales-ops", "cc_attendance.manage"]
+                    "permission": [
+                        "access-sales-ops",
+                        "cc_attendance.manage"
+                    ]
                 },
                 {
                     "url": "/sales-visits/pipeline",
