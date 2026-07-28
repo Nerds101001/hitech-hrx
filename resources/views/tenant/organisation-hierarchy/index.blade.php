@@ -321,15 +321,28 @@ document.addEventListener('DOMContentLoaded', function () {
     var zoom = 1;
     var zoomVal = document.getElementById('ocZoomVal');
 
+    // Cap the viewport height so the chart is a pannable window rather than
+    // growing to fit its content. Without a cap there is no vertical overflow,
+    // so dragging up/down had nothing to scroll — only left/right worked.
+    function viewportCap() {
+        return document.fullscreenElement
+            ? window.innerHeight - 40
+            : Math.max(420, Math.round(window.innerHeight * 0.74));
+    }
+
     function applyZoom(z) {
         // Floor of 0.25 — below that the cards are unreadable smudges, so a
         // very wide org "fits" to 25% and scrolls rather than vanishing.
         zoom = Math.min(1.4, Math.max(0.25, z));
         chart.style.transform = 'scale(' + zoom + ')';
-        scroller.style.height = (chart.scrollHeight * zoom + 60) + 'px';
+        var content = chart.scrollHeight * zoom + 60;
+        scroller.style.height = Math.min(content, viewportCap()) + 'px';
         if (zoomVal) { zoomVal.textContent = Math.round(zoom * 100) + '%'; }
         return zoom;
     }
+
+    window.addEventListener('resize', function () { applyZoom(zoom); });
+    document.addEventListener('fullscreenchange', function () { applyZoom(zoom); });
 
     /**
      * Zoom keeping the point under the cursor fixed, so Ctrl+scroll magnifies
