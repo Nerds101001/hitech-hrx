@@ -124,8 +124,10 @@ class CcAttendanceController extends Controller
         $minDate = min(self::OPEN_FROM, Carbon::today()->subDays(2)->toDateString());
         $openWindow = [self::OPEN_FROM, self::OPEN_TO];
 
+        $canSeeReport = $this->canSeeReport($user);
+
         return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user',
-            'isLocked', 'lockDeadline', 'minDate', 'openWindow',
+            'isLocked', 'lockDeadline', 'minDate', 'openWindow', 'canSeeReport',
             'summary', 'ccOptions', 'desigOptions', 'fSearch', 'fCc', 'fDesig', 'fStatus', 'sort', 'dir'));
     }
 
@@ -228,7 +230,15 @@ class CcAttendanceController extends Controller
     }
 
     /** Admin/HR see every submission; a CCare agent sees only their own. */
-    private function canSeeReport($user): bool
+    /**
+     * Who may open the Submission Report.
+     *
+     * Public so the Blade tab strip can ask the SAME question the report()
+     * method asks. The tabs used to hardcode hasRole(['admin','hr','manager']),
+     * which ignored cc_attendance.manage — so anyone delegated that permission
+     * could open /cc-attendance/report by URL but never saw a link to it.
+     */
+    public function canSeeReport($user): bool
     {
         return $this->isAttendanceAdmin($user)
             || ($user->department && stripos($user->department->name, 'Customer Care') !== false);
@@ -525,7 +535,9 @@ class CcAttendanceController extends Controller
             $attendances[$att->user_id][$d] = $att;
         }
 
-        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'user'));
+        $canSeeReport = $this->canSeeReport($user);
+
+        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'user', 'canSeeReport'));
     }
 
     /**

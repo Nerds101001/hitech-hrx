@@ -98,7 +98,7 @@
         <li class="nav-item">
             <a class="nav-link active" href="{{ route('cc-attendance.monthly') }}"><i class="ti ti-calendar-stats me-1"></i> Monthly View</a>
         </li>
-        @if($user->hasRole(['admin', 'hr', 'manager']))
+        @if($canSeeReport ?? $user->hasRole(['admin', 'hr', 'manager']))
         <li class="nav-item">
             <a class="nav-link" href="{{ route('cc-attendance.report') }}"><i class="ti ti-report-search me-1"></i> Submission Report</a>
         </li>
