@@ -58,7 +58,7 @@
                 </div>
               </div>
               <h5 class="card-title fw-bold mb-2">{{ $announcement->title }}</h5>
-              <p class="card-text text-muted mb-4 announcement-content">{{ Str::limit($announcement->content, 150) }}</p>
+              <p class="card-text text-muted mb-4 announcement-content">{{ \Illuminate\Support\Str::limit($announcement->content, 150) }}</p>
               
               <div class="d-flex align-items-center justify-content-between mt-auto pt-3 border-top">
                 <div class="d-flex align-items-center">
