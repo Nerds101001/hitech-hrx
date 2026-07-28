@@ -1,52 +1,55 @@
 @props([
     'title' => 'Dashboard',
-    'subtitle' => 'Welcome back!',
+    'subtitle' => null,
     'icon' => 'bx-home',
     'gradient' => 'primary',
-    'quote' => null
+    'quote' => null,
+    'showStats' => false,
+    'breadcrumb' => null,
 ])
 
-@php
-    $gradients = [
-        'primary' => 'linear-gradient(135deg, #004d4d 0%, #007a7a 60%, #00a3a3 100%)',
-        'success' => 'linear-gradient(135deg, #005a5a 0%, #008a8a 100%)',
-        'info' => 'linear-gradient(135deg, #006666 0%, #009999 100%)',
-        'warning' => 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
-        'danger' => 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
-        'teal' => 'linear-gradient(135deg, #004d4d 0%, #007a7a 100%)'
-    ];
-    
-    $bgGradient = $gradients[$gradient] ?? $gradients['primary'];
-    
-    $quotes = [
-        'Success is the result of hard work, determination, and courage to pursue greatness.',
-        'Teamwork divides the task and multiplies the success.',
-        'Productivity is not about doing more; it\'s about focusing on what truly matters.',
-        'The secret to great teamwork is trust, communication, and a shared goal.',
-        'Every accomplishment starts with the decision to try.',
-        'Productivity is never an accident. It is always the result of commitment to excellence.',
-        'Believe in your ability to shape the future with the work you do today.',
-        'Efficiency is doing things right; effectiveness is doing the right things.',
-        'Dream big, work hard, stay focused, and surround yourself with good people.',
-        'The best way to predict the future is to create it.'
-    ];
-    
-    $quoteText = $quote ?? $quotes[array_rand($quotes)];
-@endphp
+{{--
+  Compact page header.
 
-<div class="admin-hero animate__animated animate__fadeIn" style="background: {{ $bgGradient }};">
-    <div class="admin-hero-content">
-        <div class="admin-hero-text">
-            <div class="hero-icon">
-                <i class="bx {{ $icon }} text-white"></i>
-            </div>
-            <div class="greeting">{{ $title }}</div>
-            <div class="sub-text">{{ $subtitle }}</div>
-        </div>
-        @if($quote)
-            <div class="d-none d-md-block text-end" style="max-width: 420px; position:relative; z-index:1;">
-                <small class="text-white opacity-75 fst-italic">"{{ $quoteText }}"</small>
-            </div>
-        @endif
+  This used to render a full-width gradient hero ~160px tall, and most pages
+  then followed it with a second card containing nothing but a single button —
+  so two thirds of the first screen was chrome before any data appeared. It now
+  renders one line: icon + title (and optional subtitle) on the left, with
+  breadcrumb and page actions on the right, matching the Holiday and
+  Announcement dashboards.
+
+  Every existing prop is still accepted so all 24 call sites keep working.
+  `gradient`, `quote` and `showStats` are deliberately accepted and ignored —
+  dropping them from the signature would break those pages.
+
+  Pass page actions in the default slot to keep them on the same line:
+      <x-hero-banner title="Employee Promotions" icon="bx-trending-up">
+        <button class="btn-hitech ...">New Promotion</button>
+      </x-hero-banner>
+--}}
+
+<div class="page-header-compact d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <div class="page-header-icon">
+      <i class="bx {{ $icon }}"></i>
     </div>
+    <div>
+      <h4 class="fw-extrabold mb-0 text-dark lh-1">{{ $title }}</h4>
+      @if($subtitle)
+        <p class="text-muted mb-0 small mt-1">{{ $subtitle }}</p>
+      @endif
+    </div>
+  </div>
+
+  <div class="d-flex align-items-center flex-wrap gap-2">
+    @if($breadcrumb)
+      <nav aria-label="breadcrumb" class="me-2 d-none d-md-block">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="{{ url('/') }}">Dashboard</a></li>
+          <li class="breadcrumb-item active">{{ $breadcrumb }}</li>
+        </ol>
+      </nav>
+    @endif
+    {{ $slot }}
+  </div>
 </div>

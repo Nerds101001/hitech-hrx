@@ -24,22 +24,19 @@
 <div class="content-wrapper">
   <!-- Content -->
   <div class="container-xxl flex-grow-1 container-p-y">
-    <!-- Hero Banner -->
-    <x-hero-banner 
+    {{-- Compact header with the action inline — this page previously spent a
+         160px gradient banner plus a whole card on a single button. --}}
+    <x-hero-banner
       title="Employee Promotions"
       subtitle="Manage employee promotions and career advancement"
-      icon="ti ti-trending-up"
-      :show-stats="false"
-    />
-
-    <!-- Actions -->
-    <div class="card hitech-card-white border-0 shadow-sm rounded-4 mb-4">
-      <div class="card-body">
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#promotionModal">
-          <i class="ti ti-plus me-2"></i>New Promotion
-        </button>
-      </div>
-    </div>
+      icon="bx-trending-up"
+      breadcrumb="Promotions"
+    >
+      <button type="button" class="btn-hitech shadow-sm rounded-pill px-4 d-flex align-items-center gap-2"
+              data-bs-toggle="modal" data-bs-target="#promotionModal">
+        <i class="bx bx-plus fs-5"></i><span class="fw-bold">New Promotion</span>
+      </button>
+    </x-hero-banner>
 
     <!-- Promotions Table -->
     <div class="card hitech-card-white border-0 shadow-sm rounded-4">

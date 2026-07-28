@@ -111,18 +111,21 @@
 
 @section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
-  {{-- Standardized Header --}}
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4 py-2">
-    <h3 class="fw-extrabold mb-0 text-dark">Team Management</h3>
-    <button type="button" class="btn btn-hitech-primary shadow-sm rounded-pill px-5 add-new" data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateTeam">
-      <i class="bx bx-plus-circle me-1"></i>Add New Team
-    </button>
+  {{-- Compact header: title, icon and action on one tight row --}}
+  <div class="px-4">
+    <x-hero-banner title="Teams" subtitle="Manage teams and their members"
+                   icon="bx-group" breadcrumb="Teams">
+      <button type="button" class="btn-hitech shadow-sm rounded-pill px-4 add-new d-flex align-items-center gap-2"
+              data-bs-toggle="modal" data-bs-target="#modalAddOrUpdateTeam">
+        <i class="bx bx-plus fs-5"></i><span class="fw-bold">Add New Team</span>
+      </button>
+    </x-hero-banner>
   </div>
 
   {{-- Standardized Filter Card --}}
   <div class="px-4">
-    <div class="hitech-card-white mb-6 overflow-hidden">
-      <div class="card-body p-sm-5 p-4">
+    <div class="hitech-card-white mb-4 overflow-hidden">
+      <div class="card-body p-3">
         <div class="d-flex flex-wrap align-items-center gap-3">
           {{-- Search Section --}}
           <div class="search-wrapper-hitech w-px-350 mw-100">

@@ -4502,3 +4502,42 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
         background: rgba(255, 255, 255, 0.14);
     }
 }
+
+/* ============================================================
+   COMPACT PAGE HEADER
+   Replaces the ~160px gradient hero that sat on 24 pages. Keeps the
+   brand teal as a small icon tile rather than a full-bleed banner, so
+   the data starts near the top of the viewport.
+   ============================================================ */
+.page-header-compact {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(0, 90, 90, 0.08);
+
+    h4 {
+        font-size: 1.3rem;
+        letter-spacing: -0.01em;
+    }
+}
+
+.page-header-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #004d4d 0%, #007a7a 100%);
+    box-shadow: 0 4px 12px rgba(0, 90, 90, 0.22);
+
+    i {
+        color: #fff;
+        font-size: 1.35rem;
+    }
+}
+
+/* An "actions" card holding nothing but one button wasted a whole row on
+   several pages. Where that pattern remains, tighten it right down. */
+.card.actions-only > .card-body {
+    padding: 0.75rem 1rem;
+}
