@@ -26,30 +26,43 @@
             "icon": "menu-icon bx bx-broadcast",
             "slug": [
                 "announcements.dashboard",
-                "announcements.feed"
+                "announcements.feed",
+                "user.announcements.feed"
             ],
             "roles": [
                 "admin",
                 "hr",
-                "manager"
-            ]
-        },
-        {
-            "url": "/announcements/feed",
-            "name": "Announcements",
-            "icon": "menu-icon bx bx-broadcast",
-            "slug": "user.announcements.feed",
-            "roles": [
+                "manager",
                 "employee",
-                "office_employee",
-                "accounts"
+                "accounts",
+                "office_employee"
             ]
         },
         {
             "url": "/work-control",
             "name": "DWM",
             "icon": "menu-icon bx bx-task",
-            "slug": "tenant.work-control.index"
+            "slug": "tenant.work-control.index",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
+            ]
+        },
+        {
+            "url": "/reports",
+            "name": "Reports",
+            "icon": "menu-icon bx bx-file",
+            "slug": "reports.index",
+            "addon": "DisabledModule",
+            "roles": [
+                "admin",
+                "hr",
+                "accounts"
+            ]
         },
         {
             "icon": "menu-icon bx bx-bullseye",
@@ -94,31 +107,7 @@
             ]
         },
         {
-            "name": "KRA Management",
-            "icon": "menu-icon bx bx-task",
-            "slug": "task.index",
-            "url": "/task",
-            "addon": "TaskSystem",
-            "roles": [
-                "admin",
-                "hr",
-                "manager"
-            ]
-        },
-        {
-            "url": "/reports",
-            "name": "Reports",
-            "icon": "menu-icon bx bx-file",
-            "slug": "reports.index",
-            "addon": "DisabledModule",
-            "roles": [
-                "admin",
-                "hr",
-                "accounts"
-            ]
-        },
-        {
-            "menuHeader": "Workforce"
+            "menuHeader": "People"
         },
         {
             "url": "/employees",
@@ -145,10 +134,13 @@
             ]
         },
         {
-            "url": "/probation/evaluations",
+            "url": "/probation/dashboard",
             "name": "Probation",
             "icon": "menu-icon bx bx-check-double",
-            "slug": "probation.index",
+            "slug": [
+                "probation.dashboard",
+                "probation.index"
+            ],
             "roles": [
                 "admin",
                 "hr"
@@ -166,7 +158,9 @@
                 "job-category.index",
                 "job-stage.index",
                 "training.portal",
-                "training.manage.index"
+                "training.manage.index",
+                "employees.onboarding.review_center",
+                "employees.onboarding.review"
             ],
             "permission": "recruitment.view",
             "roles": [
@@ -177,6 +171,18 @@
                 "accounts"
             ],
             "submenu": [
+                {
+                    "url": "/employees/onboarding/review-center",
+                    "name": "Onboarding Review Center",
+                    "slug": [
+                        "employees.onboarding.review_center",
+                        "employees.onboarding.review"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
                 {
                     "url": "/job",
                     "name": "Jobs",
@@ -196,7 +202,7 @@
                     ]
                 },
                 {
-                    "url": "/job-application/candidate",
+                    "url": "/candidates",
                     "name": "Candidate",
                     "slug": "job.application.candidate",
                     "roles": [
@@ -243,7 +249,14 @@
                 {
                     "url": "/training",
                     "name": "Training Portal",
-                    "slug": "training.portal"
+                    "slug": "training.portal",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
                 },
                 {
                     "url": "/training/manage",
@@ -258,95 +271,83 @@
             ]
         },
         {
-            "name": "Attendance",
-            "icon": "menu-icon bx bx-time-five",
+            "name": "Employee Lifecycle",
+            "icon": "menu-icon bx bx-transfer",
             "slug": [
-                "attendance.index",
-                "biometric.index"
-            ],
-            "roles": [
-                "admin",
-                "hr",
-                "accounts"
-            ],
-            "submenu": [
-                {
-                    "url": "/attendance",
-                    "name": "Attendance Logs",
-                    "slug": "attendance.index"
-                },
-                {
-                    "url": "/biometric",
-                    "name": "Biometric Devices",
-                    "slug": "biometric.index"
-                }
-            ]
-        },
-        {
-            "url": "/holidays/dashboard",
-            "name": "Holidays",
-            "slug": [
-                "holidays.dashboard",
-                "holidays.index"
+                "employee-lifecycle.index",
+                "employee-lifecycle.promotions",
+                "employee-lifecycle.transfers",
+                "employee-lifecycle.resignations",
+                "employee-lifecycle.terminations",
+                "employee-lifecycle.complaints",
+                "employee-lifecycle.trips"
             ],
             "roles": [
                 "admin",
                 "hr"
             ],
-            "icon": "menu-icon bx bx-calendar-star"
-        },
-        {
-            "url": "/payroll",
-            "name": "Payroll",
-            "icon": "menu-icon bx bx-money",
-            "slug": "payroll.index",
-            "roles": [
-                "admin",
-                "hr",
-                "accounts"
-            ]
-        },
-        {
-            "name": "Performance",
-            "icon": "menu-icon bx bx-bar-chart-alt-2",
-            "slug": [
-                "performance.scorecards.index",
-                "performance.ninety-day-goals.index"
-            ],
-            "roles": [
-                "admin"
-            ],
             "submenu": [
                 {
-                    "url": "/performance/scorecards",
-                    "name": "Scorecards",
-                    "slug": "performance.scorecards.index",
+                    "url": "/employee-lifecycle",
+                    "name": "Overview",
+                    "slug": "employee-lifecycle.index",
                     "roles": [
-                        "admin"
+                        "admin",
+                        "hr"
                     ]
                 },
                 {
-                    "url": "/performance/ninety-day-goals",
-                    "name": "90-Day Goals",
-                    "slug": "performance.ninety-day-goals.index",
+                    "url": "/employee-lifecycle/promotions",
+                    "name": "Promotions",
+                    "slug": "employee-lifecycle.promotions",
                     "roles": [
-                        "admin"
+                        "admin",
+                        "hr"
                     ]
                 },
                 {
-                    "url": "/kpi/manage",
-                    "name": "KPI / KRA (Manage)",
-                    "slug": "tenant.kpi.manage",
+                    "url": "/employee-lifecycle/transfers",
+                    "name": "Transfers",
+                    "slug": "employee-lifecycle.transfers",
                     "roles": [
-                        "admin"
+                        "admin",
+                        "hr"
                     ]
                 },
                 {
-                    "url": "/kpi/my",
-                    "name": "My KPI / KRA",
-                    "slug": "tenant.kpi.my",
+                    "url": "/employee-lifecycle/resignations",
+                    "name": "Resignations",
+                    "slug": "employee-lifecycle.resignations",
                     "roles": [
-                        "admin"
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/employee-lifecycle/terminations",
+                    "name": "Terminations",
+                    "slug": "employee-lifecycle.terminations",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/employee-lifecycle/complaints",
+                    "name": "Complaints",
+                    "slug": "employee-lifecycle.complaints",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/employee-lifecycle/trips",
+                    "name": "Employee Trips",
+                    "slug": "employee-lifecycle.trips",
+                    "roles": [
+                        "admin",
+                        "hr"
                     ]
                 }
             ]
@@ -415,12 +416,198 @@
             ]
         },
         {
-            "name": "HR Policies",
-            "icon": "menu-icon bx bx-book-content",
+            "name": "Performance",
+            "icon": "menu-icon bx bx-bar-chart-alt-2",
             "slug": [
-                "hr-policies.index",
-                "hr-policies.employee.index"
+                "performance.scorecards.index",
+                "performance.ninety-day-goals.index"
             ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "submenu": [
+                {
+                    "url": "/performance/scorecards",
+                    "name": "Scorecards",
+                    "slug": "performance.scorecards.index",
+                    "roles": [
+                        "admin"
+                    ]
+                },
+                {
+                    "url": "/performance/ninety-day-goals",
+                    "name": "90-Day Goals",
+                    "slug": "performance.ninety-day-goals.index",
+                    "roles": [
+                        "admin"
+                    ]
+                },
+                {
+                    "url": "/kpi/manage",
+                    "name": "KPI / KRA (Manage)",
+                    "slug": "tenant.kpi.manage",
+                    "roles": [
+                        "admin"
+                    ]
+                },
+                {
+                    "url": "/kpi/my",
+                    "name": "My KPI / KRA",
+                    "slug": "tenant.kpi.my",
+                    "roles": [
+                        "admin"
+                    ]
+                }
+            ]
+        },
+        {
+            "menuHeader": "Time & Attendance"
+        },
+        {
+            "name": "Attendance",
+            "icon": "menu-icon bx bx-time-five",
+            "slug": [
+                "attendance.index",
+                "biometric.index"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "accounts"
+            ],
+            "submenu": [
+                {
+                    "url": "/attendance",
+                    "name": "Attendance Logs",
+                    "slug": "attendance.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/biometric",
+                    "name": "Biometric Devices",
+                    "slug": "biometric.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "/leaveRequests",
+            "name": "Leave Requests",
+            "slug": "leaveRequests.index",
+            "icon": "menu-icon bx bx-calendar-minus",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "accounts"
+            ]
+        },
+        {
+            "url": "/holidays/dashboard",
+            "name": "Holidays",
+            "slug": [
+                "holidays.dashboard",
+                "holidays.index"
+            ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "icon": "menu-icon bx bx-calendar-star"
+        },
+        {
+            "url": "/shifts",
+            "name": "Shifts",
+            "slug": "shifts.index",
+            "icon": "menu-icon bx bx-time",
+            "roles": [
+                "admin",
+                "hr"
+            ]
+        },
+        {
+            "menuHeader": "Payroll & Claims"
+        },
+        {
+            "url": "/payroll",
+            "name": "Payroll",
+            "icon": "menu-icon bx bx-money",
+            "slug": "payroll.index",
+            "roles": [
+                "admin",
+                "hr",
+                "accounts"
+            ]
+        },
+        {
+            "name": "Travel & Expense",
+            "icon": "menu-icon bx bx-trip",
+            "slug": [
+                "travel-claims.adminDashboard"
+            ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "submenu": [
+                {
+                    "url": "/travel-claims/admin/dashboard",
+                    "name": "Admin Dashboard",
+                    "slug": "travel-claims.adminDashboard",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "/expenseRequests",
+            "name": "Expense Requests",
+            "slug": "expenseRequests.index",
+            "icon": "menu-icon bx bx-receipt",
+            "roles": [
+                "admin",
+                "hr"
+            ]
+        },
+        {
+            "url": "/loan",
+            "name": "Loan Requests",
+            "slug": "loan.index",
+            "icon": "menu-icon bx bx-money",
+            "roles": [
+                "admin",
+                "hr"
+            ]
+        },
+        {
+            "menuHeader": "Performance & Learning"
+        },
+        {
+            "name": "KRA Management",
+            "icon": "menu-icon bx bx-task",
+            "slug": "task.index",
+            "url": "/task",
+            "addon": "TaskSystem",
+            "roles": [
+                "admin",
+                "hr",
+                "manager"
+            ]
+        },
+        {
+            "name": "Learning Management",
+            "icon": "menu-icon bx bx-book",
+            "addon": "LMS",
             "roles": [
                 "admin",
                 "hr",
@@ -428,22 +615,44 @@
                 "employee",
                 "accounts"
             ],
+            "slug": [
+                "lms.categories.index",
+                "lms.courses.index",
+                "lms.my.courses"
+            ],
             "submenu": [
                 {
-                    "url": "/hr-policies",
-                    "name": "Manage Policies",
-                    "icon": "menu-icon bx bx-file-blank",
-                    "slug": "hr-policies.index",
+                    "url": "/my-learning",
+                    "name": "My Learning",
+                    "slug": "lms.my.courses",
+                    "addon": "LMS",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/lms/courses",
+                    "name": "Courses",
+                    "slug": "lms.courses.index",
+                    "addon": "LMS",
                     "roles": [
                         "admin",
                         "hr"
                     ]
                 },
                 {
-                    "url": "/my-policies",
-                    "name": "My Policies",
-                    "icon": "menu-icon bx bx-user-check",
-                    "slug": "hr-policies.employee.index"
+                    "url": "/lms/categories",
+                    "name": "Categories",
+                    "slug": "lms.categories.index",
+                    "addon": "LMS",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
                 }
             ]
         },
@@ -465,7 +674,14 @@
                 {
                     "url": "/digital-library",
                     "name": "Digital Library",
-                    "slug": "library.index"
+                    "slug": "library.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
                 },
                 {
                     "url": "/ai-training",
@@ -480,84 +696,20 @@
             ]
         },
         {
-            "name": "Travel & Expense",
-            "icon": "menu-icon bx bx-trip",
-            "slug": [
-                "travel-claims.index",
-                "travel-claims.adminDashboard"
-            ],
+            "url": "/mind-speak",
+            "name": "Innovation Hub",
+            "icon": "menu-icon bx bx-brain",
+            "slug": "mind-speak.index",
             "roles": [
                 "admin",
                 "hr",
                 "manager",
                 "employee",
                 "accounts"
-            ],
-            "submenu": [
-                {
-                    "url": "/travel-claims",
-                    "name": "My Claims",
-                    "slug": "travel-claims.index"
-                },
-                {
-                    "url": "/travel-claims/admin/dashboard",
-                    "name": "Admin Dashboard",
-                    "slug": "travel-claims.adminDashboard",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                }
             ]
         },
         {
-            "menuHeader": "Operations",
-            "roles": [
-                "admin",
-                "hr"
-            ]
-        },
-        {
-            "icon": "menu-icon bx bx-package",
-            "name": "Products & Orders",
-            "addon": "ProductOrder",
-            "roles": [
-                "admin",
-                "hr"
-            ],
-            "slug": [
-                "order.index",
-                "product.index",
-                "productcategory.index"
-            ],
-            "submenu": [
-                {
-                    "url": "/order",
-                    "name": "Orders",
-                    "slug": "order.index"
-                },
-                {
-                    "url": "/product",
-                    "name": "Product",
-                    "slug": "product.index"
-                },
-                {
-                    "url": "/productcategory",
-                    "name": "Product Categories",
-                    "slug": "productcategory.index"
-                }
-            ]
-        },
-        {
-            "url": "/paymentcollection",
-            "name": "Payment Collections",
-            "icon": "menu-icon bx bx-money",
-            "slug": "paymentcollection.index",
-            "addon": "PaymentCollection",
-            "roles": [
-                "admin",
-                "hr"
-            ]
+            "menuHeader": "Sales & Operations"
         },
         {
             "name": "Sales Field Ops",
@@ -626,115 +778,65 @@
                         "hr"
                     ]
                 }
-            ]
-        },
-        {
-            "menuHeader": "Self Service",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ]
-        },
-        {
-            "url": "/user/payroll",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
             ],
-            "name": "My Payroll",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts"
+            ]
+        },
+        {
+            "icon": "menu-icon bx bx-package",
+            "name": "Products & Orders",
+            "addon": "ProductOrder",
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "slug": [
+                "order.index",
+                "product.index",
+                "productcategory.index"
+            ],
+            "submenu": [
+                {
+                    "url": "/order",
+                    "name": "Orders",
+                    "slug": "order.index"
+                },
+                {
+                    "url": "/product",
+                    "name": "Product",
+                    "slug": "product.index"
+                },
+                {
+                    "url": "/productcategory",
+                    "name": "Product Categories",
+                    "slug": "productcategory.index"
+                }
+            ]
+        },
+        {
+            "url": "/paymentcollection",
+            "name": "Payment Collections",
             "icon": "menu-icon bx bx-money",
-            "slug": "user.payroll.index"
-        },
-        {
-            "url": "/user/leaves",
+            "slug": "paymentcollection.index",
+            "addon": "PaymentCollection",
             "roles": [
                 "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ],
-            "name": "My Leaves",
-            "icon": "menu-icon bx bx-calendar-event",
-            "slug": "user.leaves.index"
-        },
-        {
-            "url": "/user/attendance",
-            "name": "My Attendance",
-            "icon": "menu-icon bx bx-time",
-            "slug": "user.attendance.index",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
+                "hr"
             ]
         },
         {
-            "url": "/user/sos",
-            "name": "My SOS",
-            "icon": "menu-icon bx bx-error",
-            "slug": "user.sos.index",
-            "addon": "DisabledModule",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ]
-        },
-        {
-            "url": "/user/visits",
-            "name": "My Visits",
-            "icon": "menu-icon bx bx-map-pin",
-            "slug": "user.visits.index",
-            "addon": "DisabledModule",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ]
-        },
-        {
-            "url": "/mind-speak",
-            "name": "Innovation Hub",
-            "icon": "menu-icon bx bx-brain",
-            "slug": "mind-speak.index",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
-            ]
-        },
-        {
-            "menuHeader": "Requests",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "accounts"
-            ]
+            "menuHeader": "Approvals"
         },
         {
             "name": "Approvals",
             "icon": "menu-icon bx bx-check-shield",
             "slug": [
-                "leaveRequests.index",
-                "expenseRequests.index",
                 "documentmanagement.index",
-                "loan.index",
                 "approvals.index"
             ],
             "roles": [
@@ -745,38 +847,9 @@
             ],
             "submenu": [
                 {
-                    "url": "/leaveRequests",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager",
-                        "accounts"
-                    ],
-                    "name": "Leave Requests",
-                    "slug": "leaveRequests.index"
-                },
-                {
-                    "url": "/expenseRequests",
-                    "name": "Expense Requests",
-                    "slug": "expenseRequests.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
                     "url": "/documentmanagement",
                     "name": "Document Requests",
                     "slug": "documentmanagement.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/loan",
-                    "name": "Loan Requests",
-                    "slug": "loan.index",
                     "roles": [
                         "admin",
                         "hr"
@@ -794,72 +867,60 @@
             ]
         },
         {
-            "url": "/my-assets",
-            "name": "My Assets",
-            "icon": "menu-icon bx bx-archive",
-            "slug": "myAssets.index",
-            "roles": [
-                "employee",
-                "manager",
-                "accounts"
-            ]
+            "menuHeader": "My Workspace"
         },
         {
-            "url": "/asset-management",
-            "name": "Asset Management",
-            "icon": "menu-icon bx bx-archive",
-            "permission": "assets.view",
-            "roles": [
-                "admin",
-                "hr"
-            ],
+            "name": "My Workspace",
+            "icon": "menu-icon bx bx-user-circle",
             "slug": [
-                "assets.index"
+                "user.payroll.index",
+                "user.leaves.index",
+                "user.attendance.index",
+                "user.sos.index",
+                "user.visits.index",
+                "myAssets.index",
+                "travel-claims.index",
+                "hr-policies.employee.index",
+                "lms.my.courses",
+                "disciplinaryactions.warnings.my-warnings"
             ],
-            "submenu": [
-                {
-                    "url": "/asset-management",
-                    "name": "Asset Manager",
-                    "slug": "assets.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/asset-categories",
-                    "name": "Asset Categories",
-                    "slug": "assetCategories.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                }
-            ]
-        },
-        {
-            "url": "/lms",
-            "name": "Learning Management",
-            "icon": "menu-icon bx bx-book",
-            "addon": "LMS",
             "roles": [
                 "admin",
                 "hr",
                 "manager",
                 "employee",
-                "accounts"
-            ],
-            "slug": [
-                "lms.categories.index",
-                "lms.courses.index",
-                "lms.my.courses"
+                "accounts",
+                "office_employee"
             ],
             "submenu": [
                 {
-                    "url": "/my-learning",
-                    "name": "My Learning",
-                    "slug": "lms.my.courses",
-                    "addon": "LMS",
+                    "url": "/user/payroll",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ],
+                    "name": "My Payroll",
+                    "slug": "user.payroll.index"
+                },
+                {
+                    "url": "/user/leaves",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ],
+                    "name": "My Leaves",
+                    "slug": "user.leaves.index"
+                },
+                {
+                    "url": "/user/attendance",
+                    "name": "My Attendance",
+                    "slug": "user.attendance.index",
                     "roles": [
                         "admin",
                         "hr",
@@ -869,20 +930,247 @@
                     ]
                 },
                 {
-                    "url": "/lms/courses",
-                    "name": "Courses",
-                    "slug": "lms.courses.index",
-                    "addon": "LMS",
+                    "url": "/user/sos",
+                    "name": "My SOS",
+                    "slug": "user.sos.index",
+                    "addon": "DisabledModule",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/user/visits",
+                    "name": "My Visits",
+                    "slug": "user.visits.index",
+                    "addon": "DisabledModule",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/my-assets",
+                    "name": "My Assets",
+                    "slug": "myAssets.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/travel-claims",
+                    "name": "My Claims",
+                    "slug": "travel-claims.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/my-policies",
+                    "name": "My Policies",
+                    "slug": "hr-policies.employee.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/my-learning",
+                    "name": "My Learning",
+                    "slug": "lms.my.courses",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ],
+                    "addon": "LMS"
+                },
+                {
+                    "url": "/disciplinary-actions/warnings/my-warnings",
+                    "name": "My Warnings",
+                    "slug": "disciplinaryactions.warnings.my-warnings",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ],
+                    "addon": "DisciplinaryActions"
+                }
+            ]
+        },
+        {
+            "menuHeader": "Administration"
+        },
+        {
+            "name": "Organisation Masters",
+            "icon": "menu-icon bx bx-sitemap",
+            "slug": [
+                "departments.index",
+                "designations.index",
+                "teams.index",
+                "units.index"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "manager"
+            ],
+            "submenu": [
+                {
+                    "url": "/departments",
+                    "name": "Departments",
+                    "slug": "departments.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
+                    "url": "/designations",
+                    "name": "Designations",
+                    "slug": "designations.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
+                    "url": "/teams",
+                    "name": "Teams",
+                    "slug": "teams.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
+                    "url": "/units",
+                    "name": "Units",
+                    "slug": "units.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Leave Setup",
+            "icon": "menu-icon bx bx-calendar-check",
+            "slug": [
+                "leaveTypes.index",
+                "leavePolicyProfiles.index"
+            ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "submenu": [
+                {
+                    "url": "/leaveTypes",
+                    "name": "Leave Types",
+                    "slug": "leaveTypes.index",
                     "roles": [
                         "admin",
                         "hr"
                     ]
                 },
                 {
-                    "url": "/lms/categories",
-                    "name": "Categories",
-                    "slug": "lms.categories.index",
-                    "addon": "LMS",
+                    "url": "/leavePolicyProfiles",
+                    "name": "Leave Profiles",
+                    "slug": "leavePolicyProfiles.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Attendance Setup",
+            "icon": "menu-icon bx bx-fingerprint",
+            "slug": [
+                "ipgroup.index",
+                "geofencegroup.index",
+                "qrcode.index",
+                "dynamicqrattendance.index",
+                "device.index"
+            ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "submenu": [
+                {
+                    "url": "/ipgroup",
+                    "name": "IP Groups",
+                    "slug": "ipgroup.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/geofencegroup",
+                    "name": "Geofence Groups",
+                    "slug": "geofencegroup.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/qrcode",
+                    "name": "QR Groups",
+                    "slug": "qrcode.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/dynamicqrattendance",
+                    "name": "QR Devices",
+                    "icon": "menu-icon bx bx-devices",
+                    "slug": "dynamicqrattendance.index",
+                    "addon": "DynamicQrAttendance",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/device",
+                    "name": "Registered Devices",
+                    "icon": "menu-icon bx bx-devices",
+                    "slug": "device.index",
+                    "addon": "DisabledModule",
                     "roles": [
                         "admin",
                         "hr"
@@ -891,59 +1179,58 @@
             ]
         },
         {
-            "url": "/roles",
-            "icon": "menu-icon tf-icons bx bx-user",
-            "name": "Roles & Permissions",
-            "slug": "roles.index",
-            "permission": "roles.manage"
-        },
-        {
-            "url": "/device",
-            "name": "Registered Devices",
-            "icon": "menu-icon bx bx-devices",
-            "slug": "device.index",
-            "addon": "DisabledModule",
+            "name": "Other Masters",
+            "icon": "menu-icon bx bx-list-ul",
+            "slug": [
+                "documenttypes.index",
+                "expenseTypes.index"
+            ],
             "roles": [
                 "admin",
                 "hr"
+            ],
+            "submenu": [
+                {
+                    "url": "/documenttypes",
+                    "name": "Document Types",
+                    "slug": "documenttypes.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/expenseTypes",
+                    "name": "Expense Types",
+                    "slug": "expenseTypes.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
             ]
         },
         {
-            "url": "/dynamicqrattendance",
-            "name": "QR Devices",
-            "icon": "menu-icon bx bx-devices",
-            "slug": "dynamicqrattendance.index",
-            "addon": "DynamicQrAttendance",
+            "name": "HR Policies",
+            "icon": "menu-icon bx bx-book-content",
+            "slug": [
+                "hr-policies.index"
+            ],
             "roles": [
                 "admin",
                 "hr"
-            ]
-        },
-        {
-            "url": "/auditLogs",
-            "icon": "menu-icon tf-icons bx bx-history",
-            "name": "Audit Logs",
-            "slug": "auditLogs.index",
-            "permission": "audit.view"
-        },
-        {
-            "url": "/dataImportExport",
-            "name": "Data Import/Export",
-            "icon": "menu-icon bx bx-import",
-            "slug": "dataImportExport.index",
-            "addon": "DataImportExport",
-            "roles": [
-                "admin"
-            ]
-        },
-        {
-            "menuHeader": "Tools & Addons",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts"
+            ],
+            "submenu": [
+                {
+                    "url": "/hr-policies",
+                    "name": "Manage Policies",
+                    "icon": "menu-icon bx bx-file-blank",
+                    "slug": "hr-policies.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
             ]
         },
         {
@@ -992,6 +1279,71 @@
             ]
         },
         {
+            "name": "Asset Management",
+            "icon": "menu-icon bx bx-archive",
+            "permission": "assets.view",
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "slug": [
+                "assets.index",
+                "assetCategories.index"
+            ],
+            "submenu": [
+                {
+                    "url": "/asset-management",
+                    "name": "Asset Manager",
+                    "slug": "assets.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/asset-categories",
+                    "name": "Asset Categories",
+                    "slug": "assetCategories.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
+            ]
+        },
+        {
+            "url": "/roles",
+            "icon": "menu-icon tf-icons bx bx-user",
+            "name": "Roles & Permissions",
+            "slug": "roles.index",
+            "permission": "roles.manage",
+            "roles": [
+                "admin",
+                "hr"
+            ]
+        },
+        {
+            "url": "/auditLogs",
+            "icon": "menu-icon tf-icons bx bx-history",
+            "name": "Audit Logs",
+            "slug": "auditLogs.index",
+            "permission": "audit.view",
+            "roles": [
+                "admin",
+                "hr"
+            ]
+        },
+        {
+            "url": "/dataImportExport",
+            "name": "Data Import/Export",
+            "icon": "menu-icon bx bx-import",
+            "slug": "dataImportExport.index",
+            "addon": "DataImportExport",
+            "roles": [
+                "admin"
+            ]
+        },
+        {
             "url": "/aiChat",
             "name": "AI Chat",
             "icon": "menu-icon bx bx-chat",
@@ -1016,76 +1368,10 @@
                 "manager"
             ],
             "slug": [
-                "departments.index",
-                "designations.index",
-                "organizationHierarchy.index",
-                "units.index",
-                "shifts.index",
-                "holidays.index",
-                "leaveTypes.index",
-                "leavePolicyProfiles.index",
-                "expenseTypes.index",
-                "documenttypes.index"
+                "settings.index",
+                "expenseTypes.index"
             ],
             "submenu": [
-                {
-                    "url": "/departments",
-                    "name": "Departments",
-                    "slug": "departments.index",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager"
-                    ]
-                },
-                {
-                    "url": "/designations",
-                    "name": "Designations",
-                    "slug": "designations.index",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager"
-                    ]
-                },
-                {
-                    "url": "/units",
-                    "name": "Units",
-                    "slug": "units.index",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager"
-                    ]
-                },
-                {
-                    "url": "/shifts",
-                    "name": "Shifts",
-                    "slug": "shifts.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/leaveTypes",
-                    "name": "Leave Types",
-                    "slug": "leaveTypes.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/leavePolicyProfiles",
-                    "name": "Leave Profiles",
-                    "slug": "leavePolicyProfiles.index",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager"
-                    ]
-                },
                 {
                     "url": "/expenseTypes",
                     "name": "Expense Types",
@@ -1094,17 +1380,9 @@
                         "admin",
                         "hr"
                     ]
-                },
-                {
-                    "url": "/documenttypes",
-                    "name": "Document Types",
-                    "slug": "documenttypes.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
                 }
-            ]
+            ],
+            "url": "/settings"
         }
     ]
 }

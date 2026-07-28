@@ -93,6 +93,50 @@
             $menuIndex = 0;
         }
         $targetMenu = $menuData[$menuIndex]->menu ?? [];
+
+        // Headers are filtered independently of their items, so a role with no
+        // items in a section still saw its header — e.g. an employee got an
+        // empty "Administration" heading. Pre-compute, per header, whether any
+        // item beneath it survives the same gates the render loop applies, and
+        // drop the ones that would head an empty group.
+        $menuUser = auth()->user();
+        $itemVisible = function ($m) use ($menuUser, $addonService, $settings) {
+            if (isset($m->addon) && !$addonService->isAddonEnabled($m->addon)) return false;
+            if (isset($m->standardAddon)
+                && !in_array($m->standardAddon, $settings->available_modules ?? [])) return false;
+
+            $isAdminUser = $menuUser
+                ? $menuUser->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr'])
+                : false;
+
+            if (isset($m->roles)) {
+                if (!$menuUser) return false;
+                $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
+                $rr = array_map('strtolower', (array) $m->roles);
+                if (empty(array_intersect($ur, $rr))) return false;
+            }
+            if (isset($m->permission) && !$isAdminUser) {
+                if (!$menuUser || !$menuUser->can($m->permission)) return false;
+            }
+            if (isset($m->department) && !$isAdminUser) {
+                if (!$menuUser || !$menuUser->department
+                    || stripos($menuUser->department->name, $m->department) === false) return false;
+            }
+            return true;
+        };
+
+        $liveHeaders = [];
+        $pendingHeader = null;
+        foreach ($targetMenu as $entry) {
+            if (isset($entry->menuHeader)) {
+                $pendingHeader = $entry->menuHeader;
+                continue;
+            }
+            if ($pendingHeader !== null && $itemVisible($entry)) {
+                $liveHeaders[$pendingHeader] = true;
+                $pendingHeader = null;   // this header is justified; stop testing it
+            }
+        }
       @endphp
 
       @foreach ($targetMenu as $menu)
@@ -125,6 +169,18 @@
               }
           }
         @endphp
+
+        @if (isset($menu->menuHeader))
+          {{-- Section headers were parsed out of the JSON but never drawn, so the
+               sidebar rendered as one flat list and every menuHeader entry was
+               dead weight. Draw them so the grouping is visible — but only when
+               this role actually has an item underneath (see $liveHeaders). --}}
+          @if (!empty($liveHeaders[$menu->menuHeader]))
+            <li class="hitech-menu-header">
+              <span class="hitech-menu-header-text">{{ __($menu->menuHeader) }}</span>
+            </li>
+          @endif
+        @endif
 
         @if (!isset($menu->menuHeader))
           @php

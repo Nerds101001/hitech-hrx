@@ -4452,3 +4452,53 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
 .table > tbody > tr:hover > * a:not(.badge):not([class*="text-"]) {
     color: #005a5a !important;
 }
+
+/* ============================================================
+   SIDEBAR SECTION HEADERS
+   tenantVerticalMenu.json has always carried menuHeader entries, but the
+   tenant renderer skipped them, so the sidebar was one flat list of ~30
+   items. Now that they render, style them as quiet dividers that group
+   the items beneath without competing with them.
+   ============================================================ */
+.hitech-menu-header {
+    list-style: none;
+    padding: 1.15rem 1.5rem 0.4rem;
+    margin-top: 0.25rem;
+
+    &:first-child {
+        padding-top: 0.5rem;
+        margin-top: 0;
+    }
+}
+
+.hitech-menu-header-text {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.42);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Light sidebars (if the theme is switched) need a darker label */
+.light-style .menu:not(.bg-menu-theme-dark) .hitech-menu-header-text,
+.menu-light .hitech-menu-header-text {
+    color: rgba(0, 90, 90, 0.55);
+}
+
+/* Collapsed sidebar: headers would wrap and break the rail, so hide the
+   text and leave a thin rule as the group separator. */
+.layout-menu-collapsed:not(.layout-menu-hover) .hitech-menu-header {
+    padding: 0.6rem 1rem 0.35rem;
+
+    .hitech-menu-header-text {
+        display: block;
+        height: 1px;
+        overflow: hidden;
+        text-indent: -999px;
+        background: rgba(255, 255, 255, 0.14);
+    }
+}
