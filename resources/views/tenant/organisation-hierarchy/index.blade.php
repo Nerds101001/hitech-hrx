@@ -231,26 +231,40 @@
     font-weight:700;padding:1px 8px;border-radius:20px;border:2px solid #fff}
   .oc-cnt em{font-style:normal;opacity:.55;margin:0 1px}
 
-  /* ---- team members: stacked one below another, branching off a spine on
-         the LEFT (file-tree style). One card wide, so a 20-person team costs
-         240px of width instead of a five-across grid. ---- */
-  .oc-team{position:relative;margin-top:30px;padding:8px 0 2px 28px;
+  .oc-team{position:relative}
+  .oc-team-i{position:relative;min-width:0}
+
+  /* ---- MID-BRANCH team: compact horizontal block, so the sub-branches
+         below stay aligned under their parent. ---- */
+  .oc-team-grid{margin-top:26px;padding:15px 12px 11px;
+    border:1.5px dashed #cbd8e0;border-radius:12px;background:#fbfdfe;
+    display:grid;gap:7px;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr))}
+  .oc-team-grid::before{content:'';position:absolute;top:-26px;left:50%;
+    width:2px;height:26px;background:#cbd8e0}
+  .oc-team-grid > .oc-team-lbl{position:absolute;top:-10px;left:14px;
+    background:#fbfdfe;padding:0 7px;font-size:.6rem;font-weight:800;
+    letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
+
+  /* ---- LAST NODE team: stacked one below another off a spine on the LEFT
+         (file-tree style). One card wide. ---- */
+  .oc-team-stack{margin-top:30px;padding:8px 0 2px 28px;
     display:flex;flex-direction:column;gap:5px;align-self:center}
   /* elbow: drop from the parent's centre, then jog left onto the spine */
-  .oc-team::before{content:'';position:absolute;left:50%;top:-30px;width:2px;height:18px;background:#cbd8e0}
-  .oc-team::after{content:'';position:absolute;left:0;top:-12px;width:50%;height:2px;background:#cbd8e0}
-
-  .oc-team-lbl{position:absolute;top:-30px;left:calc(50% + 10px);
+  .oc-team-stack::before{content:'';position:absolute;left:50%;top:-30px;
+    width:2px;height:18px;background:#cbd8e0}
+  .oc-team-stack::after{content:'';position:absolute;left:0;top:-12px;
+    width:50%;height:2px;background:#cbd8e0}
+  .oc-team-stack > .oc-team-lbl{position:absolute;top:-30px;left:calc(50% + 10px);
     font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
     color:#94a3b8;background:#fbfdfe;padding:0 5px;white-space:nowrap}
-
-  .oc-team-i{position:relative;min-width:0}
   /* vertical spine running through each row */
-  .oc-team-i::before{content:'';position:absolute;left:-28px;top:0;bottom:0;width:2px;background:#cbd8e0}
+  .oc-team-stack > .oc-team-i::before{content:'';position:absolute;left:-28px;
+    top:0;bottom:0;width:2px;background:#cbd8e0}
   /* horizontal tick into the card */
-  .oc-team-i::after{content:'';position:absolute;left:-28px;top:50%;width:24px;height:2px;background:#cbd8e0}
-  /* the spine stops at the last row's centre, giving the closing elbow */
-  .oc-team-i:last-child::before{bottom:50%}
+  .oc-team-stack > .oc-team-i::after{content:'';position:absolute;left:-28px;
+    top:50%;width:24px;height:2px;background:#cbd8e0}
+  /* spine stops at the last row's centre, giving the closing elbow */
+  .oc-team-stack > .oc-team-i:last-child::before{bottom:50%}
 
   /* manager children branch sideways */
   .oc-branch{display:flex;justify-content:center;align-items:flex-start;gap:28px;
