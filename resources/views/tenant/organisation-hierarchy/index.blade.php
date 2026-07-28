@@ -10,21 +10,9 @@
 @endsection
 
 @php
-    // Colour per department, stable for the whole page.
-    $palette = ['#005a5a','#0d9488','#2563eb','#7c3aed','#c2410c','#be123c','#047857','#4f46e5',
-                '#b45309','#0f766e','#6d28d9','#9d174d','#1d4ed8','#065f46'];
-    $collectDepts = function ($nodes) use (&$collectDepts) {
-        $out = [];
-        foreach ($nodes as $n) {
-            $out[] = $n['department'] ?? 'Unassigned';
-            $out = array_merge($out, $collectDepts($n['children'] ?? []));
-        }
-        return $out;
-    };
-    $allDepts = array_values(array_unique($collectDepts($hierarchy ?? [])));
-    sort($allDepts);
-    $deptColour = [];
-    foreach ($allDepts as $i => $d) { $deptColour[$d] = $palette[$i % count($palette)]; }
+    // $deptColour comes from the controller so the chart borders and the
+    // legend swatches are guaranteed to agree.
+    $deptColour = $deptColour ?? [];
 
     $teamOf = function ($n) use (&$teamOf) {
         return array_sum(array_map(fn($c) => 1 + $teamOf($c), $n['children'] ?? []));
@@ -53,36 +41,24 @@
 
     <div class="px-4">
 
-        {{-- ============ LEADERSHIP ============ --}}
-        @if (!empty($directors))
-        <div class="hitech-card-white p-4 mb-4 animate__animated animate__fadeInUp">
-            <h6 class="oc-band oc-band-dir">Board / Directors</h6>
-            <div class="oc-leads">
-                @foreach ($directors as $d)
-                    <article class="oc-lead" style="--c:#005a5a">
-                        <span class="oc-av lg" style="--c:#005a5a">{{ $d['initials'] }}</span>
-                        <span>
-                            <b>{{ $d['name'] }}</b>
-                            <i>{{ $d['designation'] }}</i>
-                            <u>{{ count($d['children']) }} direct · {{ $teamOf($d) }} total</u>
-                        </span>
-                    </article>
-                @endforeach
-            </div>
-        </div>
-        @endif
+        {{-- Directors now sit inside the chart itself, under the company root,
+             so the whole organisation reads as a single tree. --}}
 
-        @if (!empty($gms))
+        @if (!empty($gmsWithoutReports))
         <div class="hitech-card-white p-4 mb-4 animate__animated animate__fadeInUp" style="animation-delay:.05s">
             <h6 class="oc-band oc-band-gm">General Manager Level</h6>
+            <p class="text-muted small mb-3">
+                Senior positions with no direct reports recorded, so they have no branch in the
+                chart above. GMs who do have a team appear in the tree beside the directors.
+            </p>
             <div class="oc-leads">
-                @foreach ($gms as $g)
+                @foreach ($gmsWithoutReports as $g)
                     <article class="oc-lead" style="--c:#7c3aed">
                         <span class="oc-av lg" style="--c:#7c3aed">{{ $g['initials'] }}</span>
                         <span>
                             <b>{{ $g['name'] }}</b>
                             <i>{{ $g['designation'] }}</i>
-                            <u>{{ count($g['children']) ? count($g['children']).' direct · '.$teamOf($g).' total' : 'no direct reports' }}</u>
+                            <u>{{ $g['department'] }}</u>
                         </span>
                     </article>
                 @endforeach
@@ -217,8 +193,14 @@
     position:relative;z-index:1;cursor:pointer;transition:box-shadow .18s,transform .18s,border-color .18s}
   .oc-box:hover,.oc-box:focus{box-shadow:0 8px 20px rgba(0,90,90,.16);transform:translateY(-2px);
     border-color:#005a5a;border-width:2.5px;outline:none}
-  .oc-box.oc-leaf{width:224px;border-width:1px;border-color:#dde5ec;background:#fdfefe}
-  .oc-box.oc-leaf:hover{border-color:#005a5a;border-width:2px}
+  .oc-box.oc-leaf{width:224px;border-width:1px;background:#fdfefe}
+  /* Company root: the single node the whole organisation hangs from. */
+  .oc-box.oc-org{width:270px;background:linear-gradient(120deg,#005a5a,#0d9488);
+    border-color:#00403f;cursor:default;padding:11px 13px}
+  .oc-box.oc-org b{color:#fff;font-size:.92rem}
+  .oc-box.oc-org i{color:rgba(255,255,255,.75)}
+  .oc-box.oc-org .oc-av{background:rgba(255,255,255,.2);font-size:.72rem}
+  .oc-box.oc-org:hover{transform:none;box-shadow:0 8px 22px rgba(0,90,90,.25)}
   .oc-av{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:var(--c,#005a5a);
     color:#fff;display:grid;place-items:center;font-size:.62rem;font-weight:700}
   .oc-av.lg{width:38px;height:38px;flex:0 0 38px;font-size:.74rem}
