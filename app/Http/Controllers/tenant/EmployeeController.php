@@ -2314,6 +2314,13 @@ class EmployeeController extends Controller
       
       $isTrainingRequired = $request->has('is_training_required') && $request->is_training_required == '1';
 
+      // "Create & Activate" bypasses the onboarding form entirely: the account
+      // is usable immediately. The modal posts creation_mode=active for that
+      // button and 'invite' for Send Invitation. Without this the flag was
+      // accepted and ignored, so BOTH buttons created an onboarding account —
+      // which is why activation appeared to do nothing.
+      $activateNow = $request->input('creation_mode') === 'active';
+
       $user = User::create([
         'tenant_id'              => $authenticatedUser->tenant_id,
         'first_name'             => $request->firstName,
@@ -2329,10 +2336,14 @@ class EmployeeController extends Controller
         'date_of_joining'        => $request->doj ?: null,
         'base_salary'            => $request->baseSalary ?: null,
         'ctc_offered'            => $request->annualCtc ?: null,
-        'status'                 => UserAccountStatus::ONBOARDING,
-        'onboarding_at'          => now(),
-        'onboarding_deadline'    => now()->addDays(3),
-        'probation_period_months'=> $request->probationPeriodMonths ?? 6,
+        'status'                 => $activateNow
+                                      ? UserAccountStatus::ACTIVE
+                                      : UserAccountStatus::ONBOARDING,
+        // An activated account never has an onboarding form to fill, so it
+        // must not carry a deadline that would flag it as overdue.
+        'onboarding_at'          => $activateNow ? null : now(),
+        'onboarding_deadline'    => $activateNow ? null : now()->addDays(3),
+        'probation_period_months'=> $request->probationPeriodMonths ?? 11,
         'created_by_id'          => $authenticatedUser->id,
         'password'               => bcrypt($plainPassword),
         'is_training_required'   => $isTrainingRequired,
@@ -2345,20 +2356,35 @@ class EmployeeController extends Controller
           if ($role) $user->roles()->sync([$role->id]);
       }
 
-      // Send Invitation Notification (with password)
-      $user->notify(new OnboardingInvite($user, $plainPassword));
+      // Both modes email the credentials — an activated user still needs to
+      // know their login. A mail failure must not roll back the account.
+      try {
+        $user->notify(new OnboardingInvite($user, $plainPassword));
+      } catch (\Throwable $mailError) {
+        Log::error('Onboarding invite mail failed for ' . $user->email . ': ' . $mailError->getMessage());
+      }
 
       DB::commit();
+
+      // The modal's JS switches its success dialog on data.mode, so it has to
+      // be returned or an activated account still reads "Invitation Sent".
+      $mode = $activateNow ? 'active' : 'invite';
 
       if ($request->ajax() || $request->wantsJson()) {
         return response()->json([
           'status'         => 'success',
-          'message'        => 'Onboarding invitation sent successfully!',
+          'mode'           => $mode,
+          'message'        => $activateNow
+                                ? 'Account created and activated — the employee can log in now.'
+                                : 'Onboarding invitation sent successfully!',
           'plain_password' => $plainPassword,
           'redirect'       => route('tenant.dashboard')
         ]);
       }
-      return redirect()->route('tenant.dashboard')->with('success', 'Onboarding invitation sent! <br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword);
+
+      return redirect()->route('tenant.dashboard')->with('success',
+        ($activateNow ? 'Account created and ACTIVATED! ' : 'Onboarding invitation sent! ')
+        . '<br><b>Login:</b> ' . $user->email . '<br><b>Password:</b> ' . $plainPassword);
 
     } catch (\Exception $e) {
       DB::rollBack();
