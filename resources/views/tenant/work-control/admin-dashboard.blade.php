@@ -227,9 +227,12 @@
                     <tbody>
                         @forelse($users as $user)
                             @php
-                                $dailyMins = $user->workControlRoutines->sum('daily_equivalent_minutes');
-                                $hours = floor($dailyMins / 60);
-                                $mins = round($dailyMins % 60);
+                                // Round to whole minutes first: the raw sum is a float, and using
+                                // % on a float raises an implicit-conversion deprecation per row
+                                // (PHP 8.1+).
+                                $dailyMins = (int) round($user->workControlRoutines->sum('daily_equivalent_minutes'));
+                                $hours = intdiv($dailyMins, 60);
+                                $mins = $dailyMins % 60;
                                 
                                 // Max visualization is 10 hours (600 mins)
                                 $percent = min(100, ($dailyMins / 600) * 100);
