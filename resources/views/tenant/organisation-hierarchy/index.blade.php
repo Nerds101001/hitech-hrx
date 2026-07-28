@@ -75,6 +75,11 @@
                     <i class="bx bx-search"></i>
                     <input type="search" id="ocSearch" placeholder="Search name, designation, department or code…">
                 </div>
+                <span class="oc-hint" title="Hold Ctrl (⌘ on Mac) and scroll to zoom the chart">
+                    <i class="bx bx-mouse"></i>
+                    <span><kbd>Ctrl</kbd> + scroll to zoom</span>
+                </span>
+                <span class="oc-zoomval" id="ocZoomVal">100%</span>
                 <div class="btn-group shadow-sm rounded-pill overflow-hidden border">
                     <button class="btn btn-white px-3" id="ocOut" title="Zoom out"><i class="bx bx-minus"></i></button>
                     <button class="btn btn-white px-3" id="ocIn" title="Zoom in"><i class="bx bx-plus"></i></button>
@@ -180,6 +185,17 @@
   .oc-search input{width:100%;padding:9px 13px 9px 36px;border:1px solid #e6ecf1;
     border-radius:30px;background:#f8fafc;font-size:.85rem}
   .oc-search input:focus{outline:none;border-color:#0d9488;background:#fff}
+  .oc-hint{display:inline-flex;align-items:center;gap:7px;font-size:.72rem;color:#64748b;
+    background:#f1f5f9;border:1px solid #e2e8f0;border-radius:30px;padding:6px 13px;white-space:nowrap}
+  .oc-hint i{font-size:.95rem;color:#0d9488}
+  .oc-hint kbd{background:#fff;border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:5px;
+    padding:1px 6px;font-size:.68rem;font-weight:700;color:#334155;font-family:inherit}
+  .oc-zoomval{font-size:.72rem;font-weight:800;color:#005a5a;background:#e6f2f1;
+    border-radius:20px;padding:6px 12px;min-width:56px;text-align:center}
+  /* brief flash when Ctrl+scroll changes the zoom, so the value draws the eye */
+  .oc-zoomval.pulse{animation:ocPulse .45s ease}
+  @keyframes ocPulse{0%{background:#0d9488;color:#fff;transform:scale(1.12)}100%{background:#e6f2f1;color:#005a5a;transform:scale(1)}}
+  @media (max-width:900px){ .oc-hint{display:none} }
 
   /* ---------- chart ---------- */
   .oc-scroller{overflow:auto;padding:26px 10px 30px;background:linear-gradient(#fbfdfe,#fff)}
@@ -215,14 +231,26 @@
     font-weight:700;padding:1px 8px;border-radius:20px;border:2px solid #fff}
   .oc-cnt em{font-style:normal;opacity:.55;margin:0 1px}
 
-  /* team block: compact grid, never a long column */
-  .oc-team{position:relative;margin-top:26px;padding:15px 12px 11px;
-    border:1.5px dashed #cbd8e0;border-radius:12px;background:#fbfdfe;
-    display:grid;gap:7px;grid-template-columns:repeat(var(--cols,3),minmax(0,1fr))}
-  .oc-team::before{content:'';position:absolute;top:-26px;left:50%;width:2px;height:26px;background:#cbd8e0}
-  .oc-team-lbl{position:absolute;top:-10px;left:14px;background:#fbfdfe;padding:0 7px;
-    font-size:.6rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
-  .oc-team-i{min-width:0}
+  /* ---- team members: stacked one below another, branching off a spine on
+         the LEFT (file-tree style). One card wide, so a 20-person team costs
+         240px of width instead of a five-across grid. ---- */
+  .oc-team{position:relative;margin-top:30px;padding:8px 0 2px 28px;
+    display:flex;flex-direction:column;gap:5px;align-self:center}
+  /* elbow: drop from the parent's centre, then jog left onto the spine */
+  .oc-team::before{content:'';position:absolute;left:50%;top:-30px;width:2px;height:18px;background:#cbd8e0}
+  .oc-team::after{content:'';position:absolute;left:0;top:-12px;width:50%;height:2px;background:#cbd8e0}
+
+  .oc-team-lbl{position:absolute;top:-30px;left:calc(50% + 10px);
+    font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    color:#94a3b8;background:#fbfdfe;padding:0 5px;white-space:nowrap}
+
+  .oc-team-i{position:relative;min-width:0}
+  /* vertical spine running through each row */
+  .oc-team-i::before{content:'';position:absolute;left:-28px;top:0;bottom:0;width:2px;background:#cbd8e0}
+  /* horizontal tick into the card */
+  .oc-team-i::after{content:'';position:absolute;left:-28px;top:50%;width:24px;height:2px;background:#cbd8e0}
+  /* the spine stops at the last row's centre, giving the closing elbow */
+  .oc-team-i:last-child::before{bottom:50%}
 
   /* manager children branch sideways */
   .oc-branch{display:flex;justify-content:center;align-items:flex-start;gap:28px;
@@ -272,17 +300,56 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ---------- zoom ---------- */
     var zoom = 1;
+    var zoomVal = document.getElementById('ocZoomVal');
+
     function applyZoom(z) {
         // Floor of 0.25 — below that the cards are unreadable smudges, so a
         // very wide org "fits" to 25% and scrolls rather than vanishing.
         zoom = Math.min(1.4, Math.max(0.25, z));
         chart.style.transform = 'scale(' + zoom + ')';
         scroller.style.height = (chart.scrollHeight * zoom + 60) + 'px';
+        if (zoomVal) { zoomVal.textContent = Math.round(zoom * 100) + '%'; }
+        return zoom;
     }
+
+    /**
+     * Zoom keeping the point under the cursor fixed, so Ctrl+scroll magnifies
+     * whatever you are pointing at instead of drifting to a corner.
+     * transform-origin is 0 0, so chart coords = (scroll + offset) / zoom.
+     */
+    function zoomAt(clientX, clientY, target) {
+        var box = scroller.getBoundingClientRect();
+        var ox = clientX - box.left, oy = clientY - box.top;
+        var cx = (scroller.scrollLeft + ox) / zoom;
+        var cy = (scroller.scrollTop + oy) / zoom;
+        var z  = applyZoom(target);
+        scroller.scrollLeft = cx * z - ox;
+        scroller.scrollTop  = cy * z - oy;
+    }
+
     function fit() {
         applyZoom((scroller.clientWidth - 30) / chart.scrollWidth);
         scroller.scrollLeft = 0;
     }
+
+    // Ctrl/Cmd + wheel zooms the chart. preventDefault stops the browser's own
+    // page zoom taking over; without the passive:false option the browser
+    // ignores that and zooms the whole page instead.
+    var pulseTimer = null;
+    scroller.addEventListener('wheel', function (e) {
+        if (!e.ctrlKey && !e.metaKey) return;   // plain scroll still scrolls
+        e.preventDefault();
+        var step = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+        zoomAt(e.clientX, e.clientY, zoom * step);
+
+        if (zoomVal) {
+            zoomVal.classList.remove('pulse');
+            void zoomVal.offsetWidth;           // restart the animation
+            zoomVal.classList.add('pulse');
+            clearTimeout(pulseTimer);
+            pulseTimer = setTimeout(function () { zoomVal.classList.remove('pulse'); }, 500);
+        }
+    }, { passive: false });
     function centreOnRoot() {
         var first = chart.querySelector('.oc-root .oc-box');
         if (!first) return;

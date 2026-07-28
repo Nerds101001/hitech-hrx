@@ -3,9 +3,10 @@
 
     Shape rule that keeps the chart readable at 200+ people:
       • children WITH their own reports  → branch sideways (classic tree)
-      • children WITHOUT reports (ICs)   → a compact wrapped grid beneath
-    A manager with 20 reports therefore becomes a 5x4 block, not 20 boxes
-    across (52,000px wide) and not a 20-row column.
+      • children WITHOUT reports (ICs)   → stacked one below another, hanging
+        off a spine on the left (file-tree style)
+    Managers still fan out horizontally so the reporting shape is obvious,
+    but a 20-person team costs one card of width instead of five.
 
     Expects: $node (array from OrganisationHierarchyController::formatUserNode)
 --}}
@@ -13,9 +14,6 @@
     $children = $node['children'] ?? [];
     $mgrKids  = array_values(array_filter($children, fn($c) => !empty($c['children'])));
     $icKids   = array_values(array_filter($children, fn($c) => empty($c['children'])));
-
-    // Roughly square block: 1-3 stay on one row, 20 becomes 5 wide.
-    $cols = max(1, min(6, (int) ceil(sqrt(max(1, count($icKids))))));
 
     $countTeam = function ($n) use (&$countTeam) {
         return array_sum(array_map(fn($c) => 1 + $countTeam($c), $n['children'] ?? []));
@@ -32,7 +30,7 @@
     ])
 
     @if (count($icKids))
-        <div class="oc-team" style="--cols: {{ $cols }}">
+        <div class="oc-team">
             <span class="oc-team-lbl">{{ count($icKids) }} team member{{ count($icKids) === 1 ? '' : 's' }}</span>
             @foreach ($icKids as $ic)
                 <div class="oc-team-i">
