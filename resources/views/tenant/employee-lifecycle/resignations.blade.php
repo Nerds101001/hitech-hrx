@@ -68,10 +68,10 @@
                       </div>
                     </div>
                   </td>
-                  <td>{{ $resignation->notice_date->format('d M Y') }}</td>
-                  <td>{{ $resignation->resignation_date->format('d M Y') }}</td>
+                  <td>{{ $resignation->notice_date ? $resignation->notice_date->format('d M Y') : '—' }}</td>
+                  <td>{{ $resignation->resignation_date ? $resignation->resignation_date->format('d M Y') : '—' }}</td>
                   <td>{{ $resignation->relieving_date ? $resignation->relieving_date->format('d M Y') : 'TBD' }}</td>
-                  <td><small>{{ Str::limit($resignation->reason, 20) }}</small></td>
+                  <td><small>{{ \Illuminate\Support\Str::limit($resignation->reason ?: '—', 20) }}</small></td>
                   <td>
                     <span class="badge {{ $resignation->status == 'accepted' ? 'bg-label-success' : ($resignation->status == 'pending' ? 'bg-label-warning' : 'bg-label-secondary') }}">
                       {{ ucfirst($resignation->status) }}
@@ -83,7 +83,7 @@
                         <i class="ti ti-dots-vertical"></i>
                       </button>
                       <div class="dropdown-menu dropdown-menu-end">
-                        @if($resignation->status == 'pending')
+                        @if($resignation->status == 'pending' && $resignation->id)
                           <form action="{{ route('employee-lifecycle.resignations.approve', $resignation->id) }}" method="POST" class="d-inline">
                             @csrf
                             <button type="submit" class="dropdown-item text-success"><i class="ti ti-check me-1"></i> Accept</button>

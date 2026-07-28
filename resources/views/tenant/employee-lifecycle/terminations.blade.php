@@ -69,10 +69,10 @@
                     </div>
                   </td>
                   <td>
-                    <span class="text-capitalize">{{ str_replace('_', ' ', $termination->type) }}</span>
+                    <span class="text-capitalize">{{ str_replace('_', ' ', $termination->type ?? $termination->termination_type ?? '—') }}</span>
                   </td>
-                  <td>{{ $termination->notice_date->format('d M Y') }}</td>
-                  <td>{{ $termination->termination_date->format('d M Y') }}</td>
+                  <td>{{ $termination->notice_date ? $termination->notice_date->format('d M Y') : '—' }}</td>
+                  <td>{{ $termination->termination_date ? $termination->termination_date->format('d M Y') : '—' }}</td>
                   <td>
                     <span class="badge {{ $termination->status == 'completed' ? 'bg-label-success' : 'bg-label-warning' }}">
                       {{ ucfirst($termination->status) }}

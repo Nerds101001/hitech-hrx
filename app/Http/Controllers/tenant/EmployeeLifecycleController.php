@@ -256,11 +256,88 @@ class EmployeeLifecycleController extends Controller
     /**
      * Display resignations page
      */
+    /**
+     * Exit types recorded on the users table that count as a resignation
+     * rather than a termination.
+     */
+    private const RESIGNATION_TYPES = ['resignation', 'resignation_without_notice_period'];
+
+    /**
+     * Builds a uniform row set from BOTH exit paths.
+     *
+     * Terminations and resignations are actually performed by
+     * EmployeeController's exit action, which writes status / exit_date /
+     * last_working_day / termination_type / exit_reason straight onto the user
+     * and never creates an employee_terminations or employee_resignations row.
+     * Reading only those tables showed an empty page while 24 real exits sat in
+     * `users`, so both sources are merged here and shaped alike for the view.
+     */
+    private function exitRows(bool $wantResignations)
+    {
+        $types = self::RESIGNATION_TYPES;
+
+        $users = User::whereNotNull('termination_type')
+            ->when($wantResignations,
+                fn ($q) => $q->whereIn('termination_type', $types),
+                fn ($q) => $q->whereNotIn('termination_type', $types))
+            ->with('department')
+            ->get()
+            ->map(function ($u) {
+                $type = $u->termination_type instanceof \App\Enums\TerminationType
+                    ? $u->termination_type->value
+                    : (string) $u->termination_type;
+
+                $asDate = fn ($v) => $v ? \Carbon\Carbon::parse($v) : null;
+                $exit   = $asDate($u->exit_date);
+                $lwd    = $asDate($u->last_working_day);
+
+                return (object) [
+                    'id'                => null,   // no dedicated row to act on
+                    'user'              => $u,
+                    'notice_date'       => $exit,
+                    'resignation_date'  => $exit,
+                    'relieving_date'    => $lwd,
+                    'termination_date'  => $lwd ?? $exit,
+                    'effective_date'    => $lwd ?? $exit,
+                    'reason'            => $u->exit_reason,
+                    'reason_type'       => $type,
+                    'termination_type'  => $type,
+                    'type'              => $type,   // the terminations view uses ->type
+                    'status'            => 'completed',
+                    'is_rehireable'     => (bool) $u->is_eligible_for_rehire,
+                    'approvedBy'        => null,
+                    'processedBy'       => null,
+                    'from_user_record'  => true,
+                ];
+            });
+
+        $model = $wantResignations ? EmployeeResignation::class : EmployeeTermination::class;
+        $rows  = $model::with(['user', 'approvedBy'])->latest()->get()
+            ->map(function ($r) {
+                $r->from_user_record = false;
+                return $r;
+            });
+
+        $merged = $rows->concat($users)
+            ->sortByDesc(fn ($r) => $r->effective_date ?? $r->resignation_date ?? $r->termination_date)
+            ->values();
+
+        // Views call ->links(), so hand back a real paginator over the merge
+        $page    = \Illuminate\Pagination\Paginator::resolveCurrentPage() ?: 1;
+        $perPage = 15;
+
+        return new \Illuminate\Pagination\LengthAwarePaginator(
+            $merged->forPage($page, $perPage)->values(),
+            $merged->count(),
+            $perPage,
+            $page,
+            ['path' => \Illuminate\Pagination\Paginator::resolveCurrentPath()]
+        );
+    }
+
     public function resignations(): View
     {
-        $resignations = EmployeeResignation::with(['user', 'approvedBy'])
-            ->latest()
-            ->paginate(15);
+        $resignations = $this->exitRows(true);
 
         return view('tenant.employee-lifecycle.resignations', compact('resignations'));
     }
@@ -290,9 +367,7 @@ class EmployeeLifecycleController extends Controller
      */
     public function terminations(): View
     {
-        $terminations = EmployeeTermination::with(['user', 'approvedBy'])
-            ->latest()
-            ->paginate(15);
+        $terminations = $this->exitRows(false);
 
         return view('tenant.employee-lifecycle.terminations', compact('terminations'));
     }
