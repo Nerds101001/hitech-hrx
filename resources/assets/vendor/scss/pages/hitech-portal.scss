@@ -4541,3 +4541,104 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
 .card.actions-only > .card-body {
     padding: 0.75rem 1rem;
 }
+
+/* ============================================================
+   LIST-PAGE DENSITY
+   Measured on the Probation Dashboard at a 720px window, the title
+   row, stat cards and filter bar pushed the table down to y=593 —
+   82% of the window was chrome and only two rows were visible. The
+   causes were a 174px stat card (.dashboard-variant forces
+   flex-direction: column, so the icon stacked above the figure), a
+   filter bar padded with p-sm-5 (3rem) whose 400px search box wrapped
+   the buttons onto a second line, and 3rem mb-6 gaps between blocks.
+
+   The fixed navbar plus .layout-page clearance is 74px and cannot
+   move — that is the app header, ~10% of the window. This block gets
+   the rest down so the table starts around 30%.
+
+   Scoped to .layout-full-width (21 list/dashboard pages) so forms and
+   detail pages keep their roomier spacing.
+   ============================================================ */
+.layout-full-width {
+
+    /* ---- title + page action row ---- */
+    > .d-flex:first-of-type,
+    .page-header-compact {
+        margin-bottom: 0.5rem !important;
+        padding-bottom: 0.25rem;
+
+        h3, h4 { font-size: 1.15rem; }
+        p      { font-size: 0.75rem; }
+    }
+
+    /* ---- stat strip: icon BESIDE the figure, not above it ---- */
+    .hitech-stat-card,
+    .hitech-stat-card.dashboard-variant {
+        display: flex;
+        flex-direction: row !important;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.45rem 0.75rem !important;
+        border-radius: 12px;
+
+        &:hover { transform: translateY(-2px); }
+
+        .stat-card-header {
+            margin-bottom: 0 !important;
+            flex: 0 0 auto;
+        }
+
+        .stat-icon-wrap {
+            width: 28px !important;
+            height: 28px !important;
+            font-size: 0.9rem !important;
+            border-radius: 8px;
+            margin: 0;
+        }
+
+        .stat-value  { font-size: 1.1rem; font-weight: 800; line-height: 1.15; }
+        .stat-label  { font-size: 0.6rem; letter-spacing: 0.03em; line-height: 1.2; display: block; }
+    }
+
+    /* ---- gaps between the blocks ---- */
+    .row.g-6 {
+        --bs-gutter-y: 0.5rem;
+        --bs-gutter-x: 0.5rem;
+    }
+
+    .mb-6 { margin-bottom: 0.6rem !important; }
+    .mt-4 { margin-top: 0.6rem !important; }
+    .pt-5 { padding-top: 0.75rem !important; }
+
+    /* ---- filter bar ---- */
+    .hitech-card-white > .card-body {
+        &.p-sm-5, &.p-4, &.p-3 { padding: 0.45rem 0.7rem !important; }
+    }
+
+    /* the 400px search box wrapped the buttons to a second line */
+    .search-wrapper-hitech {
+        width: 250px !important;
+        min-width: 180px;
+
+        .form-control { height: 31px; }
+    }
+
+    .btn-search {
+        padding: 0.2rem 0.7rem !important;
+        span { display: none; }        /* the icon carries it at this size */
+    }
+
+    .form-select,
+    .btn-white {
+        min-height: 31px;
+        font-size: 0.78rem;
+        padding-top: 0.2rem !important;
+        padding-bottom: 0.2rem !important;
+    }
+
+    label.form-label { font-size: 0.68rem; margin-bottom: 0.2rem !important; }
+
+    /* ---- table rows ---- */
+    .table thead th { padding: 0.45rem 0.85rem; font-size: 0.68rem; }
+    .table tbody td { padding: 0.45rem 0.85rem; }
+}
