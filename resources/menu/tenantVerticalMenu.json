@@ -7,7 +7,10 @@
             "url": "/",
             "name": "Dashboard",
             "icon": "menu-icon bx bx-home",
-            "slug": ["tenant.dashboard", "user.dashboard.index"],
+            "slug": [
+                "tenant.dashboard",
+                "user.dashboard.index"
+            ],
             "roles": [
                 "admin",
                 "hr",
@@ -21,7 +24,10 @@
             "url": "/announcements",
             "name": "Announcements",
             "icon": "menu-icon bx bx-broadcast",
-            "slug": ["announcements.dashboard", "announcements.feed"],
+            "slug": [
+                "announcements.dashboard",
+                "announcements.feed"
+            ],
             "roles": [
                 "admin",
                 "hr",
@@ -251,7 +257,6 @@
                 }
             ]
         },
-
         {
             "name": "Attendance",
             "icon": "menu-icon bx bx-time-five",
@@ -276,6 +281,19 @@
                     "slug": "biometric.index"
                 }
             ]
+        },
+        {
+            "url": "/holidays/dashboard",
+            "name": "Holidays",
+            "slug": [
+                "holidays.dashboard",
+                "holidays.index"
+            ],
+            "roles": [
+                "admin",
+                "hr"
+            ],
+            "icon": "menu-icon bx bx-calendar-star"
         },
         {
             "url": "/payroll",
@@ -566,7 +584,12 @@
                     "url": "/sales-visits/reports",
                     "name": "Analytics & Reports",
                     "slug": "sales-visits.reports",
-                    "roles": ["admin", "hr", "manager", "accounts"]
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "accounts"
+                    ]
                 },
                 {
                     "url": "/sales-visits/clients",
@@ -1039,15 +1062,6 @@
                     "url": "/shifts",
                     "name": "Shifts",
                     "slug": "shifts.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/holidays/dashboard",
-                    "name": "Holidays",
-                    "slug": ["holidays.dashboard", "holidays.index"],
                     "roles": [
                         "admin",
                         "hr"

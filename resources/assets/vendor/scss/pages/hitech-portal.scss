@@ -4395,3 +4395,38 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
     }
 }
 
+
+/* ===========================================================
+   BRAND BADGES — on-brand replacements for the stock theme's
+   cyan (.bg-label-info #03c3ec) and grey (.bg-label-secondary),
+   which read as foreign next to the HRX teal identity.
+   Used by the Holiday and Announcement dashboards.
+   =========================================================== */
+.badge-brand {
+    background-color: #e6f4f1 !important;
+    color: #005a5a !important;
+    border: 1px solid rgba(0, 90, 90, .18);
+    font-weight: 700;
+}
+
+.badge-brand-solid {
+    background: linear-gradient(135deg, #005a5a, #007a7a) !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
+/* Location-specific vs company-wide holiday distinction, both on-brand */
+.badge-brand-soft {
+    background-color: #f0f7f6 !important;
+    color: #00706e !important;
+    border: 1px solid rgba(0, 122, 122, .16);
+    font-weight: 600;
+}
+
+/* Muted state (past / inactive) — warm grey, not the theme's blue-grey */
+.badge-muted {
+    background-color: #f1f0ec !important;
+    color: #78716c !important;
+    border: 1px solid rgba(120, 113, 108, .18);
+    font-weight: 600;
+}

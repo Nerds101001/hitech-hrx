@@ -111,6 +111,9 @@ class HolidayController extends Controller
       return DataTables::of($query)
         ->addColumn('date_formatted', fn ($h) => $h->date->format('d M Y'))
         ->addColumn('day_name', fn ($h) => $h->date->format('l'))
+        ->addColumn('type_label', fn ($h) => $h->type_label)
+        ->addColumn('is_part_day', fn ($h) => $h->isPartDay())
+        ->addColumn('gender_scope', fn ($h) => $h->applies_to_gender ?? 'all')
         ->addColumn('site_name', fn ($h) => $h->site->name ?? 'All Locations')
         ->addColumn('is_global', fn ($h) => is_null($h->site_id))
         ->addColumn('status_value', fn ($h) => $h->status instanceof Status ? $h->status->value : $h->status)
@@ -206,7 +209,13 @@ class HolidayController extends Controller
       'date' => 'required|date',
       'site_id' => 'nullable|exists:sites,id',
       'notes' => 'nullable|string|max:500',
+      'holiday_type' => 'nullable|in:full,half,hours',
+      'hours_off' => 'nullable|numeric|min:0.5|max:7|required_if:holiday_type,hours',
+      'session' => 'nullable|in:morning,afternoon',
+      'applies_to_gender' => 'nullable|in:all,male,female',
     ]);
+
+    $type = $request->holiday_type ?: 'full';
 
     $data = [
       'name' => $request->name,
@@ -215,6 +224,12 @@ class HolidayController extends Controller
       'date' => $request->date,
       'site_id' => $request->site_id ?: null,
       'notes' => $request->notes,
+      'holiday_type' => $type,
+      // hours_off is only meaningful for the 'hours' type; clear it otherwise
+      // so switching a row back to full/half can't leave a stale value behind
+      'hours_off' => $type === 'hours' ? $request->hours_off : null,
+      'session' => $type === 'full' ? null : ($request->session ?: null),
+      'applies_to_gender' => $request->applies_to_gender ?: 'all',
     ];
 
     if ($holidayId) {
@@ -249,7 +264,11 @@ class HolidayController extends Controller
       'code' => $holiday->code,
       'date' => $holiday->date->format('Y-m-d'),
       'site_id' => $holiday->site_id,
-      'notes' => $holiday->notes
+      'notes' => $holiday->notes,
+      'holiday_type' => $holiday->holiday_type ?? 'full',
+      'hours_off' => $holiday->hours_off,
+      'session' => $holiday->session,
+      'applies_to_gender' => $holiday->applies_to_gender ?? 'all',
     ];
 
     return Success::response($response);

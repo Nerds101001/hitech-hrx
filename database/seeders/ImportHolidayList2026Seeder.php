@@ -151,9 +151,34 @@ class ImportHolidayList2026Seeder extends Seeder
             $siteIds = array_values(array_unique($siteIds));
 
             foreach ($rows as [$date, $name, $isFull, $offText]) {
+                // Classify the OFF TIME text into a real part-day concession
+                // instead of skipping it. "4 PM OFF" / "2PM OFF" = leaving
+                // early; "MORNING ... 11:30" = starting late; both are hours
+                // off a normal 7h45m day, not a full day off.
+                $type = 'full'; $hoursOff = null; $session = null; $gender = 'all';
                 if (!$isFull) {
-                    $partDay[] = "{$block} | {$date} | {$name} | {$offText}";
-                    continue;
+                    $u = strtoupper($offText);
+                    if (str_contains($u, 'FEMALE')) { $gender = 'female'; }
+
+                    if (preg_match('/(\d{1,2})[:.]?(\d{2})?\s*PM\s*OFF/', $u, $m)) {
+                        // Leaving at H PM against a ~6 PM finish
+                        $leaveHour = (int) $m[1];
+                        $hoursOff = max(0.5, 18 - ($leaveHour + 12 > 18 ? $leaveHour : $leaveHour + 12));
+                        $type = 'hours'; $session = 'afternoon';
+                    } elseif (preg_match('/(\d{1,2})[:.](\d{2})/', $u, $m) && str_contains($u, 'MORNING')) {
+                        // Starting at 11:30 against a ~9:30 start
+                        $startMins = ((int) $m[1]) * 60 + (int) $m[2];
+                        $hoursOff = max(0.5, round(($startMins - 570) / 60, 2));
+                        $type = 'hours'; $session = 'morning';
+                    } else {
+                        $type = 'half';
+                    }
+
+                    if ($type === 'hours' && $hoursOff !== null) {
+                        $hoursOff = min(7.0, (float) $hoursOff);
+                    }
+                    $partDay[] = "{$block} | {$date} | {$name} | {$offText} => {$type}"
+                        . ($hoursOff !== null ? " {$hoursOff}h" : '') . " ({$gender})";
                 }
 
                 foreach ($siteIds as $siteId) {
@@ -171,8 +196,13 @@ class ImportHolidayList2026Seeder extends Seeder
                         'date'     => $date,
                         'code'     => 'HOL' . str_pad((string) $nextCode, 4, '0', STR_PAD_LEFT),
                         'site_id'  => $siteId,
-                        'notes'    => "Imported from Staff Holiday List 2026 ({$block})",
+                        'notes'    => "Imported from Staff Holiday List 2026 ({$block})"
+                                      . ($isFull ? '' : " — {$offText}"),
                         'status'   => 'active',
+                        'holiday_type'      => $type,
+                        'hours_off'         => $hoursOff,
+                        'session'           => $session,
+                        'applies_to_gender' => $gender,
                     ]);
                     $created++;
                 }
@@ -187,8 +217,8 @@ class ImportHolidayList2026Seeder extends Seeder
             foreach (array_unique($unmappedSites) as $u) { $this->command->warn("  - {$u}"); }
         }
 
-        $this->command->warn("\n" . count($partDay) . " PART-DAY rows deliberately NOT imported as holidays");
-        $this->command->warn("(a holiday row = full day off, which would wrongly cancel a working day):");
+        $this->command->info("\n" . count($partDay) . " PART-DAY concessions imported (day still worked, required hours reduced):");
+        
         foreach ($partDay as $p) { $this->command->line("  - {$p}"); }
     }
 }

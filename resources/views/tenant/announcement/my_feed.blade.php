@@ -47,9 +47,9 @@
                   <span class="badge rounded-pill" style="background: {{ $tone[1] }}; color: {{ $tone[0] }};">
                     {{ ucfirst($a->priority) }}
                   </span>
-                  <span class="badge bg-label-primary rounded-pill">{{ ucfirst($a->type) }}</span>
+                  <span class="badge badge-brand-soft rounded-pill">{{ ucfirst($a->type) }}</span>
                   @if($a->audience_type === 'team')
-                    <span class="badge bg-label-info rounded-pill"><i class="bx bx-group me-1"></i>Team</span>
+                    <span class="badge badge-brand rounded-pill"><i class="bx bx-group me-1"></i>Team</span>
                   @endif
                   @if($a->requires_acknowledgment)
                     <span class="badge bg-label-warning rounded-pill"><i class="bx bx-check-double me-1"></i>Acknowledgement required</span>

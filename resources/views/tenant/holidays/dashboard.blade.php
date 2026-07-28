@@ -208,6 +208,7 @@
               <th>Holiday</th>
               <th>Date</th>
               <th>Day</th>
+              <th>Time Off</th>
               <th>Location</th>
               <th>Notes</th>
               <th>Status</th>
@@ -251,6 +252,7 @@ document.addEventListener('DOMContentLoaded', function () {
       { data: 'name' },
       { data: 'date_formatted', name: 'date' },
       { data: 'day_name', orderable: false },
+      { data: 'type_label', name: 'holiday_type' },
       { data: 'site_name', name: 'site_id' },
       { data: 'notes_text', orderable: false },
       { data: 'status_value' },
@@ -261,7 +263,7 @@ document.addEventListener('DOMContentLoaded', function () {
         targets: 0,
         render: function (data, type, full) {
           var past = full.is_past
-            ? '<span class="badge bg-label-secondary rounded-pill ms-2" style="font-size:0.65rem;">PAST</span>'
+            ? '<span class="badge badge-muted rounded-pill ms-2" style="font-size:0.65rem;">PAST</span>'
             : '';
           return '<span class="fw-bold text-dark">' + $('<div>').text(data).html() + '</span>' + past +
                  '<br><small class="text-muted">' + $('<div>').text(full.code || '').html() + '</small>';
@@ -270,15 +272,26 @@ document.addEventListener('DOMContentLoaded', function () {
       {
         targets: 3,
         render: function (data, type, full) {
-          if (full.is_global) {
-            return '<span class="badge bg-label-primary rounded-pill"><i class="bx bx-globe me-1"></i>All Locations</span>';
+          var cls = full.is_part_day ? 'badge-brand-soft' : 'badge-brand-solid';
+          var g = '';
+          if (full.gender_scope && full.gender_scope !== 'all') {
+            g = '<br><small class="text-muted">' + full.gender_scope + ' staff only</small>';
           }
-          return '<span class="badge bg-label-info rounded-pill"><i class="bx bx-map-pin me-1"></i>' +
-                 $('<div>').text(data).html() + '</span>';
+          return '<span class="badge ' + cls + ' rounded-pill">' + $('<div>').text(data || '').html() + '</span>' + g;
         }
       },
       {
         targets: 4,
+        render: function (data, type, full) {
+          if (full.is_global) {
+            return '<span class="badge badge-brand-solid rounded-pill"><i class="bx bx-globe me-1"></i>All Locations</span>';
+          }
+          return '<span class="badge badge-brand rounded-pill"><i class="bx bx-map-pin me-1"></i>' +
+                 $('<div>').text(data).html() + '</span>';
+        }
+      },
+      {
+        targets: 5,
         render: function (data) {
           if (!data) return '<span class="text-muted">—</span>';
           var safe = $('<div>').text(data).html();
@@ -287,7 +300,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       },
       {
-        targets: 5,
+        targets: 6,
         render: function (data) {
           var cls = data === 'active' ? 'success' : 'secondary';
           var label = data ? data.charAt(0).toUpperCase() + data.slice(1) : '';
@@ -295,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       },
       {
-        targets: 6,
+        targets: 7,
         render: function (data, type, full) {
           return '<div class="d-flex align-items-center justify-content-center gap-2">' +
             '<a href="javascript:;" class="text-hitech edit-record" data-id="' + full.id + '" title="Edit"><i class="bx bx-edit fs-4"></i></a>' +
@@ -336,6 +349,8 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#holidayId').val('');
     $('#holidaySiteId').val('').trigger('change.select2');
     $('#holidayModalTitle').text('Add Holiday');
+    $('input[name=holiday_type][value=full]').prop('checked', true);
+    if (window.syncHolidayType) window.syncHolidayType();
   });
 
   $(document).on('click', '.edit-record', function () {
@@ -348,6 +363,11 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#holidayDate').val(h.date);
       $('#holidaySiteId').val(h.site_id || '').trigger('change.select2');
       $('#holidayNotes').val(h.notes);
+      $('input[name=holiday_type][value=' + (h.holiday_type || 'full') + ']').prop('checked', true);
+      $('#holidayHoursOff').val(h.hours_off || '');
+      $('#holidaySession').val(h.session || '');
+      $('#holidayGender').val(h.applies_to_gender || 'all');
+      if (window.syncHolidayType) window.syncHolidayType();
       $('#holidayModalTitle').text('Edit Holiday');
       $('#modalAddOrUpdateHoliday').modal('show');
     });

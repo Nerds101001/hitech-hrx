@@ -213,8 +213,8 @@ document.addEventListener('DOMContentLoaded', function () {
           var esc = function (s) { return $('<div>').text(s == null ? '' : s).html(); };
           var prio = { critical: 'danger', high: 'warning', medium: 'info', low: 'secondary' }[full.priority] || 'secondary';
           var badges = '<span class="badge bg-label-' + prio + ' rounded-pill me-1">' + esc(full.priority) + '</span>' +
-                       '<span class="badge bg-label-primary rounded-pill">' + esc(full.type) + '</span>';
-          var expired = full.is_expired ? '<span class="badge bg-label-secondary rounded-pill ms-1">EXPIRED</span>' : '';
+                       '<span class="badge badge-brand-soft rounded-pill">' + esc(full.type) + '</span>';
+          var expired = full.is_expired ? '<span class="badge badge-muted rounded-pill ms-1">EXPIRED</span>' : '';
           var off = full.is_active ? '' : '<span class="badge bg-label-danger rounded-pill ms-1">OFF</span>';
           return '<div class="fw-bold text-dark">' + esc(data) + '</div>' +
                  '<div class="mt-1">' + badges + expired + off + '</div>';
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', function () {
           var icon = full.audience_type === 'global' ? 'bx-globe'
                    : (full.audience_type === 'team' ? 'bx-group' : 'bx-target-lock');
           var safe = $('<div>').text(data || '').html();
-          return '<span class="badge bg-label-info rounded-pill"><i class="bx ' + icon + ' me-1"></i>' +
+          return '<span class="badge badge-brand rounded-pill"><i class="bx ' + icon + ' me-1"></i>' +
                  (safe.length > 46 ? safe.substring(0, 46) + '…' : safe) + '</span>';
         }
       },
