@@ -42,7 +42,13 @@
               $isVisible = true;
           } else {
               $hasRole = isset($menu->roles) ? ($user ? $user->hasRole((array) $menu->roles) : false) : true;
-              $hasPerm = isset($menu->permission) ? ($user ? $user->can($menu->permission) : false) : true;
+              // "permission" accepts a single name or a list, in which case ANY
+              // of them grants the item. Lets a group open up to a delegate who
+              // only needs one page inside it, while each sub-link keeps its own
+              // stricter gate.
+              $hasPerm = isset($menu->permission)
+                  ? ($user ? $user->canAny((array) $menu->permission) : false)
+                  : true;
               
               // Specific Hardcoded Travel & Expense logic
               if (isset($menu->name) && $menu->name === 'Travel & Expense' && $user && $user->hasRole('employee') && !$user->hasRole(['admin', 'hr', 'accounts', 'manager']) && $user->department !== 'Sales Department') {
@@ -102,7 +108,9 @@
                       $subVis = $isAdmin;
                       if (!$subVis) {
                           $sRole = isset($submenu->roles) ? ($user ? $user->hasRole((array) $submenu->roles) : false) : true;
-                          $sPerm = isset($submenu->permission) ? ($user ? $user->can($submenu->permission) : false) : true;
+                          $sPerm = isset($submenu->permission)
+                              ? ($user ? $user->canAny((array) $submenu->permission) : false)
+                              : true;
                           
                           $granularSubPerm = isset($submenu->name) ? Str::slug($submenu->name) . '.view' : null;
                           $hasSubOverride = false;

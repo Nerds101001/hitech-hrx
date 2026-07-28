@@ -891,17 +891,19 @@
                 "sales-visits.index",
                 "sales-visits.clients.index"
             ],
-            "permission": "access-sales-ops",
+            "permission": ["access-sales-ops", "cc_attendance.manage"],
             "submenu": [
                 {
                     "url": "/sales-visits",
                     "name": "All Visits",
-                    "slug": "sales-visits.index"
+                    "slug": "sales-visits.index",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/sales-visits/create",
                     "name": "Book a Visit",
-                    "slug": "sales-visits.create"
+                    "slug": "sales-visits.create",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/sales-visits/reports",
@@ -917,28 +919,32 @@
                 {
                     "url": "/sales-visits/clients",
                     "name": "Client Master",
-                    "slug": "sales-visits.clients.index"
+                    "slug": "sales-visits.clients.index",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/cc-attendance",
                     "name": "Attendance",
                     "slug": "cc-attendance.index",
-                    "department": "Customer Care"
+                    "permission": ["access-sales-ops", "cc_attendance.manage"]
                 },
                 {
                     "url": "/sales-visits/pipeline",
                     "name": "Sales Report",
-                    "slug": "sales-visits.pipeline.index"
+                    "slug": "sales-visits.pipeline.index",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/sales-visits/sales-pipeline",
                     "name": "Sales Pipeline",
-                    "slug": "sales-visits.actual-pipeline.index"
+                    "slug": "sales-visits.actual-pipeline.index",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/sales-visits/kingo-bingo",
                     "name": "Kingo Bingo",
-                    "slug": "sales-visits.kingo-bingo.index"
+                    "slug": "sales-visits.kingo-bingo.index",
+                    "permission": "access-sales-ops"
                 },
                 {
                     "url": "/sales-visits/sales-targets/import",

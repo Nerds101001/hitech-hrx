@@ -36,13 +36,11 @@ class AppServiceProvider extends ServiceProvider
         if ($user->hasRole(['admin', 'hr', 'Admin', 'HR'])) {
             return true;
         }
-        // Someone explicitly delegated CCare attendance management belongs in
-        // this group too — the CC Attendance page lives under Sales Field Ops,
-        // so without this the sidebar group (and therefore the only link to
-        // that page) stayed hidden from the very person granted the permission.
-        if ($user->can('cc_attendance.manage')) {
-            return true;
-        }
+        // NOTE: cc_attendance.manage deliberately does NOT grant this gate.
+        // It only opens the CC Attendance page, and the sidebar handles that
+        // by letting the "Sales Field Ops" group itself accept either
+        // permission while each sales sub-link stays gated on this one — so an
+        // attendance-only delegate sees Attendance and nothing else.
         // Mapped salespeople / CC agents from the salesperson map
         if (\App\Models\CcSalespersonMap::where('cc_user_id', $user->id)
             ->orWhere('sales_user_id', $user->id)
