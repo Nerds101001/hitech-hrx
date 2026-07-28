@@ -289,7 +289,7 @@
                 <div class="card-footer-premium text-center">
                     <p class="mb-0 text-muted small fw-medium">
                         Forgotten your password? 
-                        <a href="mailto:{{ config('variables.supportEmail') }}" class="text-primary fw-bold text-decoration-none">
+                        <a href="mailto:csenerds@gmail.com" class="text-primary fw-bold text-decoration-none">
                             <i class="bx bx-support me-1"></i>Contact Admin
                         </a>
                     </p>
