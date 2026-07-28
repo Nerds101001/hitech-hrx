@@ -4642,3 +4642,87 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
     .table thead th { padding: 0.45rem 0.85rem; font-size: 0.68rem; }
     .table tbody td { padding: 0.45rem 0.85rem; }
 }
+
+/* ============================================================
+   TABLES THAT READ AS TABLES
+   Row separators were rgba(0,0,0,0.03) — 3% opacity, effectively
+   invisible — so list pages looked like floating text rather than a
+   grid. Give rows a visible rule, a defined header and zebra
+   striping, and let the table sit flush inside its card instead of
+   inheriting the card's side padding.
+   ============================================================ */
+.table {
+    --hitech-rule: #e2e8f0;
+
+    thead th {
+        background: #f1f5f9 !important;
+        color: #475569 !important;
+        border-bottom: 2px solid #cbd5e1 !important;
+        white-space: nowrap;
+    }
+
+    tbody td {
+        border-bottom: 1px solid var(--hitech-rule) !important;
+        vertical-align: middle;
+    }
+
+    tbody tr:last-child td { border-bottom: 0 !important; }
+
+    /* striping makes wide rows scannable */
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+    tbody tr:hover           { background: #f0f7f6 !important; }
+}
+
+/* a table inside a card should be flush with the card edge */
+.hitech-card-white > .card-body > .table-responsive,
+.hitech-card-white > .card-body.p-0 > .table-responsive,
+.card-datatable.table-responsive {
+    margin: 0;
+
+    > .table { margin-bottom: 0; }
+}
+
+/* Toolbar directly above a table inside a card: search + count + action */
+.table-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: .6rem .85rem;
+    border-bottom: 1px solid #e2e8f0;
+    background: #fcfdfe;
+}
+
+.table-toolbar .toolbar-search {
+    position: relative;
+    min-width: 200px;
+}
+
+.table-toolbar .toolbar-search input {
+    height: 32px;
+    padding-left: 2rem;
+    font-size: .82rem;
+    border-radius: 8px;
+    border: 1px solid #dde3ea;
+    width: 240px;
+    max-width: 100%;
+}
+
+.table-toolbar .toolbar-search i {
+    position: absolute;
+    left: .6rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+.table-toolbar .toolbar-count {
+    font-size: .75rem;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+/* the six lifecycle stat cards were spilling past the card edge */
+.layout-full-width .row.g-6 > [class*="col-"] { min-width: 0; }

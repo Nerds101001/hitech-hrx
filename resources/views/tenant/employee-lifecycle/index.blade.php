@@ -123,7 +123,15 @@
 
           {{-- PROMOTIONS --}}
           <div class="tab-pane fade {{ $active === 'promotions' ? 'show active' : '' }}" id="tab-promotions" role="tabpanel">
-            <div class="d-flex justify-content-end px-3 pt-3">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search promotion..."
+                         data-filter-for="tab-promotions">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-promotions"></span>
+              </div>
               <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#promotionModal">
                 <i class="bx bx-plus me-1"></i>New Promotion
               </button>
@@ -155,6 +163,19 @@
 
           {{-- TRANSFERS --}}
           <div class="tab-pane fade {{ $active === 'transfers' ? 'show active' : '' }}" id="tab-transfers" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search transfer..."
+                         data-filter-for="tab-transfers">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-transfers"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#transferModal">
+                <i class="bx bx-plus me-1"></i>New Transfer
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -181,6 +202,19 @@
 
           {{-- RESIGNATIONS --}}
           <div class="tab-pane fade {{ $active === 'resignations' ? 'show active' : '' }}" id="tab-resignations" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search resignation..."
+                         data-filter-for="tab-resignations">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-resignations"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#resignationModal">
+                <i class="bx bx-plus me-1"></i>Record Resignation
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -206,6 +240,19 @@
 
           {{-- TERMINATIONS --}}
           <div class="tab-pane fade {{ $active === 'terminations' ? 'show active' : '' }}" id="tab-terminations" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search termination..."
+                         data-filter-for="tab-terminations">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-terminations"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#terminationModal">
+                <i class="bx bx-plus me-1"></i>Record Termination
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -239,6 +286,19 @@
 
           {{-- WARNINGS --}}
           <div class="tab-pane fade {{ $active === 'warnings' ? 'show active' : '' }}" id="tab-warnings" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search warning..."
+                         data-filter-for="tab-warnings">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-warnings"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#warningModal">
+                <i class="bx bx-plus me-1"></i>Issue Warning
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -263,6 +323,19 @@
 
           {{-- COMPLAINTS --}}
           <div class="tab-pane fade {{ $active === 'complaints' ? 'show active' : '' }}" id="tab-complaints" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search complaint..."
+                         data-filter-for="tab-complaints">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-complaints"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#complaintModal">
+                <i class="bx bx-plus me-1"></i>File Complaint
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -287,6 +360,19 @@
 
           {{-- TRIPS --}}
           <div class="tab-pane fade {{ $active === 'trips' ? 'show active' : '' }}" id="tab-trips" role="tabpanel">
+            <div class="table-toolbar">
+              <div class="d-flex align-items-center gap-2">
+                <div class="toolbar-search">
+                  <i class="bx bx-search"></i>
+                  <input type="text" placeholder="Search trip..."
+                         data-filter-for="tab-trips">
+                </div>
+                <span class="toolbar-count" data-count-for="tab-trips"></span>
+              </div>
+              <button class="btn-hitech rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#tripModal">
+                <i class="bx bx-plus me-1"></i>New Trip
+              </button>
+            </div>
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
@@ -382,6 +468,309 @@
   </div>
 </div>
 
+
+{{-- New Transfer --}}
+<div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-transfer"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">New Transfer</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.transfers.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">To Department <span class="text-danger">*</span></label>
+              <select name="to_department_id" class="form-select form-select-hitech" required><option value="">Select department</option>@foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach</select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Transfer Date <span class="text-danger">*</span></label>
+              <input type="date" name="transfer_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Reason</label>
+              <textarea name="reason" rows="2" class="form-control form-control-hitech"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Record Resignation --}}
+<div class="modal fade" id="resignationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-log-out"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">Record Resignation</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.resignations.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Resignation Date <span class="text-danger">*</span></label>
+              <input type="date" name="resignation_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Last Working Day <span class="text-danger">*</span></label>
+              <input type="date" name="last_working_day" class="form-control form-control-hitech" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Type <span class="text-danger">*</span></label>
+              <select name="reason_type" class="form-select form-select-hitech" required><option value="voluntary">Voluntary</option><option value="involuntary">Involuntary</option><option value="retirement">Retirement</option></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Rehireable</label>
+              <select name="is_rehireable" class="form-select form-select-hitech"><option value="1">Yes</option><option value="0">No</option></select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Reason</label>
+              <textarea name="reason" rows="2" class="form-control form-control-hitech"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Record Termination --}}
+<div class="modal fade" id="terminationModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-user-x"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">Record Termination</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.terminations.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Termination Type <span class="text-danger">*</span></label>
+              <select name="termination_type" class="form-select form-select-hitech" required><option value="layoff">Layoff</option><option value="misconduct">Misconduct</option><option value="performance">Performance</option><option value="violation">Violation</option><option value="contract_end">Contract End</option></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Effective Date <span class="text-danger">*</span></label>
+              <input type="date" name="termination_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Reason</label>
+              <textarea name="reason" rows="2" class="form-control form-control-hitech"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Issue Warning --}}
+<div class="modal fade" id="warningModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-error"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">Issue Warning</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.warnings.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Severity</label>
+              <select name="severity" class="form-select form-select-hitech"><option value="verbal">Verbal</option><option value="written">Written</option><option value="final">Final</option></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Issued Date <span class="text-danger">*</span></label>
+              <input type="date" name="issued_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Reason <span class="text-danger">*</span></label>
+              <textarea name="reason" rows="2" class="form-control form-control-hitech" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- File Complaint --}}
+<div class="modal fade" id="complaintModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-message-square-dots"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">File Complaint</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.complaints.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Subject <span class="text-danger">*</span></label>
+              <input type="text" name="subject" class="form-control form-control-hitech" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Category</label>
+              <select name="category" class="form-select form-select-hitech"><option value="harassment">Harassment</option><option value="workplace">Workplace</option><option value="payroll">Payroll</option><option value="other">Other</option></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Date</label>
+              <input type="date" name="complaint_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}">
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Details <span class="text-danger">*</span></label>
+              <textarea name="description" rows="2" class="form-control form-control-hitech" required></textarea>
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- New Trip --}}
+<div class="modal fade" id="tripModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center">
+          <div class="modal-icon-header me-3"><i class="bx bx-briefcase-alt"></i></div>
+          <h5 class="modal-title modal-title-hitech mb-0">New Trip</h5>
+        </div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <div class="modal-body modal-body-hitech">
+        <form action="{{ route('employee-lifecycle.trips.store') }}" method="POST">
+          @csrf
+          <div class="row g-4">
+            <div class="col-12">
+              <label class="form-label-hitech">Employee <span class="text-danger">*</span></label>
+              <select name="user_id" class="form-select form-select-hitech lc-select" required>
+                <option value="">Select employee</option>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ $e->first_name }} {{ $e->last_name }} ({{ $e->code }})</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Destination <span class="text-danger">*</span></label>
+              <input type="text" name="destination" class="form-control form-control-hitech" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Purpose</label>
+              <input type="text" name="purpose" class="form-control form-control-hitech">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">From <span class="text-danger">*</span></label>
+              <input type="date" name="start_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">To <span class="text-danger">*</span></label>
+              <input type="date" name="end_date" class="form-control form-control-hitech" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Estimated Cost</label>
+              <input type="number" name="estimated_cost" class="form-control form-control-hitech" step="0.01">
+            </div>
+          </div>
+          <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
+            <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-hitech-modal-submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .lifecycle-tabs {
     border-bottom: 1px solid rgba(0, 90, 90, .1);
@@ -422,7 +811,42 @@
       });
     });
 
+    // per-tab search: hides non-matching rows and keeps a live count
+    function refreshCount(paneId) {
+      const pane = document.getElementById(paneId);
+      if (!pane) return;
+      const rows = pane.querySelectorAll('tbody tr');
+      let shown = 0, total = 0;
+      rows.forEach(function (tr) {
+        if (tr.querySelector('td[colspan]')) return;   // the empty-state row
+        total++;
+        if (tr.style.display !== 'none') shown++;
+      });
+      const label = pane.parentElement.parentElement
+        .querySelector('[data-count-for="' + paneId + '"]');
+      if (label) {
+        label.textContent = shown === total
+          ? total + (total === 1 ? ' record' : ' records')
+          : shown + ' of ' + total;
+      }
+    }
+
+    document.querySelectorAll('[data-filter-for]').forEach(function (input) {
+      const paneId = input.dataset.filterFor;
+      input.addEventListener('input', function () {
+        const q = input.value.trim().toLowerCase();
+        const pane = document.getElementById(paneId);
+        pane.querySelectorAll('tbody tr').forEach(function (tr) {
+          if (tr.querySelector('td[colspan]')) return;
+          tr.style.display = (!q || tr.innerText.toLowerCase().includes(q)) ? '' : 'none';
+        });
+        refreshCount(paneId);
+      });
+      refreshCount(paneId);
+    });
+
     if (window.jQuery && jQuery.fn.select2) {
+      jQuery('.modal .lc-select').select2({ width: '100%' });
       jQuery('#promotionModal .lc-select').select2({
         dropdownParent: jQuery('#promotionModal'),
         width: '100%'
