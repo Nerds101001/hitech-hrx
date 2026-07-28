@@ -250,23 +250,24 @@
     letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
 
   /* ---- LAST NODE team: stacked one below another off a spine on the LEFT
-         (file-tree style). One card wide. ---- */
-  .oc-team-stack{margin-top:30px;padding:8px 0 2px 28px;
-    display:flex;flex-direction:column;gap:5px;align-self:center}
-  /* elbow: drop from the parent's centre, then jog left onto the spine */
-  .oc-team-stack::before{content:'';position:absolute;left:50%;top:-30px;
-    width:2px;height:18px;background:#cbd8e0}
-  .oc-team-stack::after{content:'';position:absolute;left:0;top:-12px;
-    width:50%;height:2px;background:#cbd8e0}
-  .oc-team-stack > .oc-team-lbl{position:absolute;top:-30px;left:calc(50% + 10px);
-    font-size:.58rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-    color:#94a3b8;background:#fbfdfe;padding:0 5px;white-space:nowrap}
-  /* vertical spine running through each row */
-  .oc-team-stack > .oc-team-i::before{content:'';position:absolute;left:-28px;
+         (file-tree style), inside the same dashed box the grid teams use so
+         both layouts read as one consistent component. ---- */
+  .oc-team-stack{margin-top:26px;padding:15px 12px 12px 36px;
+    border:1.5px dashed #cbd8e0;border-radius:12px;background:#fbfdfe;
+    display:flex;flex-direction:column;gap:6px;align-self:center}
+  /* stem from the parent's centre down to the top of the box */
+  .oc-team-stack::before{content:'';position:absolute;top:-26px;left:50%;
+    width:2px;height:26px;background:#cbd8e0}
+  .oc-team-stack > .oc-team-lbl{position:absolute;top:-10px;left:14px;
+    background:#fbfdfe;padding:0 7px;font-size:.6rem;font-weight:800;
+    letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
+  /* vertical spine running down inside the box */
+  .oc-team-stack > .oc-team-i::before{content:'';position:absolute;left:-20px;
     top:0;bottom:0;width:2px;background:#cbd8e0}
-  /* horizontal tick into the card */
-  .oc-team-stack > .oc-team-i::after{content:'';position:absolute;left:-28px;
-    top:50%;width:24px;height:2px;background:#cbd8e0}
+  .oc-team-stack > .oc-team-i:first-child::before{top:-12px}
+  /* horizontal tick into each card */
+  .oc-team-stack > .oc-team-i::after{content:'';position:absolute;left:-20px;
+    top:50%;width:16px;height:2px;background:#cbd8e0}
   /* spine stops at the last row's centre, giving the closing elbow */
   .oc-team-stack > .oc-team-i:last-child::before{bottom:50%}
 
