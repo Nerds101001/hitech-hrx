@@ -1,7 +1,7 @@
 <?php
 // Variables
 return [
-  "creatorName" => "Nerds",
+  "creatorName" => "Hi Tech Group",
   "creatorUrl" => "https://hitechgroup.in/",
   "supportNumber" => "+91 9814215000",
   "supportWhatsappURL" => "https://wa.me/+919814215000",

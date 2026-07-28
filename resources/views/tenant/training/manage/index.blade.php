@@ -762,7 +762,7 @@
 
     async function generateAIQuestions() {
         const moduleId = document.getElementById('q_module_id').value;
-        Swal.fire({ title:'Generating...', text:'Nerds AI is analysing the module content.', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+        Swal.fire({ title:'Generating...', text:'Hi Tech AI is analysing the module content.', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
         try {
             const res = await fetch(`{{ url('training/manage/module') }}/${moduleId}/generate-ai-questions`, {
                 method:'POST', headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}'}

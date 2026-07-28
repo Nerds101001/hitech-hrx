@@ -132,7 +132,7 @@
     <div class="library-banner">
         <div class="banner-content">
             <h1>AI Digital Library</h1>
-            <p>Secure documents & intelligent assistant powered by Nerds Bot.</p>
+            <p>Secure documents & intelligent assistant powered by Hi Tech Bot.</p>
         </div>
         @php $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR']); @endphp
         @if($vaultCanManage)
