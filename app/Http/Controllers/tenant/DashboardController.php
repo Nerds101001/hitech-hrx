@@ -1446,10 +1446,18 @@ class DashboardController extends Controller
 
   public function cardView()
   {
+    // SECURITY: this first paint used to load EVERY active user and every
+    // attendance row with no scoping, while cardViewAjax() (the auto-refresh)
+    // scoped correctly — so a manager or monitoring delegate briefly saw the
+    // whole company before the refresh silently narrowed it to their team.
+    // Same allowed-id set as the refresh now applies to both.
+    $allowedIds = $this->monitoringAllowedIds(auth()->user());
+
     $teamsList = Team::where('status', 'active')
       ->get();
 
     $attendances = Attendance::whereDate('created_at', now())
+      ->when($allowedIds !== null, fn($q) => $q->whereIn('user_id', $allowedIds))
       ->with('attendanceLogs')
       ->get();
 
@@ -1458,6 +1466,7 @@ class DashboardController extends Controller
     $users = User::where('status', '=', 'active')
       ->where('team_id', '!=', null)
       ->where('shift_id', '!=', null)
+      ->when($allowedIds !== null, fn($q) => $q->whereIn('id', $allowedIds))
       ->get();
 
     $userDevices = UserDevice::whereIn('user_id', $users->pluck('id'))
@@ -1585,12 +1594,17 @@ class DashboardController extends Controller
 
     $cardItems = [];
 
-    $allAttendanceIds = $attendances->pluck('id')->toArray();
-    $visitCountsAjax = empty($allAttendanceIds) ? collect() : Visit::whereIn('attendance_id', $allAttendanceIds)
+    // Visits hang off attendance_log_id (see Api\VisitController::store —
+    // attendance_id is never populated). This refresh used to group by
+    // attendance_id and therefore always returned 0, so every card's visit
+    // count silently changed the moment the first auto-refresh landed.
+    // Now it matches the page-load query exactly.
+    $allAttendanceLogIdsAjax = $attendances->flatMap(fn($a) => $a->attendanceLogs->pluck('id'))->all();
+    $visitCountsAjax = empty($allAttendanceLogIdsAjax) ? collect() : Visit::whereIn('attendance_log_id', $allAttendanceLogIdsAjax)
         ->whereDate('created_at', '=', now())
-        ->selectRaw('attendance_id, count(*) as count')
-        ->groupBy('attendance_id')
-        ->pluck('count', 'attendance_id');
+        ->selectRaw('attendance_log_id, count(*) as count')
+        ->groupBy('attendance_log_id')
+        ->pluck('count', 'attendance_log_id');
 
     foreach ($teamsList as $team) {
 
@@ -1611,12 +1625,18 @@ class DashboardController extends Controller
 
         $isOnline = $trackingHelper->isUserOnline($device->updated_at);
 
-        $visitsCount = $visitCountsAjax->get($attendance->id, 0);
+        // Sum across every log of this attendance, exactly like the page load.
+        $visitsCount = 0;
+        foreach ($attendance->attendanceLogs->pluck('id') as $alId) {
+          $visitsCount += $visitCountsAjax->get($alId, 0);
+        }
 
         $cardItems[] = [
           'id' => $attendance->user->id,
           'name' => $attendance->user->first_name . ' ' . $attendance->user->last_name,
-          'phoneNumber' => $attendance->user->phone_number,
+          // users.phone_number does not exist — the column is `phone`. The
+          // page load already reads $user->phone; this refresh returned null.
+          'phoneNumber' => $attendance->user->phone,
           'batteryLevel' => $device->battery_percentage,
           'isGpsOn' => $device->is_gps_on,
           'isWifiOn' => $device->is_wifi_on,
@@ -1639,7 +1659,14 @@ class DashboardController extends Controller
 
   public function timelineView()
   {
-    $employees = User::where('status', UserAccountStatus::ACTIVE)->get();
+    // The per-user AJAX endpoints already abort(403) for out-of-scope ids,
+    // but this picker listed EVERY active employee by name — so a manager
+    // or monitoring delegate could still read the full staff roster off the
+    // dropdown. Scoped to the same allowed set as the data behind it.
+    $allowedIds = $this->monitoringAllowedIds(auth()->user());
+    $employees = User::where('status', UserAccountStatus::ACTIVE)
+      ->when($allowedIds !== null, fn($q) => $q->whereIn('id', $allowedIds))
+      ->get();
 
     return view('tenant.dashboard.timeline_view', [
       'pageConfigs' => ['contentLayout' => 'wide'],
@@ -2021,14 +2048,21 @@ class DashboardController extends Controller
 
   public function getDepartmentPerformanceAjax()
   {
+    // Scope to whoever the caller may monitor — this endpoint used to return
+    // every department's headcount and attendance to anyone past the
+    // monitoring gate, including a timeline-only delegate.
+    $allowedIds = $this->monitoringAllowedIds(auth()->user());
+
     // Two bulk queries instead of one query per user (eliminates N×M×K N+1 problem)
     $totalByDept = User::where('status', UserAccountStatus::ACTIVE)
+        ->when($allowedIds !== null, fn($q) => $q->whereIn('id', $allowedIds))
         ->select('department_id', DB::raw('count(*) as total'))
         ->whereNotNull('department_id')
         ->groupBy('department_id')
         ->pluck('total', 'department_id');
 
     $presentByDept = Attendance::whereDate('check_in_time', today())
+        ->when($allowedIds !== null, fn($q) => $q->whereIn('attendances.user_id', $allowedIds))
         ->join('users', 'attendances.user_id', '=', 'users.id')
         ->select('users.department_id', DB::raw('count(*) as present_count'))
         ->whereNotNull('users.department_id')

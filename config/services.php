@@ -37,4 +37,12 @@ return [
     'password' => env('CRM_API_PASSWORD'),
   ],
 
+  // Google Maps key for Live Location, Timeline, SOS map and client
+  // create/edit. MUST be read via config() in Blade, never env(): env()
+  // returns null once `php artisan config:cache` has run, which silently
+  // broke every map in production.
+  'google_maps' => [
+    'key' => env('GOOGLE_MAPS_API_KEY'),
+  ],
+
 ];

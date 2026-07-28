@@ -64,7 +64,7 @@
     }
   </style>
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://maps.googleapis.com/maps/api/js?key={{ env('GOOGLE_MAPS_API_KEY') }}&callback=initMap&v=weekly"
+  <script src="https://maps.googleapis.com/maps/api/js?key={{ config('services.google_maps.key') }}&callback=initMap&v=weekly"
           async defer></script>
 
   <script>
@@ -90,6 +90,17 @@
       });
 
       fetchLiveLocations();
+
+      // The page is called "Live Location" but only ever loaded once, so the
+      // markers were a snapshot from whenever the tab was opened. Refresh on
+      // an interval, and pause while the tab is hidden so we don't poll a
+      // background tab forever.
+      setInterval(function () {
+        if (!document.hidden) fetchLiveLocations();
+      }, 45000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) fetchLiveLocations();
+      });
     }
 
     // 📡 Fetch Live Location Data
