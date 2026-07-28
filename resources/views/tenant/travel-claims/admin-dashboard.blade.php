@@ -4,9 +4,14 @@
 
 @section('vendor-style')
   @vite([
-    'resources/assets/vendor/scss/pages/hitech-portal.scss'
+    'resources/assets/vendor/scss/pages/hitech-portal.scss',
+    'resources/assets/vendor/libs/apex-charts/apex-charts.scss'
   ])
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+@endsection
+
+@section('vendor-script')
+  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.min.js'])
 @endsection
 
 @section('page-style')
@@ -93,6 +98,15 @@
       </div>
     </div>
   </div>
+
+  {{-- Claims per month. The controller has always built this dataset, but
+       the page had no chart to show it — a query with no consumer. --}}
+  @if(!empty($monthlyChart['data'] ?? []))
+  <div class="hitech-card mb-4 p-3">
+    <h6 class="mb-3 fw-bold">Claims per Month</h6>
+    <div id="claimsPerMonthChart" style="min-height:260px"></div>
+  </div>
+  @endif
 
   {{-- Filter & Sort Form --}}
   <div class="hitech-card mb-4 p-3">
@@ -519,6 +533,31 @@
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script>
+  // Claims per month — renders the dataset the controller has always built.
+  (function () {
+    var monthly = @json($monthlyChart ?? ['labels' => [], 'data' => []]);
+    var el = document.querySelector('#claimsPerMonthChart');
+    if (!el || !(monthly.data || []).length) return;
+    function go(tries) {
+      if (typeof ApexCharts === 'undefined') {
+        if ((tries || 0) > 100) return;
+        return setTimeout(function () { go((tries || 0) + 1); }, 50);
+      }
+      new ApexCharts(el, {
+        series: [{ name: 'Claims', data: monthly.data }],
+        chart: { type: 'bar', height: 260, toolbar: { show: false }, fontFamily: 'Public Sans, sans-serif' },
+        plotOptions: { bar: { borderRadius: 6, columnWidth: '45%', distributed: true } },
+        colors: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c084fc', '#0d9488', '#14b8a6'],
+        dataLabels: { enabled: true },
+        legend: { show: false },
+        xaxis: { categories: monthly.labels, labels: { style: { colors: '#64748b' } } },
+        grid: { borderColor: '#e2e8f0', strokeDashArray: 4 }
+      }).render();
+    }
+    go(0);
+  })();
+</script>
 <script>
   $(document).ready(function() {
     $('#claimsTable').DataTable({

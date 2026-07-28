@@ -884,14 +884,24 @@ Route::middleware([
             Route::post('/store', [\App\Http\Controllers\tenant\WorkControlController::class, 'store'])->name('store');
         });
 
-        // KPI / KRA (DWM-driven). Restricted to Admin only.
-        // NOTE: kept admin-only by default (not widened to hr|manager, even
-        // though KpiController itself allows them) to avoid a live access
-        // change without explicit sign-off — kpi.manage is available for
-        // individual delegation.
-        Route::middleware(['role_or_permission:admin|kpi.manage'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
+        // KPI / KRA (DWM-driven).
+        //
+        // "My Scorecard" is a SELF-service page — KpiController::my() and
+        // ::complete() both scope strictly to the caller's own user_id — but
+        // it was locked behind admin|kpi.manage while every employee's
+        // dashboard links to it, so each of them got a 403 on their own
+        // scorecard. Opened to any authenticated user; management stays
+        // admin-only below.
+        Route::prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/my', [\App\Http\Controllers\tenant\KpiController::class, 'my'])->name('my');
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
+        });
+
+        // Management side. NOTE: kept admin-only by default (not widened to
+        // hr|manager, even though KpiController itself allows them) to avoid a
+        // live access change without explicit sign-off — kpi.manage is
+        // available for individual delegation.
+        Route::middleware(['role_or_permission:admin|kpi.manage'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
             Route::post('/store', [\App\Http\Controllers\tenant\KpiController::class, 'store'])->name('store');
             Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');

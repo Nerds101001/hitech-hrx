@@ -507,27 +507,56 @@ public function update(Request $request, $id)
 
         $claims = $query->get();
 
+        // Stat cards must reflect the SAME filters as the table below them.
+        // They used to be six unfiltered queries, so choosing a status or
+        // month changed the table while the cards kept showing whole-company
+        // totals — the two halves of the page disagreed.
+        $statBase = function () use ($request) {
+            $q = TravelClaim::query();
+            if ($request->filled('status'))      $q->where('status', $request->status);
+            if ($request->filled('company'))     $q->where('company', $request->company);
+            if ($request->filled('claim_month')) $q->where('claim_month', $request->claim_month);
+            return $q;
+        };
+
+        $byStatus = $statBase()
+            ->selectRaw("status, COUNT(*) c, SUM(COALESCE(net_payable, total_amount, 0)) amt")
+            ->groupBy('status')->get()->keyBy('status');
+        $countOf = fn(array $statuses) => collect($statuses)->sum(fn($s) => (int) ($byStatus[$s]->c ?? 0));
+
         $stats = [
-            'total' => TravelClaim::count(),
-            'pending' => TravelClaim::where('status', 'submitted')->count(),
-            'approved' => TravelClaim::whereIn('status', ['approved', 'paid'])->count(),
-            'rejected' => TravelClaim::where('status', 'rejected')->count(),
-            'objection' => TravelClaim::where('status', 'objection')->count(),
-            'total_payout' => TravelClaim::whereIn('status', ['approved', 'paid'])->sum('net_payable'),
+            'total'        => (int) $byStatus->sum('c'),
+            'pending'      => $countOf(['submitted']),
+            'approved'     => $countOf(['approved', 'paid']),
+            'rejected'     => $countOf(['rejected']),
+            'objection'    => $countOf(['objection']),
+            'total_payout' => (float) collect(['approved', 'paid'])
+                ->sum(fn($s) => (float) ($byStatus[$s]->amt ?? 0)),
         ];
 
-        // Format for chart: Count of claims per month
+        // Claims per month — this query already existed but the blade never
+        // referenced it and the page had no chart at all, so it was a wasted
+        // query expressing an intent nobody could see. Now shaped for and
+        // rendered by a real chart on the page.
         $monthlyStatsRaw = TravelClaim::selectRaw('claim_month, count(*) as count')
             ->groupBy('claim_month')
             ->orderBy('claim_month', 'asc')
             ->get();
-        
+
         $monthlyStats = [];
         foreach ($monthlyStatsRaw as $stat) {
             $monthlyStats[$stat->claim_month] = $stat->count;
         }
 
-        return view('tenant.travel-claims.admin-dashboard', compact('claims', 'stats', 'monthlyStats'));
+        $monthlyChart = [
+            'labels' => array_map(
+                fn($m) => \Carbon\Carbon::createFromFormat('Y-m', $m)->format('M Y'),
+                array_keys($monthlyStats)
+            ),
+            'data' => array_values($monthlyStats),
+        ];
+
+        return view('tenant.travel-claims.admin-dashboard', compact('claims', 'stats', 'monthlyStats', 'monthlyChart'));
     }
 
     public function reject(Request $request, $id)
