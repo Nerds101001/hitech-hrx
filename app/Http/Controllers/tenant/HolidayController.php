@@ -64,6 +64,7 @@ class HolidayController extends Controller
       'pageConfigs' => ['contentLayout' => 'wide'],
       'statCounts'  => $statCounts,
       'sites'       => \App\Models\Site::orderBy('name')->get(['id', 'name']),
+      'departments' => \App\Models\Department::withoutGlobalScopes()->orderBy('name')->get(['id', 'name']),
       'year'        => $year,
       'years'       => $years,
     ]);
@@ -73,7 +74,7 @@ class HolidayController extends Controller
   public function dashboardAjax(Request $request)
   {
     try {
-      $query = Holiday::with('site')->select('holidays.*');
+      $query = Holiday::with(['site', 'department'])->select('holidays.*');
 
       if ($request->filled('yearFilter')) {
         $query->whereYear('date', $request->yearFilter);
@@ -86,6 +87,11 @@ class HolidayController extends Controller
       }
       if ($request->filled('monthFilter')) {
         $query->whereMonth('date', $request->monthFilter);
+      }
+      if ($request->filled('departmentFilter')) {
+        $request->departmentFilter === 'none'
+          ? $query->whereNull('department_id')
+          : $query->where('department_id', $request->departmentFilter);
       }
       if ($request->filled('statusFilter')) {
         $query->where('status', $request->statusFilter);
@@ -115,6 +121,7 @@ class HolidayController extends Controller
         ->addColumn('is_part_day', fn ($h) => $h->isPartDay())
         ->addColumn('gender_scope', fn ($h) => $h->applies_to_gender ?? 'all')
         ->addColumn('site_name', fn ($h) => $h->site->name ?? 'All Locations')
+        ->addColumn('dept_name', fn ($h) => $h->department->name ?? null)
         ->addColumn('is_global', fn ($h) => is_null($h->site_id))
         ->addColumn('status_value', fn ($h) => $h->status instanceof Status ? $h->status->value : $h->status)
         ->addColumn('is_past', fn ($h) => $h->date->lt(now()->startOfDay()))
@@ -208,6 +215,10 @@ class HolidayController extends Controller
       'code' => ['nullable', 'unique:holidays,code,' . $holidayId],
       'date' => 'required|date',
       'site_id' => 'nullable|exists:sites,id',
+      'site_ids' => 'nullable|array',
+      'site_ids.*' => 'exists:sites,id',
+      'department_ids' => 'nullable|array',
+      'department_ids.*' => 'exists:departments,id',
       'notes' => 'nullable|string|max:500',
       'holiday_type' => 'nullable|in:full,half,hours',
       'hours_off' => 'nullable|numeric|min:0.5|max:7|required_if:holiday_type,hours',
@@ -219,10 +230,7 @@ class HolidayController extends Controller
 
     $data = [
       'name' => $request->name,
-      // Auto-generated when left blank so HR never has to invent a code
-      'code' => $request->code ?: $this->generateHolidayCode(),
       'date' => $request->date,
-      'site_id' => $request->site_id ?: null,
       'notes' => $request->notes,
       'holiday_type' => $type,
       // hours_off is only meaningful for the 'hours' type; clear it otherwise
@@ -232,14 +240,84 @@ class HolidayController extends Controller
       'applies_to_gender' => $request->applies_to_gender ?: 'all',
     ];
 
-    if ($holidayId) {
-      $holiday = Holiday::find($holidayId);
-      $holiday->update($data);
-      return Success::response('Updated');
-    } else {
-      Holiday::create($data);
-      return Success::response('Added');
+    // Locations / departments are multi-select. One row is stored per
+    // location x department pair, which keeps the existing per-row scoping
+    // (and the dashboard's one-line-per-location view) working unchanged.
+    // An empty list means "not restricted by that dimension" -> [null].
+    $siteIds = array_values(array_filter((array) $request->input('site_ids', [])));
+    $deptIds = array_values(array_filter((array) $request->input('department_ids', [])));
+
+    // Single-value fallback so older callers / the legacy page still work
+    if (!$siteIds && $request->filled('site_id')) {
+      $siteIds = [$request->site_id];
     }
+    if (!$siteIds) { $siteIds = [null]; }
+    if (!$deptIds) { $deptIds = [null]; }
+
+    if ($holidayId) {
+      // Editing one row: update it in place using the first pair, then add
+      // rows for any extra locations/departments newly ticked.
+      $holiday = Holiday::findOrFail($holidayId);
+      $holiday->update($data + [
+        'site_id' => $siteIds[0],
+        'department_id' => $deptIds[0],
+      ]);
+
+      $extra = 0;
+      foreach ($siteIds as $si) {
+        foreach ($deptIds as $di) {
+          if ($si === $siteIds[0] && $di === $deptIds[0]) {
+            continue; // already handled by the update above
+          }
+          if ($this->holidayExists($data['name'], $data['date'], $si, $di)) {
+            continue;
+          }
+          Holiday::create($data + [
+            'code' => $this->generateHolidayCode(),
+            'site_id' => $si,
+            'department_id' => $di,
+          ]);
+          $extra++;
+        }
+      }
+
+      return Success::response($extra
+        ? "Updated, and added to {$extra} more location/department combination(s)"
+        : 'Updated');
+    }
+
+    $created = 0; $skipped = 0;
+    foreach ($siteIds as $si) {
+      foreach ($deptIds as $di) {
+        if ($this->holidayExists($data['name'], $data['date'], $si, $di)) {
+          $skipped++;
+          continue;
+        }
+        Holiday::create($data + [
+          'code' => $this->generateHolidayCode(),
+          'site_id' => $si,
+          'department_id' => $di,
+        ]);
+        $created++;
+      }
+    }
+
+    $msg = $created === 1 ? 'Holiday added' : "Holiday added for {$created} location/department combination(s)";
+    if ($skipped) {
+      $msg .= " ({$skipped} already existed)";
+    }
+
+    return Success::response($msg);
+  }
+
+  /** Guards against creating the same holiday twice for one scope. */
+  private function holidayExists(string $name, string $date, $siteId, $deptId): bool
+  {
+    return Holiday::whereDate('date', $date)
+      ->where('name', $name)
+      ->where('site_id', $siteId)
+      ->where('department_id', $deptId)
+      ->exists();
   }
 
   /** Next free HOL#### code (the prefix in Settings when one is configured). */
@@ -264,6 +342,9 @@ class HolidayController extends Controller
       'code' => $holiday->code,
       'date' => $holiday->date->format('Y-m-d'),
       'site_id' => $holiday->site_id,
+      'site_ids' => $holiday->site_id ? [(string) $holiday->site_id] : [],
+      'department_id' => $holiday->department_id,
+      'department_ids' => $holiday->department_id ? [(string) $holiday->department_id] : [],
       'notes' => $holiday->notes,
       'holiday_type' => $holiday->holiday_type ?? 'full',
       'hours_off' => $holiday->hours_off,

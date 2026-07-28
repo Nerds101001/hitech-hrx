@@ -35,17 +35,33 @@
             </div>
 
             <div class="col-md-6">
-              <label class="form-label-hitech" for="holidaySiteId">
-                Location
+              <label class="form-label-hitech" for="holidaySiteIds">
+                Locations
                 <i class="bx bx-info-circle text-muted"
-                   title="Pick a location to apply this holiday only to employees mapped to that site. Leave as All Locations to apply company-wide."></i>
+                   title="Pick one or more locations. Leave empty to apply company-wide."></i>
               </label>
-              <select name="site_id" id="holidaySiteId" class="form-select form-select-hitech select2">
-                <option value="">All Locations (company-wide)</option>
+              <select name="site_ids[]" id="holidaySiteIds" class="form-select form-select-hitech holiday-multi"
+                      multiple data-placeholder="All Locations (company-wide)">
                 @foreach($sites as $site)
                   <option value="{{ $site->id }}">{{ $site->name }}</option>
                 @endforeach
               </select>
+              <div class="form-text small">Leave empty = every location.</div>
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label-hitech" for="holidayDepartmentIds">
+                Departments
+                <i class="bx bx-info-circle text-muted"
+                   title="Optional. Narrow the holiday to specific departments, e.g. a Production-only shutdown day."></i>
+              </label>
+              <select name="department_ids[]" id="holidayDepartmentIds" class="form-select form-select-hitech holiday-multi"
+                      multiple data-placeholder="All Departments">
+                @foreach(($departments ?? []) as $dept)
+                  <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                @endforeach
+              </select>
+              <div class="form-text small">Leave empty = every department.</div>
             </div>
 
             {{-- Holiday type: full day off vs a part-day concession --}}
@@ -123,6 +139,16 @@
 
         <script>
         (function () {
+          // Multi-select pickers for locations / departments
+          if (window.jQuery && jQuery.fn.select2) {
+            jQuery('.holiday-multi').select2({
+              dropdownParent: jQuery('#modalAddOrUpdateHoliday'),
+              width: '100%',
+              placeholder: function () { return jQuery(this).data('placeholder'); },
+              allowClear: true
+            });
+          }
+
           // Show only the fields the chosen holiday type needs, and explain
           // in plain words what the choice will do to attendance.
           function syncHolidayType() {

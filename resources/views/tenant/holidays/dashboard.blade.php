@@ -166,6 +166,16 @@
               </select>
             </div>
             <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
+              <select class="form-select select2" id="departmentFilter">
+                <option value="">All Departments</option>
+                <option value="none">Not department-specific</option>
+                @foreach(($departments ?? []) as $dept)
+                  <option value="{{ $dept->id }}">{{ $dept->name }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-3">
               <label class="form-label fw-bold small text-muted text-uppercase mb-2">Month</label>
               <select class="form-select select2" id="monthFilter">
                 <option value="">All Months</option>
@@ -243,6 +253,7 @@ document.addEventListener('DOMContentLoaded', function () {
         d.yearFilter   = $('#yearFilter').val();
         d.siteFilter   = $('#siteFilter').val();
         d.monthFilter  = $('#monthFilter').val();
+        d.departmentFilter = $('#departmentFilter').val();
         d.scopeFilter  = $('#scopeFilter').val();
         d.statusFilter = $('#statusFilter').val();
         d.searchTerm   = $('#customSearchInput').val();
@@ -283,11 +294,15 @@ document.addEventListener('DOMContentLoaded', function () {
       {
         targets: 4,
         render: function (data, type, full) {
+          var dept = full.dept_name
+            ? '<br><span class="badge badge-brand-soft rounded-pill mt-1"><i class="bx bx-sitemap me-1"></i>' +
+              $('<div>').text(full.dept_name).html() + '</span>'
+            : '';
           if (full.is_global) {
-            return '<span class="badge badge-brand-solid rounded-pill"><i class="bx bx-globe me-1"></i>All Locations</span>';
+            return '<span class="badge badge-brand-solid rounded-pill"><i class="bx bx-globe me-1"></i>All Locations</span>' + dept;
           }
           return '<span class="badge badge-brand rounded-pill"><i class="bx bx-map-pin me-1"></i>' +
-                 $('<div>').text(data).html() + '</span>';
+                 $('<div>').text(data).html() + '</span>' + dept;
         }
       },
       {
@@ -322,10 +337,10 @@ document.addEventListener('DOMContentLoaded', function () {
   // Filters
   $('#customSearchBtn').on('click', function () { table.ajax.reload(); });
   $('#customSearchInput').on('keypress', function (e) { if (e.which === 13) table.ajax.reload(); });
-  $('#siteFilter, #monthFilter, #scopeFilter, #statusFilter, #yearFilter').on('change', function () { table.ajax.reload(); });
+  $('#siteFilter, #monthFilter, #departmentFilter, #scopeFilter, #statusFilter, #yearFilter').on('change', function () { table.ajax.reload(); });
   $('#customLengthMenu').on('change', function () { table.page.len($(this).val()).draw(); });
   $('#clearFiltersBtn').on('click', function () {
-    $('#siteFilter, #monthFilter, #scopeFilter, #statusFilter').val('').trigger('change.select2');
+    $('#siteFilter, #monthFilter, #departmentFilter, #scopeFilter, #statusFilter').val('').trigger('change.select2');
     $('#customSearchInput').val('');
     table.ajax.reload();
   });
@@ -347,7 +362,8 @@ document.addEventListener('DOMContentLoaded', function () {
   $('#addHolidayBtn').on('click', function () {
     $('#holidayForm')[0].reset();
     $('#holidayId').val('');
-    $('#holidaySiteId').val('').trigger('change.select2');
+    $('#holidaySiteIds').val(null).trigger('change');
+    $('#holidayDepartmentIds').val(null).trigger('change');
     $('#holidayModalTitle').text('Add Holiday');
     $('input[name=holiday_type][value=full]').prop('checked', true);
     if (window.syncHolidayType) window.syncHolidayType();
@@ -361,7 +377,8 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#holidayName').val(h.name);
       $('#holidayCode').val(h.code);
       $('#holidayDate').val(h.date);
-      $('#holidaySiteId').val(h.site_id || '').trigger('change.select2');
+      $('#holidaySiteIds').val(h.site_ids || []).trigger('change');
+      $('#holidayDepartmentIds').val(h.department_ids || []).trigger('change');
       $('#holidayNotes').val(h.notes);
       $('input[name=holiday_type][value=' + (h.holiday_type || 'full') + ']').prop('checked', true);
       $('#holidayHoursOff').val(h.hours_off || '');

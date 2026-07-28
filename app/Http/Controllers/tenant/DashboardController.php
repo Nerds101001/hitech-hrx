@@ -1006,7 +1006,7 @@ class DashboardController extends Controller
             'myLeavesCount' => 0,
             'myExpensesCount' => 0,
             'mySOSCount' => 0,
-            'nextHoliday' => Holiday::forSite($user->site_id ?? null)->where('date', '>=', now())->orderBy('date')->first(),
+            'nextHoliday' => Holiday::forUser($user)->where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
             'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
@@ -1081,7 +1081,7 @@ class DashboardController extends Controller
         'myLeavesCount' => 0,
         'myExpensesCount' => 0,
         'mySOSCount' => 0,
-        'nextHoliday' => Holiday::forSite($user->site_id ?? null)->where('date', '>=', now())->orderBy('date')->first(),
+        'nextHoliday' => Holiday::forUser($user)->where('date', '>=', now())->orderBy('date')->first(),
         'recentNotices' => collect(),
         'payrollTrend' => 0,
         'latestNetSalary' => 0

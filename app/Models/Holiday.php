@@ -30,6 +30,7 @@ class Holiday extends Model implements AuditableContract
     'created_by_id',
     'updated_by_id',
     'site_id',
+    'department_id',
     'holiday_type',
     'hours_off',
     'session',
@@ -39,6 +40,11 @@ class Holiday extends Model implements AuditableContract
   public function site()
   {
     return $this->belongsTo(Site::class, 'site_id');
+  }
+
+  public function department()
+  {
+    return $this->belongsTo(Department::class, 'department_id');
   }
 
   protected $casts = [
@@ -116,6 +122,32 @@ class Holiday extends Model implements AuditableContract
   }
 
   /**
+   * Holidays that reach this specific employee: matching on BOTH location and
+   * department, where NULL on a column means "not restricted by that". So a
+   * Production-only holiday skips Sales, and a Mumbai holiday skips Chennai,
+   * while a row with both NULL reaches everyone.
+   *
+   * Gender scoping is applied in PHP by appliesToUser(), because it depends on
+   * the employee's own record rather than the query.
+   */
+  public function scopeForUser($query, ?User $user)
+  {
+    return $query
+      ->where(function ($q) use ($user) {
+        $q->whereNull('site_id');
+        if ($user?->site_id) {
+          $q->orWhere('site_id', $user->site_id);
+        }
+      })
+      ->where(function ($q) use ($user) {
+        $q->whereNull('department_id');
+        if ($user?->department_id) {
+          $q->orWhere('department_id', $user->department_id);
+        }
+      });
+  }
+
+  /**
    * True when $date is a FULL-DAY holiday for this user (site- and
    * gender-aware). Part-day concessions are deliberately excluded: those days
    * are still worked, so they must not suppress attendance or earn a comp-off.
@@ -123,7 +155,7 @@ class Holiday extends Model implements AuditableContract
   public static function appliesTo(?User $user, $date): bool
   {
     return static::query()
-      ->forSite($user?->site_id)
+      ->forUser($user)
       ->whereDate('date', $date)
       ->where('holiday_type', 'full')
       ->get()
@@ -137,7 +169,7 @@ class Holiday extends Model implements AuditableContract
   public static function partDayFor(?User $user, $date): ?self
   {
     return static::query()
-      ->forSite($user?->site_id)
+      ->forUser($user)
       ->whereDate('date', $date)
       ->whereIn('holiday_type', ['half', 'hours'])
       ->get()
@@ -174,7 +206,7 @@ class Holiday extends Model implements AuditableContract
   public static function mapForUser(?User $user, $from, $to): array
   {
     return static::query()
-      ->forSite($user?->site_id)
+      ->forUser($user)
       ->where('holiday_type', 'full')   // part-days are worked, not days off
       ->whereBetween('date', [$from, $to])
       ->get()

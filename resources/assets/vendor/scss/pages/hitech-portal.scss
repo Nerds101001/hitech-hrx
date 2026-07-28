@@ -4430,3 +4430,25 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
     border: 1px solid rgba(120, 113, 108, .18);
     font-weight: 600;
 }
+
+/* ============================================================
+   TABLE HOVER TEXT FIX
+   Bootstrap's .table-hover sets every hovered cell's colour to
+   --bs-table-hover-color, and one of the table variants defines that
+   as #fff — so hovering a row turned its text white on a near-white
+   background and the content vanished. Pin the hovered colour to the
+   normal body text so hover only tints the background.
+   Badges and text-* utilities carry !important, so their own colours
+   still win — only plain cell text is affected.
+   ============================================================ */
+.table > tbody > tr:hover > *,
+.table.table-hover > tbody > tr:hover > * {
+    --bs-table-hover-color: #475569;
+    --bs-table-color-state: #475569;
+    color: #475569 !important;
+}
+
+/* Anchors inside a hovered row keep the brand teal rather than going white */
+.table > tbody > tr:hover > * a:not(.badge):not([class*="text-"]) {
+    color: #005a5a !important;
+}

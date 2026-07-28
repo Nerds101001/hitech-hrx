@@ -324,14 +324,14 @@ class LeavePolicyService
         $date = $date instanceof Carbon ? $date : Carbon::parse($date);
         $currentDateStr = $date->toDateString();
         
-        $siteKey = $user->site_id ?? 'global';
+        $siteKey = ($user->site_id ?? 'g') . '-' . ($user->department_id ?? 'g');
         if (!isset(self::$holidayCache[$siteKey])) {
             // pluck('date') yields Carbon objects (the model casts `date`), and
             // in_array() compared those against a 'Y-m-d' string — Carbon
             // stringifies to 'Y-m-d H:i:s', so the check NEVER matched and every
             // holiday was treated as a working day. Normalise to date strings.
             self::$holidayCache[$siteKey] = \App\Models\Holiday::query()
-                ->forSite($user->site_id)
+                ->forUser($user)
                 ->pluck('date')
                 ->map(fn ($d) => Carbon::parse($d)->toDateString())
                 ->all();
