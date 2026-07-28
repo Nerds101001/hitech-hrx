@@ -75,9 +75,9 @@
                     <i class="bx bx-search"></i>
                     <input type="search" id="ocSearch" placeholder="Search name, designation, department or code…">
                 </div>
-                <span class="oc-hint" title="Hold Ctrl (⌘ on Mac) and scroll to zoom the chart">
+                <span class="oc-hint" title="Hold Ctrl (⌘ on Mac) and scroll to zoom · click and drag to move around">
                     <i class="bx bx-mouse"></i>
-                    <span><kbd>Ctrl</kbd> + scroll to zoom</span>
+                    <span><kbd>Ctrl</kbd> + scroll to zoom &nbsp;·&nbsp; drag to move</span>
                 </span>
                 <span class="oc-zoomval" id="ocZoomVal">100%</span>
                 <div class="btn-group shadow-sm rounded-pill overflow-hidden border">
@@ -198,7 +198,11 @@
   @media (max-width:900px){ .oc-hint{display:none} }
 
   /* ---------- chart ---------- */
-  .oc-scroller{overflow:auto;padding:26px 10px 30px;background:linear-gradient(#fbfdfe,#fff)}
+  .oc-scroller{overflow:auto;padding:26px 10px 30px;background:linear-gradient(#fbfdfe,#fff);
+    cursor:grab}
+  .oc-scroller.oc-grabbing{cursor:grabbing;user-select:none}
+  /* while dragging, don't let the cards swallow the pointer or show hovers */
+  .oc-scroller.oc-grabbing .oc-box{pointer-events:none}
   .oc-chart{display:flex;gap:48px;align-items:flex-start;width:max-content;min-width:100%;
     padding:0 14px;transform-origin:0 0;transition:transform .18s ease}
   .oc-root{display:flex;flex-direction:column;align-items:center}
@@ -377,6 +381,39 @@ document.addEventListener('DOMContentLoaded', function () {
 
     applyZoom(1);
     centreOnRoot();
+
+    /* ---------- drag to pan (grab anywhere and move the chart) ---------- */
+    var dragging = false, moved = false, sx = 0, sy = 0, sLeft = 0, sTop = 0;
+
+    scroller.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;               // left button only
+        dragging = true; moved = false;
+        sx = e.clientX; sy = e.clientY;
+        sLeft = scroller.scrollLeft; sTop = scroller.scrollTop;
+    });
+
+    window.addEventListener('mousemove', function (e) {
+        if (!dragging) return;
+        var dx = e.clientX - sx, dy = e.clientY - sy;
+        // Small threshold so a normal click on a card still behaves as a click.
+        if (!moved && Math.abs(dx) + Math.abs(dy) > 4) {
+            moved = true;
+            scroller.classList.add('oc-grabbing');
+        }
+        if (!moved) return;
+        e.preventDefault();
+        scroller.scrollLeft = sLeft - dx;         // drag left/right
+        scroller.scrollTop  = sTop  - dy;         // drag up/down
+    });
+
+    function endDrag() {
+        if (!dragging) return;
+        dragging = false;
+        scroller.classList.remove('oc-grabbing');
+    }
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('mouseleave', endDrag);
+    scroller.addEventListener('dragstart', function (e) { e.preventDefault(); });
 
     /* ---------- hover drawer (same behaviour as the old chart) ---------- */
     var popover = document.getElementById('userCardPopover');
