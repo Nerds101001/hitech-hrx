@@ -49,11 +49,17 @@ class NewJoinerDocuments extends Mailable
         );
     }
 
-    /** @return Attachment[] */
+    /**
+     * Attached from decrypted data rather than fromPath(): the files on disk
+     * are encrypted, so attaching the path would deliver an unreadable blob.
+     *
+     * @return Attachment[]
+     */
     public function attachments(): array
     {
         return collect($this->documents)
-            ->map(fn($d) => Attachment::fromPath($d['path'])->as($d['name']))
+            ->map(fn($d) => Attachment::fromData(fn() => $d['data'], $d['name'])
+                ->withMime($d['mime']))
             ->all();
     }
 }

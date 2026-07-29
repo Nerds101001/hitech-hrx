@@ -38,10 +38,27 @@ return [
         // the new joiner has one; set false to keep the list fixed.
         'include_reporting_manager' => true,
 
-        // Documents (photo, cancelled cheque, Aadhaar, PAN, …) go only here.
+        // Documents go only here.
         'documents_to' => array_filter([
             env('HR_NOTIFY_ACCOUNTS', 'accounts5@rustx.com'),
         ]),
+
+        /*
+         | Which onboarding documents accounts actually receives.
+         |
+         | Deliberately a strict allow-list, matched against the file-name
+         | prefix used by OnboardingController. Only what payroll and
+         | statutory records genuinely need is shared — education
+         | certificates and anything else stay in HRX and are never emailed.
+         |
+         | Set to an empty array to send every uploaded document.
+         */
+        'share_documents' => [
+            'profile_photo',
+            'cancelled_cheque',
+            'aadhaar_card',
+            'pan_card',
+        ],
     ],
 
     /*

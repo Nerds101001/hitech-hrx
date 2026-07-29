@@ -85,10 +85,15 @@ class HrNotificationService
     }
 
     /**
-     * The ID documents uploaded during onboarding, as absolute paths ready to
-     * attach. Only files that actually exist are returned.
+     * The ID documents uploaded during onboarding.
      *
-     * @return array<int, array{path: string, name: string}>
+     * Onboarding files are written through FileSecurityHelper::encryptAndStore,
+     * so what sits on disk is a Laravel-encrypted payload, not the original
+     * image/PDF. Attaching the file straight from disk would deliver an
+     * unreadable blob — so each one is decrypted here and attached as raw
+     * data. decryptAndGet also passes through older unencrypted uploads.
+     *
+     * @return array<int, array{name: string, mime: string, data: string}>
      */
     public static function onboardingDocuments(User $user): array
     {
@@ -99,19 +104,54 @@ class HrNotificationService
             return [];
         }
 
+        // Strict allow-list: only the documents payroll actually needs leave
+        // the system. Education certificates and anything else stay in HRX.
+        $allowed = (array) config('hr_notifications.onboarding.share_documents', []);
+
         $out = [];
         foreach ($disk->files($folder) as $file) {
-            $abs = $disk->path($file);
-            if (!is_file($abs)) {
+            if ($allowed && !self::isShareable(basename($file), $allowed)) {
                 continue;
             }
-            $out[] = [
-                'path' => $abs,
-                'name' => self::friendlyName(basename($file)),
-            ];
+            try {
+                $data = \App\Helpers\FileSecurityHelper::decryptAndGet($file, 'public');
+                if ($data === null || $data === '') {
+                    Log::warning("Onboarding document unreadable, skipped: {$file}");
+                    continue;
+                }
+                $out[] = [
+                    'name' => self::friendlyName(basename($file)),
+                    'mime' => self::mimeFor(pathinfo($file, PATHINFO_EXTENSION)),
+                    'data' => $data,
+                ];
+            } catch (\Throwable $e) {
+                Log::warning("Onboarding document failed to decrypt ({$file}): " . $e->getMessage());
+            }
         }
 
         return $out;
+    }
+
+    /** True when the file's prefix is on the share allow-list. */
+    private static function isShareable(string $filename, array $allowed): bool
+    {
+        $name = strtolower($filename);
+        foreach ($allowed as $prefix) {
+            if (str_starts_with($name, strtolower($prefix))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function mimeFor(string $ext): string
+    {
+        return [
+            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png',
+            'gif' => 'image/gif',  'webp' => 'image/webp', 'pdf' => 'application/pdf',
+            'doc' => 'application/msword',
+            'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ][strtolower($ext)] ?? 'application/octet-stream';
     }
 
     /** Turn "aadhaar_card_1738.pdf" into "Aadhaar Card.pdf" for the attachment name. */
