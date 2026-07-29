@@ -104,6 +104,74 @@
         </div>
       </div>
 
+      {{-- New joiners waiting on their employee ID / biometric enrolment.
+           Queried here rather than passed from the controller so the card
+           works on any dashboard this partial is dropped into. --}}
+      @php
+        $setupQueue = collect();
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('employee_setup_tasks')) {
+                $setupQueue = \App\Models\EmployeeSetupTask::pending()
+                    ->with(['user.department', 'user.designation'])
+                    ->orderBy('created_at')->get();
+            }
+        } catch (\Throwable $e) { $setupQueue = collect(); }
+      @endphp
+
+      <div class="adc-card mt-4">
+        <div class="adc-card-head">
+          <div>
+            <h6 class="adc-card-title">Attendance Setup — New Joiners</h6>
+            <span class="adc-card-sub">Record employee ID and biometric enrolment so payroll can start</span>
+          </div>
+          <a href="{{ url('/employee-setup') }}" class="adc-link">View all</a>
+        </div>
+
+        @if($setupQueue->isEmpty())
+          <div class="adc-empty adc-empty-sm">
+            <i class="bx bx-check-circle"></i><span>No pending setups — everyone is enrolled.</span>
+          </div>
+        @else
+          <div class="table-responsive">
+            <table class="table adc-table mb-0">
+              <thead>
+                <tr><th>Employee</th><th>Department</th><th>Joined</th><th>Required</th><th class="text-end">Action</th></tr>
+              </thead>
+              <tbody>
+                @foreach($setupQueue as $t)
+                  <tr>
+                    <td class="fw-medium">
+                      {{ optional($t->user)->getFullName() ?? '—' }}
+                      <small class="text-muted d-block" style="font-size:.7rem">
+                        {{ optional(optional($t->user)->designation)->name }}
+                      </small>
+                    </td>
+                    <td>{{ optional(optional($t->user)->department)->name ?? '—' }}</td>
+                    <td>
+                      {{ optional($t->user)->date_of_joining
+                          ? \Carbon\Carbon::parse($t->user->date_of_joining)->format('d M Y') : '—' }}
+                    </td>
+                    <td>
+                      @if($t->needs_emp_id)
+                        <span class="adc-badge adc-tone-info">Emp ID</span>
+                      @endif
+                      @if($t->needs_biometric)
+                        <span class="adc-badge adc-tone-warning">Biometric</span>
+                      @else
+                        <span class="adc-badge adc-tone-success">Biometric exempt</span>
+                      @endif
+                    </td>
+                    <td class="text-end">
+                      <a href="{{ url('/employee-setup') }}" class="adc-badge adc-tone-primary">Update</a>
+                    </td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        @endif
+      </div>
+
       {{-- WFH attendance queue — accounts marks these from the tracking report --}}
       <div class="adc-card mt-4">
         <div class="adc-card-head">

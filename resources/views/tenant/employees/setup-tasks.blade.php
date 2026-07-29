@@ -2,6 +2,15 @@
 
 @section('title', 'Attendance Setup Queue')
 
+{{-- hitech-portal.scss defines hitech-card-white and the rest of the portal
+     styling. Without it this page renders as unstyled text. --}}
+@section('vendor-style')
+  @vite([
+    'resources/assets/vendor/libs/animate-css/animate.scss',
+    'resources/assets/vendor/scss/pages/hitech-portal.scss'
+  ])
+@endsection
+
 @section('content')
 <div class="layout-full-width">
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4 py-2">
