@@ -23,7 +23,9 @@ class SalesPipelineController extends Controller
         'Zorbit'     => ['zorbit'],
         'Tuffpaulin' => ['tuffpaulin', 'tuff paulin'],
         'Neutrasafe' => ['neutrasafe'],
-        'HITECH'     => ['hitech'],
+        // 'HITECH' removed — it is the company, not a product brand. Existing
+        // rows that still carry product='HITECH' keep their value and remain
+        // visible; they simply no longer offer it as a standard choice.
     ];
 
     public function index(Request $request)

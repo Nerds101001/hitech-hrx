@@ -364,8 +364,11 @@
                                         <option value="KIF"         {{ $row->product === 'KIF'         ? 'selected' : '' }}>KIF</option>
                                         <option value="Zorbit"      {{ $row->product === 'Zorbit'      ? 'selected' : '' }}>Zorbit</option>
                                         <option value="Tuffpaulin"  {{ $row->product === 'Tuffpaulin'  ? 'selected' : '' }}>Tuffpaulin</option>
-                                        <option value="HITECH"      {{ $row->product === 'HITECH'      ? 'selected' : '' }}>HITECH</option>
-                                        @if($row->product && !in_array($row->product, ['Rust-X', 'Dr.Bio', 'Fillezy', 'KIF', 'Zorbit', 'Tuffpaulin', 'HITECH']))
+                                        <option value="Neutrasafe"  {{ $row->product === 'Neutrasafe'  ? 'selected' : '' }}>Neutrasafe</option>
+                                        {{-- Any value not in the list above (including the legacy "HITECH")
+                                             is preserved and shown as the selected option, so removing a
+                                             brand never silently rewrites existing rows. --}}
+                                        @if($row->product && !in_array($row->product, ['Rust-X', 'Dr.Bio', 'Fillezy', 'KIF', 'Zorbit', 'Tuffpaulin', 'Neutrasafe']))
                                             <option value="{{ $row->product }}" selected>{{ $row->product }}</option>
                                         @endif
                                     </select>
@@ -496,7 +499,7 @@
                                             <option value="KIF">KIF</option>
                                             <option value="Zorbit">Zorbit</option>
                                             <option value="Tuffpaulin">Tuffpaulin</option>
-                                            <option value="HITECH">HITECH</option>
+                                            <option value="Neutrasafe">Neutrasafe</option>
                                         </select>
                                     </div>
                                     <div>
