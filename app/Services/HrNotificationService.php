@@ -185,6 +185,114 @@ class HrNotificationService
         ];
     }
 
+    /**
+     * Publish the organisation-wide welcome post for an approved joiner.
+     *
+     * Deliberately minimal: photo, name, designation and department only.
+     * Contact details, email, employee code, location and salary are NOT
+     * included — the whole company sees this, unlike the HR/accounts mail.
+     *
+     * Returns the Announcement, or null if the module is unavailable.
+     */
+    public static function publishWelcomeAnnouncement(User $joiner): ?\App\Models\Announcement
+    {
+        try {
+            $name  = $joiner->getFullName();
+            $desig = optional($joiner->designation)->name;
+            $dept  = optional($joiner->department)->name;
+            $photo = $joiner->getProfilePicture();
+
+            $line = trim(implode(' · ', array_filter([$desig, $dept])));
+
+            $content = view('emails.hr.welcome_post', [
+                'name'  => $name,
+                'line'  => $line,
+                'photo' => $photo,
+            ])->render();
+
+            return \App\Models\Announcement::create([
+                'created_by_id'           => auth()->id() ?: $joiner->id,
+                'title'                   => 'Welcome to the team, ' . $name . '!',
+                'content'                 => $content,
+                'type'                    => 'general',
+                // announcements.priority is enum('low','medium','high','critical')
+                'priority'                => 'medium',
+                'audience_type'           => 'global',
+                'is_active'               => true,
+                'requires_acknowledgment' => false,
+                'notify_email'            => false,   // in-app only; email goes to HR/accounts separately
+                'start_date'              => now()->toDateString(),
+                'end_date'                => now()->addDays(14)->toDateString(),
+                'published_at'            => now(),
+                'tenant_id'               => $joiner->tenant_id,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error("Welcome announcement failed for user {$joiner->id}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Open the accounts setup task for an approved joiner.
+     *
+     * Biometric enrolment is waived for field departments (configured in
+     * hr_notifications.biometric_exempt_departments) because those staff
+     * never punch a device — but the employee ID is required for everyone.
+     * If neither is outstanding the task is closed immediately rather than
+     * nagging accounts about nothing.
+     */
+    public static function createAccountsSetupTask(User $user): ?\App\Models\EmployeeSetupTask
+    {
+        try {
+            // Never open a second task for the same person.
+            $existing = \App\Models\EmployeeSetupTask::where('user_id', $user->id)
+                ->where('status', 'pending')->first();
+            if ($existing) {
+                return $existing;
+            }
+
+            // The employee ID is ALWAYS asked for. Onboarding auto-generates a
+            // provisional code (and users.code is NOT NULL), so "is it empty?"
+            // would never be true — accounts must still confirm or replace it
+            // with the official ID that payroll uses.
+            $needsEmpId = true;
+
+            $needsBiometric = empty(trim((string) $user->biometric_id))
+                && !self::isBiometricExempt($user);
+
+            $task = \App\Models\EmployeeSetupTask::create([
+                'user_id'         => $user->id,
+                'needs_emp_id'    => $needsEmpId,
+                'needs_biometric' => $needsBiometric,
+                'status'          => ($needsEmpId || $needsBiometric) ? 'pending' : 'completed',
+                'completed_at'    => ($needsEmpId || $needsBiometric) ? null : now(),
+                'tenant_id'       => $user->tenant_id,
+            ]);
+
+            return $task;
+        } catch (\Throwable $e) {
+            Log::error("Accounts setup task failed for user {$user->id}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /** Field departments that never punch a biometric device. */
+    public static function isBiometricExempt(User $user): bool
+    {
+        $dept = strtolower(trim(optional($user->department)->name ?? ''));
+        if ($dept === '') {
+            return false;
+        }
+
+        foreach ((array) config('hr_notifications.biometric_exempt_departments', []) as $x) {
+            if (str_contains($dept, strtolower($x))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static function isActive(User $u): bool
     {
         $s = is_object($u->status) ? $u->status->value : $u->status;

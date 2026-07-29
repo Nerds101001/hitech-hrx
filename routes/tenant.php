@@ -531,6 +531,15 @@ Route::middleware([
       });
     });
 
+    // Attendance setup queue: accounts records each new joiner's employee ID
+    // and biometric ID. Drives the login popup and the dashboard task card.
+    Route::middleware(['role_or_permission:accounts|admin|hr'])
+      ->prefix('employee-setup')->name('employee-setup.')->group(function () {
+        Route::get('pending', [\App\Http\Controllers\tenant\EmployeeSetupTaskController::class, 'pending'])->name('pending');
+        Route::get('/', [\App\Http\Controllers\tenant\EmployeeSetupTaskController::class, 'index'])->name('index');
+        Route::post('{id}/complete', [\App\Http\Controllers\tenant\EmployeeSetupTaskController::class, 'complete'])->name('complete');
+    });
+
     // Employee Lifecycle (HR/Admin)
     Route::middleware(['role_or_permission:hr|admin|lifecycle.manage'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
       Route::get('', [EmployeeLifecycleController::class, 'index'])->name('index');

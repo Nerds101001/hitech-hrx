@@ -3008,6 +3008,14 @@ class EmployeeController extends Controller
     } catch (\Throwable $e) {
       Log::error("New joiner documents mail failed for user {$user->id}: " . $e->getMessage());
     }
+
+    // Organisation-wide welcome post — photo, name, designation and
+    // department only. Everyone sees this, so it carries nothing personal.
+    \App\Services\HrNotificationService::publishWelcomeAnnouncement($user);
+
+    // Queue the accounts setup work: employee ID and (unless exempt)
+    // biometric enrolment, so payroll and attendance can start.
+    \App\Services\HrNotificationService::createAccountsSetupTask($user);
   }
 
   /**
