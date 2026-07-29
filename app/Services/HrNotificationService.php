@@ -276,6 +276,60 @@ class HrNotificationService
         }
     }
 
+    /**
+     * Raise the NOC set for a leaver and alert everyone who needs to know.
+     *
+     * The exit itself is already in force by the time this runs — access has
+     * been revoked. These rows only track who still owes clearance, and gate
+     * the point at which the exit can be marked fully closed.
+     *
+     * @param  string  $exitType  'resignation' | 'termination'
+     */
+    public static function raiseExitClearances(User $leaver, string $exitType, int $exitId): int
+    {
+        $steps = (array) config('hr_notifications.exit_clearances', []);
+        $made  = 0;
+
+        foreach ($steps as $key => $step) {
+            try {
+                \App\Models\ExitClearance::firstOrCreate(
+                    ['exit_type' => $exitType, 'exit_id' => $exitId, 'step_key' => $key],
+                    [
+                        'user_id'   => $leaver->id,
+                        'label'     => $step['label'] ?? ucfirst($key),
+                        'status'    => 'pending',
+                        'tenant_id' => $leaver->tenant_id,
+                    ]
+                );
+                $made++;
+            } catch (\Throwable $e) {
+                Log::error("Exit clearance '{$key}' failed for user {$leaver->id}: " . $e->getMessage());
+            }
+        }
+
+        self::notifyExit($leaver, $exitType, $exitId);
+
+        return $made;
+    }
+
+    /** Email the exit alert to accounts, HR and the named managers. */
+    public static function notifyExit(User $leaver, string $exitType, int $exitId): void
+    {
+        try {
+            $r = self::exitRecipients($leaver);
+            if (empty($r['to'])) {
+                Log::warning("Exit alert skipped for user {$leaver->id}: no recipients configured.");
+                return;
+            }
+
+            \Illuminate\Support\Facades\Mail::to($r['to'])->send(
+                new \App\Mail\ExitClearanceAlert($leaver, $exitType, $exitId)
+            );
+        } catch (\Throwable $e) {
+            Log::error("Exit alert failed for user {$leaver->id}: " . $e->getMessage());
+        }
+    }
+
     /** Field departments that never punch a biometric device. */
     public static function isBiometricExempt(User $user): bool
     {

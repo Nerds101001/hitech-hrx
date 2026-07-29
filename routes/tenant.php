@@ -540,6 +540,14 @@ Route::middleware([
         Route::post('{id}/complete', [\App\Http\Controllers\tenant\EmployeeSetupTaskController::class, 'complete'])->name('complete');
     });
 
+    // Exit clearance (NOC) tracker. Viewing is open to the departments that
+    // owe a clearance; signing off is authorised per-step in the controller.
+    Route::middleware(['role_or_permission:hr|admin|accounts|manager|lifecycle.manage'])
+      ->prefix('exit-clearance')->name('exit-clearance.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'index'])->name('index');
+        Route::post('{id}', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'update'])->name('update');
+    });
+
     // Employee Lifecycle (HR/Admin)
     Route::middleware(['role_or_permission:hr|admin|lifecycle.manage'])->prefix('employee-lifecycle')->name('employee-lifecycle.')->group(function () {
       Route::get('', [EmployeeLifecycleController::class, 'index'])->name('index');

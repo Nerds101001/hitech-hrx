@@ -389,9 +389,23 @@ class EmployeeLifecycleController extends Controller
             'is_rehireable' => 'boolean',
         ]);
 
-        EmployeeResignation::create($validated);
+        // Clearance is still outstanding at this point, so the record starts
+        // as pending and only becomes approved once every NOC is in.
+        $validated['status'] = 'pending';
+        $resignation = EmployeeResignation::create($validated);
 
-        return redirect()->back()->with('success', 'Resignation submitted successfully.');
+        // Raise the IT / HR / Finance / Accounts NOCs and alert everyone.
+        $leaver = \App\Models\User::find($validated['user_id']);
+        if ($leaver) {
+            \App\Services\HrNotificationService::raiseExitClearances(
+                $leaver, 'resignation', $resignation->id
+            );
+        }
+
+        return redirect()->back()->with(
+            'success',
+            'Resignation recorded. Clearance requests have been sent to IT, HR, Finance and Accounts.'
+        );
     }
 
     /**
@@ -433,9 +447,12 @@ class EmployeeLifecycleController extends Controller
                 'reason' => $validated['reason'] ?? $validated['remarks'] ?? null,
                 'termination_notes' => $validated['remarks'] ?? null,
                 'is_eligible_for_rehire' => $request->boolean('is_eligible_for_rehire'),
-                'status' => 'approved',
+                // The termination takes effect immediately (access is revoked
+                // below), but the record stays 'pending' until IT, HR, Finance
+                // and Accounts have each given their NOC.
+                'status' => 'pending',
             ];
-            EmployeeTermination::create($terminationData);
+            $termination = EmployeeTermination::create($terminationData);
 
             // 2. Deactivate the employee's user account
             $user = User::findOrFail($validated['user_id']);
@@ -476,7 +493,18 @@ class EmployeeLifecycleController extends Controller
             }
 
             DB::commit();
-            return redirect()->back()->with('success', 'Termination recorded and employee account deactivated successfully.');
+
+            // Raise the IT / HR / Finance / Accounts NOCs and alert everyone.
+            // After the commit and self-guarded: a mail failure must not undo
+            // a termination that has already taken effect.
+            \App\Services\HrNotificationService::raiseExitClearances(
+                $user, 'termination', $termination->id
+            );
+
+            return redirect()->back()->with(
+                'success',
+                'Termination recorded and access revoked. Clearance requests sent to IT, HR, Finance and Accounts.'
+            );
         } catch (\Exception $e) {
             DB::rollBack();
             \Illuminate\Support\Facades\Log::error('Termination store error: ' . $e->getMessage());
