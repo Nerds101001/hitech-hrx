@@ -97,10 +97,16 @@ return [
             'department_id' => 32,
             'emails' => array_filter([env('NOC_FINANCE', 'finance@rustx.com')]), // ARPANA Katyal, Head
         ],
-        'accounts' => [
-            'label' => 'Accounts',
-            'department_id' => 33,
-            'emails' => array_filter([env('NOC_ACCOUNTS', 'accounts@rustx.com')]), // RAJESH BHARDWAJ, Manager
+        /*
+         | The leaver's OWN reporting manager signs the fourth NOC. There is
+         | no fixed address here: it is resolved per-exit from the employee's
+         | reporting_to_id, so the correct manager is asked every time.
+         */
+        'reporting_manager' => [
+            'label' => 'Reporting Manager',
+            'department_id' => null,
+            'emails' => [],
+            'resolve' => 'reporting_manager',
         ],
     ],
 

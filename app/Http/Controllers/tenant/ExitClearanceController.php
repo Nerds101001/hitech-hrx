@@ -134,6 +134,16 @@ class ExitClearanceController extends Controller
         }
 
         $step = config('hr_notifications.exit_clearances.' . $clearance->step_key);
+
+        // The reporting-manager step is signed by that leaver's own manager,
+        // resolved from the employee record rather than by department.
+        if ($step && ($step['resolve'] ?? null) === 'reporting_manager') {
+            if ($clearance->user && (int) $clearance->user->reporting_to_id === (int) $u->id) {
+                return;
+            }
+            abort(403, 'Only this employee\'s reporting manager can sign this clearance.');
+        }
+
         if ($step && !empty($step['department_id']) && (int) $u->department_id === (int) $step['department_id']) {
             return;
         }

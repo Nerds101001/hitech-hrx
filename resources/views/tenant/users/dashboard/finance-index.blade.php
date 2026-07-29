@@ -226,6 +226,13 @@
     </div>
   </div>
 </div>
+
+{{-- The adc-* card styling shared by every command-centre dashboard. Without
+     this the whole page renders as unstyled text — admin, hr, manager and
+     employee all include it; finance was missing it. --}}
+@include('tenant.users.dashboard._adc-styles')
+@include('tenant.users.dashboard._adc-live')
+
 @endsection
 
 @section('page-script')
