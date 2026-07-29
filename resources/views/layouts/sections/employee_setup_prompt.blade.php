@@ -27,6 +27,16 @@
             $__setupTasks = collect();
         }
     }
+
+    // Show once per LOGIN. The previous sessionStorage flag survived logout,
+    // so signing in again in the same browser silently suppressed the popup.
+    // A server session key is cleared when the session is regenerated at
+    // login, so it reappears exactly once for every sign-in.
+    $__setupAutoOpen = false;
+    if ($__setupShow && $__setupTasks->isNotEmpty() && !session('esp_prompt_shown')) {
+        session(['esp_prompt_shown' => true]);
+        $__setupAutoOpen = true;
+    }
 @endphp
 
 @if($__setupShow && $__setupTasks->isNotEmpty())
@@ -59,12 +69,8 @@
   .esp-queue{font-size:.74rem;color:#64748b;padding:0 24px 16px}
 </style>
 
-<button class="esp-fab" id="espOpen" type="button" title="Attendance setup pending">
-  <i class="bx bx-id-card"></i>
-  <span>Attendance setup</span>
-  <span class="esp-count" id="espCount">{{ $__setupTasks->count() }}</span>
-</button>
-
+{{-- No floating button: the queue lives in My Tasks and on the dashboard.
+     This partial now only raises the once-per-login prompt. --}}
 <div class="modal fade esp-modal" id="espModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -121,6 +127,7 @@
       </div>
 
       <div class="modal-footer border-0 pt-0">
+        <a href="{{ url('/my-tasks') }}" class="btn btn-label-secondary me-auto">All my tasks</a>
         <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Later</button>
         <button type="button" class="btn btn-primary" id="espSave"
                 data-id="{{ $__first->id }}">Save &amp; mark done</button>
@@ -131,22 +138,19 @@
 
 <script>
 (function () {
-  var openBtn = document.getElementById('espOpen');
   var modalEl = document.getElementById('espModal');
-  if (!openBtn || !modalEl || typeof bootstrap === 'undefined') return;
+  if (!modalEl || typeof bootstrap === 'undefined') return;
 
   var modal = new bootstrap.Modal(modalEl);
 
-  // Shown once per browser session: it must reappear on the next login, but
-  // not on every single page view within the same session.
-  try {
-    if (!sessionStorage.getItem('espShown')) {
-      modal.show();
-      sessionStorage.setItem('espShown', '1');
-    }
-  } catch (e) { /* private mode — the button is still available */ }
-
-  openBtn.addEventListener('click', function () { modal.show(); });
+  // Whether this is the first page of a fresh login is decided server-side,
+  // so the prompt appears exactly once per sign-in. Delayed slightly so it
+  // does not fight the celebrations/policy modals for focus.
+  @if($__setupAutoOpen)
+    setTimeout(function () {
+      if (!document.querySelector('.modal.show')) { modal.show(); }
+    }, 900);
+  @endif
 
   document.getElementById('espSave').addEventListener('click', function () {
     var btn = this, err = document.getElementById('espErr');
@@ -182,7 +186,6 @@
         return;
       }
       // Reload so the next pending employee is presented.
-      try { sessionStorage.removeItem('espShown'); } catch (e) {}
       window.location.reload();
     })
     .catch(function () {

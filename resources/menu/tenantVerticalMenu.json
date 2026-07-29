@@ -21,6 +21,20 @@
             ]
         },
         {
+            "url": "/my-tasks",
+            "name": "My Tasks",
+            "icon": "menu-icon bx bx-task",
+            "slug": "my-tasks.index",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
+            ]
+        },
+        {
             "url": "/announcements",
             "name": "Announcements",
             "icon": "menu-icon bx bx-broadcast",

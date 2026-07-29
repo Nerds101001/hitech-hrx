@@ -531,6 +531,10 @@ Route::middleware([
       });
     });
 
+    // "My Tasks" — every user's own outstanding work, whatever their role.
+    Route::get('my-tasks', [\App\Http\Controllers\tenant\MyTasksController::class, 'index'])
+        ->name('my-tasks.index');
+
     // Attendance setup queue: accounts records each new joiner's employee ID
     // and biometric ID. Drives the login popup and the dashboard task card.
     Route::middleware(['role_or_permission:accounts|admin|hr'])
