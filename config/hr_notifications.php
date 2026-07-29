@@ -94,8 +94,11 @@ return [
      */
     'manager_designations' => ['manager', 'head', 'general manager', 'deputy general manager', 'director'],
 
-    // Always copied on exit alerts, on top of the clearance owners above.
+    // Always copied on EVERY exit alert and on every NOC update, on top of
+    // the clearance owners above — HR needs the full picture, and accounts
+    // needs to stop payroll/attendance for the leaver.
     'exit_always_cc' => array_filter([
+        env('HR_NOTIFY_ACCOUNTS', 'accounts5@rustx.com'),
         env('HR_NOTIFY_HR_1', 'suchita@rustx.com'),
         env('HR_NOTIFY_HR_2', 'priyal@rustx.com'),
     ]),
