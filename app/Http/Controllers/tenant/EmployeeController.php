@@ -2952,6 +2952,11 @@ class EmployeeController extends Controller
 
       DB::commit();
 
+      // 3. Tell accounts, the reporting manager and HR. Deliberately AFTER the
+      //    commit and individually guarded: a mail or SMTP failure must never
+      //    roll back an approval that has already succeeded.
+      $this->sendNewJoinerNotifications($user);
+
       if (request()->ajax()) {
         return response()->json(['success' => true, 'message' => 'Onboarding approved! ' . $user->name . ' is now active.']);
       }
@@ -2964,6 +2969,44 @@ class EmployeeController extends Controller
         return response()->json(['success' => false, 'message' => 'Failed to approve onboarding.']);
       }
       return redirect()->back()->with('error', 'Failed to approve onboarding.');
+    }
+  }
+
+  /**
+   * Announce an approved joiner.
+   *
+   *  1. One combined email — accounts + the reporting manager on To, HR on Cc,
+   *     so everyone sees the same thread.
+   *  2. A separate email to accounts only, carrying the ID documents, so
+   *     personal papers never reach the wider list.
+   *
+   * Each send is wrapped on its own: a failure is logged and the other mail
+   * is still attempted. The caller has already committed, so nothing here can
+   * undo the approval.
+   */
+  private function sendNewJoinerNotifications(User $user): void
+  {
+    try {
+      $r = \App\Services\HrNotificationService::onboardingRecipients($user);
+      if (!empty($r['to'])) {
+        \Illuminate\Support\Facades\Mail::to($r['to'])
+          ->cc($r['cc'])
+          ->send(new \App\Mail\NewJoinerAnnouncement($user));
+      } else {
+        Log::warning("New joiner mail skipped for user {$user->id}: no valid recipients configured.");
+      }
+    } catch (\Throwable $e) {
+      Log::error("New joiner announcement failed for user {$user->id}: " . $e->getMessage());
+    }
+
+    try {
+      $docsTo = \App\Services\HrNotificationService::onboardingDocumentRecipients();
+      if (!empty($docsTo)) {
+        \Illuminate\Support\Facades\Mail::to($docsTo)
+          ->send(new \App\Mail\NewJoinerDocuments($user));
+      }
+    } catch (\Throwable $e) {
+      Log::error("New joiner documents mail failed for user {$user->id}: " . $e->getMessage());
     }
   }
 
