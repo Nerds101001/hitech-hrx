@@ -65,10 +65,23 @@
 <script>
 (function () {
   var el = document.getElementById('setupTaskModal');
-  if (!el || typeof bootstrap === 'undefined') return;
+  if (!el) return;
 
-  var modal   = new bootstrap.Modal(el),
-      empWrap = document.getElementById('stmEmpWrap'),
+  // This partial sits inside the page content block, which the layout renders
+  // BEFORE it includes the script bundle — so Bootstrap does not exist yet.
+  // Resolve the modal lazily on first click instead of bailing out here, which
+  // is what silently killed the button.
+  // (Never write a Blade directive literally in a comment here: Blade compiles
+  // it anyway and it would open a stray section.)
+  var _m = null;
+  function modalInstance() {
+    if (_m) return _m;
+    if (typeof bootstrap === 'undefined' || !bootstrap.Modal) return null;
+    _m = bootstrap.Modal.getOrCreateInstance(el);
+    return _m;
+  }
+
+  var empWrap = document.getElementById('stmEmpWrap'),
       bioWrap = document.getElementById('stmBioWrap'),
       exempt  = document.getElementById('stmExempt'),
       emp     = document.getElementById('stmEmp'),
@@ -102,7 +115,25 @@
     save.disabled = false;
     save.textContent = 'Save & mark done';
 
-    modal.show();
+    var m = modalInstance();
+    if (m) {
+      m.show();
+    } else {
+      // Bootstrap genuinely unavailable — show it anyway rather than
+      // swallowing the click.
+      el.classList.add('show');
+      el.style.display = 'block';
+      document.body.classList.add('modal-open');
+    }
+  });
+
+  // Works with or without Bootstrap's own dismiss handling.
+  el.addEventListener('click', function (e) {
+    if (e.target.closest('[data-bs-dismiss="modal"]') && !_m) {
+      el.classList.remove('show');
+      el.style.display = 'none';
+      document.body.classList.remove('modal-open');
+    }
   });
 
   save.addEventListener('click', function () {

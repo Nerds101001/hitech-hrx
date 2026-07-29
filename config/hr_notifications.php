@@ -92,10 +92,24 @@ return [
             'department_id' => 29,
             'emails' => array_filter([env('NOC_HR', 'hr@rustx.com')]),           // Ramandeep Kaur Gill, Manager
         ],
+        'accounts' => [
+            'label' => 'Accounts',
+            'department_id' => 33,
+            'emails' => array_filter([env('NOC_ACCOUNTS', 'accounts@rustx.com')]),
+        ],
+        /*
+         | Finance only signs for people whose money it actually handles. Sales
+         | staff carry commissions, incentives and collections through Finance,
+         | so their exit needs a Finance NOC; Finance's own staff obviously do
+         | too. For every other department Finance has no dues to clear and the
+         | step is not raised at all, rather than sitting pending forever and
+         | blocking the exit from closing.
+         */
         'finance' => [
             'label' => 'Finance',
             'department_id' => 32,
             'emails' => array_filter([env('NOC_FINANCE', 'finance@rustx.com')]), // ARPANA Katyal, Head
+            'only_for_departments' => ['sales', 'new biz', 'channel sales', 'pre sales', 'finance'],
         ],
         /*
          | The leaver's OWN reporting manager signs the fourth NOC. There is

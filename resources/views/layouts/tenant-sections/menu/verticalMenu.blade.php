@@ -122,7 +122,21 @@
                 if (!$menuUser || !$menuUser->department
                     || stripos($menuUser->department->name, $m->department) === false) return false;
             }
-            return true;
+
+            // The menu JSON carries almost no "permission" keys, so until now
+            // every entry was drawn for every role and clicking most of them
+            // gave a 403 — Travel Claims, Expenses, Loans, Reports and Bot
+            // Training for accounts, among others. Ask the router what each
+            // destination actually requires. A group is kept only while at
+            // least one of its children survives.
+            if (isset($m->submenu)) {
+                foreach ($m->submenu as $sub) {
+                    if (!isset($sub->url) || \App\Support\Nav::allows(url($sub->url))) return true;
+                }
+                return false;
+            }
+
+            return !isset($m->url) || \App\Support\Nav::allows(url($m->url));
         };
 
         $liveHeaders = [];
@@ -168,6 +182,9 @@
                   if (!$isAdmin) continue;
               }
           }
+
+          // 4. Can this user actually open it? (see $itemVisible above)
+          if (!isset($menu->menuHeader) && !$itemVisible($menu)) continue;
         @endphp
 
         {{-- Section headings (MAIN, PEOPLE & HR, …) are deliberately NOT drawn.
@@ -236,6 +253,10 @@
                        if(isset($submenu->permission) && !$isAdmin) {
                          if (!$user || !$user->can($submenu->permission)) continue;
                      }
+
+                       // Same gate as the parent: never draw a child the user
+                       // would only get a 403 from.
+                       if (isset($submenu->url) && !\App\Support\Nav::allows(url($submenu->url))) continue;
                     @endphp
                     <li class="hitech-submenu-item {{ $menuMatches($submenu->slug ?? '') ? 'active' : '' }}">
                        <a href="{{ url($submenu->url) }}" class="hitech-submenu-link">

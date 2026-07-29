@@ -131,14 +131,18 @@
                             <td>
                                 @if(in_array($claim->status, ['approved', 'paid']))
                                     <div class="small">
-                                        <strong>85%:</strong> ₹{{ $claim->split_85_amount }} on {{ $claim->split_85_paid_on->format('d M') }}<br>
+                                        {{-- An approved claim has no paid-on date until it is actually
+                                             paid, so this blew the whole page up with "format() on null". --}}
+                                        <strong>85%:</strong> ₹{{ $claim->split_85_amount }}
+                                        on {{ $claim->split_85_paid_on ? $claim->split_85_paid_on->format('d M') : '11th' }}<br>
                                         <span class="text-{{ $claim->split_85_transaction ? 'success' : 'danger' }}">
                                             Trx: {{ $claim->split_85_transaction ?? 'Pending' }}
                                         </span>
                                     </div>
                                     <hr class="my-1">
                                     <div class="small">
-                                        <strong>15%:</strong> ₹{{ $claim->split_15_amount }} on {{ $claim->split_15_paid_on->format('d M') }}<br>
+                                        <strong>15%:</strong> ₹{{ $claim->split_15_amount }}
+                                        on {{ $claim->split_15_paid_on ? $claim->split_15_paid_on->format('d M') : '25th' }}<br>
                                         <span class="text-{{ $claim->split_15_transaction ? 'success' : 'danger' }}">
                                             Trx: {{ $claim->split_15_transaction ?? 'Pending' }}
                                         </span>

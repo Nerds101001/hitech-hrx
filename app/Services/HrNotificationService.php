@@ -291,6 +291,10 @@ class HrNotificationService
         $made  = 0;
 
         foreach ($steps as $key => $step) {
+            if (!self::stepAppliesTo($step, $leaver)) {
+                continue;
+            }
+
             try {
                 \App\Models\ExitClearance::firstOrCreate(
                     ['exit_type' => $exitType, 'exit_id' => $exitId, 'step_key' => $key],
@@ -310,6 +314,35 @@ class HrNotificationService
         self::notifyExit($leaver, $exitType, $exitId);
 
         return $made;
+    }
+
+    /**
+     * Does this clearance step apply to this leaver?
+     *
+     * A step with no 'only_for_departments' is raised for everyone. One that
+     * has the list is raised only when the leaver's department matches, so
+     * departments with no dues to that team never get a step that would sit
+     * pending and stop the exit from ever closing.
+     */
+    private static function stepAppliesTo(array $step, User $leaver): bool
+    {
+        $only = $step['only_for_departments'] ?? null;
+        if (empty($only)) {
+            return true;
+        }
+
+        $dept = strtolower(trim(optional($leaver->department)->name ?? ''));
+        if ($dept === '') {
+            return false;
+        }
+
+        foreach ((array) $only as $needle) {
+            if (str_contains($dept, strtolower($needle))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Email the exit alert to accounts, HR and the named managers. */
