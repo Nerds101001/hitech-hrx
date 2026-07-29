@@ -53,18 +53,33 @@ class MyTasksController extends Controller
                         'icon'   => 'bx-id-card',
                         'tone'   => 'primary',
                         'action' => url('/employee-setup'),
-                        'items'  => $setup->map(fn($t) => [
-                            'title' => optional($t->user)->getFullName() ?? 'Employee',
-                            'meta'  => trim(implode(' · ', array_filter([
+                        'items'  => $setup->map(function ($t) {
+                            $meta = trim(implode(' · ', array_filter([
                                 optional(optional($t->user)->designation)->name,
                                 optional(optional($t->user)->department)->name,
-                            ]))),
-                            'tags'  => array_values(array_filter([
-                                $t->needs_emp_id ? 'Employee ID' : null,
-                                $t->needs_biometric ? 'Biometric' : 'Biometric exempt',
-                            ])),
-                            'url'   => url('/employee-setup'),
-                        ])->all(),
+                            ])));
+
+                            return [
+                                'title' => optional($t->user)->getFullName() ?? 'Employee',
+                                'meta'  => $meta,
+                                'tags'  => array_values(array_filter([
+                                    $t->needs_emp_id ? 'Employee ID' : null,
+                                    $t->needs_biometric ? 'Biometric' : 'Biometric exempt',
+                                ])),
+                                'url'   => url('/employee-setup'),
+                                // Completed in a dialog on this page — sending
+                                // the user off to the queue page just to come
+                                // back was the long way round.
+                                'modal' => [
+                                    'id'        => $t->id,
+                                    'name'      => optional($t->user)->getFullName() ?? 'Employee',
+                                    'meta'      => $meta,
+                                    'emp'       => optional($t->user)->code,
+                                    'needs_emp' => $t->needs_emp_id ? 1 : 0,
+                                    'needs_bio' => $t->needs_biometric ? 1 : 0,
+                                ],
+                            ];
+                        })->all(),
                     ];
                 }
             } catch (\Throwable $e) { /* module not ready */ }
@@ -74,7 +89,7 @@ class MyTasksController extends Controller
         if (Schema::hasTable('exit_clearances')) {
             try {
                 $mine = ExitClearance::pending()->with('user')->get()
-                    ->filter(fn($c) => self::canSign($c, $user));
+                    ->filter(fn($c) => $c->isSignableBy($user));
 
                 if ($mine->isNotEmpty()) {
                     $groups[] = [
@@ -96,26 +111,6 @@ class MyTasksController extends Controller
         }
 
         return $groups;
-    }
-
-    /** Same rule the clearance controller enforces on save. */
-    private static function canSign(ExitClearance $c, $user): bool
-    {
-        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            return true;
-        }
-
-        $step = config('hr_notifications.exit_clearances.' . $c->step_key);
-        if (!$step) {
-            return false;
-        }
-
-        if (($step['resolve'] ?? null) === 'reporting_manager') {
-            return $c->user && (int) $c->user->reporting_to_id === (int) $user->id;
-        }
-
-        return !empty($step['department_id'])
-            && (int) $user->department_id === (int) $step['department_id'];
     }
 
     /** Total outstanding items, for the sidebar badge. */

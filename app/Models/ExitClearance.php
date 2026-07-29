@@ -37,6 +37,40 @@ class ExitClearance extends Model
         return $q->where('exit_type', $type)->where('exit_id', $id);
     }
 
+    /**
+     * May this user sign this particular clearance?
+     *
+     * The single source of truth: the tracker page, the save endpoint and the
+     * My Tasks queue all ask this, so what a user is offered is exactly what
+     * they are allowed to do.
+     *
+     * Note this is deliberately independent of roles beyond HR/admin — a
+     * leaver's reporting manager signs their step whatever role they hold,
+     * which is usually just 'employee'.
+     */
+    public function isSignableBy($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
+            return true;
+        }
+
+        $step = config('hr_notifications.exit_clearances.' . $this->step_key);
+        if (!$step) {
+            return false;
+        }
+
+        if (($step['resolve'] ?? null) === 'reporting_manager') {
+            return $this->user && (int) $this->user->reporting_to_id === (int) $user->id;
+        }
+
+        return !empty($step['department_id'])
+            && (int) $user->department_id === (int) $step['department_id'];
+    }
+
     /** True when every clearance for this exit has been signed off. */
     public static function allCleared(string $type, int $id): bool
     {

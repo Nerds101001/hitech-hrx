@@ -18,17 +18,38 @@ use Illuminate\Support\Facades\Log;
  */
 class ExitClearanceController extends Controller
 {
-    /** HR's tracker across all exits. */
+    /** HR's tracker across all exits; everyone else sees only their own steps. */
     public function index(Request $request)
     {
-        $this->authoriseView();
+        $user = auth()->user();
 
         $rows = ExitClearance::with(['user.department', 'clearedBy'])
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->status))
             ->orderByRaw("FIELD(status,'pending','blocked','cleared')")
             ->orderByDesc('created_at')
-            ->get()
-            ->groupBy(fn($r) => $r->exit_type . ':' . $r->exit_id);
+            ->get();
+
+        // HR and admin own the process and see every exit. Anyone else — a
+        // department signatory or a leaver's reporting manager — sees only the
+        // exits they actually have a step in; an exit is confidential to the
+        // people handling it.
+        $isOverseer = $user && $user->hasRole(['admin', 'Admin', 'hr', 'HR']);
+        if (!$isOverseer) {
+            $mineKeys = $rows->filter(fn($r) => $r->isSignableBy($user))
+                ->map(fn($r) => $r->exit_type . ':' . $r->exit_id)
+                ->unique()->all();
+
+            // Nothing to sign and no oversight role — nothing to show.
+            if (empty($mineKeys)) {
+                abort(403, 'You have no clearances to action.');
+            }
+
+            $rows = $rows->filter(
+                fn($r) => in_array($r->exit_type . ':' . $r->exit_id, $mineKeys, true)
+            );
+        }
+
+        $rows = $rows->groupBy(fn($r) => $r->exit_type . ':' . $r->exit_id);
 
         return view('tenant.employee-lifecycle.exit-clearances', [
             'pageConfigs' => ['contentLayout' => 'wide'],
@@ -111,43 +132,17 @@ class ExitClearanceController extends Controller
         }
     }
 
-    private function authoriseView(): void
-    {
-        $u = auth()->user();
-        if (!$u || !$u->hasRole(['admin', 'Admin', 'hr', 'HR', 'accounts', 'manager'])) {
-            abort(403);
-        }
-    }
-
     /**
      * Who may sign a given step: HR and admin can sign anything (they own the
-     * process), otherwise the user must sit in that step's department.
+     * process), a department signatory signs their department's step, and a
+     * leaver's reporting manager signs the reporting-manager step whatever
+     * role they hold. The rule itself lives on the model so the tracker, this
+     * endpoint and My Tasks cannot drift apart.
      */
     private function authoriseStep(ExitClearance $clearance): void
     {
-        $u = auth()->user();
-        if (!$u) {
-            abort(403);
+        if (!$clearance->isSignableBy(auth()->user())) {
+            abort(403, 'This clearance is for someone else to sign.');
         }
-        if ($u->hasRole(['admin', 'Admin', 'hr', 'HR'])) {
-            return;
-        }
-
-        $step = config('hr_notifications.exit_clearances.' . $clearance->step_key);
-
-        // The reporting-manager step is signed by that leaver's own manager,
-        // resolved from the employee record rather than by department.
-        if ($step && ($step['resolve'] ?? null) === 'reporting_manager') {
-            if ($clearance->user && (int) $clearance->user->reporting_to_id === (int) $u->id) {
-                return;
-            }
-            abort(403, 'Only this employee\'s reporting manager can sign this clearance.');
-        }
-
-        if ($step && !empty($step['department_id']) && (int) $u->department_id === (int) $step['department_id']) {
-            return;
-        }
-
-        abort(403, 'This clearance belongs to another department.');
     }
 }

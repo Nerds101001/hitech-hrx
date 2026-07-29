@@ -22,6 +22,14 @@
 @endphp
 
 @section('content')
+@php
+  // Accounts holds payroll/attendance rights but not travel-claim, expense,
+  // loan or report rights, so half of these tiles used to land on a 403. Ask
+  // the router what this user can actually open: navigation tiles disappear,
+  // informational cards keep the number but drop the link.
+  $mayOpen = fn($u) => !empty($u) && \App\Support\Nav::allows($u);
+@endphp
+
 <div class="adc">
 
   {{-- Hero --}}
@@ -32,7 +40,9 @@
     </div>
     <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
       <span class="adc-chip"><i class="bx bx-wallet"></i> Finance Console</span>
-      <a href="{{ url('/payroll') }}" class="adc-chip adc-chip-accent"><i class="bx bx-money"></i> Payroll</a>
+      @if($mayOpen(url('/payroll')))
+        <a href="{{ url('/payroll') }}" class="adc-chip adc-chip-accent"><i class="bx bx-money"></i> Payroll</a>
+      @endif
     </div>
   </div>
 
@@ -49,11 +59,12 @@
       ];
     @endphp
     @foreach($kpis as $k)
+      @php $kHref = $mayOpen($k['url']) ? $k['url'] : null; @endphp
       <div class="col-6 col-md-4 col-xxl-2">
-        <a href="{{ $k['url'] }}" class="adc-kpi adc-tone-{{ $k['tone'] }} h-100 d-block">
+        <a @if($kHref) href="{{ $kHref }}" @endif class="adc-kpi adc-tone-{{ $k['tone'] }} h-100 d-block">
           <div class="adc-kpi-top">
             <span class="adc-kpi-icon"><i class="bx {{ $k['icon'] }}"></i></span>
-            <i class="bx bx-chevron-right adc-kpi-go"></i>
+            @if($kHref)<i class="bx bx-chevron-right adc-kpi-go"></i>@endif
           </div>
           <div class="adc-kpi-value">{{ $k['value'] }}</div>
           <div class="adc-kpi-label">{{ $k['label'] }}</div>
@@ -77,8 +88,9 @@
         @else
           <div class="row g-3">
             @foreach($cashOutQueue as $q)
+              @php $qHref = $mayOpen($q['url'] ?? null) ? $q['url'] : null; @endphp
               <div class="col-6 col-xl-3">
-                <a href="{{ $q['url'] }}" class="adc-tile adc-tone-{{ $q['tone'] }} d-block h-100">
+                <a @if($qHref) href="{{ $qHref }}" @endif class="adc-tile adc-tone-{{ $q['tone'] }} d-block h-100">
                   <div class="adc-tile-value">{{ $money($q['amount']) }}</div>
                   <div class="adc-tile-name">{{ $q['label'] }}</div>
                   <div class="adc-tile-sub">{{ $q['count'] }} {{ \Illuminate\Support\Str::plural('item', $q['count']) }}</div>
@@ -98,7 +110,7 @@
         </div>
         <div class="col-xl-4">
           <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Claim Pipeline</h6><span class="adc-card-sub">Travel claims by stage</span></div><a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a></div>
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Claim Pipeline</h6><span class="adc-card-sub">Travel claims by stage</span></div>@if($mayOpen(url('/travel-claims/admin/dashboard')))<a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a>@endif</div>
             <div id="finClaimPipeline"></div>
           </div>
         </div>
@@ -162,7 +174,17 @@
                       @endif
                     </td>
                     <td class="text-end">
-                      <a href="{{ url('/employee-setup') }}" class="adc-badge adc-tone-primary">Update</a>
+                      <button type="button" class="adc-badge adc-tone-primary js-setup-task"
+                              style="border:none;cursor:pointer"
+                              data-id="{{ $t->id }}"
+                              data-name="{{ optional($t->user)->getFullName() }}"
+                              data-meta="{{ trim(implode(' · ', array_filter([
+                                  optional(optional($t->user)->designation)->name,
+                                  optional(optional($t->user)->department)->name,
+                              ]))) }}"
+                              data-emp="{{ optional($t->user)->code }}"
+                              data-needs-emp="{{ $t->needs_emp_id ? 1 : 0 }}"
+                              data-needs-bio="{{ $t->needs_biometric ? 1 : 0 }}">Update</button>
                     </td>
                   </tr>
                 @endforeach
@@ -220,8 +242,10 @@
               ['name'=>'Employees','icon'=>'bx-group','value'=>number_format($activeHeadcount),'sub'=>'Directory','url'=>url('/employees'),'tone'=>'primary'],
               ['name'=>'Reports','icon'=>'bx-file','value'=>'','sub'=>'Export','url'=>url('/reports'),'tone'=>'info'],
             ];
+            // Pure navigation — a tile that 403s is worse than no tile.
+            $tiles = \App\Support\Nav::filter($tiles);
           @endphp
-          @foreach($tiles as $t)
+          @forelse($tiles as $t)
             <div class="col-6 col-md-3">
               <a href="{{ $t['url'] }}" class="adc-tile adc-tone-{{ $t['tone'] }} d-block h-100">
                 <span class="adc-tile-icon"><i class="bx {{ $t['icon'] }}"></i></span>
@@ -230,7 +254,13 @@
                 <div class="adc-tile-sub">{{ $t['sub'] }}</div>
               </a>
             </div>
-          @endforeach
+          @empty
+            <div class="col-12">
+              <div class="adc-empty adc-empty-sm">
+                <i class="bx bx-lock-alt"></i><span>No finance modules are enabled for your role.</span>
+              </div>
+            </div>
+          @endforelse
         </div>
       </div>
     </div>
@@ -261,7 +291,7 @@
 
       {{-- Recent payments --}}
       <div class="adc-card mb-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Recent Payments</h6><span class="adc-card-sub">Claims marked paid</span></div><a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Recent Payments</h6><span class="adc-card-sub">Claims marked paid</span></div>@if($mayOpen(url('/travel-claims/admin/dashboard')))<a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a>@endif</div>
         @if(collect($recentPayments)->isEmpty())
           <div class="adc-empty adc-empty-sm"><i class="bx bx-transfer"></i><span>No payments recorded yet.</span></div>
         @else
@@ -282,13 +312,24 @@
       {{-- Quick actions --}}
       <div class="adc-card">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
+        @php
+          $actions = \App\Support\Nav::filter([
+            ['url'=>url('/employee-setup'),'icon'=>'bx-id-card','label'=>'Attendance Setup'],
+            ['url'=>url('/payroll'),'icon'=>'bx-money','label'=>'Run Payroll'],
+            ['url'=>url('/travel-claims/admin/dashboard'),'icon'=>'bx-car','label'=>'Verify Claims'],
+            ['url'=>url('/expenseRequests'),'icon'=>'bx-receipt','label'=>'Expenses'],
+            ['url'=>url('/loan'),'icon'=>'bx-wallet','label'=>'Loans'],
+            ['url'=>url('/attendance'),'icon'=>'bx-time-five','label'=>'Attendance'],
+            ['url'=>url('/reports'),'icon'=>'bx-file','label'=>'Reports'],
+            ['url'=>url('/my-tasks'),'icon'=>'bx-task','label'=>'My Tasks'],
+          ]);
+        @endphp
         <div class="adc-qa">
-          <a href="{{ url('/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>Run Payroll</span></a>
-          <a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-qa-btn"><i class="bx bx-car"></i><span>Verify Claims</span></a>
-          <a href="{{ url('/expenseRequests') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expenses</span></a>
-          <a href="{{ url('/loan') }}" class="adc-qa-btn"><i class="bx bx-wallet"></i><span>Loans</span></a>
-          <a href="{{ url('/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Attendance</span></a>
-          <a href="{{ url('/reports') }}" class="adc-qa-btn"><i class="bx bx-file"></i><span>Reports</span></a>
+          @foreach($actions as $a)
+            <a href="{{ $a['url'] }}" class="adc-qa-btn">
+              <i class="bx {{ $a['icon'] }}"></i><span>{{ $a['label'] }}</span>
+            </a>
+          @endforeach
         </div>
       </div>
     </div>
@@ -300,6 +341,10 @@
      employee all include it; finance was missing it. --}}
 @include('tenant.users.dashboard._adc-styles')
 @include('tenant.users.dashboard._adc-live')
+
+{{-- Same dialog the queue page and My Tasks use, so "Update" completes the
+     task here instead of bouncing to another page. --}}
+@include('tenant.employees._setup-modal')
 
 @endsection
 

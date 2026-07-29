@@ -92,7 +92,18 @@
                       {{ optional($t->completed_at)->format('d M Y') }}
                     </small>
                   @else
-                    <span class="text-muted small">—</span>
+                    <button type="button" class="btn btn-sm btn-primary js-setup-task"
+                            data-id="{{ $t->id }}"
+                            data-name="{{ optional($t->user)->getFullName() }}"
+                            data-meta="{{ trim(implode(' · ', array_filter([
+                                optional(optional($t->user)->designation)->name,
+                                optional(optional($t->user)->department)->name,
+                            ]))) }}"
+                            data-emp="{{ optional($t->user)->code }}"
+                            data-needs-emp="{{ $t->needs_emp_id ? 1 : 0 }}"
+                            data-needs-bio="{{ $t->needs_biometric ? 1 : 0 }}">
+                      <i class="bx bx-edit-alt me-1"></i>Complete
+                    </button>
                   @endif
                 </td>
               </tr>
@@ -108,4 +119,6 @@
     </div>
   </div>
 </div>
+
+@include('tenant.employees._setup-modal')
 @endsection

@@ -32,6 +32,15 @@ class AnnouncementController extends Controller
     public function dashboard(Request $request)
     {
         $user = auth()->user();
+
+        // Everyone reaches /announcements from the sidebar. Those who cannot
+        // publish get their own feed rather than a 403 — an announcements link
+        // that only some roles can open is worse than no link at all.
+        if (!$this->isPublisherAdmin() && !$this->isPublisherManager()
+            && !$user->can('announcements.manage')) {
+            return $this->myFeed($request);
+        }
+
         $isAdmin = $this->isPublisherAdmin();
 
         // A manager's dashboard only ever shows their own team posts

@@ -139,8 +139,12 @@ Route::middleware([
     Route::prefix('announcements')->name('announcements.')->group(function () {
       Route::get('feed', [AnnouncementController::class, 'myFeed'])->name('feed');
 
+      // Open to everyone: the controller serves the publishing dashboard to
+      // those who can publish and the personal feed to everyone else. The
+      // sidebar shows this to all users, so it must never 403.
+      Route::get('', [AnnouncementController::class, 'dashboard'])->name('dashboard');
+
       Route::middleware(['role_or_permission:admin|hr|manager|announcements.manage'])->group(function () {
-        Route::get('', [AnnouncementController::class, 'dashboard'])->name('dashboard');
         Route::get('dashboardAjax', [AnnouncementController::class, 'dashboardAjax'])->name('dashboardAjax');
         Route::post('store', [AnnouncementController::class, 'store'])->name('store');
         Route::get('getByIdAjax/{id}', [AnnouncementController::class, 'getByIdAjax'])->name('getByIdAjax');
@@ -544,10 +548,12 @@ Route::middleware([
         Route::post('{id}/complete', [\App\Http\Controllers\tenant\EmployeeSetupTaskController::class, 'complete'])->name('complete');
     });
 
-    // Exit clearance (NOC) tracker. Viewing is open to the departments that
-    // owe a clearance; signing off is authorised per-step in the controller.
-    Route::middleware(['role_or_permission:hr|admin|accounts|manager|lifecycle.manage'])
-      ->prefix('exit-clearance')->name('exit-clearance.')->group(function () {
+    // Exit clearance (NOC) tracker. No role gate here on purpose: the signer
+    // may be the leaver's reporting manager, who commonly holds only the
+    // 'employee' role. The controller shows a user only the exits they have a
+    // step in and 403s anyone with none, so access is decided by who owes a
+    // clearance rather than by job title.
+    Route::prefix('exit-clearance')->name('exit-clearance.')->group(function () {
         Route::get('/', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'index'])->name('index');
         Route::post('{id}', [\App\Http\Controllers\tenant\ExitClearanceController::class, 'update'])->name('update');
     });

@@ -34,6 +34,15 @@ class AdminRoleGuard
         'auth/logout',
         'lang',
         'work-control',
+
+        // Personal, per-user pages that the sidebar shows to everyone. Each one
+        // authorises inside its own controller and only ever renders that
+        // user's own items, so they must not be bounced to the employee
+        // dashboard — an employee is often a leaver's reporting manager, and
+        // the NOC they owe is signed here.
+        'my-tasks',
+        'announcements',
+        'exit-clearance',
     ];
 
     public function handle(Request $request, Closure $next): Response

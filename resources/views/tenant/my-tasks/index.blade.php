@@ -73,7 +73,18 @@
                 <span class="mt-tag">{{ $tag }}</span>
               @endforeach
             </span>
-            <a href="{{ $item['url'] }}" class="mt-go">Complete</a>
+            @if(!empty($item['modal']))
+              <button type="button" class="mt-go js-setup-task"
+                      data-id="{{ $item['modal']['id'] }}"
+                      data-name="{{ $item['modal']['name'] }}"
+                      data-meta="{{ $item['modal']['meta'] }}"
+                      data-emp="{{ $item['modal']['emp'] }}"
+                      data-needs-emp="{{ $item['modal']['needs_emp'] }}"
+                      data-needs-bio="{{ $item['modal']['needs_bio'] }}"
+                      style="border:none">Complete</button>
+            @else
+              <a href="{{ $item['url'] }}" class="mt-go">Complete</a>
+            @endif
           </div>
         @endforeach
       </div>
@@ -86,4 +97,6 @@
     @endforelse
   </div>
 </div>
+
+@include('tenant.employees._setup-modal')
 @endsection
