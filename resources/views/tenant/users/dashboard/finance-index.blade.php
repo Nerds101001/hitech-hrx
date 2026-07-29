@@ -283,12 +283,12 @@
       <div class="adc-card">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
         <div class="adc-qa">
-          <a href="{{ url('/payroll') }}" class="adc-qa-item"><i class="bx bx-money"></i><span>Run Payroll</span></a>
-          <a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-qa-item"><i class="bx bx-car"></i><span>Verify Claims</span></a>
-          <a href="{{ url('/expenseRequests') }}" class="adc-qa-item"><i class="bx bx-receipt"></i><span>Expenses</span></a>
-          <a href="{{ url('/loan') }}" class="adc-qa-item"><i class="bx bx-wallet"></i><span>Loans</span></a>
-          <a href="{{ url('/attendance') }}" class="adc-qa-item"><i class="bx bx-time-five"></i><span>Attendance</span></a>
-          <a href="{{ url('/reports') }}" class="adc-qa-item"><i class="bx bx-file"></i><span>Reports</span></a>
+          <a href="{{ url('/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>Run Payroll</span></a>
+          <a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-qa-btn"><i class="bx bx-car"></i><span>Verify Claims</span></a>
+          <a href="{{ url('/expenseRequests') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expenses</span></a>
+          <a href="{{ url('/loan') }}" class="adc-qa-btn"><i class="bx bx-wallet"></i><span>Loans</span></a>
+          <a href="{{ url('/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Attendance</span></a>
+          <a href="{{ url('/reports') }}" class="adc-qa-btn"><i class="bx bx-file"></i><span>Reports</span></a>
         </div>
       </div>
     </div>

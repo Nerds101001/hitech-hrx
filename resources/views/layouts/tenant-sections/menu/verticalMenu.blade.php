@@ -170,16 +170,14 @@
           }
         @endphp
 
-        @if (isset($menu->menuHeader))
-          {{-- Section headers were parsed out of the JSON but never drawn, so the
-               sidebar rendered as one flat list and every menuHeader entry was
-               dead weight. Draw them so the grouping is visible — but only when
-               this role actually has an item underneath (see $liveHeaders). --}}
-          @if (!empty($liveHeaders[$menu->menuHeader]))
-            <li class="hitech-menu-header">
-              <span class="hitech-menu-header-text">{{ __($menu->menuHeader) }}</span>
-            </li>
-          @endif
+        {{-- Section headings (MAIN, PEOPLE & HR, …) are deliberately NOT drawn.
+             They are kept in the menu JSON because the grouping still orders the
+             items sensibly, but the labels themselves added vertical noise to an
+             already long sidebar. Restore by re-enabling the block below. --}}
+        @if (false && isset($menu->menuHeader) && !empty($liveHeaders[$menu->menuHeader]))
+          <li class="hitech-menu-header">
+            <span class="hitech-menu-header-text">{{ __($menu->menuHeader) }}</span>
+          </li>
         @endif
 
         @if (!isset($menu->menuHeader))

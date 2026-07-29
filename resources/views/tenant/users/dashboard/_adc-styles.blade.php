@@ -109,6 +109,10 @@
   .adc-feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px;}
   .adc-feed li{display:flex;gap:11px;align-items:flex-start;}
   .adc-feed-dot{width:34px;height:34px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:1.05rem;color:var(--c);background:color-mix(in srgb,var(--c) 12%,#fff);}
+  /* Wrapper around the title/meta pair — every dashboard's feed markup uses
+     this, but it was never defined, so long entries could not shrink and
+     overflowed their row. */
+  .adc-feed-body{min-width:0;flex:1;}
   .adc-feed-title{font-size:.85rem;font-weight:600;line-height:1.25;}
   .adc-feed-meta{font-size:.74rem;color:var(--faint);margin-top:1px;}
 
