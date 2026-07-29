@@ -285,7 +285,19 @@ class HrNotificationService
      *
      * @param  string  $exitType  'resignation' | 'termination'
      */
-    public static function raiseExitClearances(User $leaver, string $exitType, int $exitId): int
+    /**
+     * Raise the clearance steps for an exit.
+     *
+     * $notify sends the exit alert to accounts/HR/the reporting manager. It is
+     * a parameter rather than an unconditional side effect because this method
+     * mails real people about a real colleague the moment it is called — a
+     * caller that only wants to know which steps apply (a check, a dry run,
+     * a test) must be able to ask without anyone receiving a resignation
+     * notice.
+     */
+    public static function raiseExitClearances(
+        User $leaver, string $exitType, int $exitId, bool $notify = true
+    ): int
     {
         $steps = (array) config('hr_notifications.exit_clearances', []);
         $made  = 0;
@@ -311,7 +323,9 @@ class HrNotificationService
             }
         }
 
-        self::notifyExit($leaver, $exitType, $exitId);
+        if ($notify) {
+            self::notifyExit($leaver, $exitType, $exitId);
+        }
 
         return $made;
     }
@@ -336,13 +350,11 @@ class HrNotificationService
             return false;
         }
 
-        foreach ((array) $only as $needle) {
-            if (str_contains($dept, strtolower($needle))) {
-                return true;
-            }
-        }
-
-        return false;
+        // Whole-name match, not substring: "Pre Sales" and "Channel Sales"
+        // both contain "sales" and must not inherit the Sales rule.
+        return in_array($dept, array_map(
+            fn($n) => strtolower(trim($n)), (array) $only
+        ), true);
     }
 
     /** Email the exit alert to accounts, HR and the named managers. */
