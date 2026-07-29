@@ -94,14 +94,31 @@ return [
      */
     'manager_designations' => ['manager', 'head', 'general manager', 'deputy general manager', 'director'],
 
-    // Always copied on EVERY exit alert and on every NOC update, on top of
-    // the clearance owners above — HR needs the full picture, and accounts
-    // needs to stop payroll/attendance for the leaver.
-    'exit_always_cc' => array_filter([
-        env('HR_NOTIFY_ACCOUNTS', 'accounts5@rustx.com'),
-        env('HR_NOTIFY_HR_1', 'suchita@rustx.com'),
-        env('HR_NOTIFY_HR_2', 'priyal@rustx.com'),
-    ]),
+    /*
+     | Who is notified on EVERY exit alert and every NOC update.
+     |
+     | Resolved as the union of:
+     |   • every active user holding one of `roles`  (so new accounts staff
+     |     are included automatically — no config edit needed)
+     |   • the fixed `emails` below
+     |   • the leaver's own reporting manager, when they have one
+     |
+     | Employee-role staff are never included unless they hold one of the
+     | roles listed here.
+     */
+    'exit_notify' => [
+        'roles' => ['accounts'],
+
+        'emails' => array_filter([
+            env('HR_NOTIFY_HR_1',  'suchita@rustx.com'),   // Suchita Rustogi  — Dy. GM, HR
+            env('HR_NOTIFY_HR_2',  'priyal@rustx.com'),    // Priyal Gangwar   — Sr. Manager, HR
+            env('HR_NOTIFY_HR_3',  'hr@rustx.com'),        // Ramandeep K Gill — Manager, HR
+            env('NOC_ACCOUNTS',    'accounts@rustx.com'),  // Rajesh Bhardwaj  — Accounts Manager
+            env('NOC_FINANCE',     'finance@rustx.com'),   // Arpana Katyal    — Finance Head
+        ]),
+
+        'include_reporting_manager' => true,
+    ],
 
     /*
      | ---------------- Accounts setup task ----------------
