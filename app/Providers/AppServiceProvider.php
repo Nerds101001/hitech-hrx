@@ -48,8 +48,15 @@ class AppServiceProvider extends ServiceProvider
             return true;
         }
         // Allow users from sales-adjacent departments:
-        // Customer Care (10), New Biz (13), Customer Excellence (20), Pre Sales (21), Channel Sales (22), Sales (30)
-        $salesDeptIds = [2, 10, 13, 20, 21, 22, 30];
+        // Sales Department (2), Customer Care (10), New Biz (13), Customer
+        // Excellence (20), Pre Sales (21), Channel Sales (22), Sales (30),
+        // Customer Care + New Biz (34).
+        //
+        // 34 is the merged Customer Care + New Biz department. It was missing
+        // here, so its members only reached Sales Field Ops if they happened to
+        // have a row in cc_salesperson_map — 8 of the 9 did, which hid the gap
+        // until the 9th (a manager, unmapped) could not see the menu at all.
+        $salesDeptIds = [2, 10, 13, 20, 21, 22, 30, 34];
         return in_array($user->department_id, $salesDeptIds);
     });
 
