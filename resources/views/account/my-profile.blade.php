@@ -945,12 +945,26 @@
                                                                 {{ $item->amount > 0 ? '+' : '' }}{{ number_format($item->amount, 1) }}
                                                             </span>
                                                         @else
+                                                            {{-- A request is shown as what it actually cost: the paid days that
+                                                                 came off the balance, and any unpaid days beside them. Showing
+                                                                 the whole span as one negative implied a minus balance, which
+                                                                 no leave register does. --}}
                                                             @php
-                                                                $from = \Carbon\Carbon::parse($item->from_date);
-                                                                $to = \Carbon\Carbon::parse($item->to_date);
-                                                                $days = $from->diffInDays($to) + 1;
+                                                                $paid = (float) ($item->paid_days ?? 0);
+                                                                $npl  = (float) ($item->lwp_days ?? 0);
                                                             @endphp
-                                                            <span class="text-info">-{{ number_format($days, 1) }}</span>
+                                                            @if($paid > 0)
+                                                                <span class="text-info">-{{ number_format($paid, 1) }}</span>
+                                                            @endif
+                                                            @if($npl > 0)
+                                                                <span class="badge bg-label-secondary ms-1" style="font-size:.68rem;"
+                                                                      title="Leave without pay">
+                                                                    {{ number_format($npl, 1) }} LWP
+                                                                </span>
+                                                            @endif
+                                                            @if($paid <= 0 && $npl <= 0)
+                                                                <span class="text-muted">—</span>
+                                                            @endif
                                                         @endif
                                                     </td>
                                                     <td class="py-2">

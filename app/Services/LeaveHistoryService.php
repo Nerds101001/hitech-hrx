@@ -9,6 +9,18 @@ use Carbon\Carbon;
 
 class LeaveHistoryService
 {
+    /**
+     * The ledger opens here. Balances were reset on 2026-08-01 and re-opened
+     * with the Accounts department's verified figure as at 31-Jul-2026, so any
+     * leave taken before that is ALREADY reflected in that opening number —
+     * listing it again showed the same days twice and made the log read as a
+     * running history rather than a balance ledger.
+     *
+     * Older leave is not deleted; it stays on the Leave Requests page and on
+     * attendance. This only decides what the balance ledger displays.
+     */
+    public const LEDGER_OPENS = '2026-07-31';
+
     public static function getUnifiedHistory($userOrId)
     {
         $history = collect();
@@ -28,14 +40,37 @@ class LeaveHistoryService
             $q->withTrashed(); // old requests may reference soft-deleted types
         }])->get();
         foreach ($requests as $leave) {
+            // Anything before the ledger opened is already inside the opening
+            // balance — see LEDGER_OPENS.
+            if ($leave->from_date && Carbon::parse($leave->from_date)->lt(Carbon::parse(self::LEDGER_OPENS))) {
+                continue;
+            }
+
+            $status = $leave->status instanceof \UnitEnum ? $leave->status->value : $leave->status;
+
+            // Split the request into what came off the paid balance and what
+            // was unpaid. A 13-day request against a 4-day balance is 4 paid +
+            // 9 LWP — it is NOT a balance of minus nine.
+            $days    = $leave->is_half_day
+                ? 0.5
+                : (Carbon::parse($leave->from_date)->diffInDays(Carbon::parse($leave->to_date)) + 1);
+            $lwpDays = (float) ($leave->lwp_days ?? 0);
+            $paidDays = max(0, $days - $lwpDays);
+
+            // Only an approved request ever touched the balance.
+            $deducted = in_array($status, ['approved'], true) ? $paidDays : 0.0;
+
             $history->push((object)[
                 'id'         => 'REQ-' . $leave->id,
                 'type'       => 'Request',
                 'leave_type' => $leave->leaveType->name ?? 'Unknown',
                 'from_date'  => $leave->from_date,
                 'to_date'    => $leave->to_date,
-                'amount'     => 0, // Handled in view
-                'status'     => $leave->status instanceof \UnitEnum ? $leave->status->value : $leave->status,
+                'amount'     => -$deducted,
+                'total_days' => $days,
+                'paid_days'  => $deducted,
+                'lwp_days'   => $lwpDays,
+                'status'     => $status,
                 'notes'      => $leave->user_notes,
                 'created_at' => $leave->created_at,
                 'is_adjustment' => false,
