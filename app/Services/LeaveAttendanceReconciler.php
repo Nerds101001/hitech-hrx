@@ -34,6 +34,17 @@ class LeaveAttendanceReconciler
     /** Written to attendance.admin_reason; also the guard against double credit. */
     public const MARK = 'Present - this day attendance log found';
 
+    /**
+     * Only leave from this date forward is reconciled.
+     *
+     * Balances were reset on 2026-08-01 and re-opened with the Accounts
+     * department's verified figure as at 31-Jul-2026. Any June or July clash is
+     * already inside that figure, so crediting it again would add days on top
+     * of a baseline the accounts team signed off. This rule governs new leave
+     * only.
+     */
+    public const APPLIES_FROM = '2026-08-01';
+
     /** Total refunded to a request can never exceed the days it actually paid for. */
     private static function paidDaysOf(LeaveRequest $leave): float
     {
@@ -58,6 +69,7 @@ class LeaveAttendanceReconciler
         $requests = LeaveRequest::with(['leaveType', 'user'])
             ->where('status', 'approved')
             ->whereNull('deleted_at')
+            ->whereDate('from_date', '>=', self::APPLIES_FROM)
             ->when($userId, fn($q) => $q->where('user_id', $userId))
             ->get();
 
