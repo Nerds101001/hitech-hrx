@@ -402,7 +402,12 @@ class PayrollService
             } elseif ($status === 'wfh' || str_contains($status, 'work_from_home')) {
                 $workedDays += 1.0;
             } elseif ($status === 'absent') {
-                $absents += 1.0;
+                // No leave applied for this day: it costs 1.5 days of salary,
+                // not one. Apply a back-dated leave and get it approved before
+                // payroll runs for the month and the approval links this day to
+                // a leave record, so the branch above scores it instead and the
+                // penalty never applies. Half days are untouched — no penalty.
+                $absents += $att->leaveRequest ? 1.0 : 1.5;
             }
         }
 

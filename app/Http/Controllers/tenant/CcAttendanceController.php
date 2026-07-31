@@ -649,10 +649,7 @@ class CcAttendanceController extends Controller
      */
     private function processCompOffLogic($userId, $tenantId, &$dbStatus)
     {
-        $compOffType = \App\Models\LeaveType::where('code', 'ALP')
-            ->orWhere('name', 'like', '%All Purpose%')
-            ->orWhere('code', 'PL')
-            ->first();
+        $compOffType = \App\Models\LeaveType::where('code', 'ALP')->first();
 
         if (!$compOffType) return null;
 

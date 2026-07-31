@@ -149,10 +149,7 @@ class AttendanceAdjustmentService
         }
 
         // 5. Retrieve Comp-off (ALP/PL) leave type
-        $compOffType = LeaveType::where('code', 'ALP')
-            ->orWhere('name', 'like', '%All Purpose%')
-            ->orWhere('code', 'PL')
-            ->first();
+        $compOffType = LeaveType::where('code', 'ALP')->first();
 
         // 6. Perform the pairing/offset
         $offsetCount = min(count($workedSundays), count($eligibleDays));
