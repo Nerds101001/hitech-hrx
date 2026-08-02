@@ -116,7 +116,9 @@
             </div>
         </div>
 
-        @include('_partials.attendance_legend')
+        {{-- Colour key only: this page doesn't load attendance-index.js, so the
+             chips would look clickable but do nothing if left filterable. --}}
+        @include('_partials.attendance_legend', ['legendFilterable' => false])
 
         <div class="tab-content border-0 p-0">
             {{-- LIST VIEW --}}

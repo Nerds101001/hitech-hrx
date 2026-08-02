@@ -20,6 +20,8 @@ use App\Http\Controllers\tenant\DesignationController;
 use App\Http\Controllers\tenant\DeviceController;
 use App\Http\Controllers\tenant\DocumentRequestController;
 use App\Http\Controllers\tenant\DocumentTypeController;
+use App\Http\Controllers\tenant\SetuMappingController;
+use App\Http\Controllers\tenant\SetuSyncController;
 use App\Http\Controllers\tenant\EmployeeController;
 use App\Http\Controllers\tenant\EmployeeLifecycleController;
 use App\Http\Controllers\tenant\ExpenseController;
@@ -245,7 +247,7 @@ Route::middleware([
     // role set — closes the gap where holding one of AdminRoleGuard's 6
     // override permissions alone, with no admin/hr/accounts/manager role,
     // would otherwise reach every module that has no gate of its own)
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage|holidays.manage|leave.create_type|leave.create_policy|expense.manage_types|document_types.manage|ipgroup.manage|geofencegroup.manage|qrgroup.manage|units.manage'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage|holidays.manage|leave.create_type|leave.create_policy|expense.manage_types|document_types.manage|ipgroup.manage|geofencegroup.manage|qrgroup.manage|units.manage|setu.manage'])->group(function () {
 
     // Shifts
     Route::prefix('shifts')->name('shifts.')->group(function () {
@@ -313,6 +315,22 @@ Route::middleware([
       Route::get('getDocumentTypeAjax/{id}', [DocumentTypeController::class, 'getDocumentTypeAjax'])->name('getDocumentTypeAjax');
       Route::delete('deleteDocumentTypeAjax/{id}', [DocumentTypeController::class, 'deleteDocumentTypeAjax'])->name('deleteDocumentTypeAjax');
       Route::post('changeStatus/{id}', [DocumentTypeController::class, 'changeStatus'])->name('changeStatus');
+    });
+
+    // Setu Salesperson Mappings — Tally ledger name -> HRX user, reviewed
+    // and corrected here instead of via the one-off CSV export/import loop.
+    Route::prefix('setu-mappings')->name('setu-mappings.')->group(function () {
+      Route::get('', [SetuMappingController::class, 'index'])->name('index');
+      Route::get('getListAjax', [SetuMappingController::class, 'getListAjax'])->name('getListAjax');
+      Route::get('getByIdAjax/{id}', [SetuMappingController::class, 'getByIdAjax'])->name('getByIdAjax');
+      Route::post('addOrUpdateAjax', [SetuMappingController::class, 'addOrUpdateAjax'])->name('addOrUpdateAjax');
+    });
+
+    // Setu Sales Sync — trigger a sync for any confirmed salesperson directly
+    // (the actual sync POST reuses sales-visits.pipeline.sync-setu; this is
+    // only the listing page).
+    Route::prefix('setu-sync')->name('setu-sync.')->group(function () {
+      Route::get('', [SetuSyncController::class, 'index'])->name('index');
     });
 
     // IP Groups
@@ -723,8 +741,18 @@ Route::middleware([
             Route::put('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'update'])->name('pipeline.update');
             Route::delete('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'destroy'])->name('pipeline.destroy');
             Route::post('/sales-report/month', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'monthUpdate'])->name('pipeline.month.update');
+
+            /* Approval-gated deletion. The sales floor raises a request with a
+               reason; only Admin/HR approve, and approval performs the delete.
+               Covers both books — Sales Report and Sales Pipeline. */
+            Route::post('/sales-report/{id}/delete-request', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'store'])->name('pipeline.delete-request.store');
+            Route::get('/delete-requests', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'index'])->name('pipeline.delete-requests.index');
+            Route::post('/delete-requests/{id}/approve', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'approve'])->name('pipeline.delete-requests.approve');
+            Route::post('/delete-requests/{id}/reject', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'reject'])->name('pipeline.delete-requests.reject');
             Route::post('/sales-report/{id}/extra-rep', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'addExtraRep'])->name('pipeline.extra.add');
             Route::delete('/sales-report/{id}/extra-rep/{userId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'removeExtraRep'])->name('pipeline.extra.remove');
+            Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
+            Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
 
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
@@ -827,6 +855,10 @@ Route::middleware([
             Route::get('/', [\App\Http\Controllers\tenant\TravelClaimController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\tenant\TravelClaimController::class, 'create'])->name('create');
             Route::post('/store', [\App\Http\Controllers\tenant\TravelClaimController::class, 'store'])->name('store');
+            // Bill files upload as soon as they are picked, before the claim is
+            // saved — declared above /{id} so "attachments" is not read as an id.
+            Route::post('/attachments', [\App\Http\Controllers\tenant\TravelClaimController::class, 'uploadAttachment'])->name('attachments.store');
+            Route::delete('/attachments/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroyAttachment'])->name('attachments.destroy');
             Route::get('/{id}/edit', [\App\Http\Controllers\tenant\TravelClaimController::class, 'edit'])->name('edit');
             Route::post('/{id}/update', [\App\Http\Controllers\tenant\TravelClaimController::class, 'update'])->name('update');
             Route::get('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'show'])->name('show');

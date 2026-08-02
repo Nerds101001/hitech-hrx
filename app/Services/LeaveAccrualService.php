@@ -10,12 +10,57 @@ use Illuminate\Support\Facades\Log;
 class LeaveAccrualService
 {
     /**
+     * Has this balance already received THIS month's credit?
+     *
+     * The month is baked into the audit reason itself ("Earned for August 2026",
+     * stashed in audits.user_agent by LeaveBalance::transformAudit), so matching
+     * the tag alone is exact and timezone-proof — no date range needed.
+     *
+     * This is what makes a re-run safe: the command is registered twice in the
+     * schedule (bootstrap/app.php and routes/console.php) and may also be run by
+     * hand, and ALP is carry-forward (balance += grant), so without this guard a
+     * second pass silently doubles everyone's leave.
+     */
+    protected static function alreadyCreditedThisMonth($balanceId, string $monthTag): bool
+    {
+        if (!$balanceId) return false;
+
+        return \Illuminate\Support\Facades\DB::table('audits')
+            ->where('auditable_type', LeaveBalance::class)
+            ->where('auditable_id', $balanceId)
+            ->where('user_agent', $monthTag)
+            ->exists();
+    }
+
+    /**
      * Accrue leaves for all users based on their assigned profile policies.
      * Should be run on the 1st of every month.
+     *
+     * Who gets credited: ACTIVE, non-deleted staff whose leave policy profile
+     * has a rule granting a monthly amount. A profile whose rule leaves the
+     * monthly columns null (e.g. ALP on the "Even/ODD Saturday Off" profiles)
+     * grants nothing and is skipped — that exclusion is intentional policy.
      */
     public static function accrueMonthly()
     {
-        $users = User::whereNotNull('leave_policy_profile_id')->get();
+        // Terminated / onboarding / soft-deleted people must never accrue.
+        $users = User::whereNotNull('leave_policy_profile_id')
+            ->whereNull('deleted_at')
+            ->where('status', 'active')
+            ->get();
+
+        $monthTag = 'Earned for ' . now()->format('F Y');
+        $granted  = 0;
+        $skipped  = 0;
+
+        // Short Leave is owned exclusively by `leave:grant-short-leave`, which
+        // grants it to EVERY active employee (company policy), not just those
+        // whose profile happens to carry an SHL rule — and it reaches the ~15
+        // active staff who have no leave policy profile at all, whom this
+        // profile-driven loop can never see. Granting SHL here as well would
+        // mean two commands writing the same balance from two different
+        // populations in the same run, so this loop skips SHL entirely.
+        $shlTypeId = \App\Models\LeaveType::where('code', 'SHL')->value('id');
 
         foreach ($users as $user) {
             $profile = $user->leavePolicyProfile;
@@ -23,11 +68,15 @@ class LeaveAccrualService
 
             $rules = $profile->rules;
             foreach ($rules as $rule) {
-                // Calculate monthly increment: 
+                if ($shlTypeId && (int) $rule->leave_type_id === (int) $shlTypeId) {
+                    continue;
+                }
+
+                // Calculate monthly increment:
                 // 1. If it's a short leave, use short_leave_per_month
                 // 2. Else use max_per_month or max_per_year/12
                 $monthlyIncrement = $rule->short_leave_per_month ?? $rule->max_per_month ?? ($rule->max_per_year ? ($rule->max_per_year / 12) : 0);
-                
+
                 if ($monthlyIncrement <= 0) continue;
 
                 $balance = LeaveBalance::firstOrNew([
@@ -36,12 +85,19 @@ class LeaveAccrualService
                     'tenant_id'     => $user->tenant_id,
                 ]);
 
+                // Idempotent: already credited for this month → leave it alone.
+                if (self::alreadyCreditedThisMonth($balance->id, $monthTag)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $granted++;
+
                 if ($rule->is_carry_forward) {
                     // Carry Forward: Increment the existing balance
                     $balance->balance += $monthlyIncrement;
                     $balance->accrued_this_year += $monthlyIncrement;
-                    $monthYear = now()->format('F Y');
-                    \App\Models\LeaveBalance::$auditReason = "Earned for {$monthYear}";
+                    \App\Models\LeaveBalance::$auditReason = $monthTag;
                 } else {
                     // Reset: Lapse any unused balance first
                     if ($balance->exists && $balance->balance > 0) {
@@ -56,16 +112,17 @@ class LeaveAccrualService
                     $balance->used    = 0; 
                     $balance->accrued_this_year += $monthlyIncrement;
                     $balance->carry_forward_last_year = 0;
-                    
-                    $monthYear = now()->format('F Y');
-                    \App\Models\LeaveBalance::$auditReason = "Earned for {$monthYear}";
+
+                    \App\Models\LeaveBalance::$auditReason = $monthTag;
                 }
 
                 $balance->save();
             }
         }
-        
-        Log::info("Monthly leave accrual processed for " . count($users) . " users.");
+
+        Log::info("Monthly leave accrual ({$monthTag}) — users scanned: " . count($users) . ", credits granted: {$granted}, skipped (already credited this month): {$skipped}.");
+
+        return ['granted' => $granted, 'skipped' => $skipped, 'users' => count($users)];
     }
 
     /**

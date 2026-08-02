@@ -50,13 +50,18 @@ class AppServiceProvider extends ServiceProvider
         // Allow users from sales-adjacent departments:
         // Sales Department (2), Customer Care (10), New Biz (13), Customer
         // Excellence (20), Pre Sales (21), Channel Sales (22), Sales (30),
-        // Customer Care + New Biz (34).
+        // Customer Care + New Biz (34), Export Department (14).
         //
         // 34 is the merged Customer Care + New Biz department. It was missing
         // here, so its members only reached Sales Field Ops if they happened to
         // have a row in cc_salesperson_map — 8 of the 9 did, which hid the gap
         // until the 9th (a manager, unmapped) could not see the menu at all.
-        $salesDeptIds = [2, 10, 13, 20, 21, 22, 30, 34];
+        //
+        // 14 (Export Department) is granted so the export team sees the Sales
+        // Field Ops menu; their DATA stays self-scoped by SalesScope (export
+        // is not a CCare/New Biz "rep" and not admin/hr, so a plain export user
+        // sees only their own book — an export manager sees only their reports).
+        $salesDeptIds = [2, 10, 13, 14, 20, 21, 22, 30, 34];
         return in_array($user->department_id, $salesDeptIds);
     });
 

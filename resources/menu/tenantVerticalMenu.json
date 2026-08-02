@@ -896,6 +896,15 @@
                     "permission": "access-sales-ops"
                 },
                 {
+                    "url": "/sales-visits/delete-requests",
+                    "name": "Delete Requests",
+                    "slug": "sales-visits.pipeline.delete-requests.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
                     "url": "/cc-attendance",
                     "name": "Attendance",
                     "slug": "cc-attendance.index",
@@ -926,6 +935,24 @@
                     "url": "/sales-visits/sales-targets/import",
                     "name": "Import Targets",
                     "slug": "sales-visits.sales-targets.import",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/setu-mappings",
+                    "name": "Setu Salesperson Mappings",
+                    "slug": "setu-mappings.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/setu-sync",
+                    "name": "Setu Sales Sync",
+                    "slug": "setu-sync.index",
                     "roles": [
                         "admin",
                         "hr"

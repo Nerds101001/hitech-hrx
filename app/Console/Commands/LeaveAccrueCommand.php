@@ -27,9 +27,9 @@ class LeaveAccrueCommand extends Command
     public function handle()
     {
         $this->info('Starting monthly leave accrual...');
-        
-        LeaveAccrualService::accrueMonthly();
 
-        $this->info('Leave accrual completed successfully.');
+        $result = LeaveAccrualService::accrueMonthly();
+
+        $this->info("Leave accrual completed. Users scanned: {$result['users']}, credits granted: {$result['granted']}, skipped (already credited this month): {$result['skipped']}.");
     }
 }

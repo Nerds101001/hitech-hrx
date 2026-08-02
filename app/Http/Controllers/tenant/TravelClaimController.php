@@ -13,13 +13,54 @@ use Illuminate\Support\Facades\DB;
 
 class TravelClaimController extends Controller
 {
+    /**
+     * Personal vehicles reimbursed per kilometre. Anything not listed here is
+     * reimbursed at the fare the user enters. 'Bike'/'Car' are the legacy
+     * spellings kept so old rows keep costing the same.
+     *
+     * The matching table in resources/views/tenant/travel-claims/form.blade.php
+     * must be changed with this one — the grid recalculates client-side.
+     */
+    public const PER_KM_RATES = [
+        'Personal Bike' => 4.00,
+        'Bike'          => 4.00,
+        'Personal Car'  => 9.50,
+        'Car'           => 9.50,
+    ];
 
+    /**
+     * Modes that carry an odometer: the personal vehicles above plus the
+     * company's own bike and car. These are the only rows that require meter
+     * readings, and the only ones that make the month's odometer photos
+     * mandatory.
+     */
+    public const METERED_MODES = [
+        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car',
+    ];
+
+    private static function isMeteredMode(?string $mode): bool
+    {
+        return $mode !== null && in_array($mode, self::METERED_MODES, true);
+    }
+
+    /**
+     * An untouched number box posts an empty string, and MySQL will not accept
+     * '' for a decimal column — it rejected the whole INSERT, which took the
+     * entire save down with it. Blank means "not recorded", so: null.
+     */
+    private static function decimalOrNull($value): ?float
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return null;
+        }
+        return (float) $value;
+    }
 
     public function index(Request $request)
     {
         $user = auth()->user();
         if ($user->hasRole(['admin', 'Admin', 'super_admin']) || $user->can('travel_claim.verify')) {
-            $claims = TravelClaim::with('user')
+            $claims = TravelClaim::with(['user', 'items', 'attachments'])
                 ->where(function($q) use ($user) {
                     $q->where('status', '!=', 'draft')
                       ->orWhere('user_id', $user->id);
@@ -37,10 +78,11 @@ class TravelClaimController extends Controller
 
     public function create()
     {
-        return view('tenant.travel-claims.form');
+        return view('tenant.travel-claims.form', ['attachmentsByCategory' => collect()]);
     }
 
-    public function store(Request $request, TravelClaim $existingClaim = null)
+    // Explicitly nullable: PHP 8.4 deprecates inferring it from the default.
+    public function store(Request $request, ?TravelClaim $existingClaim = null)
     {
         // Pre-filter empty items submitted by the grid
         if ($request->has('items') && is_array($request->items)) {
@@ -57,10 +99,19 @@ class TravelClaimController extends Controller
                            $request->hasFile("items.{$idx}.courier_proof") ||
                            $request->hasFile("items.{$idx}.auto_taxi_proof");
 
-                $hasValue = !empty($item['mode_of_travel']) || 
+                // A row counts as filled on ANY of its own fields. Meter
+                // readings, distance, the typed conveyance amount and the
+                // customer name used to be ignored here, so a row carrying
+                // only those was dropped without a word.
+                $hasValue = !empty($item['mode_of_travel']) ||
                             !empty($item['to_location']) ||
                             !empty($item['from_location']) ||
+                            !empty($item['party_visited']) ||
                             !empty($item['remarks']) ||
+                            (isset($item['start_meter']) && $item['start_meter'] !== '') ||
+                            (isset($item['end_meter']) && $item['end_meter'] !== '') ||
+                            (isset($item['distance_km']) && floatval($item['distance_km']) > 0) ||
+                            (isset($item['conveyance_amount']) && floatval($item['conveyance_amount']) > 0) ||
                             (isset($item['food_allowance']) && floatval($item['food_allowance']) > 0) ||
                             (isset($item['lodging_amount']) && floatval($item['lodging_amount']) > 0) ||
                             (isset($item['courier_amount']) && floatval($item['courier_amount']) > 0) ||
@@ -123,7 +174,8 @@ class TravelClaimController extends Controller
 
         $latePenalty = false;
         try {
-            $claimMonthDate = \Carbon\Carbon::createFromFormat('Y-m', $request->claim_month);
+            // Anchor to day 1 — 'Y-m' alone overflows past short months on days 29-31.
+            $claimMonthDate = \Carbon\Carbon::createFromFormat('Y-m-d', $request->claim_month . '-01');
             $deadline = $claimMonthDate->copy()->addMonth()->startOfMonth()->addDays(6)->endOfDay(); // 7th of next month
             if (now()->gt($deadline)) {
                 $latePenalty = true;
@@ -132,8 +184,46 @@ class TravelClaimController extends Controller
             // fallback
         }
 
+        // Does the month contain at least one row on a metered vehicle? The
+        // odometer rules below all hang off this: someone who only claimed
+        // food, courier or a train fare never touched an odometer and must
+        // not be asked for one.
+        $hasVehicleRow = false;
+        foreach (($request->items ?? []) as $it) {
+            if (self::isMeteredMode($it['mode_of_travel'] ?? null)) {
+                $hasVehicleRow = true;
+                break;
+            }
+        }
+
         try {
             DB::beginTransaction();
+
+            // Editing replaces the children. This MUST happen inside the
+            // transaction — it used to run in update() before store() opened
+            // one, so any later failure rolled back the rewrite but not the
+            // delete, and the claim was left with no rows at all (every
+            // amount reading zero) with no way back.
+            // Per-day proofs were retired in favour of the monthly consolidated
+            // files, so the grid no longer posts the `existing_*` fields this
+            // method reads — meaning every edit silently nulled the paths on
+            // historical rows and orphaned the files. Carry them across the
+            // delete/recreate, keyed by the day they belong to.
+            $carriedProofs = [];
+            if ($existingClaim) {
+                foreach ($existingClaim->items()->get() as $old) {
+                    $carriedProofs[Carbon::parse($old->date)->format('Y-m-d')] = [
+                        'photo'                 => $old->photo_path,
+                        'petrol_slip'           => $old->petrol_slip_proof,
+                        'toll_proof'            => $old->toll_proof,
+                        'additional_food_proof' => $old->additional_food_proof,
+                        'special_approval_proof'=> $old->special_approval_proof,
+                        'courier_proof'         => $old->courier_proof,
+                    ];
+                }
+                $existingClaim->advances()->delete();
+                $existingClaim->items()->delete();
+            }
 
             $targetStatus = $isDraft ? 'draft' : 'submitted';
 
@@ -145,11 +235,34 @@ class TravelClaimController extends Controller
                 ? $request->file('month_end_odometer_proof')->store('travel_claims', 'public')
                 : ($existingClaim->month_end_odometer_proof ?? null);
 
+            // Odometer rules, reported together so the whole claim can be fixed
+            // in one pass rather than one message at a time. Both only apply to
+            // bike/car rows; no per-day photo is ever asked for.
             if (!$isDraft) {
-                if (!$monthStartProofPath || !$monthEndProofPath) {
-                    throw \Illuminate\Validation\ValidationException::withMessages([
-                        'month_start_odometer_proof' => 'Month Start Odometer and Month End Odometer proofs are required for submission.',
-                    ]);
+                $odoErrors = [];
+
+                if ($hasVehicleRow && (!$monthStartProofPath || !$monthEndProofPath)) {
+                    $odoErrors['month_start_odometer_proof'] =
+                        'Month Start and Month End odometer photos are required because this claim includes travel on a bike or car.';
+                }
+
+                foreach (($request->items ?? []) as $idx => $it) {
+                    if (!self::isMeteredMode($it['mode_of_travel'] ?? null)) {
+                        continue;
+                    }
+                    $start = self::decimalOrNull($it['start_meter'] ?? null);
+                    $end   = self::decimalOrNull($it['end_meter'] ?? null);
+                    if ($start === null || $end === null) {
+                        $odoErrors["items.{$idx}.start_meter"] =
+                            "Day {$idx}: start and end meter readings are required for {$it['mode_of_travel']}.";
+                    } elseif ($end < $start) {
+                        $odoErrors["items.{$idx}.end_meter"] =
+                            "Day {$idx}: the end meter reading cannot be lower than the start reading.";
+                    }
+                }
+
+                if (!empty($odoErrors)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages($odoErrors);
                 }
             }
 
@@ -166,6 +279,29 @@ class TravelClaimController extends Controller
                 $proofPaths[$field] = $request->hasFile($field)
                     ? $request->file($field)->store($dir, 'public')
                     : ($existingClaim->{$field} ?? null);
+            }
+
+            // Files uploaded while the form was open are held against the
+            // browser's upload token until there is a claim to attach them to.
+            $uploadToken = trim((string) $request->input('upload_token', ''));
+            $attachmentCounts = [];
+            if ($uploadToken !== '' || $existingClaim) {
+                $attachmentCounts = \App\Models\TravelClaimAttachment::query()
+                    ->where('user_id', auth()->id())
+                    ->where(function ($q) use ($uploadToken, $existingClaim) {
+                        if ($existingClaim) {
+                            $q->where('travel_claim_id', $existingClaim->id);
+                        }
+                        if ($uploadToken !== '') {
+                            $q->orWhere(function ($q2) use ($uploadToken) {
+                                $q2->where('upload_token', $uploadToken)->whereNull('travel_claim_id');
+                            });
+                        }
+                    })
+                    ->selectRaw('category, COUNT(*) c')
+                    ->groupBy('category')
+                    ->pluck('c', 'category')
+                    ->all();
             }
 
             // Block submission when a claimed category has no consolidated bill.
@@ -187,8 +323,11 @@ class TravelClaimController extends Controller
                 ];
                 $missing = [];
                 foreach ($required as $key => [$field, $label]) {
-                    if ($sum[$key] > 0 && empty($proofPaths[$field])) {
-                        $missing[$field] = "The combined {$label} bill file is required because you have claimed an amount in that category.";
+                    // Satisfied by either the new multi-file uploads or the
+                    // single legacy file an older claim was saved with.
+                    $hasBill = ($attachmentCounts[$field] ?? 0) > 0 || !empty($proofPaths[$field]);
+                    if ($sum[$key] > 0 && !$hasBill) {
+                        $missing[$field] = "At least one {$label} bill file is required because you have claimed an amount in that category.";
                     }
                 }
                 if (!empty($missing)) {
@@ -223,6 +362,14 @@ class TravelClaimController extends Controller
                 ], $proofPaths));
             }
 
+            // Hand the token's files to the claim now that it has an id.
+            if ($uploadToken !== '') {
+                \App\Models\TravelClaimAttachment::whereNull('travel_claim_id')
+                    ->where('upload_token', $uploadToken)
+                    ->where('user_id', auth()->id())
+                    ->update(['travel_claim_id' => $claim->id]);
+            }
+
             $total_amount = 0;
 
             $skippedRows = 0;
@@ -235,46 +382,42 @@ class TravelClaimController extends Controller
                         continue;
                     }
 
+                    $carried = $carriedProofs[$item['date']] ?? [];
+
                     $photoPath = $request->hasFile("items.{$index}.photo")
                         ? $request->file("items.{$index}.photo")->store('travel_claims', 'public')
-                        : ($item['existing_photo'] ?? null);
-                    
+                        : ($item['existing_photo'] ?? $carried['photo'] ?? null);
+
                     $petrolSlipPath = $request->hasFile("items.{$index}.petrol_slip")
                         ? $request->file("items.{$index}.petrol_slip")->store('travel_claims_petrol', 'public')
-                        : ($item['existing_petrol_slip'] ?? null);
+                        : ($item['existing_petrol_slip'] ?? $carried['petrol_slip'] ?? null);
 
                     $tollProofPath = $request->hasFile("items.{$index}.toll_proof")
                         ? $request->file("items.{$index}.toll_proof")->store('travel_claims_tolls', 'public')
-                        : ($item['existing_toll_proof'] ?? null);
+                        : ($item['existing_toll_proof'] ?? $carried['toll_proof'] ?? null);
 
                     $addFoodProofPath = $request->hasFile("items.{$index}.additional_food_proof")
                         ? $request->file("items.{$index}.additional_food_proof")->store('travel_claims_extra', 'public')
-                        : ($item['existing_additional_food_proof'] ?? null);
+                        : ($item['existing_additional_food_proof'] ?? $carried['additional_food_proof'] ?? null);
 
                     $specialApprovalProofPath = $request->hasFile("items.{$index}.special_approval_proof")
                         ? $request->file("items.{$index}.special_approval_proof")->store('travel_claims_special', 'public')
-                        : ($item['existing_special_approval_proof'] ?? null);
+                        : ($item['existing_special_approval_proof'] ?? $carried['special_approval_proof'] ?? null);
 
                     // Deleted proof paths handled dynamically below to null
 
                     $distance = floatval($item['distance_km'] ?? 0);
                     $mode = $item['mode_of_travel'] ?? null;
-                    $rate = 0;
-                    $isOfficial = false;
-                    
-                    if ($mode == 'Personal Bike' || $mode == 'Bike') {
-                        $rate = 4.00;
-                    } elseif ($mode == 'Personal Car' || $mode == 'Car') {
-                        $rate = 9.50;
-                    } elseif ($mode == 'Official Bike' || $mode == 'Official Car') {
-                        $isOfficial = true;
-                    }
+                    $rate = self::PER_KM_RATES[$mode] ?? null;
 
-                    if ($isOfficial) {
-                        $conveyance = floatval($item['conveyance_amount'] ?? 0);
-                    } else {
-                        $conveyance = $distance * $rate;
-                    }
+                    // Personal vehicles are paid per kilometre; everything else
+                    // — official vehicles, cab, bus, train, flight — is paid at
+                    // the fare the user actually typed. That fallback used to be
+                    // `distance * rate`, which for a bus or train is 0 * 0, so
+                    // those fares were silently wiped on save.
+                    $conveyance = $rate !== null
+                        ? $distance * $rate
+                        : floatval($item['conveyance_amount'] ?? 0);
 
                     $penalty_applied = false;
 
@@ -304,7 +447,7 @@ class TravelClaimController extends Controller
                     // $courierProofPath" and rolled back.
                     $courierProofPath = $request->hasFile("items.{$index}.courier_proof")
                         ? $request->file("items.{$index}.courier_proof")->store('travel_claims_courier', 'public')
-                        : ($item['existing_courier_proof'] ?? null);
+                        : ($item['existing_courier_proof'] ?? $carried['courier_proof'] ?? null);
 
                     $row_total = $conveyance + $food_allowance + $lodging + $courier + $other + $toll_amount + $add_food_amount + $special_approval_amount;
                     $total_amount += $row_total;
@@ -316,8 +459,8 @@ class TravelClaimController extends Controller
                         'to_location' => $item['to_location'] ?? null,
                         'party_visited' => $item['party_visited'] ?? null,
                         'mode_of_travel' => $mode,
-                        'start_meter' => $item['start_meter'] ?? null,
-                        'end_meter' => $item['end_meter'] ?? null,
+                        'start_meter' => self::decimalOrNull($item['start_meter'] ?? null),
+                        'end_meter' => self::decimalOrNull($item['end_meter'] ?? null),
                         'distance_km' => $distance,
                         'photo_path' => $photoPath,
                         'petrol_slip_proof' => $petrolSlipPath,
@@ -386,6 +529,13 @@ class TravelClaimController extends Controller
             $msg = request()->routeIs('travel-claims.update') ? 'Travel claim updated successfully.' : 'Travel claim submitted successfully.';
         }
         return redirect()->route('travel-claims.index')->with('success', $msg);
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        // A missing odometer photo or meter reading is a form error, not a
+        // crash. Letting it through means Laravel renders it against the right
+        // field; the blanket catch below used to swallow it into an unhelpful
+        // "Error submitting claim" banner.
+        DB::rollBack();
+        throw $e;
     } catch (\Exception $e) {
         DB::rollBack();
         return back()->with('error', 'Error submitting claim: ' . $e->getMessage())->withInput();
@@ -398,7 +548,10 @@ public function edit($id)
     if ($claim->status !== 'draft' && $claim->status !== 'objection') {
         return redirect()->route('travel-claims.index')->with('error', 'You can only edit claims that are in draft or have objections.');
     }
-    return view('tenant.travel-claims.form', compact('claim'));
+    $attachmentsByCategory = \App\Models\TravelClaimAttachment::where('travel_claim_id', $claim->id)
+        ->orderBy('id')->get()->groupBy('category');
+
+    return view('tenant.travel-claims.form', compact('claim', 'attachmentsByCategory'));
 }
 
 public function update(Request $request, $id)
@@ -408,10 +561,9 @@ public function update(Request $request, $id)
         return redirect()->route('travel-claims.index')->with('error', 'You can only edit claims that are in draft or have objections.');
     }
 
-    // Clear children so store() repopulates them on the same parent record
-    $claim->items()->delete();
-    $claim->advances()->delete();
-
+    // store() clears and repopulates the children inside its own transaction.
+    // Deleting them here, outside it, destroyed the rows for good whenever the
+    // save that followed failed.
     return $this->store($request, $claim);
 }
 
@@ -456,7 +608,8 @@ public function update(Request $request, $id)
         $split85 = round($claim->net_payable * 0.85, 2);
         $split15 = $claim->net_payable - $split85;
         
-        $claimMonthDate = Carbon::createFromFormat('Y-m', $claim->claim_month);
+        // Anchor to day 1 — 'Y-m' alone overflows past short months on days 29-31.
+        $claimMonthDate = Carbon::createFromFormat('Y-m-d', $claim->claim_month . '-01');
         // Payments happen next month
         $payDate85 = $claimMonthDate->copy()->addMonth()->setDay(11);
         $payDate15 = $claimMonthDate->copy()->addMonth()->setDay(25);
@@ -550,7 +703,8 @@ public function update(Request $request, $id)
 
         $monthlyChart = [
             'labels' => array_map(
-                fn($m) => \Carbon\Carbon::createFromFormat('Y-m', $m)->format('M Y'),
+                // Anchor to day 1 — 'Y-m' alone overflows past short months on days 29-31.
+                fn($m) => \Carbon\Carbon::createFromFormat('Y-m-d', $m . '-01')->format('M Y'),
                 array_keys($monthlyStats)
             ),
             'data' => array_values($monthlyStats),
@@ -597,6 +751,98 @@ public function update(Request $request, $id)
             . ($flagged ? ' ' . count($flagged) . ' row(s) flagged for correction.' : ''));
     }
 
+    /**
+     * Store one file for a monthly bill category and return its details as
+     * JSON. Called as soon as the user picks a file, so nothing is lost if the
+     * form is abandoned mid-way and large bills are not re-posted on every save.
+     *
+     * Before the claim exists the file is held against `upload_token`; store()
+     * adopts those rows once the claim has an id.
+     */
+    public function uploadAttachment(Request $request)
+    {
+        $categories = array_keys(\App\Models\TravelClaimAttachment::CATEGORIES);
+
+        $request->validate([
+            'category'     => 'required|string|in:' . implode(',', $categories),
+            'file'         => 'required|file|mimes:jpeg,png,jpg,pdf|max:10240',
+            'upload_token' => 'required|string|max:64',
+            'claim_id'     => 'nullable|integer',
+        ]);
+
+        $category = $request->input('category');
+        $token    = $request->input('upload_token');
+        $claimId  = $request->input('claim_id') ?: null;
+
+        // A claim can only gain files while its owner may still edit it.
+        if ($claimId) {
+            $claim = TravelClaim::where('user_id', auth()->id())->find($claimId);
+            if (!$claim || !in_array($claim->status, ['draft', 'objection'], true)) {
+                return response()->json(['message' => 'This claim can no longer be edited.'], 403);
+            }
+        }
+
+        $existing = \App\Models\TravelClaimAttachment::where('user_id', auth()->id())
+            ->where('category', $category)
+            ->where(function ($q) use ($claimId, $token) {
+                $q->where('upload_token', $token)->whereNull('travel_claim_id');
+                if ($claimId) {
+                    $q->orWhere('travel_claim_id', $claimId);
+                }
+            })
+            ->count();
+
+        if ($existing >= \App\Models\TravelClaimAttachment::MAX_PER_CATEGORY) {
+            return response()->json([
+                'message' => 'You already have ' . \App\Models\TravelClaimAttachment::MAX_PER_CATEGORY
+                    . ' files in this category — remove one before adding another.',
+            ], 422);
+        }
+
+        $file = $request->file('file');
+        $path = $file->store(\App\Models\TravelClaimAttachment::CATEGORIES[$category], 'public');
+
+        $attachment = \App\Models\TravelClaimAttachment::forceCreate([
+            'travel_claim_id' => $claimId,
+            'upload_token'    => $token,
+            'user_id'         => auth()->id(),
+            'category'        => $category,
+            'path'            => $path,
+            'original_name'   => $file->getClientOriginalName(),
+            'mime'            => $file->getClientMimeType(),
+            'size'            => $file->getSize(),
+        ]);
+
+        return response()->json([
+            'id'       => $attachment->id,
+            'name'     => $attachment->original_name,
+            'url'      => $attachment->url,
+            'size'     => $attachment->size,
+            'is_image' => $attachment->is_image,
+            'count'    => $existing + 1,
+        ]);
+    }
+
+    /**
+     * Remove one uploaded bill file, and its file on disk with it.
+     */
+    public function destroyAttachment($id)
+    {
+        $attachment = \App\Models\TravelClaimAttachment::where('user_id', auth()->id())->findOrFail($id);
+
+        if ($attachment->travel_claim_id) {
+            $claim = TravelClaim::find($attachment->travel_claim_id);
+            if (!$claim || !in_array($claim->status, ['draft', 'objection'], true)) {
+                return response()->json(['message' => 'This claim can no longer be edited.'], 403);
+            }
+        }
+
+        Storage::disk('public')->delete($attachment->path);
+        $attachment->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function downloadAttachments($id)
     {
         $claim = TravelClaim::with(['items', 'user'])->findOrFail($id);
@@ -638,6 +884,43 @@ public function update(Request $request, $id)
             $filesToAdd[] = [
                 'path' => $path,
                 'zipPath' => "Header/month_end_odometer_proof.{$ext}"
+            ];
+        }
+
+        // Consolidated monthly bills — the legacy single file per category, plus
+        // every file from the multi-upload boxes that replaced it.
+        $categoryLabels = [
+            'food_bill_proof'         => 'Food_Bills',
+            'conveyance_petrol_proof' => 'Conveyance_Petrol_Bills',
+            'toll_parking_proof'      => 'Toll_Parking_Bills',
+            'customer_courier_proof'  => 'Customer_Expense_Courier_Bills',
+        ];
+        foreach ($categoryLabels as $field => $folderName) {
+            if ($claim->$field && Storage::disk('public')->exists($claim->$field)) {
+                $path = Storage::disk('public')->path($claim->$field);
+                $ext  = pathinfo($path, PATHINFO_EXTENSION) ?: 'jpg';
+                $filesToAdd[] = ['path' => $path, 'zipPath' => "{$folderName}/combined.{$ext}"];
+            }
+        }
+
+        $seenNames = [];
+        foreach (\App\Models\TravelClaimAttachment::where('travel_claim_id', $claim->id)->orderBy('id')->get() as $att) {
+            if (!Storage::disk('public')->exists($att->path)) {
+                continue;
+            }
+            $folderName = $categoryLabels[$att->category] ?? 'Other_Bills';
+            // Two bills can genuinely share a filename; a collision inside the
+            // zip would silently drop one of them.
+            $name = $att->original_name;
+            $key  = $folderName . '/' . strtolower($name);
+            if (isset($seenNames[$key])) {
+                $name = pathinfo($name, PATHINFO_FILENAME) . '_' . $att->id
+                      . (($e = pathinfo($name, PATHINFO_EXTENSION)) ? '.' . $e : '');
+            }
+            $seenNames[$key] = true;
+            $filesToAdd[] = [
+                'path'    => Storage::disk('public')->path($att->path),
+                'zipPath' => "{$folderName}/{$name}",
             ];
         }
 

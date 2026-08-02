@@ -14,6 +14,30 @@
 @endphp
 @section('title', 'Sales Report')
 
+{{-- SweetAlert2 + Select2 aren't bundled globally — the Setu Sync preview /
+     review modals need them (Swal for popups, Select2 for the review picker),
+     so this page loads them itself. --}}
+@section('vendor-style')
+    @vite([
+      'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
+      'resources/assets/vendor/libs/select2/select2.scss'
+    ])
+@endsection
+
+@section('vendor-script')
+    @vite([
+      'resources/assets/vendor/libs/sweetalert2/sweetalert2.js',
+      'resources/assets/vendor/libs/select2/select2.js'
+    ])
+@endsection
+
+@section('page-script')
+    @vite([
+      'resources/assets/js/app/setu-period-picker.js',
+      'resources/assets/js/app/setu-review-common.js'
+    ])
+@endsection
+
 @section('navbar-actions')
     <div class="d-flex gap-2 align-items-center flex-wrap">
         @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.pipeline.index', 'mvMemberParam' => 'sp'])
@@ -33,6 +57,21 @@
             <a href="{{ route('sales-visits.pipeline.import') }}" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold shadow-sm d-flex align-items-center" title="Import Sales Report">
                 <i class="bx bx-upload me-1"></i> Import Sales Report
             </a>
+        @endif
+        @if($syncTargetId)
+            @if($syncMapped)
+                @include('tenant.partials.setu-period-picker')
+                <button type="button" id="btnSyncSetu" data-target-id="{{ $syncTargetId }}"
+                        class="btn btn-sm btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center">
+                    <i class="bx bx-sync me-1"></i> Sync {{ $syncTargetLabel }} Sales Report
+                </button>
+            @else
+                <span tabindex="0" data-bs-toggle="tooltip" title="Not linked to Setu yet — contact admin">
+                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold shadow-sm d-flex align-items-center" disabled style="pointer-events: none;">
+                        <i class="bx bx-sync me-1"></i> Sync {{ $syncTargetLabel }} Sales Report
+                    </button>
+                </span>
+            @endif
         @endif
         {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
         @if($isAdmin)
@@ -90,6 +129,7 @@
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
                     <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
                     <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
+                    <option value="Packer" {{ $fType === 'Packer' ? 'selected' : '' }}>Packer</option>
                 </select>
                 <select class="form-select" name="cat" style="width:130px;" onchange="this.form.submit()">
                     <option value="">All Category</option>
@@ -142,7 +182,10 @@
     </div>
 
     {{-- ─── TABLE ──────────────────────────────────────────────────────── --}}
-    <div class="table-responsive" id="pipelineTableWrap" style="overflow-x:auto;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+    <div id="pipelineTopScroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:2px;position:sticky;top:0;z-index:40;background:#fff;">
+        <div id="pipelineTopScrollInner" style="height:1px;"></div>
+    </div>
+    <div class="table-responsive" id="pipelineTableWrap" style="overflow:auto;max-height:max(340px, calc(100vh - 250px));border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
         <table class="table table-bordered table-sm align-middle m-0"
                id="pipelineTable" style="white-space:nowrap;font-size:0.85rem;">
             <thead class="position-sticky top-0 text-white"
@@ -163,13 +206,18 @@
                                 <th rowspan="2" class="align-middle col-salesperson" style="cursor:pointer;" onclick="sortPipeline('salesperson', this)" title="Click to sort">Salesperson<span class="sort-caret"></span></th>
                             @endunless
                             <th rowspan="2" class="align-middle" style="min-width:150px;cursor:pointer;" onclick="sortPipeline('brand', this)" title="Click to sort">Brand<span class="sort-caret"></span></th>
-                            <th rowspan="2" class="align-middle block-end" style="min-width:130px;">Other Reps</th>
+                            <th rowspan="2" class="align-middle " style="min-width:130px;">New BIZ2</th>
+                            <th rowspan="2" class="align-middle block-end" style="min-width:130px;">Service Sales</th>
 
                             @foreach($months as $m)
                                 @php
                                     $isThisMonth = ($m['key'] === $currentMonthKey);
-                                    // Past: 1 col (Sale only). Current: 4 (Forecast + Sale + Pending + Remarks).
-                                    $colspan     = $isThisMonth ? 4 : 1;
+                                    // Pending is shown for the immediately previous month too, so the
+                                    // outstanding July figures stay visible next to August.
+                                    $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
+                                    $showPend    = $isThisMonth || ($m['key'] === $prevMonthKey);
+                                    // Past: 1 col (Sale). Prev month: 2 (Sale + Pend). Current: 4.
+                                    $colspan     = $isThisMonth ? 4 : ($showPend ? 3 : 1);
                                     // Salesperson login: badge the month if their own sale beat their target.
                                     $mActual = $monthlyActuals[$m['key']] ?? 0;
                                     $mKingo  = $monthlyTargets[$m['key']]['kingo'] ?? 0;
@@ -190,9 +238,14 @@
                         {{-- Sub Header Row --}}
                         <tr>
                             @foreach($months as $m)
-                                @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
-                                @if($isThisMonth)
-                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;cursor:pointer;" onclick="sortPipeline('forecast', this)" title="Click to sort">
+                                @php
+                                    $isThisMonth = ($m['key'] === $currentMonthKey);
+                                    $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
+                                    $showPend = $isThisMonth || ($m['key'] === $prevMonthKey);
+                                @endphp
+                                @if($showPend)
+                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;{{ $isThisMonth ? 'cursor:pointer;' : '' }}"
+                                        @if($isThisMonth) onclick="sortPipeline('forecast', this)" title="Click to sort" @endif>
                                         Fcst<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                     </th>
                                 @endif
@@ -201,10 +254,12 @@
                                     onclick="sortPipeline('{{ $isThisMonth ? 'sale' : 'month:'.$m['key'] }}', this)" title="Click to sort">
                                     Sale<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                 </th>
-                                @if($isThisMonth)
-                                    <th class="text-end align-middle" style="min-width:52px;max-width:52px;cursor:pointer;" onclick="sortPipeline('pending', this)" title="Click to sort">
-                                        Pend<span class="sort-caret"></span><br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
+                                @if($showPend)
+                                    <th class="text-end align-middle {{ !$isThisMonth ? 'block-end' : '' }}" style="min-width:52px;max-width:52px;">
+                                        Pend<br><small class="fw-normal opacity-75" style="font-size:0.6rem">₹L</small>
                                     </th>
+                                @endif
+                                @if($isThisMonth)
                                     <th class="align-middle block-end" style="min-width:95px;max-width:95px;">Remarks</th>
                                 @endif
                             @endforeach
@@ -226,10 +281,15 @@
                                 <td class="col-salesperson" style="background:#d1fae5!important;"></td>
                             @endunless
                             <td style="background:#d1fae5!important;"></td>
+                            <td style="background:#d1fae5!important;"></td>
                             <td class="block-end" style="background:#d1fae5!important;"></td>
                             @foreach($months as $m)
-                                @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
-                                @if($isThisMonth)
+                                @php
+                                    $isThisMonth = ($m['key'] === $currentMonthKey);
+                                    $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
+                                    $showPend = $isThisMonth || ($m['key'] === $prevMonthKey);
+                                @endphp
+                                @if($showPend)
                                     <td class="text-end" id="mtotal-forecast-{{ $m['key'] }}"
                                         style="background:#d1fae5!important;color:#1e40af;">{{ number_format($monthlyForecast[$m['key']] ?? 0, 2) }}</td>
                                 @endif
@@ -237,11 +297,13 @@
                                     style="background:#d1fae5!important;color:#065f46;">
                                     {{ number_format($monthlyActuals[$m['key']] ?? 0, 2) }}
                                 </td>
-                                @if($isThisMonth)
-                                    <td class="text-end" id="mtotal-pending-{{ $m['key'] }}"
+                                @if($showPend)
+                                    <td class="text-end {{ !$isThisMonth ? 'block-end' : '' }}" id="mtotal-pending-{{ $m['key'] }}"
                                         style="background:#d1fae5!important;color:#9a3412;font-weight:700;">
-                                        {{ number_format($totalPendingCurrentMonth ?? 0, 2) }}
+                                        {{ number_format($isThisMonth ? ($totalPendingCurrentMonth ?? 0) : ($monthlyPending[$m['key']] ?? 0), 2) }}
                                     </td>
+                                @endif
+                                @if($isThisMonth)
                                     <td class="block-end" style="background:#d1fae5!important;"></td>
                                 @endif
                             @endforeach
@@ -303,6 +365,7 @@
                                         $isCustomer   = in_array($typeNorm, ['customer', 'direct customer']);
                                         $isDistributor = $typeNorm === 'distributor';
                                         $isDealer      = $typeNorm === 'dealer';
+                                        $isPacker      = $typeNorm === 'packer';
                                     @endphp
                                     <select class="excel-select row-field status-select text-truncate"
                                             data-field="type">
@@ -310,7 +373,8 @@
                                         <option value="Distributor" {{ $isDistributor ? 'selected' : '' }}>Distributor</option>
                                         <option value="Dealer"      {{ $isDealer ? 'selected' : '' }}>Dealer</option>
                                         <option value="Customer"    {{ $isCustomer ? 'selected' : '' }}>Customer</option>
-                                        @if($row->type && !$isCustomer && !$isDistributor && !$isDealer)
+                                        <option value="Packer"      {{ $isPacker ? 'selected' : '' }}>Packer</option>
+                                        @if($row->type && !$isCustomer && !$isDistributor && !$isDealer && !$isPacker)
                                             <option value="{{ $row->type }}" selected>{{ $row->type }}</option>
                                         @endif
                                     </select>
@@ -375,11 +439,21 @@
                                 </td>
 
                                 {{-- Other Reps — extra people who also see this customer --}}
-                                <td class="align-middle block-end extra-cell" data-id="{{ $row->id }}"
-                                    style="min-width:130px;cursor:pointer;" title="Other representatives — click to add">
+                                <td class="align-middle extra-cell" data-id="{{ $row->id }}" data-type="other"
+                                    style="min-width:130px;cursor:pointer;" title="New BIZ2 — CCare / New Biz people; click to add">
                                     @foreach($row->extraReps as $er)
                                         <span class="badge bg-label-secondary extra-tag" data-uid="{{ $er->user_id }}" style="font-size:0.62rem;">
                                             {{ $er->user->name ?? ('#'.$er->user_id) }} <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>
+                                        </span>
+                                    @endforeach
+                                </td>
+
+                                {{-- Service Sales — salespersons attached to this customer --}}
+                                <td class="align-middle block-end extra-cell" data-id="{{ $row->id }}" data-type="service"
+                                    style="min-width:130px;cursor:pointer;" title="Service Sales — click to add a salesperson">
+                                    @foreach($row->serviceReps as $sr)
+                                        <span class="badge bg-label-info extra-tag" data-uid="{{ $sr->user_id }}" style="font-size:0.62rem;">
+                                            {{ $sr->user->name ?? ('#'.$sr->user_id) }} <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>
                                         </span>
                                     @endforeach
                                 </td>
@@ -389,11 +463,13 @@
                                         $mData       = $row->months->firstWhere('month_year', $m['key']);
                                         $isPast      = $m['key'] < $currentMonthKey;
                                         $isThisMonth = ($m['key'] === $currentMonthKey);
+                                        $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
+                                        $showPend    = $isThisMonth || ($m['key'] === $prevMonthKey);
                                         // Past months are editable too — users need to correct
                                         // imported / historical figures.
                                         $roAttr      = '';
                                     @endphp
-                                    @if($isThisMonth)
+                                    @if($showPend)
                                         <td class="p-0 bg-forecast-light" style="max-width:52px;">
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
@@ -408,13 +484,15 @@
                                                value="{{ $mData && $mData->sale_amount ? $mData->sale_amount : '' }}"
                                                {!! $roAttr !!}>
                                     </td>
-                                    @if($isThisMonth)
-                                        <td class="p-0 bg-pending-light" style="max-width:52px;">
+                                    @if($showPend)
+                                        <td class="p-0 bg-pending-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:52px;">
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
                                                    value="{{ $mData && $mData->pending_amount ? $mData->pending_amount : '' }}">
                                         </td>
+                                    @endif
+                                    @if($isThisMonth)
                                         <td class="p-0 block-end" style="max-width:95px;">
                                             <input type="text" class="excel-input month-field"
                                                    data-month="{{ $m['key'] }}" data-field="remarks"
@@ -424,13 +502,12 @@
                                 @endforeach
                                 @if($canDeleteCustomer)
                                     <td class="text-center align-middle">
-                                        <form action="{{ route('sales-visits.pipeline.destroy', $row->id) }}" method="POST"
-                                              onsubmit="return confirm('Delete customer '{{ addslashes($row->party_name) }}' and all of its monthly figures? This cannot be undone.');"
+                                        <form action="{{ route('sales-visits.pipeline.delete-request.store', $row->id) }}" method="POST"
+                                              class="js-delete-customer" data-party="{{ $row->party_name }}"
                                               style="display:inline-block;">
                                             @csrf
-                                            @method('DELETE')
                                             <button type="submit" class="btn btn-sm btn-icon btn-text-danger"
-                                                    style="padding:0;background:none;border:none;" title="Delete customer">
+                                                    style="padding:0;background:none;border:none;" title="Request deletion of this customer">
                                                 <i class="bx bx-trash text-danger" style="font-size:1.05rem;"></i>
                                             </button>
                                         </form>
@@ -460,6 +537,7 @@
                                             <option value="Customer">Customer</option>
                                             <option value="Distributor">Distributor</option>
                                             <option value="Dealer">Dealer</option>
+                                            <option value="Packer">Packer</option>
                                         </select>
                                     </div>
                                     <div>
@@ -508,7 +586,11 @@
                                     </div>
                                     {{-- Month sale figures (+ current-month forecast/pending) --}}
                                     @foreach($months as $m)
-                                        @php $isThisMonth = ($m['key'] === $currentMonthKey); @endphp
+                                        @php
+                                    $isThisMonth = ($m['key'] === $currentMonthKey);
+                                    $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
+                                    $showPend = $isThisMonth || ($m['key'] === $prevMonthKey);
+                                @endphp
                                         <div>
                                             <label class="form-label small fw-bold mb-1" style="color:#065f46;">{{ $m['display'] }} Sale</label>
                                             <input type="number" step="0.01" class="form-control form-control-sm text-end new-month" data-month="{{ $m['key'] }}" data-field="sale_amount" style="width:80px;" placeholder="₹L">
@@ -690,6 +772,12 @@
 </div>
 @endif
 
+{{-- Setu sync preview + review modals (shared with the Setu Sales Sync page). --}}
+@if($syncTargetId && $syncMapped)
+    @include('tenant.partials.setu-preview-modal')
+    @include('tenant.partials.setu-review-modal')
+@endif
+
 {{-- ─── STYLES ──────────────────────────────────────────────────────── --}}
 <style>
     /* Compact stats strip */
@@ -801,18 +889,30 @@
         @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
     </select>
 </template>
+{{-- Other Reps: CCare / New Biz people only. Salespersons were removed here —
+     they belong in the Service Sales column instead. --}}
 <template id="tplExtraSelect">
     <select class="excel-select" style="width:100%;min-width:120px;">
         <option value="">— Add person —</option>
-        <optgroup label="Salespersons">
-            @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+        @if(($bothUsers ?? collect())->count())
+        <optgroup label="CCare &amp; New Biz">
+            @foreach($bothUsers as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
         </optgroup>
+        @endif
         <optgroup label="CCare">
-            @foreach($ccareUsers as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+            @foreach(($ccareOnly ?? $ccareUsers) as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
         </optgroup>
         <optgroup label="New Biz">
-            @foreach($newBizUsers as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
+            @foreach(($newBizOnly ?? $newBizUsers) as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
         </optgroup>
+    </select>
+</template>
+
+{{-- Service Sales: salespersons only. --}}
+<template id="tplServiceSelect">
+    <select class="excel-select" style="width:100%;min-width:120px;">
+        <option value="">— Add salesperson —</option>
+        @foreach($salespersons as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
     </select>
 </template>
 
@@ -932,7 +1032,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── Other Reps: add / remove additional representatives ────────────────
     document.querySelectorAll('.extra-cell').forEach(cell => cell.addEventListener('click', function(e) {
         if (e.target.closest('.remove-extra') || this.querySelector('select')) return;
-        const tpl = document.getElementById('tplExtraSelect');
+        // Other Reps uses the CCare/New Biz picker; Service Sales uses the
+        // salesperson-only one. data-type on the cell decides which.
+        const cellType = this.dataset.type || 'other';
+        const tpl = document.getElementById(cellType === 'service' ? 'tplServiceSelect' : 'tplExtraSelect');
         if (!tpl) return;
         const sel = tpl.content.firstElementChild.cloneNode(true);
         this.appendChild(sel); sel.focus();
@@ -946,12 +1049,12 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({ user_id: uid })
+                body: JSON.stringify({ user_id: uid, type: cell.dataset.type || 'other' })
             }).then(r => r.json()).then(d => {
                 sel.remove();
                 if (d.success && !cell.querySelector(`.extra-tag[data-uid="${uid}"]`)) {
                     const s = document.createElement('span');
-                    s.className = 'badge bg-label-secondary extra-tag';
+                    s.className = 'badge extra-tag ' + ((cell.dataset.type === 'service') ? 'bg-label-info' : 'bg-label-secondary');
                     s.dataset.uid = uid; s.style.fontSize = '0.62rem';
                     s.innerHTML = name + ' <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>';
                     cell.appendChild(s);
@@ -966,11 +1069,38 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!x) return;
         const tag = x.closest('.extra-tag'), cell = x.closest('.extra-cell');
         if (!tag || !cell) return;
-        fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep/${tag.dataset.uid}`, {
+        const t = cell.dataset.type || 'other';
+        fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep/${tag.dataset.uid}?type=${t}`, {
             method: 'DELETE',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).then(r => r.json()).then(d => { if (d.success) tag.remove(); });
     });
+
+    // ── Setu Sync — opens the shared preview modal (customer × month-wise
+    // changes), then the review modal for similar-name decisions. Driven by
+    // window.SetuSync (setu-review-common.js). A full page reload after apply
+    // so the corrected figures show immediately.
+    const btnSyncSetu = document.getElementById('btnSyncSetu');
+    if (btnSyncSetu) {
+        btnSyncSetu.addEventListener('click', function () {
+            const btn = this;
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bx bx-loader-alt bx-spin me-1"></i> Checking…';
+            window.SetuSync.run(btn.dataset.targetId, {
+                onDone: function () { setTimeout(() => location.reload(), 1600); }
+            }).then(function (d) {
+                btn.disabled = false; btn.innerHTML = original;
+                const c = d.counts;
+                if (!c.blankFills && !c.overwrites && !c.renames && !c.newCustomers && !c.reviewItems) {
+                    window.showSuccessSwal(`${d.salesperson} is already in sync with Setu (${d.period}).`);
+                }
+            }).catch(function (e) {
+                btn.disabled = false; btn.innerHTML = original;
+                window.showErrorSwal((e && e.message) || 'Could not sync with Setu.');
+            });
+        });
+    }
 
     // Filtering / pagination / totals are server-side now — nothing to init here.
 });
@@ -1141,4 +1271,169 @@ document.querySelectorAll('.target-input').forEach(input => {
     });
 });
 </script>
+{{-- Deletion is approval-gated: the requester picks a reason and may add
+     remarks, and the row is only removed once Admin/HR approve it. --}}
+<script>
+document.addEventListener('submit', function (e) {
+    const form = e.target.closest('.js-delete-customer');
+    if (!form || form.dataset.confirmed === '1') return;
+    e.preventDefault();
+
+    const party = form.dataset.party || 'this customer';
+    const send = (reason, remarks) => {
+        form.dataset.confirmed = '1';
+        const add = (n, v) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = n; i.value = v || ''; form.appendChild(i); };
+        add('reason', reason); add('remarks', remarks);
+        form.submit();
+    };
+
+    if (typeof Swal === 'undefined') {
+        const r = prompt('Reason to delete ' + party + '?\n\nType one of: duplicate, legal_case, closed');
+        if (!r) return;
+        send(r.trim().toLowerCase(), prompt('Remarks (optional)') || '');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Request deletion',
+        html:
+            '<div style="text-align:left;font-size:.88rem;color:#566a7f;">'
+          + '  <div style="font-weight:700;color:#2f3944;margin-bottom:10px;">' + party.replace(/</g,'&lt;') + '</div>'
+          + '  <label style="font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.4px;color:#7b8794;">Reason <span style="color:#c0392b;">*</span></label>'
+          + '  <select id="delReason" class="form-select" style="margin:4px 0 12px;">'
+          + '    <option value="">— Select a reason —</option>'
+          + '    <option value="duplicate">Duplicate</option>'
+          + '    <option value="legal_case">Legal case</option>'
+          + '    <option value="closed">Closed</option>'
+          + '  </select>'
+          + '  <label style="font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.4px;color:#7b8794;">Remarks</label>'
+          + '  <textarea id="delRemarks" class="form-control" rows="3" style="margin-top:4px;" placeholder="Anything the approver should know (optional)"></textarea>'
+          + '  <div style="margin-top:12px;padding:8px 10px;background:#fff6f6;border-radius:8px;color:#c0392b;font-weight:600;font-size:.8rem;">'
+          + '    This is sent to Admin/HR for approval. The customer is not deleted until it is approved.'
+          + '  </div>'
+          + '</div>',
+        showCancelButton: true,
+        reverseButtons: true,
+        buttonsStyling: false,
+        confirmButtonText: 'Send for approval',
+        cancelButtonText: 'Cancel',
+        customClass: { popup: 'hrx-swal', confirmButton: 'btn btn-danger me-2', cancelButton: 'btn btn-label-secondary' },
+        preConfirm: () => {
+            const reason = document.getElementById('delReason').value;
+            if (!reason) { Swal.showValidationMessage('Please choose a reason'); return false; }
+            return { reason: reason, remarks: document.getElementById('delRemarks').value };
+        }
+    }).then((r) => { if (r.isConfirmed && r.value) send(r.value.reason, r.value.remarks); });
+});
+</script>
+<style>
+    .hrx-swal { border-radius: 14px !important; }
+    .hrx-swal .swal2-title { font-size: 1.05rem !important; font-weight: 800 !important; color: #2f3944 !important; }
+</style>
+
+
+<style>
+    /* Freeze the first two columns so the customer stays identifiable while
+       scrolling right through the month columns. */
+    #pipelineTableWrap table th.col-sno,
+    #pipelineTableWrap table td.col-sno {
+        position: sticky; left: 0; z-index: 12; background: #fff;
+    }
+    #pipelineTableWrap table th.col-party,
+    #pipelineTableWrap table td.col-party {
+        position: sticky; left: 44px; z-index: 12; background: #fff;
+        box-shadow: 2px 0 4px -2px rgba(0,0,0,.18);
+    }
+    /* header cells sit above body cells, and the totals row above both */
+    #pipelineTableWrap thead th.col-sno,
+    #pipelineTableWrap thead th.col-party { z-index: 30; background: #0f6e6e; }
+    #monthTotalsRow td.col-sno,
+    #monthTotalsRow td.col-party { z-index: 26; }
+    /* keep the striping/highlight readable on the frozen cells */
+    #pipelineTableWrap tbody tr:hover td.col-sno,
+    #pipelineTableWrap tbody tr:hover td.col-party { background: #f6faf9; }
+
+    #pipelineTopScroll::-webkit-scrollbar { height: 10px; }
+    #pipelineTopScroll::-webkit-scrollbar-thumb { background: #c6cdd3; border-radius: 6px; }
+    #pipelineTopScroll::-webkit-scrollbar-thumb:hover { background: #aeb7be; }
+</style>
+<script>
+(function () {
+    const wrap = document.getElementById('pipelineTableWrap');
+    const top  = document.getElementById('pipelineTopScroll');
+    const inner = document.getElementById('pipelineTopScrollInner');
+    if (!wrap || !top || !inner) return;
+
+    const sizeIt = () => {
+        const t = wrap.querySelector('table');
+        if (t) inner.style.width = t.scrollWidth + 'px';
+        top.style.display = (wrap.scrollWidth > wrap.clientWidth) ? 'block' : 'none';
+    };
+
+    // Mirror either scroller into the other. Assigning .onscroll (rather than
+    // addEventListener) keeps this idempotent if the block is ever included
+    // twice, and the guard skips the echo when the values already agree.
+    top.onscroll = function () {
+        if (Math.abs(wrap.scrollLeft - top.scrollLeft) > 1) wrap.scrollLeft = top.scrollLeft;
+    };
+    wrap.onscroll = function () {
+        if (Math.abs(top.scrollLeft - wrap.scrollLeft) > 1) top.scrollLeft = wrap.scrollLeft;
+    };
+
+    sizeIt();
+    window.addEventListener('resize', sizeIt);
+    if (window.ResizeObserver) new ResizeObserver(sizeIt).observe(wrap);
+})();
+</script>
+
+
+<style>
+    /* --- frozen header -------------------------------------------------
+       The grid scrolls inside #pipelineTableWrap, so both header rows and the
+       totals row stay visible while the customer rows move underneath. Offsets
+       are set from JS (below) because the two header rows are not a fixed
+       height across zoom levels / font settings. */
+    #pipelineTableWrap thead th {
+        position: sticky;
+        z-index: 22;
+        background: #0f6e6e;   /* header keeps its teal so rows don't show through */
+    }
+    #pipelineTableWrap thead tr:first-child th  { top: 0; }
+    #pipelineTableWrap #monthTotalsRow td {
+        position: sticky;
+        z-index: 18;
+        background: #d1fae5 !important;
+    }
+    /* the two frozen columns must sit above the scrolling cells in BOTH axes */
+    #pipelineTableWrap thead th.col-sno,
+    #pipelineTableWrap thead th.col-party { z-index: 34; }
+    #pipelineTableWrap #monthTotalsRow td.col-sno,
+    #pipelineTableWrap #monthTotalsRow td.col-party { z-index: 28; }
+</style>
+<script>
+(function () {
+    const wrap = document.getElementById('pipelineTableWrap');
+    if (!wrap) return;
+    const tbl = wrap.querySelector('table');
+    if (!tbl || !tbl.tHead) return;
+
+    // Stack row 2 under row 1, and the totals row under both — measured rather
+    // than hard-coded so it survives zoom and font changes.
+    const place = () => {
+        const rows = tbl.tHead.rows;
+        const h1 = rows[0] ? rows[0].getBoundingClientRect().height : 0;
+        if (rows[1]) {
+            [...rows[1].cells].forEach(c => { c.style.top = h1 + 'px'; });
+        }
+        const headH = h1 + (rows[1] ? rows[1].getBoundingClientRect().height : 0);
+        const totals = document.getElementById('monthTotalsRow');
+        if (totals) [...totals.cells].forEach(c => { c.style.top = headH + 'px'; });
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    if (window.ResizeObserver) new ResizeObserver(place).observe(tbl);
+})();
+</script>
+
 @endsection

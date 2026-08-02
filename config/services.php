@@ -37,6 +37,15 @@ return [
     'password' => env('CRM_API_PASSWORD'),
   ],
 
+  // Setu (insights.effortlessanalytics.com) — Tally-sourced sales insights,
+  // used to reconcile actual invoiced sales into sales_pipelines. See
+  // App\Services\SetuReportService.
+  'setu' => [
+    'base_url' => env('SETU_BASE_URL', 'https://insights.effortlessanalytics.com'),
+    'access_token' => env('SETU_ACCESS_TOKEN'),
+    'report_id' => env('SETU_SALES_REPORT_ID', 2886),
+  ],
+
   // Google Maps key for Live Location, Timeline, SOS map and client
   // create/edit. MUST be read via config() in Blade, never env(): env()
   // returns null once `php artisan config:cache` has run, which silently

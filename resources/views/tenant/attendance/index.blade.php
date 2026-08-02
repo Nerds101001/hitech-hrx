@@ -24,6 +24,177 @@
   ])
 @endsection
 
+@section('page-style')
+<style>
+  /* --- compact stat strip (replaces the old hero banner + 4 tall cards) --- */
+  .attendance-statbar .stat-pill {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: #fff; border: 1px solid #e7eaee; border-radius: 50px;
+      padding: 5px 14px; font-size: .78rem; white-space: nowrap;
+      box-shadow: 0 1px 2px rgba(16,24,40,.04);
+  }
+  .attendance-statbar .sp-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+  .attendance-statbar .sp-val { font-weight: 800; font-size: .95rem; color: #2f3944; line-height: 1; }
+  .attendance-statbar .sp-lbl { color: #7b8794; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; font-size: .62rem; }
+  .attendance-statbar .stat-pill-muted { background: #f6f8f9; }
+
+  /* --- Select2: the default highlighted option was near-white text on a pale
+         grey row, which made the hovered department unreadable. Force the brand
+         teal row with white text instead. --- */
+  .select2-container--default .select2-results__option--highlighted[aria-selected],
+  .select2-container--default .select2-results__option--highlighted,
+  .select2-container--default .select2-results__option--highlighted.select2-results__option--selectable {
+      background-color: #0f6e6e !important;
+      color: #fff !important;
+  }
+  .select2-container--default .select2-results__option[aria-selected="true"],
+  .select2-container--default .select2-results__option--selected {
+      background-color: #e8f2f2 !important;
+      color: #0f6e6e !important;
+      font-weight: 700;
+  }
+  .select2-container--default .select2-results__option {
+      padding: 7px 12px; font-size: .82rem; color: #4b5563;
+  }
+  .select2-results__options { max-height: 260px; }
+
+  /* --- one-line compact toolbar ---------------------------------------
+     The filters used to wrap onto a second row with tall 400px-wide controls,
+     eating ~120px of vertical space above the grid. Everything now sits on a
+     single line at a smaller control height, and scrolls sideways only if the
+     window is genuinely too narrow. */
+  .attendance-filterbar { overflow-x: auto; overflow-y: visible; padding-bottom: 2px; }
+  .attendance-filterbar::-webkit-scrollbar { height: 5px; }
+  .attendance-filterbar::-webkit-scrollbar-thumb { background: #d6dce1; border-radius: 4px; }
+
+  .attendance-filterbar .form-select,
+  .attendance-filterbar .form-control,
+  .attendance-filterbar .filter-item-hitech {
+      height: 34px; min-height: 34px; padding: 4px 26px 4px 10px;
+      font-size: .76rem; line-height: 1.2;
+  }
+  .attendance-filterbar .search-wrapper-hitech { height: 34px; }
+  .attendance-filterbar .search-wrapper-hitech .form-control { height: 32px; padding-left: 4px; font-size: .76rem; }
+  .attendance-filterbar .search-wrapper-hitech .btn-search { height: 30px; padding: 0 12px; font-size: .74rem; }
+  .attendance-filterbar .search-wrapper-hitech .btn-search span { font-size: .74rem; }
+  .attendance-filterbar .btn { height: 34px; padding: 0 12px; font-size: .76rem; display: inline-flex; align-items: center; }
+
+  /* Select2 renders its own box — match the shrunken height */
+  .attendance-filterbar .select2-container .select2-selection--single { height: 34px !important; }
+  .attendance-filterbar .select2-container--default .select2-selection--single .select2-selection__rendered {
+      line-height: 32px !important; font-size: .76rem; padding-left: 10px; padding-right: 22px;
+  }
+  .attendance-filterbar .select2-container--default .select2-selection--single .select2-selection__arrow { height: 32px !important; }
+
+  /* The global .compact-select sets min-width:140px, which beat the per-control
+     inline widths (a min-width always wins over a smaller width). Release it so
+     each filter can take the narrow size set on its wrapper. */
+  .attendance-filterbar .compact-select { flex: 0 0 auto; min-width: 0 !important; }
+  .attendance-filterbar .form-select,
+  .attendance-filterbar .form-control,
+  .attendance-filterbar .filter-item-hitech,
+  .attendance-filterbar .btn { height: 34px !important; min-height: 34px !important; }
+  .attendance-filterbar .btn { padding: 0 10px !important; }
+  .attendance-filterbar > .d-flex.align-items-center { flex: 0 0 auto; }
+  /* keep the action buttons pinned right without stretching the row */
+  .attendance-filterbar .btn-hitech-export span { font-size: .74rem; }
+  /* catch every remaining control (length menu, icon + import buttons) so the
+     whole row shares one height instead of mixing 34px and 42px */
+  .attendance-filterbar select,
+  .attendance-filterbar input,
+  .attendance-filterbar button,
+  .attendance-filterbar .select2-selection { height: 34px !important; min-height: 34px !important; }
+  .attendance-filterbar > * { align-self: center; }
+  .attendance-filterbar .search-wrapper-hitech .btn-search { height: 28px !important; }
+  /* btn-hitech-icon / btn-hitech-export set their own padding with !important in
+     the app stylesheet, which outranked the generic .btn rule above and left the
+     two action buttons 8px taller than every other control on the row. */
+  .attendance-filterbar button.btn.btn-hitech-icon,
+  .attendance-filterbar button.btn.btn-hitech-export,
+  .attendance-filterbar button.btn-hitech-icon,
+  .attendance-filterbar button.btn-hitech-export {
+      height: 34px !important; min-height: 34px !important;
+      padding-top: 0 !important; padding-bottom: 0 !important;
+      padding-left: 10px !important; padding-right: 10px !important;
+      display: inline-flex !important; align-items: center !important;
+  }
+  .attendance-filterbar button.btn-hitech-export i { font-size: 1rem !important; margin-right: 5px !important; }
+  .attendance-filterbar button.btn-hitech-icon i { font-size: 1rem !important; }
+
+  /* --- breathing room -------------------------------------------------
+     First pass squeezed everything against the card edges and clipped the
+     longer labels ("Sort: Name (A-Z)") under the dropdown arrow. */
+  .attendance-filterbar .select2-container--default .select2-selection--single .select2-selection__rendered {
+      padding-right: 30px !important; padding-left: 12px !important;
+  }
+  .attendance-filterbar .select2-container--default .select2-selection--single { border-color: #dfe3e7 !important; border-radius: 7px !important; }
+  .attendance-filterbar .form-select, .attendance-filterbar .form-control { padding-right: 30px !important; padding-left: 12px !important; }
+  .attendance-filterbar .search-wrapper-hitech { padding-left: 6px; }
+  .attendance-filterbar .search-wrapper-hitech .form-control { padding-left: 8px !important; }
+  /* the row itself gets side padding so nothing touches the card border */
+  .attendance-filterbar { padding: 2px 2px 6px 2px; }
+
+  /* legend sat flush against the card edges too */
+  #attendanceLegend { padding: .65rem 1.25rem !important; }
+  .attendance-legend .legend-chip { padding: 4px 12px; }
+
+  .attendance-statbar { padding: 0 2px; }
+
+  /* --- tab row: tabs left, actions right ------------------------------
+     nav-justified stretched two tabs across the full card width, leaving a
+     huge dead zone; the actions now use that space instead of crowding the
+     filter row (which is why the filters needed a scrollbar). */
+  .attendance-tabbar { padding-left: .5rem; }
+  .attendance-tabbar .nav-tabs { border-bottom: 0; flex: 0 0 auto; }
+  /* Tabs sized to match the Bulk Import button (34px) so the whole top row
+     shares one control height. */
+  .attendance-tabbar .nav-tabs .nav-link {
+      height: 34px !important; min-height: 34px !important;
+      padding: 0 16px !important; white-space: nowrap;
+      display: inline-flex !important; align-items: center !important;
+      font-size: .78rem; line-height: 1 !important; border-radius: 7px;
+  }
+  .attendance-tabbar .nav-tabs .nav-item { display: flex; align-items: center; }
+  .attendance-tabbar { padding: .6rem .5rem .6rem 1rem; }
+
+  /* The search button is absolutely positioned inside its wrapper; once the
+     wrapper was narrowed it spilled over the neighbouring date filter. Clip it
+     to the wrapper and drop the label so the input keeps usable width. */
+  .attendance-filterbar .search-wrapper-hitech {
+      overflow: hidden; border-radius: 7px; position: relative;
+  }
+  .attendance-filterbar .search-wrapper-hitech .btn-search {
+      position: absolute !important; right: 0; top: 50%; transform: translateY(-50%);
+      height: 30px !important; padding: 0 10px !important; border-radius: 6px; z-index: 2;
+  }
+  .attendance-filterbar .search-wrapper-hitech .btn-search span { display: none; }
+  .attendance-filterbar .search-wrapper-hitech .form-control { padding-right: 42px !important; }
+  .attendance-tabactions { flex: 0 0 auto; }
+  .attendance-tabactions .form-select,
+  .attendance-tabactions .btn {
+      height: 34px !important; min-height: 34px !important;
+      font-size: .76rem; display: inline-flex; align-items: center;
+  }
+  .attendance-tabbar .attendance-tabactions button.btn.btn-hitech-icon,
+  .attendance-tabbar .attendance-tabactions button.btn.btn-hitech-export,
+  .attendance-tabactions button.btn-hitech-icon,
+  .attendance-tabactions button.btn-hitech-export {
+      height: 34px !important; min-height: 34px !important;
+      padding: 0 12px !important; line-height: 1 !important;
+      display: inline-flex !important; align-items: center !important;
+  }
+  .attendance-tabactions button.btn-hitech-export i,
+  .attendance-tabactions button.btn-hitech-icon i { font-size: 1rem !important; }
+  .attendance-tabactions button.btn-hitech-export i { margin-right: 6px !important; }
+  .attendance-tabactions .form-select { padding: 0 26px 0 10px !important; }
+
+  @media (max-width: 900px) {
+      .attendance-tabbar { padding-bottom: .5rem; }
+      .attendance-tabactions { padding-left: .75rem; }
+  }
+</style>
+@endsection
+
 @section('content')
 <div class="px-4">
 @if(session('import_failures'))
@@ -38,70 +209,46 @@
     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>
 @endif
-<div class="row g-6 mb-6">
-  <!-- Hero Banner -->
-  <div class="col-lg-12">
-    <x-hero-banner
-      title="Attendance Management" 
-      subtitle="Track, monitor and optimize employee presence in real-time"
-      icon="bx-time-five"
-      gradient="teal"
-      quote="Punctuality is not just about being on time, it's about respecting other people's time."
-    />
+{{-- Compact stat strip. The old layout opened with a full-width hero banner
+     plus four tall cards, which pushed the actual registry grid below the fold
+     on a 1366px screen. The page title is already in the navbar, so the banner
+     was pure duplication; the four numbers now sit in one slim row. --}}
+<div class="attendance-statbar d-flex flex-wrap align-items-center gap-2 mb-3">
+  <div class="stat-pill" title="Employees present today">
+    <span class="sp-dot bg-teal"></span>
+    <span class="sp-val" id="statPresentCount">{{ $todayPresentCount ?? 0 }}</span>
+    <span class="sp-lbl">Present</span>
   </div>
-</div>
-
-<!-- Stats Cards -->
-<div class="row g-6 mb-6">
-  <x-stat-card 
-    id="statPresentCount"
-    title="Today's Present" 
-    value="{{ $todayPresentCount ?? 0 }}" 
-    icon="bx-user-check" 
-    color="success"
-    trend="up"
-    trendValue="+{{ $todayPresentCount > 0 ? round(($todayPresentCount / ($activeUsersCount ?: 1)) * 100) : 0 }}%"
-    animation-delay="0.1s"
-  />
-  
-  <x-stat-card 
-    id="statAbsentCount"
-    title="Today's Absent" 
-    value="{{ $todayAbsentCount ?? 0 }}" 
-    icon="bx-user-x" 
-    color="danger"
-    trend="down"
-    trendValue="{{ $todayAbsentCount }}"
-    animation-delay="0.2s"
-  />
-  
-  <x-stat-card 
-    id="statLeaveCount"
-    title="On Leave" 
-    value="{{ $onLeaveCount ?? 0 }}" 
-    icon="bx-calendar-minus" 
-    color="warning"
-    animation-delay="0.3s"
-  />
-  
-  <x-stat-card 
-    id="statLateCount"
-    title="Late Arrivals" 
-    value="{{ $lateCount ?? 0 }}" 
-    icon="bx-time" 
-    color="amber"
-    trend="up"
-    trendValue="{{ $lateCount }} today"
-    animation-delay="0.4s"
-  />
+  <div class="stat-pill" title="Employees absent today">
+    <span class="sp-dot bg-red"></span>
+    <span class="sp-val" id="statAbsentCount">{{ $todayAbsentCount ?? 0 }}</span>
+    <span class="sp-lbl">Absent</span>
+  </div>
+  <div class="stat-pill" title="Employees on approved leave today">
+    <span class="sp-dot bg-indigo-vibrant"></span>
+    <span class="sp-val" id="statLeaveCount">{{ $onLeaveCount ?? 0 }}</span>
+    <span class="sp-lbl">On Leave</span>
+  </div>
+  <div class="stat-pill" title="Late arrivals today">
+    <span class="sp-dot bg-warning"></span>
+    <span class="sp-val" id="statLateCount">{{ $lateCount ?? 0 }}</span>
+    <span class="sp-lbl">Late</span>
+  </div>
+  <div class="stat-pill stat-pill-muted ms-auto" title="Total active employees">
+    <span class="sp-val">{{ $activeUsersCount ?? 0 }}</span>
+    <span class="sp-lbl">Active staff</span>
+  </div>
 </div>
 
 <!-- Attendance Records Table -->
 <div class="row g-6 mb-6">
   <div class="col-12">
-    <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
-      <div class="hitech-card-header border-bottom p-0">
-          <ul class="nav nav-tabs nav-justified hitech-tabs-sm mb-0" role="tablist">
+    <div class="hitech-card">
+      {{-- Tabs on the left, page actions on the right. The actions used to live in
+           the filter row, which pushed it past the available width and forced a
+           horizontal scrollbar; the tab strip had ~600px of unused space. --}}
+      <div class="hitech-card-header border-bottom p-0 d-flex align-items-center justify-content-between flex-wrap gap-2 attendance-tabbar">
+          <ul class="nav nav-tabs hitech-tabs-sm mb-0 flex-nowrap" role="tablist">
               <li class="nav-item">
                   <button class="nav-link py-3 active" id="registry-view-tab" data-bs-toggle="tab" data-bs-target="#registryViewTab">
                       <i class="bx bx-grid-alt me-2 text-primary"></i>Monthly Registry
@@ -113,13 +260,35 @@
                   </button>
               </li>
           </ul>
+
+          <div class="d-flex align-items-center gap-2 attendance-tabactions pe-3">
+            {{-- Records Per Page --}}
+            <select class="form-select filter-item-hitech border-light shadow-none fw-bold" id="customLengthMenu" style="width: 74px;">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+
+            {{-- Export --}}
+            <button type="button" class="btn btn-hitech-icon shadow-sm" onclick="exportData()" title="Export Data">
+              <i class="bx bx-download fs-5"></i>
+            </button>
+
+            @if(auth()->user()->hasRole(['admin', 'hr', 'accounts']))
+            <button type="button" class="btn btn-hitech-export shadow-sm" data-bs-toggle="modal" data-bs-target="#importAttendanceModal">
+              <i class="bx bx-upload fs-5 me-2"></i>
+              <span>Bulk Import</span>
+            </button>
+            @endif
+          </div>
       </div>
 
       {{-- Unified White Filter Row --}}
-      <div class="card-body p-4 border-bottom">
-        <div class="d-flex flex-wrap align-items-center gap-3">
+      <div class="card-body px-4 py-3 border-bottom">
+        <div class="d-flex flex-nowrap align-items-center gap-2 attendance-filterbar">
           {{-- Search --}}
-          <div class="search-wrapper-hitech" style="width: 400px;">
+          <div class="search-wrapper-hitech" style="width: 172px; flex:0 0 172px;">
             <i class="bx bx-search text-muted ms-3 fs-5"></i>
             <input type="text" class="form-control" placeholder="Search employee..." id="customSearchInput">
             <button class="btn-search shadow-sm" id="customSearchBtn">
@@ -129,7 +298,7 @@
           </div>
 
           {{-- Quick Period Filter --}}
-          <div class="compact-select" style="min-width: 140px;">
+          <div class="compact-select" style="width: 110px;">
               <select id="quickPeriod" class="form-select filter-item-hitech">
                   <option value="today" selected>Today</option>
                   <option value="yesterday">Yesterday</option>
@@ -140,19 +309,19 @@
           </div>
 
           {{-- Date Filter (Shown for Custom) --}}
-          <div id="dateFilterWrapper" style="width: 160px; display: none;">
+          <div id="dateFilterWrapper" style="width: 132px; display: none;">
             <input type="date" id="date" name="date" class="form-control filter-item-hitech"
                    value="{{ request()->get('date', now()->format('Y-m-d')) }}">
           </div>
 
           {{-- Month/Year Filter (for Registry) --}}
-          <div class="compact-select" id="registryMonthWrapper" style="min-width: 160px; display: none;">
+          <div class="compact-select" id="registryMonthWrapper" style="width: 132px; display: none;">
               <input type="month" id="registryMonth" class="form-control filter-item-hitech" 
                      value="{{ now()->format('Y-m') }}">
           </div>
 
           {{-- Site/Unit --}}
-          <div class="compact-select" style="min-width: 140px;">
+          <div class="compact-select" style="width: 114px;">
               <select id="siteId" name="siteId" class="form-select select2 filter-item-hitech">
                 <option value="">Unit: All</option>
                 @foreach($sites as $site)
@@ -161,18 +330,18 @@
               </select>
           </div>
 
-          {{-- Department --}}
-          <div class="compact-select">
-              <select id="teamId" name="teamId" class="form-select select2 filter-item-hitech">
+          {{-- Department (real departments — the old list was the unused `teams` table) --}}
+          <div class="compact-select" style="width: 136px;">
+              <select id="departmentId" name="departmentId" class="form-select select2 filter-item-hitech">
                 <option value="">Dept: All</option>
-                @foreach($teams as $team)
-                  <option value="{{ $team->id }}">{{ $team->name }}</option>
+                @foreach($departments as $department)
+                  <option value="{{ $department->id }}">{{ $department->name }}</option>
                 @endforeach
               </select>
           </div>
 
           {{-- Employee --}}
-          <div class="compact-select" style="min-width: 200px;">
+          <div class="compact-select" style="width: 136px;">
             <select id="userId" name="userId" class="form-select select2 filter-item-hitech">
               <option value="">Emp: All</option>
               @foreach($users as $user)
@@ -185,7 +354,7 @@
           </div>
 
           {{-- Shift --}}
-          <div class="compact-select">
+          <div class="compact-select" style="width: 112px;">
             <select id="shiftId" name="shiftId" class="form-select select2 filter-item-hitech">
               <option value="">Shift: All</option>
               @foreach($shifts as $shift)
@@ -196,31 +365,19 @@
             </select>
           </div>
 
-          {{-- Spacer --}}
-          <div class="flex-grow-1"></div>
-
-          {{-- Records Per Page --}}
-          <div class="d-flex align-items-center">
-            <select class="form-select w-px-70 filter-item-hitech border-light shadow-none fw-bold" id="customLengthMenu">
-              <option value="10">10</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
+          {{-- Sort (Monthly Registry) --}}
+          <div class="compact-select" id="registrySortWrap" style="width: 150px;">
+            <select id="registrySort" class="form-select select2 filter-item-hitech">
+              <option value="name_asc">Sort: Name (A-Z)</option>
+              <option value="name_desc">Sort: Name (Z-A)</option>
+              <option value="code_asc">Sort: Emp Code</option>
+              <option value="absents_desc">Sort: Most Absent</option>
+              <option value="presents_desc">Sort: Most Present</option>
+              <option value="lates_desc">Sort: Most Late</option>
+              <option value="leaves_desc">Sort: Most Leave</option>
             </select>
           </div>
 
-          {{-- Export Icon --}}
-          <button type="button" class="btn btn-hitech-icon shadow-sm me-2" onclick="exportData()" title="Export Data">
-            <i class="bx bx-download fs-5"></i>
-          </button>
-
-          @if(auth()->user()->hasRole(['admin', 'hr', 'accounts']))
-          {{-- Bulk Import Button --}}
-          <button type="button" class="btn btn-hitech-export shadow-sm" data-bs-toggle="modal" data-bs-target="#importAttendanceModal">
-            <i class="bx bx-upload fs-5 me-2"></i>
-            <span>Bulk Import</span>
-          </button>
-          @endif
         </div>
       </div>
 
@@ -265,7 +422,7 @@
 <!-- Full Width Interactive Chart -->
 <div class="row g-6">
   <div class="col-12">
-    <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
+    <div class="hitech-card" style="animation-delay: 0.2s">
       <div class="hitech-card-header border-bottom">
         <div class="d-flex align-items-center gap-3">
             <h5 class="title mb-0">Weekly Attendance Analytics</h5>
@@ -290,8 +447,8 @@
           <div class="compact-select" style="min-width: 160px;">
               <select id="chartTeamFilter" class="form-select select2 filter-item-hitech">
                   <option value="">Dept: All</option>
-                  @foreach($teams as $team)
-                      <option value="{{ $team->id }}">{{ $team->name }}</option>
+                  @foreach($departments as $department)
+                      <option value="{{ $department->id }}">{{ $department->name }}</option>
                   @endforeach
               </select>
           </div>

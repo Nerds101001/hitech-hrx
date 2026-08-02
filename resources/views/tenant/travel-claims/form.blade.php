@@ -50,6 +50,36 @@
         tr.flagged-row > td { background-color: #fdecea !important; }
         tr.flagged-row > td:first-child { box-shadow: inset 3px 0 0 0 #dc3545; }
         tr.flagged-row input.form-control, tr.flagged-row select.form-select { border-color: #f1a9a0; }
+
+        /* The horizontal scrollbar sits above the grid and stays put while the
+           page moves, so you never have to travel to the bottom of a 31-row
+           table to scroll sideways. */
+        #claimTopScroll {
+            position: sticky;
+            top: 0;
+            z-index: 7;
+            background: #fff;
+        }
+
+        /* The grid scrolls inside its own box rather than with the page. This
+           is what lets the header freeze: `overflow-x` on the wrapper makes it
+           a scroll container on BOTH axes, so a sticky thead pins to the
+           wrapper's top edge — which only stays on screen if the wrapper has a
+           bounded height of its own. */
+        #claimTableScroll {
+            max-height: calc(100vh - 260px);
+            min-height: 320px;
+            overflow: auto;
+        }
+
+        #claimTableScroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 4;
+            /* Opaque: the rows scroll underneath it. */
+            background-color: #f2f3f4;
+            box-shadow: inset 0 -1px 0 #d9dee3;
+        }
     </style>
 
     @if($errors->any())
@@ -69,12 +99,15 @@
             <li><strong>Last date of submission:</strong> the <strong>7th of the following month</strong>. Claims submitted after the 7th incur a <strong>10% late-submission penalty</strong> on the net payable amount.</li>
             <li><strong>Bill attachments are now uploaded once for the whole month</strong> at the bottom of this form — <em>not</em> per day. Combine all of a category's bills into a single file (PDF or image).</li>
             <li>For every category where you have claimed an amount, the matching consolidated bill file is <strong>mandatory</strong> — e.g. if your Food total is above ₹0 you must attach the combined Food bills. <strong>The form will not submit</strong> until each claimed category has its bill attached.</li>
-            <li>Month Start &amp; Month End odometer photos remain required for submission.</li>
+            <li><strong>Odometer photos are only needed if you travelled by bike or car</strong> (personal or official). If your month is only food, courier, cab, bus, train or flight, leave them blank — you can still submit. On bike/car days, fill the <strong>start and end meter</strong> readings in the grid; no photo is asked for per day.</li>
         </ul>
     </div>
 
     <form action="{{ isset($claim) ? route('travel-claims.update', $claim->id) : route('travel-claims.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
+        {{-- Ties files uploaded before this claim exists to the claim once it is
+             saved. Kept across a failed submit so nothing has to be re-picked. --}}
+        <input type="hidden" name="upload_token" id="uploadToken" value="{{ old('upload_token', \Illuminate\Support\Str::uuid()) }}">
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-white border-bottom pt-4 pb-3">
                 <h5 class="card-title mb-0">Claim Header</h5>
@@ -97,10 +130,13 @@
                     </div>
                 </div>
             
-                <div class="row g-3 mt-1">
+                <div class="row g-3 mt-1" id="odometerProofRow">
+                    <div class="col-12">
+                        <div class="small mb-0" id="odometerRequirementNote"></div>
+                    </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label fw-semibold text-secondary small mb-1">Month Start Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the start of the month"></i></label>
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month Start Odometer Proof <span class="text-danger odo-required" style="display:none;">*</span> <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the start of the month"></i></label>
                         <input type="file" name="month_start_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
                         @if(isset($claim) && $claim->month_start_odometer_proof)
                             <div class="mt-2 text-primary small">
@@ -111,7 +147,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label fw-semibold text-secondary small mb-1">Month End Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the end of the month"></i></label>
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month End Odometer Proof <span class="text-danger odo-required" style="display:none;">*</span> <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the end of the month"></i></label>
                         <input type="file" name="month_end_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
                         @if(isset($claim) && $claim->month_end_odometer_proof)
                             <div class="mt-2 text-primary small">
@@ -166,7 +202,7 @@
         <div class="card shadow-sm border-0 mb-4 mt-3">
             <div class="card-header bg-white border-bottom pt-4 pb-3">
                 <h5 class="card-title mb-1">Monthly Bill Attachments</h5>
-                <p class="text-muted small mb-0">Upload <strong>one combined file per category</strong> covering all days of the month. Any category you have claimed an amount for must have its bill attached, or the claim cannot be submitted.</p>
+                <p class="text-muted small mb-0">Attach the bills for each category — <strong>up to {{ \App\Models\TravelClaimAttachment::MAX_PER_CATEGORY }} files per box</strong>, no need to merge them into one. Files upload as soon as you pick them. Any category you have claimed an amount for needs at least one bill, or the claim cannot be submitted.</p>
             </div>
             <div class="card-body">
                 <div class="row g-3">
@@ -179,15 +215,39 @@
                         ];
                     @endphp
                     @foreach($consolidated as $c)
+                        @php $catFiles = ($attachmentsByCategory ?? collect())->get($c['name'], collect()); @endphp
                         <div class="col-md-6">
-                            <div class="form-group">
+                            <div class="form-group attachment-box" data-category="{{ $c['name'] }}">
                                 <label class="form-label fw-semibold text-secondary small mb-1">{{ $c['label'] }} Bill
                                     <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="{{ $c['hint'] }}"></i>
+                                    <span class="badge bg-label-secondary ms-1 attach-count">{{ $catFiles->count() }}/{{ \App\Models\TravelClaimAttachment::MAX_PER_CATEGORY }}</span>
                                 </label>
-                                <input type="file" name="{{ $c['name'] }}" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                                <input type="file" class="form-control attach-input" multiple
+                                       accept="image/jpeg,image/png,image/jpg,application/pdf">
+                                <div class="form-text small">Pick several at once — each uploads immediately.</div>
+
+                                <div class="attach-progress progress mt-2" style="height:4px; display:none;">
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%"></div>
+                                </div>
+                                <div class="attach-error text-danger small mt-1" style="display:none;"></div>
+
+                                <ul class="list-group list-group-flush mt-2 attach-list">
+                                    @foreach($catFiles as $f)
+                                        <li class="list-group-item d-flex align-items-center justify-content-between px-0 py-1" data-id="{{ $f->id }}">
+                                            <a href="{{ $f->url }}" target="_blank" class="text-truncate small me-2" style="max-width: 75%;">
+                                                <i class="bi {{ $f->is_image ? 'bi-image' : 'bi-file-earmark-pdf' }}"></i> {{ $f->original_name }}
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-link text-danger p-0 attach-remove" title="Remove">
+                                                <i class="bx bx-trash"></i>
+                                            </button>
+                                        </li>
+                                    @endforeach
+                                </ul>
+
                                 @if(isset($claim) && $claim->{$c['name']})
                                     <div class="mt-2 text-primary small">
-                                        <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->{$c['name']}) }}" target="_blank">View File</a>
+                                        <i class="bi bi-check-circle-fill"></i> Previously uploaded:
+                                        <a href="{{ asset('storage/' . $claim->{$c['name']}) }}" target="_blank">View File</a>
                                     </div>
                                 @endif
                             </div>
@@ -319,8 +379,9 @@
                         <option value="Personal Car" ${(ex.mode_of_travel == 'Personal Car' || ex.mode_of_travel == 'Car') ? 'selected' : ''}>Personal Car</option>
                         <option value="Official Bike" ${ex.mode_of_travel == 'Official Bike' ? 'selected' : ''}>Official Bike</option>
                         <option value="Official Car" ${ex.mode_of_travel == 'Official Car' ? 'selected' : ''}>Official Car</option>
-                        <option value="Train" ${ex.mode_of_travel == 'Train' ? 'selected' : ''}>Train</option>
+                        <option value="Cab / Taxi" ${ex.mode_of_travel == 'Cab / Taxi' ? 'selected' : ''}>Cab / Taxi</option>
                         <option value="Bus" ${ex.mode_of_travel == 'Bus' ? 'selected' : ''}>Bus</option>
+                        <option value="Train" ${ex.mode_of_travel == 'Train' ? 'selected' : ''}>Train</option>
                         <option value="Flight" ${ex.mode_of_travel == 'Flight' ? 'selected' : ''}>Flight</option>
                     </select>
                 </td>
@@ -349,7 +410,40 @@
                 calculateRow(d);
             }
         }
+        updateOdometerRequirement();
         calculateTotals();
+    }
+
+    // Must match TravelClaimController::PER_KM_RATES and ::METERED_MODES —
+    // the server recalculates on save and the two have to agree.
+    const PER_KM_RATES = {
+        'Personal Bike': 4.00, 'Bike': 4.00,
+        'Personal Car':  9.50, 'Car':  9.50
+    };
+    const METERED_MODES = [
+        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car'
+    ];
+    function isMeteredMode(mode) { return METERED_MODES.includes(mode); }
+
+    // True once any row is on a bike or car — the month's odometer photos are
+    // only required in that case.
+    function monthHasVehicleRow() {
+        let found = false;
+        $('.expense-row').each(function() {
+            if (isMeteredMode($(this).find('.mode-select').val())) { found = true; return false; }
+        });
+        return found;
+    }
+
+    // Reflects the server rule on screen so nobody hunts for a photo they do
+    // not owe, and nobody is surprised at submit time.
+    function updateOdometerRequirement() {
+        let needed = monthHasVehicleRow();
+        $('.odo-required').toggle(needed);
+        $('#odometerRequirementNote')
+            .html(needed
+                ? '<span class="text-danger fw-semibold"><i class="bx bx-error-circle"></i> This claim includes bike/car travel, so both odometer photos are required to submit.</span>'
+                : '<span class="text-muted">No bike or car travel entered — odometer photos are optional for this claim.</span>');
     }
 
     function calculateRow(idx) {
@@ -358,11 +452,11 @@
         let start = parseFloat(row.find('.start-meter').val()) || 0;
         let end = parseFloat(row.find('.end-meter').val()) || 0;
         let dist = 0;
-        
-        let isPersonal = ['Personal Bike', 'Personal Car', 'Bike', 'Car'].includes(mode);
-        let isOfficial = ['Official Bike', 'Official Car'].includes(mode);
 
-        if (isPersonal || isOfficial) {
+        let rate = PER_KM_RATES[mode];      // undefined => paid at actual fare
+        let isPerKm = rate !== undefined;
+
+        if (isMeteredMode(mode)) {
             // Meter readings are recorded for both personal and office vehicles;
             // only the conveyance amount differs (auto rate vs actual expense)
             if (end > start && end !== 0) {
@@ -373,21 +467,18 @@
             }
             row.find('.start-meter, .end-meter').prop('readonly', false).removeClass('bg-light');
         } else {
+            // Cab, bus, train and flight have no odometer — the user types the
+            // fare they paid straight into the conveyance column.
             row.find('.distance').val('');
             row.find('.start-meter, .end-meter').val('').prop('readonly', true).addClass('bg-light');
         }
 
-        let rate = 0;
-        if(mode === 'Personal Bike' || mode === 'Bike') rate = 4.00;
-        if(mode === 'Personal Car' || mode === 'Car') rate = 9.50;
-
-        let conveyance = 0;
-        if (isPersonal) {
-            conveyance = dist * rate;
-            row.find('.conveyance').val(conveyance.toFixed(2)).prop('readonly', true).addClass('bg-light');
+        if (isPerKm) {
+            row.find('.conveyance').val((dist * rate).toFixed(2)).prop('readonly', true).addClass('bg-light');
         } else {
             row.find('.conveyance').prop('readonly', false).removeClass('bg-light');
         }
+        updateOdometerRequirement();
         calculateTotals();
     }
 
@@ -441,6 +532,133 @@
         $('#netPayableText').text('₹' + net.toFixed(2));
     }
 
+    // ── Monthly bill attachments ──────────────────────────────────────────
+    // Files upload the moment they are picked, so a slow connection is paid
+    // for once while the user carries on filling the grid, and an abandoned
+    // form does not lose them. Nothing here is posted with the form; the
+    // hidden upload token is what links these files to the saved claim.
+    const ATTACH_MAX        = {{ \App\Models\TravelClaimAttachment::MAX_PER_CATEGORY }};
+    const ATTACH_UPLOAD_URL = "{{ route('travel-claims.attachments.store') }}";
+    const ATTACH_DELETE_URL = "{{ route('travel-claims.attachments.destroy', ['id' => '__ID__']) }}";
+    const ATTACH_CLAIM_ID   = @json($claim->id ?? null);
+
+    function attachCsrf() {
+        return $('input[name="_token"]').first().val() || '';
+    }
+
+    function attachSetError(box, msg) {
+        const el = box.find('.attach-error');
+        if (!msg) { el.hide().text(''); return; }
+        el.text(msg).show();
+    }
+
+    function attachRefreshCount(box) {
+        const n = box.find('.attach-list li').length;
+        box.find('.attach-count').text(n + '/' + ATTACH_MAX);
+        return n;
+    }
+
+    function attachRenderRow(box, file) {
+        const icon = file.is_image ? 'bi-image' : 'bi-file-earmark-pdf';
+        const li = $('<li>')
+            .addClass('list-group-item d-flex align-items-center justify-content-between px-0 py-1')
+            .attr('data-id', file.id);
+        $('<a>').attr({ href: file.url, target: '_blank' })
+            .addClass('text-truncate small me-2').css('max-width', '75%')
+            .html('<i class="bi ' + icon + '"></i> ')
+            .append(document.createTextNode(file.name))
+            .appendTo(li);
+        $('<button type="button" class="btn btn-sm btn-link text-danger p-0 attach-remove" title="Remove"><i class="bx bx-trash"></i></button>')
+            .appendTo(li);
+        box.find('.attach-list').append(li);
+        attachRefreshCount(box);
+    }
+
+    async function attachUploadOne(box, file) {
+        const data = new FormData();
+        data.append('file', file);
+        data.append('category', box.data('category'));
+        data.append('upload_token', $('#uploadToken').val());
+        if (ATTACH_CLAIM_ID) data.append('claim_id', ATTACH_CLAIM_ID);
+
+        const res = await fetch(ATTACH_UPLOAD_URL, {
+            method: 'POST',
+            body: data,
+            headers: { 'X-CSRF-TOKEN': attachCsrf(), 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        });
+
+        if (!res.ok) {
+            let msg = 'Upload failed (' + res.status + ').';
+            try {
+                const err = await res.json();
+                msg = err.message || (err.errors && Object.values(err.errors)[0][0]) || msg;
+            } catch (e) { /* non-JSON error page — keep the status message */ }
+            throw new Error(file.name + ': ' + msg);
+        }
+        return await res.json();
+    }
+
+    // Uploaded one at a time on purpose: 30 parallel POSTs of 10 MB each is a
+    // good way to have the server drop half of them.
+    async function attachUploadQueue(box, files) {
+        attachSetError(box, '');
+        const room = ATTACH_MAX - attachRefreshCount(box);
+        if (room <= 0) {
+            attachSetError(box, 'This box already holds the maximum of ' + ATTACH_MAX + ' files.');
+            return;
+        }
+        if (files.length > room) {
+            attachSetError(box, 'Only ' + room + ' more file(s) fit here — the rest were not uploaded.');
+            files = files.slice(0, room);
+        }
+
+        box.find('.attach-progress').show();
+        try {
+            for (const file of files) {
+                try {
+                    attachRenderRow(box, await attachUploadOne(box, file));
+                } catch (e) {
+                    attachSetError(box, e.message);
+                }
+            }
+        } finally {
+            box.find('.attach-progress').hide();
+        }
+    }
+
+    async function attachRemove(box, li) {
+        const id = li.attr('data-id');
+        try {
+            const res = await fetch(ATTACH_DELETE_URL.replace('__ID__', id), {
+                method: 'DELETE',
+                headers: { 'X-CSRF-TOKEN': attachCsrf(), 'Accept': 'application/json' },
+                credentials: 'same-origin'
+            });
+            if (!res.ok) throw new Error('Could not remove that file.');
+            li.remove();
+            attachRefreshCount(box);
+            attachSetError(box, '');
+        } catch (e) {
+            attachSetError(box, e.message);
+        }
+    }
+
+    function initAttachmentBoxes() {
+        $('.attachment-box').each(function() {
+            const box = $(this);
+            box.find('.attach-input').on('change', function() {
+                const files = Array.from(this.files || []);
+                this.value = '';   // so re-picking the same file fires change again
+                if (files.length) attachUploadQueue(box, files);
+            });
+            box.on('click', '.attach-remove', function() {
+                attachRemove(box, $(this).closest('li'));
+            });
+            attachRefreshCount(box);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize tooltips (safeguarded against missing bootstrap globals)
         try {
@@ -458,6 +676,8 @@
         if ($('#claimMonthInput').val()) {
             generateMonthGrid();
         }
+        updateOdometerRequirement();
+        initAttachmentBoxes();
 
         // Keep the top scrollbar in sync with the wide expense table so users
         // can scroll horizontally without going to the bottom of the page
@@ -492,6 +712,12 @@
                 let fromLoc = row.find('input[name*="[from_location]"]').val();
                 let toLoc = row.find('input[name*="[to_location]"]').val();
                 let remarks = row.find('input[name*="[remarks]"]').val();
+                // A row carrying only a customer name or only meter readings is
+                // still a row the user filled in — it used to be disabled here
+                // and thrown away without a word.
+                let party = row.find('input[name*="[party_visited]"]').val();
+                let startMeter = row.find('.start-meter').val();
+                let endMeter = row.find('.end-meter').val();
                 let food = parseFloat(row.find('.food').val()) || 0;
                 let lodging = parseFloat(row.find('.lodging').val()) || 0;
                 let courier = parseFloat(row.find('.courier').val()) || 0;
@@ -503,7 +729,7 @@
                 // Bills are now uploaded once at the bottom (not per day), so a row
                 // counts as empty purely on its own text/amount fields.
                 // If everything is completely empty or zero, disable all inputs in this row
-                if (!mode && !fromLoc && !toLoc && !remarks && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0) {
+                if (!mode && !fromLoc && !toLoc && !remarks && !party && !startMeter && !endMeter && food === 0 && lodging === 0 && courier === 0 && other === 0 && toll === 0 && specialAppr === 0 && conveyanceAmount === 0) {
                     row.find('input, select').prop('disabled', true);
                 }
             });

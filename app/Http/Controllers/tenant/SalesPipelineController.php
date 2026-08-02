@@ -5,8 +5,13 @@ namespace App\Http\Controllers\tenant;
 use App\Http\Controllers\Controller;
 use App\Models\SalesPipeline;
 use App\Models\SalesPipelineMonth;
+use App\Models\SetuSalespersonMapping;
 use App\Models\User;
+use App\ApiClasses\Success;
+use App\ApiClasses\Error;
+use App\Services\SetuReportService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 
 class SalesPipelineController extends Controller
@@ -73,7 +78,7 @@ class SalesPipelineController extends Controller
         // Most recent month first so users see the current month without scrolling right
         $months = array_reverse($months);
 
-        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'extraReps.user', 'months' => function($q) use ($months) {
+        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'extraReps.user', 'serviceReps.user', 'months' => function($q) use ($months) {
             $monthKeys = array_column($months, 'key');
             $q->whereIn('month_year', $monthKeys);
         }])->where('is_locked', true);
@@ -247,7 +252,8 @@ class SalesPipelineController extends Controller
         $salespersons = User::where(function ($q) {
                 $q->where(function ($w) {
                     $w->whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
-                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%'));
+                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%')
+                          ->orWhere('name', 'like', '%Export%'));
                 })->orWhereIn('id', SalesPipeline::whereNotNull('salesperson_id')
                     ->distinct()->pluck('salesperson_id'));
             })
@@ -428,7 +434,38 @@ class SalesPipelineController extends Controller
         $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
             || auth()->user()->can('sales_report.manage');
 
-        return view('tenant.sales-pipeline.index', compact('canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        // Setu Sync button target: self, or — for privileged viewers — whoever
+        // the sp= filter is currently focused on. Mirrors syncSetu()'s own
+        // authorization check exactly, so the button is never shown for a
+        // target the endpoint would then reject.
+        $syncIsPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('sales_report.manage');
+        $isSalespersonForSync = !$user->hasRole(['admin', 'Admin']) && !$isCcare && !$isNewBiz;
+        $syncTargetId = null;
+        if ($isSalespersonForSync) {
+            $syncTargetId = $user->id;
+        } elseif ($syncIsPrivileged && !empty($fSp)) {
+            $syncTargetId = (int) $fSp;
+        }
+        $syncTargetLabel = null;
+        $syncMapped = false;
+        if ($syncTargetId) {
+            if ($syncTargetId === $user->id) {
+                $syncTargetLabel = 'My';
+            } else {
+                $targetUser = User::find($syncTargetId);
+                $syncTargetLabel = $targetUser ? trim($targetUser->first_name . ' ' . $targetUser->last_name) . "'s" : 'Their';
+            }
+            $syncMapped = SetuSalespersonMapping::where('user_id', $syncTargetId)
+                ->where('status', SetuSalespersonMapping::STATUS_CONFIRMED)->exists();
+        }
+
+        // People who are BOTH CCare and New Biz get their own optgroup so the
+        // Other Reps picker can show them once instead of twice.
+        $bothUsers   = $ccareUsers->whereIn('id', $newBizUsers->pluck('id'))->values();
+        $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
+        $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
+
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -570,7 +607,8 @@ class SalesPipelineController extends Controller
         $salespersons = User::where(function ($q) {
                 $q->where(function ($w) {
                     $w->whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
-                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%'));
+                      ->whereHas('department', fn($d) => $d->where('name', 'like', '%Sales%')
+                          ->orWhere('name', 'like', '%Export%'));
                 })->orWhereIn('id', SalesPipeline::whereNotNull('salesperson_id')
                     ->distinct()->pluck('salesperson_id'));
             })
@@ -791,10 +829,17 @@ class SalesPipelineController extends Controller
         if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
-        $request->validate(['user_id' => 'required|exists:users,id']);
+        $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'type'    => 'nullable|in:other,service',
+        ]);
+        // `type` splits the two tag columns: other = Other Reps (CCare/New Biz),
+        // service = Service Sales (salespersons). Defaults to other so any older
+        // caller keeps its existing behaviour.
         \App\Models\SalesPipelineExtraRep::firstOrCreate([
             'sales_pipeline_id' => $pipeline->id,
             'user_id' => (int) $request->user_id,
+            'type'    => $request->input('type', \App\Models\SalesPipelineExtraRep::TYPE_OTHER),
         ]);
         return response()->json(['success' => true]);
     }
@@ -808,9 +853,215 @@ class SalesPipelineController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         // Delete via the model instance so the removal is audited.
-        \App\Models\SalesPipelineExtraRep::where('sales_pipeline_id', $pipeline->id)
-            ->where('user_id', (int) $userId)->get()->each->delete();
+        $q = \App\Models\SalesPipelineExtraRep::where('sales_pipeline_id', $pipeline->id)
+            ->where('user_id', (int) $userId);
+        // Same person may be tagged in both columns — only clear the one clicked.
+        if (request()->filled('type')) {
+            $q->where('type', request()->input('type'));
+        }
+        $q->get()->each->delete();
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Resolve the common context for the Setu sync/resolve endpoints:
+     * authorization, the confirmed mapping, and the validated sync period.
+     * Returns ['response' => JsonResponse] on any failure (caller returns it
+     * directly) or the resolved [target, mapping, fyLabel, fromMonth, toMonth]
+     * on success. `$request->validate()` throwing propagates as Laravel's
+     * standard 422 JSON, same as the masters pages.
+     */
+    private function setuSyncContext(Request $request, $salespersonId, SetuReportService $setu): array
+    {
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('sales_report.manage');
+        if (!$isPrivileged && (int) $salespersonId !== $user->id) {
+            return ['response' => Error::response('You can only sync your own Sales Report.', 403)];
+        }
+
+        $target = User::find($salespersonId);
+        if (!$target) {
+            return ['response' => Error::response('That salesperson was not found.', 404)];
+        }
+
+        $mapping = SetuSalespersonMapping::where('user_id', $target->id)
+            ->where('status', SetuSalespersonMapping::STATUS_CONFIRMED)->first();
+        if (!$mapping) {
+            return ['response' => Error::response("{$target->first_name} isn't linked to Setu yet — an admin needs to confirm their mapping first.", 422)];
+        }
+
+        $request->validate([
+            'fy' => ['nullable', Rule::in($setu->availableFiscalYears())],
+            'period' => ['nullable', 'in:whole,Q1,Q2,Q3,Q4,custom'],
+            'from' => ['nullable', 'date_format:Y-m'],
+            'to' => ['nullable', 'date_format:Y-m', 'after_or_equal:from'],
+        ]);
+        $fy = $request->input('fy');
+        $period = $request->input('period', 'whole');
+        $from = $request->input('from');
+        $to = $request->input('to');
+        if ($period === 'custom') {
+            $fyForBounds = $fy ?? $setu->currentFiscalYearLabel();
+            [$fyStart] = $setu->quarterMonthRange($fyForBounds, 'Q1');
+            [, $fyEnd] = $setu->quarterMonthRange($fyForBounds, 'Q4');
+            if (!$from || !$to || $from < $fyStart || $to > $fyEnd) {
+                return ['response' => Error::response("Custom range must fall within {$fyForBounds} ({$fyStart} to {$fyEnd}).", 422)];
+            }
+        }
+        try {
+            [$fyLabel, $fromMonth, $toMonth] = $setu->resolvePeriod($fy, $period, $from, $to);
+        } catch (\InvalidArgumentException $e) {
+            return ['response' => Error::response($e->getMessage(), 422)];
+        }
+
+        return ['response' => null, 'target' => $target, 'mapping' => $mapping,
+                'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth];
+    }
+
+    /**
+     * Self-service / admin "Sync" button on the Sales Report page and the Setu
+     * Sales Sync centre. Two phases via the same endpoint:
+     *   - preview (default): reconciles dry (writes nothing), returns every
+     *     bucket + counts so the UI can show "N figures will change" before
+     *     the user commits.
+     *   - apply (`apply=1`): commits blankFills + overwrites + renames through
+     *     the models (so every change is audited). `reviewItems` are NEVER
+     *     written here — they need per-item human decisions (see resolveSetu).
+     * `overwrite: true` — Setu is the source of truth, so an EXACT-name match
+     * has its differing figures corrected and its name standardised to Setu's
+     * spelling. Only certainties auto-act; anything fuzzy is a review item.
+     */
+    public function syncSetu(Request $request, $salespersonId, SetuReportService $setu)
+    {
+        $ctx = $this->setuSyncContext($request, $salespersonId, $setu);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        ['target' => $target, 'mapping' => $mapping, 'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth] = $ctx;
+
+        $apply = $request->boolean('apply');
+        $result = $setu->reconcileSalesperson($target, $mapping->tally_name, live: $apply, fyLabel: $fyLabel, fromMonth: $fromMonth, toMonth: $toMonth, overwrite: true);
+        if ($result['error']) {
+            return Error::response($result['error']);
+        }
+
+        // Full customer roster for the target — powers the review picker's
+        // "search all rows" so a sibling the fuzzy matcher missed can still be
+        // chosen (a company may exist under several spellings). Only sent when
+        // there is something to review, to keep the common payload small.
+        $roster = [];
+        if ($result['reviewItems']) {
+            $roster = SalesPipeline::withoutGlobalScopes()
+                ->where('salesperson_id', $target->id)->where('is_locked', true)
+                ->withSum('months as months_total', 'sale_amount')
+                ->orderBy('party_name')
+                ->get(['id', 'party_name'])
+                ->map(fn($p) => ['pipeline_id' => $p->id, 'party_name' => $p->party_name, 'total' => round((float) $p->months_total, 3)])
+                ->values();
+        }
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'salespersonId' => $target->id,
+            'applied' => $apply,
+            'fyLabel' => $result['fyLabel'],
+            'period' => $result['period'],
+            'months' => $setu->fiscalYearMonths($result['fyLabel'], $fromMonth, $toMonth),
+            'blankFills' => $result['blankFills'],
+            'overwrites' => $result['overwrites'],
+            'renames' => $result['renames'],
+            'newCustomers' => $result['newCustomers'],
+            'reviewItems' => $result['reviewItems'],
+            'allCustomers' => $result['allCustomers'],
+            'roster' => $roster,
+            'counts' => [
+                'blankFills' => count($result['blankFills']),
+                'overwrites' => count($result['overwrites']),
+                'renames' => count($result['renames']),
+                'newCustomers' => count($result['newCustomers']),
+                'reviewItems' => count($result['reviewItems']),
+            ],
+        ]);
+    }
+
+    /**
+     * Apply per-item human decisions for the fuzzy/unmatched review queue
+     * (the "similar match, you decide" case). Re-fetches Setu server-side for
+     * the period — never trusts client-sent money — and, per resolution:
+     *   - update: adopt Setu's exact name onto the chosen existing row and
+     *     write its Setu figures (Setu is source of truth);
+     *   - create: make a fresh is_locked customer row under Setu's exact name;
+     *   - skip: nothing.
+     * All writes go through the models (audited) inside one transaction.
+     */
+    public function resolveSetu(Request $request, $salespersonId, SetuReportService $setu)
+    {
+        $ctx = $this->setuSyncContext($request, $salespersonId, $setu);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        ['target' => $target, 'mapping' => $mapping, 'fyLabel' => $fyLabel, 'fromMonth' => $fromMonth, 'toMonth' => $toMonth] = $ctx;
+
+        $request->validate([
+            'resolutions' => ['required', 'array', 'min:1'],
+            'resolutions.*.setuCustomer' => ['required', 'string'],
+            'resolutions.*.action' => ['required', 'in:update,create,skip'],
+            'resolutions.*.targetPipelineId' => ['nullable', 'integer'],
+        ]);
+        $resolutions = $request->input('resolutions');
+
+        $setuByCustomer = $setu->periodMonthlySales($mapping->tally_name, $fyLabel, $fromMonth, $toMonth);
+        if ($setuByCustomer === null) {
+            return Error::response('Setu fetch failed — see the application log.');
+        }
+
+        // tenant_id to stamp on new rows/months — match the salesperson's
+        // existing book so a created customer is scoped like its siblings.
+        $tenantId = SalesPipeline::withoutGlobalScopes()
+            ->where('salesperson_id', $target->id)->where('is_locked', true)->value('tenant_id');
+
+        $updated = 0; $created = 0; $skipped = 0; $missing = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($resolutions, $setuByCustomer, $target, $tenantId, &$updated, &$created, &$skipped, &$missing) {
+            foreach ($resolutions as $r) {
+                if (($r['action'] ?? '') === 'skip') { $skipped++; continue; }
+
+                $setuName = $r['setuCustomer'];
+                $months = array_filter($setuByCustomer[$setuName] ?? []); // non-zero months for this period
+                if (!$months) { $missing++; continue; } // not in Setu for this period any more — skip safely
+
+                if ($r['action'] === 'update') {
+                    $pipeline = SalesPipeline::withoutGlobalScopes()
+                        ->where('salesperson_id', $target->id)->where('is_locked', true)
+                        ->find((int) ($r['targetPipelineId'] ?? 0));
+                    if (!$pipeline) { $missing++; continue; } // invalid/foreign target — skip
+                    $pipeline->party_name = $setuName; // adopt Setu's exact name
+                    $pipeline->save();
+                } else { // create
+                    $pipeline = SalesPipeline::withoutGlobalScopes()->updateOrCreate(
+                        ['party_name' => $setuName, 'salesperson_id' => $target->id],
+                        ['is_locked' => true, 'type' => 'Customer', 'tenant_id' => $tenantId]
+                    );
+                    $created++;
+                }
+
+                foreach ($months as $monthYear => $amount) {
+                    SalesPipelineMonth::withoutGlobalScopes()->updateOrCreate(
+                        ['sales_pipeline_id' => $pipeline->id, 'month_year' => $monthYear],
+                        ['sale_amount' => $amount, 'tenant_id' => $pipeline->tenant_id]
+                    );
+                }
+                if ($r['action'] === 'update') { $updated++; }
+            }
+        });
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'updated' => $updated,
+            'created' => $created,
+            'skipped' => $skipped,
+            'missing' => $missing,
+        ]);
     }
 
     public function update(Request $request, $id)
@@ -1005,11 +1256,18 @@ class SalesPipelineController extends Controller
         $user = auth()->user();
 
         // Removing a customer destroys every monthly figure attached to it and
-        // changes reported totals, so it is restricted to admin (or an explicit
-        // sales_report.manage grant) — previously any CCare/New Biz rep or the
-        // owning salesperson could delete a customer outright.
-        if (!$user->hasRole(['admin', 'Admin', 'super_admin']) && !$user->can('sales_report.manage')) {
-            return redirect()->back()->with('error', 'Only an administrator can delete a customer.');
+        // changes reported totals. It was admin-only for a while; reopened on
+        // 2026-08-01 at the client's request so the sales floor can clear the
+        // duplicate customers themselves. Anyone in a CCare / New Biz / sales
+        // role may delete any row — every deletion is audited (party name and
+        // the acting user), which is the safety net for that choice.
+        $isSalesFloor = $user->isCcareAgent()
+            || $user->isNewBizAgent()
+            || SalesPipeline::withoutGlobalScopes()->where('salesperson_id', $user->id)->exists();
+        if (!$user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
+            && !$user->can('sales_report.manage')
+            && !$isSalesFloor) {
+            return redirect()->back()->with('error', 'You do not have permission to delete a customer.');
         }
 
         $name = $pipeline->party_name;

@@ -43,7 +43,22 @@ class SalesPipeline extends Model implements AuditableContract
     }
 
     // Additional representatives — tagged users see this customer too.
+    // "Other Reps" holds CCare / New Biz people; "Service Sales" holds
+    // salespersons. Both live in sales_pipeline_extra_reps, split by `type`.
     public function extraReps()
+    {
+        return $this->hasMany(SalesPipelineExtraRep::class)
+                    ->where('type', SalesPipelineExtraRep::TYPE_OTHER);
+    }
+
+    public function serviceReps()
+    {
+        return $this->hasMany(SalesPipelineExtraRep::class)
+                    ->where('type', SalesPipelineExtraRep::TYPE_SERVICE);
+    }
+
+    // Every tag regardless of column (used where both need loading at once).
+    public function allExtraReps()
     {
         return $this->hasMany(SalesPipelineExtraRep::class);
     }

@@ -39,4 +39,10 @@ class TravelClaim extends Model
     {
         return $this->hasMany(TravelClaimAdvance::class);
     }
+
+    /** Monthly bill files, many per category. */
+    public function attachments()
+    {
+        return $this->hasMany(TravelClaimAttachment::class);
+    }
 }

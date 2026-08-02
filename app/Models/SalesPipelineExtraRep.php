@@ -17,7 +17,11 @@ class SalesPipelineExtraRep extends Model implements AuditableContract
     use TenantTrait, Auditable;
 
     protected $table = 'sales_pipeline_extra_reps';
-    protected $fillable = ['sales_pipeline_id', 'user_id', 'tenant_id'];
+    protected $fillable = ['sales_pipeline_id', 'user_id', 'type', 'tenant_id'];
+
+    /** Tag lists sharing this table. */
+    public const TYPE_OTHER   = 'other';   // CCare / New Biz people
+    public const TYPE_SERVICE = 'service'; // salespersons (Service Sales column)
 
     public function pipeline()
     {

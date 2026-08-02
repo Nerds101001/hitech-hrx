@@ -17,7 +17,7 @@ $(function () {
       data: function data(d) {
         d.userId = $('#userId').val();
         d.shiftId = $('#shiftId').val();
-        d.teamId = $('#teamId').val();
+        d.departmentId = $('#departmentId').val();
         d.siteId = $('#siteId').val();
         d.searchTerm = $('#customSearchInput').val();
 
@@ -89,9 +89,9 @@ $(function () {
           });
         }
         
-        if ($('#statAbsentCount').length) $('#statAbsentCount').text(json.stats.absent);
-        if ($('#statLeaveCount').length) $('#statLeaveCount').text(json.stats.leave);
-        if ($('#statLateCount').length) $('#statLateCount').text(json.stats.late);
+        if ($('#statAbsentCount').length) $('#statAbsentCount').text(json.stats.absent ?? 0);
+        if ($('#statLeaveCount').length) $('#statLeaveCount').text(json.stats.leave ?? 0);
+        if ($('#statLateCount').length) $('#statLateCount').text(json.stats.late ?? 0);
 
         // Optional: Update trend percentage if needed
         const trendEl = $('#statPresentCount').closest('.stat-card-body').find('.text-success');
@@ -102,7 +102,7 @@ $(function () {
     }
   });
 
-  $('#userId, #shiftId, #teamId, #siteId').select2();
+  $('#userId, #shiftId, #departmentId, #siteId, #registrySort').select2({ minimumResultsForSearch: Infinity });
 
   const reloadRegistryIfActive = () => {
     if ($('#registry-view-tab').hasClass('active')) {
@@ -144,7 +144,7 @@ $(function () {
     }
   });
 
-  $('#userId, #date, #shiftId, #teamId, #siteId').on('change', function () {
+  $('#userId, #date, #shiftId, #departmentId, #siteId').on('change', function () {
     dataTable.draw();
     reloadRegistryIfActive();
     refreshChart(); // Real-time sync to graph
@@ -179,7 +179,7 @@ $(function () {
   $('#userId').on('change', function() {
     $('#chartUserFilter').val($(this).val()).trigger('change.select2', [true]);
   });
-  $('#teamId').on('change', function() {
+  $('#departmentId').on('change', function() {
     $('#chartTeamFilter').val($(this).val()).trigger('change.select2', [true]);
   });
 
@@ -194,8 +194,8 @@ $(function () {
   $('#chartTeamFilter').on('change', function(e, isSync) {
     if (isSync) return;
     const val = $(this).val();
-    if ($('#teamId').val() !== val) {
-        $('#teamId').val(val).trigger('change');
+    if ($('#departmentId').val() !== val) {
+        $('#departmentId').val(val).trigger('change');
     }
   });
 
@@ -219,7 +219,7 @@ window.refreshChart = function() {
       method: 'GET',
       data: {
         period: $('#chartPeriod').val(),
-        teamId: $('#chartTeamFilter').val(),
+        departmentId: $('#chartTeamFilter').val(),
         userId: $('#chartUserFilter').val(),
         siteId: $('#siteId').val(),
         shiftId: $('#shiftId').val(),
@@ -289,7 +289,7 @@ function loadMonthlyRegistry() {
             year: year,
             userId: $('#userId').val(),
             shiftId: $('#shiftId').val(),
-            teamId: $('#teamId').val(),
+            departmentId: $('#departmentId').val(),
             siteId: $('#siteId').val(),
             searchTerm: $('#customSearchInput').val()
         },
@@ -297,11 +297,35 @@ function loadMonthlyRegistry() {
             container.html('<div class="text-center p-5"><div class="spinner-border text-teal" role="status"></div><p class="mt-2 text-muted fw-bold">Synchronizing with Biometric Data...</p></div>');
         },
         success: function(resp) {
+            window.__registryResp = resp;
+            renderRegistry();
+        }
+    });
+}
+
+/* Renders whatever is cached in window.__registryResp, applying the current
+   sort and the active legend status filter. Split out from the AJAX call so
+   re-sorting or clicking a legend chip re-renders instantly, with no refetch. */
+function renderRegistry() {
+    const container = $('#registryTableContainer');
+    const resp = window.__registryResp;
+    if (!resp) return;
+    {
+        {
             if (!resp.data || resp.data.length === 0) {
                 container.html('<div class="text-center p-5"><i class="bx bx-info-circle text-muted mb-2 display-6"></i><p>No records found for current filters.</p></div>');
                 return;
             }
 
+            const rows = registryRowsForDisplay(resp);
+            if (!rows.length) {
+                container.html('<div class="text-center p-5"><i class="bx bx-filter-alt text-muted mb-2 display-6"></i>'
+                    + '<p class="mb-2 fw-bold">No employee has <span class="text-teal">' + (window.__legendStatus || '') + '</span> in this period.</p>'
+                    + '<button class="btn btn-sm btn-outline-secondary" onclick="clearLegendFilter()">Clear filter</button></div>');
+                updateLegendCount(0);
+                return;
+            }
+            updateLegendCount(rows.length);
             let html = '<table class="table table-bordered mb-0 hitech-registry-table">';
             html += '<thead class="bg-light"><tr><th class="sticky-col bg-light shadow-sm" style="left:0; z-index:10; min-width:180px;">MANAGER / EMPLOYEE</th>';
             for(let i=1; i<=resp.daysInMonth; i++) {
@@ -310,7 +334,7 @@ function loadMonthlyRegistry() {
             }
             html += '<th class="text-center bg-light" title="Present">P</th><th class="text-center bg-light" title="Absent">A</th><th class="text-center bg-light" title="OFF / Holiday">OFF</th><th class="text-center bg-light" title="Late">L</th></tr></thead><tbody>';
 
-            resp.data.forEach((row, rowIndex) => {
+            rows.forEach((row, rowIndex) => {
                 const safeName = row.employee.replace(/'/g, "\\'");
                 const periodStr = moment().month(resp.month - 1).year(resp.year).format('MMMM YYYY');
                 const summaryClick = `onclick="showEmployeeSummary('${safeName}', '${row.code}', '${row.presents}', '${row.absents}', '${row.lates}', '${row.leaves}', '${periodStr}')"`;
@@ -347,7 +371,7 @@ function loadMonthlyRegistry() {
                     if(day.is_short_leave) inner += '<i class="bx bxs-time-five text-white opacity-75 position-absolute top-0 start-0 p-1" style="font-size:0.55rem;" title="Short Leave Applied"></i>';
 
                     html += `<td class="text-center p-1" style="border: 1px solid #f1f3f5;">
-                                <div class="attendance-box ${day.class} rounded-2 cursor-pointer d-flex align-items-center justify-content-center shadow-sm position-relative" 
+                                <div class="attendance-box ${day.class} rounded-2 cursor-pointer d-flex align-items-center justify-content-center shadow-sm position-relative" data-status="${day.status}" 
                                      style="height:32px; min-width:32px;" 
                                      ${clickAttr}>
                                     ${inner}
@@ -364,8 +388,9 @@ function loadMonthlyRegistry() {
 
             html += '</tbody></table>';
             container.html(html);
+            paintLegendHighlight();
         }
-    });
+    }
 }
 
 window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, id = null, isEdited = false, editorName = '', adminReason = '', attachment = '', userId = null, fullDate = '') {
@@ -626,3 +651,135 @@ window.submitAttendanceFile = function(input, targetId) {
         display.classList.add('d-none');
     });
 };
+
+/* ============================================================================
+   Monthly Registry — legend status filter + sorting
+   ----------------------------------------------------------------------------
+   The legend chips below the toolbar double as filters. Clicking "Paid Leave"
+   keeps only the employees who have at least one Paid Leave day in the shown
+   month and dims every other cell, so the matching days are obvious. Both the
+   filter and the sort work on the cached payload (window.__registryResp), so
+   they are instant and never re-hit the server.
+   ========================================================================== */
+
+window.__legendStatus = null;   // active legend filter, e.g. "Paid Leave"
+
+/* A registry row carries day_1..day_N; collect the statuses actually present. */
+function rowStatuses(row, daysInMonth) {
+  const out = [];
+  for (let i = 1; i <= daysInMonth; i++) {
+    const d = row['day_' + i];
+    if (d && d.status) out.push(d.status);
+  }
+  return out;
+}
+
+/* "Present" must also match the starred part-day variant ("Present*"), and the
+   cyan short-leave day is reported as Present, so it gets its own bucket via
+   the day's is_short_leave flag. */
+function statusMatches(dayStatus, want) {
+  if (!dayStatus || !want) return false;
+  if (want === 'Present') return dayStatus === 'Present' || dayStatus === 'Present*';
+  if (want === 'SP')      return dayStatus === 'SP' || dayStatus === 'HP';
+  return dayStatus === want;
+}
+
+function rowMatchesLegend(row, daysInMonth, want) {
+  if (want === 'Short Leave') {
+    for (let i = 1; i <= daysInMonth; i++) {
+      const d = row['day_' + i];
+      if (d && d.is_short_leave) return true;
+    }
+    return false;
+  }
+  return rowStatuses(row, daysInMonth).some(s => statusMatches(s, want));
+}
+
+/* Sort + filter the cached rows for display. */
+function registryRowsForDisplay(resp) {
+  let rows = (resp.data || []).slice();
+
+  const want = window.__legendStatus;
+  if (want) rows = rows.filter(r => rowMatchesLegend(r, resp.daysInMonth, want));
+
+  const mode = $('#registrySort').val() || 'name_asc';
+  const num  = v => parseFloat(v || 0) || 0;
+  const name = r => (r.employee || '').toLowerCase();
+
+  rows.sort((a, b) => {
+    switch (mode) {
+      case 'name_desc':     return name(b).localeCompare(name(a));
+      case 'code_asc':      return String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true });
+      case 'absents_desc':  return num(b.absents)  - num(a.absents);
+      case 'presents_desc': return num(b.presents) - num(a.presents);
+      case 'lates_desc':    return num(b.lates)    - num(a.lates);
+      case 'leaves_desc':   return num(b.leaves)   - num(a.leaves);
+      default:              return name(a).localeCompare(name(b));
+    }
+  });
+  return rows;
+}
+
+/* Dim the day cells that don't match, outline the ones that do. */
+function paintLegendHighlight() {
+  const want = window.__legendStatus;
+  const $boxes = $('#registryTableContainer .attendance-box');
+  $boxes.removeClass('legend-dimmed legend-hit');
+  if (!want) return;
+
+  $boxes.each(function () {
+    const $b = $(this);
+    const hit = (want === 'Short Leave')
+      ? $b.find('.bxs-time-five').length > 0
+      : statusMatches($b.attr('data-status'), want);
+    $b.addClass(hit ? 'legend-hit' : 'legend-dimmed');
+  });
+}
+
+function updateLegendCount(n) {
+  $('#legendCount').text(window.__legendStatus ? '(' + n + ')' : '');
+}
+
+window.clearLegendFilter = function () {
+  window.__legendStatus = null;
+  $('#attendanceLegend').removeClass('has-filter').find('.legend-chip').removeClass('is-active');
+  if (window.__registryResp) renderRegistry();
+};
+
+$(function () {
+  // Legend chips act as filters only where the partial enabled it.
+  $('#attendanceLegend[data-filterable="1"]').on('click', '.legend-chip[data-status]', function () {
+    const status = $(this).data('status');
+    const isSame = window.__legendStatus === status;
+
+    $('#attendanceLegend').find('.legend-chip').removeClass('is-active');
+
+    if (isSame) {                       // clicking the active chip clears it
+      window.__legendStatus = null;
+      $('#attendanceLegend').removeClass('has-filter');
+    } else {
+      window.__legendStatus = status;
+      $(this).addClass('is-active');
+      $('#attendanceLegend').addClass('has-filter');
+    }
+
+    if (window.__registryResp) {
+      renderRegistry();
+    } else if (typeof loadMonthlyRegistry === 'function') {
+      loadMonthlyRegistry();
+    }
+  });
+
+  $('#legendClear').on('click', window.clearLegendFilter);
+
+  $('#registrySort').on('change', function () {
+    if (window.__registryResp) renderRegistry();
+  });
+
+  // The sort control only applies to the Monthly Registry grid.
+  const syncSortVisibility = () => {
+    $('#registrySortWrap').toggle($('#registry-view-tab').hasClass('active'));
+  };
+  $('#log-view-tab, #registry-view-tab').on('shown.bs.tab', syncSortVisibility);
+  syncSortVisibility();
+});

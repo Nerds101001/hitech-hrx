@@ -346,6 +346,40 @@
                             @endif
                         @endforeach
                     </div>
+
+                    {{-- Bills uploaded through the multi-file boxes, listed per
+                         category. The single-file buttons above stay for claims
+                         saved before that change. --}}
+                    @php
+                        $attachLabels = [
+                            'food_bill_proof'         => 'Food Bills',
+                            'conveyance_petrol_proof' => 'Conveyance / Petrol',
+                            'toll_parking_proof'      => 'Toll / Parking',
+                            'customer_courier_proof'  => 'Customer Expense / Courier',
+                        ];
+                        $grouped = $claim->attachments->groupBy('category');
+                    @endphp
+                    @if($claim->attachments->count())
+                        <div class="mt-3">
+                            @foreach($attachLabels as $cat => $label)
+                                @php $files = $grouped->get($cat, collect()); @endphp
+                                @if($files->count())
+                                    <div class="mb-2">
+                                        <div class="small fw-semibold text-muted">{{ $label }} ({{ $files->count() }})</div>
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach($files as $f)
+                                                <button type="button" data-url="{{ \Illuminate\Support\Facades\Storage::url($f->path) }}"
+                                                        class="btn btn-xs btn-outline-primary btn-preview-attachment text-truncate"
+                                                        style="max-width: 220px;" title="{{ $f->original_name }}">
+                                                    <i class="bx {{ $f->is_image ? 'bx-image' : 'bx-file' }}"></i> {{ $f->original_name }}
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
                 </div>
             </div>
             <div class="modal-footer border-top d-block">

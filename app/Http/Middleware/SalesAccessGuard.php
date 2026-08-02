@@ -55,7 +55,8 @@ class SalesAccessGuard
         return $dept && (str_contains($dept, 'sales')
                        || str_contains($dept, 'customer care')
                        || str_contains($dept, 'new biz')
-                       || str_contains($dept, 'new business'));
+                       || str_contains($dept, 'new business')
+                       || str_contains($dept, 'export'));
     }
 
     public function handle(Request $request, Closure $next): Response
