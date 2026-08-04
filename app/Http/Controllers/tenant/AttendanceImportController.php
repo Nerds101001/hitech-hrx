@@ -21,8 +21,13 @@ class AttendanceImportController extends Controller
 
     public function previewBiometricImport(Request $request)
     {
+        /* A size cap matters here beyond tidiness: the spreadsheet reader below
+           expands the file in memory, and PhpSpreadsheet has open advisories for
+           memory exhaustion via crafted XLS/Gnumeric input. `mimes` only checks
+           the extension, so the cap is the real guard until the library is
+           patched. 10 MB matches PipelineImportController. */
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv'
+            'file' => 'required|mimes:xlsx,xls,csv|max:10240',
         ]);
 
         $path = $request->file('file')->getRealPath();

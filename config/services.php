@@ -43,7 +43,7 @@ return [
   'setu' => [
     'base_url' => env('SETU_BASE_URL', 'https://insights.effortlessanalytics.com'),
     'access_token' => env('SETU_ACCESS_TOKEN'),
-    'report_id' => env('SETU_SALES_REPORT_ID', 2886),
+    'report_id' => env('SETU_SALES_REPORT_ID', 2899),
   ],
 
   // Google Maps key for Live Location, Timeline, SOS map and client

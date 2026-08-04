@@ -135,7 +135,7 @@ class ShiftController extends Controller
         'required',
         'string',
         'max:50',
-        Rule::unique('shifts', 'code')->where(fn($query) => $query->where('tenant_id', $tenantId))->ignore($shiftId)
+        Rule::unique('shifts', 'code')->ignore($shiftId)   // tenant scope removed: it never detected duplicates
       ],
       'notes' => 'nullable|string|max:500',
       'start_time' => 'required|date_format:H:i', // Store as HH:MM

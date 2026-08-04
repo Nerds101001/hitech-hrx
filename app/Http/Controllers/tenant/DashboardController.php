@@ -435,7 +435,9 @@ class DashboardController extends Controller
               ->orderByDesc('value')
               ->take(6)
               ->get();
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- Sales target vs achievement, current month (real: salesperson_targets
         //     for target, derived achievement from locked pipeline months) ---
@@ -474,7 +476,9 @@ class DashboardController extends Controller
               })
               ->filter(fn($r) => $r->target > 0 || $r->achieved > 0)
               ->sortByDesc('achieved')->take(20)->values();
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         $salesTargetPct = [];
         foreach ($salesTargets as $type => $tgt) $salesTargetPct[$type] = $tgt > 0 ? round($salesAchieved / $tgt * 100, 1) : 0;
         $salesAchievementPct = $salesTargetPct['Bingo'] ?? 0;
@@ -487,7 +491,9 @@ class DashboardController extends Controller
           $assetMaintenance = \App\Models\Asset::where('status', 'maintenance')->count();
           $assetAvailable   = \App\Models\Asset::where('status', 'available')->count();
           $assetValue       = (float) \App\Models\Asset::sum('purchase_cost');
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- Training module (there is no LMS; use the real training system) ---
         $trainingModules = 0; $trainingEnrollments = 0; $trainingCompleted = 0; $trainingInProgress = 0;
@@ -496,7 +502,9 @@ class DashboardController extends Controller
           $trainingEnrollments = DB::table('user_training_progress')->count();
           $trainingCompleted   = DB::table('user_training_progress')->where('status', 'completed')->count();
           $trainingInProgress  = DB::table('user_training_progress')->where('status', 'in_progress')->count();
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         $trainingCompletionPct = $trainingEnrollments > 0 ? round($trainingCompleted / $trainingEnrollments * 100) : 0;
 
         // --- Attrition YTD ---
@@ -504,7 +512,9 @@ class DashboardController extends Controller
         try {
           $relievedThisYear = User::whereYear('relieved_at', now()->year)->count();
           $attritionRate = $active > 0 ? round($relievedThisYear / $active * 100, 1) : 0;
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- Leave trend: approved requests by month & type, current year ---
         $leaveTrend = ['labels' => [], 'series' => []];
@@ -527,7 +537,9 @@ class DashboardController extends Controller
               $series[] = ['name' => $type, 'data' => array_values($data)];
           }
           $leaveTrend = ['labels' => $labels, 'series' => $series];
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- "KPI Summary": real kpi_checks buckets, else today's workforce split ---
         $kpiSummary = ['labels' => ['On Duty', 'On Leave', 'Absent'], 'values' => [(int)$presentUsersCount, (int)$onLeaveUsersCount, (int)max(0, $absentCount)], 'source' => 'workforce'];
@@ -539,7 +551,9 @@ class DashboardController extends Controller
           if ($k && (int) $k->total > 0) {
               $kpiSummary = ['labels' => ['On Track', 'At Risk', 'Off Track'], 'values' => [(int)$k->ontrack, (int)$k->atrisk, (int)$k->offtrack], 'source' => 'kpi'];
           }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         $activeApprovalsTotal = $pendingLeaveRequests + $pendingExpenseRequests + $pendingDocumentRequests + $pendingLoanRequests;
         $attPct = $active > 0 ? round($presentUsersCount / $active * 100, 1) : 0;
@@ -559,7 +573,9 @@ class DashboardController extends Controller
             $att7[] = ['label' => $d->format('D'), 'pct' => $pct, 'present' => $present];
             $att7pctSum += $pct;
           }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         $att7Avg = count($att7) ? round($att7pctSum / count($att7), 1) : 0;
 
         $upcomingHolidays = Holiday::where('date', '>=', now()->toDateString())->orderBy('date')->take(5)->get();
@@ -579,7 +595,9 @@ class DashboardController extends Controller
             ->sum(DB::raw('COALESCE(net_payable, total_amount, 0)'));
           $ceoCashOut['expenses'] = (float) ExpenseRequest::where('status', 'pending')->sum('amount');
           $ceoCashOut['loans']    = (float) LoanRequest::where('status', 'pending')->sum('amount');
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         $ceoCashOutTotal = array_sum($ceoCashOut);
 
         // --- Payroll cost trend (12 months) + current monthly salary run ---
@@ -596,7 +614,9 @@ class DashboardController extends Controller
             $ceoPayrollTrend['labels'][] = $m->format('M y');
             $ceoPayrollTrend['data'][]   = round((float) ($pByMonth[$m->format('Y-m')] ?? 0), 2);
           }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- Top & bottom performers vs target (current month) ---
         $ceoTopReps = collect();
@@ -631,7 +651,9 @@ class DashboardController extends Controller
             $ceoTopReps    = $rows->sortByDesc('pct')->take(5)->values();
             $ceoBottomReps = $rows->sortBy('pct')->take(5)->values();
           }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- Headcount cost per department (where the money goes) ---
         $ceoDeptCost = collect();
@@ -646,7 +668,9 @@ class DashboardController extends Controller
             ->orderByDesc('cost')
             ->limit(8)
             ->get();
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
 
         // --- AI Insights: real signals derived from the numbers above ---
         $aiInsights = [];
@@ -674,7 +698,9 @@ class DashboardController extends Controller
           foreach (User::whereNotNull('date_of_joining')->where('date_of_joining', '>=', now()->subDays(30)->toDateString())->orderByDesc('date_of_joining')->take(4)->get(['id', 'first_name', 'last_name', 'date_of_joining']) as $u) {
               $recentFeed->push(['type' => 'People', 'icon' => 'bx-user-plus', 'tone' => 'primary', 'title' => trim($u->first_name . ' ' . $u->last_name) . ' joined', 'time' => Carbon::parse($u->date_of_joining)->diffForHumans(), 'raw' => Carbon::parse($u->date_of_joining)]);
           }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         foreach ($pendingApprovals->take(5) as $a) {
           $recentFeed->push(['type' => $a['type'], 'icon' => 'bx-check-shield', 'tone' => 'warning', 'title' => ($a['user'] ?? 'Someone') . ' — ' . $a['type'] . ' request', 'time' => $a['time_ago'] ?? 'Recently', 'raw' => $a['raw_date'] ?? now()]);
         }
@@ -827,7 +853,9 @@ class DashboardController extends Controller
                 $p = Attendance::whereIn('user_id', $teamMemberIds)->whereDate('check_in_time', $d->toDateString())->distinct('user_id')->count('user_id');
                 $teamAtt7[] = ['label' => $d->format('D'), 'pct' => $active > 0 ? (int) round($p / $active * 100) : 0];
             }
-        } catch (\Throwable $e) {}
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
+        }
         // Upcoming approved team leaves
         $teamUpcomingLeaves = LeaveRequest::whereIn('user_id', $teamMemberIds)
             ->where('status', LeaveRequestStatus::APPROVED)
@@ -1009,10 +1037,10 @@ class DashboardController extends Controller
             'nextHoliday' => Holiday::forUser($user)->where('date', '>=', now())->orderBy('date')->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
-            'departments' => \App\Models\Department::withoutGlobalScopes()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
+            'departments' => \App\Models\Department::withTrashed()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
             'roles' => \Spatie\Permission\Models\Role::get(),
-            'designations' => \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get(),
-            'managers' => \App\Models\User::withoutGlobalScopes()->whereHas('roles', function($q) {
+            'designations' => \App\Models\Designation::withTrashed()->where('status', 'active')->get(),
+            'managers' => \App\Models\User::withTrashed()->whereHas('roles', function($q) {
                 $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
             })->where('status', UserAccountStatus::ACTIVE)->get()
         ]);
@@ -1020,22 +1048,22 @@ class DashboardController extends Controller
 
 
       $roles = \Spatie\Permission\Models\Role::get();
-      $departments  = Department::withoutGlobalScopes()->where('status', Status::ACTIVE)->orderBy('name')->get();
-      $teams        = Team::withoutGlobalScopes()->where('status', Status::ACTIVE)->get();
-      $designations = \App\Models\Designation::withoutGlobalScopes()->where('status', 'active')->get();
-      $managers     = User::withoutGlobalScopes()->whereHas('roles', function($q) {
+      $departments  = Department::withTrashed()->where('status', Status::ACTIVE)->orderBy('name')->get();
+      $teams        = Team::withTrashed()->where('status', Status::ACTIVE)->get();
+      $designations = \App\Models\Designation::withTrashed()->where('status', 'active')->get();
+      $managers     = User::withTrashed()->whereHas('roles', function($q) {
           $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
       })->where('status', UserAccountStatus::ACTIVE)->get();
 
       // Fallback: If no data found, try without status filter
       if ($departments->isEmpty()) {
-          $departments = Department::withoutGlobalScopes()->orderBy('name')->get();
+          $departments = Department::withTrashed()->orderBy('name')->get();
       }
       if ($designations->isEmpty()) {
-          $designations = \App\Models\Designation::withoutGlobalScopes()->get();
+          $designations = \App\Models\Designation::withTrashed()->get();
       }
       if ($managers->isEmpty()) {
-          $managers = User::withoutGlobalScopes()->where('status', UserAccountStatus::ACTIVE)->get();
+          $managers = User::withTrashed()->where('status', UserAccountStatus::ACTIVE)->get();
       }
 
       // Return HR dashboard view directly

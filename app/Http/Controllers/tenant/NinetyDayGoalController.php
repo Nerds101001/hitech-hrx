@@ -15,7 +15,7 @@ class NinetyDayGoalController extends Controller
         $cycleId = $request->get('cycle_id');
         
         $query = NinetyDayGoal::with(['user', 'cycle'])
-            ->where('tenant_id', Auth::user()->tenant_id);
+            ;   // tenant filter removed: NULL = NULL matched no rows
 
         if ($cycleId) {
             $query->where('appraisal_cycle_id', $cycleId);
@@ -27,7 +27,7 @@ class NinetyDayGoalController extends Controller
         }
 
         $goals = $query->latest()->get();
-        $cycles = AppraisalCycle::where('tenant_id', Auth::user()->tenant_id)->get();
+        $cycles = AppraisalCycle::get();   // tenant filter removed: NULL = NULL matched no rows
 
         return view('tenant.performance.ninety-day-goals.index', compact('goals', 'cycles'));
     }

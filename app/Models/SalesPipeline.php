@@ -22,6 +22,22 @@ class SalesPipeline extends Model implements AuditableContract
         'is_locked'     => 'boolean',
     ];
 
+    /**
+     * Static reason store for the audit trail — mirrors LeaveBalance's pattern
+     * exactly (the only other model in this codebase that does this). Set
+     * immediately before save() on the same instance; consumed once then reset.
+     */
+    public static ?string $auditReason = null;
+
+    public function transformAudit(array $data): array
+    {
+        if (static::$auditReason) {
+            $data['user_agent'] = static::$auditReason;
+            static::$auditReason = null;
+        }
+        return $data;
+    }
+
     public function salesperson()
     {
         return $this->belongsTo(User::class, 'salesperson_id');
@@ -35,6 +51,14 @@ class SalesPipeline extends Model implements AuditableContract
     public function newBiz()
     {
         return $this->belongsTo(User::class, 'new_biz_id');
+    }
+
+    // Exclusive third owner slot, independent of ccare_id/new_biz_id — used by
+    // the customer search-and-claim feature. Not the "New BIZ2" grid column
+    // (that's the extraReps tag list below, a different concept).
+    public function newBiz2()
+    {
+        return $this->belongsTo(User::class, 'new_biz_2_id');
     }
 
     public function months()

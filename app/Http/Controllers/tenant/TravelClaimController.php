@@ -78,7 +78,18 @@ class TravelClaimController extends Controller
 
     public function create()
     {
-        return view('tenant.travel-claims.form', ['attachmentsByCategory' => collect()]);
+        /* Show any draft already in progress so people resume it instead of
+           unknowingly starting a second one for the same month. */
+        $openDrafts = TravelClaim::where('user_id', auth()->id())
+            ->where('status', 'draft')
+            ->withCount('items')
+            ->orderByDesc('updated_at')
+            ->get();
+
+        return view('tenant.travel-claims.form', [
+            'attachmentsByCategory' => collect(),
+            'openDrafts' => $openDrafts,
+        ]);
     }
 
     // Explicitly nullable: PHP 8.4 deprecates inferring it from the default.
@@ -141,7 +152,8 @@ class TravelClaimController extends Controller
             $request->merge(['items' => $filteredItems]);
         }
 
-        $isDraft = $request->input('action') === 'draft';
+        // Background autosave is always a draft — it must never submit a claim.
+        $isDraft = $request->input('action') === 'draft' || $request->boolean('autosave');
 
         $request->validate([
             'claim_month' => 'required|string',
@@ -209,6 +221,23 @@ class TravelClaimController extends Controller
             // method reads — meaning every edit silently nulled the paths on
             // historical rows and orphaned the files. Carry them across the
             // delete/recreate, keyed by the day they belong to.
+            /* One draft per person per month per company. Every visit to
+               /travel-claims/create used to start a fresh draft for the same
+               month, and autosave turns that from an occasional annoyance into
+               a new row on each visit — so adopt the open draft instead.
+               MUST happen before the carry-proofs/delete block below, or the
+               adopted draft keeps its old rows and they get duplicated.
+               Only drafts are adopted: a submitted or verified claim is
+               finished and must never be silently overwritten. */
+            if (!$existingClaim && $isDraft) {
+                $existingClaim = TravelClaim::where('user_id', auth()->id())
+                    ->where('claim_month', $request->claim_month)
+                    ->where('company', $request->company)
+                    ->where('status', 'draft')
+                    ->orderBy('id')
+                    ->first();
+            }
+
             $carriedProofs = [];
             if ($existingClaim) {
                 foreach ($existingClaim->items()->get() as $old) {
@@ -520,6 +549,19 @@ class TravelClaimController extends Controller
         ])->save();
 
         DB::commit();
+
+        /* Autosave: the browser posts the form as a draft in the background, so
+           it needs the claim id back (to keep updating the SAME draft instead of
+           creating one per keystroke burst) rather than a redirect. */
+        if ($request->boolean('autosave')) {
+            return response()->json([
+                'ok'       => true,
+                'id'       => $claim->id,
+                'saved_at' => now()->format('h:i A'),
+                'skipped'  => $skippedRows ?? 0,
+            ]);
+        }
+
         if ($isDraft) {
             $msg = 'Draft saved. You can find it under your claims list and continue editing.';
             if (!empty($skippedRows)) {
@@ -538,6 +580,10 @@ class TravelClaimController extends Controller
         throw $e;
     } catch (\Exception $e) {
         DB::rollBack();
+        // Autosave must not throw the user out of the form they are typing in.
+        if ($request->boolean('autosave')) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+        }
         return back()->with('error', 'Error submitting claim: ' . $e->getMessage())->withInput();
     }
 }

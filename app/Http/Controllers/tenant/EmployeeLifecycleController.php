@@ -111,7 +111,7 @@ class EmployeeLifecycleController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name', 'code', 'designation_id', 'department_id']);
 
-        $departments  = \App\Models\Department::withoutGlobalScopes()->orderBy('name')->get(['id', 'name']);
+        $departments  = \App\Models\Department::withTrashed()->orderBy('name')->get(['id', 'name']);
         $designations = \App\Models\Designation::orderBy('name')->get(['id', 'name']);
 
         return view('tenant.employee-lifecycle.index', compact(

@@ -719,6 +719,15 @@ Route::middleware([
         Route::get('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'monthly'])->name('cc-attendance.monthly');
         Route::post('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'storeMonthly'])->name('cc-attendance.monthly.store');
 
+        /* Admin/HR: open a back-dated filling window. Replaces the hardcoded
+           OPEN_FROM/OPEN_TO constants, which needed a redeploy to change.
+           Authorisation is enforced inside the controller by
+           isAttendanceAdmin(), the same gate the register itself uses. */
+        Route::get('/cc-attendance/unlocks', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'unlocks'])->name('cc-attendance.unlocks');
+        Route::post('/cc-attendance/unlocks', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'storeUnlock'])->name('cc-attendance.unlocks.store');
+        Route::post('/cc-attendance/unlocks/{id}/toggle', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'toggleUnlock'])->name('cc-attendance.unlocks.toggle');
+        Route::delete('/cc-attendance/unlocks/{id}', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'destroyUnlock'])->name('cc-attendance.unlocks.destroy');
+
         // --- MIND SPEAK ---
         Route::prefix('mind-speak')->name('mind-speak.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'index'])->name('index');
@@ -751,6 +760,12 @@ Route::middleware([
             Route::post('/delete-requests/{id}/reject', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'reject'])->name('pipeline.delete-requests.reject');
             Route::post('/sales-report/{id}/extra-rep', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'addExtraRep'])->name('pipeline.extra.add');
             Route::delete('/sales-report/{id}/extra-rep/{userId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'removeExtraRep'])->name('pipeline.extra.remove');
+            // Search any customer company-wide, then claim a role on it — GET
+            // with no {id} (no row in play yet), matching /sales-report/import;
+            // claim/transfer-history take {id}, matching /sales-report/{id}/extra-rep.
+            Route::get('/sales-report/search-customer', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'searchCustomer'])->name('pipeline.search');
+            Route::post('/sales-report/{id}/claim', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'claim'])->name('pipeline.claim');
+            Route::get('/sales-report/{id}/transfer-history', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'transferHistory'])->name('pipeline.transfer-history');
             Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
 

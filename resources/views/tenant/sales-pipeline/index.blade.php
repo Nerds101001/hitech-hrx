@@ -474,14 +474,14 @@
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
-                                                   value="{{ $mData && $mData->forecast_amount ? $mData->forecast_amount : '' }}">
+                                                   value="{{ $mData->forecast_amount ?? 0 }}">
                                         </td>
                                     @endif
                                     <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
                                         <input type="number" step="0.01"
                                                class="excel-input text-end month-field font-monospace"
                                                data-month="{{ $m['key'] }}" data-field="sale_amount"
-                                               value="{{ $mData && $mData->sale_amount ? $mData->sale_amount : '' }}"
+                                               value="{{ $mData->sale_amount ?? 0 }}"
                                                {!! $roAttr !!}>
                                     </td>
                                     @if($showPend)
@@ -489,7 +489,7 @@
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
-                                                   value="{{ $mData && $mData->pending_amount ? $mData->pending_amount : '' }}">
+                                                   value="{{ $mData->pending_amount ?? 0 }}">
                                         </td>
                                     @endif
                                     @if($isThisMonth)
@@ -858,6 +858,10 @@
     .block-end { border-right: 2px solid #64748b !important; }
     .bg-forecast-light { background-color: #eff6ff !important; }
     .bg-forecast-light input { color: #1e40af !important; font-weight: 600; }
+    /* Hide number input spinners */
+    #pipelineTable input[type=number]::-webkit-outer-spin-button,
+    #pipelineTable input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    #pipelineTable input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     .bg-sale-light { background-color: #ecfdf5 !important; }
     .bg-sale-light input { color: #065f46 !important; font-weight: 600; }
     .bg-pending-light { background-color: #fff7ed !important; }

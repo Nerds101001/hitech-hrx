@@ -4,17 +4,64 @@
 
 @section('vendor-style')
   @vite([
-    'resources/assets/vendor/scss/pages/hitech-portal.scss',
-    'resources/assets/vendor/libs/apex-charts/apex-charts.scss'
+    'resources/assets/vendor/scss/pages/hitech-portal.scss'
   ])
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 @endsection
 
-@section('vendor-script')
-  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.min.js'])
-@endsection
 
 @section('page-style')
+<style>
+/* Two-line headers keep the summary sheet readable without a 1700px table. */
+.ad-h {
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+    font-weight: 700; color: #64748b; background: #f8fafc;
+    line-height: 1.25; padding: .5rem .55rem; vertical-align: bottom;
+}
+.ad-h-sub { font-weight: 500; text-transform: none; letter-spacing: 0; color: #94a3b8; font-size: .62rem; }
+#summarySheetTable > tbody > tr > td { vertical-align: middle; font-size: .82rem; padding: .5rem .55rem; }
+#summarySheetTable > tbody > tr:hover { background: #f1f5f9; }
+#summarySheetTable td:nth-child(2) { line-height: 1.3; }
+
+/* Zebra striping: the claims list had no visual separation between rows. */
+/* !important is needed: the theme sets .table-flush-spacing tbody tr to a flat
+   white with !important, which is exactly the rule that left the claims list
+   looking like one undifferentiated block. */
+#claimsTable > tbody > tr:nth-child(even)          { background: #f7fafa !important; }
+#claimsTable > tbody > tr:hover,
+#claimsTable > tbody > tr:nth-child(even):hover    { background: #e6f4f3 !important; }
+/* Real grid lines. .table-flush-spacing strips every border and adds row gaps,
+   which is why the list read as floating text with no row/column separation. */
+#claimsTable, #summarySheetTable {
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    width: 100%;
+}
+#claimsTable > thead > tr > th,
+#claimsTable > tbody > tr > td,
+#summarySheetTable > thead > tr > th,
+#summarySheetTable > tbody > tr > td {
+    border: 1px solid #e3e9ef !important;
+}
+#claimsTable > thead > tr > th,
+#summarySheetTable > thead > tr > th { border-bottom: 2px solid #cbd5e1 !important; }
+#claimsTable > tbody > tr, #summarySheetTable > tbody > tr { box-shadow: none !important; }
+
+/* Pagination — hand-rolled because the page's DataTables never initialises
+   (it is pulled from a CDN and calls $().DataTable() with no jQuery present),
+   so the table has always been unpaginated. */
+.ad-pager { display: flex; align-items: center; gap: .5rem; padding: .7rem .2rem 0; flex-wrap: wrap; }
+.ad-pager .sp { margin-left: auto; font-size: .78rem; color: #64748b; }
+.ad-pg {
+    min-width: 30px; height: 30px; padding: 0 .5rem; border: 1px solid #cbd5e1;
+    background: #fff; color: #334155; border-radius: 6px; font-size: .8rem;
+    cursor: pointer; transition: background .12s, border-color .12s;
+}
+.ad-pg:hover:not(:disabled) { background: #f0fdfa; border-color: #5eead4; color: #0f766e; }
+.ad-pg[disabled]            { opacity: .45; cursor: default; }
+.ad-pg.on                   { background: #0f766e; border-color: #0f766e; color: #fff; font-weight: 700; }
+</style>
+
 <style>
   /* ===================== Custom KPI Purple Card for Admin ===================== */
   .card-purple::after { background: linear-gradient(90deg, #8b5cf6, #c084fc) !important; }
@@ -23,6 +70,78 @@
 @endsection
 
 @section('content')
+
+<style>
+/* ── compact header strip ─────────────────────────────────────────────── */
+.ad-head {
+    display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+    padding: .85rem 1.25rem; border-radius: 14px;
+    background: linear-gradient(90deg, #0d6e6e 0%, #0e8f8f 55%, #12a3a3 100%);
+    box-shadow: 0 2px 10px rgba(13,110,110,.18);
+}
+.ad-head-title { min-width: 190px; }
+.ad-head-sub { font-size: .74rem; color: rgba(255,255,255,.72); }
+.ad-kpis { display: flex; gap: .5rem; flex-wrap: wrap; margin-left: auto; }
+.ad-kpi {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-width: 84px; padding: .35rem .7rem; border-radius: 10px;
+    background: rgba(255,255,255,.13); border: 1px solid rgba(255,255,255,.18);
+}
+.ad-kpi .n { color: #fff; font-weight: 700; font-size: 1.02rem; line-height: 1.15; }
+.ad-kpi .l { color: rgba(255,255,255,.75); font-size: .64rem; text-transform: uppercase; letter-spacing: .04em; }
+.ad-kpi-money { min-width: 116px; background: rgba(255,255,255,.2); }
+
+/* ── one filter bar ───────────────────────────────────────────────────── */
+.ad-filters {
+    display: flex; gap: .6rem; align-items: flex-end; flex-wrap: wrap;
+    padding: .75rem .85rem; margin-bottom: 1rem;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+}
+.ad-f { display: flex; flex-direction: column; gap: .2rem; }
+.ad-f > label {
+    font-size: .66rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: #64748b;
+}
+.ad-in {
+    height: 34px; padding: .25rem .55rem; font-size: .82rem;
+    border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #0f172a;
+    min-width: 150px;
+}
+.ad-f:first-child .ad-in { min-width: 230px; }
+.ad-in:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 3px rgba(20,184,166,.15); }
+.ad-reset {
+    display: inline-flex; align-items: center; gap: .3rem; height: 34px;
+    padding: 0 .8rem; border-radius: 8px; font-size: .8rem; font-weight: 600;
+    border: 1px solid #cbd5e1; background: #fff; color: #475569; text-decoration: none;
+}
+.ad-reset:hover { background: #f1f5f9; color: #0f172a; }
+.ad-count { margin-left: auto; font-size: .76rem; color: #64748b; align-self: center; }
+
+/* ── table ────────────────────────────────────────────────────────────── */
+#claimsTable > thead > tr > th {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .04em;
+    font-weight: 700; color: #64748b; background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0; padding: .6rem; white-space: nowrap;
+}
+#claimsTable > tbody > tr > td { vertical-align: middle; font-size: .85rem; padding: .55rem .6rem; }
+#claimsTable > tbody > tr:hover { background: #f1f5f9; }
+
+/* ── icon actions, same language as the claims page ───────────────────── */
+.ad-act {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0; margin-left: 2px;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; color: #0f766e; font-size: 15px; line-height: 1;
+    cursor: pointer; text-decoration: none;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.ad-act:hover        { background: #f0fdfa; border-color: #5eead4; color: #0f766e; }
+.ad-act-review       { color: #0e7490; }
+.ad-act-review:hover { background: #ecfeff; border-color: #67e8f9; color: #0e7490; }
+.ad-act-dl           { color: #4f46e5; }
+.ad-act-dl:hover     { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
+.ad-act:focus-visible { outline: 2px solid #14b8a6; outline-offset: 1px; }
+</style>
 <div class="animate__animated animate__fadeIn">
 
   @if(session('success'))
@@ -32,125 +151,21 @@
     </div>
   @endif
 
-  {{-- Hero Header --}}
-  <div class="hitech-page-hero mb-6">
-    <div class="hitech-page-hero-text">
-      <h4 class="greeting text-white mb-1">Travel & Expense Admin Dashboard</h4>
-      <p class="sub-text text-white-50 mb-0">High-level view of all travel claims, approvals, rejections, and payouts across the organization.</p>
+  {{-- One compact header strip. The hero banner, five tall KPI cards and the
+       chart between them pushed the actual claims list below the fold; the
+       numbers are the same, they just no longer own the screen. --}}
+  <div class="ad-head mb-3">
+    <div class="ad-head-title">
+      <h5 class="mb-0 fw-bold text-white">Travel &amp; Expense</h5>
+      <span class="ad-head-sub">All claims, approvals and payouts</span>
     </div>
-  </div>
-
-  {{-- KPI Stat Cards --}}
-  <div class="row g-4 mb-4">
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-blue h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-blue"><i class="bx bx-file"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['total']) }}</h3>
-          <small class="stat-label">Total Claims</small>
-        </div>
-      </div>
+    <div class="ad-kpis">
+      <div class="ad-kpi"><span class="n">{{ number_format($stats['total']) }}</span><span class="l">Total</span></div>
+      <div class="ad-kpi"><span class="n">{{ number_format($stats['pending']) }}</span><span class="l">Pending</span></div>
+      <div class="ad-kpi"><span class="n">{{ number_format($stats['approved']) }}</span><span class="l">Approved</span></div>
+      <div class="ad-kpi"><span class="n">{{ number_format($stats['rejected']) }}</span><span class="l">Rejected</span></div>
+      <div class="ad-kpi ad-kpi-money"><span class="n">₹{{ number_format($stats['total_payout']) }}</span><span class="l">Payout</span></div>
     </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-teal h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-teal"><i class="bx bx-time"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['pending']) }}</h3>
-          <small class="stat-label">Pending</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-amber h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-amber"><i class="bx bx-check-shield"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['approved']) }}</h3>
-          <small class="stat-label">Approved & Paid</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-red h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-red"><i class="bx bx-x-circle"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['rejected']) }}</h3>
-          <small class="stat-label">Rejected</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-purple h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-purple"><i class="bx bx-rupee"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">₹{{ number_format($stats['total_payout']) }}</h3>
-          <small class="stat-label">Total Payout Volume</small>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {{-- Claims per month. The controller has always built this dataset, but
-       the page had no chart to show it — a query with no consumer. --}}
-  @if(!empty($monthlyChart['data'] ?? []))
-  <div class="hitech-card mb-4 p-3">
-    <h6 class="mb-3 fw-bold">Claims per Month</h6>
-    <div id="claimsPerMonthChart" style="min-height:260px"></div>
-  </div>
-  @endif
-
-  {{-- Filter & Sort Form --}}
-  <div class="hitech-card mb-4 p-3">
-    <form method="GET" action="{{ route('travel-claims.adminDashboard') }}" id="filterForm">
-      <div class="row g-3 align-items-end">
-        <div class="col-12 col-sm-6 col-md-3">
-          <label class="hitech-label">Status</label>
-          <select name="status" class="form-select-hitech">
-            <option value="">All Statuses</option>
-            <option value="submitted" {{ request('status') == 'submitted' ? 'selected' : '' }}>Pending Verification</option>
-            <option value="verified" {{ request('status') == 'verified' ? 'selected' : '' }}>Verified</option>
-            <option value="approved" {{ request('status') == 'approved' ? 'selected' : '' }}>Approved</option>
-            <option value="paid" {{ request('status') == 'paid' ? 'selected' : '' }}>Paid</option>
-            <option value="objection" {{ request('status') == 'objection' ? 'selected' : '' }}>Objection</option>
-            <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rejected</option>
-          </select>
-        </div>
-
-        <div class="col-12 col-sm-6 col-md-3">
-          <label class="hitech-label">Company</label>
-          <select name="company" class="form-select-hitech">
-            <option value="">All Companies</option>
-            <option value="Hi Tech International" {{ request('company') == 'Hi Tech International' ? 'selected' : '' }}>Hi Tech</option>
-            <option value="KEEP IT FRESH LLP" {{ request('company') == 'KEEP IT FRESH LLP' ? 'selected' : '' }}>KEEP IT FRESH</option>
-          </select>
-        </div>
-
-        <div class="col-12 col-sm-6 col-md-3">
-          <label class="hitech-label">Claim Month</label>
-          <input type="month" name="claim_month" class="hitech-input" value="{{ request('claim_month') }}">
-        </div>
-
-        <div class="col-12 col-md-3">
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-hitech w-100 fw-bold d-flex align-items-center justify-content-center">
-              <i class="bx bx-filter-alt me-2"></i> Filter
-            </button>
-            <a href="{{ route('travel-claims.adminDashboard') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="border-radius: 12px; min-width: 46px;" title="Reset">
-              <i class="bx bx-reset fs-4"></i>
-            </a>
-          </div>
-        </div>
-      </div>
-    </form>
   </div>
 
   {{-- Chart and Tables --}}
@@ -164,22 +179,79 @@
           </h5>
         </div>
         <div class="card-body p-4">
+          {{-- ONE filter bar. Status/Company/Month reload the page because the
+               KPI numbers must reflect them; Search and Employee narrow the rows
+               already on screen. They used to sit in two separate panels, which
+               made it look like two competing filters. --}}
+          <form method="GET" action="{{ route('travel-claims.adminDashboard') }}" class="ad-filters" id="filterForm">
+            <div class="ad-f">
+              <label>Search</label>
+              <input type="text" id="dashSearch" class="ad-in" autocomplete="off"
+                     placeholder="Name, claim #, company…">
+            </div>
+            <div class="ad-f">
+              <label>Employee</label>
+              <select id="dashEmp" class="ad-in">
+                <option value="">All employees</option>
+                @foreach($claims->pluck('user.name')->filter()->unique()->sort() as $n)
+                  <option value="{{ strtolower($n) }}">{{ $n }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="ad-f">
+              <label>Status</label>
+              <select name="status" class="ad-in" onchange="this.form.submit()">
+                <option value="">All statuses</option>
+                @foreach(['submitted'=>'Pending Verification','verified'=>'Verified','approved'=>'Approved','paid'=>'Paid','objection'=>'Objection','rejected'=>'Rejected'] as $k => $v)
+                  <option value="{{ $k }}" {{ request('status') == $k ? 'selected' : '' }}>{{ $v }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="ad-f">
+              <label>Company</label>
+              <select name="company" class="ad-in" onchange="this.form.submit()">
+                <option value="">All companies</option>
+                <option value="Hi Tech International" {{ request('company') == 'Hi Tech International' ? 'selected' : '' }}>Hi Tech</option>
+                <option value="KEEP IT FRESH LLP" {{ request('company') == 'KEEP IT FRESH LLP' ? 'selected' : '' }}>Keep It Fresh</option>
+              </select>
+            </div>
+            <div class="ad-f">
+              <label>Claim month</label>
+              <input type="month" name="claim_month" class="ad-in" value="{{ request('claim_month') }}"
+                     onchange="this.form.submit()">
+            </div>
+            <div class="ad-f ad-f-btns">
+              <a href="{{ route('travel-claims.adminDashboard') }}" class="ad-reset" title="Clear every filter">
+                <i class="bx bx-reset"></i> Reset
+              </a>
+            </div>
+            <div class="ad-count"><span id="dashCount"></span></div>
+          </form>
+
           <div class="table-responsive">
             <table class="table table-flush-spacing mb-0" id="claimsTable">
               <thead class="bg-light">
                 <tr>
-                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">ID</th>
-                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Employee</th>
-                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Month</th>
-                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Net Payable</th>
+                  <th class="text-uppercase" data-dsort="id" title="Click to sort" style="font-size: 0.75rem; letter-spacing: 0.5px; cursor:pointer;">ID <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                  <th class="text-uppercase" data-dsort="emp" title="Click to sort" style="font-size: 0.75rem; letter-spacing: 0.5px; cursor:pointer;">Employee <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                  <th class="text-uppercase" data-dsort="month" title="Click to sort" style="font-size: 0.75rem; letter-spacing: 0.5px; cursor:pointer;">Month <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                  <th class="text-uppercase" data-dsort="net" title="Click to sort" style="font-size: 0.75rem; letter-spacing: 0.5px; cursor:pointer;">Net Payable <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Remarks / Objection</th>
-                  <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Status</th>
+                  <th class="text-uppercase" data-dsort="status" title="Click to sort" style="font-size: 0.75rem; letter-spacing: 0.5px; cursor:pointer;">Status <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
                   <th class="text-uppercase" style="font-size: 0.75rem; letter-spacing: 0.5px;">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 @forelse($claims as $claim)
-                  <tr>
+                  {{-- Keys on the row so filtering/sorting never parses formatted
+                       cell text (currency symbols, badges, line breaks). --}}
+                  <tr class="dash-row"
+                      data-id="{{ $claim->id }}"
+                      data-emp="{{ strtolower($claim->user->name ?? '') }}"
+                      data-month="{{ $claim->claim_month }}"
+                      data-company="{{ strtolower($claim->company) }}"
+                      data-status="{{ $claim->status }}"
+                      data-net="{{ (float) $claim->net_payable }}">
                     <td>#{{ $claim->id }}</td>
                     <td>
                       <strong>{{ $claim->user->name }}</strong><br>
@@ -204,12 +276,12 @@
                     <td>
                       <div class="d-flex gap-2">
                         @if($claim->status == 'submitted' || $claim->status == 'verified')
-                          <button class="btn btn-sm btn-hitech rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">Review</button>
+                          <button class="ad-act ad-act-review" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}" title="Review this claim"><i class="bx bx-check-shield"></i></button>
                         @else
-                          <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}">View</button>
+                          <button class="ad-act" data-bs-toggle="modal" data-bs-target="#actionModal{{ $claim->id }}" title="View details"><i class="bx bx-show"></i></button>
                         @endif
-                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-primary rounded-pill px-3 d-flex align-items-center gap-1" title="Download All Attachments">
-                          <i class="bx bx-download"></i> Download All
+                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="ad-act ad-act-dl" title="Download all attachments">
+                          <i class="bx bx-download"></i>
                         </a>
                       </div>
                     </td>
@@ -241,14 +313,14 @@
             <table class="table table-bordered mb-0 align-middle" id="summarySheetTable" style="font-size: 0.85rem;">
               <thead class="bg-light">
                 <tr>
-                  <th>Claim ID</th>
-                  <th>Employee</th>
-                  <th>Claim Month</th>
-                  <th>Total Net Payable</th>
-                  <th>85% Split (11th of next month)</th>
-                  <th>85% Payout Status</th>
-                  <th>15% Split (25th of next month)</th>
-                  <th>15% Payout Status</th>
+                  <th class="ad-h" style="width:80px;">Claim<br>ID</th>
+                  <th class="ad-h" style="width:190px;">Employee</th>
+                  <th class="ad-h" style="width:90px;">Claim<br>Month</th>
+                  <th class="ad-h text-end" style="width:120px;">Total Net<br>Payable</th>
+                  <th class="ad-h text-end" style="width:120px;">85% Split<br><span class="ad-h-sub">11th next month</span></th>
+                  <th class="ad-h" style="width:120px;">85% Payout<br>Status</th>
+                  <th class="ad-h text-end" style="width:120px;">15% Split<br><span class="ad-h-sub">25th next month</span></th>
+                  <th class="ad-h" style="width:120px;">15% Payout<br>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -310,9 +382,12 @@
         <div class="modal-content border-0 shadow-lg">
           <div class="modal-header">
             <h5 class="modal-title text-white">Claim #{{ $claim->id }} - {{ $claim->user->name }}</h5>
-            <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-light ms-auto me-3" style="border-radius: 8px;">
+            <a href="{{ route('travel-claims.download-attachments', $claim->id) }}"
+                   style="display:inline-flex;align-items:center;gap:.35rem;background:#ffffff;
+                          color:#0f766e;font-weight:700;padding:.4rem .9rem;border-radius:8px;
+                          font-size:.8rem;text-decoration:none;box-shadow:0 1px 4px rgba(0,0,0,.15);">
                 <i class="bx bx-download"></i> Download Attachments
-            </a>
+                </a>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body p-0">
@@ -534,31 +609,6 @@
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script>
-  // Claims per month — renders the dataset the controller has always built.
-  (function () {
-    var monthly = @json($monthlyChart ?? ['labels' => [], 'data' => []]);
-    var el = document.querySelector('#claimsPerMonthChart');
-    if (!el || !(monthly.data || []).length) return;
-    function go(tries) {
-      if (typeof ApexCharts === 'undefined') {
-        if ((tries || 0) > 100) return;
-        return setTimeout(function () { go((tries || 0) + 1); }, 50);
-      }
-      new ApexCharts(el, {
-        series: [{ name: 'Claims', data: monthly.data }],
-        chart: { type: 'bar', height: 260, toolbar: { show: false }, fontFamily: 'Public Sans, sans-serif' },
-        plotOptions: { bar: { borderRadius: 6, columnWidth: '45%', distributed: true } },
-        colors: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c084fc', '#0d9488', '#14b8a6'],
-        dataLabels: { enabled: true },
-        legend: { show: false },
-        xaxis: { categories: monthly.labels, labels: { style: { colors: '#64748b' } } },
-        grid: { borderColor: '#e2e8f0', strokeDashArray: 4 }
-      }).render();
-    }
-    go(0);
-  })();
-</script>
-<script>
   $(document).ready(function() {
     $('#claimsTable').DataTable({
       order: [[0, 'asc']],
@@ -599,5 +649,153 @@
         }
     });
   });
+</script>
+
+<script>
+/* All Claims List: instant search, employee filter and column sorting. */
+(function () {
+    const table = document.getElementById('claimsTable');
+    if (!table) return;
+    const tbody  = table.querySelector('tbody');
+    const search = document.getElementById('dashSearch');
+    const emp    = document.getElementById('dashEmp');
+    const count  = document.getElementById('dashCount');
+    if (!tbody || !search) return;
+
+    const rows  = () => Array.from(tbody.querySelectorAll('tr.dash-row'));
+    const total = rows().length;
+
+    function apply() {
+        const q = (search.value || '').trim().toLowerCase();
+        const e = emp.value;
+        let shown = 0;
+
+        rows().forEach(function (tr) {
+            const hay = tr.dataset.emp + ' #' + tr.dataset.id + ' ' +
+                        tr.dataset.company + ' ' + tr.dataset.month + ' ' + tr.dataset.status;
+            const ok = (!q || hay.includes(q)) && (!e || tr.dataset.emp === e);
+            tr.style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        });
+
+        count.textContent = shown === total
+            ? 'Showing all ' + total + ' claim(s)'
+            : 'Showing ' + shown + ' of ' + total + ' claim(s)';
+
+        // Keep the "no claims" placeholder out of a filtered list.
+        const empty = tbody.querySelector('tr:not(.dash-row)');
+        if (empty) empty.style.display = (total && shown === 0) ? '' : (total ? 'none' : '');
+    }
+
+    const dir = {};
+    table.querySelectorAll('th[data-dsort]').forEach(function (th) {
+        th.addEventListener('click', function () {
+            const key = th.dataset.dsort;
+            dir[key] = !dir[key];
+            const numeric = (key === 'id' || key === 'net');
+            rows().sort(function (a, b) {
+                const x = a.dataset[key], y = b.dataset[key];
+                const r = numeric ? (parseFloat(x) - parseFloat(y)) : String(x).localeCompare(String(y));
+                return dir[key] ? r : -r;
+            }).forEach(tr => tbody.appendChild(tr));
+
+            table.querySelectorAll('th[data-dsort] i').forEach(i => i.className = 'bx bx-sort-alt-2 text-muted');
+            const icon = th.querySelector('i');
+            if (icon) icon.className = dir[key] ? 'bx bx-up-arrow-alt' : 'bx bx-down-arrow-alt';
+        });
+    });
+
+    search.addEventListener('input', apply);
+    emp.addEventListener('change', apply);
+    document.getElementById('dashClear').addEventListener('click', function () {
+        search.value = ''; emp.value = ''; apply();
+    });
+
+    apply();
+})();
+</script>
+
+<script>
+/* Filter + paginate the claims list. One system: the filter decides which rows
+   are eligible, the pager decides which of those are on screen. */
+(function () {
+    const tbody = document.querySelector('#claimsTable tbody');
+    if (!tbody) return;
+    const search = document.getElementById('dashSearch');
+    const emp    = document.getElementById('dashEmp');
+    const count  = document.getElementById('dashCount');
+    const rows   = () => Array.from(tbody.querySelectorAll('tr.dash-row'));
+    const total  = rows().length;
+
+    let page = 1, perPage = 25;
+
+    let pager = document.getElementById('adPager');
+    if (!pager) {
+        pager = document.createElement('div');
+        pager.id = 'adPager';
+        pager.className = 'ad-pager';
+        tbody.closest('table').parentNode.appendChild(pager);
+    }
+
+    function eligible() {
+        const q = (search?.value || '').trim().toLowerCase();
+        const e = emp?.value || '';
+        return rows().filter(tr => {
+            const hay = tr.dataset.emp + ' #' + tr.dataset.id + ' ' +
+                        tr.dataset.company + ' ' + tr.dataset.month + ' ' + tr.dataset.status;
+            return (!q || hay.includes(q)) && (!e || tr.dataset.emp === e);
+        });
+    }
+
+    function draw() {
+        const list = eligible();
+        const pages = Math.max(1, Math.ceil(list.length / perPage));
+        if (page > pages) page = pages;
+        const from = (page - 1) * perPage;
+        const to = Math.min(from + perPage, list.length);
+
+        rows().forEach(tr => tr.style.display = 'none');
+        list.slice(from, to).forEach(tr => tr.style.display = '');
+
+        if (count) {
+            count.textContent = list.length === total
+                ? 'Showing all ' + total + ' claim(s)'
+                : 'Showing ' + list.length + ' of ' + total + ' claim(s)';
+        }
+
+        let html = '';
+        html += '<button class="ad-pg" ' + (page === 1 ? 'disabled' : '') + ' data-go="prev">\u2039</button>';
+        for (let i = 1; i <= pages; i++) {
+            if (pages > 7 && i > 3 && i < pages - 2 && Math.abs(i - page) > 1) {
+                if (html.slice(-16) !== '<span>\u2026</span>') html += '<span>\u2026</span>';
+                continue;
+            }
+            html += '<button class="ad-pg ' + (i === page ? 'on' : '') + '" data-go="' + i + '">' + i + '</button>';
+        }
+        html += '<button class="ad-pg" ' + (page === pages ? 'disabled' : '') + ' data-go="next">\u203a</button>';
+        html += '<select class="ad-pg" id="adPer" style="width:auto;">'
+             +  [10, 25, 50, 100].map(n => '<option value="' + n + '"' + (n === perPage ? ' selected' : '') + '>' + n + ' / page</option>').join('')
+             +  '</select>';
+        html += '<span class="sp">' + (list.length ? (from + 1) + '\u2013' + to : 0) + ' of ' + list.length + '</span>';
+        pager.innerHTML = html;
+    }
+
+    pager.addEventListener('click', e => {
+        const b = e.target.closest('[data-go]');
+        if (!b || b.disabled) return;
+        const v = b.dataset.go;
+        const pages = Math.max(1, Math.ceil(eligible().length / perPage));
+        page = v === 'prev' ? Math.max(1, page - 1)
+             : v === 'next' ? Math.min(pages, page + 1) : parseInt(v, 10);
+        draw();
+    });
+    pager.addEventListener('change', e => {
+        if (e.target.id === 'adPer') { perPage = parseInt(e.target.value, 10); page = 1; draw(); }
+    });
+    [search, emp].forEach(el => el && el.addEventListener('input', () => { page = 1; draw(); }));
+    if (emp) emp.addEventListener('change', () => { page = 1; draw(); });
+
+    draw();
+})();
 </script>
 @endsection

@@ -108,7 +108,7 @@ class SalesPipelineController extends Controller
         // Row visibility: that list OR — for a CCare/New Biz rep — the individual
         // customer rows they are personally assigned to (ccare_id / new_biz_id).
         \App\Support\SalesScope::applyScope($query, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id', 'new_biz_2_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
         // Snapshot of what this user may see, BEFORE the filters below. The filter
@@ -351,6 +351,30 @@ class SalesPipelineController extends Controller
             if ($allowedSpIds !== null) {
                 $annualQuery->whereIn('a.user_id', $allowedSpIds);
             }
+
+            /* The YOY cards must answer for whoever is on screen. Filtering to
+               one salesperson while the cards kept showing company-wide totals
+               made the two halves of the page contradict each other: the
+               customer count read 114 while YOY still read the whole company.
+               Narrowed ONLY when a people filter is active, so the unfiltered
+               view is exactly as before. */
+            $annualSpIds = null;
+            if (!empty($fSp)) {
+                $annualSpIds = [(int) $fSp];
+            } elseif (!empty($fCcare) || !empty($fNb)) {
+                // ccare / new-biz pick customers, so ask which salespeople own them
+                $annualSpIds = SalesPipeline::query()
+                    ->where('is_locked', true)
+                    ->when(!empty($fCcare), fn ($q) => $q->where('ccare_id', $fCcare))
+                    ->when(!empty($fNb), fn ($q) => $q->where('new_biz_id', $fNb))
+                    ->whereNotNull('salesperson_id')
+                    ->distinct()->pluck('salesperson_id')->all();
+            }
+            if ($annualSpIds !== null) {
+                // empty list must mean zero, never "no filter"
+                $annualQuery->whereIn('a.user_id', $annualSpIds ?: [0]);
+            }
+
             foreach ($annualQuery->get() as $a) {
                 $key = strtolower(trim($a->first_name . ' ' . $a->last_name));
                 $annualMap[$key] = [(float)$a->fy_22_23, (float)$a->fy_23_24, (float)$a->fy_24_25, (float)$a->fy_25_26];
@@ -386,47 +410,66 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        // ── This-month target achievement (per salesperson) for the popup ──
-        // Compares each salesperson's current-month actual sale (locked report
-        // rows) against their Bingo / Kingo / Super-Kingo targets. All in lakhs.
-        $targetAchievers = [];
-        $kAchieved = 0; $bAchieved = 0; $skAchieved = 0;
-        $cmTargets = $salespersonTargets->where('month_year', $currentMonthKey);
+        // ── Target achievement (per salesperson) for the popup ──
+        // Compares each salesperson's actual sale (locked report rows) against
+        // their Bingo / Kingo / Super-Kingo targets. All in lakhs.
+        //
+        // Computed for EVERY elapsed month of the FY, not just the current one,
+        // so the popup's month picker switches instantly instead of costing a
+        // request per month. Future months are skipped — they have targets but
+        // no actuals yet, so there is nothing to achieve against. One grouped
+        // query covers all months; the per-month split happens in PHP.
+        $achieveMonthKeys = array_values(array_filter(
+            array_column($months, 'key'),
+            fn ($k) => $k <= $currentMonthKey
+        ));
+        $targetAchieversByMonth = [];
+        $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys);
         if ($allowedSpIds !== null) {
-            $cmTargets = $cmTargets->whereIn('salesperson_id', $allowedSpIds);
+            $allTargets = $allTargets->whereIn('salesperson_id', $allowedSpIds);
         }
-        if ($cmTargets->isNotEmpty()) {
-            $actualByS = SalesPipelineMonth::query()
+        if ($allTargets->isNotEmpty() && $achieveMonthKeys) {
+            $actualRows = SalesPipelineMonth::query()
                 ->join('sales_pipelines', 'sales_pipelines.id', '=', 'sales_pipeline_months.sales_pipeline_id')
-                ->where('sales_pipeline_months.month_year', $currentMonthKey)
+                ->whereIn('sales_pipeline_months.month_year', $achieveMonthKeys)
                 ->where('sales_pipelines.is_locked', true)
                 ->whereNull('sales_pipelines.deleted_at')
                 ->when($allowedSpIds !== null, fn($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
-                ->groupBy('sales_pipelines.salesperson_id')
-                ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
-                ->get()->keyBy('sp');
-            $nameMap = User::whereIn('id', $cmTargets->pluck('salesperson_id')->unique()->all())
-                ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
-            foreach ($cmTargets as $t) {
-                $spId   = $t->salesperson_id;
-                $actual  = (float) (optional($actualByS->get($spId))->actual ?? 0);
-                $pending = (float) (optional($actualByS->get($spId))->pending ?? 0);
-                $bingo  = (float) $t->bingo_target;
-                $kingo  = (float) $t->kingo_target;
-                $super  = (float) $t->super_kingo_target;
-                if ($bingo > 0 && $actual >= $bingo) $bAchieved++;
-                if ($kingo > 0 && $actual >= $kingo) $kAchieved++;
-                if ($super > 0 && $actual >= $super) $skAchieved++;
-                $targetAchievers[] = [
-                    'name'    => $nameMap[$spId] ?? ('#' . $spId),
-                    'actual'  => $actual,
-                    'pending' => $pending,
-                    'bingo'   => $bingo,
-                    'kingo'   => $kingo,
-                    'super'   => $super,
-                ];
+                ->groupBy('sales_pipelines.salesperson_id', 'sales_pipeline_months.month_year')
+                ->selectRaw('sales_pipelines.salesperson_id AS sp, sales_pipeline_months.month_year AS mk, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
+                ->get();
+            $actualByKey = [];
+            foreach ($actualRows as $a) {
+                $actualByKey[$a->mk . '|' . $a->sp] = $a;
             }
-            usort($targetAchievers, fn($a, $b) => $b['actual'] <=> $a['actual']);
+            $nameMap = User::whereIn('id', $allTargets->pluck('salesperson_id')->unique()->all())
+                ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
+
+            foreach ($achieveMonthKeys as $mk) {
+                $list = [];
+                foreach ($allTargets->where('month_year', $mk) as $t) {
+                    $spId = $t->salesperson_id;
+                    $row  = $actualByKey[$mk . '|' . $spId] ?? null;
+                    $list[] = [
+                        'name'    => $nameMap[$spId] ?? ('#' . $spId),
+                        'actual'  => (float) ($row->actual ?? 0),
+                        'pending' => (float) ($row->pending ?? 0),
+                        'bingo'   => (float) $t->bingo_target,
+                        'kingo'   => (float) $t->kingo_target,
+                        'super'   => (float) $t->super_kingo_target,
+                    ];
+                }
+                usort($list, fn($a, $b) => $b['actual'] <=> $a['actual']);
+                $targetAchieversByMonth[$mk] = $list;
+            }
+        }
+        // The stat chip still reports the current month.
+        $targetAchievers = $targetAchieversByMonth[$currentMonthKey] ?? [];
+        $kAchieved = 0; $bAchieved = 0; $skAchieved = 0;
+        foreach ($targetAchievers as $r) {
+            if ($r['bingo'] > 0 && $r['actual'] >= $r['bingo']) $bAchieved++;
+            if ($r['kingo'] > 0 && $r['actual'] >= $r['kingo']) $kAchieved++;
+            if ($r['super'] > 0 && $r['actual'] >= $r['super']) $skAchieved++;
         }
 
         // Deleting a customer wipes its whole sales history, so it is
@@ -465,7 +508,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -863,6 +906,203 @@ class SalesPipelineController extends Controller
         return response()->json(['success' => true]);
     }
 
+    // ── Search any customer, then claim a role on it ────────────────────────
+    // Deliberately a SEPARATE query from index()'s — that one is scoped by
+    // SalesScope::applyScope() on purpose; this one is not, because the whole
+    // point is to find customers outside the caller's normal view. Column
+    // allowlists on both methods keep the response to identity + role-holder
+    // data only — never total_business_potential/yoy_*/monthly figures, so
+    // this can't be used as a backdoor to browse another rep's revenue.
+
+    public function searchCustomer(Request $request)
+    {
+        $user = auth()->user();
+        if (!\App\Support\SalesScope::canClaimCustomer($user)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        $request->validate(['q' => 'required|string|min:3|max:255']);
+        $q = trim($request->input('q'));
+
+        $rows = SalesPipeline::query()
+            ->where('is_locked', true)
+            ->where('party_name', 'like', '%' . $q . '%')
+            ->with([
+                'salesperson:id,first_name,last_name',
+                'ccare:id,first_name,last_name',
+                'newBiz:id,first_name,last_name',
+                'newBiz2:id,first_name,last_name',
+                'serviceReps.user:id,first_name,last_name',
+            ])
+            ->orderBy('party_name')
+            ->limit(26)
+            ->get(['id', 'party_name', 'type', 'address', 'product', 'salesperson_id', 'ccare_id', 'new_biz_id', 'new_biz_2_id']);
+
+        $truncated = $rows->count() > 25;
+        $rows = $rows->take(25);
+
+        $person = fn ($u) => $u ? ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)] : null;
+
+        $results = $rows->map(function ($p) use ($person) {
+            return [
+                'id'          => $p->id,
+                'party_name'  => $p->party_name,
+                'type'        => $p->type,
+                'address'     => $p->address,
+                'product'     => $p->product,
+                'salesperson' => $person($p->salesperson),
+                'ccare'       => $person($p->ccare),
+                'new_biz'     => $person($p->newBiz),
+                'new_biz_2'   => $person($p->newBiz2),
+                'service_reps' => $p->serviceReps->map(fn ($er) => $person($er->user))->filter()->values(),
+            ];
+        });
+
+        return response()->json([
+            'success'   => true,
+            'query'     => $q,
+            'count'     => $results->count(),
+            'truncated' => $truncated,
+            'results'   => $results,
+        ]);
+    }
+
+    public function claim(Request $request, $id)
+    {
+        $user = auth()->user();
+        if (!\App\Support\SalesScope::canClaimCustomer($user)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        $request->validate(['role' => 'required|in:salesperson,ccare,new_biz,new_biz_2']);
+
+        $pipeline = SalesPipeline::findOrFail($id);
+        if (!$pipeline->is_locked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This customer is in the Sales Pipeline book, not Sales Report. Claiming is only available for Sales Report customers.',
+            ], 422);
+        }
+
+        $role = $request->input('role');
+        $column = ['salesperson' => 'salesperson_id', 'ccare' => 'ccare_id', 'new_biz' => 'new_biz_id', 'new_biz_2' => 'new_biz_2_id'][$role];
+        $roleLabel = ['salesperson' => 'Salesperson', 'ccare' => 'CCare', 'new_biz' => 'New Biz', 'new_biz_2' => 'New Biz 2'][$role];
+        // Displaced-holder bucket: CCare/New Biz/New Biz 2 land in "Other Reps"
+        // (extraReps holds CCare/New Biz people); a displaced Salesperson lands
+        // in "Service Sales" (serviceReps is documented as holding salespersons).
+        $displacedType = $role === 'salesperson'
+            ? \App\Models\SalesPipelineExtraRep::TYPE_SERVICE
+            : \App\Models\SalesPipelineExtraRep::TYPE_OTHER;
+
+        $result = \Illuminate\Support\Facades\DB::transaction(function () use ($pipeline, $user, $column, $role, $roleLabel, $displacedType) {
+            $displaced = [];
+            $preserve = function ($userId, $type) use ($pipeline, $user, &$displaced) {
+                if (!$userId || $userId == $user->id) {
+                    return;
+                }
+                \App\Models\SalesPipelineExtraRep::firstOrCreate([
+                    'sales_pipeline_id' => $pipeline->id,
+                    'user_id'           => $userId,
+                    'type'              => $type,
+                ]);
+                $u = User::find($userId);
+                if ($u) {
+                    $displaced[] = ['id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name)];
+                }
+            };
+
+            // Same-slot displacement (new logic — not present in update()'s
+            // rep-cell picker, which overwrites a same-column holder outright).
+            $preserve($pipeline->{$column}, $displacedType);
+
+            // Cross-column exclusivity, unchanged from update()'s existing
+            // "one category at a time" rule — CCare/New Biz only. Salesperson
+            // and New Biz 2 are independent of this and of each other.
+            if ($role === 'ccare' && $pipeline->new_biz_id) {
+                $preserve($pipeline->new_biz_id, \App\Models\SalesPipelineExtraRep::TYPE_OTHER);
+                $pipeline->new_biz_id = null;
+            } elseif ($role === 'new_biz' && $pipeline->ccare_id) {
+                $preserve($pipeline->ccare_id, \App\Models\SalesPipelineExtraRep::TYPE_OTHER);
+                $pipeline->ccare_id = null;
+            }
+
+            $pipeline->{$column} = $user->id;
+            SalesPipeline::$auditReason = 'Claimed via customer search — ' . $roleLabel
+                . ' (was: ' . ($displaced[0]['name'] ?? 'unassigned') . ')';
+            $pipeline->save();
+
+            return $displaced;
+        });
+
+        return response()->json([
+            'success'      => true,
+            'message'      => "You are now {$roleLabel} for {$pipeline->party_name}.",
+            'pipeline_id'  => $pipeline->id,
+            'party_name'   => $pipeline->party_name,
+            'role'         => $role,
+            'new_holder'   => ['id' => $user->id, 'name' => trim($user->first_name . ' ' . $user->last_name)],
+            'displaced'    => $result,
+        ]);
+    }
+
+    public function transferHistory($id)
+    {
+        $user = auth()->user();
+        if (!\App\Support\SalesScope::canClaimCustomer($user)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        $pipeline = SalesPipeline::findOrFail($id);
+
+        $ownershipCols = ['salesperson_id', 'ccare_id', 'new_biz_id', 'new_biz_2_id'];
+        $roleLabels = ['salesperson_id' => 'Salesperson', 'ccare_id' => 'CCare', 'new_biz_id' => 'New Biz', 'new_biz_2_id' => 'New Biz 2'];
+
+        $rows = \Illuminate\Support\Facades\DB::table('audits')
+            ->where('auditable_type', SalesPipeline::class)
+            ->where('auditable_id', $pipeline->id)
+            ->where('event', 'updated')
+            ->orderByDesc('created_at')
+            ->get(['old_values', 'new_values', 'user_id', 'user_agent', 'created_at']);
+
+        $userIds = collect();
+        $entries = [];
+        foreach ($rows as $row) {
+            $old = json_decode($row->old_values ?? '{}', true) ?: [];
+            $new = json_decode($row->new_values ?? '{}', true) ?: [];
+            foreach ($ownershipCols as $col) {
+                if (!array_key_exists($col, $new)) {
+                    continue;
+                }
+                $fromId = $old[$col] ?? null;
+                $toId = $new[$col] ?? null;
+                if ($fromId == $toId) {
+                    continue; // both null, or unchanged — nothing actually moved
+                }
+                if ($fromId) $userIds->push($fromId);
+                if ($toId) $userIds->push($toId);
+                if ($row->user_id) $userIds->push($row->user_id);
+                $entries[] = [
+                    'role' => $roleLabels[$col], 'from_id' => $fromId, 'to_id' => $toId,
+                    'changed_by_id' => $row->user_id, 'reason' => $row->user_agent, 'changed_at' => $row->created_at,
+                ];
+            }
+        }
+
+        $names = User::whereIn('id', $userIds->unique()->filter())->get()->keyBy('id')
+            ->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name));
+
+        $history = collect($entries)->map(fn ($e) => [
+            'role'       => $e['role'],
+            'from'       => $e['from_id'] ? ($names[$e['from_id']] ?? '#' . $e['from_id']) : 'Unassigned',
+            'to'         => $e['to_id'] ? ($names[$e['to_id']] ?? '#' . $e['to_id']) : 'Unassigned',
+            'changed_by' => $e['changed_by_id'] ? ($names[$e['changed_by_id']] ?? '#' . $e['changed_by_id']) : 'System',
+            // Every OTHER row's user_agent is a raw browser UA string (or CLI
+            // string for import/console changes) courtesy of OwenIt's default
+            // resolver — not a useful "why". Only surface our own custom tag.
+            'reason'     => str_starts_with((string) $e['reason'], 'Claimed via') ? $e['reason'] : null,
+            'changed_at' => $e['changed_at'],
+        ])->values();
+
+        return response()->json(['success' => true, 'party_name' => $pipeline->party_name, 'history' => $history]);
+    }
+
     /**
      * Resolve the common context for the Setu sync/resolve endpoints:
      * authorization, the confirmed mapping, and the validated sync period.
@@ -951,7 +1191,7 @@ class SalesPipelineController extends Controller
         // there is something to review, to keep the common payload small.
         $roster = [];
         if ($result['reviewItems']) {
-            $roster = SalesPipeline::withoutGlobalScopes()
+            $roster = SalesPipeline::withTrashed()
                 ->where('salesperson_id', $target->id)->where('is_locked', true)
                 ->withSum('months as months_total', 'sale_amount')
                 ->orderBy('party_name')
@@ -1017,7 +1257,7 @@ class SalesPipelineController extends Controller
 
         // tenant_id to stamp on new rows/months — match the salesperson's
         // existing book so a created customer is scoped like its siblings.
-        $tenantId = SalesPipeline::withoutGlobalScopes()
+        $tenantId = SalesPipeline::withTrashed()
             ->where('salesperson_id', $target->id)->where('is_locked', true)->value('tenant_id');
 
         $updated = 0; $created = 0; $skipped = 0; $missing = 0;
@@ -1031,14 +1271,14 @@ class SalesPipelineController extends Controller
                 if (!$months) { $missing++; continue; } // not in Setu for this period any more — skip safely
 
                 if ($r['action'] === 'update') {
-                    $pipeline = SalesPipeline::withoutGlobalScopes()
+                    $pipeline = SalesPipeline::withTrashed()
                         ->where('salesperson_id', $target->id)->where('is_locked', true)
                         ->find((int) ($r['targetPipelineId'] ?? 0));
                     if (!$pipeline) { $missing++; continue; } // invalid/foreign target — skip
                     $pipeline->party_name = $setuName; // adopt Setu's exact name
                     $pipeline->save();
                 } else { // create
-                    $pipeline = SalesPipeline::withoutGlobalScopes()->updateOrCreate(
+                    $pipeline = SalesPipeline::withTrashed()->updateOrCreate(
                         ['party_name' => $setuName, 'salesperson_id' => $target->id],
                         ['is_locked' => true, 'type' => 'Customer', 'tenant_id' => $tenantId]
                     );
@@ -1046,7 +1286,7 @@ class SalesPipelineController extends Controller
                 }
 
                 foreach ($months as $monthYear => $amount) {
-                    SalesPipelineMonth::withoutGlobalScopes()->updateOrCreate(
+                    SalesPipelineMonth::updateOrCreate(
                         ['sales_pipeline_id' => $pipeline->id, 'month_year' => $monthYear],
                         ['sale_amount' => $amount, 'tenant_id' => $pipeline->tenant_id]
                     );
@@ -1263,7 +1503,7 @@ class SalesPipelineController extends Controller
         // the acting user), which is the safety net for that choice.
         $isSalesFloor = $user->isCcareAgent()
             || $user->isNewBizAgent()
-            || SalesPipeline::withoutGlobalScopes()->where('salesperson_id', $user->id)->exists();
+            || SalesPipeline::withTrashed()->where('salesperson_id', $user->id)->exists();
         if (!$user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
             && !$user->can('sales_report.manage')
             && !$isSalesFloor) {

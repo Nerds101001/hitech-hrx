@@ -64,7 +64,7 @@ class HolidayController extends Controller
       'pageConfigs' => ['contentLayout' => 'wide'],
       'statCounts'  => $statCounts,
       'sites'       => \App\Models\Site::orderBy('name')->get(['id', 'name']),
-      'departments' => \App\Models\Department::withoutGlobalScopes()->orderBy('name')->get(['id', 'name']),
+      'departments' => \App\Models\Department::withTrashed()->orderBy('name')->get(['id', 'name']),
       'year'        => $year,
       'years'       => $years,
     ]);

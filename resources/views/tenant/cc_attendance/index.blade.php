@@ -86,6 +86,13 @@
             <a class="nav-link" href="{{ route('cc-attendance.report') }}"><i class="ti ti-report-search me-1"></i> Submission Report</a>
         </li>
         @endif
+        {{-- Admin/HR only: open a back-dated filling window. Same gate the
+             controller enforces, so the tab never shows a page that 403s. --}}
+        @if($user->hasRole(['admin', 'hr']) || $user->can('cc_attendance.manage'))
+        <li class="nav-item">
+            <a class="nav-link" href="{{ route('cc-attendance.unlocks') }}"><i class="ti ti-lock-open me-1"></i> Unlock Windows</a>
+        </li>
+        @endif
     </ul>
 
     @if(!empty($isLocked) && $isLocked)

@@ -8,6 +8,48 @@
   ])
 @endsection
 
+
+<style>
+/* Grid lines. The theme's table classes strip every border with !important,
+   which left this list reading as floating text with no row/column
+   separation — the same problem the admin dashboard had. */
+.claims-table { border-collapse: collapse !important; border-spacing: 0 !important; width: 100%; }
+.claims-table > thead > tr > th,
+.claims-table > tbody > tr > td { border: 1px solid #e3e9ef !important; }
+.claims-table > thead > tr > th { border-bottom: 2px solid #cbd5e1 !important; background: #f8fafc !important; }
+.claims-table > tbody > tr:nth-child(even)       { background: #f7fafa !important; }
+.claims-table > tbody > tr:hover,
+.claims-table > tbody > tr:nth-child(even):hover { background: #e6f4f3 !important; }
+
+/* Square icon actions, identical to My Claims and the Admin Dashboard. */
+.claim-actions { display: flex; gap: 2px; align-items: center; justify-content: flex-end; }
+.claim-actions form { margin: 0; }
+.vc-act {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; padding: 0;
+    border: 1px solid #cbd5e1; border-radius: 6px;
+    background: #fff; color: #0f766e; font-size: 15px; line-height: 1;
+    cursor: pointer; text-decoration: none;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.vc-act:hover        { background: #f0fdfa; border-color: #5eead4; color: #0f766e; }
+.vc-act-review       { color: #0e7490; }
+.vc-act-review:hover { background: #ecfeff; border-color: #67e8f9; color: #0e7490; }
+.vc-act-edit         { color: #c2740a; }
+.vc-act-edit:hover   { background: #fffbeb; border-color: #fcd34d; color: #b45309; }
+.vc-act-del          { color: #e11d48; }
+.vc-act-del:hover    { background: #fff1f2; border-color: #fda4af; color: #be123c; }
+.vc-act-dl           { color: #4f46e5; }
+.vc-act-dl:hover     { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
+.vc-act:focus-visible { outline: 2px solid #14b8a6; outline-offset: 1px; }
+
+/* Soft status pill, matching the claims list. */
+.claim-status {
+    display: inline-block; padding: .22rem .6rem; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
+}
+</style>
+
 @section('content')
 <style>
     /* --- Claims list: keep rows one line tall and actions on a common baseline --- */
@@ -106,7 +148,10 @@
                 <p class="sub-text text-white-50 mb-0">Review and verify travel expenses submitted by employees.</p>
             </div>
             <div>
-                <a href="{{ route('travel-claims.create') }}" class="btn btn-hitech btn-light fw-bold shadow-sm rounded-pill px-4" style="color: #005a5a !important;">
+                <a href="{{ route('travel-claims.create') }}"
+                   style="display:inline-flex;align-items:center;gap:.35rem;background:#ffffff;
+                          color:#0f766e;font-weight:700;padding:.5rem 1.15rem;border-radius:999px;
+                          font-size:.88rem;text-decoration:none;box-shadow:0 2px 6px rgba(0,0,0,.18);">
                     <i class="bx bx-plus me-1"></i> New Claim
                 </a>
             </div>
@@ -125,23 +170,74 @@
             </h5>
         </div>
         <div class="card-body p-4">
+            {{-- Search / filter / sort. Runs on the rows already rendered, so
+                 it is instant and needs no extra request. --}}
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label small fw-semibold mb-1">Search</label>
+                    <input type="text" id="fcSearch" class="form-control"
+                           placeholder="Employee name, claim #, or company">
+                </div>
+                <div class="col-lg-2 col-md-3 col-6">
+                    <label class="form-label small fw-semibold mb-1">Month</label>
+                    <select id="fcMonth" class="form-select">
+                        <option value="">All months</option>
+                        @foreach($claims->pluck('claim_month')->filter()->unique()->sortDesc() as $m)
+                            <option value="{{ $m }}">{{ $m }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3 col-6">
+                    <label class="form-label small fw-semibold mb-1">Employee</label>
+                    <select id="fcEmp" class="form-select">
+                        <option value="">All employees</option>
+                        @foreach($claims->pluck('user.name')->filter()->unique()->sort() as $n)
+                            <option value="{{ strtolower($n) }}">{{ $n }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6">
+                    <label class="form-label small fw-semibold mb-1">Status</label>
+                    <select id="fcStatus" class="form-select">
+                        <option value="">All statuses</option>
+                        @foreach($claims->pluck('status')->filter()->unique()->sort() as $st)
+                            <option value="{{ $st }}">{{ ucfirst($st) }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-4 col-6 d-flex gap-2">
+                    <button type="button" id="fcClear" class="btn btn-outline-secondary w-100">Clear</button>
+                </div>
+                <div class="col-12">
+                    <span id="fcCount" class="small text-muted"></span>
+                </div>
+            </div>
+
             <div class="table-responsive">
                 <table class="table align-middle mb-0 claims-table">
                     <thead>
                         <tr>
-                            <th style="width:80px;">Claim</th>
-                            <th style="width:170px;">Employee</th>
-                            <th style="width:90px;">Month</th>
-                            <th style="width:170px;">Company</th>
-                            <th style="width:120px;" class="text-end">Net Payable</th>
+                            <th style="width:80px;" data-sort="id" title="Click to sort">Claim <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                            <th style="width:170px;" data-sort="emp" title="Click to sort">Employee <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                            <th style="width:90px;" data-sort="month" title="Click to sort">Month <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                            <th style="width:170px;" data-sort="company" title="Click to sort">Company <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
+                            <th style="width:120px;" class="text-end" data-sort="net" title="Click to sort">Net Payable <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
                             <th>Remarks / Objection</th>
-                            <th style="width:110px;">Status</th>
+                            <th style="width:110px;" data-sort="status" title="Click to sort">Status <i class="bx bx-sort-alt-2 text-muted" style="font-size:.75rem;"></i></th>
                             <th style="width:200px;" class="text-end">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($claims as $claim)
-                        <tr>
+                        {{-- Filter/sort keys live on the row so the script never
+                             has to parse formatted cell text (currency, badges). --}}
+                        <tr class="claim-row"
+                            data-emp="{{ strtolower($claim->user->name ?? '') }}"
+                            data-month="{{ $claim->claim_month }}"
+                            data-company="{{ strtolower($claim->company) }}"
+                            data-status="{{ $claim->status }}"
+                            data-id="{{ $claim->id }}"
+                            data-net="{{ (float) $claim->net_payable }}">
                             <td class="text-nowrap fw-semibold">#{{ $claim->id }}</td>
                             <td>
                                 <div class="text-nowrap">{{ $claim->user->name }}</div>
@@ -186,26 +282,27 @@
                             <td>
                                 <div class="claim-actions">
                                     @if($claim->status === 'draft')
-                                        <a href="{{ route('travel-claims.edit', $claim->id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="bx bx-edit-alt"></i> Continue
+                                        <a href="{{ route('travel-claims.edit', $claim->id) }}" class="vc-act vc-act-edit" title="Continue this draft">
+                                            <i class="bx bx-edit-alt"></i>
                                         </a>
-                                        <form action="{{ route('travel-claims.destroy', $claim->id) }}" method="POST" onsubmit="return confirm('Delete this draft claim? This action cannot be undone.');">
+                                        <form action="{{ route('travel-claims.destroy', $claim->id) }}" method="POST" class="d-inline"
+                                              onsubmit="return confirm('Delete this draft claim? This cannot be undone.');">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                <i class="bx bx-trash"></i> Delete
+                                            <button type="submit" class="vc-act vc-act-del" title="Delete draft">
+                                                <i class="bx bx-trash"></i>
                                             </button>
                                         </form>
                                     @else
                                         {{-- Your own claim: view only. Nobody may action their own
                                              claim (the controller blocks it server-side too). --}}
-                                        <button type="button" class="btn btn-sm {{ $claim->user_id === auth()->id() ? 'btn-outline-secondary' : 'btn-primary' }}"
-                                                data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}">
+                                        <button type="button" class="vc-act {{ $claim->user_id === auth()->id() ? '' : 'vc-act-review' }}"
+                                                data-bs-toggle="modal" data-bs-target="#verifyModal{{ $claim->id }}"
+                                                title="{{ $claim->user_id === auth()->id() ? 'View details' : 'Review this claim' }}">
                                             <i class="bx {{ $claim->user_id === auth()->id() ? 'bx-show' : 'bx-check-shield' }}"></i>
-                                            {{ $claim->user_id === auth()->id() ? 'View' : 'Review' }}
                                         </button>
-                                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="btn btn-sm btn-outline-secondary" title="Download all attachments">
-                                            <i class="bx bx-download"></i> Files
+                                        <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="vc-act vc-act-dl" title="Download all attachments">
+                                            <i class="bx bx-download"></i>
                                         </a>
                                     @endif
                                 </div>
@@ -489,4 +586,73 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 @endsection
+
+<script>
+/* Travel-claim list: search, filter and sort over the rendered rows. */
+(function () {
+    const tbody  = document.querySelector('.claims-table tbody');
+    if (!tbody) return;
+    const search = document.getElementById('fcSearch');
+    const month  = document.getElementById('fcMonth');
+    const emp    = document.getElementById('fcEmp');
+    const status = document.getElementById('fcStatus');
+    const count  = document.getElementById('fcCount');
+    const rows   = () => Array.from(tbody.querySelectorAll('tr.claim-row'));
+    const total  = rows().length;
+
+    function apply() {
+        const q  = (search.value || '').trim().toLowerCase();
+        const m  = month.value, e = emp.value, st = status.value;
+        let shown = 0;
+
+        rows().forEach(function (tr) {
+            const hay = tr.dataset.emp + ' #' + tr.dataset.id + ' ' + tr.dataset.company;
+            const ok = (!q  || hay.includes(q))
+                    && (!m  || tr.dataset.month  === m)
+                    && (!e  || tr.dataset.emp    === e)
+                    && (!st || tr.dataset.status === st);
+            tr.style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        });
+
+        count.textContent = shown === total
+            ? 'Showing all ' + total + ' claim(s)'
+            : 'Showing ' + shown + ' of ' + total + ' claim(s)';
+
+        // The "no claims" placeholder must not sit under a filtered list.
+        const empty = tbody.querySelector('tr:not(.claim-row)');
+        if (empty) empty.style.display = (total && shown === 0) ? '' : (total ? 'none' : '');
+    }
+
+    let dir = {};
+    document.querySelectorAll('.claims-table th[data-sort]').forEach(function (th) {
+        th.addEventListener('click', function () {
+            const key = th.dataset.sort;
+            dir[key] = !dir[key];
+            const numeric = (key === 'id' || key === 'net');
+            const sorted = rows().sort(function (a, b) {
+                const x = a.dataset[key], y = b.dataset[key];
+                const r = numeric ? (parseFloat(x) - parseFloat(y)) : String(x).localeCompare(String(y));
+                return dir[key] ? r : -r;
+            });
+            sorted.forEach(tr => tbody.appendChild(tr));
+            document.querySelectorAll('.claims-table th[data-sort] i').forEach(i => i.className = 'bx bx-sort-alt-2 text-muted');
+            const icon = th.querySelector('i');
+            if (icon) icon.className = dir[key] ? 'bx bx-up-arrow-alt' : 'bx bx-down-arrow-alt';
+        });
+    });
+
+    [search, month, emp, status].forEach(el => {
+        el.addEventListener('input', apply);
+        el.addEventListener('change', apply);
+    });
+    document.getElementById('fcClear').addEventListener('click', function () {
+        search.value = ''; month.value = ''; emp.value = ''; status.value = '';
+        apply();
+    });
+
+    apply();
+})();
+</script>
+
 @endsection

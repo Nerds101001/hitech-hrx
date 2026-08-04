@@ -103,7 +103,35 @@
         </ul>
     </div>
 
-    <form action="{{ isset($claim) ? route('travel-claims.update', $claim->id) : route('travel-claims.store') }}" method="POST" enctype="multipart/form-data">
+    {{-- Drafts already in progress. Shown on a NEW claim only: without it a
+         second visit quietly started another draft for the same month. --}}
+    @if(!isset($claim) && ($openDrafts ?? collect())->count())
+        <div class="alert alert-warning border-0 shadow-sm mb-4">
+            <div class="d-flex align-items-center mb-2">
+                <i class="bx bx-time-five fs-4 me-2"></i>
+                <strong>You already have {{ $openDrafts->count() }} saved draft{{ $openDrafts->count() > 1 ? 's' : '' }}.</strong>
+            </div>
+            <p class="small mb-2">Continue one of these instead of starting again — filling the same month twice creates a duplicate claim.</p>
+            <div class="list-group">
+                @foreach($openDrafts as $d)
+                    <a href="{{ route('travel-claims.edit', $d->id) }}"
+                       class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <span>
+                            <strong>{{ $d->claim_month }}</strong>
+                            <span class="text-muted">— {{ $d->company }}</span>
+                            <span class="badge bg-label-secondary ms-2">{{ $d->items_count }} row(s)</span>
+                        </span>
+                        <span class="small text-muted">
+                            last saved {{ $d->updated_at->diffForHumans() }}
+                            <i class="bx bx-chevron-right"></i>
+                        </span>
+                    </a>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
+    <form id="claimForm" action="{{ isset($claim) ? route('travel-claims.update', $claim->id) : route('travel-claims.store') }}" method="POST" enctype="multipart/form-data">
         @csrf
         {{-- Ties files uploaded before this claim exists to the claim once it is
              saved. Kept across a failed submit so nothing has to be re-picked. --}}
@@ -271,7 +299,10 @@
                 <p id="latePenaltyWarning" class="text-danger small mb-1 fw-bold" style="display:none;"><i class="bx bx-error-circle"></i> 10% Late Submission Penalty Applied to Net Payable!</p>
                 <h3 class="mb-3">Net Payable: <span id="netPayableText" class="text-success fw-bold">₹0.00</span></h3>
                 <p class="text-muted small mb-4">By submitting, you certify these expenses were incurred for official business in compliance with the company Travel Policy.</p>
-                <div class="d-flex justify-content-end gap-2">
+                <div class="d-flex justify-content-end align-items-center gap-2">
+                    {{-- Autosave status. Stays quiet until something is actually
+                         saved, so it never nags on an untouched form. --}}
+                    <span id="autosaveStatus" class="small text-muted me-auto"></span>
                     <button type="submit" name="action" value="draft" formnovalidate class="btn btn-outline-secondary btn-lg px-4 shadow-sm"><i class="bx bx-save me-1"></i> Save Draft</button>
                     <button type="submit" name="action" value="submit" class="btn btn-success btn-lg px-5 shadow"><i class="bx bx-check-circle me-1"></i> Submit Claim</button>
                 </div>
@@ -736,4 +767,112 @@
         });
     });
 </script>
+
+<script>
+/* ── Autosave ──────────────────────────────────────────────────────────────
+   Saves the form as a DRAFT in the background so a half-filled claim is never
+   lost to a timeout, a stray refresh or a closed tab. "Save Draft" and "Submit
+   Claim" keep working exactly as before — this only removes the need to
+   remember to press Draft.
+
+   Deliberately does NOT send file inputs: bills already upload the moment they
+   are picked (travel-claims.attachments), and the server falls back to the
+   stored path / the existing_* hidden fields whenever a file is absent, so
+   omitting them re-posts nothing and loses nothing. */
+(function () {
+    const form   = document.getElementById('claimForm');
+    const status = document.getElementById('autosaveStatus');
+    if (!form || !status) return;
+
+    const STORE_URL  = @json(route('travel-claims.store'));
+    const UPDATE_TPL = @json(route('travel-claims.update', ['id' => '__ID__']));
+
+    let claimId   = @json(isset($claim) ? $claim->id : null);
+    let dirty     = false;
+    let inFlight  = false;
+    let timer     = null;
+
+    const IDLE_MS  = 2500;      // save this long after typing stops
+    const SWEEP_MS = 60000;     // and at least once a minute while dirty
+
+    function show(html, cls) {
+        status.className = 'small me-auto ' + (cls || 'text-muted');
+        status.innerHTML = html;
+    }
+
+    /* claim_month and company are required even for a draft, so there is
+       nothing the server can store until they are set. Saving before that
+       would just 422 in a loop. */
+    function ready() {
+        const m = form.querySelector('[name="claim_month"]');
+        const c = form.querySelector('[name="company"]');
+        return m && c && m.value && c.value;
+    }
+
+    function save() {
+        if (inFlight || !dirty || !ready()) return;
+        inFlight = true;
+        show('<i class="bx bx-loader-alt bx-spin"></i> Saving…');
+
+        const fd = new FormData();
+        for (const el of form.elements) {
+            if (!el.name || el.disabled) continue;
+            if (el.type === 'file') continue;                       // see note above
+            if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
+            if (el.name === 'action') continue;                     // never "submit"
+            fd.append(el.name, el.value);
+        }
+        fd.append('action', 'draft');
+        fd.append('autosave', '1');
+
+        fetch(claimId ? UPDATE_TPL.replace('__ID__', claimId) : STORE_URL, {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        })
+        .then(r => r.ok ? r.json() : r.json().catch(() => ({})).then(j => Promise.reject(j)))
+        .then(j => {
+            if (!j.ok) return Promise.reject(j);
+            dirty = false;
+            /* First save created the claim. Point later saves at it and fix the
+               URL, so a refresh reopens the draft instead of a blank form. */
+            if (!claimId && j.id) {
+                claimId = j.id;
+                history.replaceState(null, '', UPDATE_TPL.replace('__ID__', claimId).replace('/update', '/edit'));
+            }
+            let msg = '<i class="bx bx-check-circle text-success"></i> Draft saved ' + j.saved_at;
+            if (j.skipped) msg += ' — ' + j.skipped + ' row(s) without a date were not saved';
+            show(msg, 'text-muted');
+        })
+        .catch(err => {
+            // A validation complaint is normal mid-typing; say so without alarm.
+            const first = err && err.errors ? Object.values(err.errors)[0][0] : null;
+            show('<i class="bx bx-error-circle text-warning"></i> Not saved yet'
+                 + (first ? ' — ' + first : '') + '. Your typing is safe; it will retry.',
+                 'text-muted');
+        })
+        .finally(() => { inFlight = false; });
+    }
+
+    function touched() {
+        dirty = true;
+        clearTimeout(timer);
+        timer = setTimeout(save, IDLE_MS);
+    }
+
+    form.addEventListener('input',  touched);
+    form.addEventListener('change', touched);
+    setInterval(save, SWEEP_MS);
+
+    // A real Draft/Submit click must not race the background save.
+    form.addEventListener('submit', () => { clearTimeout(timer); dirty = false; });
+
+    // Last chance if they close the tab mid-edit.
+    window.addEventListener('beforeunload', function (e) {
+        if (dirty && ready()) { e.preventDefault(); e.returnValue = ''; }
+    });
+})();
+</script>
+
 @endsection

@@ -28,6 +28,11 @@ return Application::configure(basePath: dirname(__DIR__))
     $schedule->command('payroll:auto-generate')->lastDayOfMonth('23:00');
     $schedule->command('leave:accrue')->monthlyOn(1, '00:00');
     $schedule->command('leave:reset-yearly')->yearlyOn(4, 1, '00:00');
+    /* Keep the audit table small. `audits` grows with every model write and never
+       shrinks; this moves anything over 12 months into audits_archive (nothing is
+       deleted). Runs on the 2nd so it never contends with the 1st-of-month leave
+       and payroll jobs. */
+    $schedule->command('hrx:archive-audits --live')->monthlyOn(2, '02:00');
     $schedule->command('leave:daily-digest')->dailyAt('09:00');
   })
   ->withMiddleware(function (Middleware $middleware) {

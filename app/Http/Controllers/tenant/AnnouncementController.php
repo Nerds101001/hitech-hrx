@@ -62,7 +62,7 @@ class AnnouncementController extends Controller
         return view('tenant.announcement.dashboard', [
             'pageConfigs'  => ['contentLayout' => 'wide'],
             'statCounts'   => $statCounts,
-            'departments'  => Department::withoutGlobalScopes()->orderBy('name')->get(['id', 'name']),
+            'departments'  => Department::withTrashed()->orderBy('name')->get(['id', 'name']),
             'sites'        => Site::orderBy('name')->get(['id', 'name']),
             'designations' => Designation::orderBy('name')->get(['id', 'name']),
             'roles'        => \Spatie\Permission\Models\Role::orderBy('name')->get(['id', 'name']),

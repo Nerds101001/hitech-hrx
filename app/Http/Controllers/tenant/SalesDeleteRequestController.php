@@ -27,7 +27,7 @@ class SalesDeleteRequestController extends Controller
             || $user->can('sales_report.manage')
             || $user->isCcareAgent()
             || $user->isNewBizAgent()
-            || SalesPipeline::withoutGlobalScopes()->where('salesperson_id', $user->id)->exists();
+            || SalesPipeline::withTrashed()->where('salesperson_id', $user->id)->exists();
     }
 
     /** Deciding a request — admin/HR only (deletion cannot be undone). */
@@ -57,11 +57,11 @@ class SalesDeleteRequestController extends Controller
             'reason.in'       => 'That reason is not recognised.',
         ]);
 
-        $pipeline = SalesPipeline::withoutGlobalScopes()->findOrFail($pipelineId);
+        $pipeline = SalesPipeline::withTrashed()->findOrFail($pipelineId);
 
         // One open request per customer — otherwise two reps queue the same row
         // and the second approval hits an already-deleted record.
-        $existing = DeleteRequest::withoutGlobalScopes()
+        $existing = DeleteRequest::query()
             ->where('sales_pipeline_id', $pipeline->id)
             ->where('status', DeleteRequest::STATUS_PENDING)
             ->first();
@@ -92,14 +92,14 @@ class SalesDeleteRequestController extends Controller
 
         $tab = in_array($request->get('tab'), ['approved', 'rejected']) ? $request->get('tab') : 'pending';
 
-        $requests = DeleteRequest::withoutGlobalScopes()
+        $requests = DeleteRequest::query()
             ->with(['requester', 'actioner'])
             ->where('status', $tab)
             ->orderByDesc($tab === 'pending' ? 'created_at' : 'actioned_at')
             ->paginate(25)
             ->withQueryString();
 
-        $counts = DeleteRequest::withoutGlobalScopes()
+        $counts = DeleteRequest::query()
             ->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
 
         return view('tenant.sales-delete-requests.index', [
@@ -115,7 +115,7 @@ class SalesDeleteRequestController extends Controller
     {
         $this->authorizeApprover();
 
-        $dr = DeleteRequest::withoutGlobalScopes()->findOrFail($id);
+        $dr = DeleteRequest::query()->findOrFail($id);
         if ($dr->status !== DeleteRequest::STATUS_PENDING) {
             return back()->with('error', 'That request has already been ' . $dr->status . '.');
         }
@@ -123,7 +123,7 @@ class SalesDeleteRequestController extends Controller
         try {
             DB::transaction(function () use ($dr) {
                 $pipeline = $dr->sales_pipeline_id
-                    ? SalesPipeline::withoutGlobalScopes()->find($dr->sales_pipeline_id)
+                    ? SalesPipeline::withTrashed()->find($dr->sales_pipeline_id)
                     : null;
 
                 // Delete through the model so the removal is audited. If the row
@@ -153,7 +153,7 @@ class SalesDeleteRequestController extends Controller
 
         $data = $request->validate(['decision_note' => ['nullable', 'string', 'max:1000']]);
 
-        $dr = DeleteRequest::withoutGlobalScopes()->findOrFail($id);
+        $dr = DeleteRequest::query()->findOrFail($id);
         if ($dr->status !== DeleteRequest::STATUS_PENDING) {
             return back()->with('error', 'That request has already been ' . $dr->status . '.');
         }

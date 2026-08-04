@@ -383,7 +383,7 @@ class OnboardingController extends Controller
                 ];
                 
                 // Find or Create Document Type
-                $docType = \App\Models\DocumentType::withoutGlobalScopes()->where('code', $mapping['code'])->first();
+                $docType = \App\Models\DocumentType::withTrashed()->where('code', $mapping['code'])->first();
                 if (!$docType) {
                     $docType = \App\Models\DocumentType::create([
                         'name' => $mapping['name'],
@@ -478,7 +478,7 @@ class OnboardingController extends Controller
                         ];
                         
                         // Find or Create Document Type
-                        $docType = \App\Models\DocumentType::withoutGlobalScopes()->where('code', $mapping['code'])->first();
+                        $docType = \App\Models\DocumentType::withTrashed()->where('code', $mapping['code'])->first();
                         if (!$docType) {
                             $docType = \App\Models\DocumentType::create([
                                 'name' => $mapping['name'],

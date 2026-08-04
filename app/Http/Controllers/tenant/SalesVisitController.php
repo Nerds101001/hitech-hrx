@@ -343,7 +343,7 @@ class SalesVisitController extends Controller
         // Customer Care: 10, New Biz: 13
         $salesDeptIds   = [2, 26];
         // The combined "Customer Care + New Biz" department counts as both.
-        $comboDeptIds   = \App\Models\Department::withoutGlobalScopes()
+        $comboDeptIds   = \App\Models\Department::withTrashed()
             ->where('name', 'like', '%Customer Care + New Biz%')->pluck('id')->all();
         $ccareDeptIds   = array_merge([10], $comboDeptIds);
         $newBizDeptIds  = array_merge([13], $comboDeptIds);

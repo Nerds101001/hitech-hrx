@@ -137,7 +137,7 @@ class AuditLogController extends Controller
         foreach ($wanted as $class => $ids) {
             if (!class_exists($class)) continue;
             try {
-                $rows = $class::withoutGlobalScopes()->whereIn('id', array_unique($ids))->get();
+                $rows = $class::withTrashed()->whereIn('id', array_unique($ids))->get();
             } catch (\Throwable $e) {
                 continue;   // a model we cannot query is not worth failing the page for
             }

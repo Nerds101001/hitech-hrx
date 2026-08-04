@@ -590,15 +590,6 @@
                     ]
                 },
                 {
-                    "url": "/travel-claims/admin/dashboard",
-                    "name": "Travel Claims",
-                    "slug": "travel-claims.adminDashboard",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
                     "url": "/expenseRequests",
                     "name": "Expense Requests",
                     "slug": "expenseRequests.index",
@@ -620,6 +611,37 @@
                     "url": "/expenseTypes",
                     "name": "Expense Types",
                     "slug": "expenseTypes.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Travel & Expense",
+            "icon": "menu-icon bx bx-trip",
+            "slug": [
+                "travel-claims.index",
+                "travel-claims.adminDashboard"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts"
+            ],
+            "submenu": [
+                {
+                    "url": "/travel-claims",
+                    "name": "My Claims",
+                    "slug": "travel-claims.index"
+                },
+                {
+                    "url": "/travel-claims/admin/dashboard",
+                    "name": "Admin Dashboard",
+                    "slug": "travel-claims.adminDashboard",
                     "roles": [
                         "admin",
                         "hr"

@@ -15,7 +15,7 @@ class SalesAssessmentController extends Controller
     public function index(Request $request)
     {
         $cycleId = $request->get('cycle_id');
-        $query = AppraisalScorecard::with(['user', 'cycle'])->where('tenant_id', Auth::user()->tenant_id);
+        $query = AppraisalScorecard::with(['user', 'cycle']);   // tenant filter removed: NULL = NULL matched no rows
 
         if ($cycleId) {
             $query->where('appraisal_cycle_id', $cycleId);
@@ -26,7 +26,7 @@ class SalesAssessmentController extends Controller
         }
 
         $scorecards = $query->latest()->get();
-        $cycles = AppraisalCycle::where('tenant_id', Auth::user()->tenant_id)->get();
+        $cycles = AppraisalCycle::get();   // tenant filter removed: NULL = NULL matched no rows
 
         return view('tenant.performance.scorecards.index', compact('scorecards', 'cycles'));
     }

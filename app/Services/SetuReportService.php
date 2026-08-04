@@ -36,7 +36,7 @@ class SetuReportService
     {
         $this->baseUrl = rtrim((string) config('services.setu.base_url', ''), '/');
         $this->accessToken = config('services.setu.access_token');
-        $this->reportId = (int) config('services.setu.report_id', 2886);
+        $this->reportId = (int) config('services.setu.report_id', 2899);
     }
 
     /**
@@ -335,7 +335,7 @@ class SetuReportService
         // scoring — a company may exist under several spellings, all of which
         // must be offered as candidates) and a normalised-name index (for the
         // exact-match lookup).
-        $existingList = SalesPipeline::withoutGlobalScopes()
+        $existingList = SalesPipeline::withTrashed()
             ->where('salesperson_id', $user->id)
             ->where('is_locked', true)
             ->with('months')
@@ -414,7 +414,7 @@ class SetuReportService
         if ($live) {
             // Blank fills: always safe (nothing to destroy), written on any live run.
             foreach ($blankFills as $f) {
-                SalesPipelineMonth::withoutGlobalScopes()->updateOrCreate(
+                SalesPipelineMonth::updateOrCreate(
                     ['sales_pipeline_id' => $f['pipeline_id'], 'month_year' => $f['month']],
                     ['sale_amount' => $f['amount'], 'tenant_id' => null]
                 );
@@ -424,13 +424,13 @@ class SetuReportService
             // captured in the audit log — the only recovery path.
             if ($overwrite) {
                 foreach ($overwrites as $o) {
-                    SalesPipelineMonth::withoutGlobalScopes()->updateOrCreate(
+                    SalesPipelineMonth::updateOrCreate(
                         ['sales_pipeline_id' => $o['pipeline_id'], 'month_year' => $o['month']],
                         ['sale_amount' => $o['setu'], 'tenant_id' => null]
                     );
                 }
                 foreach ($renames as $r) {
-                    $p = SalesPipeline::withoutGlobalScopes()->find($r['pipeline_id']);
+                    $p = SalesPipeline::withTrashed()->find($r['pipeline_id']);
                     if ($p) {
                         $p->party_name = $r['to'];
                         $p->save();
@@ -440,12 +440,12 @@ class SetuReportService
                 // adopting Setu's exact name + monthly figures. updateOrCreate
                 // on (party_name, salesperson_id) so a re-run never duplicates.
                 foreach ($newCustomers as $nc) {
-                    $p = SalesPipeline::withoutGlobalScopes()->updateOrCreate(
+                    $p = SalesPipeline::withTrashed()->updateOrCreate(
                         ['party_name' => $nc['customer'], 'salesperson_id' => $user->id],
                         ['is_locked' => true, 'type' => 'Customer', 'tenant_id' => $tenantId]
                     );
                     foreach (array_filter($nc['months']) as $monthYear => $amount) {
-                        SalesPipelineMonth::withoutGlobalScopes()->updateOrCreate(
+                        SalesPipelineMonth::updateOrCreate(
                             ['sales_pipeline_id' => $p->id, 'month_year' => $monthYear],
                             ['sale_amount' => $amount, 'tenant_id' => $p->tenant_id]
                         );

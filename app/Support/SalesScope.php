@@ -68,6 +68,24 @@ class SalesScope
         return $ids->filter()->unique()->values()->all();
     }
 
+    /**
+     * May this user search the whole customer database and claim a role on a
+     * row outside their normal scope? Deliberately broad — any sales-floor
+     * user, not just CCare/New Biz, per explicit product decision: a plain
+     * salesperson can claim the Salesperson role on a customer too.
+     *
+     * Reuses SalesAccessGuard::isBroadSalesUser() — the same predicate that
+     * already decides who may reach the Sales Report page at all — rather
+     * than defining a second, narrower notion of "sales-floor user." Checked
+     * independently inside the search/claim/history endpoints themselves
+     * (not relied on via middleware alone), matching how every other
+     * mutation on this resource re-validates itself.
+     */
+    public static function canClaimCustomer($user): bool
+    {
+        return \App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user);
+    }
+
     /** True when the user is a Customer Care / New Biz representative. */
     public static function isRep($user): bool
     {

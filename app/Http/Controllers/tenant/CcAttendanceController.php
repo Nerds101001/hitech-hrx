@@ -183,9 +183,35 @@ class CcAttendanceController extends Controller
             return false;
         }
         if ($date >= self::OPEN_FROM && $date <= self::OPEN_TO) {
-            return false; // July back-fill window
+            return false; // legacy July 2026 back-fill window
+        }
+        // Admin-opened override windows (Attendance > Unlock Windows).
+        foreach ($this->activeUnlocks() as $w) {
+            if ($w->covers($date, $user->id ?? null)) {
+                return false;
+            }
         }
         return now()->greaterThan(Carbon::parse($date)->addDays(2)->setTime(12, 0));
+    }
+
+    /**
+     * Active unlock windows, fetched once per request. isLockedFor() runs once
+     * per row on the monthly grid, so without this the page would issue a query
+     * per cell.
+     */
+    private ?\Illuminate\Support\Collection $unlockCache = null;
+
+    private function activeUnlocks(): \Illuminate\Support\Collection
+    {
+        if ($this->unlockCache === null) {
+            // No date filter here: from_date/to_date describe the ATTENDANCE
+            // dates a window covers, not when it activates, so a window opened
+            // ahead of time must still be found. covers() does the date test.
+            $this->unlockCache = \App\Models\CcAttendanceUnlock::where('is_active', true)
+                ->orderByDesc('id')
+                ->get();
+        }
+        return $this->unlockCache;
     }
 
     /**
@@ -713,5 +739,82 @@ class CcAttendanceController extends Controller
             default:
                 return ['absent', Carbon::parse($date)->startOfDay(), null, $reason];
         }
+    }
+
+    // ─── Unlock windows (Admin/HR) ────────────────────────────────────────
+
+    /** Manage screen: existing windows + the pool of users a window can target. */
+    public function unlocks(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($this->isAttendanceAdmin($user), 403);
+
+        $windows = \App\Models\CcAttendanceUnlock::with('creator')->orderByDesc('id')->get();
+
+        // Anyone who fills the register: people mapped to salespeople, plus
+        // whoever has already been granted the manage permission.
+        $markerIds = \App\Models\CcSalespersonMap::query()->distinct()->pluck('cc_user_id');
+        $people = \App\Models\User::where(fn ($q) => $q
+                ->whereIn('id', $markerIds)
+                ->orWhereHas('roles', fn ($r) => $r->whereIn('name', ['admin', 'hr', 'manager'])))
+            ->orderBy('first_name')
+            ->get(['id', 'first_name', 'last_name', 'code']);
+
+        return view('tenant.cc_attendance.unlocks', compact('windows', 'people', 'user'));
+    }
+
+    /** Open a window. Capped at CcAttendanceUnlock::MAX_DAYS. */
+    public function storeUnlock(Request $request)
+    {
+        abort_unless($this->isAttendanceAdmin(Auth::user()), 403);
+
+        $data = $request->validate([
+            'from_date' => ['required', 'date'],
+            'to_date'   => ['required', 'date', 'after_or_equal:from_date'],
+            'scope'     => ['required', 'in:all,selected'],
+            'user_ids'  => ['array'],
+            'user_ids.*' => ['integer', 'exists:users,id'],
+            'reason'    => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $days = Carbon::parse($data['from_date'])->diffInDays(Carbon::parse($data['to_date'])) + 1;
+        if ($days > \App\Models\CcAttendanceUnlock::MAX_DAYS) {
+            return back()->with('error', "A window may cover at most "
+                . \App\Models\CcAttendanceUnlock::MAX_DAYS . " days — you asked for {$days}.");
+        }
+        if ($data['scope'] === 'selected' && empty($data['user_ids'])) {
+            return back()->with('error', 'Pick at least one person, or choose "Everyone".');
+        }
+
+        \App\Models\CcAttendanceUnlock::create([
+            'from_date' => $data['from_date'],
+            'to_date'   => $data['to_date'],
+            'scope'     => $data['scope'],
+            'user_ids'  => $data['scope'] === 'selected' ? array_values($data['user_ids']) : null,
+            'is_active' => true,
+            'reason'    => $data['reason'] ?? null,
+            'created_by' => Auth::id(),
+        ]);
+
+        return back()->with('success', "Attendance unlocked for {$days} day(s).");
+    }
+
+    /** Enable / disable without losing the record. */
+    public function toggleUnlock($id)
+    {
+        abort_unless($this->isAttendanceAdmin(Auth::user()), 403);
+        $w = \App\Models\CcAttendanceUnlock::findOrFail($id);
+        $w->is_active = !$w->is_active;
+        $w->save();
+
+        return back()->with('success', 'Window ' . ($w->is_active ? 'enabled' : 'disabled') . '.');
+    }
+
+    public function destroyUnlock($id)
+    {
+        abort_unless($this->isAttendanceAdmin(Auth::user()), 403);
+        \App\Models\CcAttendanceUnlock::findOrFail($id)->delete();
+
+        return back()->with('success', 'Window removed.');
     }
 }

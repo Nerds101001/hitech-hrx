@@ -656,7 +656,7 @@ class EmployeeController extends Controller
       // Find or Create a DocumentType based on the code to avoid unique constraint violations
       // Must bypass TenantTrait global scope globally since the database has a strict unique index on `code`
       $docCode = strtoupper(str_replace(' ', '_', $request->documentName));
-      $docType = DocumentType::withoutGlobalScopes()->withTrashed()->where('code', $docCode)->first();
+      $docType = DocumentType::withTrashed()->withTrashed()->where('code', $docCode)->first();
 
       if ($docType && $docType->trashed()) {
         $docType->restore();
@@ -1267,9 +1267,9 @@ class EmployeeController extends Controller
     $onboarding = $onboardingQuery->count();
 
     $roles = Role::get();
-    $teams = Team::withoutGlobalScopes()->select('name', 'id')->get();
-    $designations = Designation::withoutGlobalScopes()->select('name', 'id')->get();
-    $departments = Department::withoutGlobalScopes()->select('name', 'id')->orderBy('name')->get();
+    $teams = Team::withTrashed()->select('name', 'id')->get();
+    $designations = Designation::withTrashed()->select('name', 'id')->get();
+    $departments = Department::withTrashed()->select('name', 'id')->orderBy('name')->get();
     $sites = Site::select('id', 'name')->orderBy('name')->get();
 
     \Illuminate\Support\Facades\Log::info('Employee Index Loaded', [
@@ -1301,7 +1301,7 @@ class EmployeeController extends Controller
       'departments' => $departments,
       'designations' => $designations,
       'sites' => $sites,
-      'managers' => User::withoutGlobalScopes()->whereHas('roles', function($q) {
+      'managers' => User::withTrashed()->whereHas('roles', function($q) {
           $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts', 'Admin', 'HR', 'Manager', 'super_admin', 'Super Admin']);
       })->whereIn('status', [UserAccountStatus::ACTIVE, 'active', 'ACTIVE'])->get(),
       'ccUsers' => User::with(['designation', 'department'])
@@ -2769,7 +2769,7 @@ class EmployeeController extends Controller
 
   public function exportEmployees()
   {
-    $employees = User::where('tenant_id', auth()->user()->tenant_id)
+    $employees = User::query()   // tenant filter removed: NULL = NULL matched no rows
       ->with(['team', 'designation'])
       ->get();
 
@@ -2826,7 +2826,7 @@ class EmployeeController extends Controller
       $prefix .= '-';
     }
 
-    $lastCodeQuery = User::withoutGlobalScopes()->where('code', 'like', $prefix . '%');
+    $lastCodeQuery = User::withTrashed()->where('code', 'like', $prefix . '%');
     if ($tenantId) {
       $lastCodeQuery->where('tenant_id', $tenantId);
     }
@@ -2840,7 +2840,7 @@ class EmployeeController extends Controller
     }
 
     $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
-    while (User::withoutGlobalScopes()->where('code', $code)->exists()) {
+    while (User::withTrashed()->where('code', $code)->exists()) {
       $nextNumber++;
       $code = $prefix . str_pad((string) $nextNumber, 3, '0', STR_PAD_LEFT);
     }
@@ -3112,10 +3112,10 @@ class EmployeeController extends Controller
       }
 
       // 3. Mark DocumentRequests as rejected across ALL known codes for this doc type
-      $docTypeIds = \App\Models\DocumentType::withoutGlobalScopes()
+      $docTypeIds = \App\Models\DocumentType::withTrashed()
         ->whereIn('code', $meta['codes'])->pluck('id');
       if ($docTypeIds->isNotEmpty()) {
-        \App\Models\DocumentRequest::withoutGlobalScopes()
+        \App\Models\DocumentRequest::withTrashed()
           ->where('user_id', $user->id)
           ->whereIn('document_type_id', $docTypeIds)
           ->update([
@@ -3187,11 +3187,11 @@ class EmployeeController extends Controller
 
       // 1a. Find DocumentRequest(s) across ALL known codes for this doc type
       //     (DB has duplicate DocumentType records created at different times)
-      $docTypeIds = \App\Models\DocumentType::withoutGlobalScopes()
+      $docTypeIds = \App\Models\DocumentType::withTrashed()
         ->whereIn('code', $meta['codes'])
         ->pluck('id');
       if ($docTypeIds->isNotEmpty()) {
-        $docRequests = \App\Models\DocumentRequest::withoutGlobalScopes()->withTrashed()
+        $docRequests = \App\Models\DocumentRequest::withTrashed()->withTrashed()
           ->where('user_id', $user->id)
           ->whereIn('document_type_id', $docTypeIds)
           ->get();
