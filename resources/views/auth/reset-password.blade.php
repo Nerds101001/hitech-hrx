@@ -28,7 +28,7 @@
       {{-- LEFT IDENTITY PANEL (desktop only) --}}
       <div class="identity-panel">
         <div class="content">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo" style="width: 200px; max-width: 80%; height: auto; flex-shrink: 0; margin-bottom: 1.5rem;"
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="identity-logo" style="width: 200px; max-width: 80%; height: auto; flex-shrink: 0; margin-bottom: 1.5rem;">
           <h1>Set New Password</h1>
           <div class="features">
             <div class="feature-item">
@@ -53,7 +53,7 @@
 
         {{-- MOBILE BRAND BANNER --}}
         <div class="mobile-brand-banner">
-          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo" style="width: 160px; max-width: 70%; height: auto; flex-shrink: 0;"
+          <img src="{{ asset('assets/img/logo-white.png') }}" alt="Logo" class="mobile-logo" style="width: 160px; max-width: 70%; height: auto; flex-shrink: 0;">
           <h2>Set New Password</h2>
           <p>Secure Gateway — Choose a strong new password below</p>
           <span class="version-badge">SYSTEM V4.2.0-ADMIN</span>
@@ -132,6 +132,9 @@
               <div style="height:4px; border-radius:50px; background:rgba(0,0,0,0.06); overflow:hidden;">
                 <div id="strength-bar" style="height:100%; width:0; border-radius:50px; transition: all 0.3s ease; background:#10b981;"></div>
               </div>
+              <div id="password-strength-error" class="text-danger small mt-1" style="display:none;">
+                <i class="bx bx-error-circle me-1"></i><span id="password-strength-error-text"></span>
+              </div>
             </div>
 
             <button type="submit" class="btn btn-primary d-flex align-items-center justify-content-center w-100 hitech-btn-admin">
@@ -168,22 +171,45 @@
     }
   }
 
-  // Password strength meter
+  // Password strength meter. Kept in sync with the server-side rule
+  // (AuthController::resetPasswordPost — min 8, mixed case, number, symbol)
+  // so "Strong" here always means "will actually be accepted".
+  function passwordChecks(val) {
+    return {
+      length: val.length >= 8,
+      upper:  /[A-Z]/.test(val),
+      lower:  /[a-z]/.test(val),
+      number: /[0-9]/.test(val),
+      symbol: /[^A-Za-z0-9]/.test(val),
+    };
+  }
+  function isStrongPassword(val) {
+    return Object.values(passwordChecks(val)).every(Boolean);
+  }
+  function passwordRequirementText(val) {
+    const c = passwordChecks(val);
+    const missing = [];
+    if (!c.length) missing.push('at least 8 characters');
+    if (!c.upper)  missing.push('an uppercase letter');
+    if (!c.lower)  missing.push('a lowercase letter');
+    if (!c.number) missing.push('a number');
+    if (!c.symbol) missing.push('a symbol');
+    return missing.length ? 'Password needs ' + missing.join(', ') + '.' : '';
+  }
+
   document.getElementById('new_password').addEventListener('input', function () {
     const val = this.value;
-    let score = 0;
-    if (val.length >= 8) score++;
-    if (/[A-Z]/.test(val)) score++;
-    if (/[0-9]/.test(val)) score++;
-    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const c = passwordChecks(val);
+    const score = ['length', 'upper', 'lower', 'number', 'symbol'].filter(k => c[k]).length;
 
     const bar   = document.getElementById('strength-bar');
     const label = document.getElementById('strength-label');
     const configs = [
       { w: '0%',   color: '#94a3b8', text: '—' },
-      { w: '25%',  color: '#ef4444', text: 'Weak' },
-      { w: '50%',  color: '#f59e0b', text: 'Fair' },
-      { w: '75%',  color: '#3b82f6', text: 'Good' },
+      { w: '20%',  color: '#ef4444', text: 'Weak' },
+      { w: '40%',  color: '#ef4444', text: 'Weak' },
+      { w: '60%',  color: '#f59e0b', text: 'Fair' },
+      { w: '80%',  color: '#3b82f6', text: 'Good' },
       { w: '100%', color: '#10b981', text: 'Strong' },
     ];
     const cfg = configs[score] || configs[0];
@@ -193,18 +219,40 @@
     label.style.color     = cfg.color;
   });
 
-  // Match validation on submit
+  // Match + strength validation on submit — mirrors the server so a user is
+  // never told "success" client-side only to be bounced back by validation.
   function validatePasswords(e) {
     const p1  = document.getElementById('new_password').value;
     const p2  = document.getElementById('confirm_password').value;
-    const err = document.getElementById('password-match-error');
-    if (p1 !== p2) {
-      e.preventDefault();
-      err.style.display = 'block';
+    const matchErr    = document.getElementById('password-match-error');
+    const strengthErr = document.getElementById('password-strength-error');
+    const strengthErrText = document.getElementById('password-strength-error-text');
+
+    if (!isStrongPassword(p1)) {
+      if (e) e.preventDefault();
+      strengthErrText.textContent = passwordRequirementText(p1);
+      strengthErr.style.display = 'block';
       return false;
     }
-    err.style.display = 'none';
+    strengthErr.style.display = 'none';
+
+    // Trimmed comparison: a trailing space from a copy-paste shouldn't read as
+    // a mismatch when the server (which also trims before saving) would accept it.
+    if (p1.trim() !== p2.trim()) {
+      if (e) e.preventDefault();
+      matchErr.style.display = 'block';
+      return false;
+    }
+    matchErr.style.display = 'none';
     return true;
   }
+
+  // Clear stale errors as soon as the user starts correcting either field.
+  function clearPasswordErrors() {
+    document.getElementById('password-match-error').style.display = 'none';
+    document.getElementById('password-strength-error').style.display = 'none';
+  }
+  document.getElementById('new_password').addEventListener('input', clearPasswordErrors);
+  document.getElementById('confirm_password').addEventListener('input', clearPasswordErrors);
 </script>
 @endsection

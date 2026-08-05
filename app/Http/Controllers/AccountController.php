@@ -547,9 +547,14 @@ class AccountController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
+    // Trim first so a stray copy-paste space can't get baked into the stored password.
+    $request->merge(['newPassword' => trim((string) $request->input('newPassword'))]);
+
     $request->validate([
       'oldPassword' => 'required|min:6',
-      'newPassword' => 'required|min:6',
+      'newPassword' => ['required', \Illuminate\Validation\Rules\Password::min(8)->mixedCase()->numbers()->symbols()],
+    ], [
+      'newPassword.min' => 'Password must be at least 8 characters.',
     ]);
 
     if (!(Hash::check($request->oldPassword, auth()->user()->password))) {

@@ -24,7 +24,18 @@ class ChangePasswordRequest extends FormRequest
   {
     return [
       'currentPassword' => ['required', 'string', 'min:6', 'max:255'],
-      'newPassword' => ['required', 'string', 'min:6', 'max:255']
+      'newPassword' => ['required', 'string', 'max:255', \Illuminate\Validation\Rules\Password::min(8)->mixedCase()->numbers()->symbols()],
     ];
+  }
+
+  /**
+   * Trim before validating so a stray copy-paste space can't get baked into
+   * the stored password or read as a spurious length/complexity failure.
+   */
+  protected function prepareForValidation(): void
+  {
+    $this->merge([
+      'newPassword' => trim((string) $this->input('newPassword')),
+    ]);
   }
 }

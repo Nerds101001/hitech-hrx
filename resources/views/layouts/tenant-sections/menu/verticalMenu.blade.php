@@ -99,8 +99,22 @@
         // empty "Administration" heading. Pre-compute, per header, whether any
         // item beneath it survives the same gates the render loop applies, and
         // drop the ones that would head an empty group.
+        // A JSON "permission" field is sometimes a list of alternatives (e.g.
+        // Sales Field Ops accepts "access-sales-ops" OR "cc_attendance.manage"
+        // so an attendance-only delegate still sees the group) — but
+        // User::can() on an array requires ALL of them, not any one. Since
+        // cc_attendance.manage is admin/hr-only, that silently hid the whole
+        // group from every Sales/CCare/New Biz/Export user it was meant for.
+        $hasAnyPermission = function ($user, $permission) {
+            if (!$user) return false;
+            foreach ((array) $permission as $p) {
+                if ($user->can($p)) return true;
+            }
+            return false;
+        };
+
         $menuUser = auth()->user();
-        $itemVisible = function ($m) use ($menuUser, $addonService, $settings) {
+        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission) {
             if (isset($m->addon) && !$addonService->isAddonEnabled($m->addon)) return false;
             if (isset($m->standardAddon)
                 && !in_array($m->standardAddon, $settings->available_modules ?? [])) return false;
@@ -116,7 +130,7 @@
                 if (empty(array_intersect($ur, $rr))) return false;
             }
             if (isset($m->permission) && !$isAdminUser) {
-                if (!$menuUser || !$menuUser->can($m->permission)) return false;
+                if (!$hasAnyPermission($menuUser, $m->permission)) return false;
             }
             if (isset($m->department) && !$isAdminUser) {
                 if (!$menuUser || !$menuUser->department
@@ -173,7 +187,7 @@
           }
 
           if(isset($menu->permission) && !$isAdmin) {
-              if (!$user || !$user->can($menu->permission)) continue;
+              if (!$hasAnyPermission($user, $menu->permission)) continue;
           }
 
           if(isset($menu->department)) {
@@ -251,7 +265,7 @@
                        }
 
                        if(isset($submenu->permission) && !$isAdmin) {
-                         if (!$user || !$user->can($submenu->permission)) continue;
+                         if (!$hasAnyPermission($user, $submenu->permission)) continue;
                      }
 
                        // Same gate as the parent: never draw a child the user
