@@ -722,6 +722,10 @@ class DashboardController extends Controller
         return view('tenant.users.dashboard.admin-index', [
           'todayVisits'           => $todayVisits,
           'pageConfigs'           => ['contentLayout' => 'wide'],
+          // Celebrations card — computed above for the HR dashboard, but the
+          // Admin view was never handed them, so its card rendered empty.
+          'upcomingBirthdays'     => $upcomingBirthdays,
+          'upcomingAnniversaries' => $upcomingAnniversaries,
           // headline stats
           'activeEmployees'       => $active,
           'totalUser'             => $totalUser,

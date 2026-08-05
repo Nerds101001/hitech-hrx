@@ -353,6 +353,12 @@
         </div>
       </div>
 
+      {{-- Celebrations — birthdays and work anniversaries, with the Send-a-Wish
+           action. Shared partial so Admin and HR cannot drift apart. --}}
+      <div class="row g-3 mt-0">
+        @include('tenant.users.dashboard._adc-celebrations')
+      </div>
+
     </div>
 
     {{-- ========== RIGHT RAIL ========== --}}

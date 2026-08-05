@@ -162,6 +162,18 @@
                     ]
                 },
                 {
+                    "url": "/employees/celebrations",
+                    "name": "Celebrations",
+                    "slug": "employee.celebrations",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "accounts",
+                        "employee"
+                    ]
+                },
+                {
                     "url": "/organizationHierarchy",
                     "name": "Org Hierarchy",
                     "slug": "organizationHierarchy.index",
