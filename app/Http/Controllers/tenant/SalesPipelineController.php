@@ -869,7 +869,10 @@ class SalesPipelineController extends Controller
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
+        // A customer search "Add me" claim reaches this same endpoint for a row the
+        // caller has no prior connection to — canClaimCustomer() covers that case
+        // without loosening it for non-sales users hitting this directly.
+        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage') && !\App\Support\SalesScope::canClaimCustomer($user)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         $request->validate([

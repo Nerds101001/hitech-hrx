@@ -58,6 +58,12 @@
                 <i class="bx bx-upload me-1"></i> Import Sales Report
             </a>
         @endif
+        @if(\App\Support\SalesScope::canClaimCustomer($user))
+            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center"
+                    data-bs-toggle="modal" data-bs-target="#claimSearchModal">
+                <i class="bx bx-search-alt me-1"></i> Find &amp; Claim Customer
+            </button>
+        @endif
         @if($syncTargetId)
             @if($syncMapped)
                 @include('tenant.partials.setu-period-picker')
@@ -778,6 +784,10 @@
     @include('tenant.partials.setu-review-modal')
 @endif
 
+@if(\App\Support\SalesScope::canClaimCustomer($user))
+    @include('tenant.partials.customer-claim-modal')
+@endif
+
 {{-- ─── STYLES ──────────────────────────────────────────────────────── --}}
 <style>
     /* Compact stats strip */
@@ -1439,5 +1449,160 @@ document.addEventListener('submit', function (e) {
     if (window.ResizeObserver) new ResizeObserver(place).observe(tbl);
 })();
 </script>
+
+@if(\App\Support\SalesScope::canClaimCustomer($user))
+<script>
+(function () {
+    const CURRENT_USER_ID = {{ $user->id }};
+    const modalEl = document.getElementById('claimSearchModal');
+    if (!modalEl) return;
+
+    const input   = document.getElementById('claimSearchInput');
+    const hint    = document.getElementById('claimSearchHint');
+    const results = document.getElementById('claimSearchResults');
+
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+
+    const ROLE_LABELS = { salesperson: 'Salesperson', ccare: 'CCare', new_biz: 'New Biz', new_biz_2: 'New Biz 2' };
+
+    function roleRow(id, role, person) {
+        return `
+            <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                <div><span class="text-muted small">${ROLE_LABELS[role]}:</span> <strong>${person ? esc(person.name) : 'Unassigned'}</strong></div>
+                <button type="button" class="btn btn-xs btn-outline-primary claim-role-btn" data-id="${id}" data-role="${role}" data-party="__PARTY__">Assign to me</button>
+            </div>`;
+    }
+
+    function renderCard(r) {
+        const serviceNames = (r.service_reps || []).map(p => esc(p.name)).join(', ') || 'None';
+        const partyEsc = esc(r.party_name);
+
+        return `
+        <div class="card border-0 shadow-sm mb-2">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="fw-bold">${partyEsc}</div>
+                        <div class="small text-muted">${esc(r.type || '')}${r.address ? ' · ' + esc(r.address) : ''}</div>
+                    </div>
+                    <button type="button" class="btn btn-xs btn-link claim-history-btn" data-id="${r.id}">History</button>
+                </div>
+                <div class="mt-2">
+                    ${roleRow(r.id, 'salesperson', r.salesperson).replace('__PARTY__', partyEsc)}
+                    ${roleRow(r.id, 'ccare', r.ccare).replace('__PARTY__', partyEsc)}
+                    ${roleRow(r.id, 'new_biz', r.new_biz).replace('__PARTY__', partyEsc)}
+                    ${roleRow(r.id, 'new_biz_2', r.new_biz_2).replace('__PARTY__', partyEsc)}
+                    <div class="d-flex justify-content-between align-items-center py-1">
+                        <div><span class="text-muted small">Service Sales:</span> <strong>${serviceNames}</strong></div>
+                        <button type="button" class="btn btn-xs btn-outline-secondary claim-service-btn" data-id="${r.id}" data-party="${partyEsc}">Add me</button>
+                    </div>
+                </div>
+                <div class="claim-history-panel small text-muted mt-2" style="display:none;"></div>
+            </div>
+        </div>`;
+    }
+
+    let debounceTimer = null;
+    input.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        const q = input.value.trim();
+        if (q.length < 3) {
+            results.innerHTML = '';
+            hint.textContent = q.length ? 'Type at least 3 letters…' : '';
+            return;
+        }
+        hint.textContent = 'Searching…';
+        debounceTimer = setTimeout(function () {
+            fetch(`{{ url('sales-visits/sales-report/search-customer') }}?q=${encodeURIComponent(q)}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { hint.textContent = d.message || 'Search failed.'; return; }
+                results.innerHTML = d.results.map(renderCard).join('');
+                hint.textContent = d.count === 0
+                    ? 'No customers found.'
+                    : (d.truncated ? `Showing first ${d.count} matches — refine your search.` : `${d.count} match(es).`);
+            })
+            .catch(() => { hint.textContent = 'Search failed.'; });
+        }, 300);
+    });
+
+    function finishAndReload(message) {
+        window.showSuccessSwal(message);
+        setTimeout(() => window.location.reload(), 1500);
+    }
+
+    results.addEventListener('click', function (e) {
+        const roleBtn = e.target.closest('.claim-role-btn');
+        const serviceBtn = e.target.closest('.claim-service-btn');
+        const historyBtn = e.target.closest('.claim-history-btn');
+
+        if (roleBtn) {
+            const id = roleBtn.dataset.id, role = roleBtn.dataset.role, party = roleBtn.dataset.party;
+            if (!confirm(`Assign yourself as ${ROLE_LABELS[role]} for "${party}"? This will replace the current ${ROLE_LABELS[role]}.`)) return;
+            roleBtn.disabled = true;
+            fetch(`{{ url('sales-visits/sales-report') }}/${id}/claim`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ role: role }),
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { window.showErrorSwal(d.message || 'Could not claim customer.'); roleBtn.disabled = false; return; }
+                finishAndReload(d.message);
+            })
+            .catch(() => { window.showErrorSwal('Could not claim customer.'); roleBtn.disabled = false; });
+            return;
+        }
+
+        if (serviceBtn) {
+            const id = serviceBtn.dataset.id;
+            serviceBtn.disabled = true;
+            fetch(`{{ url('sales-visits/sales-report') }}/${id}/extra-rep`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ user_id: CURRENT_USER_ID, type: 'service' }),
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (!d.success) { window.showErrorSwal(d.message || 'Could not add you as Service Sales.'); serviceBtn.disabled = false; return; }
+                finishAndReload(`You've been added as Service Sales for ${serviceBtn.dataset.party}.`);
+            })
+            .catch(() => { window.showErrorSwal('Could not add you as Service Sales.'); serviceBtn.disabled = false; });
+            return;
+        }
+
+        if (historyBtn) {
+            const id = historyBtn.dataset.id;
+            const panel = historyBtn.closest('.card-body').querySelector('.claim-history-panel');
+            if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+            panel.style.display = 'block';
+            panel.textContent = 'Loading…';
+            fetch(`{{ url('sales-visits/sales-report') }}/${id}/transfer-history`)
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.success || !d.history.length) { panel.textContent = 'No history yet.'; return; }
+                    panel.innerHTML = d.history.map(h => `
+                        <div class="py-1 border-top">
+                            <strong>${esc(h.role)}</strong>: ${esc(h.from)} → ${esc(h.to)}
+                            <span class="text-muted">by ${esc(h.changed_by)} on ${esc(h.changed_at)}</span>
+                            ${h.reason ? `<div class="fst-italic">${esc(h.reason)}</div>` : ''}
+                        </div>`).join('');
+                })
+                .catch(() => { panel.textContent = 'Could not load history.'; });
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function () {
+        input.value = '';
+        results.innerHTML = '';
+        hint.textContent = '';
+    });
+})();
+</script>
+@endif
 
 @endsection
