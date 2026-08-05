@@ -218,8 +218,7 @@
                     "slug": "departments.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 },
                 {
@@ -228,8 +227,7 @@
                     "slug": "designations.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 },
                 {
@@ -238,8 +236,7 @@
                     "slug": "teams.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 }
             ]
@@ -507,8 +504,7 @@
                     "slug": "leavePolicyProfiles.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 },
                 {
@@ -1231,8 +1227,7 @@
             ],
             "roles": [
                 "admin",
-                "hr",
-                "manager"
+                "hr"
             ],
             "submenu": [
                 {
@@ -1241,8 +1236,7 @@
                     "slug": "units.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 },
                 {
@@ -1278,8 +1272,7 @@
                     "slug": "settings.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ]
                 }
             ]

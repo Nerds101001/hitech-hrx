@@ -285,12 +285,15 @@ Route::middleware([
       Route::get('checkCodeValidationAjax', [LeaveTypeController::class, 'checkCodeValidationAjax'])->name('checkCodeValidationAjax');
     });
 
-    // Leave Policy Profiles
-    Route::get('leavePolicyProfiles', [LeavePolicyProfileController::class, 'index'])->name('leavePolicyProfiles.index');
-    Route::get('leavePolicyProfiles/getProfileAjax/{id}', [LeavePolicyProfileController::class, 'getProfileAjax'])->name('leavePolicyProfiles.getProfileAjax');
-    Route::post('leavePolicyProfiles/addOrUpdateAjax', [LeavePolicyProfileController::class, 'addOrUpdateAjax'])->name('leavePolicyProfiles.addOrUpdateAjax');
-    Route::post('leavePolicyProfiles/addManualCreditAjax', [LeavePolicyProfileController::class, 'addManualCreditAjax'])->name('leavePolicyProfiles.addManualCreditAjax');
-    Route::get('leavePolicyProfiles/getProfileListAjax', [LeavePolicyProfileController::class, 'getProfileListAjax'])->name('leavePolicyProfiles.getProfileListAjax');
+    // Leave Policy Profiles — admin/HR only. The surrounding group also admits
+    // accounts/manager for other masters, so this narrows just this feature.
+    Route::middleware(['role_or_permission:admin|hr|leave.create_policy'])->group(function () {
+      Route::get('leavePolicyProfiles', [LeavePolicyProfileController::class, 'index'])->name('leavePolicyProfiles.index');
+      Route::get('leavePolicyProfiles/getProfileAjax/{id}', [LeavePolicyProfileController::class, 'getProfileAjax'])->name('leavePolicyProfiles.getProfileAjax');
+      Route::post('leavePolicyProfiles/addOrUpdateAjax', [LeavePolicyProfileController::class, 'addOrUpdateAjax'])->name('leavePolicyProfiles.addOrUpdateAjax');
+      Route::post('leavePolicyProfiles/addManualCreditAjax', [LeavePolicyProfileController::class, 'addManualCreditAjax'])->name('leavePolicyProfiles.addManualCreditAjax');
+      Route::get('leavePolicyProfiles/getProfileListAjax', [LeavePolicyProfileController::class, 'getProfileListAjax'])->name('leavePolicyProfiles.getProfileListAjax');
+    });
 
     // Expense Types
     Route::prefix('expenseTypes')->name('expenseTypes.')->group(function () {
@@ -352,18 +355,22 @@ Route::middleware([
     });
 
     // Units (formerly Site Attendance)
-    Route::prefix('units')->name('units.')->group(function () {
-      Route::get('', [UnitController::class, 'index'])->name('index');
-      Route::get('indexAjax', [UnitController::class, 'indexAjax'])->name('indexAjax');
-      Route::get('getByIdAjax/{id}', [UnitController::class, 'getByIdAjax'])->name('getByIdAjax');
-      Route::post('addOrUpdateAjax', [UnitController::class, 'addOrUpdateAjax'])->name('addOrUpdateAjax');
-      Route::delete('deleteAjax/{id}', [UnitController::class, 'deleteAjax'])->name('deleteAjax');
-    });
+    // Units / Sites and their leave policies — admin/HR only, same reasoning as
+    // Leave Policy Profiles above: the surrounding masters group is wider.
+    Route::middleware(['role_or_permission:admin|hr|units.manage'])->group(function () {
+      Route::prefix('units')->name('units.')->group(function () {
+        Route::get('', [UnitController::class, 'index'])->name('index');
+        Route::get('indexAjax', [UnitController::class, 'indexAjax'])->name('indexAjax');
+        Route::get('getByIdAjax/{id}', [UnitController::class, 'getByIdAjax'])->name('getByIdAjax');
+        Route::post('addOrUpdateAjax', [UnitController::class, 'addOrUpdateAjax'])->name('addOrUpdateAjax');
+        Route::delete('deleteAjax/{id}', [UnitController::class, 'deleteAjax'])->name('deleteAjax');
+      });
 
-    // Unit Leave Policies
-    Route::prefix('unit-leave-policies')->name('unitLeavePolicies.')->group(function () {
-      Route::get('forUnit/{siteId}', [\App\Http\Controllers\tenant\UnitLeavePolicyController::class, 'getPoliciesForUnit'])->name('forUnit');
-      Route::post('save', [\App\Http\Controllers\tenant\UnitLeavePolicyController::class, 'savePolicy'])->name('save');
+      // Unit Leave Policies
+      Route::prefix('unit-leave-policies')->name('unitLeavePolicies.')->group(function () {
+        Route::get('forUnit/{siteId}', [\App\Http\Controllers\tenant\UnitLeavePolicyController::class, 'getPoliciesForUnit'])->name('forUnit');
+        Route::post('save', [\App\Http\Controllers\tenant\UnitLeavePolicyController::class, 'savePolicy'])->name('save');
+      });
     });
 
     }); // close Masters role:admin|hr|accounts|manager gate
@@ -607,7 +614,10 @@ Route::middleware([
       Route::post('document/{id}/reject', [ApprovalController::class, 'rejectDocument'])->name('document.reject');
     });
 
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|departments.manage|designations.manage|teams.manage'])->group(function () {
+    // Org masters are admin/HR only — managers and accounts may no longer edit
+    // the company structure. The per-capability permissions stay so one person
+    // can still be delegated access individually without widening either role.
+    Route::middleware(['role_or_permission:admin|hr|departments.manage|designations.manage|teams.manage'])->group(function () {
 
     // Departments
     Route::prefix('departments')->name('departments.')->group(function () {
