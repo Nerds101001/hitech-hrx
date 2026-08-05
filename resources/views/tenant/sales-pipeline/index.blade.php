@@ -169,7 +169,11 @@
         .sales-filter .form-select,
         .sales-filter .form-control { border:1px solid #d9dee3; background-color:#fff; box-shadow:none; }
         .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
-    </style>
+    
+/* A negative sale is a credit note, not a typo - show it red so it reads as
+   money going the other way, and name it on hover. */
+.excel-input.is-credit-note, .is-credit-note { color: #dc3545 !important; font-weight: 600; }
+</style>
     <div class="card border-0 shadow-sm rounded-3 mb-3">
         <div class="card-body py-2 px-3">
             <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
@@ -545,10 +549,12 @@
                                         </td>
                                     @endif
                                     <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
+                                        @php $isCredit = $mData && (float) $mData->sale_amount < 0; @endphp
                                         <input type="number" step="0.01"
-                                               class="excel-input text-end month-field font-monospace"
+                                               class="excel-input text-end month-field font-monospace{{ $isCredit ? ' is-credit-note' : '' }}"
                                                data-month="{{ $m['key'] }}" data-field="sale_amount"
                                                value="{{ $mData && $mData->sale_amount ? $mData->sale_amount : '' }}"
+                                               @if($isCredit) title="Credit Note" @endif
                                                {!! $roAttr !!}>
                                     </td>
                                     @if($showPend)
@@ -1100,6 +1106,69 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 
+    // A negative sale is a credit note: red, and named on hover. Applied on
+    // load and after each inline edit so a freshly typed -1.5 turns red at once.
+    function markCreditNotes(scope) {
+        (scope || document).querySelectorAll('.month-field[data-field="sale_amount"]').forEach(el => {
+            const isCredit = parseFloat(el.value) < 0;
+            el.classList.toggle('is-credit-note', isCredit);
+            if (isCredit) el.setAttribute('title', 'Credit Note'); else el.removeAttribute('title');
+        });
+        document.querySelectorAll('[id^="mtotal-"]').forEach(td => {
+            const isCredit = parseFloat(String(td.textContent).replace(/,/g, '')) < 0;
+            td.classList.toggle('is-credit-note', isCredit);
+            if (isCredit) td.setAttribute('title', 'Credit Note');
+        });
+    }
+    document.addEventListener('DOMContentLoaded', () => markCreditNotes());
+
+    // ── Grid keyboard nav ─────────────────────────────────────────────
+    // On a number input the arrow keys SPIN THE VALUE. The spinner buttons
+    // were hidden in CSS, which stopped the clicks but not the keys, so a
+    // stray Up/Down silently edited a sales figure. Arrows now move between
+    // cells like a spreadsheet, and never change what is in them.
+    (function excelGridNav() {
+        const EDITABLE = 'input.excel-input:not([type=hidden]):not([disabled])';
+
+        function move(from, dir) {
+            const td = from.closest('td'), tr = from.closest('tr');
+            if (!td || !tr) return false;
+            const col = Array.prototype.indexOf.call(tr.children, td);
+            let row = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
+            while (row) {
+                const cell = row.children[col];
+                const target = cell && cell.querySelector(EDITABLE);
+                if (target && target.offsetParent !== null) {
+                    target.focus();
+                    if (typeof target.select === 'function') target.select();
+                    return true;
+                }
+                row = dir > 0 ? row.nextElementSibling : row.previousElementSibling;
+            }
+            return false;
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Enter') return;
+            const el = e.target;
+            if (!el || !el.classList || !el.classList.contains('excel-input')) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            // Always stop the default first: on type=number that IS the spin.
+            e.preventDefault();
+            move(el, e.key === 'ArrowUp' ? -1 : 1);
+        });
+
+        // Same bug by another route: scrolling the page with the cursor over a
+        // focused number cell scrolls its value instead.
+        document.addEventListener('wheel', function (e) {
+            const el = document.activeElement;
+            if (el && el.classList && el.classList.contains('excel-input') &&
+                el.type === 'number' && el === e.target) {
+                el.blur();
+            }
+        }, { passive: true });
+    })();
+
     // ── Inline edit: month-field ──────────────────────────────────────
     document.querySelectorAll('.month-field').forEach(field => {
         field.addEventListener('change', function() {
@@ -1112,6 +1181,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const month    = this.dataset.month;
             const fieldKey = this.dataset.field;
             const val      = this.value;
+            markCreditNotes(tr);
 
             fetch(`{{ route('sales-visits.pipeline.month.update') }}`, {
                 method: 'POST',

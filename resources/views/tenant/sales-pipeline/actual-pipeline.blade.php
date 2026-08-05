@@ -429,6 +429,11 @@
     .stat-value { font-size: 0.88rem; font-weight: 700; color: #0f172a; line-height: 1.2; }
     .stat-value em { font-style: normal; font-size: 0.65rem; color: #94a3b8; margin-left: 1px; }
 
+    /* Hide the number spinners; the arrow keys are handled in JS so they
+       move between cells instead of changing the figure. */
+    .excel-input[type=number]::-webkit-outer-spin-button,
+    .excel-input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .excel-input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     .excel-input, .excel-select {
         width:100%; height:100%; min-height:28px;
         border:none !important; outline:none !important;
@@ -489,6 +494,53 @@ document.addEventListener('DOMContentLoaded', function () {
     {{-- Inline editing is attached only for roles that may change the book;
          plain salespeople get a read-only grid. Enforced server-side too. --}}
     @if($canEditBook)
+    // ── Grid keyboard nav ─────────────────────────────────────────────
+    // On a number input the arrow keys SPIN THE VALUE. The spinner buttons
+    // were hidden in CSS, which stopped the clicks but not the keys, so a
+    // stray Up/Down silently edited a sales figure. Arrows now move between
+    // cells like a spreadsheet, and never change what is in them.
+    (function excelGridNav() {
+        const EDITABLE = 'input.excel-input:not([type=hidden]):not([disabled])';
+
+        function move(from, dir) {
+            const td = from.closest('td'), tr = from.closest('tr');
+            if (!td || !tr) return false;
+            const col = Array.prototype.indexOf.call(tr.children, td);
+            let row = dir > 0 ? tr.nextElementSibling : tr.previousElementSibling;
+            while (row) {
+                const cell = row.children[col];
+                const target = cell && cell.querySelector(EDITABLE);
+                if (target && target.offsetParent !== null) {
+                    target.focus();
+                    if (typeof target.select === 'function') target.select();
+                    return true;
+                }
+                row = dir > 0 ? row.nextElementSibling : row.previousElementSibling;
+            }
+            return false;
+        }
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Enter') return;
+            const el = e.target;
+            if (!el || !el.classList || !el.classList.contains('excel-input')) return;
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            // Always stop the default first: on type=number that IS the spin.
+            e.preventDefault();
+            move(el, e.key === 'ArrowUp' ? -1 : 1);
+        });
+
+        // Same bug by another route: scrolling the page with the cursor over a
+        // focused number cell scrolls its value instead.
+        document.addEventListener('wheel', function (e) {
+            const el = document.activeElement;
+            if (el && el.classList && el.classList.contains('excel-input') &&
+                el.type === 'number' && el === e.target) {
+                el.blur();
+            }
+        }, { passive: true });
+    })();
+
     // ── Inline edit: row-field ─────────────────────────────────────────
     document.querySelectorAll('.row-field').forEach(field => {
         field.addEventListener('change', function () {
