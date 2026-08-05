@@ -17,6 +17,26 @@ use Carbon\Carbon;
 class SalesPipelineController extends Controller
 {
     /**
+     * Sentinel value for the "— No X —" person filters: rows where the person
+     * column is blank. $countsFor() groups by the column and so skips those
+     * rows entirely, which is why the "All …" totals used to read lower than
+     * the grid did.
+     */
+    private const FILTER_NONE = 'none';
+
+    /**
+     * Apply a person filter that also understands "unassigned".
+     */
+    private static function applyPersonFilter($query, string $column, $value): void
+    {
+        if ($value === self::FILTER_NONE) {
+            $query->whereNull($column);
+        } elseif (!empty($value)) {
+            $query->where($column, $value);
+        }
+    }
+
+    /**
      * The real product brands and the spellings they appear under in the
      * free-text `product` column, used by the Brand filter.
      */
@@ -134,16 +154,10 @@ class SalesPipelineController extends Controller
                 $query->where('type', $fType);
             }
         }
-        if (!empty($fSp)) {
-            $query->where('salesperson_id', $fSp);
-        }
-        if (!empty($fCcare)) {
-            $query->where('ccare_id', $fCcare);
-        }
+        self::applyPersonFilter($query, 'salesperson_id', $fSp);
+        self::applyPersonFilter($query, 'ccare_id', $fCcare);
         $fNb = $request->input('nb');      // new_biz_id
-        if (!empty($fNb)) {
-            $query->where('new_biz_id', $fNb);
-        }
+        self::applyPersonFilter($query, 'new_biz_id', $fNb);
         // Brand filter. The Brand column is the free-text `product` field, which
         // holds things like "dr. bio - fillezy - rustx", so filtering on exact
         // values would offer hundreds of one-off options. Match the real brands
@@ -300,6 +314,16 @@ class SalesPipelineController extends Controller
         $spFilterCounts    = $countsFor('salesperson_id');
         $ccareFilterCounts = $countsFor('ccare_id');
         $nbFilterCounts    = $countsFor('new_biz_id');
+        // Rows where the column is blank. $countsFor() groups by the column and
+        // so skips these entirely, which is why "All Salespersons" showed fewer
+        // than the grid did. Each becomes a "No …" option and is added back into
+        // the "All" total so the two agree again.
+        $noneCountFor = function (string $column) use ($optionBase) {
+            return (clone $optionBase)->whereNull($column)->count();
+        };
+        $spNoneCount    = $noneCountFor('salesperson_id');
+        $ccareNoneCount = $noneCountFor('ccare_id');
+        $nbNoneCount    = $noneCountFor('new_biz_id');
         // Brand options, built from the brands actually present in what this
         // user can see, each with its row count.
         // Bucket the free-text product values into the real brands. One grouped
@@ -474,8 +498,16 @@ class SalesPipelineController extends Controller
 
         // Deleting a customer wipes its whole sales history, so it is
         // admin-only (plus an explicit sales_report.manage grant).
-        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
-            || auth()->user()->can('sales_report.manage');
+        // The trash icon raises a delete REQUEST, it does not delete anything
+        // directly — approval is a separate admin/HR step and every delete is
+        // audited. Client decision 2026-08-01: the sales floor (CCare / New Biz
+        // / any salesperson with a book) may raise one so reps can clear their
+        // own duplicates without waiting on an admin.
+        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
+            || auth()->user()->can('sales_report.manage')
+            || auth()->user()->isCcareAgent()
+            || auth()->user()->isNewBizAgent()
+            || SalesPipeline::where('salesperson_id', auth()->id())->exists();
 
         // Setu Sync button target: self, or — for privileged viewers — whoever
         // the sp= filter is currently focused on. Mirrors syncSetu()'s own
@@ -508,7 +540,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -770,8 +802,16 @@ class SalesPipelineController extends Controller
 
         // Deleting a customer wipes its whole sales history, so it is
         // admin-only (plus an explicit sales_report.manage grant).
-        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
-            || auth()->user()->can('sales_report.manage');
+        // The trash icon raises a delete REQUEST, it does not delete anything
+        // directly — approval is a separate admin/HR step and every delete is
+        // audited. Client decision 2026-08-01: the sales floor (CCare / New Biz
+        // / any salesperson with a book) may raise one so reps can clear their
+        // own duplicates without waiting on an admin.
+        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
+            || auth()->user()->can('sales_report.manage')
+            || auth()->user()->isCcareAgent()
+            || auth()->user()->isNewBizAgent()
+            || SalesPipeline::where('salesperson_id', auth()->id())->exists();
 
         return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
@@ -1474,7 +1514,14 @@ class SalesPipelineController extends Controller
         );
 
         $field = $request->field;
-        $monthData->$field = $request->value;
+        $value = $request->value;
+        // forecast/sale/pending are NOT NULL columns: clearing a cell sends an
+        // empty string, and writing that as NULL threw an integrity-constraint
+        // violation (a 500 on every cleared cell). An empty amount means zero.
+        if ($field !== 'remarks' && ($value === null || $value === '')) {
+            $value = 0;
+        }
+        $monthData->$field = $value;
         $monthData->save();
 
         if ($field === 'sale_amount') {

@@ -145,14 +145,22 @@
                 </select>
                 {{-- Full directory filters for every role: rows stay scoped, so an
                      out-of-scope pick simply shows only what the user may see. --}}
-                <select class="form-select" name="sp" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All Salespersons ({{ $spFilterCounts->sum() }})</option>
+                {{-- "No Salesperson" isolates the independent customers a CCare
+                     rep holds directly. Shown only when such rows exist here. --}}
+                <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
+                    <option value="">All Salespersons ({{ $spFilterCounts->sum() + $spNoneCount }})</option>
+                    @if($spNoneCount)
+                        <option value="none" {{ (string)$fSp === 'none' ? 'selected' : '' }}>&mdash; No Salesperson &mdash; ({{ $spNoneCount }})</option>
+                    @endif
                     @foreach($salespersonFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)$fSp === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $spFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
                 </select>
-                <select class="form-select" name="ccare" style="width:170px;" onchange="this.form.submit()">
-                    <option value="">All CCare ({{ $ccareFilterCounts->sum() }})</option>
+                <select class="form-select" name="ccare" style="width:180px;" onchange="this.form.submit()">
+                    <option value="">All CCare ({{ $ccareFilterCounts->sum() + $ccareNoneCount }})</option>
+                    @if($ccareNoneCount)
+                        <option value="none" {{ (string)$fCcare === 'none' ? 'selected' : '' }}>&mdash; No CCare &mdash; ({{ $ccareNoneCount }})</option>
+                    @endif
                     @foreach($ccareFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)$fCcare === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $ccareFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
@@ -163,8 +171,11 @@
                         <option value="{{ $bName }}" {{ (string)($fBrand ?? '') === (string)$bName ? 'selected' : '' }}>{{ $bName }} ({{ $bCount }})</option>
                     @endforeach
                 </select>
-                <select class="form-select" name="nb" style="width:170px;" onchange="this.form.submit()">
-                    <option value="">All New Biz ({{ $nbFilterCounts->sum() }})</option>
+                <select class="form-select" name="nb" style="width:180px;" onchange="this.form.submit()">
+                    <option value="">All New Biz ({{ $nbFilterCounts->sum() + $nbNoneCount }})</option>
+                    @if($nbNoneCount)
+                        <option value="none" {{ (string)($fNb ?? '') === 'none' ? 'selected' : '' }}>&mdash; No New Biz &mdash; ({{ $nbNoneCount }})</option>
+                    @endif
                     @foreach($newBizFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $nbFilterCounts[$au->id] ?? 0 }})</option>
                     @endforeach
@@ -480,14 +491,14 @@
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
-                                                   value="{{ $mData->forecast_amount ?? 0 }}">
+                                                   value="{{ $mData && $mData->forecast_amount ? $mData->forecast_amount : '' }}">
                                         </td>
                                     @endif
                                     <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
                                         <input type="number" step="0.01"
                                                class="excel-input text-end month-field font-monospace"
                                                data-month="{{ $m['key'] }}" data-field="sale_amount"
-                                               value="{{ $mData->sale_amount ?? 0 }}"
+                                               value="{{ $mData && $mData->sale_amount ? $mData->sale_amount : '' }}"
                                                {!! $roAttr !!}>
                                     </td>
                                     @if($showPend)
@@ -495,7 +506,7 @@
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
-                                                   value="{{ $mData->pending_amount ?? 0 }}">
+                                                   value="{{ $mData && $mData->pending_amount ? $mData->pending_amount : '' }}">
                                         </td>
                                     @endif
                                     @if($isThisMonth)
@@ -865,6 +876,16 @@
     .col-category   { min-width:90px;  max-width:100px; }
     .col-repname    { min-width:130px; max-width:150px; overflow:hidden; text-overflow:ellipsis; }
 
+    /* Excel-style column resize handle, appended to every <th> by JS. */
+    #pipelineTable .col-resize-handle {
+        position: absolute; top: 0; right: 0; bottom: 0; width: 6px;
+        cursor: col-resize; z-index: 50; user-select: none;
+    }
+    #pipelineTable .col-resize-handle:hover,
+    #pipelineTable .col-resize-handle:active {
+        background: rgba(255,255,255,0.35);
+    }
+
     .block-end { border-right: 2px solid #64748b !important; }
     .bg-forecast-light { background-color: #eff6ff !important; }
     .bg-forecast-light input { color: #1e40af !important; font-weight: 600; }
@@ -932,7 +953,60 @@
 
 {{-- ─── SCRIPTS ─────────────────────────────────────────────────────── --}}
 <script>
+// Excel-style drag-to-resize columns. Width persists per-column in
+// localStorage (keyed by table id + column index) so it survives reloads.
+function makeTableColumnsResizable(tableId) {
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    var storagePrefix = 'colw_' + tableId + '_';
+
+    table.querySelectorAll('thead th').forEach(function (th, idx) {
+        var saved = localStorage.getItem(storagePrefix + idx);
+        if (saved) {
+            th.style.width = saved + 'px';
+            th.style.minWidth = saved + 'px';
+            th.style.maxWidth = saved + 'px';
+        }
+
+        if (th.querySelector('.col-resize-handle')) return;
+        if (getComputedStyle(th).position === 'static') th.style.position = 'relative';
+
+        var handle = document.createElement('span');
+        handle.className = 'col-resize-handle';
+        th.appendChild(handle);
+
+        // Headers here are often clickable (sort) -- a resize drag must
+        // never bubble up and trigger that.
+        handle.addEventListener('click', function (e) { e.stopPropagation(); });
+        handle.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var startX = e.pageX;
+            var startWidth = th.offsetWidth;
+            document.body.style.userSelect = 'none';
+            document.body.style.cursor = 'col-resize';
+
+            function onMove(e2) {
+                var newWidth = Math.max(40, startWidth + (e2.pageX - startX));
+                th.style.width = newWidth + 'px';
+                th.style.minWidth = newWidth + 'px';
+                th.style.maxWidth = newWidth + 'px';
+            }
+            function onUp() {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                document.body.style.userSelect = '';
+                document.body.style.cursor = '';
+                localStorage.setItem(storagePrefix + idx, th.offsetWidth);
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        });
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    makeTableColumnsResizable('pipelineTable');
 
     // ── Inline edit: row-field (type, etc.) ───────────────────────────
     document.querySelectorAll('.row-field').forEach(field => {
