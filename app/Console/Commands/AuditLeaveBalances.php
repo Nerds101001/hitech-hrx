@@ -187,9 +187,16 @@ class AuditLeaveBalances extends Command
                             DB::table('leave_balances')
                                 ->where('user_id', $user->id)
                                 ->where('leave_type_id', $typeId)
+                                /* Query\Builder::update() takes no bindings argument, so a
+                                   raw expression here cannot be parameterised. Casting to
+                                   float and formatting to a fixed decimal makes the value
+                                   deterministic — PHP's default float-to-string can emit
+                                   scientific notation or a locale comma, either of which
+                                   would corrupt a leave balance. Numeric-only output also
+                                   leaves nothing injectable. */
                                 ->update([
-                                    'balance'    => DB::raw("balance + {$mergedBalance}"),
-                                    'used'       => DB::raw("used + {$mergedUsed}"),
+                                    'balance'    => DB::raw('balance + ' . number_format((float) $mergedBalance, 4, '.', '')),
+                                    'used'       => DB::raw('used + ' . number_format((float) $mergedUsed, 4, '.', '')),
                                     'updated_at' => now(),
                                 ]);
                         }

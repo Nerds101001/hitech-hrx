@@ -14,7 +14,7 @@ class FindUserByEmail extends Command
     {
         $search = $this->argument('search');
 
-        $users = User::withoutGlobalScopes()
+        $users = User::withTrashed()
             ->where('email', 'LIKE', "%{$search}%")
             ->whereNull('deleted_at')
             ->get(['id', 'first_name', 'last_name', 'email', 'status']);

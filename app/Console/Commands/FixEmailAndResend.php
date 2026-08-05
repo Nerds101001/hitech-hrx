@@ -17,7 +17,7 @@ class FixEmailAndResend extends Command
         $oldEmail = $this->argument('oldEmail');
         $newEmail = $this->argument('newEmail');
 
-        $user = User::withoutGlobalScopes()
+        $user = User::withTrashed()
             ->whereRaw('LOWER(email) = ?', [strtolower($oldEmail)])
             ->whereNull('deleted_at')
             ->first();
@@ -30,7 +30,7 @@ class FixEmailAndResend extends Command
         $this->line("Found: ID={$user->id}, Name={$user->first_name} {$user->last_name}, Email={$user->email}");
 
         // Check new email not already taken
-        $exists = User::withoutGlobalScopes()
+        $exists = User::withTrashed()
             ->whereRaw('LOWER(email) = ?', [strtolower($newEmail)])
             ->whereNull('deleted_at')
             ->exists();

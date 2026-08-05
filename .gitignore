@@ -95,3 +95,19 @@ vite.config.js.timestamp-*
 
 # Deployment credentials — never commit
 /deployment/.env.deploy
+
+# One-off analysis scratch (Setu/HRX reconciliation, audits, exports)
+/zz_*
+/tables.txt
+/composer.json.backup
+/composer.lock.backup
+
+# Staff PII dumps - never commit these
+/users.txt
+/users_emails.txt
+/names_emails.txt
+/manpreet_audit.log
+/manpreet_action_summary.txt
+
+# Holds the live database name, user and password as parameter defaults
+/deployment/hostinger/fetch_live_db.ps1

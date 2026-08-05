@@ -18,7 +18,7 @@ class SendOnboardingByCode extends Command
         foreach ($codes as $code) {
             $this->info("\n--- Employee Code: {$code} ---");
 
-            $user = User::withoutGlobalScopes()
+            $user = User::withTrashed()
                 ->where('code', $code)
                 ->orWhereRaw('LOWER(email) = ?', [strtolower($code)])
                 ->whereNull('deleted_at')

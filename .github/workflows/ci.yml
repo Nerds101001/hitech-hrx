@@ -1,0 +1,98 @@
+name: CI
+
+# Four gates, cheapest first. The dependency audit runs before anything else
+# because it is the one that would have caught the PhpSpreadsheet RCE months
+# before it was found by hand.
+on:
+  push:
+    branches: [master, main, menu-restructure]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          # Match production (/opt/alt/php84). Local is 8.3, which is why the
+          # dependency graph currently will not resolve — see composer audit.
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: composer audit
+        # Fails the build on any known CVE in the lock file.
+        run: composer audit
+
+  style:
+    name: Pint (code style)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Check formatting
+        # --test reports without rewriting files.
+        run: vendor/bin/pint --test
+
+  tests:
+    name: PHPUnit
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: hrx_test
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, gd, bcmath
+          coverage: none
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force
+
+      - name: Migrate test database
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: hrx_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate --force
+
+      - name: Run tests
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: hrx_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: vendor/bin/phpunit

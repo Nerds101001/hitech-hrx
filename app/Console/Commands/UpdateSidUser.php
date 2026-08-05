@@ -39,7 +39,7 @@ class UpdateSidUser extends Command
             $this->info('Starting user update for sid@rustx.com...');
 
             // Find or create the user — email stored as Sid@rustx.com (capital S)
-            $user = User::withoutGlobalScopes()
+            $user = User::withTrashed()
                 ->whereRaw('LOWER(email) = ?', ['sid@rustx.com'])
                 ->first();
             
@@ -56,7 +56,7 @@ class UpdateSidUser extends Command
             }
 
             // Find Admin department
-            $department = Department::withoutGlobalScopes()
+            $department = Department::withTrashed()
                 ->where('name', 'LIKE', '%Admin%')
                 ->orWhere('name', 'LIKE', '%admin%')
                 ->first();
@@ -73,7 +73,7 @@ class UpdateSidUser extends Command
             $this->info("Department: {$department->name} (ID: {$department->id})");
 
             // Find Director designation
-            $designation = Designation::withoutGlobalScopes()
+            $designation = Designation::withTrashed()
                 ->where('name', 'LIKE', '%Director%')
                 ->orWhere('name', 'LIKE', '%director%')
                 ->first();
@@ -91,13 +91,13 @@ class UpdateSidUser extends Command
             $this->info("Designation: {$designation->name} (ID: {$designation->id})");
 
             // Find Ludhiana leave policy
-            $leavePolicy = LeavePolicyProfile::withoutGlobalScopes()
+            $leavePolicy = LeavePolicyProfile::withTrashed()
                 ->whereRaw('LOWER(name) LIKE ?', ['%ludhiana%'])
                 ->first();
             
             if (!$leavePolicy) {
                 // List all available policies for info
-                $allPolicies = LeavePolicyProfile::withoutGlobalScopes()->pluck('name', 'id')->toArray();
+                $allPolicies = LeavePolicyProfile::withTrashed()->pluck('name', 'id')->toArray();
                 $this->warn('Ludhiana leave policy not found.');
                 $this->warn('Available policies: ' . implode(', ', $allPolicies));
                 $leavePolicy = null;
