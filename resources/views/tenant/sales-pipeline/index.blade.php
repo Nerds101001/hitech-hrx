@@ -39,12 +39,19 @@
 @endsection
 
 @section('navbar-actions')
-    <div class="d-flex gap-2 align-items-center flex-wrap">
+    {{-- Two clusters, not one flat row: "what am I looking at" (whose data,
+         which year) stays visible, while every action collapses into a single
+         menu. A manager previously saw up to eight controls side by side, which
+         wrapped onto a second line and pushed into the page title. --}}
+    <div class="d-flex gap-2 align-items-center sp-toolbar">
+
+        {{-- ── View context ────────────────────────────────────────────── --}}
         @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.pipeline.index', 'mvMemberParam' => 'sp'])
-        <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="d-flex gap-2 mb-0">
+
+        <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="mb-0">
             @php $startYear = 2023; $endYear = (int)date('Y') + 1; @endphp
             <select name="fy" class="form-select form-select-sm border-0 fw-bold"
-                    style="background-color: rgba(15, 118, 110, 0.1); color: #0f766e;" onchange="this.form.submit()">
+                    style="background-color: rgba(15, 118, 110, 0.1); color: #0f766e; width:auto;" onchange="this.form.submit()">
                 @for($i = $startYear; $i <= $endYear; $i++)
                     <option value="{{ $i }}-{{ $i+1 }}"
                         {{ $selectedFy == ($i.'-'.($i+1)) ? 'selected' : '' }}>
@@ -53,40 +60,80 @@
                 @endfor
             </select>
         </form>
-        @if($isCcare || $isAdmin || $isNewBiz)
-            <a href="{{ route('sales-visits.pipeline.import') }}" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold shadow-sm d-flex align-items-center" title="Import Sales Report">
-                <i class="bx bx-upload me-1"></i> Import Sales Report
-            </a>
-        @endif
-        @if(\App\Support\SalesScope::canClaimCustomer($user))
-            <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center"
-                    data-bs-toggle="modal" data-bs-target="#claimSearchModal">
-                <i class="bx bx-search-alt me-1"></i> Find &amp; Claim Customer
-            </button>
-        @endif
-        @if($syncTargetId)
-            @if($syncMapped)
-                @include('tenant.partials.setu-period-picker')
-                <button type="button" id="btnSyncSetu" data-target-id="{{ $syncTargetId }}"
-                        class="btn btn-sm btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center">
-                    <i class="bx bx-sync me-1"></i> Sync {{ $syncTargetLabel }} Sales Report
+
+        {{-- ── Actions ─────────────────────────────────────────────────── --}}
+        @php
+            $spCanImport = $isCcare || $isAdmin || $isNewBiz;
+            $spCanClaim  = \App\Support\SalesScope::canClaimCustomer($user);
+            $spHasSetu   = (bool) $syncTargetId;
+            $spHasAction = $spCanImport || $spCanClaim || $spHasSetu || $isAdmin;
+        @endphp
+        @if($spHasAction)
+            {{-- auto-close="outside" so the Setu period selects inside the menu
+                 can be used without the menu closing on the first click. --}}
+            <div class="dropdown">
+                <button class="btn btn-sm btn-primary rounded-pill fw-bold shadow-sm dropdown-toggle d-flex align-items-center"
+                        type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <i class="bx bx-slider-alt me-1"></i> Actions
                 </button>
-            @else
-                <span tabindex="0" data-bs-toggle="tooltip" title="Not linked to Setu yet — contact admin">
-                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold shadow-sm d-flex align-items-center" disabled style="pointer-events: none;">
-                        <i class="bx bx-sync me-1"></i> Sync {{ $syncTargetLabel }} Sales Report
-                    </button>
-                </span>
-            @endif
-        @endif
-        {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
-        @if($isAdmin)
-            <a href="{{ route('sales-visits.kingo-bingo.fill-targets') }}" class="btn btn-sm btn-success rounded-pill fw-bold shadow-sm d-flex align-items-center">
-                <i class="bx bx-edit me-1"></i> Fill Targets
-            </a>
-            <button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-bold shadow-sm d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#targetsModal">
-                <i class="bx bx-target-lock me-1"></i> Assign Targets
-            </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 py-2" style="min-width:270px;">
+
+                    @if($spCanClaim)
+                        <li>
+                            <button type="button" class="dropdown-item d-flex align-items-center gap-2"
+                                    data-bs-toggle="modal" data-bs-target="#claimSearchModal">
+                                <i class="bx bx-search-alt text-primary"></i> Find &amp; Claim Customer
+                            </button>
+                        </li>
+                    @endif
+
+                    @if($spCanImport)
+                        <li>
+                            <a href="{{ route('sales-visits.pipeline.import') }}" class="dropdown-item d-flex align-items-center gap-2">
+                                <i class="bx bx-upload text-secondary"></i> Import Sales Report
+                            </a>
+                        </li>
+                    @endif
+
+                    @if($spHasSetu)
+                        <li><hr class="dropdown-divider"></li>
+                        @if($syncMapped)
+                            <li class="px-3 pb-2">
+                                @include('tenant.partials.setu-period-picker')
+                            </li>
+                            <li>
+                                <button type="button" id="btnSyncSetu" data-target-id="{{ $syncTargetId }}"
+                                        class="dropdown-item d-flex align-items-center gap-2">
+                                    <i class="bx bx-sync text-primary"></i> Sync {{ $syncTargetLabel }} Sales Report
+                                </button>
+                            </li>
+                        @else
+                            <li>
+                                <span class="dropdown-item disabled d-flex align-items-center gap-2"
+                                      title="Not linked to Setu yet — contact admin">
+                                    <i class="bx bx-sync"></i> Sync {{ $syncTargetLabel }} Sales Report
+                                </span>
+                            </li>
+                        @endif
+                    @endif
+
+                    {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
+                    @if($isAdmin)
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a href="{{ route('sales-visits.kingo-bingo.fill-targets') }}" class="dropdown-item d-flex align-items-center gap-2">
+                                <i class="bx bx-edit text-success"></i> Fill Targets
+                            </a>
+                        </li>
+                        <li>
+                            <button type="button" class="dropdown-item d-flex align-items-center gap-2"
+                                    data-bs-toggle="modal" data-bs-target="#targetsModal">
+                                <i class="bx bx-target-lock text-success"></i> Assign Targets
+                            </button>
+                        </li>
+                    @endif
+                </ul>
+            </div>
         @endif
     </div>
 @endsection

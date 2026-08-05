@@ -17,18 +17,24 @@
     $mvOnSelf      = !$mvOnTeam && !$mvOnMember;
 @endphp
 @if(($isManager ?? false) && ($hasTeam ?? false) && !empty($mvRoute))
-<div class="d-flex gap-2 align-items-center flex-wrap">
-    <a href="{{ route($mvRoute, array_filter(['fy' => $mvFy])) }}"
-       class="btn btn-sm rounded-pill fw-bold shadow-sm {{ $mvOnSelf ? 'btn-primary' : 'btn-outline-secondary' }}">
-        <i class="bx bx-user me-1"></i> My Data
-    </a>
-    <a href="{{ route($mvRoute, array_filter(['team' => 1, 'fy' => $mvFy])) }}"
-       class="btn btn-sm rounded-pill fw-bold shadow-sm {{ $mvOnTeam ? 'btn-primary' : 'btn-outline-primary' }}">
-        <i class="bx bx-group me-1"></i> Team
-    </a>
-    <form method="GET" class="d-inline">
+{{-- One segmented control rather than two loose pills: My Data / Team are
+     mutually exclusive views of the same page, so they read better joined. --}}
+<div class="d-flex gap-2 align-items-center">
+    <div class="btn-group btn-group-sm shadow-sm" role="group" aria-label="Whose data to show">
+        <a href="{{ route($mvRoute, array_filter(['fy' => $mvFy])) }}"
+           class="btn fw-bold d-flex align-items-center {{ $mvOnSelf ? 'btn-primary' : 'btn-outline-secondary' }}">
+            <i class="bx bx-user me-1"></i> My Data
+        </a>
+        <a href="{{ route($mvRoute, array_filter(['team' => 1, 'fy' => $mvFy])) }}"
+           class="btn fw-bold d-flex align-items-center {{ $mvOnTeam ? 'btn-primary' : 'btn-outline-secondary' }}">
+            <i class="bx bx-group me-1"></i> Team
+        </a>
+    </div>
+    <form method="GET" class="mb-0">
         @if($mvFy)<input type="hidden" name="fy" value="{{ $mvFy }}">@endif
-        <select name="{{ $mvMemberParam }}" class="form-select form-select-sm" style="min-width:170px" onchange="this.form.submit()">
+        <select name="{{ $mvMemberParam }}"
+                class="form-select form-select-sm {{ $mvOnMember ? 'border-primary fw-semibold' : '' }}"
+                style="width:auto; max-width:190px;" onchange="this.form.submit()">
             <option value="">— Team member —</option>
             @foreach(($teamMembers ?? collect()) as $tm)
             <option value="{{ $tm->id }}" {{ $mvSelected == $tm->id ? 'selected' : '' }}>{{ $tm->name }}</option>
