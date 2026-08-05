@@ -23,11 +23,14 @@ class SalesDeleteRequestController extends Controller
     private function canRequest($user): bool
     {
         if (!$user) return false;
+        // Plain salespeople are read-only on the sales book (decision
+        // 2026-08-05), so they can no longer raise a delete request either —
+        // the "owns rows as salesperson" clause that used to admit them has
+        // been dropped. Mirrors SalesPipelineController::canEditBook().
         return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
             || $user->can('sales_report.manage')
             || $user->isCcareAgent()
-            || $user->isNewBizAgent()
-            || SalesPipeline::withTrashed()->where('salesperson_id', $user->id)->exists();
+            || $user->isNewBizAgent();
     }
 
     /** Deciding a request — admin/HR only (deletion cannot be undone). */

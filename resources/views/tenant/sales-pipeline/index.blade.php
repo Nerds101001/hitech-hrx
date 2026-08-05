@@ -530,15 +530,18 @@
                                         $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
                                         $showPend    = $isThisMonth || ($m['key'] === $prevMonthKey);
                                         // Past months are editable too — users need to correct
-                                        // imported / historical figures.
-                                        $roAttr      = '';
+                                        // imported / historical figures. Read-only roles (plain
+                                        // salespeople) get the attribute on every month cell, so
+                                        // the figures cannot be typed into even with JS disabled.
+                                        $roAttr      = $canEditBook ? '' : 'readonly';
                                     @endphp
                                     @if($showPend)
                                         <td class="p-0 bg-forecast-light" style="max-width:52px;">
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
-                                                   value="{{ $mData && $mData->forecast_amount ? $mData->forecast_amount : '' }}">
+                                                   value="{{ $mData && $mData->forecast_amount ? $mData->forecast_amount : '' }}"
+                                                   {!! $roAttr !!}>
                                         </td>
                                     @endif
                                     <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
@@ -553,14 +556,16 @@
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
-                                                   value="{{ $mData && $mData->pending_amount ? $mData->pending_amount : '' }}">
+                                                   value="{{ $mData && $mData->pending_amount ? $mData->pending_amount : '' }}"
+                                                   {!! $roAttr !!}>
                                         </td>
                                     @endif
                                     @if($isThisMonth)
                                         <td class="p-0 block-end" style="max-width:95px;">
                                             <input type="text" class="excel-input month-field"
                                                    data-month="{{ $m['key'] }}" data-field="remarks"
-                                                   value="{{ $mData ? $mData->remarks : '' }}">
+                                                   value="{{ $mData ? $mData->remarks : '' }}"
+                                                   {!! $roAttr !!}>
                                         </td>
                                     @endif
                                 @endforeach
@@ -693,8 +698,8 @@
         <div>{{ $pipelines->onEachSide(1)->links() }}</div>
     </div>
 
-    {{-- Add New Entry trigger --}}
-    <div class="d-flex justify-content-center py-2 mt-1">
+    {{-- Add New Entry trigger — hidden for read-only roles (plain salespeople). --}}
+    <div class="d-flex justify-content-center py-2 mt-1 @unless($canEditBook) d-none @endunless">
         <button class="btn btn-sm btn-outline-success rounded-pill px-4" id="addRowTriggerBtn"
                 onclick="showAddNewRow()" style="border-color:#0f766e;color:#0f766e;">
             <i class="bx bx-plus-circle me-1"></i> Add New Entry
@@ -1055,6 +1060,11 @@ function makeTableColumnsResizable(tableId) {
 document.addEventListener('DOMContentLoaded', function() {
     makeTableColumnsResizable('pipelineTable');
 
+    {{-- Inline editing is attached only for roles that may change the book.
+         Plain salespeople get a read-only grid: no click-to-edit cells, no
+         field saves, no rep/tag changes. The write endpoints enforce the same
+         rule server-side, so this is presentation, not the security boundary. --}}
+    @if($canEditBook)
     // ── Inline edit: row-field (type, etc.) ───────────────────────────
     document.querySelectorAll('.row-field').forEach(field => {
         field.addEventListener('change', function() {
@@ -1210,6 +1220,8 @@ document.addEventListener('DOMContentLoaded', function() {
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
         }).then(r => r.json()).then(d => { if (d.success) tag.remove(); });
     });
+
+    @endif
 
     // ── Setu Sync — opens the shared preview modal (customer × month-wise
     // changes), then the review modal for similar-name decisions. Driven by

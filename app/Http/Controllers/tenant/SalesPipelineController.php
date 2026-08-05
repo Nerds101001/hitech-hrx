@@ -37,6 +37,29 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * May this user change anything on the Sales Report / Sales Pipeline book?
+     *
+     * Plain salespeople are READ-ONLY on both pages by decision of 2026-08-05:
+     * the book is maintained by CCare / New Biz, and a salesperson editing
+     * their own rows was producing conflicting figures on shared customers.
+     * They keep full visibility — this gates writes only.
+     *
+     * Note this deliberately does NOT accept "is the salesperson on this row",
+     * which is exactly the clause that used to let them through.
+     */
+    private static function canEditBook($user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
+            || $user->isCcareAgent()
+            || $user->isNewBizAgent()
+            || $user->can('sales_report.manage');
+    }
+
+    /**
      * The real product brands and the spellings they appear under in the
      * free-text `product` column, used by the Brand filter.
      */
@@ -498,16 +521,16 @@ class SalesPipelineController extends Controller
 
         // Deleting a customer wipes its whole sales history, so it is
         // admin-only (plus an explicit sales_report.manage grant).
+        // Single source of truth for "may this user change the book at all".
+        // The view uses it to render read-only; the write endpoints enforce it.
+        $canEditBook = self::canEditBook($user);
+
         // The trash icon raises a delete REQUEST, it does not delete anything
         // directly — approval is a separate admin/HR step and every delete is
-        // audited. Client decision 2026-08-01: the sales floor (CCare / New Biz
-        // / any salesperson with a book) may raise one so reps can clear their
-        // own duplicates without waiting on an admin.
-        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
-            || auth()->user()->can('sales_report.manage')
-            || auth()->user()->isCcareAgent()
-            || auth()->user()->isNewBizAgent()
-            || SalesPipeline::where('salesperson_id', auth()->id())->exists();
+        // audited. CCare / New Biz may raise one so reps can clear their own
+        // duplicates without waiting on an admin; plain salespeople are
+        // read-only (2026-08-05) so they cannot.
+        $canDeleteCustomer = $canEditBook;
 
         // Setu Sync button target: self, or — for privileged viewers — whoever
         // the sp= filter is currently focused on. Mirrors syncSetu()'s own
@@ -540,7 +563,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -802,18 +825,18 @@ class SalesPipelineController extends Controller
 
         // Deleting a customer wipes its whole sales history, so it is
         // admin-only (plus an explicit sales_report.manage grant).
+        // Single source of truth for "may this user change the book at all".
+        // The view uses it to render read-only; the write endpoints enforce it.
+        $canEditBook = self::canEditBook($user);
+
         // The trash icon raises a delete REQUEST, it does not delete anything
         // directly — approval is a separate admin/HR step and every delete is
-        // audited. Client decision 2026-08-01: the sales floor (CCare / New Biz
-        // / any salesperson with a book) may raise one so reps can clear their
-        // own duplicates without waiting on an admin.
-        $canDeleteCustomer = auth()->user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager'])
-            || auth()->user()->can('sales_report.manage')
-            || auth()->user()->isCcareAgent()
-            || auth()->user()->isNewBizAgent()
-            || SalesPipeline::where('salesperson_id', auth()->id())->exists();
+        // audited. CCare / New Biz may raise one so reps can clear their own
+        // duplicates without waiting on an admin; plain salespeople are
+        // read-only (2026-08-05) so they cannot.
+        $canDeleteCustomer = $canEditBook;
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
     }
 
     public function store(Request $request)
@@ -823,6 +846,15 @@ class SalesPipelineController extends Controller
         ]);
 
         $user = auth()->user();
+        // Adding a customer is book editing — read-only roles (plain
+        // salespeople) must not create rows either. This endpoint previously
+        // had no authorization check at all.
+        if (!self::canEditBook($user)) {
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            }
+            return redirect()->back()->with('error', 'You do not have permission to add a customer.');
+        }
         $isCcareUser = $user->isCcareAgent();
         $isNewBizUser = $user->isNewBizAgent();
         $isAdmin = $user->hasRole(['admin', 'Admin', 'hr', 'manager']);
@@ -908,11 +940,14 @@ class SalesPipelineController extends Controller
     {
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
-        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        // A customer search "Add me" claim reaches this same endpoint for a row the
-        // caller has no prior connection to — canClaimCustomer() covers that case
-        // without loosening it for non-sales users hitting this directly.
-        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage') && !\App\Support\SalesScope::canClaimCustomer($user)) {
+        // Two different callers land here. The grid's "Other Reps / Service
+        // Sales" cell is book editing, so it follows canEditBook(). The customer
+        // search "Add me" claim is a separate, deliberately broader feature —
+        // but only ever for the caller adding THEMSELVES, never tagging someone
+        // else, so a read-only salesperson still cannot edit another person in.
+        $isSelfClaim = (int) $request->input('user_id') === (int) $user->id
+            && \App\Support\SalesScope::canClaimCustomer($user);
+        if (!self::canEditBook($user) && !$isSelfClaim) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         $request->validate([
@@ -934,8 +969,7 @@ class SalesPipelineController extends Controller
     {
         $pipeline = SalesPipeline::findOrFail($id);
         $user = auth()->user();
-        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        if (!$isPrivileged && !$user->isCcareAgent() && !$user->isNewBizAgent() && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
+        if (!self::canEditBook($user)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         // Delete via the model instance so the removal is audited.
@@ -1354,7 +1388,7 @@ class SalesPipelineController extends Controller
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
         $isCcare  = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
+        if (!self::canEditBook($user)) {
             if ($request->ajax()) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
@@ -1404,7 +1438,7 @@ class SalesPipelineController extends Controller
         }
 
         // ── Handle Category change (Admin/HR/Manager + CCare/New Biz) ───────
-        if ($request->has('category') && ($isPrivileged || $isCcare || $isNewBiz || $pipeline->salesperson_id === $user->id)) {
+        if ($request->has('category') && self::canEditBook($user)) {
             // Apply any other fields sent along with the category first — this
             // branch returns early, and they must not be silently dropped.
             if (!empty($data)) {
@@ -1499,10 +1533,7 @@ class SalesPipelineController extends Controller
 
         $pipeline = SalesPipeline::findOrFail($request->sales_pipeline_id);
         $user = auth()->user();
-        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
-        $isCcare  = $user->isCcareAgent();
-        $isNewBiz = $user->isNewBizAgent();
-        if (!$isPrivileged && !$isCcare && !$isNewBiz && $pipeline->salesperson_id !== $user->id && !$user->can('sales_report.manage')) {
+        if (!self::canEditBook($user)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 

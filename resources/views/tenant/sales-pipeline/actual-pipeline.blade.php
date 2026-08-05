@@ -404,8 +404,8 @@
                 <div>{{ $pipelines->onEachSide(1)->links() }}</div>
             </div>
 
-            {{-- Add New Entry trigger --}}
-            <div class="d-flex justify-content-center py-2 border-top" style="background:#f8fafc;">
+            {{-- Add New Entry trigger — hidden for read-only roles (plain salespeople). --}}
+            <div class="d-flex justify-content-center py-2 border-top @unless($canEditBook) d-none @endunless" style="background:#f8fafc;">
                 <button class="btn btn-sm btn-outline-success rounded-pill px-4"
                         id="addRowTriggerBtn" onclick="showAddNewRow()"
                         style="border-color:#0f766e;color:#0f766e;">
@@ -486,6 +486,9 @@ const ANNUAL_GRAND = @json($annualGrand);
 
 document.addEventListener('DOMContentLoaded', function () {
 
+    {{-- Inline editing is attached only for roles that may change the book;
+         plain salespeople get a read-only grid. Enforced server-side too. --}}
+    @if($canEditBook)
     // ── Inline edit: row-field ─────────────────────────────────────────
     document.querySelectorAll('.row-field').forEach(field => {
         field.addEventListener('change', function () {
@@ -528,6 +531,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
+    @endif
 
     // Filtering / pagination / totals are server-side now — nothing to init here.
 });
