@@ -1181,6 +1181,69 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * The Target Achievement popup, as an .xlsx — for one month.
+     *
+     * Recomputes rather than trusting anything from the request, and applies the
+     * caller's own SalesScope, so the sheet can never contain salespeople the
+     * user cannot already see on the page.
+     */
+    public function exportTargetAchievement(Request $request)
+    {
+        $user = auth()->user();
+        $request->validate([
+            'month' => ['required', 'date_format:Y-m'],
+            'fy'    => ['nullable', 'string', 'max:9'],
+        ]);
+        $month = $request->input('month');
+
+        // Never let a future month be exported — there are no actuals to judge.
+        if ($month > now()->format('Y-m')) {
+            return back()->with('error', 'That month has not started yet.');
+        }
+
+        $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
+
+        $targets = \App\Models\SalespersonTarget::where('month_year', $month)
+            ->when($allowedSpIds !== null, fn ($q) => $q->whereIn('salesperson_id', $allowedSpIds))
+            ->get(['salesperson_id', 'kingo_target', 'bingo_target', 'super_kingo_target']);
+
+        $actuals = SalesPipelineMonth::query()
+            ->join('sales_pipelines', 'sales_pipelines.id', '=', 'sales_pipeline_months.sales_pipeline_id')
+            ->where('sales_pipeline_months.month_year', $month)
+            ->where('sales_pipelines.is_locked', true)
+            ->whereNull('sales_pipelines.deleted_at')
+            ->when($allowedSpIds !== null, fn ($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
+            ->groupBy('sales_pipelines.salesperson_id')
+            ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
+            ->get()->keyBy('sp');
+
+        $names = User::whereIn('id', $targets->pluck('salesperson_id')->unique()->all())
+            ->get()->mapWithKeys(fn ($u) => [$u->id => $u->name]);
+
+        $rows = [];
+        foreach ($targets as $t) {
+            $a = $actuals[$t->salesperson_id] ?? null;
+            $rows[] = [
+                'name'    => $names[$t->salesperson_id] ?? ('#' . $t->salesperson_id),
+                'actual'  => (float) ($a->actual ?? 0),
+                'pending' => (float) ($a->pending ?? 0),
+                'bingo'   => (float) $t->bingo_target,
+                'kingo'   => (float) $t->kingo_target,
+                'super'   => (float) $t->super_kingo_target,
+            ];
+        }
+        usort($rows, fn ($x, $y) => $y['actual'] <=> $x['actual']);
+
+        $label = \Carbon\Carbon::createFromFormat('Y-m', $month)->format('M Y');
+        $scope = $allowedSpIds === null ? 'All salespeople' : 'Your team';
+        $file  = 'target-achievement-' . $month . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TargetAchievementExport($rows, $label, $scope), $file
+        );
+    }
+
+    /**
      * Resolve the common context for the Setu sync/resolve endpoints:
      * authorization, the confirmed mapping, and the validated sync period.
      * Returns ['response' => JsonResponse] on any failure (caller returns it
@@ -1388,8 +1451,15 @@ class SalesPipelineController extends Controller
         $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']);
         $isCcare  = $user->isCcareAgent();
         $isNewBiz = $user->isNewBizAgent();
+        // fetch() does NOT send X-Requested-With, so ajax() alone is false for
+        // every inline edit on the grids and this returned a 302 redirect where
+        // the caller expected JSON — r.json() then threw and the row never
+        // showed its saved state. expectsJson() covers the Accept header the
+        // grids now send.
+        $wantsJson = $request->ajax() || $request->expectsJson();
+
         if (!self::canEditBook($user)) {
-            if ($request->ajax()) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+            if ($wantsJson) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
 
@@ -1504,7 +1574,7 @@ class SalesPipelineController extends Controller
         $pipeline->update($data);
 
 
-        if ($request->ajax()) {
+        if ($wantsJson) {
             // If category changed, return the resolved rep name so JS can update cell live
             $repName = null;
             if ($request->has('category')) {

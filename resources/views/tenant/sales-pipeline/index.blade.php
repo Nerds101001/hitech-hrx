@@ -49,6 +49,13 @@
         @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.pipeline.index', 'mvMemberParam' => 'sp'])
 
         <form action="{{ route('sales-visits.pipeline.index') }}" method="GET" class="mb-0">
+            {{-- Changing the year kept only ?fy, so it also dropped the Team
+                 context and every active filter. Carry them through. --}}
+            @foreach(['team','party','type','cat','sp','ccare','brand','nb','per','sort','dir'] as $keep)
+                @if(request()->filled($keep))
+                    <input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">
+                @endif
+            @endforeach
             @php $startYear = 2023; $endYear = (int)date('Y') + 1; @endphp
             <select name="fy" class="form-select form-select-sm border-0 fw-bold"
                     style="background-color: rgba(15, 118, 110, 0.1); color: #0f766e; width:auto;" onchange="this.form.submit()">
@@ -178,6 +185,11 @@
         <div class="card-body py-2 px-3">
             <form method="GET" action="{{ route('sales-visits.pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
+                {{-- Keep the Team context across a filter. Without this the form
+                     submitted without ?team=1, the controller fell back to the
+                     manager's own rows, and applying any filter silently threw
+                     you back to "My Data" with an empty table. --}}
+                @if(request()->boolean('team'))<input type="hidden" name="team" value="1">@endif
                 @if(request('sort'))<input type="hidden" name="sort" value="{{ request('sort') }}"><input type="hidden" name="dir" value="{{ request('dir') }}">@endif
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
@@ -728,9 +740,31 @@
 <div class="modal fade" id="targetAchieveModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header" style="background:linear-gradient(90deg,#0d9488,#0f766e);">
-                <h5 class="modal-title text-white fw-bold mb-0">This Month — Target Achievement</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            @php
+                // Newest month first — people look at the current month, then step back.
+                $tgtMonthKeys = array_reverse($achieveMonthKeys ?? [$currentMonthKey]);
+                $tgtMonthLabel = collect($months)->keyBy('key')->map(fn($m) => $m['display']);
+            @endphp
+            <div class="modal-header d-flex flex-wrap gap-2 align-items-center" style="background:linear-gradient(90deg,#0d9488,#0f766e);">
+                <h5 class="modal-title text-white fw-bold mb-0">Target Achievement</h5>
+
+                {{-- Month picker. Every elapsed month of the FY is already rendered
+                     below, so switching is instant — no extra request. --}}
+                <select id="tgtMonthPicker" class="form-select form-select-sm ms-2 fw-bold border-0"
+                        style="width:auto; background-color:rgba(255,255,255,.92); color:#0f766e;">
+                    @foreach($tgtMonthKeys as $mk)
+                        <option value="{{ $mk }}" {{ $mk === $currentMonthKey ? 'selected' : '' }}>
+                            {{ $tgtMonthLabel[$mk] ?? $mk }}{{ $mk === $currentMonthKey ? ' (this month)' : '' }}
+                        </option>
+                    @endforeach
+                </select>
+
+                <a id="tgtExportBtn" class="btn btn-sm btn-light fw-bold d-flex align-items-center"
+                   href="{{ route('sales-visits.pipeline.targets.export', ['month' => $currentMonthKey, 'fy' => $selectedFy]) }}">
+                    <i class="bx bx-download me-1"></i> Excel
+                </a>
+
+                <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
                 {{-- Legend stays static; ONLY the table below scrolls, so the
@@ -756,26 +790,32 @@
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Super Kingo</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        @forelse($targetAchievers ?? [] as $r)
-                            <tr>
-                                <td class="fw-semibold">{{ $r['name'] }}</td>
-                                <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
-                                <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
-                                @foreach(['bingo','kingo','super'] as $tier)
-                                    @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
-                                    <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
-                                        @if($r[$tier] > 0)
-                                            {{ number_format($r[$tier], 2) }}
-                                            @if($r['actual'] >= $r[$tier])<i class="bx bx-check"></i>@endif
-                                        @else — @endif
-                                    </td>
-                                @endforeach
-                            </tr>
-                        @empty
-                            <tr><td colspan="6" class="text-center text-muted py-4">No targets set for this month.</td></tr>
-                        @endforelse
-                    </tbody>
+                    {{-- One tbody per elapsed month; the picker shows exactly one.
+                         Rendered server-side so the colour thresholds stay in PHP
+                         rather than being duplicated in JS. --}}
+                    @foreach($tgtMonthKeys as $mk)
+                        @php $rowsForMonth = ($targetAchieversByMonth[$mk] ?? ($mk === $currentMonthKey ? ($targetAchievers ?? []) : [])); @endphp
+                        <tbody class="tgt-month-body" data-month="{{ $mk }}" @if($mk !== $currentMonthKey) style="display:none;" @endif>
+                            @forelse($rowsForMonth as $r)
+                                <tr>
+                                    <td class="fw-semibold">{{ $r['name'] }}</td>
+                                    <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
+                                    <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
+                                    @foreach(['bingo','kingo','super'] as $tier)
+                                        @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
+                                        <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
+                                            @if($r[$tier] > 0)
+                                                {{ number_format($r[$tier], 2) }}
+                                                @if($r['actual'] >= $r[$tier])<i class="bx bx-check"></i>@endif
+                                            @else — @endif
+                                        </td>
+                                    @endforeach
+                                </tr>
+                            @empty
+                                <tr><td colspan="6" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
+                            @endforelse
+                        </tbody>
+                    @endforeach
                 </table>
                 </div>
             </div>
@@ -1082,7 +1122,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             fetch(`{{ url('sales-visits/sales-report') }}/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ [key]: val })
             }).then(r => r.json()).then(data => {
                 if (data.success) {
@@ -1185,7 +1226,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             fetch(`{{ route('sales-visits.pipeline.month.update') }}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ sales_pipeline_id: id, month_year: month, field: fieldKey, value: val })
             }).then(res => res.json()).then(data => {
                 if (data.success) {
@@ -1211,7 +1253,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const putRow = (id, payload) => fetch(`{{ url('sales-visits/sales-report') }}/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
         body: JSON.stringify(payload)
     }).then(r => r.json());
     document.querySelectorAll('.rep-cell').forEach(cell => cell.addEventListener('click', function() {
@@ -1263,7 +1306,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const cell = sel.closest('.extra-cell');
             fetch(`{{ url('sales-visits/sales-report') }}/${cell.dataset.id}/extra-rep`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ user_id: uid, type: cell.dataset.type || 'other' })
             }).then(r => r.json()).then(d => {
                 sel.remove();
@@ -1370,6 +1414,27 @@ function openTargetModal() {
     new bootstrap.Modal(document.getElementById('targetAchieveModal')).show();
 }
 
+// Target Achievement — month picker. Every elapsed month is already rendered as
+// its own <tbody>, so switching is a show/hide, not a request. The Excel link
+// follows the selection so you always export what you are looking at.
+document.addEventListener('DOMContentLoaded', function () {
+    const picker = document.getElementById('tgtMonthPicker');
+    if (!picker) return;
+    const exportBtn = document.getElementById('tgtExportBtn');
+
+    picker.addEventListener('change', function () {
+        const month = this.value;
+        document.querySelectorAll('#targetAchieveModal .tgt-month-body').forEach(function (tb) {
+            tb.style.display = (tb.dataset.month === month) ? '' : 'none';
+        });
+        if (exportBtn) {
+            const u = new URL(exportBtn.href, window.location.origin);
+            u.searchParams.set('month', month);
+            exportBtn.href = u.toString();
+        }
+    });
+});
+
 function showAddNewRow() {
     document.getElementById('addNewRow').style.display       = '';
     document.getElementById('addRowTriggerBtn').style.display = 'none';
@@ -1471,7 +1536,8 @@ document.querySelectorAll('.target-input').forEach(input => {
 
         fetch("{{ route('sales-visits.targets.update') }}", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
             body: JSON.stringify({ salesperson_id: spId, month_year: month, kingo_target: kingo, bingo_target: bingo })
         })
         .then(res => res.json())
@@ -1749,7 +1815,8 @@ document.addEventListener('submit', function (e) {
             roleBtn.disabled = true;
             fetch(`{{ url('sales-visits/sales-report') }}/${id}/claim`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ role: role }),
             })
             .then(r => r.json())
@@ -1766,7 +1833,8 @@ document.addEventListener('submit', function (e) {
             serviceBtn.disabled = true;
             fetch(`{{ url('sales-visits/sales-report') }}/${id}/extra-rep`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ user_id: CURRENT_USER_ID, type: 'service' }),
             })
             .then(r => r.json())

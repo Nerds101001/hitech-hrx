@@ -776,6 +776,8 @@ Route::middleware([
             Route::get('/sales-report/search-customer', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'searchCustomer'])->name('pipeline.search');
             Route::post('/sales-report/{id}/claim', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'claim'])->name('pipeline.claim');
             Route::get('/sales-report/{id}/transfer-history', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'transferHistory'])->name('pipeline.transfer-history');
+            // Target Achievement popup -> .xlsx for the month being viewed.
+            Route::get('/sales-report/targets/export', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'exportTargetAchievement'])->name('pipeline.targets.export');
             Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
 
