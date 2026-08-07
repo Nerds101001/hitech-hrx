@@ -60,6 +60,19 @@
 .ad-pg:hover:not(:disabled) { background: #f0fdfa; border-color: #5eead4; color: #0f766e; }
 .ad-pg[disabled]            { opacity: .45; cursor: default; }
 .ad-pg.on                   { background: #0f766e; border-color: #0f766e; color: #fff; font-weight: 700; }
+
+/* Reason boxes on the review panel. These were single-line inputs, so anything
+   longer than the field scrolled out of sight and the reviewer could not read
+   back what they had written before submitting. Multi-line, and draggable
+   taller when the reason runs long — both remarks and objection_notes are TEXT
+   columns, so there is no length limit to design around. */
+.ad-reason {
+    min-height: 78px;
+    resize: vertical;
+    line-height: 1.45;
+    border-radius: 8px;
+}
+.ad-reason:focus { border-color: #5eead4; box-shadow: 0 0 0 .15rem rgba(15,118,110,.12); }
 </style>
 
 <style>
@@ -544,8 +557,8 @@
               @if($claim->status == 'submitted')
               <form action="{{ route('travel-claims.verify', $claim->id) }}" method="POST" class="mb-3">
                   @csrf
-                  <div class="d-flex gap-2">
-                    <input type="text" name="remarks" class="form-control" placeholder="Verification Remarks (Optional)" style="border-radius: 8px;">
+                  <div class="d-flex gap-2 align-items-end">
+                    <textarea name="remarks" class="form-control ad-reason" rows="2" placeholder="Verification Remarks (Optional)"></textarea>
                     <button type="submit" class="btn btn-success text-nowrap" style="border-radius: 8px;">Approve & Verify</button>
                   </div>
               </form>
@@ -555,8 +568,8 @@
                   <div class="col-6">
                       <form action="{{ route('travel-claims.objection', $claim->id) }}" method="POST">
                           @csrf
-                          <div class="d-flex gap-2">
-                            <input type="text" name="remarks" class="form-control" placeholder="Objection Reason" required style="border-radius: 8px;">
+                          <div class="d-flex gap-2 align-items-end">
+                            <textarea name="remarks" class="form-control ad-reason" rows="3" placeholder="Objection Reason" required></textarea>
                             <button type="submit" class="btn btn-warning text-nowrap" style="border-radius: 8px;">Raise Objection</button>
                           </div>
                       </form>
@@ -564,8 +577,8 @@
                   <div class="col-6">
                       <form action="{{ route('travel-claims.reject', $claim->id) }}" method="POST">
                           @csrf
-                          <div class="d-flex gap-2">
-                            <input type="text" name="remarks" class="form-control" placeholder="Rejection Reason" required style="border-radius: 8px;">
+                          <div class="d-flex gap-2 align-items-end">
+                            <textarea name="remarks" class="form-control ad-reason" rows="3" placeholder="Rejection Reason" required></textarea>
                             <button type="submit" class="btn btn-danger text-nowrap" style="border-radius: 8px;">Reject Claim</button>
                           </div>
                       </form>
