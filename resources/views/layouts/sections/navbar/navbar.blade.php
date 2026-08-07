@@ -59,6 +59,9 @@
             @yield('navbar-actions')
         </div>
 
+        <!-- Delegate-session strip. Renders nothing outside a delegate session. -->
+        @include('layouts.sections.delegate_strip')
+
         <ul class="navbar-nav flex-row align-items-center ms-auto">
         <!-- Search icon moved to right -->
         @if ($configData['displaySearch'] == true)
