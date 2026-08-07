@@ -69,7 +69,18 @@
             ['icon'=>'bx-calendar-heart','tone'=>'info','title'=>'Leave Balance','value'=>$nf1($leaveDaysAvailable ?? 0),'sub'=>'Days Available','btn'=>'Apply Leave','url'=>url('/user/leaves'),'big'=>true],
             ['icon'=>'bx-wallet','tone'=>'primary','title'=>'Payroll','value'=>'₹'.number_format($latestNetSalary ?? 0),'sub'=>'Take Home ('.now()->format('M').')','btn'=>'View Payslip','url'=>url('/user/payroll'),'big'=>true],
             ['icon'=>'bx-receipt','tone'=>'warning','title'=>'Expenses','value'=>'₹'.number_format($expensesThisMonth ?? 0),'sub'=>'This Month','btn'=>'View Claims','url'=>url('/travel-claims'),'big'=>true],
-            ['icon'=>'bx-line-chart','tone'=>'danger','title'=>'Performance','value'=>($kraOverall ?? 0).'%','sub'=>'KRA Completion','btn'=>'View Performance','url'=>url('/kpi/my'),'big'=>true],
+            /* Marks earned, not "periods ticked": the old card showed 100% for
+               someone who completed every KPI and scored nothing. A Blade
+               comment cannot be used here — inside @php it reaches PHP as raw
+               tokens and is a parse error. */
+            ['icon'=>'bx-line-chart','tone'=>'danger','title'=>'Performance',
+             'value'=>($kpiPossible ?? 0) > 0
+                 ? rtrim(rtrim(number_format($kpiEarned ?? 0, 1), '0'), '.').' / '.rtrim(rtrim(number_format($kpiPossible, 1), '0'), '.')
+                 : '—',
+             'sub'=>($kpiPossible ?? 0) > 0
+                 ? ($kraOverall ?? 0).'% of marks'.(($kpiDueSoon ?? 0) > 0 ? ' · '.$kpiDueSoon.' due soon' : '')
+                 : 'No KPIs assigned',
+             'btn'=>'View Performance','url'=>url('/kpi/my'),'big'=>true],
           ];
         @endphp
         @foreach($kpis as $k)
@@ -299,7 +310,7 @@
           <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
           <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
           <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
-          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Innovation Hub</span></a>
+          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Mind Speak</span></a>
         </div>
       </div>
 
