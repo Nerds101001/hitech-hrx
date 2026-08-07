@@ -34,6 +34,30 @@ use App\Constants\Constants as AppConstants;
 class UserDashboardController extends Controller
 {
     /**
+     * Point the session at another account WITHOUT rotating the session id.
+     *
+     * auth()->login() calls session()->migrate(true), which destroys the
+     * current session file and issues a new id. Anything already in flight when
+     * the switch happens — the Employee Directory's DataTable ajax, a
+     * notification poller — still carries the old cookie: it finds no session,
+     * redirects to the login page, and hands the browser back the dead id. The
+     * next refresh then lands on the login screen, which is exactly the
+     * "switching logs me out on refresh" report.
+     *
+     * Writing the guard's session key directly keeps one session throughout,
+     * which is also how impersonation is normally done. Nothing is weakened by
+     * skipping the rotation: session fixation is a risk when an unauthenticated
+     * session becomes authenticated, and this session is already authenticated
+     * — only the account it points at changes.
+     */
+    private function assumeIdentity(User $user): void
+    {
+        $guard = auth()->guard();
+        session([$guard->getName() => $user->id]);
+        $guard->setUser($user);
+    }
+
+    /**
      * Log in AS another account. Two ways in:
      *  - header hub: a vacant-position account whose access_delegate_id
      *    points at me (privileged accounts are always off limits);
@@ -84,7 +108,7 @@ class UserDashboardController extends Controller
             'delegate_switch_original_id' => $me->id,
             'delegate_switch_super'       => $isSuper,
         ]);
-        auth()->login($target);
+        $this->assumeIdentity($target);
         session()->save();
 
         \Illuminate\Support\Facades\Log::info(($isSuper ? 'SUPER delegate switch' : 'Delegate switch') . ": user {$me->id} ({$me->email}) logged in as account {$target->id} ({$target->email})");
@@ -117,7 +141,7 @@ class UserDashboardController extends Controller
             return redirect('/login');
         }
 
-        auth()->login($original);
+        $this->assumeIdentity($original);
         session()->forget(['delegate_switch_original_id', 'delegate_switch_super']);
         session()->save();
 
