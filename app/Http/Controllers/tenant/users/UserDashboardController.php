@@ -34,40 +34,60 @@ use App\Constants\Constants as AppConstants;
 class UserDashboardController extends Controller
 {
     /**
-     * Log in AS a vacant-position account delegated to me (header hub).
-     * The original user id is kept in the session so Exit can restore it;
-     * only active accounts whose access_delegate_id points at me qualify.
+     * Log in AS another account. Two ways in:
+     *  - header hub: a vacant-position account whose access_delegate_id
+     *    points at me (privileged accounts are always off limits);
+     *  - Employee Directory: a super delegate (config/access.php) entering
+     *    ANY active account in one click, for support/debugging.
+     * The original user id is kept in the session so Exit can restore it.
      */
     public function switchToDelegate($id)
     {
-        $me = auth()->user();
+        $me      = auth()->user();
+        $isSuper = $me->isSuperDelegate();
 
         if (session()->has('delegate_switch_original_id')) {
             return redirect()->back()->with('error', 'You are already in a delegate session — exit it first.');
         }
 
-        $target = User::where('id', $id)
-            ->where('access_delegate_id', $me->id)
-            ->where('status', UserAccountStatus::ACTIVE)
-            ->first();
+        if ((int) $id === (int) $me->id) {
+            return redirect()->back()->with('error', 'That is already your own account.');
+        }
+
+        $query = User::where('id', $id)->where('status', UserAccountStatus::ACTIVE);
+
+        // Super delegates skip the pointer requirement; everyone else may only
+        // enter accounts explicitly delegated to them.
+        if (!$isSuper) {
+            $query->where('access_delegate_id', $me->id);
+        }
+
+        $target = $query->first();
 
         if (!$target) {
-            return redirect()->back()->with('error', 'This account is not delegated to you.');
+            return redirect()->back()->with('error', $isSuper
+                ? 'That account was not found or is not active.'
+                : 'This account is not delegated to you.');
         }
 
         // Hard security boundary: privileged accounts can never be entered via
         // delegation, even if a delegation row was somehow created for one —
-        // blocks admin/HR privilege escalation through the switch path.
-        if ($target->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+        // blocks admin/HR privilege escalation through the switch path. A super
+        // delegate is exempt: it is the top account already, so entering an
+        // admin/HR account grants it nothing it does not already hold.
+        if (!$isSuper && $target->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
             \Illuminate\Support\Facades\Log::warning("Delegate switch BLOCKED: user {$me->id} attempted to enter privileged account {$target->id}");
             return redirect()->back()->with('error', 'Privileged accounts cannot be accessed by delegation.');
         }
 
-        session(['delegate_switch_original_id' => $me->id]);
+        session([
+            'delegate_switch_original_id' => $me->id,
+            'delegate_switch_super'       => $isSuper,
+        ]);
         auth()->login($target);
         session()->save();
 
-        \Illuminate\Support\Facades\Log::info("Delegate switch: user {$me->id} ({$me->email}) logged in as delegated account {$target->id} ({$target->email})");
+        \Illuminate\Support\Facades\Log::info(($isSuper ? 'SUPER delegate switch' : 'Delegate switch') . ": user {$me->id} ({$me->email}) logged in as account {$target->id} ({$target->email})");
 
         return redirect('/user/dashboard')->with('success', 'You are now logged in as ' . $target->getFullName() . ' (delegate session).');
     }
@@ -80,24 +100,30 @@ class UserDashboardController extends Controller
             return redirect()->back()->with('error', 'You are not in a delegate session.');
         }
 
+        $wasSuper = (bool) session('delegate_switch_super');
         $current  = auth()->user();
         $original = User::find($originalId);
 
-        // Integrity: the account being exited must actually be delegated to
-        // the stored original user — otherwise kill the session entirely.
-        if (!$original || (int) $current->access_delegate_id !== (int) $original->id) {
-            session()->forget('delegate_switch_original_id');
+        // Integrity: the account being exited must actually be delegated to the
+        // stored original user (or that user must still be a super delegate) —
+        // otherwise kill the session entirely.
+        $legitimate = $original && ($wasSuper
+            ? $original->isSuperDelegate()
+            : (int) $current->access_delegate_id === (int) $original->id);
+
+        if (!$legitimate) {
+            session()->forget(['delegate_switch_original_id', 'delegate_switch_super']);
             auth()->logout();
             return redirect('/login');
         }
 
         auth()->login($original);
-        session()->forget('delegate_switch_original_id');
+        session()->forget(['delegate_switch_original_id', 'delegate_switch_super']);
         session()->save();
 
         \Illuminate\Support\Facades\Log::info("Delegate switch: user {$original->id} exited delegated account {$current->id}");
 
-        return redirect('/user/dashboard')->with('success', 'Back on your own account.');
+        return redirect($wasSuper ? '/employees' : '/user/dashboard')->with('success', 'Back on your own account.');
     }
 
     public function index()

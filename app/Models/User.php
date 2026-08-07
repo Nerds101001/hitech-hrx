@@ -741,6 +741,18 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->hasMany(User::class, 'access_delegate_id');
   }
 
+  /**
+   * Support account allowed to enter ANY active account from the Employee
+   * Directory, without an access_delegate_id pointer being set first.
+   * Driven by config/access.php (SUPER_DELEGATE_EMAILS).
+   */
+  public function isSuperDelegate(): bool
+  {
+    $allowed = array_map('strtolower', (array) config('access.super_delegate_emails', []));
+
+    return $allowed !== [] && in_array(strtolower((string) $this->email), $allowed, true);
+  }
+
   /** @var int[]|null Per-request memo — used by view composers too. */
   private ?array $managerIdentityIdsMemo = null;
 

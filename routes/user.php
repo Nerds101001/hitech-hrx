@@ -5,16 +5,22 @@ use App\Http\Controllers\tenant\users\UserDashboardController;
 use App\Http\Controllers\tenant\users\UserPayrollController;
 use App\Http\Controllers\tenant\LeaveController;
 
+// Delegate Access: log in as a delegated account (header hub) or as any active
+// account (super delegate, from the Employee Directory), and exit back.
+// Deliberately outside the role list below: the account being entered may hold
+// no role at all, and Exit must still work from inside it. Both endpoints do
+// their own authorisation in the controller.
+Route::middleware(['web', 'auth'])->prefix('user')->name('user.')->group(function () {
+  Route::post('/delegation/switch/{id}', [UserDashboardController::class, 'switchToDelegate'])->name('delegation.switch');
+  Route::post('/delegation/exit', [UserDashboardController::class, 'exitDelegate'])->name('delegation.exit');
+});
+
 Route::middleware([
   'web',
   'auth',
   'role:admin|hr|manager|employee|office_employee|accounts'
 ])->prefix('user')->name('user.')->group(function () {
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
-
-  // Delegate Access hub: log in as a vacant-position account delegated to me / exit back
-  Route::post('/delegation/switch/{id}', [UserDashboardController::class, 'switchToDelegate'])->name('delegation.switch');
-  Route::post('/delegation/exit', [UserDashboardController::class, 'exitDelegate'])->name('delegation.exit');
 
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');

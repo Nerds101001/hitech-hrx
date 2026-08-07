@@ -44,6 +44,11 @@
       const employeeViewBase = "{{ route('employees.show', '') }}/";
       const isAdminOrHR = {{ auth()->user()->hasRole(['admin', 'hr', 'Admin', 'HR', 'accounts']) ? 'true' : 'false' }};
 
+      // Super delegate (config/access.php): one-click "work as this user".
+      const canSuperDelegate  = {{ auth()->user()->isSuperDelegate() ? 'true' : 'false' }};
+      const myUserId          = {{ (int) auth()->id() }};
+      const delegateSwitchUrl = "{{ url('user/delegation/switch') }}/";
+
       const statusObj = {
         active: { title: 'Active', class: 'bg-label-success' },
         inactive: { title: 'Inactive', class: 'bg-label-danger' },
@@ -150,7 +155,11 @@
                     }
                     actionBtns += `<a class="icon-sophisticated reset-password" data-id="${full['id']}" data-name="${full['name']}" data-phone="${full['phone']}" href="javascript:;" title="Reset Password"><i class="bx bx-key"></i></a>`;
                 }
-                
+
+                if (canSuperDelegate && Number(full['id']) !== myUserId) {
+                    actionBtns += `<a class="icon-sophisticated delegate-switch text-warning" data-id="${full['id']}" data-name="${full['name']}" href="javascript:;" title="Switch to this user's account (delegate session)"><i class="bx bx-transfer-alt"></i></a>`;
+                }
+
                 return `<div class="d-flex align-items-center justify-content-center gap-2">${actionBtns}</div>`;
               }
             }
@@ -169,6 +178,21 @@
         $('#customSearchInput').on('keyup', (e) => { if (e.key === 'Enter') window.dt_user.search($('#customSearchInput').val()).draw(); });
         $('#customLengthMenu').on('change', function() { window.dt_user.page.len($(this).val()).draw(); });
       }
+
+      // Delegate switch: one click enters the selected account. POSTed through a
+      // throwaway form so the CSRF token rides along; the header hub's
+      // "Exit Delegate Login" brings us back to our own account.
+      $(document).on('click', '.delegate-switch', function (e) {
+        e.preventDefault();
+        const $btn = $(this);
+        if ($btn.data('busy')) return;
+        $btn.data('busy', true).find('i').attr('class', 'bx bx-loader-alt bx-spin');
+
+        const $form = $('<form>', { method: 'POST', action: delegateSwitchUrl + $btn.data('id') })
+          .append($('<input>', { type: 'hidden', name: '_token', value: '{{ csrf_token() }}' }))
+          .appendTo('body');
+        $form[0].submit();
+      });
 
       // Password Reset Listener (Using Bootstrap Modal to match Leave Request format)
       $(document).on('click', '.reset-password', function (e) {
@@ -495,6 +519,9 @@
                       <li><a class="dropdown-item dropdown-item-hitech toggle-status-record" href="javascript:;" data-id="{{ $user->id }}"><i class="bx {{ $lockIcon }} me-2 text-danger"></i>{{ $lockLabel }}</a></li>
                     @endif
                     <li><a class="dropdown-item dropdown-item-hitech" href="{{ route('employees.show', $user->id) }}"><i class="bx bx-show me-2 text-info"></i>View Profile</a></li>
+                    @if(auth()->user()->isSuperDelegate() && $user->id !== auth()->id())
+                      <li><a class="dropdown-item dropdown-item-hitech delegate-switch" href="javascript:;" data-id="{{ $user->id }}" data-name="{{ $user->name }}"><i class="bx bx-transfer-alt me-2 text-warning"></i>Switch to This Account</a></li>
+                    @endif
                   </ul>
                 </div>
             </div>
