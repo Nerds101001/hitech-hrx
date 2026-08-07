@@ -638,10 +638,15 @@ class SalesPipelineController extends Controller
         // Salesperson-level list (self / team / explicitly-mapped) drives the
         // filter dropdowns and per-salesperson aggregates below.
         $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
-        // Row visibility: that list OR — for a CCare/New Biz rep — the individual
-        // customer rows they are personally assigned to (ccare_id / new_biz_id).
+        // Pipeline visibility is PERSONAL: only prospects this user is actually
+        // tagged on (salesperson / ccare / new_biz / extra rep), plus a
+        // manager's direct reports. Deliberately different from the Sales
+        // Report, where a CCare rep sees their mapped salespeople's whole book
+        // — applying that here showed a rep every prospect owned by another
+        // rep on the same salesperson, which is not theirs to work or edit.
         \App\Support\SalesScope::applyScope($query, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'], 'member' => 'sp', 'extra' => true,
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'],
+            'member' => 'sp', 'extra' => true, 'personal' => true,
         ]);
 
         // Snapshot for the filter dropdowns — see the note in index().

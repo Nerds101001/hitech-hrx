@@ -107,9 +107,38 @@ class SalesScope
      *   $cols = ['sp' => 'salesperson_id', 'rep' => ['ccare_id','new_biz_id'],
      *            'member' => 'sp']   // 'member' = manager's teammate filter key
      */
+    /**
+     * Who a user is personally responsible for, ignoring the CCare→salesperson
+     * map. A CCare rep is mapped to several salespeople, and allowedUserIds()
+     * merges those in so the Sales Report shows their whole book — correct
+     * there, but on the Sales Pipeline it meant a rep saw every prospect
+     * belonging to those salespeople, including ones another rep owns.
+     *
+     * Managers still get their direct reports; everyone else gets only
+     * themselves.
+     */
+    public static function personalIds($user): ?array
+    {
+        if (!$user) {
+            return [0];
+        }
+        if ($user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('sales_ops.view_all')) {
+            return null; // unrestricted, same as allowedUserIds()
+        }
+        $ids = collect([$user->id]);
+        if ($user->hasRole(['manager', 'Manager'])) {
+            $ids = $ids->merge(User::where('reporting_to_id', $user->id)->pluck('id'));
+        }
+        return $ids->filter()->unique()->values()->all();
+    }
+
     public static function applyScope($query, $user, $request, array $cols): void
     {
-        $ids = self::viewIds($user, $request, $cols['member'] ?? 'sp');
+        // 'personal' => true limits the scope to rows the user is themselves
+        // tagged on, rather than their mapped salespeople's whole book.
+        $ids = ($cols['personal'] ?? false)
+            ? self::personalIds($user)
+            : self::viewIds($user, $request, $cols['member'] ?? 'sp');
         if ($ids === null) {
             return; // admin/hr — no restriction
         }

@@ -101,6 +101,9 @@
         <div class="card-body py-2 px-3">
             <form method="GET" action="{{ route('sales-visits.actual-pipeline.index') }}" class="sales-filter d-flex flex-wrap align-items-center gap-2">
                 <input type="hidden" name="fy" value="{{ $selectedFy }}">
+                {{-- Keep the Team context across a filter, or a manager applying
+                     one is thrown back to "My Data" with an empty table. --}}
+                @if(request()->boolean('team'))<input type="hidden" name="team" value="1">@endif
                 <span class="fw-bold text-muted" style="font-size:0.8rem">FILTER:</span>
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
@@ -153,15 +156,13 @@
                             <th class="align-middle">Start Date</th>
                             <th class="align-middle">Customer Name</th>
                             <th class="align-middle">Product</th>
-                            @if($isAdmin)
-                                <th class="align-middle">Salesperson</th>
-                                <th class="align-middle">New Biz</th>
-                            @elseif($isSalesperson)
-                                <th class="align-middle" title="New Biz representative">Representative</th>
-                            @else
-                                {{-- CCare / New Biz see the salesperson --}}
-                                <th class="align-middle">Salesperson</th>
-                            @endif
+                            {{-- Both columns for everyone. A salesperson used to get a
+                                 single "Representative" column and a CCare/New Biz login a
+                                 single "Salesperson" column, so nobody but an admin could
+                                 see the full ownership of a customer. Who may CHANGE the
+                                 assignment is unchanged — that is still admin-only below. --}}
+                            <th class="align-middle">Salesperson</th>
+                            <th class="align-middle">New Biz</th>
                             <th class="text-end align-middle">Potential (L) / Month</th>
                             <th class="align-middle">Stage</th>
                             <th class="align-middle" style="min-width:250px;">Status Remarks</th>
@@ -171,23 +172,14 @@
                     <tbody id="pipelineBody">
                         @forelse($pipelines as $index => $row)
                             @php
-                                // Determine single rep column value for salesperson view
-                                if ($isSalesperson) {
-                                    $reps = [];
-                                    if ($row->newBiz->name ?? null) { $reps[] = $row->newBiz->name . ' (NB)'; }
-                                    $repDisplay = !empty($reps) ? implode(' / ', $reps) : '-';
-                                } elseif ($isCcare || $isNewBiz) {
-                                    $repDisplay = $row->salesperson->name ?? '-';
-                                } else {
-                                    $repDisplay = '';
-                                }
-                                // data-rep for filter
-                                $repStr = $isAdmin
-                                    ? implode(' | ', array_filter([
-                                        $row->salesperson->name ?? '',
-                                        $row->newBiz->name      ?? '',
-                                      ]))
-                                    : $repDisplay;
+                                // Both names drive the search filter for every role, because
+                                // both are now on screen for every role. Keying it off the old
+                                // per-role display meant a search matched a column the user
+                                // could not see, or missed one they could.
+                                $repStr = implode(' | ', array_filter([
+                                    $row->salesperson->name ?? '',
+                                    $row->newBiz->name      ?? '',
+                                ]));
                                 $rowMonthSales = $row->months->pluck('sale_amount', 'month_year')->toArray();
                             @endphp
                             <tr data-id="{{ $row->id }}"
@@ -223,7 +215,11 @@
                                     </span>
                                 </td>
 
-                                @if($isAdmin)
+                                {{-- Was @if($isAdmin): only a literal 'admin' could reassign, so a
+                                     CCare / New Biz rep had no way to correct the rep on their own
+                                     prospect. Now anyone who may edit the book can, which matches
+                                     what update() already enforces server-side. --}}
+                                @if($canEditBook)
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="salesperson_id">
                                             <option value="">-SP-</option>
@@ -240,23 +236,13 @@
                                             @endforeach
                                         </select>
                                     </td>
-                                @elseif($isSalesperson)
-                                    <td class="align-middle">{{ $repDisplay }}</td>
-                                @elseif($isCcare || $isNewBiz)
-                                    {{-- A CCare/New Biz rep does not own the salesperson assignment, and
-                                         their assignable list is only themselves — so the select had no
-                                         option matching the row and every salesperson rendered blank.
-                                         $repDisplay already holds the name for exactly this case. --}}
-                                    <td class="align-middle">{{ $repDisplay }}</td>
                                 @else
-                                    <td class="p-0 align-middle">
-                                        <select class="excel-select row-field" data-field="salesperson_id">
-                                            <option value="">-Select Salesperson-</option>
-                                            @foreach($assignedUsers as $u)
-                                                <option value="{{ $u->id }}" {{ $row->salesperson_id == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
-                                            @endforeach
-                                        </select>
-                                    </td>
+                                    {{-- Read-only text for roles that may not edit the book at all
+                                         (plain salespeople). Everyone who CAN edit gets the selects
+                                         above — the assignable lists are built from the full
+                                         directory, so they always contain the row's current holder. --}}
+                                    <td class="align-middle">{{ $row->salesperson->name ?? '-' }}</td>
+                                    <td class="align-middle">{{ $row->newBiz->name ?? '-' }}</td>
                                 @endif
 
                                 <td class="p-0 align-middle position-relative editable-cell">
@@ -550,9 +536,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const fieldKey = this.dataset.field;
             const val      = this.value;
 
-            fetch(`{{ url('sales-visits/pipeline') }}/${id}`, {
+            // Built from the NAMED route, not a hand-written path. This used to
+            // POST to /sales-visits/pipeline/{id}, which has no PUT route — every
+            // inline edit on this page 404'd and was silently thrown away, so a
+            // stage change looked like it saved and came back on refresh.
+            fetch(@json(route('sales-visits.pipeline.update', ['id' => '__ID__'])).replace('__ID__', id), {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
                 body: JSON.stringify({ [fieldKey]: val })
             }).then(r => r.json()).then(data => {
                 if (data.success) {
