@@ -67,7 +67,18 @@ class SalesVisitController extends Controller
         if ($request->filled('visit_type')) {
             $query->where('visit_type', $request->visit_type);
         }
-        if ($request->filled('salesperson_id')) {
+        // `salesperson_id` means two things: the filter bar uses it as "visits
+        // where this person is the salesperson", the Team member picker means
+        // "show me this teammate's visits". The scope above already narrowed to
+        // that teammate (salesperson_id OR cc_user_id), so re-filtering on
+        // salesperson_id alone dropped every visit they attended as the CC
+        // user — which for a CCare team is most of them.
+        $memberPicked = $isManager
+            && $request->filled('salesperson_id')
+            && is_array($teamMemberIds)
+            && in_array((int) $request->salesperson_id, $teamMemberIds, true);
+
+        if ($request->filled('salesperson_id') && !$memberPicked) {
             $query->where('salesperson_id', $request->salesperson_id);
         }
         if ($request->filled('cc_user_id')) {

@@ -177,7 +177,21 @@ class SalesPipelineController extends Controller
                 $query->where('type', $fType);
             }
         }
-        self::applyPersonFilter($query, 'salesperson_id', $fSp);
+        // Same two meanings for `sp` as on the Sales Pipeline: the filter bar
+        // means "rows where this person is the SALESPERSON", the Team member
+        // picker means "show me this teammate's book". The scope above has
+        // already narrowed to that teammate across every role column, so
+        // re-filtering on salesperson_id here emptied the page — 16 of
+        // Shallu's 17 reports with rows showed zero, because they hold those
+        // rows as CCare/New Biz and almost never as salesperson.
+        $memberPicked = $isManager
+            && !empty($fSp)
+            && is_array($teamMemberIds)
+            && in_array((int) $fSp, $teamMemberIds, true);
+
+        if (!$memberPicked) {
+            self::applyPersonFilter($query, 'salesperson_id', $fSp);
+        }
         self::applyPersonFilter($query, 'ccare_id', $fCcare);
         $fNb = $request->input('nb');      // new_biz_id
         self::applyPersonFilter($query, 'new_biz_id', $fNb);
@@ -665,7 +679,19 @@ class SalesPipelineController extends Controller
         if ($fStage !== '') {
             $query->where('status_stage', 'like', '%' . $fStage . '%');
         }
-        if (!empty($fSp)) {
+        // `sp` carries two different meanings on this page: the filter bar uses
+        // it as "rows where this person is the SALESPERSON", while the Team
+        // member picker means "show me this teammate's pipeline". For a manager
+        // picking a teammate the scope above has already narrowed to that person
+        // across all three role columns, so re-filtering on salesperson_id here
+        // wiped the result: every one of Shallu's 20 reports is CCare/New Biz
+        // and owns zero rows AS salesperson, so choosing any of them returned 0.
+        $memberPicked = $isManager
+            && !empty($fSp)
+            && is_array($teamMemberIds)
+            && in_array((int) $fSp, $teamMemberIds, true);
+
+        if (!empty($fSp) && !$memberPicked) {
             $query->where('salesperson_id', $fSp);
         }
         if (!empty($fNewBiz)) {

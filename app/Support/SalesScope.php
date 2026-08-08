@@ -117,7 +117,7 @@ class SalesScope
      * Managers still get their direct reports; everyone else gets only
      * themselves.
      */
-    public static function personalIds($user): ?array
+    public static function personalIds($user, $request = null, string $memberParam = 'sp'): ?array
     {
         if (!$user) {
             return [0];
@@ -125,10 +125,31 @@ class SalesScope
         if ($user->hasRole(['admin', 'Admin', 'hr', 'HR']) || $user->can('sales_ops.view_all')) {
             return null; // unrestricted, same as allowedUserIds()
         }
+
         $ids = collect([$user->id]);
+
+        // A manager's team is added ONLY when they ask for it. This used to
+        // merge every direct report unconditionally and ignore the request
+        // entirely, so the My Data / Team switch on the Sales Pipeline did
+        // nothing at all: a manager of 20 always saw the whole team's book
+        // (1,457 prospects) even with "My Data" selected, instead of the 136
+        // they are personally tagged on. viewIds() below already had this
+        // behaviour — personalIds() simply never got it.
         if ($user->hasRole(['manager', 'Manager'])) {
-            $ids = $ids->merge(User::where('reporting_to_id', $user->id)->pluck('id'));
+            $team = User::where('reporting_to_id', $user->id)->pluck('id');
+
+            if ($request && $request->filled($memberParam)) {
+                // One teammate in focus — but only if they really report to me.
+                $member = (int) $request->input($memberParam);
+                return $team->contains($member) ? [$member] : [$user->id];
+            }
+            if ($request === null || $request->boolean('team')) {
+                // No request in hand: keep the old, wider behaviour rather than
+                // silently narrowing a caller that never opted in.
+                $ids = $ids->merge($team);
+            }
         }
+
         return $ids->filter()->unique()->values()->all();
     }
 
@@ -137,7 +158,7 @@ class SalesScope
         // 'personal' => true limits the scope to rows the user is themselves
         // tagged on, rather than their mapped salespeople's whole book.
         $ids = ($cols['personal'] ?? false)
-            ? self::personalIds($user)
+            ? self::personalIds($user, $request, $cols['member'] ?? 'sp')
             : self::viewIds($user, $request, $cols['member'] ?? 'sp');
         if ($ids === null) {
             return; // admin/hr — no restriction

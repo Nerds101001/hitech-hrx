@@ -41,7 +41,7 @@
                 <p class="text-white-50 mb-0">Track and manage your active sales pipeline</p>
             </div>
             <div class="d-flex gap-2 align-items-center flex-wrap">
-                @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.actual-pipeline.index', 'mvMemberParam' => 'sp'])
+                @include('tenant.partials.manager-view-switch', ['mvRoute' => 'sales-visits.actual-pipeline.index', 'mvOnDark' => true, 'mvMemberParam' => 'sp'])
                 <form action="{{ route('sales-visits.actual-pipeline.index') }}" method="GET" class="d-flex gap-2">
                     @php $startYear = 2023; $endYear = (int)date('Y') + 1; @endphp
                     <select name="fy" class="form-select border-white text-white fw-bold"
