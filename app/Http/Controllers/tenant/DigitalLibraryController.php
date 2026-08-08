@@ -83,78 +83,60 @@ class DigitalLibraryController extends Controller
         $duplicate = LibraryFile::where('title', $originalName)->first();
 
         try {
-            $parser = new \Smalot\PdfParser\Parser();
-            $pdf = $parser->parseFile($file->getPathname());
-            
-            // Extract text with clean encoding
-            $text = mb_convert_encoding($pdf->getText(), 'UTF-8', 'UTF-8');
-            $textSample = mb_substr($text, 0, 8000); // Increased for better accuracy
+            $audit      = app(\App\Services\VaultAuditService::class);
+            $textSample = $audit->extractText($file->getPathname());
 
             if (strlen(trim($textSample)) < 100) {
                 Log::warning("DIGITAL_LIBRARY_OCR_NEEDED: Small text extracted from " . $originalName);
                 // We'll try to let it pass if it's a valid file, but note it
             }
 
-            $factory = OpenAI::factory();
-            $client = $factory->withApiKey(config('openai.api_key'))
-                              ->withBaseUri(config('openai.base_url'))
-                              ->make();
+            /*
+             * Try for an answer while the uploader waits, but do not hold the
+             * request open indefinitely. The provider's queue for the larger
+             * models swings between seconds and several minutes; past the
+             * timeout the file is accepted anyway and left for the backlog
+             * (vault:audit-pending) to classify. Failing an upload because the
+             * AI was busy is the behaviour this replaces.
+             */
+            $result = $audit->audit($textSample, $originalName, (int) config('openai.audit_timeout', 20));
 
-            // Request AI Audit
-            $resp = $client->chat()->create([
-                'model' => config('openai.ai_model'),
-                'messages' => [
-                    ['role' => 'system', 'content' => "You are an expert technical document auditor for Hitech HRX. 
-                    Categories: TDS (Technical Data Sheet), SDS (Safety Data Sheet), Presentation (Corporate Presentation), LEARN (Training), Test Report, Comparison Report.
-                    Brands: RUST-X, Dr.Bio, KIF, Fillezy, Tuffpaulin, ZOrbit, HITECH.
-                    Sub-Categories: Cleaners, Cutting Oil, Coatings, VCI Packaging, Rust Preventive Oils, VCI Emitters, Steel Coil Packaging, VCI Sprays, Zorbit Desiccant, Rust Removers & Converters, Industrial Lubricants, VCI Masterbatch, Data Logger.
-                    
-                    STRICT INSTRUCTIONS:
-                    - You MUST identify the document type.
-                    - Identify the BRAND from the list above. If not found, use 'HITECH'.
-                    - Identify the SUB-CATEGORY from the list above. If not explicitly found, categorize it into the most logical one.
-                    - If it looks like a technical asset (Chemical TDS, Industrial SDS, Corporate Presentation), do NOT reject it.
-                    - Extract: BRAND|SUB_CATEGORY|CATEGORY|NAME|DATE|CRUX
-                    - CATEGORY MUST be one of (TDS, SDS, Presentation, LEARN, Test Report, Comparison Report).
-                    - CRUX Rules (Must be 5-6 lines total, PLAIN TEXT ONLY):
-                      - NO markdown, NO asterisks, NO bolding, NO numbered lists.
-                      - Lines 1-3: Clear Product Description.
-                      - Lines 4-5: Features & Key Applications.
-                      - Line 6: Technical crux (Safety/Metric).
-                    - If completely garbage or unrelated to business/industry, reply ONLY 'INVALID'."],
-                    ['role' => 'user', 'content' => "Filename: " . $originalName . "\nText Sample: " . $textSample],
-                ],
-            ]);
-
-            // Robust response handling
-            $respArray = json_decode(json_encode($resp), true);
-            
-            if (!isset($respArray['choices'][0]['message']['content'])) {
-                Log::error("DIGITALLIBRARY_AI_MALFORMED_RESPONSE: " . json_encode($respArray));
-                throw new \Exception("AI Guardian returned an unexpected response structure. Raw: " . mb_substr(json_encode($respArray), 0, 200));
+            if ($result['status'] === 'timeout') {
+                return response()->json([
+                    'success'      => true,
+                    'pending'      => true,
+                    'brand'        => 'HITECH',
+                    'sub_category' => 'Industrial Assets',
+                    'category'     => $request->input('category') ?: 'TDS',
+                    'name'         => $originalName,
+                    'date'         => date('Y-m-d'),
+                    'summary'      => \App\Services\VaultAuditService::PENDING_SUMMARY,
+                    'notice'       => 'The AI is busy right now. Save the file and it will be classified automatically in the background.',
+                    'temp_name'    => $originalName,
+                    'is_duplicate' => !!$duplicate,
+                    'duplicate_id' => $duplicate?->id,
+                ]);
             }
 
-            $aiResult = $respArray['choices'][0]['message']['content'];
-            Log::info("AI RAW AUDIT [" . $originalName . "]: " . $aiResult);
-
-            if (str_contains(strtoupper($aiResult), 'INVALID') && strlen($aiResult) < 20) {
-                return response()->json(['error' => 'AI Guardian: Could not verify document as a valid technical asset. Please ensure the PDF is not scouted or image-only.'], 422);
+            if ($result['status'] === 'invalid') {
+                return response()->json(['error' => $result['message']], 422);
             }
 
-            // Robust Splitting
-            $parts = explode('|', $aiResult);
-            
+            if ($result['status'] !== 'ok') {
+                return response()->json(['error' => 'Audit Error: ' . $result['message']], 500);
+            }
+
             return response()->json([
-                'success' => true,
-                'brand' => trim($parts[0] ?? 'HITECH'),
-                'sub_category' => trim($parts[1] ?? 'Industrial Assets'),
-                'category' => trim($parts[2] ?? 'TDS'),
-                'name' => trim($parts[3] ?? $originalName),
-                'date' => trim($parts[4] ?? date('Y-m-d')),
-                'summary' => trim($parts[5] ?? (count($parts) > 1 ? end($parts) : 'Technical summary extracted.')),
-                'temp_name' => $originalName,
+                'success'      => true,
+                'brand'        => $result['brand'],
+                'sub_category' => $result['sub_category'],
+                'category'     => $result['category'],
+                'name'         => $result['name'],
+                'date'         => $result['date'],
+                'summary'      => $result['summary'],
+                'temp_name'    => $originalName,
                 'is_duplicate' => !!$duplicate,
-                'duplicate_id' => $duplicate?->id
+                'duplicate_id' => $duplicate?->id,
             ]);
         } catch (\Exception $e) {
             Log::error("DIGITALLIBRARY_AUDIT_ERROR [" . $originalName . "]: " . $e->getMessage(), [

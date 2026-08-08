@@ -629,20 +629,34 @@
             formData.append('_token', '{{ csrf_token() }}');
 
             try {
-                const response = await fetch('{{ route("library.analyze") }}', { 
-                    method: 'POST', 
-                    body: formData, 
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' } 
+                const response = await fetch('{{ route("library.analyze") }}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
                 });
-                const data = await response.json();
+
+                // Parse defensively. A gateway timeout or a login redirect hands
+                // back an HTML page, and calling .json() on it produced the
+                // useless "Unexpected token '<'" this used to show.
+                const rawBody = await response.text();
+                let data = null;
+                try { data = rawBody ? JSON.parse(rawBody) : {}; } catch (_) { data = null; }
+
+                if (data === null) {
+                    throw new Error(response.status === 413
+                        ? 'That file is too large to upload.'
+                        : 'The AI audit did not finish in time. Save the file anyway — it will be classified in the background.');
+                }
                 if (!response.ok) throw new Error(data.error || 'AI Audit Interrupted');
 
                 const statusEl = document.getElementById(`status-${id}`);
                 const summaryEl = document.getElementById(`summary-${id}`);
                 const actionBtnArea = document.getElementById(`action-${id}`);
 
-                statusEl.textContent = data.category;
-                statusEl.className = 'badge bg-info';
+                // The AI was busy: the file is still perfectly savable, it just
+                // gets classified by vault:audit-pending later instead of now.
+                statusEl.textContent = data.pending ? 'Queued' : data.category;
+                statusEl.className = data.pending ? 'badge bg-warning text-dark' : 'badge bg-info';
                 document.getElementById(`bar-${id}`).style.width = '100%';
                 
                 const brandId = Object.keys(libraryTaxonomy).find(bid => {
@@ -674,6 +688,10 @@
                     <div class="p-3 rounded-3 text-dark border border-light mb-3 text-start" style="font-size: 0.75rem; line-height: 1.6; background: #fbfcfd;">
                         <span class="fw-bold text-primary">AI Crux:</span> ${data.summary}
                     </div>
+                    ${data.pending ? `
+                    <div class="p-2 rounded-3 mb-3 text-start" style="font-size: 0.72rem; background:#fff7ed; color:#b45309; border:1px solid #fed7aa;">
+                        <i class="ti ti-clock me-1"></i>${data.notice || 'The AI is busy. Save the file — it will be classified automatically in the background.'}
+                    </div>` : ''}
                 `;
                 updateCategoryDropdown(id, data.sub_category);
                 

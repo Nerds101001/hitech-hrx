@@ -34,6 +34,10 @@ return Application::configure(basePath: dirname(__DIR__))
        and payroll jobs. */
     $schedule->command('hrx:archive-audits --live')->monthlyOn(2, '02:00');
     $schedule->command('leave:daily-digest')->dailyAt('09:00');
+    /* Digital Library files the upload dialog could not wait for. Hourly and
+       overlap-guarded because each file can hold the AI provider for minutes.
+       Harmless if it finds nothing, and safe to run by hand. */
+    $schedule->command('vault:audit-pending --limit=20')->hourly()->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);
