@@ -224,7 +224,7 @@ class SalesManagerSummary
                 ];
 
                 // ---- Team alerts ----
-                if ($sm['offTrack'] > 0) $sm['alerts'][] = ['icon' => 'bx-target-lock', 'tone' => 'danger', 'title' => $sm['offTrack'] . ' rep(s) below 60% of target', 'sub' => 'Coach and review pipeline'];
+                if ($sm['offTrack'] > 0) $sm['alerts'][] = ['icon' => 'bx-target-lock', 'tone' => 'danger', 'title' => $sm['offTrack'] . ' rep(s) below 60% of forecast', 'sub' => 'Coach and review pipeline'];
                 if ($sm['atRisk'] > 0) $sm['alerts'][] = ['icon' => 'bx-error-circle', 'tone' => 'warning', 'title' => $sm['atRisk'] . ' rep(s) at risk (60–90%)', 'sub' => 'Check pipeline progress'];
                 if ($pendingLeaveRequests > 0) $sm['alerts'][] = ['icon' => 'bx-calendar', 'tone' => 'info', 'title' => $pendingLeaveRequests . ' leave request(s) pending', 'sub' => 'Awaiting your approval'];
                 if ($funnel['Negotiation']['n'] > 0) $sm['alerts'][] = ['icon' => 'bx-trending-up', 'tone' => 'success', 'title' => $funnel['Negotiation']['n'] . ' deal(s) in negotiation', 'sub' => number_format($funnel['Negotiation']['v'], 1) . ' L in play'];

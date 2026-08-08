@@ -6,6 +6,7 @@ use App\Enums\LeaveRequestStatus;
 use App\Enums\UserAccountStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use Illuminate\Support\Facades\Log;
 use App\Models\DocumentRequest;
 use App\Models\ExpenseRequest;
 use App\Models\LeaveRequest;
@@ -211,11 +212,14 @@ class UserDashboardController extends Controller
             ->where('status', LeaveRequestStatus::APPROVED)
             ->with('user');
 
-        // Scoping for Manager
+        // Scoping for Manager. Was team_id, which leaked: this manager's
+        // team_id is NULL and 251 other users also have NULL, so "her team"
+        // matched almost the whole company and the card listed people who do
+        // not report to her at all. Scope by direct reports, the same set the
+        // rest of the manager dashboard uses.
         if ($isManager) {
-            $teamOutTodayQuery->whereHas('user', function ($q) use ($user) {
-                $q->where('team_id', $user->team_id);
-            });
+            $teamOutTodayQuery->whereIn('user_id',
+                User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id'));
         }
         $teamOutToday = $teamOutTodayQuery->get();
 
@@ -425,8 +429,34 @@ class UserDashboardController extends Controller
             // a manager actually sees. Shared builder, so the two cannot drift.
             $sm = \App\Support\SalesManagerSummary::build($teamMembers, $teamDeployment, (int) $pendingLeaveRequests);
 
+            // Both of these were only ever passed by DashboardController, so on
+            // this route the cards rendered their empty state — "No team
+            // attendance in last 7 days" and "No upcoming team leaves" — no
+            // matter what the data said.
+            $teamAtt7 = [];
+            try {
+                $teamHeadcount = max(1, count($teamMemberIds));
+                for ($i = 6; $i >= 0; $i--) {
+                    $d = now()->subDays($i);
+                    $present = Attendance::whereIn('user_id', $teamMemberIds)
+                        ->whereDate('check_in_time', $d->toDateString())
+                        ->distinct('user_id')->count('user_id');
+                    $teamAtt7[] = ['label' => $d->format('D'),
+                                   'pct' => (int) round($present / $teamHeadcount * 100)];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Team attendance tile: ' . $e->getMessage());
+            }
+
+            $teamUpcomingLeaves = LeaveRequest::whereIn('user_id', $teamMemberIds)
+                ->where('status', LeaveRequestStatus::APPROVED)
+                ->whereDate('from_date', '>', now())
+                ->with(['user', 'leaveType'])->orderBy('from_date')->take(8)->get();
+
             return view('tenant.users.dashboard.manager-index', [
                 'sm' => $sm,
+                'teamAtt7' => $teamAtt7,
+                'teamUpcomingLeaves' => $teamUpcomingLeaves,
                 'teamDeployment' => $teamDeployment,
                 'teamPendingLeaveRequests' => LeaveRequest::whereIn('user_id', $teamMemberIds)
                     ->where('status', 'pending')

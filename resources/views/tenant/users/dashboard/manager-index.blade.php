@@ -127,7 +127,7 @@
     </div>
     <div class="col-xl-3">
       <div class="adc-card h-100">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Target Summary</h6><span class="adc-card-sub">Reps vs target</span></div></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Forecast Summary</h6><span class="adc-card-sub">Reps vs forecast</span></div></div>
         <div id="adcTargetDonut"></div>
         <ul class="sm-legend mt-2">
           <li><span class="dot" style="background:#16a34a"></span> On Track <span class="ms-auto fw-bold">{{ $sm['onTrack'] ?? 0 }}</span></li>
@@ -171,7 +171,7 @@
     </div>
     <div class="col-xl-6">
       <div class="adc-card h-100">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Goals vs Achievement</h6><span class="adc-card-sub">Target vs achieved (Lakhs / count)</span></div></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Goals vs Achievement</h6><span class="adc-card-sub">Forecast vs achieved (Lakhs / count)</span></div></div>
         <div id="adcGoals"></div>
       </div>
     </div>
@@ -191,7 +191,7 @@
     </div>
     <div class="col-xl-5">
       <div class="adc-card h-100">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Team Members</h6><span class="adc-card-sub">Status today · target achievement</span></div><a href="{{ url('/organizationHierarchy') }}" class="adc-link">Org</a></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Team Members</h6><span class="adc-card-sub">Status today · sales vs forecast</span></div><a href="{{ url('/organizationHierarchy') }}" class="adc-link">Org</a></div>
         @if(empty($sm['snapshot']))
           <div class="adc-empty adc-empty-sm"><i class="bx bx-group"></i><span>No direct reports.</span></div>
         @else
