@@ -26,6 +26,57 @@
     font-size: 0.9rem;
     font-weight: 500;
   }
+
+  /* ===================== Mobile =====================
+     A four-column history table in a horizontal scroller is unreadable on a
+     phone. Below 768px each submission becomes its own card, and the form
+     controls get proper tap targets. */
+  @media (max-width: 767.98px) {
+    .ms-emp-table thead { display: none; }
+    .ms-emp-table, .ms-emp-table tbody, .ms-emp-table tr, .ms-emp-table td { display: block; width: 100%; }
+    .ms-emp-table tr {
+      border: 1px solid var(--hitech-border);
+      border-radius: 14px;
+      margin: 0 0.75rem 0.85rem;
+      padding: 0.35rem 0.15rem;
+      background: #fff;
+      box-shadow: 0 1px 6px rgba(0,0,0,.04);
+    }
+    .ms-emp-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.9rem;
+      border: none;
+      border-bottom: 1px dashed var(--hitech-border);
+      padding: 0.65rem 0.9rem;
+    }
+    .ms-emp-table td:last-child { border-bottom: none; }
+    .ms-emp-table td::before {
+      content: attr(data-label);
+      font-size: 0.66rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #94a3b8;
+      flex: 0 0 32%;
+      padding-top: 2px;
+    }
+    .ms-emp-table td[data-label="Content"] { display: block; }
+    .ms-emp-table td[data-label="Content"]::before { display: block; margin-bottom: 0.35rem; }
+    .ms-emp-table td[data-label="Content"] .text-wrap { max-width: none !important; }
+    .ms-emp-table td > *:not(::before) { text-align: right; }
+    .ms-emp-table td[data-label="Status"] > div,
+    .ms-emp-table td[data-label="Status"] { text-align: right; }
+    .ms-emp-table td[data-label="Status"] .text-wrap { max-width: none !important; text-align: left; }
+    .table-responsive { overflow-x: visible; }
+
+    /* Form: full-width controls and thumb-sized targets. */
+    .form-control-hitech, .form-select, textarea.form-control { font-size: 16px; }  /* stops iOS zooming on focus */
+    .hitech-submit-btn, .ms-resubmit, .btn-record { width: 100%; }
+    .hitech-page-hero .btn { width: 100%; }
+    .modal-dialog { margin: 0.5rem; }
+  }
 </style>
 @endsection
 
@@ -48,9 +99,19 @@
 
   {{-- Hero Header --}}
   <div class="hitech-page-hero mb-6 animate__animated animate__fadeIn">
-    <div class="hitech-page-hero-text">
-      <h4 class="greeting">Innovation Hub Portal</h4>
-      <p class="sub-text">Share your ideas, suggestions, complaints, sales pitches, or seminars. Make your voice heard, openly or anonymously.</p>
+    <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100 flex-wrap gap-3">
+      <div>
+        <h4 class="greeting">Mind Speak Portal</h4>
+        <p class="sub-text mb-0">Share your ideas, suggestions, complaints, sales pitches, or seminars. Make your voice heard, openly or anonymously.</p>
+      </div>
+      {{-- Only an admin/HR arrives here via ?compose=1, so only they get a way back. --}}
+      @if($canSeeDashboard ?? false)
+        <a href="{{ route('mind-speak.index') }}"
+           class="btn btn-light rounded-pill px-4 fw-bold shadow-sm flex-shrink-0"
+           style="background-color:#ffffff !important; color:#0d7377 !important;">
+          <i class="bx bx-arrow-back me-1"></i> Back to Dashboard
+        </a>
+      @endif
     </div>
   </div>
 
@@ -61,22 +122,30 @@
         <div class="hitech-card-header">
           <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a;">
             <i class="bx bx-pen fs-4" style="color: #0d9488;"></i>
-            <span>Submit New Innovation</span>
+            <span>Submit New Entry</span>
           </h5>
         </div>
         <div class="card-body p-4">
           <form action="{{ route('mind-speak.store') }}" method="POST" id="mindSpeakForm" enctype="multipart/form-data">
             @csrf
-            
+            {{-- Set when the employee resubmits a rejected entry; the new row
+                 links back to the original so the reason stays on record. --}}
+            <input type="hidden" name="resubmitted_from_id" id="resubmittedFromId" value="">
+            <div id="resubmitNotice" class="alert alert-warning d-none py-2 px-3 mb-3" style="font-size:.82rem;">
+              <i class="bx bx-revision me-1"></i>
+              Resubmitting a returned entry — edit it below and send it again.
+              <a href="javascript:void(0);" id="cancelResubmit" class="fw-bold ms-1">Cancel</a>
+            </div>
+
             <div class="mb-4">
               <label class="hitech-label" for="category">Category</label>
               <select name="category" id="category" class="form-select-hitech form-select @error('category') is-invalid @enderror" required>
                 <option value="" disabled selected>Select Category...</option>
-                <option value="Idea" {{ old('category') == 'Idea' ? 'selected' : '' }}>💡 Idea</option>
-                <option value="Complaint" {{ old('category') == 'Complaint' ? 'selected' : '' }}>⚠️ Complaint</option>
-                <option value="Sales Pitch" {{ old('category') == 'Sales Pitch' ? 'selected' : '' }}>🎙️ Sales Pitch</option>
-                <option value="Seminar" {{ old('category') == 'Seminar' ? 'selected' : '' }}>🎓 Seminar</option>
-                <option value="Competitor Insights" {{ old('category') == 'Competitor Insights' ? 'selected' : '' }}>👁️ Competitor Insights</option>
+                <option value="Idea" {{ old('category') == 'Idea' ? 'selected' : '' }}>Idea</option>
+                <option value="Complaint" {{ old('category') == 'Complaint' ? 'selected' : '' }}>Complaint</option>
+                <option value="Sales Pitch" {{ old('category') == 'Sales Pitch' ? 'selected' : '' }}>Sales Pitch</option>
+                <option value="Seminar" {{ old('category') == 'Seminar' ? 'selected' : '' }}>Seminar</option>
+                <option value="Competitor Insights" {{ old('category') == 'Competitor Insights' ? 'selected' : '' }}>Competitor Insights</option>
               </select>
               @error('category')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -138,7 +207,7 @@
             </div>
 
             <button type="submit" class="btn btn-hitech w-100 mt-2 rounded-pill px-4">
-              <i class="bx bx-send me-1"></i> Submit to Innovation Hub
+              <i class="bx bx-send me-1"></i> Submit to Mind Speak
             </button>
           </form>
         </div>
@@ -151,26 +220,26 @@
         <div class="hitech-card-header d-flex justify-content-between align-items-center">
           <h5 class="title mb-0 d-flex align-items-center gap-2" style="color: #005a5a;">
             <i class="bx bx-history fs-4" style="color: #0d9488;"></i>
-            <span>Your Last Submitted Innovations</span>
+            <span>Your Mind Speak Submissions</span>
           </h5>
           <span class="badge rounded-pill fw-bold" style="background: rgba(0, 90, 90, 0.15); color: #005a5a; font-size: 0.8rem;">{{ $submissions->count() }} Submissions</span>
         </div>
         <div class="card-body p-0">
           @if($submissions->count() > 0)
             <div class="table-responsive">
-              <table class="table mb-0 table-hover align-middle">
+              <table class="table mb-0 table-hover align-middle ms-emp-table">
                 <thead>
                   <tr>
-                    <th>Category</th>
-                    <th>Idea / Content</th>
-                    <th>Visibility</th>
-                    <th>Submitted At</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Idea / Content</th>
+                    <th scope="col">Visibility</th>
+                    <th scope="col">Submitted At</th>
                   </tr>
                 </thead>
                 <tbody>
                   @foreach($submissions as $sub)
                   <tr>
-                    <td>
+                    <td data-label="Status">
                       @php
                         $badgeClass = match($sub->category) {
                           'Idea' => 'bg-label-info',
@@ -182,8 +251,42 @@
                         };
                       @endphp
                       <span class="badge {{ $badgeClass }}">{{ $sub->category }}</span>
+                      {{-- What happened to it. Previously a submission vanished
+                           into the system with no reply of any kind. --}}
+                      @php
+                        $st = $sub->status ?? 'pending';
+                        $stBadge = match($st) {
+                          'approved'     => 'bg-label-success',
+                          'acknowledged' => 'bg-label-info',
+                          'rejected'     => 'bg-label-danger',
+                          default        => 'bg-label-secondary',
+                        };
+                        $stText = match($st) {
+                          'approved'     => 'Approved',
+                          'acknowledged' => 'Reviewed',
+                          'rejected'     => 'Needs changes',
+                          default        => 'Awaiting review',
+                        };
+                      @endphp
+                      <div class="mt-1"><span class="badge {{ $stBadge }}">{{ $stText }}</span></div>
+                      @if($sub->admin_remarks)
+                        <div class="text-wrap mt-1 p-2 rounded-2"
+                             style="font-size:.75rem; line-height:1.45; background: var(--hitech-primary-light); border: 1px solid var(--hitech-border); color:#334155; max-width:230px;">
+                          <strong style="color: var(--hitech-primary);">{{ $st === 'rejected' ? 'Why it was sent back' : 'Reply' }}:</strong>
+                          {{ $sub->admin_remarks }}
+                        </div>
+                      @endif
+                      @if($st === 'rejected')
+                        <button type="button" class="btn btn-xs btn-outline-primary mt-2 ms-resubmit"
+                                style="font-size:.7rem; padding:2px 8px;"
+                                data-id="{{ $sub->id }}"
+                                data-category="{{ $sub->category }}"
+                                data-content="{{ $sub->content }}">
+                          <i class="bx bx-revision"></i> Resubmit
+                        </button>
+                      @endif
                     </td>
-                    <td>
+                    <td data-label="Content">
                       <div class="text-wrap" style="max-width: 260px; min-width: 160px; font-size: 0.85rem; line-height: 1.5; color: #4b5563;">
                         {{ \Illuminate\Support\Str::limit($sub->content, 120) }}
                         @if(strlen($sub->content) > 120)
@@ -203,9 +306,9 @@
                             <div class="modal-body p-4" style="font-size: 0.95rem; line-height: 1.7; color: #374151; white-space: pre-line;">
                               {{ $sub->content }}
                             </div>
-                            <div class="modal-footer border-0 bg-light py-3">
+                            <div class="modal-footer py-3">
                               <small class="text-muted me-auto"><i class="bx bx-calendar me-1"></i> {{ $sub->created_at->format('d M Y, h:i A') }}</small>
-                              <button type="button" class="btn btn-label-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                              <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
                             </div>
                           </div>
                         </div>
@@ -220,11 +323,11 @@
                            @endphp
                            @if($isAudio)
                              <audio controls class="w-100 mt-1" style="height: 36px;">
-                               <source src="{{ Storage::url($sub->attachment) }}" type="audio/{{ $ext == 'webm' ? 'webm' : 'mpeg' }}">
+                               <source src="{{ route('mind-speak.attachment', $sub->id) }}" type="audio/{{ $ext == 'webm' ? 'webm' : 'mpeg' }}">
                                Your browser does not support the audio element.
                              </audio>
                            @else
-                             <a href="{{ Storage::url($sub->attachment) }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 mt-1" style="font-size: 0.75rem;">
+                             <a href="{{ route('mind-speak.attachment', $sub->id) }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 mt-1" style="font-size: 0.75rem;">
                                <i class="bx bx-link-external me-1"></i> View Attachment
                              </a>
                            @endif
@@ -232,14 +335,14 @@
                       @endif
 
                     </td>
-                    <td>
+                    <td data-label="Visibility">
                       @if($sub->is_anonymous)
                         <span class="text-warning fw-bold small"><i class="bx bx-hide align-middle"></i> Anonymous</span>
                       @else
                         <span class="text-success fw-bold small"><i class="bx bx-show align-middle"></i> Public</span>
                       @endif
                     </td>
-                    <td>
+                    <td data-label="Submitted">
                       <span class="text-muted small fw-semibold">{{ $sub->created_at->format('d M Y') }}</span><br>
                       <small class="text-muted" style="font-size: 0.75rem;">{{ $sub->created_at->format('h:i A') }}</small>
                     </td>
@@ -251,8 +354,8 @@
           @else
             <div class="text-center py-6 text-muted">
               <i class="bx bx-brain fs-1 d-block mb-2 text-light" style="font-size: 4rem !important;"></i>
-              <p class="mb-0 fw-semibold">No Innovations submitted yet.</p>
-              <small class="text-muted">Use the form on the left to submit your first innovation!</small>
+              <p class="mb-0 fw-semibold">No Mind Speak submitted yet.</p>
+              <small class="text-muted">Use the form above to submit your first one.</small>
             </div>
           @endif
         </div>
@@ -497,5 +600,37 @@
       bsAlert.close();
     }, 4000);
   });
+
+  // Resubmit a returned entry: prefill the form with the original so the
+  // employee edits rather than retypes, and tag it with the id it replaces.
+  (function () {
+    const hidden   = document.getElementById('resubmittedFromId');
+    const notice   = document.getElementById('resubmitNotice');
+    const category = document.getElementById('category');
+    const content  = document.getElementById('content');
+    if (!hidden || !category || !content) return;
+
+    document.querySelectorAll('.ms-resubmit').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        hidden.value   = btn.dataset.id;
+        category.value = btn.dataset.category;
+        content.value  = btn.dataset.content || '';
+        notice.classList.remove('d-none');
+        // Category drives the attachment rules, so let that logic re-run.
+        category.dispatchEvent(new Event('change'));
+        content.dispatchEvent(new Event('input'));
+        document.getElementById('mindSpeakForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        content.focus();
+      });
+    });
+
+    const cancel = document.getElementById('cancelResubmit');
+    if (cancel) cancel.addEventListener('click', function () {
+      hidden.value = '';
+      notice.classList.add('d-none');
+      content.value = '';
+      content.dispatchEvent(new Event('input'));
+    });
+  })();
 </script>
 @endsection

@@ -10,15 +10,6 @@
 
 @section('page-style')
 <style>
-  /* ===================== Custom KPI Purple Card for Anonymous ===================== */
-  .card-purple::after {
-    background: linear-gradient(90deg, #8b5cf6, #c084fc);
-  }
-  .icon-purple {
-    background: rgba(139, 92, 246, 0.1);
-    color: #7c3aed;
-  }
-
   /* ===================== Chart & Tables Card ===================== */
   .ms-card {
     background: #fff;
@@ -32,7 +23,7 @@
     font-weight: 700;
     color: #1e293b;
     font-size: 1rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--hitech-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -64,11 +55,11 @@
   .filter-bar .form-control {
     border-radius: 9px;
     font-size: 0.88rem;
-    border-color: #e5e7eb;
+    border-color: var(--hitech-border);
     height: 40px;
   }
   .filter-bar .btn-filter {
-    background: #0d7377;
+    background: var(--hitech-primary);
     color: #fff;
     border: none;
     border-radius: 9px;
@@ -78,10 +69,10 @@
     transition: background 0.2s;
   }
   .filter-bar .btn-filter:hover {
-    background: #0a585b;
+    background: var(--primary-teal-dark, #005a5a);
   }
   .filter-bar .btn-export {
-    background: #10b981;
+    background: var(--hitech-icon-password);
     color: #fff;
     border: none;
     border-radius: 9px;
@@ -91,32 +82,32 @@
     transition: background 0.2s;
   }
   .filter-bar .btn-export:hover {
-    background: #059669;
+    background: #0f9c6e;
   }
 
   /* ===================== Submissions Table ===================== */
   .ms-table thead th {
-    background: #f8fafc;
+    background: var(--hitech-bg-soft);
     color: #1e293b;
     font-size: 0.78rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    border-bottom: 2px solid #f1f5f9;
+    border-bottom: 2px solid var(--hitech-border);
     padding: 1rem;
   }
   .ms-table tbody tr {
     transition: background 0.15s ease;
   }
   .ms-table tbody tr:hover {
-    background: #f8fafc;
+    background: var(--hitech-bg-soft);
   }
   .ms-table td {
     padding: 1rem;
     vertical-align: middle;
     font-size: 0.88rem;
     color: #374151;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--hitech-border);
   }
   
   .ms-badge {
@@ -134,24 +125,121 @@
   .badge-competitor { background: #e0e7ff; color: #4338ca; }
 
   .emp-code-badge {
-    background: #f1f5f9;
-    color: #334155;
+    background: var(--hitech-primary-light);
+    color: var(--hitech-primary);
     font-weight: 700;
     padding: 0.25rem 0.6rem;
     border-radius: 6px;
     font-size: 0.8rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--hitech-border);
   }
 
-  .dept-list-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #f1f5f9;
+  /* ===================== Compact stat strip =====================
+     The old cards were a full dashboard tile each and pushed the table
+     below the fold. Seven of these fit on one row.
+
+     Colours come from the portal theme (--hitech-*), not from a palette
+     invented for this page: one teal accent throughout, the theme's soft
+     background and the theme's border. */
+  .ms-stat-strip {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
   }
-  .dept-list-item:last-child {
-    border-bottom: none;
+  @media (max-width: 1199px) { .ms-stat-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 575px)  { .ms-stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .ms-stat {
+    background: #fff;
+    border: 1px solid var(--hitech-border);
+    border-left: 3px solid var(--hitech-primary);
+    border-radius: 12px;
+    padding: 0.7rem 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    transition: transform .2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .ms-stat:hover { transform: translateY(-2px); }
+  .ms-stat .ico {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--hitech-primary-light);
+    color: var(--hitech-primary);
+    font-size: 0.95rem;
+  }
+  .ms-stat .v { font-size: 1.1rem; font-weight: 800; color: #1e293b; line-height: 1.15; }
+  .ms-stat .l { font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: 0.03em; color: #64748b; white-space: nowrap;
+                overflow: hidden; text-overflow: ellipsis; }
+
+  /* ===================== Icon action buttons =====================
+     Text buttons wrapped and pushed the table wide; the reviewer's
+     remarks made it worse.
+
+     These extend the theme's own .icon-sophisticated (slate at rest,
+     lifting to colour on hover) rather than introducing a new set of
+     pastel fills. The accent on hover uses the theme's action colours. */
+  .ms-act {
+    --ms-act-accent: var(--hitech-primary);
+    background: var(--hitech-bg-soft);
+    color: #64748b;
+    border: 1px solid var(--hitech-border);
+  }
+  .ms-act:hover {
+    background: #fff;
+    color: var(--ms-act-accent);
+    border-color: var(--ms-act-accent);
+  }
+  .ms-act:hover i { transform: scale(1.1); }
+  .ms-act i { transition: transform 0.2s ease; }
+  .ms-act-view    { --ms-act-accent: var(--hitech-icon-view); }
+  .ms-act-approve { --ms-act-accent: var(--hitech-icon-password); }   /* theme green  */
+  .ms-act-ack     { --ms-act-accent: var(--hitech-primary); }         /* theme teal   */
+  .ms-act-reject  { --ms-act-accent: var(--hitech-icon-deactivate); } /* theme red    */
+
+  .ms-remark-flag { color: var(--hitech-primary); cursor: help; font-size: 0.95rem; }
+
+  /* ===================== Mobile =====================
+     A seven-column table inside a horizontal scroller is unusable on a
+     phone. Below 768px each row becomes a stacked card, with the column
+     name coming from the td's data-label. */
+  @media (max-width: 767.98px) {
+    .ms-table thead { display: none; }
+    .ms-table, .ms-table tbody, .ms-table tr, .ms-table td { display: block; width: 100%; }
+    .ms-table tr {
+      border: 1px solid var(--hitech-border);
+      border-radius: 12px;
+      margin: 0 0 0.85rem;
+      padding: 0.35rem 0.15rem;
+      background: #fff;
+    }
+    .ms-table td {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      border-bottom: 1px dashed var(--hitech-border);
+      padding: 0.6rem 0.9rem;
+      text-align: left !important;
+    }
+    .ms-table td:last-child { border-bottom: none; }
+    .ms-table td::before {
+      content: attr(data-label);
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #94a3b8;
+      flex: 0 0 34%;
+    }
+    .ms-table td > * { text-align: right; }
+    .ms-table td[data-label="Content"] { display: block; }
+    .ms-table td[data-label="Content"] > div { max-width: none !important; text-align: left; }
+    .ms-table td[data-label="Content"]::before { display: block; margin-bottom: 0.3rem; }
+    .ms-table td[data-label="Actions"] { justify-content: space-between; }
+    .table-responsive { overflow-x: visible; }
+    .ms-act { width: 38px; height: 38px; }   /* comfortable tap target */
   }
 
   /* ===================== Alerts ===================== */
@@ -185,91 +273,39 @@
 
   {{-- Hero Header --}}
   <div class="hitech-page-hero mb-6 animate__animated animate__fadeIn">
-    <div class="hitech-page-hero-text">
-      <h4 class="greeting">Innovation Hub Dashboard</h4>
-      <p class="sub-text">Review ideas, feedback, complaints, sales pitches, and seminars submitted by staff members.</p>
+    <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100 flex-wrap gap-3">
+      <div>
+        <h4 class="greeting">Mind Speak Dashboard</h4>
+        <p class="sub-text mb-0">Review ideas, feedback, complaints, sales pitches, and seminars submitted by staff members.</p>
+      </div>
+      {{-- Admin and HR landed here with no way to post anything themselves. --}}
+      <a href="{{ route('mind-speak.index', ['compose' => 1]) }}"
+         class="btn btn-light rounded-pill px-4 fw-bold shadow-sm flex-shrink-0"
+         style="background-color:#ffffff !important; color:#0d7377 !important;">
+        <i class="bx bx-plus-circle me-1"></i> Submit an Entry
+      </a>
     </div>
   </div>
 
-  {{-- KPI Stat Cards --}}
-  <div class="row g-6 mb-6">
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-blue h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-blue"><i class="bx bx-brain"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['total']) }}</h3>
-          <small class="stat-label">Total Speaks</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-teal h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-teal"><i class="bx bx-bulb"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['idea']) }}</h3>
-          <small class="stat-label">Ideas</small>
+  {{-- KPI strip — one compact row so the submissions table stays above the fold --}}
+  <div class="ms-stat-strip">
+    @foreach([
+      ['bx-brain',        'Total Speaks',        $stats['total']],
+      ['bx-bulb',         'Ideas',               $stats['idea']],
+      ['bx-microphone',   'Sales Pitches',       $stats['sales_pitch'] ?? 0],
+      ['bx-presentation', 'Seminars',            $stats['seminar'] ?? 0],
+      ['bx-bullseye',     'Competitor Insights', $stats['competitor_insights'] ?? 0],
+      ['bx-error-circle', 'Complaints',          $stats['complaint']],
+      ['bx-hide',         'Anonymous',           $stats['anonymous']],
+    ] as [$icon, $label, $value])
+      <div class="ms-stat">
+        <span class="ico"><i class="bx {{ $icon }}"></i></span>
+        <div class="min-w-0">
+          <div class="v">{{ number_format($value) }}</div>
+          <div class="l" title="{{ $label }}">{{ $label }}</div>
         </div>
       </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-amber h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-amber"><i class="bx bx-microphone"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['sales_pitch'] ?? 0) }}</h3>
-          <small class="stat-label">Sales Pitches</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-emerald h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-emerald" style="background: rgba(16, 185, 129, 0.15); color: #10b981;"><i class="bx bx-presentation"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['seminar'] ?? 0) }}</h3>
-          <small class="stat-label">Seminars</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-blue h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-blue" style="background: rgba(67, 56, 202, 0.15); color: #4338ca;"><i class="bx bx-bullseye"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['competitor_insights'] ?? 0) }}</h3>
-          <small class="stat-label">Competitor Insights</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-4 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-red h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-red"><i class="bx bx-error-circle"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['complaint']) }}</h3>
-          <small class="stat-label">Complaints</small>
-        </div>
-      </div>
-    </div>
-    <div class="col-12 col-sm-6 col-md-6 col-lg">
-      <div class="hitech-stat-card dashboard-variant card-purple h-100">
-        <div class="stat-card-header">
-          <div class="stat-icon-wrap icon-purple"><i class="bx bx-hide"></i></div>
-        </div>
-        <div>
-          <h3 class="stat-value mb-1">{{ number_format($stats['anonymous']) }}</h3>
-          <small class="stat-label">Anonymous</small>
-        </div>
-      </div>
-    </div>
+    @endforeach
   </div>
 
   {{-- Filter & Sort Form --}}
@@ -327,7 +363,7 @@
             <a href="{{ route('mind-speak.index') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Reset Filters">
               <i class="bx bx-reset fs-5"></i>
             </a>
-            <button type="button" onclick="exportData()" class="btn btn-export d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Export to CSV">
+            <button type="button" id="msExportBtn" class="btn btn-export d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Export to CSV">
               <i class="bx bx-download fs-5"></i>
             </button>
           </div>
@@ -336,51 +372,9 @@
     </form>
   </div>
 
-  {{-- Breakdowns & Analytics (Month-wise and Department-wise) --}}
-  <div class="row g-4 mb-4">
-    {{-- Month-wise Card --}}
-    <div class="col-12 col-lg-7">
-      <div class="card ms-card h-100">
-        <div class="ms-card-header">
-          <h5 class="ms-card-title"><i class="bx bx-chart me-1 text-primary"></i> Monthly Submissions Trends (Current Year)</h5>
-        </div>
-        <div class="card-body p-4">
-          <canvas id="monthlyTrendChart" style="max-height: 280px; width: 100%;"></canvas>
-        </div>
-      </div>
-    </div>
-
-    {{-- Department-wise Card --}}
-    <div class="col-12 col-lg-5">
-      <div class="card ms-card h-100">
-        <div class="ms-card-header">
-          <h5 class="ms-card-title"><i class="bx bx-sitemap me-1 text-primary"></i> Department Submissions Breakdown</h5>
-        </div>
-        <div class="card-body p-0" style="max-height: 320px; overflow-y: auto;">
-          @if($deptStats->count() > 0)
-            <div class="dept-list">
-              @foreach($deptStats as $deptStat)
-                <div class="dept-list-item">
-                  <div class="d-flex align-items-center">
-                    <span style="width: 8px; height: 8px; border-radius: 50%; background-color: #0d9488; margin-right: 12px; display: inline-block;"></span>
-                    <span class="fw-semibold text-dark">{{ $deptStat->department_name ?? 'Unassigned / Other' }}</span>
-                  </div>
-                  <span class="badge rounded-pill fw-bold" style="background: rgba(0, 90, 90, 0.15); color: #005a5a; font-size: 0.8rem;">
-                    {{ $deptStat->total }}
-                  </span>
-                </div>
-              @endforeach
-            </div>
-          @else
-            <div class="text-center py-6 text-muted">
-              <i class="bx bx-folder fs-1 text-light d-block mb-2" style="font-size: 3rem !important;"></i>
-              No department data available.
-            </div>
-          @endif
-        </div>
-      </div>
-    </div>
-  </div>
+  {{-- The monthly trend chart and the department breakdown were removed: the
+       reviewer's job here is to act on submissions, and both pushed the table
+       below the fold. Dropping the chart also removes the Chart.js CDN. --}}
 
   {{-- Detailed Table --}}
   <div class="card ms-card">
@@ -394,18 +388,21 @@
           <table class="table ms-table mb-0">
             <thead>
               <tr>
-                <th>Category</th>
-                <th>Content / Idea</th>
-                <th>Employee ID</th>
-                <th>Submitter Info</th>
-                <th>Department</th>
-                <th>Submitted Date</th>
+                {{-- Employee ID, Submitter and Department were three columns
+                     saying the same thing; folded into one to give the content
+                     and the actions room. --}}
+                <th scope="col">Category</th>
+                <th scope="col">Content / Idea</th>
+                <th scope="col">Submitter</th>
+                <th scope="col">Submitted</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
               @foreach($submissions as $sub)
                 <tr>
-                  <td>
+                  <td data-label="Category">
                     @php
                       $badgeClass = match($sub->category) {
                         'Idea' => 'badge-idea',
@@ -415,10 +412,23 @@
                         'Competitor Insights' => 'badge-competitor',
                         default => 'badge-other',
                       };
+                      $msBadge = match($sub->status ?? 'pending') {
+                        'approved'     => 'bg-label-success',
+                        'acknowledged' => 'bg-label-info',
+                        'rejected'     => 'bg-label-danger',
+                        default        => 'bg-label-secondary',
+                      };
+                      // Review: a proposal (Sales Pitch / Seminar / Competitor
+                      // Insights) is approved or rejected; feedback (Idea /
+                      // Complaint) is acknowledged with a reply. Either way a
+                      // rejection must carry a reason.
+                      $msActions = $sub->availableActions();
+                      $msIcon = ['approve' => 'bx-check', 'acknowledge' => 'bx-message-rounded-check', 'reject' => 'bx-x'];
+                      $msTone = ['approve' => 'approve',  'acknowledge' => 'ack',                      'reject' => 'reject'];
                     @endphp
                     <span class="ms-badge {{ $badgeClass }}">{{ $sub->category }}</span>
                   </td>
-                  <td>
+                  <td data-label="Content">
                     <div style="max-width: 320px; min-width: 180px; font-size: 0.85rem; line-height: 1.5; color: #374151;">
                       {{ \Illuminate\Support\Str::limit($sub->content, 140) }}
                       @if(strlen($sub->content) > 140)
@@ -429,9 +439,9 @@
                     {{-- Detail Modal --}}
                     <div class="modal fade" id="viewModalAdmin{{ $sub->id }}" tabindex="-1" aria-hidden="true">
                       <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content" style="border-radius: 16px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-                          <div class="modal-header bg-light" style="border-bottom: 1px solid #f1f5f9; border-top-left-radius: 16px; border-top-right-radius: 16px;">
-                            <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+                        <div class="modal-content">
+                          <div class="modal-header">
+                            <h5 class="modal-title d-flex align-items-center">
                               <span class="ms-badge {{ $badgeClass }} me-3">{{ $sub->category }}</span> 
                               Mind Speak Submission Details
                             </h5>
@@ -441,7 +451,15 @@
                             <div class="row g-4 mb-4">
                               <div class="col-md-6">
                                 <span class="d-block text-uppercase text-muted fw-bold mb-1" style="font-size: 0.72rem; letter-spacing: 0.5px;">Employee ID</span>
-                                <span class="emp-code-badge">{{ $sub->user->code }}</span>
+                                {{-- The employee code identifies the person just as well as
+                                     their name. Showing it on an anonymous submission — right
+                                     next to a label promising anonymity — defeated the whole
+                                     feature, so it is masked with everything else. --}}
+                                @if($sub->is_anonymous)
+                                  <span class="text-muted font-italic">[Anonymous]</span>
+                                @else
+                                  <span class="emp-code-badge">{{ $sub->user->code }}</span>
+                                @endif
                               </div>
                               <div class="col-md-6">
                                 <span class="d-block text-uppercase text-muted fw-bold mb-1" style="font-size: 0.72rem; letter-spacing: 0.5px;">Visibility Mode</span>
@@ -470,9 +488,9 @@
                                 <span class="fw-semibold text-dark">{{ $sub->created_at->format('d M Y, h:i A') }}</span>
                               </div>
                             </div>
-                            <hr class="my-4" style="border-color: #f1f5f9;">
+                            <hr class="my-4" style="border-color: var(--hitech-border);">
                             <span class="d-block text-uppercase text-muted fw-bold mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">Submitted Content / Message</span>
-                            <div class="p-3 bg-light rounded-3 text-dark" style="white-space: pre-line; line-height: 1.7; font-size: 0.95rem;">
+                            <div class="p-3 rounded-3 text-dark" style="white-space: pre-line; line-height: 1.7; font-size: 0.95rem; background: var(--hitech-primary-light); border: 1px solid var(--hitech-border);">
                               {{ $sub->content }}
                             </div>
                             @if($sub->attachment)
@@ -484,46 +502,106 @@
                                 @endphp
                                 @if($isAudio)
                                   <audio controls class="w-100">
-                                    <source src="{{ Storage::url($sub->attachment) }}" type="audio/{{ $ext == 'webm' ? 'webm' : 'mpeg' }}">
+                                    <source src="{{ route('mind-speak.attachment', $sub->id) }}" type="audio/{{ $ext == 'webm' ? 'webm' : 'mpeg' }}">
                                     Your browser does not support the audio element.
                                   </audio>
                                 @else
-                                  <a href="{{ Storage::url($sub->attachment) }}" target="_blank" class="btn btn-outline-primary rounded-pill px-4">
+                                  <a href="{{ route('mind-speak.attachment', $sub->id) }}" target="_blank" class="btn btn-primary rounded-pill px-4">
                                     <i class="bx bx-download me-1"></i> View Attachment
                                   </a>
                                 @endif
                               </div>
                             @endif
+                            {{-- The reviewer's own note lives here rather than in
+                                 the table, where it was wrapping the column. --}}
+                            @if($sub->admin_remarks)
+                              <div class="mt-4">
+                                <span class="d-block text-uppercase text-muted fw-bold mb-2" style="font-size: 0.72rem; letter-spacing: 0.5px;">
+                                  Reviewer's Remarks
+                                  @if($sub->reviewed_at)
+                                    — {{ $sub->reviewer?->first_name ?? 'Reviewer' }}, {{ $sub->reviewed_at->format('d M Y') }}
+                                  @endif
+                                </span>
+                                <div class="p-3 rounded-3" style="background: var(--hitech-bg-soft); border: 1px solid var(--hitech-border); border-left: 3px solid var(--hitech-primary); white-space: pre-line; font-size: 0.9rem;">
+                                  {{ $sub->admin_remarks }}
+                                </div>
+                              </div>
+                            @endif
                           </div>
-                          <div class="modal-footer bg-light" style="border-top: 1px solid #f1f5f9; border-bottom-left-radius: 16px; border-bottom-right-radius: 16px;">
-                            <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                          <div class="modal-footer d-flex justify-content-between">
+                            <span class="badge {{ $msBadge }}">{{ ucfirst($sub->status ?? 'pending') }}</span>
+                            <div class="d-flex gap-2">
+                              <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+                              {{-- Acting straight from the detail view: the reviewer
+                                   has just read the whole submission, which is the
+                                   moment they can actually judge it. --}}
+                              @foreach($msActions as $act)
+                                <button type="button"
+                                        class="btn rounded-pill px-4 fw-semibold ms-review-btn
+                                               {{ $act === 'reject' ? 'btn-danger' : ($act === 'approve' ? 'btn-success' : 'btn-primary') }}"
+                                        data-id="{{ $sub->id }}" data-action="{{ $act }}"
+                                        data-category="{{ $sub->category }}"
+                                        data-from-modal="viewModalAdmin{{ $sub->id }}">
+                                  <i class="bx {{ $msIcon[$act] }} me-1"></i>{{ ucfirst($act) }}
+                                </button>
+                              @endforeach
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
 
                   </td>
-                  <td>
-                    <span class="emp-code-badge">{{ $sub->user->code }}</span>
-                  </td>
-                  <td>
+                  {{-- Submitter: code, name, email and department in one column.
+                       All four are masked together on an anonymous row — the
+                       code identifies a person just as surely as the name. --}}
+                  <td data-label="Submitter" style="min-width: 180px;">
                     @if($sub->is_anonymous)
                       <span class="text-muted font-italic small"><i class="bx bx-hide align-middle"></i> [Anonymous]</span>
                     @else
-                      <span class="fw-semibold text-dark">{{ $sub->user->full_name ?? $sub->user->name }}</span><br>
-                      <small class="text-muted" style="font-size: 0.78rem;">{{ $sub->user->email }}</small>
+                      <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="emp-code-badge">{{ $sub->user->code }}</span>
+                        <span class="fw-semibold text-dark" style="font-size:.86rem;">{{ $sub->user->full_name ?? $sub->user->name }}</span>
+                      </div>
+                      <small class="text-muted d-block" style="font-size: 0.74rem;">{{ $sub->user->email }}</small>
+                      <small class="text-muted d-block" style="font-size: 0.74rem;">{{ $sub->user->department?->name ?? 'N/A' }}</small>
                     @endif
                   </td>
-                  <td>
-                    @if($sub->is_anonymous)
-                      <span class="text-muted small">—</span>
-                    @else
-                      <span class="text-dark fw-semibold" style="font-size: 0.85rem;">{{ $sub->user->department?->name ?? 'N/A' }}</span>
+                  <td data-label="Submitted" class="text-nowrap">
+                    <span class="text-dark fw-semibold" style="font-size:.83rem;">{{ $sub->created_at->format('d M Y') }}</span><br>
+                    <small class="text-muted" style="font-size: 0.72rem;">{{ $sub->created_at->format('h:i A') }}</small>
+                  </td>
+                  <td data-label="Status" class="text-nowrap">
+                    <span class="badge {{ $msBadge }}">{{ ucfirst($sub->status ?? 'pending') }}</span>
+                    {{-- The remarks used to be printed in full here and wrapped
+                         the column badly; the flag opens the detail view. --}}
+                    @if($sub->admin_remarks)
+                      <i class="bx bx-message-square-dots ms-remark-flag ms-1 align-middle"
+                         title="{{ \Illuminate\Support\Str::limit($sub->admin_remarks, 160) }}"></i>
+                    @endif
+                    @if($sub->reviewed_at)
+                      <div class="text-muted" style="font-size:.68rem;">
+                        {{ $sub->reviewer?->first_name ?? '—' }} · {{ $sub->reviewed_at->format('d M') }}
+                      </div>
                     @endif
                   </td>
-                  <td>
-                    <span class="text-dark fw-semibold">{{ $sub->created_at->format('d M Y') }}</span><br>
-                    <small class="text-muted" style="font-size: 0.75rem;">{{ $sub->created_at->format('h:i A') }}</small>
+                  <td data-label="Actions" class="text-end text-nowrap">
+                    <div class="d-inline-flex gap-1">
+                      <button type="button" class="icon-sophisticated ms-act ms-act-view"
+                              data-bs-toggle="modal" data-bs-target="#viewModalAdmin{{ $sub->id }}"
+                              title="View full submission" aria-label="View full submission">
+                        <i class="bx bx-show"></i>
+                      </button>
+                      @foreach($msActions as $act)
+                        <button type="button"
+                                class="icon-sophisticated ms-act ms-act-{{ $msTone[$act] }} ms-review-btn"
+                                data-id="{{ $sub->id }}" data-action="{{ $act }}"
+                                data-category="{{ $sub->category }}"
+                                title="{{ ucfirst($act) }}" aria-label="{{ ucfirst($act) }} this submission">
+                          <i class="bx {{ $msIcon[$act] }}"></i>
+                        </button>
+                      @endforeach
+                    </div>
                   </td>
                 </tr>
               @endforeach
@@ -547,71 +625,149 @@
     </div>
   </div>
 
+{{-- Review modal — shared by Approve / Acknowledge / Reject --}}
+<div class="modal fade" id="msReviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="POST" id="msReviewForm" class="modal-content">
+      @csrf
+      <input type="hidden" name="action" id="msAction">
+      <div class="modal-header">
+        <h5 class="modal-title" id="msReviewTitle">Review submission</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label fw-semibold" id="msRemarksLabel" for="msRemarks">Remarks</label>
+        <textarea class="form-control" name="remarks" id="msRemarks" rows="4" maxlength="2000"
+                  placeholder="What should the employee know?"></textarea>
+        <div class="invalid-feedback">A reason is required — the employee cannot fix what they were not told.</div>
+        <div class="form-text" id="msRemarksHint">The employee sees this on their Mind Speak page.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn rounded-pill px-4 fw-semibold btn-success" id="msReviewSubmit">Confirm</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </div>
 @endsection
 
 @section('page-script')
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  // Chart.js Configuration for Monthly Trend
-  (function() {
-    const ctx = document.getElementById('monthlyTrendChart');
-    if (!ctx) return;
+  /* Everything here waits for DOMContentLoaded.
+   *
+   * The layout loads Bootstrap through @@vite, which emits
+   * <script type="module"> — and modules are DEFERRED, so they run AFTER this
+   * inline script. The previous version called `new bootstrap.Modal(...)` at
+   * parse time, which threw "bootstrap is not defined" and killed the rest of
+   * the block, so no click handler was ever attached and Approve / Acknowledge
+   * / Reject did nothing at all. The detail modal still opened because that
+   * one is declarative (data-bs-toggle), which Bootstrap wires up itself
+   * whenever it finally loads.
+   *
+   * Modules are guaranteed to execute before DOMContentLoaded fires, so by the
+   * time this runs `window.bootstrap` exists. It is still checked, because a
+   * silent no-op is what caused this bug in the first place. */
+  document.addEventListener('DOMContentLoaded', function () {
 
-    const months = @json(array_keys($formattedMonths));
-    const counts = @json(array_values($formattedMonths));
+    // ---- CSV export ----
+    const exportBtn = document.getElementById('msExportBtn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        const params = new URLSearchParams(new FormData(document.getElementById('filterForm'))).toString();
+        window.location.href = @json(route('mind-speak.export')) + '?' + params;
+      });
+    }
 
-    new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: months,
-        datasets: [{
-          label: 'Submissions',
-          data: counts,
-          backgroundColor: 'rgba(13, 115, 119, 0.75)',
-          borderColor: '#0d7377',
-          borderWidth: 1,
-          borderRadius: 6,
-          borderSkipped: false,
-          hoverBackgroundColor: '#0d7377'
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { bodyFont: { size: 13 } }
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: { font: { size: 11 } }
-          },
-          y: {
-            beginAtZero: true,
-            ticks: { stepSize: 1 },
-            grid: { color: 'rgba(0,0,0,.05)' }
-          }
-        }
+    if (typeof bootstrap === 'undefined') {
+      console.error('Mind Speak: Bootstrap did not load — review actions are unavailable.');
+      return;
+    }
+
+    // ---- auto-dismiss flash messages ----
+    document.querySelectorAll('.ms-alert').forEach(function (el) {
+      setTimeout(function () { bootstrap.Alert.getOrCreateInstance(el).close(); }, 4000);
+    });
+
+    // ---- review actions ----
+    // One modal serves all three so the reviewer always gets a chance to add a
+    // note. On a rejection the note is compulsory: an employee cannot fix what
+    // they were not told.
+    const modalEl = document.getElementById('msReviewModal');
+    if (!modalEl) return;
+
+    const modal   = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const form    = document.getElementById('msReviewForm');
+    const remarks = document.getElementById('msRemarks');
+    const label   = document.getElementById('msRemarksLabel');
+    const hint    = document.getElementById('msRemarksHint');
+    const title   = document.getElementById('msReviewTitle');
+    const submit  = document.getElementById('msReviewSubmit');
+    const actIn   = document.getElementById('msAction');
+    const BASE    = @json(url('/mind-speak'));
+
+    const COPY = {
+      approve:     { verb: 'Approve',     icon: 'bx-check',                 btn: 'btn-success',
+                     label: 'Remarks for the employee (optional)',
+                     hint:  'Anything you add is shown to the employee alongside the approval.' },
+      acknowledge: { verb: 'Acknowledge', icon: 'bx-message-rounded-check', btn: 'btn-primary',
+                     label: 'Reply to the employee (optional)',
+                     hint:  'Your reply appears on their Mind Speak page.' },
+      reject:      { verb: 'Reject',      icon: 'bx-x',                     btn: 'btn-danger',
+                     label: 'Reason for rejection (required)',
+                     hint:  'The employee sees this and can correct the entry and resubmit.' },
+    };
+
+    // Delegated, so buttons inside a detail modal are covered by the same
+    // handler as the ones in the table.
+    document.addEventListener('click', function (e) {
+      const btn = e.target.closest('.ms-review-btn');
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+      const copy   = COPY[action];
+      if (!copy) return;
+
+      form.action       = BASE + '/' + btn.dataset.id + '/review';
+      actIn.value       = action;
+      title.textContent = copy.verb + ' — ' + btn.dataset.category;
+      label.textContent = copy.label;
+      hint.textContent  = copy.hint;
+      remarks.required  = (action === 'reject');
+      remarks.value     = '';
+      remarks.placeholder = action === 'reject'
+        ? 'What needs to change before this can be accepted?'
+        : 'What should the employee know?';
+      submit.className   = 'btn rounded-pill px-4 fw-semibold ' + copy.btn;
+      submit.innerHTML   = '<i class="bx ' + copy.icon + ' me-1"></i>' + copy.verb;
+
+      // When the click came from a detail modal, close that one first —
+      // two stacked modals fight over the backdrop.
+      const parent = btn.dataset.fromModal ? document.getElementById(btn.dataset.fromModal) : null;
+      if (parent) {
+        parent.addEventListener('hidden.bs.modal', function open() {
+          parent.removeEventListener('hidden.bs.modal', open);
+          modal.show();
+        });
+        bootstrap.Modal.getOrCreateInstance(parent).hide();
+      } else {
+        modal.show();
       }
     });
-  })();
 
-  // CSV Export helper function with query parameters
-  function exportData() {
-    const filterForm = document.getElementById('filterForm');
-    const params = new URLSearchParams(new FormData(filterForm)).toString();
-    const exportUrl = `{{ route('mind-speak.export') }}?${params}`;
-    window.location.href = exportUrl;
-  }
+    // A rejection with only spaces in the box is refused by the server; say so
+    // here rather than making the reviewer discover it after a round trip.
+    form.addEventListener('submit', function (e) {
+      if (actIn.value === 'reject' && remarks.value.trim() === '') {
+        e.preventDefault();
+        remarks.classList.add('is-invalid');
+        remarks.focus();
+      }
+    });
+    remarks.addEventListener('input', function () { remarks.classList.remove('is-invalid'); });
 
-  // Auto-dismiss alerts after 4s
-  document.querySelectorAll('.ms-alert').forEach(el => {
-    setTimeout(() => {
-      const bsAlert = new bootstrap.Alert(el);
-      bsAlert.close();
-    }, 4000);
+    modalEl.addEventListener('shown.bs.modal', function () { remarks.focus(); });
   });
 </script>
 @endsection
