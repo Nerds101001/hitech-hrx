@@ -73,6 +73,24 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     @endif
+    {{-- Validation failures used to be invisible here: the page rendered only
+         session('success') and session('error'), never $errors. A submission
+         with no status ticked was rejected by the server, redirected back, and
+         showed no message at all — the reported "I saved five times and
+         nothing happened". --}}
+    @if($errors->any())
+        <div class="alert alert-danger alert-dismissible" role="alert">
+            <div class="fw-bold mb-1"><i class="ti ti-alert-triangle me-1"></i> Attendance was not saved</div>
+            <ul class="mb-0 ps-3">
+                @foreach($errors->all() as $e)
+                    <li>{{ $e === 'The attendance field is required.'
+                            ? 'No attendance status was ticked. Choose P / A / HD / WFH / PS for at least one salesperson.'
+                            : $e }}</li>
+                @endforeach
+            </ul>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    @endif
 
     <ul class="nav nav-pills cc-nav-pills mb-4">
         <li class="nav-item">
@@ -218,7 +236,19 @@
                     @endif
                 </div>
             @else
-                <form action="{{ route('cc-attendance.store') }}" method="POST" enctype="multipart/form-data">
+                {{-- id, not the action: route('cc-attendance.index') and
+                     route('cc-attendance.store') are the SAME path (/cc-attendance),
+                     differing only by verb. querySelector by action matched the GET
+                     date-filter form first, so the client-side guard bound to the
+                     wrong form and never ran on this one at all. --}}
+                <form id="ccAttendanceForm" action="{{ route('cc-attendance.store') }}" method="POST" enctype="multipart/form-data" novalidate>
+                    {{-- Stays on screen after a blocked submit. The old alert()
+                         vanished the moment it was dismissed, which is why a
+                         blocked save looked like the button did nothing. --}}
+                    <div class="alert alert-warning d-none mx-3 mt-3" id="ccBlockMsg" role="alert">
+                        <div class="fw-bold mb-1"><i class="ti ti-alert-triangle me-1"></i> Nothing was saved</div>
+                        <div id="ccBlockBody"></div>
+                    </div>
                     @csrf
                     <input type="hidden" name="date" value="{{ $date }}">
                     
@@ -343,7 +373,11 @@
                                                         @endif
                                                     </div>
                                                     <div>
-                                                        <input type="text" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" value="{{ $record->notes ?? '' }}" placeholder="Reporting — required (e.g. companies visited)">
+                                                        <label class="form-label small fw-semibold mb-1" for="note_{{ $emp->id }}">
+                                                            Reporting <span class="text-danger">*</span>
+                                                            <span class="text-muted fw-normal">— required for every marked salesperson</span>
+                                                        </label>
+                                                        <input type="text" id="note_{{ $emp->id }}" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" value="{{ $record->notes ?? '' }}" placeholder="e.g. companies visited">
                                                     </div>
                                                     {{-- Work from home must carry the approval snapshot. --}}
                                                     <div class="cc-wfh-box" id="wfhbox_{{ $emp->id }}" style="display:{{ $sel === 'Work from home' ? 'block' : 'none' }};">
@@ -353,7 +387,7 @@
                                                         <input type="file" name="wfh_proof[{{ $emp->id }}]" accept="image/*"
                                                                class="form-control form-control-sm cc-wfh-input" data-uid="{{ $emp->id }}">
                                                         @if($record && $record->attachment)
-                                                            <a href="{{ \Illuminate\Support\Facades\Storage::url($record->attachment) }}" target="_blank"
+                                                            <a href="{{ route('cc-attendance.proof', $record->id) }}" target="_blank"
                                                                class="small d-inline-block mt-1"><i class="ti ti-photo"></i> View uploaded approval</a>
                                                             <div class="text-muted" style="font-size:.7rem;">Leave empty to keep the existing snapshot.</div>
                                                         @else
@@ -392,7 +426,7 @@ function ccToggleWfh(uid, value) {
 // Reporting/remarks is mandatory: block submit when any marked salesperson
 // has an empty reporting box (server enforces this too).
 document.addEventListener('DOMContentLoaded', function () {
-    const form = document.querySelector('form[action="{{ route('cc-attendance.store') }}"]');
+    const form = document.getElementById('ccAttendanceForm');
     if (!form) return;
 
     form.addEventListener('submit', function (e) {
@@ -411,22 +445,59 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (file && !file.files.length && !already) noProof.push(file);
             }
         });
-        if (bad.length || noProof.length) {
+        // Nothing ticked at all: the browser sends no attendance[] field, the
+        // server rejects it, and the redirect used to come back silent. Say so
+        // here instead of letting it round-trip.
+        const anyTicked = form.querySelectorAll('input[type="radio"]:checked').length > 0;
+
+        if (bad.length || noProof.length || !anyTicked) {
             e.preventDefault();
             bad.forEach(function (n) { n.classList.add('is-invalid'); });
             noProof.forEach(function (n) { n.classList.add('is-invalid'); });
+
+            const parts = [];
+            if (!anyTicked) {
+                parts.push('No attendance status was ticked. Choose <b>P / A / HD / WFH / PS</b> for at least one salesperson.');
+            }
+            if (bad.length) {
+                parts.push('<b>Reporting</b> is required for every marked salesperson — fill the highlighted box'
+                    + (bad.length > 1 ? 'es' : '') + '.');
+            }
+            if (noProof.length) {
+                parts.push('<b>Work From Home</b> needs the approval snapshot — attach it for the highlighted salesperson'
+                    + (noProof.length > 1 ? 's' : '') + '.');
+            }
+
+            // A banner that STAYS on screen. The old alert() disappeared as soon
+            // as it was dismissed, so a blocked save looked like a dead button.
+            const box  = document.getElementById('ccBlockMsg');
+            const body = document.getElementById('ccBlockBody');
+            if (box && body) {
+                body.innerHTML = parts.map(p => '<div>• ' + p + '</div>').join('');
+                box.classList.remove('d-none');
+                box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
             const first = bad[0] || noProof[0];
-            first.scrollIntoView({ block: 'center', behavior: 'smooth' });
-            first.focus();
-            alert(bad.length
-                ? 'Reporting/remarks is mandatory for every marked salesperson. Please fill the highlighted reporting box(es).'
-                : 'Work From Home needs the approval snapshot. Please attach it for the highlighted salesperson(s).');
+            if (first) { first.focus(); }
         }
+    });
+
+    // Picking a status makes that row's Reporting box visibly required, rather
+    // than only turning red after a failed save.
+    form.addEventListener('change', function (e) {
+        const m = e.target.name && e.target.name.match(/^attendance\[(\d+)\]$/);
+        if (!m) return;
+        const note = form.querySelector('input[name="notes[' + m[1] + ']"]');
+        if (!note) return;
+        const needsNote = e.target.checked && e.target.value !== '__clear';
+        note.required = needsNote;
+        note.classList.toggle('border-danger', needsNote && note.value.trim() === '');
     });
     // clear the red border once they type
     form.addEventListener('input', function (e) {
         if (e.target.classList && e.target.classList.contains('cc-note-input') && e.target.value.trim() !== '') {
-            e.target.classList.remove('is-invalid');
+            e.target.classList.remove('is-invalid', 'border-danger');
+            document.getElementById('ccBlockMsg')?.classList.add('d-none');
         }
     });
 });

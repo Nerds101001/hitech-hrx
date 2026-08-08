@@ -9,6 +9,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceLog;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class CcAttendanceController extends Controller
 {
@@ -429,7 +430,11 @@ class CcAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
-        $cleared = 0;
+        // Counted so the message can tell the truth. It used to say "Attendance
+        // saved" unconditionally — including when every row was skipped and
+        // nothing at all was written.
+        $cleared = 0; $saved = 0; $onLeave = 0;
+
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
 
@@ -439,6 +444,7 @@ class CcAttendanceController extends Controller
             // window check above already blocked locked dates; Admin/HR always
             // pass). Approved leave is owned by the leave module.
             if ($attendance && $this->isLeaveStatus($attendance->status)) {
+                $onLeave++;
                 continue;
             }
 
@@ -460,8 +466,13 @@ class CcAttendanceController extends Controller
             [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $date);
             $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
 
+            // Private disk. These used to land on the public disk and were served
+            // at /storage/wfh_approvals/<name> with no authentication at all —
+            // a manager's approval screenshot readable by anyone with the URL.
+            // Served through proof() below instead. Files uploaded before this
+            // change still read from the public disk so old links keep working.
             $proofPath = $request->hasFile("wfh_proof.$userId")
-                ? $request->file("wfh_proof.$userId")->store('wfh_approvals', 'public')
+                ? $request->file("wfh_proof.$userId")->store('wfh_approvals', 'local')
                 : null;
 
             if ($attendance) {
@@ -481,6 +492,7 @@ class CcAttendanceController extends Controller
                     $updateData['check_out_time'] = $checkOut;
                 }
                 $attendance->update($updateData);
+                $saved++;
             } else {
                 Attendance::create([
                     'user_id' => $userId,
@@ -493,12 +505,65 @@ class CcAttendanceController extends Controller
                     'attachment' => $proofPath,
                     'created_by_id' => $authId
                 ]);
+                $saved++;
             }
         }
 
-        $msg = 'Attendance saved for the salespeople you marked.'
-             . ($cleared ? " {$cleared} entry(ies) cleared." : '');
+        // Nothing written is a FAILURE, not a success — reporting it as saved is
+        // what let a lost submission look like a completed one.
+        if ($saved === 0 && $cleared === 0) {
+            $why = $onLeave
+                ? "those salespeople are on approved leave for {$date} — leave is managed by the Leave module."
+                : 'no attendance status was ticked. Choose P / A / HD / WFH / PS for at least one salesperson.';
+            return redirect()->back()->withInput()
+                ->with('error', "Nothing was saved — {$why}");
+        }
+
+        $parts = [];
+        if ($saved)   { $parts[] = $saved . ' ' . str('salesperson')->plural($saved) . ' marked'; }
+        if ($cleared) { $parts[] = $cleared . ' ' . str('entry')->plural($cleared) . ' cleared'; }
+        if ($onLeave) { $parts[] = $onLeave . ' skipped (on approved leave)'; }
+        $msg = 'Attendance saved for ' . Carbon::parse($date)->format('d M Y') . ' — ' . implode(', ', $parts) . '.';
+
         return redirect()->route('cc-attendance.index', ['date' => $date])->with('success', $msg);
+    }
+
+    /**
+     * Serve a WFH approval snapshot, to the people entitled to see it.
+     *
+     * Allowed: whoever may mark this salesperson's attendance (their CCare
+     * owner, or an attendance admin) and the salesperson themselves. Everyone
+     * else gets a 403 — these are screenshots of a private conversation with
+     * someone's reporting manager.
+     */
+    public function proof($id)
+    {
+        $user = Auth::user();
+        $row  = Attendance::withTrashed()->findOrFail($id);
+
+        $allowed = $row->user_id === $user->id
+            || in_array($row->user_id, $this->allowedSalespersonIds($user));
+
+        if (!$allowed) {
+            abort(403, 'You are not allowed to view this approval snapshot.');
+        }
+        if (!$row->attachment) {
+            abort(404);
+        }
+
+        // 'local' first for anything uploaded since the fix, 'public' for the
+        // snapshots that predate it.
+        foreach (['local', 'public'] as $disk) {
+            if (Storage::disk($disk)->exists($row->attachment)) {
+                return Storage::disk($disk)->response(
+                    $row->attachment,
+                    basename($row->attachment),
+                    ['Cache-Control' => 'private, no-store']
+                );
+            }
+        }
+
+        abort(404);
     }
 
     /** Is a WFH approval snapshot already on file for this person/date? */
