@@ -417,7 +417,16 @@ class UserDashboardController extends Controller
                 return (object) ['user' => $m, 'deploy_status' => $status];
             });
 
+            // This view carries a full sales-manager panel — pipeline value,
+            // per-rep sales/forecast/pending, alerts. It was never passed here,
+            // so every figure fell back to its `?? 0` default and the page read
+            // zero, while the same view at "/" showed real numbers. The delegate
+            // switch and the sidebar both land on THIS route, so this is the one
+            // a manager actually sees. Shared builder, so the two cannot drift.
+            $sm = \App\Support\SalesManagerSummary::build($teamMembers, $teamDeployment, (int) $pendingLeaveRequests);
+
             return view('tenant.users.dashboard.manager-index', [
+                'sm' => $sm,
                 'teamDeployment' => $teamDeployment,
                 'teamPendingLeaveRequests' => LeaveRequest::whereIn('user_id', $teamMemberIds)
                     ->where('status', 'pending')
@@ -1535,30 +1544,58 @@ class UserDashboardController extends Controller
 
         // --- KRA / KPI progress for the current period --------------------
         $kraItems = [];
-        $kraOverall = 0;
+        // Performance = MARKS EARNED against marks possible for the period we
+        // are in. It used to count "periods completed", so someone who ticked
+        // every KPI and scored nothing showed 100%. It also read only the first
+        // six KPIs by title, which on a 13-KPI scorecard hid Revenue — the
+        // single biggest weight — from the card entirely.
+        $kraOverall  = 0;
+        $kpiEarned   = 0.0;
+        $kpiPossible = 0.0;
+        $kpiDueSoon  = 0;
         try {
             $assignments = \App\Models\KpiAssignment::where('user_id', $user->id)
                 ->where('is_active', true)
                 ->orderBy('title')
-                ->limit(6)
-                ->get();
+                ->get();                       // every KPI, not the first six
 
             if ($assignments->isNotEmpty()) {
-                $checks = \App\Models\KpiCheck::where('user_id', $user->id)
-                    ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
-                    ->get()
-                    ->groupBy('kpi_assignment_id');
+                $today = \Carbon\Carbon::today();
 
-                $totalPct = 0;
+                // The check covering today for each assignment — the period the
+                // employee is actually being measured on right now.
+                $current = \App\Models\KpiCheck::where('user_id', $user->id)
+                    ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
+                    ->whereDate('period_start', '<=', $today)
+                    ->whereDate('period_end', '>=', $today)
+                    ->get()
+                    ->keyBy('kpi_assignment_id');
+
                 foreach ($assignments as $a) {
-                    $mine = $checks->get($a->id, collect());
-                    $done = $mine->whereIn('status', ['completed_on_time', 'completed_late'])->count();
-                    $total = max(1, $mine->count());
-                    $pct = (int) round(($done / $total) * 100);
-                    $kraItems[] = ['name' => $a->title, 'pct' => $pct];
-                    $totalPct += $pct;
+                    $check = $current->get($a->id);
+                    $max   = (float) $a->max_marks;
+                    $score = $check && $check->score !== null ? (float) $check->score : 0.0;
+
+                    $kpiPossible += $max;
+                    $kpiEarned   += $score;
+
+                    // Still open and the deadline is within a week.
+                    if ($check && $check->status === 'pending' && $check->due_date) {
+                        $due = \Carbon\Carbon::parse($check->due_date);
+                        if ($due->gte($today) && $due->diffInDays($today) <= 7) {
+                            $kpiDueSoon++;
+                        }
+                    }
+
+                    $kraItems[] = [
+                        'name' => $a->title,
+                        'pct'  => $max > 0 ? (int) round(($score / $max) * 100) : 0,
+                    ];
                 }
-                $kraOverall = (int) round($totalPct / max(1, count($kraItems)));
+
+                $kraOverall = $kpiPossible > 0
+                    ? (int) round(($kpiEarned / $kpiPossible) * 100)
+                    : 0;
             }
         } catch (\Throwable $e) {
             $kraItems = [];
@@ -1653,7 +1690,7 @@ class UserDashboardController extends Controller
             'deptName', 'managerName', 'shiftWindow',
             'todayAttendance', 'todayHours', 'presentThisWeek', 'weekWorkingDays',
             'leaveDaysAvailable', 'expensesThisMonth',
-            'kraItems', 'kraOverall',
+            'kraItems', 'kraOverall', 'kpiEarned', 'kpiPossible', 'kpiDueSoon',
             'upcomingLeaves', 'myTimeline', 'myDocs', 'importantContacts',
             'salesProfile'
         );
