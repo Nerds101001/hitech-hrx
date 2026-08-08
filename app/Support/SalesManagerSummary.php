@@ -30,6 +30,11 @@ class SalesManagerSummary
             'achievePct' => 0, 'pendingPct' => 0, 'onTrack' => 0, 'atRisk' => 0,
             'offTrack' => 0, 'topPerformers' => [], 'perf' => [], 'snapshot' => [],
             'activity' => [], 'goals' => [], 'schedule' => [], 'feed' => [], 'alerts' => [],
+            // Kingo/Bingo scorecard, this month, for this manager's own team.
+            'scorecardMonth' => '', 'scorecardAchieved' => 0.0, 'repsWithoutTarget' => 0,
+            'tierTargets' => ['Bingo' => 0.0, 'Kingo' => 0.0, 'Super Kingo' => 0.0],
+            'tierPct'     => ['Bingo' => 0.0, 'Kingo' => 0.0, 'Super Kingo' => 0.0],
+            'staff' => [], 'scoreTop' => [], 'scoreBehind' => [],
         ];
     }
 
@@ -45,6 +50,11 @@ class SalesManagerSummary
             'achievedL' => 0.0, 'achievePct' => 0, 'onTrack' => 0, 'atRisk' => 0,
             'offTrack' => 0, 'topPerformers' => [], 'perf' => [], 'snapshot' => [],
             'activity' => [], 'goals' => [], 'schedule' => [], 'feed' => [], 'alerts' => [],
+            // Kingo/Bingo scorecard, this month, for this manager's own team.
+            'scorecardMonth' => '', 'scorecardAchieved' => 0.0, 'repsWithoutTarget' => 0,
+            'tierTargets' => ['Bingo' => 0.0, 'Kingo' => 0.0, 'Super Kingo' => 0.0],
+            'tierPct'     => ['Bingo' => 0.0, 'Kingo' => 0.0, 'Super Kingo' => 0.0],
+            'staff' => [], 'scoreTop' => [], 'scoreBehind' => [],
         ];
         try {
             // Direct reports = the sales team the manager owns.
@@ -230,6 +240,99 @@ class SalesManagerSummary
                 if ($funnel['Negotiation']['n'] > 0) $sm['alerts'][] = ['icon' => 'bx-trending-up', 'tone' => 'success', 'title' => $funnel['Negotiation']['n'] . ' deal(s) in negotiation', 'sub' => number_format($funnel['Negotiation']['v'], 1) . ' L in play'];
             }
         } catch (\Throwable $e) { Log::warning('Manager sales widgets: ' . $e->getMessage()); }
+
+        // ---- Kingo / Bingo scorecard, this month, for THIS manager's team ----
+        // Mirrors the company-wide card on the admin dashboard, scoped to the
+        // manager's own reports. Shown to Sales-department managers.
+        try {
+            $repIds = $deployMembers->pluck('id')->all();
+            if (!empty($repIds)) {
+                $nameOf = $deployMembers->keyBy('id');
+                $mk = now()->format('Y-m');
+                $sm['scorecardMonth'] = now()->format('F Y');
+
+                $roleCols = ['salesperson_id', 'ccare_id', 'new_biz_id'];
+                if (\Illuminate\Support\Facades\Schema::hasColumn('sales_pipelines', 'new_biz_2_id')) {
+                    $roleCols[] = 'new_biz_2_id';
+                }
+
+                $tierRow = DB::table('salesperson_targets')
+                    ->where('month_year', $mk)->whereIn('salesperson_id', $repIds)
+                    ->selectRaw('SUM(bingo_target) b, SUM(kingo_target) k, SUM(super_kingo_target) s')
+                    ->first();
+                $sm['tierTargets'] = [
+                    'Bingo'       => (float) ($tierRow->b ?? 0),
+                    'Kingo'       => (float) ($tierRow->k ?? 0),
+                    'Super Kingo' => (float) ($tierRow->s ?? 0),
+                ];
+
+                // Achievement = realised sales this month from the Sales Report
+                // (locked rows), counted for whichever role the rep holds.
+                $achievedBySp = [];
+                foreach ($roleCols as $col) {
+                    $rows = DB::table('sales_pipeline_months as m')
+                        ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
+                        ->where('m.month_year', $mk)->where('sp.is_locked', true)
+                        ->whereNull('sp.deleted_at')->whereIn('sp.' . $col, $repIds)
+                        ->groupBy('sp.' . $col)
+                        ->selectRaw('sp.' . $col . ' spid, SUM(m.sale_amount) achieved')
+                        ->pluck('achieved', 'spid');
+                    foreach ($rows as $spid => $a) {
+                        $achievedBySp[$spid] = ($achievedBySp[$spid] ?? 0) + (float) $a;
+                    }
+                }
+
+                // Team headline is deduplicated: a customer with two of the team
+                // on it must not be counted twice.
+                $monthIds = DB::table('sales_pipelines')
+                    ->where(function ($w) use ($roleCols, $repIds) {
+                        foreach ($roleCols as $i => $c) {
+                            $i === 0 ? $w->whereIn($c, $repIds) : $w->orWhereIn($c, $repIds);
+                        }
+                    })
+                    ->where('is_locked', true)->whereNull('deleted_at')->pluck('id');
+                $sm['scorecardAchieved'] = (float) DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $monthIds)->where('month_year', $mk)
+                    ->sum('sale_amount');
+
+                foreach ($sm['tierTargets'] as $tier => $t) {
+                    $sm['tierPct'][$tier] = $t > 0 ? round($sm['scorecardAchieved'] / $t * 100, 1) : 0.0;
+                }
+
+                $targetRows = DB::table('salesperson_targets')
+                    ->where('month_year', $mk)->whereIn('salesperson_id', $repIds)
+                    ->get(['salesperson_id', 'bingo_target'])->keyBy('salesperson_id');
+
+                $staff = [];
+                foreach ($repIds as $uid) {
+                    $ach = (float) ($achievedBySp[$uid] ?? 0);
+                    $tgt = (float) ($targetRows[$uid]->bingo_target ?? 0);
+                    if ($tgt <= 0 && $ach <= 0) {
+                        continue;                   // nothing to say about them
+                    }
+                    $u = $nameOf->get($uid);
+                    $staff[] = [
+                        'id'   => $uid,
+                        'name' => $u ? (method_exists($u, 'getFullName') ? $u->getFullName() : trim($u->first_name . ' ' . $u->last_name)) : ('#' . $uid),
+                        'target' => $tgt, 'achieved' => $ach,
+                        'pct' => $tgt > 0 ? round($ach / $tgt * 100, 1) : null,
+                    ];
+                }
+                usort($staff, fn($a, $b) => $b['achieved'] <=> $a['achieved']);
+                $sm['staff']    = $staff;
+                $sm['scoreTop'] = array_slice($staff, 0, 5);
+
+                // Furthest behind: only reps who actually have a target, or the
+                // card just lists everyone without one at 0%.
+                $behind = array_values(array_filter($staff, fn($r) => $r['pct'] !== null));
+                usort($behind, fn($a, $b) => $a['pct'] <=> $b['pct']);
+                $sm['scoreBehind'] = array_slice($behind, 0, 5);
+                $sm['repsWithoutTarget'] = count(array_filter($staff, fn($r) => $r['pct'] === null));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Manager scorecard: ' . $e->getMessage());
+        }
+
         return $sm;
     }
 }

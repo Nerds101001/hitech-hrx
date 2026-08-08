@@ -97,6 +97,92 @@
     $goalAchieved = array_values(array_map(fn($g)=>(float)$g['achieved'], $sm['goals'] ?? []));
   @endphp
 
+  @php $mgrVariant = $mgrVariant ?? 'ccare'; @endphp
+  @if($mgrVariant === 'sales')
+  {{-- ===== SCORECARD ROW — Sales-department managers only. =====
+       Mirrors the company-wide scorecard on the admin dashboard, but every
+       figure below is restricted to this manager's own reports. --}}
+  <div class="row g-4 mt-0">
+    <div class="col-xl-7">
+      <div class="adc-card h-100">
+        <div class="adc-card-head">
+          <div>
+            <h6 class="adc-card-title">Sales Target vs Achievement</h6>
+            <span class="adc-card-sub">{{ $sm['scorecardMonth'] ?: now()->format('F Y') }} · your team</span>
+          </div>
+          <div class="adc-seg" id="mgrTgtSeg">
+            <button type="button" data-t="Bingo" class="active">Bingo</button>
+            <button type="button" data-t="Kingo">Kingo</button>
+            <button type="button" data-t="Super Kingo">Super K</button>
+          </div>
+        </div>
+        <div class="row align-items-center g-2">
+          <div class="col-md-5"><div id="mgrGauge"></div></div>
+          <div class="col-md-7">
+            <div class="adc-tgt-list">
+              <div class="adc-tgt-row"><span class="adc-mini-label">Target</span><b id="mgrTgtVal">—</b></div>
+              <div class="adc-tgt-row"><span class="adc-mini-label">Achieved</span><b id="mgrAchVal" class="text-success">—</b></div>
+              <div class="adc-tgt-row"><span class="adc-mini-label">Gap</span><b id="mgrGapVal">—</b></div>
+            </div>
+          </div>
+        </div>
+        <div class="adc-staff">
+          <div class="adc-staff-head d-flex justify-content-between align-items-center">
+            <span>Your Sales Staff</span>
+            @if(!empty($sm['staff']))<small class="text-muted fw-normal">{{ count($sm['staff']) }} reps · scroll</small>@endif
+          </div>
+          @if(empty($sm['staff']))
+            <div class="adc-empty adc-empty-sm"><i class="bx bx-bar-chart-alt-2"></i><span>No targets set for your team this month.</span></div>
+          @else
+            <div class="adc-staff-scroll">
+              <table class="table adc-table adc-staff-table mb-0">
+                <tbody>
+                  @foreach($sm['staff'] as $p)
+                    @php $pct = $p['pct'] ?? 0; $barTone = $pct >= 100 ? 'success' : ($pct >= 70 ? 'primary' : 'danger'); @endphp
+                    <tr>
+                      <td class="fw-medium"><img class="adc-staff-av" src="https://ui-avatars.com/api/?name={{ urlencode($p['name']) }}&background=0d9488&color=fff&bold=true&size=48" alt="">{{ $p['name'] }}</td>
+                      <td class="text-end text-muted">{{ $fmtL($p['target']) }}</td>
+                      <td class="text-end fw-semibold" style="width:60px">{{ $p['pct'] !== null ? $pct . '%' : '—' }}</td>
+                      <td style="width:90px"><div class="adc-bar"><span class="adc-tone-{{ $barTone }}" style="width: {{ min(100, $pct) }}%"></span></div></td>
+                    </tr>
+                  @endforeach
+                </tbody>
+              </table>
+            </div>
+          @endif
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-5">
+      <div class="adc-card h-100">
+        <div class="adc-card-head">
+          <div><h6 class="adc-card-title">⚠️ Needs Attention</h6><span class="adc-card-sub">Furthest behind target · {{ now()->format('M Y') }}</span></div>
+          <a href="{{ url('/sales-visits/kingo-bingo') }}" class="adc-link">Scorecard</a>
+        </div>
+        @if(empty($sm['scoreBehind']))
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-check-circle"></i><span>No rep is behind target.</span></div>
+        @else
+          <ul class="adc-appr">
+            @foreach($sm['scoreBehind'] as $r)
+              <li>
+                <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($r['name']) }}&background=ef4444&color=fff&bold=true" alt="">
+                <div class="adc-appr-body">
+                  <div class="adc-appr-name">{{ $r['name'] }}</div>
+                  <div class="adc-appr-meta">{{ $fmtL($r['achieved']) }} of {{ $fmtL($r['target']) }}</div>
+                </div>
+                <span class="adc-badge adc-tone-{{ $r['pct'] >= 100 ? 'success' : ($r['pct'] >= 75 ? 'warning' : 'danger') }}">{{ round($r['pct']) }}%</span>
+              </li>
+            @endforeach
+          </ul>
+          @if(($sm['repsWithoutTarget'] ?? 0) > 0)
+            <div class="adc-card-sub mt-2">{{ $sm['repsWithoutTarget'] }} rep(s) have no target set this month.</div>
+          @endif
+        @endif
+      </div>
+    </div>
+  </div>
+  @endif
+
   {{-- ===== SALES COMMAND ROW ===== --}}
   <div class="row g-4 mt-0">
     <div class="col-xl-5">
@@ -426,6 +512,58 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   const mk = (AC, sel, opts) => { const el=document.querySelector(sel); if(!el)return; try{ new AC(el,opts).render(); }catch(e){ console.error(sel,e); empty(el,'bx-error-circle','Chart failed'); } };
   getApex().then(AC => {
+@if(($mgrVariant ?? 'ccare') === 'sales')
+    // Team scorecard gauge, with the Bingo / Kingo / Super Kingo toggle.
+    // Built with `new AC(...)` rather than mk() because the toggle needs the
+    // instance back to call updateSeries().
+    (function () {
+      const gEl = document.querySelector('#mgrGauge');
+      if (!gEl) return;
+      const sTargets = {!! json_encode($sm['tierTargets'] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!};
+      const sPct  = {!! json_encode($sm['tierPct'] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!};
+      const sAch  = {{ (float) ($sm['scorecardAchieved'] ?? 0) }};
+      const lakh  = v => '₹' + (Number(v)||0).toFixed(2) + ' L';
+      const setFigs = t => {
+        const tv=document.querySelector('#mgrTgtVal'), av=document.querySelector('#mgrAchVal'), gv=document.querySelector('#mgrGapVal');
+        if(tv) tv.textContent = lakh(sTargets[t]||0);
+        if(av) av.textContent = lakh(sAch);
+        if(gv) gv.textContent = lakh(Math.max(0,(sTargets[t]||0)-sAch));
+      };
+      const anyTarget = Object.values(sTargets).some(v => v > 0);
+      if (!AC || (!anyTarget && sAch <= 0)) {
+        empty(gEl, 'bx-target-lock', AC ? 'No targets set for your team this month' : 'Charts unavailable');
+        const seg=document.querySelector('#mgrTgtSeg'); if(seg) seg.style.display='none';
+        setFigs('Bingo');
+        return;
+      }
+      let gauge = null;
+      try {
+        gauge = new AC(gEl, {
+          series:[Math.min(150, sPct['Bingo']||0)],
+          chart:{type:'radialBar',height:230,offsetY:-10,fontFamily:'Public Sans'}, colors:['#16a34a'],
+          plotOptions:{radialBar:{
+            startAngle:-90, endAngle:90, hollow:{size:'62%'},
+            track:{background:'#eef1f5',strokeWidth:'100%',margin:4},
+            dataLabels:{
+              name:{offsetY:6,color:'#94a3b8',fontSize:'12px'},
+              value:{offsetY:-34,fontSize:'30px',fontWeight:800,color:'#1e293b',formatter:v=>Math.round(v)+'%'}
+            }
+          }},
+          fill:{type:'gradient',gradient:{shade:'light',type:'horizontal',shadeIntensity:0.4,gradientToColors:['#5eead4'],stops:[0,100]}},
+          stroke:{lineCap:'round'}, labels:['Team Achievement']
+        });
+        gauge.render();
+      } catch (e) { console.error('#mgrGauge', e); empty(gEl,'bx-error-circle','Chart failed'); }
+      setFigs('Bingo');
+      document.querySelectorAll('#mgrTgtSeg button').forEach(b => b.addEventListener('click', function () {
+        document.querySelectorAll('#mgrTgtSeg button').forEach(x => x.classList.remove('active'));
+        this.classList.add('active');
+        const t = this.dataset.t;
+        if (gauge) gauge.updateSeries([Math.min(150, sPct[t]||0)]);
+        setFigs(t);
+      }));
+    })();
+@endif
     // Team status donut
     const el = document.querySelector('#adcTeamStatus');
     const data = [{{ $present }}, {{ $onLeave }}, {{ $absent }}];

@@ -454,6 +454,8 @@ class UserDashboardController extends Controller
                 ->with(['user', 'leaveType'])->orderBy('from_date')->take(8)->get();
 
             return view('tenant.users.dashboard.manager-index', [
+                'mgrVariant' => \App\Support\ManagerDashboard::variant($user),
+                'mgrDept' => \App\Support\ManagerDashboard::departmentName($user),
                 'sm' => $sm,
                 'teamAtt7' => $teamAtt7,
                 'teamUpcomingLeaves' => $teamUpcomingLeaves,
