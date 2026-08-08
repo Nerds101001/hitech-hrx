@@ -870,11 +870,18 @@ class DashboardController extends Controller
         // which renders this same view at /user/dashboard.
         $sm = \App\Support\SalesManagerSummary::build($deployMembers, $teamDeployment, $pendingLeaveRequests);
 
+        // Team-scoped approval counts. Hoisted so the rail and the view below
+        // read the same numbers — the admin branch's own copies of these are
+        // company-wide and never run for a manager.
+        $mgrPendingExpense  = 0;
+        $mgrPendingDocument = DocumentRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
+        $mgrPendingLoan     = LoanRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
+
         $mgrRail = \App\Support\ManagerDashboard::rail([
-            'teamSize' => count($teamMemberIds), 'present' => $presentUsersCount ?? 0,
+            'teamSize' => $active, 'present' => $presentUsersCount ?? 0,
             'onLeave' => $onLeaveUsersCount ?? 0, 'absent' => $todayAbsentUsers ?? 0,
-            'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $pendingExpenseRequests,
-            'pendingDocument' => $pendingDocumentRequests, 'pendingLoan' => $pendingLoanRequests,
+            'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $mgrPendingExpense,
+            'pendingDocument' => $mgrPendingDocument, 'pendingLoan' => $mgrPendingLoan,
             'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
             'sm' => $sm,
         ]);
@@ -896,9 +903,9 @@ class DashboardController extends Controller
             'todayAbsentUsers' => $todayAbsentUsers,
             'pendingLeaveRequests' => $pendingLeaveRequests,
             'teamPendingLeaveRequests' => $teamPendingLeaveRequests,
-            'pendingExpenseRequests' => 0,
-            'pendingDocumentRequests' => DocumentRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
-            'pendingLoanRequests' => LoanRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count(),
+            'pendingExpenseRequests' => $mgrPendingExpense,
+            'pendingDocumentRequests' => $mgrPendingDocument,
+            'pendingLoanRequests' => $mgrPendingLoan,
             'teamOutToday' => $teamOutToday,
             'todayBirthdays' => $todayBirthdays,
             'upcomingBirthdays' => $upcomingBirthdaysFiltered,

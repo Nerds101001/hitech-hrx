@@ -454,8 +454,8 @@ class UserDashboardController extends Controller
                 ->with(['user', 'leaveType'])->orderBy('from_date')->take(8)->get();
 
             $mgrRail = \App\Support\ManagerDashboard::rail([
-                'teamSize' => count($teamMemberIds), 'present' => $todayPresentUsers ?? 0,
-                'onLeave' => $todayOnLeaveCount ?? 0, 'absent' => $todayAbsentUsers ?? 0,
+                'teamSize' => $active, 'present' => $todayPresentCount ?? 0,
+                'onLeave' => $todayOnLeaveCount ?? 0, 'absent' => $todayAbsentCount ?? 0,
                 'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $pendingExpenseRequests,
                 'pendingDocument' => $pendingDocumentRequests, 'pendingLoan' => $pendingLoanRequests,
                 'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
