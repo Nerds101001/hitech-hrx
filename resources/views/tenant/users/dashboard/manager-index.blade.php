@@ -97,6 +97,11 @@
     $goalAchieved = array_values(array_map(fn($g)=>(float)$g['achieved'], $sm['goals'] ?? []));
   @endphp
 
+  {{-- Everything below is main-column + right-rail, matching the admin
+       dashboard. The rail opens further down, just before "Approvals Queue". --}}
+  <div class="row g-4 mt-0">
+    <div class="col-xxl-9 col-lg-8">
+
   @php $mgrVariant = $mgrVariant ?? 'ccare'; @endphp
   @if($mgrVariant === 'sales')
   {{-- ===== SCORECARD ROW — Sales-department managers only. =====
@@ -310,11 +315,7 @@
     </div>
   </div>
 
-  <div class="row g-4 mt-0">
-    {{-- MAIN --}}
-    <div class="col-xxl-9 col-lg-8">
-
-      <div class="row g-4">
+      <div class="row g-4 mt-0">
         <div class="col-xl-8">
           <div class="adc-card h-100">
             <div class="adc-card-head"><div><h6 class="adc-card-title">Team Deployment</h6><span class="adc-card-sub">Everyone's status today</span></div><a href="{{ url('/attendance') }}" class="adc-link">Attendance</a></div>
@@ -431,6 +432,53 @@
     {{-- RAIL --}}
     <div class="col-xxl-3 col-lg-4">
 
+      {{-- AI Insights --}}
+      <div class="adc-card adc-ai mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title"><i class="bx bx-bulb text-warning"></i> AI Insights</h6><span class="adc-card-sub">Signals from your team's live data</span></div></div>
+        <ul class="adc-insights">
+          @foreach($aiInsights ?? [] as $ins)
+            <li>
+              <span class="adc-ins-icon adc-tone-{{ $ins['tone'] }}"><i class="bx {{ $ins['icon'] }}"></i></span>
+              <div><div class="adc-ins-title">{{ $ins['title'] }}</div><div class="adc-ins-sub">{{ $ins['sub'] }}</div></div>
+            </li>
+          @endforeach
+        </ul>
+      </div>
+
+      {{-- Today's Events. Birthdays and anniversaries open the wish dialog;
+           the rest are plain counters. --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Events</h6></div></div>
+        <ul class="adc-events">
+          @foreach($eventsToday ?? [] as $ev)
+            @php $clickable = !empty($ev['key']) && $ev['count'] > 0; @endphp
+            <li @if($clickable) role="button" tabindex="0" class="mgr-wish-open" data-wish="{{ $ev['key'] }}"
+                    title="Send your wishes" @endif>
+              <span class="adc-ev-icon adc-tone-{{ $ev['tone'] }}"><i class="bx {{ $ev['icon'] }}"></i></span>
+              <span class="adc-ev-label">{{ $ev['label'] }}@if($clickable) <i class="bx bx-chevron-right"></i>@endif</span>
+              <span class="adc-ev-count">{{ $ev['count'] }}</span>
+            </li>
+          @endforeach
+        </ul>
+      </div>
+
+      {{-- Upcoming Calendar --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Upcoming Calendar</h6></div><a href="{{ url('/holidays') }}" class="adc-link">All</a></div>
+        @if(collect($upcomingHolidays ?? [])->isEmpty())
+          <div class="adc-empty adc-empty-sm"><span>No upcoming holidays.</span></div>
+        @else
+          <ul class="adc-cal">
+            @foreach($upcomingHolidays as $h)
+              <li>
+                <span class="adc-cal-date"><b>{{ \Carbon\Carbon::parse($h->date)->format('d') }}</b><small>{{ \Carbon\Carbon::parse($h->date)->format('M') }}</small></span>
+                <div><div class="adc-cal-name">{{ $h->name ?? $h->title ?? 'Holiday' }}</div><div class="adc-cal-day">{{ \Carbon\Carbon::parse($h->date)->format('l') }}</div></div>
+              </li>
+            @endforeach
+          </ul>
+        @endif
+      </div>
+
       {{-- Team pending approvals --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Approvals Queue</h6><span class="adc-card-sub"><b data-approval-count>{{ collect($teamPendingLeaveRequests ?? [])->count() }}</b> team leave requests</span></div><a href="{{ url('/leaveRequests') }}" class="adc-link">All</a></div>
@@ -457,10 +505,10 @@
         @else
           <ul class="adc-appr">
             @foreach($todayBdays->take(3) as $u)
-              <li><img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=ec4899&color=fff" alt=""><div class="adc-appr-body"><div class="adc-appr-name">{{ $u->name }}</div><div class="adc-appr-meta">Birthday 🎂</div></div></li>
+              <li role="button" tabindex="0" class="mgr-wish-open" data-wish="bday" data-only="{{ $u->id }}" title="Send your wishes"><img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=ec4899&color=fff" alt=""><div class="adc-appr-body"><div class="adc-appr-name">{{ $u->name }}</div><div class="adc-appr-meta">Birthday 🎂</div></div><i class="bx bx-message-rounded-dots text-muted"></i></li>
             @endforeach
             @foreach($todayAnnis->take(3) as $u)
-              <li><img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=0d9488&color=fff" alt=""><div class="adc-appr-body"><div class="adc-appr-name">{{ $u->name }}</div><div class="adc-appr-meta">Anniversary 🎉</div></div></li>
+              <li role="button" tabindex="0" class="mgr-wish-open" data-wish="anni" data-only="{{ $u->id }}" title="Send your wishes"><img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=0d9488&color=fff" alt=""><div class="adc-appr-body"><div class="adc-appr-name">{{ $u->name }}</div><div class="adc-appr-meta">Anniversary 🎉</div></div><i class="bx bx-message-rounded-dots text-muted"></i></li>
             @endforeach
           </ul>
         @endif
@@ -481,11 +529,47 @@
 
     </div>
   </div>
+
+  {{-- Wish dialog. Posts to the existing birthdays.send endpoint, which
+       re-checks the date server-side, so a stale page cannot wish the wrong
+       person. Notifications are in-app only — no mail is sent. --}}
+  <div class="modal fade" id="mgrWishModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bx bx-party text-warning"></i> <span id="mgrWishTitle">Send your wishes</span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="mgrWishAlert" class="alert d-none py-2 px-3 mb-3" role="alert"></div>
+          <label class="form-label small fw-semibold">Who are you wishing?</label>
+          <div id="mgrWishPeople" class="d-flex flex-column gap-2 mb-3"></div>
+          <label class="form-label small fw-semibold" for="mgrWishMsg">Your message</label>
+          <textarea id="mgrWishMsg" class="form-control" rows="3" maxlength="1000"
+                    placeholder="Wishing you a wonderful year ahead!"></textarea>
+          <div class="form-text">Delivered as an in-app notification.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="mgrWishSend"><i class="bx bx-send"></i> Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 @include('tenant.users.dashboard._adc-styles')
 @include('tenant.users.dashboard._adc-live')
 <style>
+  /* Clickable celebration rows — theme hover, no new palette. */
+  .mgr-wish-open{cursor:pointer;transition:background .15s ease;border-radius:8px}
+  .mgr-wish-open:hover,.mgr-wish-open:focus-visible{background:var(--hitech-bg-soft)}
+  .mgr-wish-open:focus-visible{outline:2px solid var(--hitech-primary);outline-offset:-2px}
+  .mgr-wish-person{display:flex;align-items:center;gap:10px;padding:.5rem .65rem;border:1px solid var(--hitech-border);
+                   border-radius:10px;cursor:pointer;transition:border-color .15s ease,background .15s ease}
+  .mgr-wish-person:hover{background:var(--hitech-bg-soft)}
+  .mgr-wish-person.sel{border-color:var(--hitech-primary);background:var(--hitech-bg-soft)}
+  .mgr-wish-person img{width:34px;height:34px;border-radius:50%;flex:0 0 34px}
   .sm-rank{width:26px;height:26px;flex:0 0 26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:#fff;background:#94a3b8;margin-right:2px}
   .sm-rank-1{background:linear-gradient(135deg,#f59e0b,#d97706)}.sm-rank-2{background:linear-gradient(135deg,#94a3b8,#64748b)}.sm-rank-3{background:linear-gradient(135deg,#f97316,#ea580c)}
   .sm-legend{list-style:none;margin:0;padding:0;font-size:.82rem}
@@ -500,6 +584,103 @@
 @endsection
 
 @section('page-script')
+<script>
+{{-- Wish dialog. Deliberately its own listener: if a chart throws in the block
+     below, the wish buttons must still work. --}}
+document.addEventListener('DOMContentLoaded', function () {
+  const modalEl = document.getElementById('mgrWishModal');
+  if (!modalEl) return;
+
+  const PEOPLE = {
+    bday: {!! json_encode($todayBdays->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(), JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!},
+    anni: {!! json_encode($todayAnnis->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(), JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) !!}
+  };
+  const COPY = {
+    bday: {title:'Wish a happy birthday', type:'birthday', tone:'ec4899', msg:'Happy birthday! Wishing you a wonderful year ahead.'},
+    anni: {title:'Wish a happy work anniversary', type:'anniversary', tone:'0d9488', msg:'Happy work anniversary! Thank you for all you do.'}
+  };
+
+  const wrap = document.getElementById('mgrWishPeople');
+  const msgBox = document.getElementById('mgrWishMsg');
+  const alertBox = document.getElementById('mgrWishAlert');
+  const sendBtn = document.getElementById('mgrWishSend');
+  const titleEl = document.getElementById('mgrWishTitle');
+  let mode = 'bday';
+
+  const note = (text, kind) => {
+    alertBox.className = 'alert py-2 px-3 mb-3 alert-' + kind;
+    alertBox.textContent = text;
+  };
+  const clearNote = () => { alertBox.className = 'alert d-none py-2 px-3 mb-3'; alertBox.textContent = ''; };
+  const selected = () => [...wrap.querySelectorAll('.mgr-wish-person.sel')].map(n => n.dataset.id);
+
+  function open(kind, onlyId) {
+    mode = kind;
+    const c = COPY[kind];
+    titleEl.textContent = c.title;
+    msgBox.value = c.msg;
+    clearNote();
+    sendBtn.disabled = false;
+    const list = PEOPLE[kind] || [];
+    wrap.innerHTML = list.map(p => {
+      // Pre-select the row that was clicked; if opened from the counter, select all.
+      const sel = (!onlyId || String(p.id) === String(onlyId)) ? ' sel' : '';
+      return '<div class="mgr-wish-person' + sel + '" data-id="' + p.id + '">'
+           + '<img src="https://ui-avatars.com/api/?name=' + encodeURIComponent(p.name)
+           + '&background=' + c.tone + '&color=fff&bold=true" alt="">'
+           + '<span class="fw-semibold">' + p.name + '</span></div>';
+    }).join('');
+    if (!list.length) wrap.innerHTML = '<div class="text-muted small">Nobody to wish today.</div>';
+    (window.bootstrap ? bootstrap.Modal.getOrCreateInstance(modalEl) : null)?.show();
+  }
+
+  wrap.addEventListener('click', e => {
+    const row = e.target.closest('.mgr-wish-person');
+    if (row) row.classList.toggle('sel');
+  });
+
+  document.querySelectorAll('.mgr-wish-open').forEach(el => {
+    const go = e => { e.preventDefault(); open(el.dataset.wish, el.dataset.only || null); };
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(e); });
+  });
+
+  sendBtn.addEventListener('click', async function () {
+    const ids = selected();
+    const message = (msgBox.value || '').trim();
+    if (!ids.length) { note('Pick at least one person.', 'warning'); return; }
+    if (!message)    { note('Write a short message first.', 'warning'); return; }
+
+    sendBtn.disabled = true;
+    note('Sending…', 'info');
+    const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    let ok = 0; const failed = [];
+    for (const id of ids) {
+      try {
+        const res = await fetch('{{ url('/birthdays/send') }}', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'Accept': 'application/json',
+                    'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest'},
+          body: JSON.stringify({receiver_id: id, message: message, wish_type: COPY[mode].type})
+        });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.success) ok++; else failed.push(body.error || body.message || ('HTTP ' + res.status));
+      } catch (err) { failed.push(err.message); }
+    }
+
+    if (ok && !failed.length) {
+      note(ok + ' wish' + (ok > 1 ? 'es' : '') + ' sent.', 'success');
+      setTimeout(() => bootstrap.Modal.getOrCreateInstance(modalEl).hide(), 1200);
+    } else if (ok) {
+      note(ok + ' sent, ' + failed.length + ' failed: ' + failed[0], 'warning');
+      sendBtn.disabled = false;
+    } else {
+      note('Could not send: ' + (failed[0] || 'unknown error'), 'danger');
+      sendBtn.disabled = false;
+    }
+  });
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const empty = (el, icon, msg) => { if (el) el.innerHTML = '<div class="adc-empty"><i class="bx '+icon+'"></i><span>'+msg+'</span></div>'; };

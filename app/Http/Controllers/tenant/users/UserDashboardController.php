@@ -453,7 +453,16 @@ class UserDashboardController extends Controller
                 ->whereDate('from_date', '>', now())
                 ->with(['user', 'leaveType'])->orderBy('from_date')->take(8)->get();
 
-            return view('tenant.users.dashboard.manager-index', [
+            $mgrRail = \App\Support\ManagerDashboard::rail([
+                'teamSize' => count($teamMemberIds), 'present' => $todayPresentUsers ?? 0,
+                'onLeave' => $todayOnLeaveCount ?? 0, 'absent' => $todayAbsentUsers ?? 0,
+                'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $pendingExpenseRequests,
+                'pendingDocument' => $pendingDocumentRequests, 'pendingLoan' => $pendingLoanRequests,
+                'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
+                'sm' => $sm,
+            ]);
+
+            return view('tenant.users.dashboard.manager-index', array_merge($mgrRail, [
                 'mgrVariant' => \App\Support\ManagerDashboard::variant($user),
                 'mgrDept' => \App\Support\ManagerDashboard::departmentName($user),
                 'sm' => $sm,
@@ -493,7 +502,7 @@ class UserDashboardController extends Controller
                 'managers' => \App\Models\User::whereHas('roles', function($q) {
                     $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
                 })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()
-            ]);
+            ]));
         }
 
         // 3. Admin / Default Dashboard (Full View)

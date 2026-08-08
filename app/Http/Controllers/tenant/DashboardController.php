@@ -870,7 +870,16 @@ class DashboardController extends Controller
         // which renders this same view at /user/dashboard.
         $sm = \App\Support\SalesManagerSummary::build($deployMembers, $teamDeployment, $pendingLeaveRequests);
 
-        return view('tenant.users.dashboard.manager-index', [
+        $mgrRail = \App\Support\ManagerDashboard::rail([
+            'teamSize' => count($teamMemberIds), 'present' => $presentUsersCount ?? 0,
+            'onLeave' => $onLeaveUsersCount ?? 0, 'absent' => $todayAbsentUsers ?? 0,
+            'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $pendingExpenseRequests,
+            'pendingDocument' => $pendingDocumentRequests, 'pendingLoan' => $pendingLoanRequests,
+            'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
+            'sm' => $sm,
+        ]);
+
+        return view('tenant.users.dashboard.manager-index', array_merge($mgrRail, [
             'mgrVariant' => \App\Support\ManagerDashboard::variant($user),
             'mgrDept' => \App\Support\ManagerDashboard::departmentName($user),
             'sm' => $sm,
@@ -911,7 +920,7 @@ class DashboardController extends Controller
             'managers' => \App\Models\User::withTrashed()->whereHas('roles', function($q) {
                 $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
             })->where('status', UserAccountStatus::ACTIVE)->get()
-        ]);
+        ]));
       }
 
 
