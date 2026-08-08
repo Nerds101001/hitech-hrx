@@ -153,7 +153,68 @@
 .ad-act-review:hover { background: #ecfeff; border-color: #67e8f9; color: #0e7490; }
 .ad-act-dl           { color: #4f46e5; }
 .ad-act-dl:hover     { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
+.ad-act-xls          { color: #15803d; }
+.ad-act-xls:hover    { background: #f0fdf4; border-color: #86efac; color: #166534; }
 .ad-act:focus-visible { outline: 2px solid #14b8a6; outline-offset: 1px; }
+
+/* Buttons on the teal modal header — white on teal, matching the existing one. */
+.ad-modal-btn {
+    display: inline-flex; align-items: center; gap: .35rem;
+    background: #fff; color: #0f766e; font-weight: 700;
+    padding: .4rem .9rem; border-radius: 8px; font-size: .8rem;
+    text-decoration: none; white-space: nowrap;
+    box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.ad-modal-btn:hover { background: #f0fdfa; color: #0f766e; }
+
+/* ===== Claim detail sheet: frozen heading row + frozen first three columns =====
+   The sheet is 25 columns wide. Scrolled right you lost the date and the party
+   visited, so an amount in the middle belonged to no identifiable trip; scrolled
+   down you lost the column names. Both panes are now pinned, exactly as the
+   exported .xlsx freezes at D2. */
+.claim-sheet-wrap {
+    max-height: 62vh;
+    overflow: auto;                 /* owns BOTH scroll directions */
+}
+.claim-sheet {
+    border-collapse: separate;      /* sticky cells need separate borders */
+    border-spacing: 0;
+    margin-bottom: 0;
+}
+.claim-sheet th,
+.claim-sheet td {
+    border-right: 1px solid #dee2e6;
+    border-bottom: 1px solid #dee2e6;
+    background: #fff;
+    vertical-align: middle;
+}
+.claim-sheet thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: #f1f5f9;
+    border-top: 1px solid #dee2e6;
+    box-shadow: inset 0 -1px 0 #cbd5e1;
+    white-space: nowrap;
+}
+/* the three pinned columns — offsets must match the widths below */
+.claim-sheet th:nth-child(1), .claim-sheet td:nth-child(1) { position: sticky; left: 0;      z-index: 2; min-width: 74px;  max-width: 74px; }
+.claim-sheet th:nth-child(2), .claim-sheet td:nth-child(2) { position: sticky; left: 74px;   z-index: 2; min-width: 170px; max-width: 170px; }
+.claim-sheet th:nth-child(3), .claim-sheet td:nth-child(3) { position: sticky; left: 244px;  z-index: 2; min-width: 180px; max-width: 180px;
+                                                             box-shadow: 2px 0 4px -2px rgba(15,23,42,.25); }
+/* corner cells sit above both panes */
+.claim-sheet thead th:nth-child(1),
+.claim-sheet thead th:nth-child(2),
+.claim-sheet thead th:nth-child(3) { z-index: 4; }
+.claim-sheet tbody td:nth-child(-n+3) { background: #fff; }
+.claim-sheet tbody tr:hover td { background: #f8fafc; }
+.claim-sheet tbody tr:hover td:nth-child(-n+3) { background: #f1f5f9; }
+
+@media (max-width: 767.98px) {
+    /* Pinning 424px of columns on a 375px screen leaves nothing to read. */
+    .claim-sheet th:nth-child(-n+3), .claim-sheet td:nth-child(-n+3) { position: static; max-width: none; }
+    .claim-sheet-wrap { max-height: 70vh; }
+}
 </style>
 <div class="animate__animated animate__fadeIn">
 
@@ -296,6 +357,11 @@
                         <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="ad-act ad-act-dl" title="Download all attachments">
                           <i class="bx bx-download"></i>
                         </a>
+                        {{-- The claim as a spreadsheet: every line, every
+                             amount and a totals row, for checking off-screen. --}}
+                        <a href="{{ route('travel-claims.export', $claim->id) }}" class="ad-act ad-act-xls" title="Export this claim to Excel">
+                          <i class="bx bx-spreadsheet"></i>
+                        </a>
                       </div>
                     </td>
                   </tr>
@@ -395,12 +461,14 @@
         <div class="modal-content border-0 shadow-lg">
           <div class="modal-header">
             <h5 class="modal-title text-white">Claim #{{ $claim->id }} - {{ $claim->user->name }}</h5>
-            <a href="{{ route('travel-claims.download-attachments', $claim->id) }}"
-                   style="display:inline-flex;align-items:center;gap:.35rem;background:#ffffff;
-                          color:#0f766e;font-weight:700;padding:.4rem .9rem;border-radius:8px;
-                          font-size:.8rem;text-decoration:none;box-shadow:0 1px 4px rgba(0,0,0,.15);">
+            <div class="d-flex align-items-center gap-2 ms-auto me-2">
+              <a href="{{ route('travel-claims.download-attachments', $claim->id) }}" class="ad-modal-btn">
                 <i class="bx bx-download"></i> Download Attachments
-                </a>
+              </a>
+              <a href="{{ route('travel-claims.export', $claim->id) }}" class="ad-modal-btn">
+                <i class="bx bx-spreadsheet"></i> Export to Excel
+              </a>
+            </div>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body p-0">
@@ -422,9 +490,9 @@
               </div>
             </div>
 
-            <div class="table-responsive">
-                <table class="table table-bordered mb-0" style="font-size: 0.8rem;">
-                    <thead class="table-light">
+            <div class="claim-sheet-wrap">
+                <table class="table claim-sheet mb-0" style="font-size: 0.8rem;">
+                    <thead>
                         <tr>
                             <th>Date</th>
                             <th>Locations</th>

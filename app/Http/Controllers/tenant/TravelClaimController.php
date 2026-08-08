@@ -256,13 +256,22 @@ class TravelClaimController extends Controller
 
             $targetStatus = $isDraft ? 'draft' : 'submitted';
 
-            $monthStartProofPath = $request->hasFile('month_start_odometer_proof')
-                ? $request->file('month_start_odometer_proof')->store('travel_claims', 'public')
-                : ($existingClaim->month_start_odometer_proof ?? null);
+            // Replacing a proof used to leave the previous file on disk for
+            // ever; nothing referenced it again, so storage only ever grew.
+            $replaceProof = function (string $field, string $dir) use ($request, $existingClaim) {
+                $current = $existingClaim->{$field} ?? null;
+                if (!$request->hasFile($field)) {
+                    return $current;
+                }
+                $new = $request->file($field)->store($dir, 'public');
+                if ($current && $current !== $new && Storage::disk('public')->exists($current)) {
+                    Storage::disk('public')->delete($current);
+                }
+                return $new;
+            };
 
-            $monthEndProofPath = $request->hasFile('month_end_odometer_proof')
-                ? $request->file('month_end_odometer_proof')->store('travel_claims', 'public')
-                : ($existingClaim->month_end_odometer_proof ?? null);
+            $monthStartProofPath = $replaceProof('month_start_odometer_proof', 'travel_claims');
+            $monthEndProofPath   = $replaceProof('month_end_odometer_proof', 'travel_claims');
 
             // Odometer rules, reported together so the whole claim can be fixed
             // in one pass rather than one message at a time. Both only apply to
@@ -270,9 +279,14 @@ class TravelClaimController extends Controller
             if (!$isDraft) {
                 $odoErrors = [];
 
-                if ($hasVehicleRow && (!$monthStartProofPath || !$monthEndProofPath)) {
+                // At least ONE odometer photo, not one per box. People commonly
+                // photograph the opening and closing readings together, or send
+                // a single strip covering the month; demanding two separate
+                // uploads rejected claims whose proof was already there.
+                if ($hasVehicleRow && !$monthStartProofPath && !$monthEndProofPath) {
                     $odoErrors['month_start_odometer_proof'] =
-                        'Month Start and Month End odometer photos are required because this claim includes travel on a bike or car.';
+                        'An odometer photo is required because this claim includes travel on a bike or car. '
+                        . 'One image showing both the month start and month end readings is fine.';
                 }
 
                 foreach (($request->items ?? []) as $idx => $it) {
@@ -305,9 +319,9 @@ class TravelClaimController extends Controller
             ];
             $proofPaths = [];
             foreach ($consolidatedProofs as $field => $dir) {
-                $proofPaths[$field] = $request->hasFile($field)
-                    ? $request->file($field)->store($dir, 'public')
-                    : ($existingClaim->{$field} ?? null);
+                // Same replacement rule as the odometer photos: the file being
+                // superseded is removed rather than abandoned on disk.
+                $proofPaths[$field] = $replaceProof($field, $dir);
             }
 
             // Files uploaded while the form was open are held against the
@@ -376,6 +390,9 @@ class TravelClaimController extends Controller
                     'late_penalty_applied' => $latePenalty,
                 ], $proofPaths))->save();
             } else {
+                // Deliberately NOT unique per month: a salesperson may file two
+                // or three claims for the same month, so multiple claims are
+                // legitimate and must not be blocked.
                 $claim = TravelClaim::forceCreate(array_merge([
                     'user_id' => auth()->id(),
                     'claim_month' => $request->claim_month,
@@ -525,12 +542,18 @@ class TravelClaimController extends Controller
             foreach ($request->advances as $adv) {
                 $amt = floatval($adv['amount'] ?? 0);
                 if ($amt > 0) {
+                    // The table's columns are advance_date / advance_type /
+                    // remarks. Writing date / mode / cheque_number threw
+                    // "Unknown column" inside the transaction, which rolled
+                    // back the whole claim — so entering any advance destroyed
+                    // the entire submission rather than just the advance.
+                    $chequeNo = trim((string) ($adv['cheque_number'] ?? ''));
                     TravelClaimAdvance::forceCreate([
                         'travel_claim_id' => $claim->id,
-                        'date' => $adv['date'] ?? null,
-                        'mode' => $adv['mode'] ?? null,
-                        'cheque_number' => $adv['cheque_number'] ?? null,
-                        'amount' => $amt,
+                        'advance_date'    => $adv['date'] ?? null,
+                        'advance_type'    => $adv['mode'] ?? null,
+                        'remarks'         => $chequeNo !== '' ? 'Cheque no: ' . $chequeNo : null,
+                        'amount'          => $amt,
                     ]);
                     $total_advances += $amt;
                 }
@@ -538,8 +561,11 @@ class TravelClaimController extends Controller
         }
 
         $net_payable = $total_amount - $total_advances;
-        if ($latePenalty) {
-            $net_payable = $net_payable * 0.90; // 10% late penalty
+        // 10% late penalty — only on money going OUT. When advances exceed the
+        // claim the balance is negative (the employee owes it back), and
+        // multiplying that by 0.90 shrank their debt, so filing late paid them.
+        if ($latePenalty && $net_payable > 0) {
+            $net_payable = $net_payable * 0.90;
         }
 
         $claim->forceFill([
@@ -632,6 +658,12 @@ public function update(Request $request, $id)
         if ($claim->user_id === auth()->id()) {
             return back()->with('error', 'You cannot verify your own claim.');
         }
+        // Only something awaiting review can be verified — not a draft, and not
+        // a claim that has already been approved or paid.
+        if (!in_array($claim->status, ['submitted', 'objection'], true)) {
+            return back()->with('error',
+                'Only a submitted claim can be verified. This claim is currently ' . $claim->status . '.');
+        }
         $claim->forceFill([
             'status' => 'verified',
             'verifier_id' => auth()->id(),
@@ -649,7 +681,14 @@ public function update(Request $request, $id)
         if ($claim->user_id === auth()->id()) {
             return back()->with('error', 'You cannot approve your own claim.');
         }
-        
+        // Approval follows verification. Without this a submitted claim could
+        // jump straight to approved, skipping the verifier entirely — the
+        // two-step control existed only by convention.
+        if ($claim->status !== 'verified') {
+            return back()->with('error',
+                'Only a verified claim can be approved. This claim is currently ' . $claim->status . '.');
+        }
+
         // Split payments: 85% on 11th, 15% on 25th
         $split85 = round($claim->net_payable * 0.85, 2);
         $split15 = $claim->net_payable - $split85;
@@ -673,6 +712,13 @@ public function update(Request $request, $id)
     public function pay(Request $request, $id)
     {
         $claim = TravelClaim::findOrFail($id);
+        // Money may only be recorded against a claim that has been approved.
+        // Without this, a transaction reference could be written onto a draft.
+        if (!in_array($claim->status, ['approved', 'paid'], true)) {
+            return back()->with('error',
+                'Only an approved claim can be paid. This claim is currently ' . $claim->status . '.');
+        }
+
         if ($request->payment_type == '85') {
             $claim->forceFill(['split_85_transaction' => $request->transaction])->save();
         } elseif ($request->payment_type == '15') {
@@ -765,6 +811,11 @@ public function update(Request $request, $id)
         if ($claim->user_id === auth()->id()) {
             return back()->with('error', 'You cannot reject your own claim.');
         }
+        // Paid is terminal: the money has already gone out, so rejecting it
+        // afterwards would leave the books saying it never should have.
+        if ($claim->status === 'paid') {
+            return back()->with('error', 'A paid claim cannot be rejected. Raise a recovery separately.');
+        }
         $claim->forceFill([
             'status' => 'rejected',
             'remarks' => 'Rejected: ' . $request->remarks,
@@ -777,6 +828,9 @@ public function update(Request $request, $id)
         $claim = TravelClaim::findOrFail($id);
         if ($claim->user_id === auth()->id()) {
             return back()->with('error', 'You cannot raise an objection on your own claim.');
+        }
+        if ($claim->status === 'paid') {
+            return back()->with('error', 'A paid claim cannot be sent back. Raise a recovery separately.');
         }
         $claim->forceFill([
             'status' => 'objection',
@@ -814,6 +868,10 @@ public function update(Request $request, $id)
             'file'         => 'required|file|mimes:jpeg,png,jpg,pdf|max:10240',
             'upload_token' => 'required|string|max:64',
             'claim_id'     => 'nullable|integer',
+            // The browser uploads under a sanitised filename because the host's
+            // firewall 403s an apostrophe in a multipart filename. This carries
+            // the name the user actually picked, for display and download.
+            'original_name' => 'nullable|string|max:255',
         ]);
 
         $category = $request->input('category');
@@ -854,7 +912,7 @@ public function update(Request $request, $id)
             'user_id'         => auth()->id(),
             'category'        => $category,
             'path'            => $path,
-            'original_name'   => $file->getClientOriginalName(),
+            'original_name'   => trim((string) $request->input('original_name')) ?: $file->getClientOriginalName(),
             'mime'            => $file->getClientMimeType(),
             'size'            => $file->getSize(),
         ]);
@@ -887,6 +945,32 @@ public function update(Request $request, $id)
         $attachment->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * One claim as an .xlsx, so a verifier can check it away from the screen.
+     *
+     * Same authorisation as downloadAttachments(): admin / hr / accounts, the
+     * verify or approve permission, or the person who filed the claim.
+     */
+    public function exportExcel($id)
+    {
+        $claim = TravelClaim::with(['items', 'user', 'advances'])->findOrFail($id);
+        $user  = auth()->user();
+
+        if (!$user->hasRole(['admin', 'hr', 'accounts']) &&
+            !$user->can('travel_claim.verify') &&
+            !$user->can('travel_claim.approve') &&
+            $claim->user_id !== $user->id) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $name = preg_replace('/[^A-Za-z0-9]+/', '_', (string) ($claim->user->name ?? 'employee'));
+        $file = sprintf('Claim_%d_%s_%s.xlsx', $claim->id, trim($name, '_'), $claim->claim_month);
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TravelClaimExport($claim), $file
+        );
     }
 
     public function downloadAttachments($id)
@@ -1042,6 +1126,23 @@ public function update(Request $request, $id)
                     if ($item->$field) {
                         Storage::disk('public')->delete($item->$field);
                     }
+                }
+            }
+
+            // Monthly bill uploads. The rows cascade with the claim, but the
+            // files behind them do not — deleting a draft used to leave every
+            // attached bill sitting in storage with nothing referencing it.
+            foreach (\App\Models\TravelClaimAttachment::where('travel_claim_id', $claim->id)->get() as $bill) {
+                if ($bill->path && Storage::disk('public')->exists($bill->path)) {
+                    Storage::disk('public')->delete($bill->path);
+                }
+                $bill->delete();
+            }
+
+            // The four consolidated header proofs, likewise.
+            foreach (['food_bill_proof', 'conveyance_petrol_proof', 'toll_parking_proof', 'customer_courier_proof'] as $field) {
+                if ($claim->{$field} && Storage::disk('public')->exists($claim->{$field})) {
+                    Storage::disk('public')->delete($claim->{$field});
                 }
             }
 
