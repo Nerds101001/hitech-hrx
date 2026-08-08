@@ -132,6 +132,16 @@
       var dispSel = el('ctcDisposition'), subSel = el('ctcSubDisposition'), subWrap = el('ctcSubWrap');
       if (!phone || !dialBtn) return;
 
+      /* The button sits inside .emp-hero, which is position:relative with
+         overflow:hidden — nesting the dialog there let the card clip it, so it
+         appeared squashed into the hero instead of centred over the page.
+         A Bootstrap modal has to be a direct child of <body>; move it there
+         once, before anything opens it. */
+      var modalEl = el('clickToCallModal');
+      if (modalEl && modalEl.parentElement !== document.body) {
+        document.body.appendChild(modalEl);
+      }
+
       var meta  = document.querySelector('meta[name="csrf-token"]');
       var token = meta ? meta.getAttribute('content') : '';
 
