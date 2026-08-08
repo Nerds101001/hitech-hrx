@@ -683,7 +683,7 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
     const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
     const isYoutube = activeTab === '#youtubeTab';
     const category = isYoutube ? formData.get('video_category') : formData.get('category');
-    
+
     if (category === 'LEARN') {
         const title = isYoutube ? formData.get('title_yt') : formData.get('name');
         const presenter = formData.get('presenter_id');
@@ -705,6 +705,17 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
         }
     }
     
+    // Both tabs sit inside one form, so the tab you are NOT using still gets
+    // serialised. On a file upload that meant shipping video_category=LEARN
+    // (the select's first option) with every PDF, which the server read as a
+    // Learn @ HiTech session and rejected for a missing Video Title. Send only
+    // the fields belonging to the tab actually in use. Done after the check
+    // above so that validation still sees the whole form.
+    (isYoutube
+        ? ['file', 'name']
+        : ['video_category', 'title_yt', 'youtube_url', 'presenter_id', 'session_date']
+    ).forEach(field => formData.delete(field));
+
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = '<i class="ti ti-loader-2 spin me-2"></i> Committing...';

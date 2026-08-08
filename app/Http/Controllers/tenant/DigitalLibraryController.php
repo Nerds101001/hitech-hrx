@@ -168,18 +168,36 @@ class DigitalLibraryController extends Controller
     public function store(Request $request)
     {
         try {
+            /*
+             * Learn @ HiTech only exists on the video-link tab — Video Title,
+             * Presenter and Session Date are all inputs of that tab.
+             *
+             * Both tabs of the Add Document dialog live in ONE form, so a plain
+             * file upload still serialises the video tab's fields, and its
+             * category select defaults to LEARN. Keying these rules off
+             * video_category alone therefore demanded a Video Title from every
+             * PDF upload — a Comparison Report was rejected with "Video Title
+             * is required for Learn @ HiTech sessions."
+             *
+             * Persistence below already decides which tab was used by looking
+             * at youtube_url, so validation now agrees with it.
+             */
+            $isLearnVideo = $request->filled('youtube_url')
+                && $request->input('video_category') === 'LEARN';
+            $learnRule = $isLearnVideo ? 'required' : 'nullable';
+
             $validator = Validator::make($request->all(), [
                 'file' => 'required_without:youtube_url|nullable|mimes:pdf,mp4,mov,avi|max:51200',
                 'youtube_url' => 'required_without:file|nullable|url',
                 'category' => 'nullable',
                 'overwrite' => 'nullable|boolean',
-                'title_yt' => 'required_if:video_category,LEARN',
-                'presenter_id' => 'required_if:video_category,LEARN',
-                'session_date' => 'required_if:video_category,LEARN'
+                'title_yt' => $learnRule,
+                'presenter_id' => $learnRule,
+                'session_date' => $learnRule
             ], [
-                'title_yt.required_if' => 'Video Title is required for Learn @ HiTech sessions.',
-                'presenter_id.required_if' => 'Presenter is compulsory for Learn @ HiTech sessions.',
-                'session_date.required_if' => 'Session Date is compulsory for Learn @ HiTech sessions.'
+                'title_yt.required' => 'Video Title is required for Learn @ HiTech sessions.',
+                'presenter_id.required' => 'Presenter is compulsory for Learn @ HiTech sessions.',
+                'session_date.required' => 'Session Date is compulsory for Learn @ HiTech sessions.'
             ]);
 
             if ($validator->fails()) {
