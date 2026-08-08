@@ -134,7 +134,19 @@
             <h1>AI Digital Library</h1>
             <p>Secure documents & intelligent assistant powered by Nerds Bot.</p>
         </div>
-        @php $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR']); @endphp
+        @php
+            /* Upload / creation controls. Admin and HR qualify by role, and so
+               does anyone granted vault.upload individually under Roles &
+               Permissions → User Special Permissions.
+
+               This used to check the role alone. The routes behind these
+               buttons have always accepted vault.upload, so the permission was
+               real on the server but invisible in the UI: a manager granted it
+               saw no Add Document / Bulk Upload button and reasonably concluded
+               the grant had not worked. */
+            $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR'])
+                || auth()->user()->can('vault.upload');
+        @endphp
         @if($vaultCanManage)
         <div class="banner-btns">
             <button class="btn btn-white bg-white text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">AI Bulk Upload</button>
@@ -208,7 +220,7 @@
         @endforeach
         
         <!-- Add Brand Trigger (admin/HR only) -->
-        @if($vaultCanManage ?? auth()->user()->hasRole(['admin','Admin','hr','HR']))
+        @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
         <div class="brand-card add-trigger border-dashed" onclick="openAddModal('brand')">
             <div class="brand-dot bg-light d-flex align-items-center justify-content-center">
                 <i class="ti ti-plus fs-6 text-muted"></i>
@@ -332,7 +344,7 @@
                         </div>
                     @endforeach
                     
-                    @if($vaultCanManage ?? auth()->user()->hasRole(['admin','Admin','hr','HR']))
+                    @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
                     <hr class="my-2 opacity-25">
                     <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $b->id }})">
                         <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
