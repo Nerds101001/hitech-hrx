@@ -88,29 +88,180 @@ class SalesDeleteRequestController extends Controller
         return back()->with('success', 'Deletion request sent to Admin/HR for approval. "' . $pipeline->party_name . '" stays until it is approved.');
     }
 
-    /** Review screen — Pending / Approved / Rejected. */
+    /** Review screen — Pending / Approved / Rejected, with filters and sorting. */
     public function index(Request $request)
     {
         $this->authorizeApprover();
 
         $tab = in_array($request->get('tab'), ['approved', 'rejected']) ? $request->get('tab') : 'pending';
 
-        $requests = DeleteRequest::query()
-            ->with(['requester', 'actioner'])
-            ->where('status', $tab)
-            ->orderByDesc($tab === 'pending' ? 'created_at' : 'actioned_at')
-            ->paginate(25)
-            ->withQueryString();
+        $query = DeleteRequest::query()
+            // The customer is soft-deleted on approval, so withTrashed() is what
+            // keeps the representative columns readable on an approved request.
+            ->with(['requester', 'actioner', 'pipeline' => fn($q) => $q->withTrashed()
+                ->with(['salesperson', 'ccare', 'newBiz'])])
+            ->where('status', $tab);
 
+        if ($s = trim((string) $request->get('q'))) {
+            $query->where('party_name', 'like', '%' . $s . '%');
+        }
+        if ($request->filled('reason')) {
+            $query->where('reason', $request->get('reason'));
+        }
+        if ($request->filled('book')) {
+            $query->where('book', $request->get('book'));
+        }
+        if ($request->filled('requested_by')) {
+            $query->where('requested_by', $request->get('requested_by'));
+        }
+        if ($request->filled('actioned_by')) {
+            $query->where('actioned_by', $request->get('actioned_by'));
+        }
+        // One box for all three roles: the reviewer thinks "whose customer was
+        // this?", not "which of the three columns is it in?".
+        if ($request->filled('rep')) {
+            $rep = (int) $request->get('rep');
+            $query->whereHas('pipeline', fn($q) => $q->withTrashed()->where(
+                fn($w) => $w->where('salesperson_id', $rep)
+                    ->orWhere('ccare_id', $rep)
+                    ->orWhere('new_biz_id', $rep)
+            ));
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->get('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->get('date_to'));
+        }
+
+        $sortable = [
+            'customer'  => 'party_name',
+            'reason'    => 'reason',
+            'book'      => 'book',
+            'requested' => 'created_at',
+            'decided'   => 'actioned_at',
+        ];
+        $sort = $request->get('sort');
+        $dir  = $request->get('dir') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortable[$sort] ?? ($tab === 'pending' ? 'created_at' : 'actioned_at'), $dir);
+
+        $requests = $query->paginate((int) $request->get('per_page', 25))->withQueryString();
+
+        // ---- headline figures -------------------------------------------------
         $counts = DeleteRequest::query()
             ->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
 
+        // Category-wise, for the cards. Counted across the tab in view so the
+        // numbers describe the list being looked at, not the whole table.
+        $reasonCounts = DeleteRequest::query()
+            ->where('status', $tab)
+            ->selectRaw('reason, COUNT(*) c')->groupBy('reason')->pluck('c', 'reason');
+
+        // ---- filter dropdown sources -----------------------------------------
+        $requesterIds = DeleteRequest::query()->distinct()->pluck('requested_by')->filter();
+        $actionerIds  = DeleteRequest::query()->distinct()->pluck('actioned_by')->filter();
+        $repIds       = SalesPipeline::withTrashed()
+            ->whereIn('id', DeleteRequest::query()->pluck('sales_pipeline_id')->filter())
+            ->get(['salesperson_id', 'ccare_id', 'new_biz_id'])
+            ->flatMap(fn($p) => [$p->salesperson_id, $p->ccare_id, $p->new_biz_id])
+            ->filter()->unique();
+
+        $userName = fn($ids) => \App\Models\User::whereIn('id', $ids)
+            ->orderBy('first_name')->get()
+            ->mapWithKeys(fn($u) => [$u->id => $u->getFullName() ?: ('#' . $u->id)]);
+
         return view('tenant.sales-delete-requests.index', [
-            'requests' => $requests,
-            'tab'      => $tab,
-            'counts'   => $counts,
-            'reasons'  => DeleteRequest::REASONS,
+            'requests'     => $requests,
+            'tab'          => $tab,
+            'counts'       => $counts,
+            'reasonCounts' => $reasonCounts,
+            'reasons'      => DeleteRequest::REASONS,
+            'requesters'   => $userName($requesterIds),
+            'actioners'    => $userName($actionerIds),
+            'reps'         => $userName($repIds),
+            'sort'         => $sort,
+            'dir'          => $dir,
         ]);
+    }
+
+    /**
+     * Approve or reject several requests in one go.
+     *
+     * Each request is handled in its own transaction: one customer failing to
+     * delete must not silently roll back the ones that already succeeded, and
+     * the reviewer is told exactly how many of each outcome there were.
+     */
+    public function bulk(Request $request)
+    {
+        $this->authorizeApprover();
+
+        $data = $request->validate([
+            'bulk_action'   => ['required', Rule::in(['approve', 'reject'])],
+            'ids'           => ['required', 'array', 'min:1'],
+            'ids.*'         => ['integer'],
+            'decision_note' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'ids.required' => 'Select at least one request first.',
+        ]);
+
+        $rows = DeleteRequest::query()
+            ->whereIn('id', $data['ids'])
+            ->where('status', DeleteRequest::STATUS_PENDING)
+            ->get();
+
+        $done = 0; $failed = 0;
+        $skipped = count($data['ids']) - $rows->count();
+
+        foreach ($rows as $dr) {
+            try {
+                if ($data['bulk_action'] === 'approve') {
+                    $this->applyApproval($dr);
+                } else {
+                    $dr->update([
+                        'status'        => DeleteRequest::STATUS_REJECTED,
+                        'actioned_by'   => auth()->id(),
+                        'actioned_at'   => now(),
+                        'decision_note' => $data['decision_note'] ?? null,
+                    ]);
+                }
+                $done++;
+            } catch (\Throwable $e) {
+                $failed++;
+                Log::error('Bulk ' . $data['bulk_action'] . ' failed for delete-request #' . $dr->id . ': ' . $e->getMessage());
+            }
+        }
+
+        $verb = $data['bulk_action'] === 'approve' ? 'Deleted and approved' : 'Rejected';
+        $msg  = $verb . ' ' . $done . ' ' . str('request')->plural($done) . '.';
+        if ($skipped) $msg .= ' ' . $skipped . ' already decided and left alone.';
+        if ($failed)  $msg .= ' ' . $failed . ' could not be processed — nothing was removed for those.';
+
+        return back()->with($failed ? 'error' : 'success', $msg);
+    }
+
+    /**
+     * The actual deletion, shared by the single and bulk approve paths so the
+     * two can never drift apart.
+     */
+    private function applyApproval(DeleteRequest $dr): void
+    {
+        DB::transaction(function () use ($dr) {
+            $pipeline = $dr->sales_pipeline_id
+                ? SalesPipeline::withTrashed()->find($dr->sales_pipeline_id)
+                : null;
+
+            // Delete through the model so the removal is audited. If the row
+            // is already gone we still close the request rather than erroring.
+            if ($pipeline) {
+                $pipeline->delete();
+            }
+
+            $dr->update([
+                'status'      => DeleteRequest::STATUS_APPROVED,
+                'actioned_by' => auth()->id(),
+                'actioned_at' => now(),
+            ]);
+        });
     }
 
     /** Approve — this is the point at which the customer is actually removed. */
@@ -124,23 +275,7 @@ class SalesDeleteRequestController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($dr) {
-                $pipeline = $dr->sales_pipeline_id
-                    ? SalesPipeline::withTrashed()->find($dr->sales_pipeline_id)
-                    : null;
-
-                // Delete through the model so the removal is audited. If the row
-                // is already gone we still close the request rather than erroring.
-                if ($pipeline) {
-                    $pipeline->delete();
-                }
-
-                $dr->update([
-                    'status'      => DeleteRequest::STATUS_APPROVED,
-                    'actioned_by' => auth()->id(),
-                    'actioned_at' => now(),
-                ]);
-            });
+            $this->applyApproval($dr);
         } catch (\Throwable $e) {
             Log::error('Delete-request approval failed for #' . $dr->id . ': ' . $e->getMessage());
             return back()->with('error', 'Could not delete that customer. Nothing was removed.');
