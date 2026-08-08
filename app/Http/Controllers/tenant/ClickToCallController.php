@@ -13,20 +13,27 @@ class ClickToCallController extends Controller
     }
 
     /**
-     * Place a call for the signed-in agent.
-     *
-     * Authorisation is checked here rather than only on the button: the button
-     * is hidden for everyone else, but a hidden button is not a permission.
+     * Authorisation is checked on every action, not just on the button. The
+     * button is hidden for everyone else, but a hidden button is not a
+     * permission.
      */
+    private function deny(Request $request): ?\Illuminate\Http\JsonResponse
+    {
+        if ($this->calls->canCall($request->user())) {
+            return null;
+        }
+
+        return response()->json([
+            'result'  => 'forbidden',
+            'message' => 'Click to call is not enabled for your account.',
+        ], 403);
+    }
+
+    /** Place a call. Fixes the agent's mode first if that is what is blocking it. */
     public function dial(Request $request)
     {
-        $user = $request->user();
-
-        if (!$this->calls->canCall($user)) {
-            return response()->json([
-                'result'  => 'forbidden',
-                'message' => 'Click to call is not enabled for your account.',
-            ], 403);
+        if ($denied = $this->deny($request)) {
+            return $denied;
         }
 
         $phone = $this->calls->normalisePhone((string) $request->input('phone'));
@@ -38,6 +45,66 @@ class ClickToCallController extends Controller
             ], 422);
         }
 
-        return response()->json($this->calls->dial($user, $phone));
+        return response()->json($this->calls->dial($request->user(), $phone));
+    }
+
+    public function hangup(Request $request)
+    {
+        if ($denied = $this->deny($request)) {
+            return $denied;
+        }
+
+        return response()->json($this->calls->hangup($request->user()));
+    }
+
+    /** Save the outcome of the call the agent just had. */
+    public function dispose(Request $request)
+    {
+        if ($denied = $this->deny($request)) {
+            return $denied;
+        }
+
+        $disposition = trim((string) $request->input('disposition'));
+
+        if ($disposition === '') {
+            return response()->json([
+                'result'  => 'invalid',
+                'message' => 'Choose a disposition first.',
+            ], 422);
+        }
+
+        return response()->json($this->calls->dispose(
+            $request->user(),
+            $disposition,
+            $request->input('sub_disposition')
+        ));
+    }
+
+    /**
+     * Dispositions for the agent's campaign. Fetched live rather than stored,
+     * so the dialer stays the single source of truth.
+     */
+    public function dispositions(Request $request)
+    {
+        if ($denied = $this->deny($request)) {
+            return $denied;
+        }
+
+        return response()->json(['dispositions' => $this->calls->dispositions($request->user())]);
+    }
+
+    public function subDispositions(Request $request)
+    {
+        if ($denied = $this->deny($request)) {
+            return $denied;
+        }
+
+        $disposition = trim((string) $request->input('disposition'));
+
+        return response()->json([
+            'sub_dispositions' => $disposition === ''
+                ? []
+                : $this->calls->subDispositions($request->user(), $disposition),
+        ]);
     }
 }

@@ -22,11 +22,21 @@ Route::middleware([
 ])->prefix('user')->name('user.')->group(function () {
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
 
-  /* Click to call. Throttled because each request rings a real phone and a
-     double-click should not become two call legs. */
-  Route::post('/click-to-call', [\App\Http\Controllers\tenant\ClickToCallController::class, 'dial'])
-    ->middleware('throttle:10,1')
-    ->name('click-to-call');
+  /* Click to call. Dialling is throttled because each request rings a real
+     phone and a double-click should not become two call legs; the read-only
+     lists are not. Every action re-checks the agent mapping in the controller. */
+  Route::prefix('click-to-call')->name('click-to-call.')->group(function () {
+    Route::post('/', [\App\Http\Controllers\tenant\ClickToCallController::class, 'dial'])
+      ->middleware('throttle:10,1')->name('dial');
+    Route::post('/hangup', [\App\Http\Controllers\tenant\ClickToCallController::class, 'hangup'])
+      ->middleware('throttle:20,1')->name('hangup');
+    Route::post('/dispose', [\App\Http\Controllers\tenant\ClickToCallController::class, 'dispose'])
+      ->middleware('throttle:20,1')->name('dispose');
+    Route::get('/dispositions', [\App\Http\Controllers\tenant\ClickToCallController::class, 'dispositions'])
+      ->name('dispositions');
+    Route::get('/sub-dispositions', [\App\Http\Controllers\tenant\ClickToCallController::class, 'subDispositions'])
+      ->name('sub-dispositions');
+  });
 
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
