@@ -118,6 +118,7 @@
       margin-top: .8rem; padding: .55rem .7rem; border-radius: 10px;
       font-size: .74rem; font-weight: 600; line-height: 1.4;
     }
+    .ctc-detail { margin-top: .25rem; font-weight: 600; opacity: .75; font-size: .68rem; }
     .ctc-result.ok   { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
     .ctc-result.warn { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; }
     .ctc-result.bad  { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
@@ -149,10 +150,23 @@
         same_mode: 'warn', not_idle: 'warn', not_on_call: 'warn'
       };
 
-      function show(cls, text) {
+      // textContent throughout, never innerHTML: 'detail' is the dialer's own
+      // words and the dialer is a third-party box.
+      function show(cls, text, detail) {
         result.classList.remove('d-none');
         result.className = 'ctc-result ' + cls;
-        result.textContent = text;
+        result.textContent = '';
+
+        var line = document.createElement('div');
+        line.textContent = text;
+        result.appendChild(line);
+
+        if (detail) {
+          var small = document.createElement('div');
+          small.className = 'ctc-detail';
+          small.textContent = 'Dialer: ' + detail;
+          result.appendChild(small);
+        }
       }
 
       async function call(url, options) {
@@ -228,7 +242,7 @@
           return;
         }
 
-        show(TONE[res.data.result] || 'bad', res.data.message);
+        show(TONE[res.data.result] || 'bad', res.data.message, res.data.detail);
 
         if (res.data.result === 'success') {
           live.classList.remove('d-none');
@@ -241,7 +255,8 @@
         var res = await call(URLS.hang, { method: 'POST', body: '{}' });
         busy(hangBtn, false);
         show(res.data ? (TONE[res.data.result] || 'bad') : 'bad',
-             res.data ? res.data.message : 'Could not reach the server.');
+             res.data ? res.data.message : 'Could not reach the server.',
+             res.data ? res.data.detail : null);
       }
 
       async function dispose() {
@@ -258,7 +273,7 @@
         busy(dispBtn, false);
 
         if (!res.data) { show('bad', 'Could not reach the server.'); return; }
-        show(TONE[res.data.result] || 'bad', res.data.message);
+        show(TONE[res.data.result] || 'bad', res.data.message, res.data.detail);
 
         if (res.data.result === 'success') {
           live.classList.add('d-none');

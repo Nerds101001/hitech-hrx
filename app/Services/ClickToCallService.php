@@ -46,16 +46,24 @@ class ClickToCallService
     /** A compromised endpoint should not be able to flood a dropdown either. */
     private const MAX_LIST_ITEMS = 200;
 
-    /** Refusals worth explaining in the agent's own words. */
+    /**
+     * Refusals worth explaining in the agent's own words.
+     *
+     * Matched on the shortest distinctive fragment rather than the document's
+     * full sentence. The live box says "Agent not in manual/progressive mode"
+     * where the spec says "manual or progressive" — keying on the whole
+     * sentence meant that refusal went unrecognised and, worse, the automatic
+     * mode fix never fired. Fragments survive that kind of wording drift.
+     */
     private const REFUSALS = [
-        'agent not in manual or progressive mode' => ['wrong_mode', 'Your campaign is not in manual or progressive mode.'],
-        'agent not login or exist'                => ['not_logged_in', 'You are not logged into Smart Agent. Sign in there first, then try again.'],
-        'agent busy'                              => ['busy', 'You are already on a call or in wrap-up. Finish that first, then try again.'],
-        'same mode not allowed'                   => ['same_mode', 'You are already in that mode.'],
-        'agent not idle'                          => ['not_idle', 'You are on a call, so you cannot log out yet.'],
-        'agent not on call'                       => ['not_on_call', 'There is no active call.'],
-        'agent not on hold'                       => ['not_on_hold', 'That call is not on hold.'],
-        'agent not on mute'                       => ['not_on_mute', 'That call is not muted.'],
+        'not in manual' => ['wrong_mode', 'Your campaign is not in manual or progressive mode.'],
+        'not login'     => ['not_logged_in', 'You are not logged into Smart Agent. Sign in there first, then try again.'],
+        'busy'          => ['busy', 'You are already on a call or in wrap-up. Finish that first, then try again.'],
+        'same mode'     => ['same_mode', 'You are already in that mode.'],
+        'not idle'      => ['not_idle', 'You are on a call, so you cannot log out yet.'],
+        'not on call'   => ['not_on_call', 'There is no active call.'],
+        'not on hold'   => ['not_on_hold', 'That call is not on hold.'],
+        'not on mute'   => ['not_on_mute', 'That call is not muted.'],
     ];
 
     /** The dialer identity for this login, or null if they may not dial. */
@@ -334,12 +342,22 @@ class ClickToCallService
         Log::info("CLICK_TO_CALL_RESPONSE [{$action}][{$user->id}]: {$raw}");
 
         if (isset(self::SUCCESS[$action]) && str_contains($lower, self::SUCCESS[$action])) {
-            return ['result' => 'success', 'message' => $this->successMessage($action), 'raw' => $raw];
+            return [
+                'result'  => 'success',
+                'message' => $this->successMessage($action),
+                'detail'  => $this->displayable($raw),
+                'raw'     => $raw,
+            ];
         }
 
         foreach (self::REFUSALS as $needle => [$code, $message]) {
             if (str_contains($lower, $needle)) {
-                return ['result' => $code, 'message' => $message, 'raw' => $raw];
+                return [
+                    'result'  => $code,
+                    'message' => $message,
+                    'detail'  => $this->displayable($raw),
+                    'raw'     => $raw,
+                ];
             }
         }
 
@@ -352,16 +370,34 @@ class ClickToCallService
         // Documented catch-all is a bare "Error"; anything unrecognised lands
         // here too rather than being reported as though it worked.
         //
-        // The reply is deliberately NOT quoted back. strip_tags drops <script>
-        // but keeps what is inside it, so echoing an unrecognised reply would
-        // put third-party text on the page for no real benefit — the agent
-        // cannot act on it, and the full body is already in the log above for
-        // whoever is diagnosing.
+        // The reply is surfaced as 'detail' rather than folded into 'message',
+        // and only after displayable() has reduced it to a plain phrase. That
+        // matters here: an unrecognised reply is usually the dialer wording
+        // something differently, and hiding it entirely once cost us a silent
+        // failure of the automatic mode fix.
         return [
             'result'  => 'error',
-            'message' => 'The dialer refused the request. Please try again, or contact support if it continues.',
+            'message' => 'The dialer refused the request.',
+            'detail'  => $this->displayable($raw),
             'raw'     => $raw,
         ];
+    }
+
+    /**
+     * The dialer's own words, reduced to something safe to put on the page.
+     *
+     * Keeping this visible is worth real money in diagnosis — an unrecognised
+     * reply is normally the vendor wording something differently, and we only
+     * found the "manual/progressive" mismatch by reading it. Anything outside a
+     * plain phrase is dropped, and it is rendered with textContent, so the worst
+     * a hostile endpoint achieves is a short nonsense string.
+     */
+    private function displayable(string $raw): string
+    {
+        $clean = preg_replace('/[^\p{L}\p{N} \.\,\:\-\/\|]+/u', '', $raw) ?? '';
+        $clean = trim(preg_replace('/\s+/u', ' ', $clean) ?? '');
+
+        return mb_strlen($clean) > 100 ? mb_substr($clean, 0, 100) . '...' : $clean;
     }
 
     private function successMessage(string $action): string
