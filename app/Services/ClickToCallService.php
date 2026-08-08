@@ -32,6 +32,20 @@ class ClickToCallService
         'LOGOUT'  => 'agent logout',
     ];
 
+    /**
+     * The dialer is a third-party box on someone else's network. Its reply is
+     * untrusted input: it reaches the log file, the JSON response and the
+     * dashboard, so it is bounded and scrubbed before any of that. A healthy
+     * reply is a short line like "Success to dial" or a pipe-delimited list.
+     */
+    private const MAX_BODY = 2000;
+
+    /** Longest plausible mode or disposition name; the spec says varchar(30). */
+    private const MAX_LIST_ITEM = 64;
+
+    /** A compromised endpoint should not be able to flood a dropdown either. */
+    private const MAX_LIST_ITEMS = 200;
+
     /** Refusals worth explaining in the agent's own words. */
     private const REFUSALS = [
         'agent not in manual or progressive mode' => ['wrong_mode', 'Your campaign is not in manual or progressive mode.'],
@@ -195,7 +209,36 @@ class ClickToCallService
         );
     }
 
-    /** Lists arrive pipe-delimited and sometimes end with a stray full stop. */
+    /**
+     * Scrub the dialer's reply before it goes anywhere near a log line, a JSON
+     * body or the page.
+     *
+     * Markup is stripped rather than escaped, control characters are dropped so
+     * nothing can forge log lines with embedded newlines, and the whole thing is
+     * truncated. The front end also assigns it with textContent rather than
+     * innerHTML, so this is defence in depth rather than the only guard.
+     */
+    private function sanitiseBody(string $body): string
+    {
+        $clean = strip_tags($body);
+        $clean = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $clean) ?? '';
+        $clean = preg_replace('/\s+/u', ' ', $clean) ?? '';
+        $clean = trim($clean);
+
+        if (mb_strlen($clean) > self::MAX_BODY) {
+            Log::warning('CLICK_TO_CALL_OVERSIZED_RESPONSE: ' . mb_strlen($clean) . ' chars, truncated');
+            $clean = mb_substr($clean, 0, self::MAX_BODY);
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Lists arrive pipe-delimited and sometimes end with a stray full stop.
+     *
+     * Entries become dropdown values that are later sent back to the dialer, so
+     * anything that does not look like a name is dropped rather than trusted.
+     */
     private function splitList(string $raw): array
     {
         // A refusal is not a list.
@@ -205,9 +248,49 @@ class ClickToCallService
             }
         }
 
-        $items = array_map(fn ($v) => trim(rtrim(trim($v), '.')), explode('|', $raw));
+        $items = [];
 
-        return array_values(array_filter($items, fn ($v) => $v !== ''));
+        foreach (explode('|', $raw) as $entry) {
+            $entry = trim(rtrim(trim($entry), '.'));
+
+            if ($entry === '' || mb_strlen($entry) > self::MAX_LIST_ITEM) {
+                continue;
+            }
+
+            // Names, ids and the "2=Manual" form only — no quotes, angle
+            // brackets, ampersands or anything else that would be awkward in a
+            // URL or a page.
+            if (!preg_match('/^[\p{L}\p{N} _\-\.\/\(\)=]+$/u', $entry)) {
+                Log::warning("CLICK_TO_CALL_SUSPICIOUS_LIST_ITEM: " . mb_substr($entry, 0, 80));
+                continue;
+            }
+
+            $items[] = $entry;
+
+            if (count($items) >= self::MAX_LIST_ITEMS) {
+                break;
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * A disposition arrives from the browser and is sent straight back to the
+     * dialer, so confirm the campaign actually offers it. When the list cannot
+     * be fetched — the agent may have dropped out of session — fall back to a
+     * shape check rather than blocking a legitimate save.
+     */
+    public function isKnownDisposition(User $user, string $disposition): bool
+    {
+        $known = $this->dispositions($user);
+
+        if ($known !== []) {
+            return in_array($disposition, $known, true);
+        }
+
+        return mb_strlen($disposition) <= self::MAX_LIST_ITEM
+            && (bool) preg_match('/^[\p{L}\p{N} _\-\.\/\(\)]+$/u', $disposition);
     }
 
     // --------------------------------------------------------------- transport
@@ -246,7 +329,7 @@ class ClickToCallService
             ];
         }
 
-        $raw   = trim(strip_tags($response->body()));
+        $raw   = $this->sanitiseBody($response->body());
         $lower = strtolower($raw);
         Log::info("CLICK_TO_CALL_RESPONSE [{$action}][{$user->id}]: {$raw}");
 
@@ -268,9 +351,15 @@ class ClickToCallService
 
         // Documented catch-all is a bare "Error"; anything unrecognised lands
         // here too rather than being reported as though it worked.
+        //
+        // The reply is deliberately NOT quoted back. strip_tags drops <script>
+        // but keeps what is inside it, so echoing an unrecognised reply would
+        // put third-party text on the page for no real benefit — the agent
+        // cannot act on it, and the full body is already in the log above for
+        // whoever is diagnosing.
         return [
             'result'  => 'error',
-            'message' => 'The dialer refused the request' . ($raw !== '' ? ": {$raw}" : '.'),
+            'message' => 'The dialer refused the request. Please try again, or contact support if it continues.',
             'raw'     => $raw,
         ];
     }

@@ -29,6 +29,16 @@ class ClickToCallController extends Controller
         ], 403);
     }
 
+    /**
+     * The dialer's own words stay server-side. 'raw' is kept in the log for
+     * diagnosis, but only the result code and a message we composed are handed
+     * to the browser — there is no reason to relay a third party's bytes.
+     */
+    private function reply(array $outcome): \Illuminate\Http\JsonResponse
+    {
+        return response()->json(\Illuminate\Support\Arr::except($outcome, ['raw']));
+    }
+
     /** Place a call. Fixes the agent's mode first if that is what is blocking it. */
     public function dial(Request $request)
     {
@@ -45,7 +55,7 @@ class ClickToCallController extends Controller
             ], 422);
         }
 
-        return response()->json($this->calls->dial($request->user(), $phone));
+        return $this->reply($this->calls->dial($request->user(), $phone));
     }
 
     public function hangup(Request $request)
@@ -54,7 +64,7 @@ class ClickToCallController extends Controller
             return $denied;
         }
 
-        return response()->json($this->calls->hangup($request->user()));
+        return $this->reply($this->calls->hangup($request->user()));
     }
 
     /** Save the outcome of the call the agent just had. */
@@ -73,7 +83,16 @@ class ClickToCallController extends Controller
             ], 422);
         }
 
-        return response()->json($this->calls->dispose(
+        // The value came from the browser and goes straight back out to the
+        // dialer, so check the campaign actually offers it.
+        if (!$this->calls->isKnownDisposition($request->user(), $disposition)) {
+            return response()->json([
+                'result'  => 'invalid',
+                'message' => 'That disposition is not available on your campaign.',
+            ], 422);
+        }
+
+        return $this->reply($this->calls->dispose(
             $request->user(),
             $disposition,
             $request->input('sub_disposition')
