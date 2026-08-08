@@ -85,6 +85,13 @@
     $perfTop = array_slice($sm['perf'] ?? [], 0, 7);
     $perfNames = array_values(array_map(fn($p)=>$p['name'], $perfTop));
     $perfPcts = array_values(array_map(fn($p)=>(int)$p['pct'], $perfTop));
+    // Three views of the same reps: against forecast, against what is still
+    // pending, and the total book. Targets are set for almost nobody, so a
+    // target-based bar read 0% for a team that was actually selling.
+    $perfSales    = array_values(array_map(fn($p)=>round((float)($p['sold'] ?? 0),1), $perfTop));
+    $perfForecast = array_values(array_map(fn($p)=>round((float)($p['forecast'] ?? 0),1), $perfTop));
+    $perfPending  = array_values(array_map(fn($p)=>round((float)($p['pending'] ?? 0),1), $perfTop));
+    $perfPctPend  = array_values(array_map(fn($p)=>(int)($p['pctPend'] ?? 0), $perfTop));
     $goalLabels = array_values(array_map(fn($g)=>$g['label'], $sm['goals'] ?? []));
     $goalTargets = array_values(array_map(fn($g)=>(float)$g['target'], $sm['goals'] ?? []));
     $goalAchieved = array_values(array_map(fn($g)=>(float)$g['achieved'], $sm['goals'] ?? []));
@@ -131,11 +138,34 @@
     </div>
   </div>
 
+  <style>
+    /* Segmented tabs, using the portal theme's teal rather than a new palette. */
+    .adc-perf-tab{border:1px solid var(--hitech-border);background:#fff;color:#64748b;
+                  font-size:.72rem;font-weight:700;padding:.25rem .6rem;}
+    .adc-perf-tab.active{background:var(--hitech-primary);border-color:var(--hitech-primary);color:#fff;}
+    .adc-perf-tab:hover:not(.active){background:var(--hitech-bg-soft);color:var(--hitech-primary);}
+  </style>
   {{-- ===== PERFORMANCE + GOALS ===== --}}
   <div class="row g-4 mt-0">
     <div class="col-xl-6">
       <div class="adc-card h-100">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Team Performance</h6><span class="adc-card-sub">Achievement % vs target · this FY</span></div></div>
+        <div class="adc-card-head">
+          <div>
+            <h6 class="adc-card-title">Team Performance</h6>
+            <span class="adc-card-sub" id="adcPerfSub">Sales vs Forecast · this FY</span>
+          </div>
+          <div class="btn-group btn-group-sm" role="group" aria-label="Which comparison to show">
+            <button type="button" class="btn btn-sm adc-perf-tab active" data-mode="fcst">Sales vs Forecast</button>
+            <button type="button" class="btn btn-sm adc-perf-tab" data-mode="pend">Sales vs Pending</button>
+            <button type="button" class="btn btn-sm adc-perf-tab" data-mode="book">Total Book</button>
+          </div>
+        </div>
+        {{-- Headline figures for whichever tab is showing. --}}
+        <div class="d-flex flex-wrap gap-4 px-1 pb-2" id="adcPerfTotals">
+          <div><div class="adc-card-sub">Sales</div><div class="fw-bold" style="font-size:1.05rem;color:#0f172a;" id="adcTotA">{{ $fmtL($sm['achievedL'] ?? 0) }}</div></div>
+          <div><div class="adc-card-sub" id="adcTotBLabel">Forecast</div><div class="fw-bold" style="font-size:1.05rem;color:#0f172a;" id="adcTotB">{{ $fmtL($sm['forecastL'] ?? 0) }}</div></div>
+          <div><div class="adc-card-sub" id="adcTotCLabel">Achieved</div><div class="fw-bold" style="font-size:1.05rem;color:#0d7377;" id="adcTotC">{{ (int)($sm['achievePct'] ?? 0) }}%</div></div>
+        </div>
         <div id="adcPerf"></div>
       </div>
     </div>
@@ -457,22 +487,81 @@ document.addEventListener('DOMContentLoaded', function () {
         stroke:{width:2,colors:['#fff']}
       });
     })();
-    // ---- Team performance bars ----
+    // ---- Team performance: three views of the same reps ----
     (function(){
       const el=document.querySelector('#adcPerf'); if(!el) return;
-      const names=@json($perfNames);
-      const pcts=@json($perfPcts);
+      const names = @json($perfNames);
+      const sales = @json($perfSales);
+      const fcst  = @json($perfForecast);
+      const pend  = @json($perfPending);
+      const pctF  = @json($perfPcts);      // sales / forecast
+      const pctP  = @json($perfPctPend);   // sales / (sales + pending)
+      const totals = {
+        sales:   @json(round((float)($sm['achievedL'] ?? 0),1)),
+        fcst:    @json(round((float)($sm['forecastL'] ?? 0),1)),
+        pend:    @json(round((float)($sm['pendingL']  ?? 0),1)),
+        pctF:    @json((int)($sm['achievePct'] ?? 0)),
+        pctP:    @json((int)($sm['pendingPct'] ?? 0)),
+        book:    @json(round((float)($sm['bookL'] ?? 0),1)),
+      };
       if(!AC){ empty(el,'bx-bar-chart','Charts unavailable'); return; }
-      if(!pcts.length){ empty(el,'bx-bar-chart','No performance data'); return; }
-      mk(AC,'#adcPerf',{
-        series:[{name:'Achievement %',data:pcts}],
-        chart:{type:'bar',height:280,toolbar:{show:false},fontFamily:'Public Sans'},
-        plotOptions:{bar:{horizontal:true,borderRadius:5,barHeight:'62%',distributed:true}},
-        colors:pcts.map(v=>v>=90?'#16a34a':(v>=60?'#d97706':'#dc2626')),
-        dataLabels:{enabled:true,formatter:v=>v+'%',style:{colors:['#0f172a'],fontWeight:700}},
-        xaxis:{categories:names,max:Math.max(120,...pcts),labels:{style:{colors:'#94a3b8'}}},
-        yaxis:{labels:{style:{colors:'#475569',fontSize:'12px'}}}, legend:{show:false}, grid:{borderColor:'#f1f5f9'}
+      if(!names.length){ empty(el,'bx-bar-chart','No performance data'); return; }
+
+      const fmtL = v => v>=100 ? '₹'+(v/100).toFixed(2)+' Cr' : '₹'+Number(v).toFixed(1)+' L';
+      let chart=null;
+
+      const MODES = {
+        fcst: { sub:'Sales vs Forecast · this FY',
+                series:[{name:'Sales',data:sales},{name:'Forecast',data:fcst}],
+                colors:['#0d7377','#94a3b8'],
+                totals:{ bLabel:'Forecast', b:fmtL(totals.fcst), cLabel:'Achieved', c:totals.pctF+'%' } },
+        pend: { sub:'Sales vs Pending · this FY',
+                series:[{name:'Sales',data:sales},{name:'Pending',data:pend}],
+                colors:['#0d7377','#f5a623'],
+                totals:{ bLabel:'Pending', b:fmtL(totals.pend), cLabel:'Realised', c:totals.pctP+'%' } },
+        // Third view: the whole book each rep is carrying — what is already
+        // sold plus what is still to come. Answers "who is carrying the most".
+        book: { sub:'Total book — sales plus pending · this FY',
+                series:[{name:'Sales',data:sales},{name:'Pending',data:pend}],
+                colors:['#0d7377','#f5a623'], stacked:true,
+                totals:{ bLabel:'Pending', b:fmtL(totals.pend), cLabel:'Total book', c:fmtL(totals.book) } },
+      };
+
+      function draw(mode){
+        const m = MODES[mode];
+        document.getElementById('adcPerfSub').textContent = m.sub;
+        document.getElementById('adcTotB').textContent      = m.totals.b;
+        document.getElementById('adcTotBLabel').textContent = m.totals.bLabel;
+        document.getElementById('adcTotC').textContent      = m.totals.c;
+        document.getElementById('adcTotCLabel').textContent = m.totals.cLabel;
+        // Built directly, not through mk(): mk() does not return the instance,
+        // so destroy() could never run and every tab switch would leak a chart.
+        if(chart){ try{ chart.destroy(); }catch(e){} chart=null; }
+        el.innerHTML='';
+        chart = new AC(el,{
+          series:m.series,
+          chart:{type:'bar',height:280,toolbar:{show:false},fontFamily:'Public Sans',stacked:!!m.stacked},
+          plotOptions:{bar:{horizontal:true,borderRadius:4,barHeight:'70%'}},
+          colors:m.colors,
+          dataLabels:{enabled:false},
+          xaxis:{categories:names,labels:{style:{colors:'#94a3b8'},formatter:v=>Number(v).toFixed(0)}},
+          yaxis:{labels:{style:{colors:'#475569',fontSize:'12px'}}},
+          legend:{show:true,position:'top',horizontalAlign:'right',fontSize:'11px'},
+          grid:{borderColor:'#f1f5f9'},
+          tooltip:{y:{formatter:v=>fmtL(v)}}
+        });
+        try{ chart.render(); }
+        catch(e){ console.error('#adcPerf',e); empty(el,'bx-error-circle','Chart failed'); }
+      }
+
+      document.querySelectorAll('.adc-perf-tab').forEach(function(b){
+        b.addEventListener('click', function(){
+          document.querySelectorAll('.adc-perf-tab').forEach(x=>x.classList.remove('active'));
+          b.classList.add('active');
+          draw(b.dataset.mode);
+        });
       });
+      draw('fcst');
     })();
     // ---- Goals vs achievement ----
     (function(){
