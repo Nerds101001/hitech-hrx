@@ -22,6 +22,12 @@ Route::middleware([
 ])->prefix('user')->name('user.')->group(function () {
   Route::get('/dashboard', [UserDashboardController::class, 'index'])->name('dashboard.index');
 
+  /* Click to call. Throttled because each request rings a real phone and a
+     double-click should not become two call legs. */
+  Route::post('/click-to-call', [\App\Http\Controllers\tenant\ClickToCallController::class, 'dial'])
+    ->middleware('throttle:10,1')
+    ->name('click-to-call');
+
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
 

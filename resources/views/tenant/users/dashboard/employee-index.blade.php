@@ -40,6 +40,8 @@
         <div class="emp-hero-main">
           <h3 class="emp-hero-greet">{{ $greet }}, {{ $firstName }}! <span class="adc-wave">☀️</span></h3>
           <p class="emp-hero-sub">Have a productive day ahead.</p>
+          {{-- Click to call. Renders nothing unless this login is mapped to a dialer agent. --}}
+          <div class="mb-2">@include('tenant.users.dashboard._click-to-call')</div>
           <div class="emp-hero-meta">
             <div><span class="emp-meta-l">Employee ID</span><span class="emp-meta-v">{{ $me->code ?? '—' }}</span></div>
             <div><span class="emp-meta-l">Department</span><span class="emp-meta-v">{{ $deptName ?? '—' }}</span></div>

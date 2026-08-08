@@ -23,4 +23,40 @@ return [
     explode(',', (string) env('SUPER_DELEGATE_EMAILS', 'ai@rustx.com'))
   ))),
 
+  /*
+  |--------------------------------------------------------------------------
+  | Click to call
+  |--------------------------------------------------------------------------
+  |
+  | Places a call through the Smart Agent dialer from the employee dashboard.
+  |
+  | The dialer speaks plain HTTP while HRX is served over HTTPS, so the browser
+  | can never call it directly — the request goes to HRX and HRX relays it. The
+  | endpoint also sits behind a firewall that allows specific source addresses,
+  | which is why this only works from the production server.
+  |
+  | 'agents' maps an HRX login to that person's dialer identity; the two are
+  | unrelated systems with different user ids. Only the logins listed here get
+  | the button, so adding someone is a config change, not a code change.
+  |
+  */
+
+  'click_to_call' => [
+
+    'enabled' => (bool) env('CLICK_TO_CALL_ENABLED', true),
+
+    'endpoint' => env('CLICK_TO_CALL_URL', 'http://45.120.40.194:18111/'),
+
+    // The dialer answers in ~50ms; anything slower means it is unwell.
+    'timeout' => (int) env('CLICK_TO_CALL_TIMEOUT', 10),
+
+    'agents' => [
+      'bhatiamehak52@gmail.com' => [
+        'campaign'  => 'mehak',
+        'agent'     => 'mehak',
+        'client_id' => '8006',
+      ],
+    ],
+  ],
+
 ];
