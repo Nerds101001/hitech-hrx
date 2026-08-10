@@ -199,13 +199,32 @@ class UserDashboardController extends Controller
             ->orderBy('date', 'asc')
             ->first();
 
-        $recentNotices = Notice::where('status', 1)
-            ->where(function ($q) {
-                $q->whereNull('expiry_date')->orWhere('expiry_date', '>=', now());
-            })
-            ->orderBy('created_at', 'desc')
-            ->take(5)
-            ->get();
+        // Announcements published through Employee Lifecycle are the real feed.
+        // This used to read the legacy notices table, which on most tenants
+        // holds nothing but seeded "Notice 1/2/3" rows, so the card showed
+        // placeholders while genuine announcements went unseen. Fall back to
+        // notices only where no announcement is visible, so tenants still on
+        // the old table keep what they had.
+        $recentNotices = collect();
+        try {
+            $recentNotices = \App\Models\Announcement::current()
+                ->visibleTo($user)
+                ->orderByDesc('published_at')
+                ->take(5)
+                ->get();
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard announcements: ' . $e->getMessage());
+            $recentNotices = collect();
+        }
+        if ($recentNotices->isEmpty()) {
+            $recentNotices = Notice::where('status', 1)
+                ->where(function ($q) {
+                    $q->whereNull('expiry_date')->orWhere('expiry_date', '>=', now());
+                })
+                ->orderBy('created_at', 'desc')
+                ->take(5)
+                ->get();
+        }
 
         // Rail widgets: the calendar ahead, and which mandatory policies this
         // person still owes an acknowledgement for. The highlight used to say

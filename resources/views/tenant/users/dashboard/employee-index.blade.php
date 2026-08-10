@@ -216,8 +216,6 @@
           </div>
         </div>
       </div>
-        </div>
-      </div>
 
       {{-- Timeline + Upcoming Leaves + Documents + Contacts --}}
       <div class="row g-4 mt-1">
@@ -328,8 +326,8 @@
 
       {{-- Celebrations: who to congratulate today, then who is coming up. --}}
       @php
-        $celToday = collect($todayBirthdays ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Birthday','icon'=>'🎂','bg'=>'ec4899'])
-                    ->concat(collect($todayAnniversaries ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Work Anniversary','icon'=>'🎉','bg'=>'0d9488']));
+        $celToday = collect($todayBirthdays ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Birthday','icon'=>'🎂','bg'=>'ec4899','wish'=>'birthday'])
+                    ->concat(collect($todayAnniversaries ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Work Anniversary','icon'=>'🎉','bg'=>'0d9488','wish'=>'anniversary']));
         $celSoon = collect($upcomingBirthdays ?? [])->reject(fn($u) => $u->is_today ?? false)->take(3)
                     ->map(fn($u) => ['u'=>$u,'kind'=>'Birthday','date'=>$u->dob ?? null])
                    ->concat(collect($upcomingAnniversaries ?? [])->reject(fn($u) => $u->is_today ?? false)->take(3)
@@ -343,9 +341,21 @@
           @if($celToday->isNotEmpty())
             <ul class="adc-appr mb-0">
               @foreach($celToday->take(6) as $c)
+                @php $celName = trim(($c['u']->first_name ?? '').' '.($c['u']->last_name ?? '')) ?: ($c['u']->name ?? 'Colleague'); @endphp
                 <li>
-                  <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($c['u']->name) }}&background={{ $c['bg'] }}&color=fff&bold=true" alt="">
-                  <div class="adc-appr-body"><div class="adc-appr-name">{{ $c['u']->name }}</div><div class="adc-appr-meta">{{ $c['kind'] }} {{ $c['icon'] }}</div></div>
+                  <img class="adc-appr-av"
+                       src="{{ $c['u']->getProfilePicture() ?: 'https://ui-avatars.com/api/?name='.urlencode($celName).'&background='.$c['bg'].'&color=fff&bold=true' }}"
+                       alt="" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($celName) }}&background={{ $c['bg'] }}&color=fff&bold=true'">
+                  <div class="adc-appr-body">
+                    <div class="adc-appr-name">{{ $celName }} <span class="adc-badge adc-tone-danger ms-1">TODAY</span></div>
+                    <div class="adc-appr-meta">{{ $c['kind'] }} {{ $c['icon'] }}</div>
+                  </div>
+                  {{-- Shared Send-a-Wish modal, included globally by commonMaster. --}}
+                  <button type="button" class="btn btn-sm btn-icon emp-wish-btn" title="Send your wishes"
+                          data-uid="{{ $c['u']->id }}" data-uname="{{ $celName }}"
+                          onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, '{{ $c['wish'] }}')">
+                    <i class="bx bx-send"></i>
+                  </button>
                 </li>
               @endforeach
             </ul>
@@ -394,7 +404,7 @@
             @foreach(collect($recentNotices)->take(5) as $n)
               <li>
                 <span class="adc-feed-dot adc-tone-info"><i class="bx bx-news"></i></span>
-                <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->created_at)->diffForHumans() }}</div></div>
+                <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->published_at ?? $n->created_at)->diffForHumans() }}</div></div>
               </li>
             @endforeach
           </ul>
@@ -481,6 +491,9 @@
   .emp-hl-link{display:flex;align-items:center;gap:11px;width:100%;text-decoration:none;color:inherit;}
   .emp-hl-arrow{color:var(--faint);opacity:0;transition:opacity .12s,transform .12s;font-size:1.1rem;margin-left:auto;}
   .adc-events li:hover .emp-hl-arrow{opacity:1;transform:translateX(2px);}
+
+  .emp-wish-btn{flex:0 0 auto;color:var(--hitech-primary,#0d9488);background:transparent;border:1px solid var(--hitech-border,#e2e8f0);}
+  .emp-wish-btn:hover{background:var(--hitech-bg-soft,#f1f5f9);color:var(--hitech-primary,#0d9488);}
 
   /* Upcoming celebrations list in the rail. */
   .emp-cel-soon{list-style:none;margin:0;padding:0;}
