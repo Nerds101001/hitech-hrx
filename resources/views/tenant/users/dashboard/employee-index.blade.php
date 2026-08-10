@@ -116,113 +116,63 @@
         @endforeach
       </div>
 
-      {{-- Sales-only: Kingo/Bingo board + recent order customers --}}
+      {{-- Sales card. One card now: month switcher re-scopes everything,
+           and the order customers for that month sit at the foot. --}}
       @if($sp && ($sp['isSalesDept'] ?? false))
+      @php
+        $spMonths  = $sp['months'];
+        $spCurrent = $sp['currentKey'];
+      @endphp
       <div class="row g-4 mt-1">
-        <div class="col-xl-7">
-          <div class="adc-card h-100">
-            <div class="adc-card-head">
+        <div class="col-12">
+          <div class="adc-card">
+            <div class="adc-card-head flex-wrap gap-2">
               <div>
                 <h6 class="adc-card-title">📈 My Sales</h6>
-                <span class="adc-card-sub">This financial year · {{ $sp['customerCount'] }} customers I'm tagged on</span>
+                <span class="adc-card-sub">{{ number_format($sp['customerCount']) }} customers I'm tagged on</span>
               </div>
-              <a href="{{ url('/sales-visits/pipeline') }}" class="adc-link">Details</a>
-            </div>
-
-            {{-- Same three views the manager card uses, so a rep and their
-                 manager read the same numbers the same way. --}}
-            @php
-              $spSold = (float) $sp['fySold']; $spFcst = (float) $sp['fyForecast'];
-              $spPend = (float) $sp['fyPending']; $spBook = (float) $sp['book'];
-              $spTabs = [
-                ['k'=>'fcst','label'=>'Sales vs Forecast','a'=>['Sales',$spSold],'b'=>['Forecast',$spFcst],
-                 'pct'=>$sp['pctForecast'],'pctLabel'=>'Of forecast'],
-                ['k'=>'pend','label'=>'Sales vs Pending','a'=>['Sales',$spSold],'b'=>['Pending orders',$spPend],
-                 'pct'=>$sp['pctPending'],'pctLabel'=>'Converted'],
-                ['k'=>'book','label'=>'Total Book','a'=>['Book (sales + pending)',$spBook],'b'=>['Open orders',null],
-                 'pct'=>null,'pctLabel'=>''],
-              ];
-            @endphp
-            <div class="d-flex flex-wrap gap-2 mb-3">
-              @foreach($spTabs as $i => $t)
-                <button type="button" class="btn btn-sm emp-sales-tab {{ $i === 0 ? 'active' : '' }}" data-tab="{{ $t['k'] }}">{{ $t['label'] }}</button>
-              @endforeach
-            </div>
-            @foreach($spTabs as $i => $t)
-              <div class="emp-sales-pane {{ $i === 0 ? '' : 'd-none' }}" data-pane="{{ $t['k'] }}">
-                <div class="d-flex flex-wrap gap-4 mb-3">
-                  <div><div class="adc-card-sub">{{ $t['a'][0] }}</div><div class="emp-sales-fig">{{ $fmtL($t['a'][1]) }}</div></div>
-                  <div><div class="adc-card-sub">{{ $t['b'][0] }}</div>
-                    <div class="emp-sales-fig">{{ $t['b'][1] === null ? number_format($sp['openOrders']) : $fmtL($t['b'][1]) }}</div></div>
-                  @if($t['pct'] !== null)
-                    <div><div class="adc-card-sub">{{ $t['pctLabel'] }}</div>
-                      <div class="emp-sales-fig" style="color:{{ $t['pct'] >= 80 ? '#0d7377' : ($t['pct'] >= 50 ? '#d97706' : '#dc2626') }}">{{ $t['pct'] }}%</div></div>
-                  @endif
-                  <div><div class="adc-card-sub">This month</div><div class="emp-sales-fig">{{ $fmtL($sp['achieved']) }}</div></div>
-                </div>
-                @if($t['pct'] !== null)
-                  <div class="adc-bar mb-3"><span class="adc-tone-{{ $t['pct'] >= 80 ? 'success' : ($t['pct'] >= 50 ? 'warning' : 'danger') }}" style="width: {{ min(100, $t['pct']) }}%"></span></div>
-                @endif
-              </div>
-            @endforeach
-
-            {{-- Kingo / Bingo board. Targets are only set for the Sales
-                 department, so everyone else sees why it is empty instead of a
-                 board that can never fill in. --}}
-            <div class="emp-tier-head">🏆 Kingo · Bingo · Super Kingo <small>{{ now()->format('F Y') }}</small></div>
-            @if($sp['hasTargets'])
-              <div class="adc-tier-grid">
-                @foreach($sp['kingoTiers'] as $t)
-                  @php $tone = $t['won'] ? 'success' : ($t['pct'] >= 75 ? 'warning' : 'danger'); @endphp
-                  <div class="adc-tier adc-tone-{{ $tone }} {{ $t['won'] ? 'won' : '' }}">
-                    <div class="adc-tier-top"><span class="adc-tier-name">{{ $t['name'] }}</span>@if($t['won'])<span class="adc-tier-badge">🏆 WON</span>@endif</div>
-                    <div class="adc-tier-pct">{{ round($t['pct']) }}%</div>
-                    <div class="adc-bar"><span class="adc-tone-{{ $tone }}" style="width: {{ min(100, $t['pct']) }}%"></span></div>
-                    <div class="adc-tier-target">Target {{ $fmtL($t['target']) }}</div>
-                  </div>
-                @endforeach
-              </div>
-            @else
-              <div class="adc-empty adc-empty-sm mb-2"><i class="bx bx-target-lock"></i><span>No Kingo/Bingo target set for you this month.</span></div>
-            @endif
-
-            {{-- Six months of my own sales --}}
-            @if(!empty($sp['monthly']))
-              @php $mMax = max(array_map(fn($m) => $m['value'], $sp['monthly'])) ?: 1; $mom = $sp['momPct']; @endphp
-              <div class="emp-tier-head mt-3">Last 6 months
-                <small>vs last month
-                  <b style="color:{{ $mom === null ? '#64748b' : ($mom >= 0 ? '#0d7377' : '#dc2626') }}">{{ $mom === null ? '—' : ($mom >= 0 ? '+' : '') . $mom . '%' }}</b>
-                </small>
-              </div>
-              <div class="emp-spark">
-                @foreach($sp['monthly'] as $m)
-                  <div class="emp-spark-col" title="{{ $m['label'] }} · {{ $fmtL($m['value']) }}">
-                    <div class="emp-spark-bar" style="height:{{ max(3, round($m['value'] / $mMax * 100)) }}%"></div>
-                    <span class="emp-spark-lbl">{{ $m['label'] }}</span>
-                  </div>
-                @endforeach
-              </div>
-            @endif
-          </div>
-        </div>
-        <div class="col-xl-5">
-          <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Recent Order Customers</h6><span class="adc-card-sub">Gave orders · {{ now()->format('M Y') }}</span></div><a href="{{ url('/sales-visits/pipeline') }}" class="adc-link">Sales Report</a></div>
-            @if(collect($sp['orderCustomers'] ?? [])->isEmpty())
-              <div class="adc-empty adc-empty-sm"><i class="bx bx-cart"></i><span>No orders recorded yet.</span></div>
-            @else
-              <div class="adc-staff-scroll" style="max-height:290px">
-                <table class="table adc-table mb-0"><tbody>
-                  @foreach($sp['orderCustomers'] as $c)
-                    <tr>
-                      <td class="fw-medium">{{ $c['name'] }}<small class="text-muted d-block" style="font-size:.7rem">{{ $c['product'] }}</small></td>
-                      <td class="text-end"><span class="adc-badge adc-tone-success">{{ $c['stage'] ?: 'Order' }}</span></td>
-                      <td class="text-end fw-semibold" style="width:80px">{{ $c['sale'] > 0 ? $fmtL($c['sale']) : '—' }}</td>
-                    </tr>
+              <div class="d-flex align-items-center gap-2">
+                <select id="empMonthPick" class="form-select form-select-sm" style="width:auto;min-width:120px">
+                  @foreach(array_reverse($sp['monthKeys']) as $mk)
+                    <option value="{{ $mk }}" @selected($mk === $spCurrent)>{{ $spMonths[$mk]['label'] }}</option>
                   @endforeach
-                </tbody></table>
+                </select>
+                <a href="{{ url('/sales-visits/pipeline') }}" class="adc-link">Details</a>
               </div>
-            @endif
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-sm emp-sales-tab active" data-tab="mine">My Sales</button>
+              <button type="button" class="btn btn-sm emp-sales-tab" data-tab="kingo">🏆 Kingo · Bingo · Super Kingo</button>
+            </div>
+
+            {{-- ---- My Sales ---- --}}
+            <div class="emp-sales-pane" data-pane="mine">
+              <div class="d-flex flex-wrap gap-4 mb-2">
+                <div><div class="adc-card-sub">Sales</div><div class="emp-sales-fig" data-f="sold">—</div></div>
+                <div><div class="adc-card-sub">Forecast</div><div class="emp-sales-fig" data-f="forecast">—</div></div>
+                <div><div class="adc-card-sub">Pending orders</div><div class="emp-sales-fig" data-f="pending">—</div></div>
+                <div><div class="adc-card-sub">Total book</div><div class="emp-sales-fig" data-f="book">—</div></div>
+                <div><div class="adc-card-sub">Of forecast</div><div class="emp-sales-fig" data-f="pctForecast">—</div></div>
+                <div><div class="adc-card-sub">Open orders</div><div class="emp-sales-fig" data-f="openOrders">—</div></div>
+              </div>
+              <div class="adc-bar mb-3"><span data-bar="pctForecast" class="adc-tone-success" style="width:0%"></span></div>
+
+              <div class="emp-tier-head">Last 6 months <small id="empMomLbl"></small></div>
+              <div class="emp-spark" id="empSpark"></div>
+
+              <div class="emp-tier-head">Order customers <small id="empOrdLbl"></small></div>
+              <div class="adc-staff-scroll" style="max-height:260px">
+                <table class="table adc-table mb-0"><tbody id="empOrders"></tbody></table>
+              </div>
+              <div class="adc-empty adc-empty-sm d-none" id="empOrdersEmpty"><i class="bx bx-cart"></i><span>No orders recorded in this month.</span></div>
+            </div>
+
+            {{-- ---- Kingo / Bingo ---- --}}
+            <div class="emp-sales-pane d-none" data-pane="kingo">
+              <div class="adc-tier-grid" id="empTiers"></div>
+              <div class="adc-empty adc-empty-sm d-none" id="empTiersEmpty"><i class="bx bx-target-lock"></i><span>No Kingo/Bingo target set for you in this month.</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -621,7 +571,8 @@
   .emp-spark{display:flex;align-items:flex-end;gap:10px;height:104px;padding-top:4px;}
   .emp-spark-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
   .emp-spark-bar{width:100%;max-width:44px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--hitech-primary,#0d9488),color-mix(in srgb,var(--hitech-primary,#0d9488) 45%,#fff));}
-  .emp-spark-col:last-child .emp-spark-bar{background:linear-gradient(180deg,#f59e0b,#fbbf24);}
+  .emp-spark-col.on .emp-spark-bar{background:linear-gradient(180deg,#f59e0b,#fbbf24);}
+  .emp-spark-col.on .emp-spark-lbl{color:#b45309;}
   .emp-spark-lbl{margin-top:6px;font-size:.68rem;font-weight:700;color:#94a3b8;}
 
   /* Kingo/Bingo tier board (sales) */
@@ -735,10 +686,105 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <script>
-{{-- My Sales tabs. Own listener so a chart failure below cannot disable them. --}}
+{{-- My Sales: month switcher re-scopes every figure, the trend, the tier
+     board and the order list, all from data already on the page. --}}
 document.addEventListener('DOMContentLoaded', function () {
+  var pick = document.getElementById('empMonthPick');
+  if (!pick) return;
+
+  var MONTHS = @json($sp['months'] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+  var SERIES = @json($sp['monthly'] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+  var KEYS = @json($sp['monthKeys'] ?? [], JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT);
+
+  var money = function (v) {
+    v = Number(v) || 0;
+    if (Math.abs(v) >= 100) return '\u20b9' + (v / 100).toFixed(2) + ' Cr';
+    if (Math.abs(v) >= 1)   return '\u20b9' + v.toFixed(2) + ' L';
+    return '\u20b9' + Math.round(v * 100000).toLocaleString('en-IN');
+  };
+  var tone = function (p) { return p >= 80 ? 'success' : (p >= 50 ? 'warning' : 'danger'); };
+  var esc = function (t) { var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; };
+
+  function render(key) {
+    var m = MONTHS[key];
+    if (!m) return;
+
+    document.querySelectorAll('[data-f]').forEach(function (el) {
+      var f = el.dataset.f, v = m[f];
+      if (f === 'openOrders') { el.textContent = (v == null ? 0 : v); return; }
+      if (f === 'pctForecast' || f === 'pctPending') {
+        el.textContent = (v == null ? '\u2014' : v + '%');
+        el.style.color = v == null ? '#64748b' : (v >= 80 ? '#0d7377' : (v >= 50 ? '#d97706' : '#dc2626'));
+        return;
+      }
+      el.textContent = money(v);
+    });
+    var bar = document.querySelector('[data-bar="pctForecast"]');
+    if (bar) {
+      var p = m.pctForecast || 0;
+      bar.style.width = Math.min(100, p) + '%';
+      bar.className = 'adc-tone-' + tone(p);
+    }
+
+    // Month-on-month against the month before the one selected.
+    var i = KEYS.indexOf(key);
+    var prev = i > 0 ? (MONTHS[KEYS[i - 1]] || {}).sold : null;
+    var lbl = document.getElementById('empMomLbl');
+    if (lbl) {
+      if (prev > 0) {
+        var d = ((m.sold - prev) / prev) * 100;
+        lbl.innerHTML = 'vs previous month <b style="color:' + (d >= 0 ? '#0d7377' : '#dc2626') + '">' +
+                        (d >= 0 ? '+' : '') + d.toFixed(1) + '%</b>';
+      } else { lbl.textContent = ''; }
+    }
+
+    // Trend, with the selected month highlighted.
+    var max = Math.max.apply(null, SERIES.map(function (x) { return x.value; }).concat([1])) || 1;
+    document.getElementById('empSpark').innerHTML = SERIES.map(function (x, idx) {
+      var h = Math.max(3, Math.round((x.value / max) * 100));
+      var on = KEYS[idx] === key;
+      return '<div class="emp-spark-col' + (on ? ' on' : '') + '" title="' + esc(x.label) + ' \u00b7 ' + money(x.value) + '">' +
+             '<div class="emp-spark-bar" style="height:' + h + '%"></div>' +
+             '<span class="emp-spark-lbl">' + esc(x.label) + '</span></div>';
+    }).join('');
+
+    // Orders for the month.
+    var body = document.getElementById('empOrders'), none = document.getElementById('empOrdersEmpty');
+    var ordLbl = document.getElementById('empOrdLbl');
+    if (ordLbl) ordLbl.textContent = m.label;
+    if (!m.orders || !m.orders.length) {
+      body.innerHTML = ''; none.classList.remove('d-none');
+    } else {
+      none.classList.add('d-none');
+      body.innerHTML = m.orders.map(function (o) {
+        return '<tr><td class="fw-medium">' + esc(o.name) +
+               '<small class="text-muted d-block" style="font-size:.7rem">' + esc(o.product) + '</small></td>' +
+               '<td class="text-end"><span class="adc-badge adc-tone-success">' + esc(o.stage || 'Order') + '</span></td>' +
+               '<td class="text-end fw-semibold" style="width:90px">' + money(o.sale) + '</td></tr>';
+      }).join('');
+    }
+
+    // Tier board.
+    var grid = document.getElementById('empTiers'), tnone = document.getElementById('empTiersEmpty');
+    if (!m.tiers || !m.tiers.length) {
+      grid.innerHTML = ''; tnone.classList.remove('d-none');
+    } else {
+      tnone.classList.add('d-none');
+      grid.innerHTML = m.tiers.map(function (t) {
+        var tn = t.won ? 'success' : (t.pct >= 75 ? 'warning' : 'danger');
+        return '<div class="adc-tier adc-tone-' + tn + (t.won ? ' won' : '') + '">' +
+               '<div class="adc-tier-top"><span class="adc-tier-name">' + esc(t.name) + '</span>' +
+               (t.won ? '<span class="adc-tier-badge">\ud83c\udfc6 WON</span>' : '') + '</div>' +
+               '<div class="adc-tier-pct">' + Math.round(t.pct) + '%</div>' +
+               '<div class="adc-bar"><span class="adc-tone-' + tn + '" style="width:' + Math.min(100, t.pct) + '%"></span></div>' +
+               '<div class="adc-tier-target">Target ' + money(t.target) + '</div></div>';
+      }).join('');
+    }
+  }
+
+  pick.addEventListener('change', function () { render(this.value); });
+
   var tabs = document.querySelectorAll('.emp-sales-tab');
-  if (!tabs.length) return;
   tabs.forEach(function (b) {
     b.addEventListener('click', function () {
       tabs.forEach(function (x) { x.classList.remove('active'); });
@@ -749,6 +795,8 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   });
+
+  render(pick.value);
 });
 </script>
 <script>

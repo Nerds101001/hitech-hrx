@@ -1790,8 +1790,18 @@ class UserDashboardController extends Controller
     }
 
     /**
-     * Kingo/Bingo tiers + today's visits for a salesperson. Returns null for
-     * non-sales staff so the blade skips the whole section.
+     * The sales card on the employee dashboard.
+     *
+     * Returns one entry per month for the last six, each carrying that month's
+     * figures, Kingo/Bingo tiers and order customers, so the month switcher can
+     * re-scope the whole card without a round trip.
+     *
+     * A customer counts for this person if they are tagged on it in ANY role.
+     * Salespeople sit on salesperson_id, Customer Care on ccare_id and New Biz
+     * on new_biz_id; matching only salesperson_id left every CCare and New Biz
+     * employee looking at an empty card while their manager saw real numbers.
+     *
+     * Money is in LAKHS throughout, matching the Sales Report.
      */
     private function buildEmployeeSalesProfile(User $user): ?array
     {
@@ -1806,11 +1816,6 @@ class UserDashboardController extends Controller
             return null;
         }
 
-        // A customer is held under whichever column matches the person's role:
-        // salespeople sit on salesperson_id, Customer Care on ccare_id, New Biz
-        // on new_biz_id. Matching only salesperson_id left every CCare and New
-        // Biz employee looking at an empty card while their manager's dashboard
-        // showed their real numbers.
         $roleCols = ['salesperson_id', 'ccare_id', 'new_biz_id'];
         if (Schema::hasColumn('sales_pipelines', 'new_biz_2_id')) {
             $roleCols[] = 'new_biz_2_id';
@@ -1837,134 +1842,118 @@ class UserDashboardController extends Controller
             $todayVisits = collect();
         }
 
-        // Monthly achieved + targets. Targets live in salesperson_targets keyed
-        // by 'YYYY-MM'; achieved comes from this month's pipeline sale amounts.
-        // Both are stored in LAKHS, matching the Kingo Bingo scorecard.
-        $achieved = 0.0;
-        $kingoTiers = [];
-        $orderCustomers = [];
+        $months = [];
         $monthly = [];
         $customerCount = 0;
-        $fySold = 0.0; $fyForecast = 0.0; $fyPending = 0.0; $book = 0.0;
-        $pctForecast = null; $pctPending = null; $openOrders = 0;
-        $lastMonth = 0.0;
-        $momPct = null;
+        $DB = \Illuminate\Support\Facades\DB::class;
+
         try {
-            $monthKey = Carbon::today()->format('Y-m');
+            // Realised sales live on the locked rows: is_locked true is the
+            // Sales Report, false is the open pipeline. Without this the card
+            // counted forecast as money earned.
+            $rows = \App\Models\SalesPipeline::where($heldByMe)->where('is_locked', true)
+                ->get(['id', 'party_name', 'product', 'status_stage']);
+            $ids = $rows->pluck('id');
+            $customerCount = $ids->count();
 
-            // Achieved means realised sales, which live on the locked rows —
-            // is_locked true is the Sales Report, false is the open pipeline.
-            // Without this filter the card counted forecast as money earned.
-            $pipelines = \App\Models\SalesPipeline::with(['months' => fn($q) => $q->where('month_year', $monthKey)])
-                ->where($heldByMe)
-                ->where('is_locked', true)
-                ->get();
-
-            foreach ($pipelines as $p) {
-                $achieved += (float) ($p->months->first()->sale_amount ?? 0);
+            $keys = [];
+            for ($i = 5; $i >= 0; $i--) {
+                $keys[] = Carbon::today()->subMonths($i)->format('Y-m');
             }
 
-            $target = \App\Models\SalespersonTarget::where('salesperson_id', $user->id)
-                ->where('month_year', $monthKey)
-                ->first();
-
-            if ($target) {
-                foreach ([['Bingo', 'bingo_target'], ['Kingo', 'kingo_target'], ['Super Kingo', 'super_kingo_target']] as [$label, $col]) {
-                    $t = (float) ($target->{$col} ?? 0);
-                    if ($t <= 0) continue;
-                    $kingoTiers[] = [
-                        'name' => $label,
-                        'target' => $t,
-                        'pct' => ($achieved / $t) * 100,
-                        'won' => $achieved >= $t,
-                    ];
-                }
-            }
-
-            $orderCustomers = $pipelines
-                ->filter(fn($p) => (float) ($p->months->first()->sale_amount ?? 0) > 0)
-                ->take(6)
-                ->map(fn($p) => [
-                    'name' => $p->party_name ?? 'Customer',
-                    'product' => $p->product ?? '',
-                    'stage' => $p->status_stage ?? '',
-                    'sale' => (float) ($p->months->first()->sale_amount ?? 0),
-                ])->values()->all();
-
-            // Kingo/Bingo targets are only set for the Sales department, so for
-            // Customer Care, New Biz and Export the tier board is permanently
-            // empty. Give them their own six months of sales instead — same
-            // figures, just measured against their own history rather than a
-            // target nobody sets for them.
-            $ids = \App\Models\SalesPipeline::where($heldByMe)->where('is_locked', true)->pluck('id');
+            $byMonth = collect();
+            $targets = collect();
             if ($ids->isNotEmpty()) {
-                $keys = [];
-                for ($i = 5; $i >= 0; $i--) {
-                    $keys[] = Carbon::today()->subMonths($i)->format('Y-m');
-                }
-                $sums = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                $byMonth = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
                     ->whereIn('sales_pipeline_id', $ids)->whereIn('month_year', $keys)
-                    ->groupBy('month_year')
-                    ->selectRaw('month_year, SUM(sale_amount) total')
-                    ->pluck('total', 'month_year');
-                foreach ($keys as $k) {
-                    $monthly[] = [
-                        'label' => Carbon::createFromFormat('Y-m', $k)->format('M'),
-                        'value' => round((float) ($sums[$k] ?? 0), 2),
-                    ];
+                    ->get(['sales_pipeline_id', 'month_year', 'sale_amount', 'forecast_amount', 'pending_amount'])
+                    ->groupBy('month_year');
+
+                $targets = \Illuminate\Support\Facades\DB::table('salesperson_targets')
+                    ->where('salesperson_id', $user->id)->whereIn('month_year', $keys)
+                    ->get()->keyBy('month_year');
+            }
+
+            $nameOf = $rows->keyBy('id');
+            foreach ($keys as $k) {
+                $set   = $byMonth[$k] ?? collect();
+                $sold  = (float) $set->sum('sale_amount');
+                $fcst  = (float) $set->sum('forecast_amount');
+                $pend  = (float) $set->sum('pending_amount');
+                $book  = $sold + $pend;
+
+                $tiers = [];
+                $t = $targets[$k] ?? null;
+                if ($t) {
+                    foreach ([['Bingo', 'bingo_target'], ['Kingo', 'kingo_target'], ['Super Kingo', 'super_kingo_target']] as [$label, $col]) {
+                        $tv = (float) ($t->{$col} ?? 0);
+                        if ($tv <= 0) {
+                            continue;
+                        }
+                        $tiers[] = [
+                            'name' => $label, 'target' => round($tv, 2),
+                            'pct' => round($tv > 0 ? $sold / $tv * 100 : 0, 1),
+                            'won' => $sold >= $tv,
+                        ];
+                    }
                 }
-                $customerCount = $ids->count();
 
-                // Financial-year figures, using the same definitions as the
-                // manager dashboard so an employee's card and their manager's
-                // row agree: Apr-Mar to date, sale/forecast/pending straight
-                // off the month rows, book = sold + still pending.
-                $fyStartYear = now()->month >= 4 ? now()->year : now()->year - 1;
-                $fyMonths = [];
-                $cur = Carbon::create($fyStartYear, 4, 1);
-                $end = now()->copy()->endOfMonth();
-                while ($cur <= $end) { $fyMonths[] = $cur->format('Y-m'); $cur->addMonth(); }
+                $orders = $set->filter(fn($m) => (float) $m->sale_amount > 0)
+                    ->sortByDesc('sale_amount')->take(6)
+                    ->map(function ($m) use ($nameOf) {
+                        $p = $nameOf->get($m->sales_pipeline_id);
+                        return [
+                            'name' => $p->party_name ?? 'Customer',
+                            'product' => $p->product ?? '',
+                            'stage' => $p->status_stage ?? '',
+                            'sale' => round((float) $m->sale_amount, 2),
+                        ];
+                    })->values()->all();
 
-                $fy = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
-                    ->whereIn('sales_pipeline_id', $ids)
-                    ->whereIn('month_year', $fyMonths)
-                    ->selectRaw('SUM(sale_amount) sold, SUM(forecast_amount) fcst, SUM(pending_amount) pend')
-                    ->first();
-                $fySold     = (float) ($fy->sold ?? 0);
-                $fyForecast = (float) ($fy->fcst ?? 0);
-                $fyPending  = (float) ($fy->pend ?? 0);
-                $book       = $fySold + $fyPending;
-                $pctForecast = $fyForecast > 0 ? round($fySold / $fyForecast * 100, 1) : null;
-                $pctPending  = $book > 0 ? round($fySold / $book * 100, 1) : null;
-
-                // Customers still carrying a pending amount this FY.
-                $openOrders = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
-                    ->whereIn('sales_pipeline_id', $ids)
-                    ->whereIn('month_year', $fyMonths)
-                    ->where('pending_amount', '>', 0)
-                    ->distinct()->count('sales_pipeline_id');
-                $prev = (float) ($sums[Carbon::today()->subMonth()->format('Y-m')] ?? 0);
-                $lastMonth = $prev;
-                $momPct = $prev > 0 ? round((($achieved - $prev) / $prev) * 100, 1) : null;
+                $months[$k] = [
+                    'key'      => $k,
+                    'label'    => Carbon::createFromFormat('Y-m', $k)->format('M Y'),
+                    'sold'     => round($sold, 2),
+                    'forecast' => round($fcst, 2),
+                    'pending'  => round($pend, 2),
+                    'book'     => round($book, 2),
+                    'pctForecast' => $fcst > 0 ? round($sold / $fcst * 100, 1) : null,
+                    'pctPending'  => $book > 0 ? round($sold / $book * 100, 1) : null,
+                    'openOrders'  => $set->where('pending_amount', '>', 0)->count(),
+                    'orderCount'  => count($orders),
+                    'tiers'    => $tiers,
+                    'orders'   => $orders,
+                ];
+                $monthly[] = ['label' => Carbon::createFromFormat('Y-m', $k)->format('M'), 'value' => round($sold, 2)];
             }
         } catch (\Throwable $e) {
-            // Sales tables absent/renamed — degrade to the "no targets" state.
+            Log::warning('Employee sales card: ' . $e->getMessage());
         }
 
+        if (empty($months)) {
+            return null;
+        }
+
+        $currentKey = Carbon::today()->format('Y-m');
+        $cur = $months[$currentKey] ?? end($months);
+        $prevKey = Carbon::today()->subMonth()->format('Y-m');
+        $prev = (float) ($months[$prevKey]['sold'] ?? 0);
+
         return [
-            'isSalesDept' => true,
-            'todayVisits' => $todayVisits,
-            'achieved' => $achieved,
-            'hasTargets' => !empty($kingoTiers),
-            'kingoTiers' => $kingoTiers,
-            'orderCustomers' => $orderCustomers,
-            'monthly' => $monthly,
+            'isSalesDept'   => true,
+            'todayVisits'   => $todayVisits,
             'customerCount' => $customerCount,
-            'fySold' => $fySold, 'fyForecast' => $fyForecast, 'fyPending' => $fyPending,
-            'book' => $book, 'pctForecast' => $pctForecast, 'pctPending' => $pctPending,
-            'openOrders' => $openOrders,
-            'lastMonth' => $lastMonth,
-            'momPct' => $momPct,
+            'months'        => $months,
+            'monthKeys'     => array_keys($months),
+            'currentKey'    => $cur['key'],
+            'monthly'       => $monthly,
+            'lastMonth'     => $prev,
+            'momPct'        => $prev > 0 ? round((($cur['sold'] - $prev) / $prev) * 100, 1) : null,
+            // Kept so anything still reading the old shape does not break.
+            'achieved'      => $cur['sold'],
+            'hasTargets'    => !empty($cur['tiers']),
+            'kingoTiers'    => $cur['tiers'],
+            'orderCustomers' => $cur['orders'],
         ];
     }
 }
