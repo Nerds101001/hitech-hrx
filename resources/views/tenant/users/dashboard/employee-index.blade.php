@@ -328,12 +328,11 @@
               <ul class="emp-contacts">
                 @foreach($importantContacts as $c)
                   <li>
-                    <img class="emp-contact-av" src="https://ui-avatars.com/api/?name={{ urlencode($c['name']) }}&background={{ $c['bg'] ?? '0d9488' }}&color=fff" alt="">
+                    @php $cAv = 'https://ui-avatars.com/api/?name='.urlencode($c['name']).'&background='.($c['bg'] ?? '0d9488').'&color=fff&bold=true'; @endphp
+                    <img class="emp-contact-av" src="{{ $c['photo'] ?? $cAv }}" alt="" onerror="this.src='{{ $cAv }}'">
                     <div class="emp-contact-body">
                       <div class="emp-contact-name">{{ $c['name'] }}</div>
                       <div class="emp-contact-role">{{ $c['role'] }}</div>
-                      @if(!empty($c['email']))<a class="emp-contact-line" href="mailto:{{ $c['email'] }}"><i class="bx bx-envelope"></i>{{ $c['email'] }}</a>@endif
-                      @if(!empty($c['phone']))<a class="emp-contact-line" href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}"><i class="bx bx-phone"></i>{{ $c['phone'] }}</a>@endif
                     </div>
                     <span class="emp-contact-act">
                       @if(!empty($c['phone']))<a href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}" title="Call {{ $c['phone'] }}"><i class="bx bx-phone"></i></a>@endif
@@ -403,7 +402,7 @@
                   @if($j)
                     data-name="{{ $j['name'] }}" data-desig="{{ $j['designation'] }}"
                     data-dept="{{ $j['department'] }}" data-email="{{ $j['email'] }}"
-                    data-phone="{{ $j['phone'] }}" data-joined="{{ $j['joined'] }}"
+                    data-uid="{{ $j['id'] }}" data-joined="{{ $j['joined'] }}"
                     data-photo="{{ $j['photo'] }}"
                   @endif>
                 <span class="adc-feed-dot adc-tone-info"><i class="bx {{ $j ? 'bx-user-plus' : 'bx-news' }}"></i></span>
@@ -436,7 +435,11 @@
             <ul class="adc-appr mb-0">
               @foreach($celToday->take(6) as $c)
                 @php $celName = trim(($c['u']->first_name ?? '').' '.($c['u']->last_name ?? '')) ?: ($c['u']->name ?? 'Colleague'); @endphp
-                <li>
+                {{-- Whole row opens the shared Send-a-Wish modal from commonMaster. --}}
+                <li role="button" tabindex="0" class="mgr-wish-open"
+                    onclick="openSendWishModal({{ $c['u']->id }}, this.dataset.uname, '{{ $c['wish'] }}')"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSendWishModal({{ $c['u']->id }}, this.dataset.uname, '{{ $c['wish'] }}');}"
+                    data-uname="{{ $celName }}" title="Send your wishes">
                   <img class="adc-appr-av"
                        src="{{ $c['u']->getProfilePicture() ?: 'https://ui-avatars.com/api/?name='.urlencode($celName).'&background='.$c['bg'].'&color=fff&bold=true' }}"
                        alt="" onerror="this.src='https://ui-avatars.com/api/?name={{ urlencode($celName) }}&background={{ $c['bg'] }}&color=fff&bold=true'">
@@ -444,12 +447,7 @@
                     <div class="adc-appr-name">{{ $celName }} <span class="adc-badge adc-tone-danger ms-1">TODAY</span></div>
                     <div class="adc-appr-meta">{{ $c['kind'] }} {{ $c['icon'] }}</div>
                   </div>
-                  {{-- Shared Send-a-Wish modal, included globally by commonMaster. --}}
-                  <button type="button" class="btn btn-sm btn-icon emp-wish-btn" title="Send your wishes"
-                          data-uid="{{ $c['u']->id }}" data-uname="{{ $celName }}"
-                          onclick="openSendWishModal(this.dataset.uid, this.dataset.uname, '{{ $c['wish'] }}')">
-                    <i class="bx bx-send"></i>
-                  </button>
+                  <i class="bx bx-send text-muted"></i>
                 </li>
               @endforeach
             </ul>
@@ -461,7 +459,7 @@
             <div class="adc-card-sub mt-2 mb-1">Coming up</div>
             <ul class="emp-cel-soon">
               @foreach($celSoon->take(4) as $c)
-                <li>
+                <li onclick="window.location='{{ route('employee.celebrations') }}'" role="button" tabindex="0" class="emp-cel-row">
                   <span class="emp-cel-name">{{ $c['u']->name }}</span>
                   <span class="emp-cel-meta">{{ $c['kind'] }}@if(!empty($c['date'])) · {{ \Carbon\Carbon::parse($c['date'])->format('d M') }}@endif</span>
                 </li>
@@ -502,26 +500,26 @@
         </div>
         <div class="modal-body">
           <div id="empAnnJoiner" class="d-none">
-            <div class="d-flex align-items-center gap-3 mb-3 p-3" style="background:var(--hitech-bg-soft,#f1f5f9);border-radius:12px;">
-              <img id="empAnnPhoto" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;flex:0 0 56px;">
-              <div>
-                <div class="fw-bold" style="font-size:1rem;color:#0f172a;" id="empAnnName"></div>
-                <div class="text-muted" style="font-size:.8rem;" id="empAnnDesig"></div>
-              </div>
+            <div class="text-center mb-3">
+              <img id="empAnnPhoto" src="" alt=""
+                   style="width:84px;height:84px;border-radius:50%;object-fit:cover;border:3px solid var(--hitech-bg-soft,#f1f5f9);">
+              <div class="fw-bold mt-2" style="font-size:1.05rem;color:#0f172a;" id="empAnnName"></div>
+              <div class="text-muted" style="font-size:.8rem;" id="empAnnDesig"></div>
+              <div class="text-muted" style="font-size:.78rem;" id="empAnnDept"></div>
             </div>
-            <dl class="row mb-3" style="font-size:.85rem;">
-              <dt class="col-4 text-muted fw-normal">Department</dt><dd class="col-8 fw-semibold" id="empAnnDept"></dd>
-              <dt class="col-4 text-muted fw-normal">Email</dt><dd class="col-8"><a id="empAnnEmail" href="#"></a></dd>
-              <dt class="col-4 text-muted fw-normal d-none" id="empAnnPhoneL">Phone</dt><dd class="col-8 d-none" id="empAnnPhoneV"></dd>
-              <dt class="col-4 text-muted fw-normal d-none" id="empAnnJoinedL">Joined</dt><dd class="col-8 fw-semibold d-none" id="empAnnJoinedV"></dd>
-            </dl>
+            <label class="form-label small fw-semibold" for="empAnnMsg">Send them a welcome</label>
+            <textarea id="empAnnMsg" class="form-control" rows="3" maxlength="1000"></textarea>
+            <div class="form-text">Delivered as an in-app notification.</div>
+            <div id="empAnnAlert" class="alert d-none py-2 px-3 mt-2 mb-0" role="alert"></div>
           </div>
-          <p id="empAnnBody" class="mb-1" style="white-space:pre-line;color:#475569;"></p>
-          <div class="adc-card-sub" id="empAnnWhen"></div>
+          <div id="empAnnPlain">
+            <p id="empAnnBody" class="mb-1" style="white-space:pre-line;color:#475569;"></p>
+            <div class="adc-card-sub" id="empAnnWhen"></div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
-          <a href="#" class="btn btn-primary d-none" id="empAnnMail"><i class="bx bx-envelope"></i> Say hello</a>
+          <button type="button" class="btn btn-primary d-none" id="empAnnSend"><i class="bx bx-send"></i> Send</button>
         </div>
       </div>
     </div>
@@ -583,7 +581,10 @@
   .emp-contact-act a{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--bg);color:var(--p);text-decoration:none;font-size:1rem;transition:all .12s;}
   .emp-contact-act a:hover{background:var(--p);color:#fff;}
 
-  .emp-qa{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+  /* 5 across, 2 down. Collapses on narrow screens. */
+  .emp-qa{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;}
+  @media (max-width:1199px){ .emp-qa{grid-template-columns:repeat(3,1fr);} }
+  @media (max-width:575px){ .emp-qa{grid-template-columns:repeat(2,1fr);} }
   .emp-hl-link{display:flex;align-items:center;gap:11px;width:100%;text-decoration:none;color:inherit;}
   .emp-hl-arrow{color:var(--faint);opacity:0;transition:opacity .12s,transform .12s;font-size:1.1rem;margin-left:auto;}
   .adc-events li:hover .emp-hl-arrow{opacity:1;transform:translateX(2px);}
@@ -591,10 +592,12 @@
   .emp-wish-btn{flex:0 0 auto;color:var(--hitech-primary,#0d9488);background:transparent;border:1px solid var(--hitech-border,#e2e8f0);}
   .emp-wish-btn:hover{background:var(--hitech-bg-soft,#f1f5f9);color:var(--hitech-primary,#0d9488);}
 
+  .mgr-wish-open{cursor:pointer;border-radius:8px;transition:background .15s ease;}
+  .mgr-wish-open:hover,.mgr-wish-open:focus-visible{background:var(--hitech-bg-soft,#f1f5f9);}
+  .emp-cel-row{cursor:pointer;transition:background .15s ease;}
+  .emp-cel-row:hover{background:var(--hitech-bg-soft,#f1f5f9);}
   .emp-ann-open{cursor:pointer;border-radius:8px;transition:background .15s ease;}
   .emp-ann-open:hover,.emp-ann-open:focus-visible{background:var(--hitech-bg-soft,#f1f5f9);}
-  .emp-contact-line{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#64748b;text-decoration:none;margin-top:2px;}
-  .emp-contact-line:hover{color:var(--hitech-primary,#0d9488);}
 
   /* My Sales — tabs, figures and the tier heading. Theme tokens only. */
   .emp-sales-tab{border:1px solid var(--hitech-border,#e2e8f0);background:#fff;color:#64748b;
@@ -644,51 +647,91 @@
 document.addEventListener('DOMContentLoaded', function () {
   var modalEl = document.getElementById('empAnnModal');
   if (!modalEl) return;
-  var set = function (id, val) { var n = document.getElementById(id); if (n) n.textContent = val || ''; };
-  var avatar = function (name) {
-    return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=0d9488&color=fff&bold=true&size=112';
+  var set = function (id, v) { var n = document.getElementById(id); if (n) n.textContent = v || ''; };
+  var avatar = function (n) {
+    return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(n) + '&background=0d9488&color=fff&bold=true&size=168';
+  };
+  var alertBox = document.getElementById('empAnnAlert');
+  var sendBtn = document.getElementById('empAnnSend');
+  var msgBox = document.getElementById('empAnnMsg');
+  var current = null;
+
+  var note = function (text, kind) {
+    if (!alertBox) return;
+    alertBox.className = 'alert py-2 px-3 mt-2 mb-0 alert-' + kind;
+    alertBox.textContent = text;
+  };
+  var clearNote = function () {
+    if (alertBox) { alertBox.className = 'alert d-none py-2 px-3 mt-2 mb-0'; alertBox.textContent = ''; }
   };
 
   document.querySelectorAll('.emp-ann-open').forEach(function (row) {
     var open = function (e) {
       e.preventDefault();
       var d = row.dataset;
+      current = d;
       set('empAnnTitle', d.title);
-      set('empAnnBody', d.body);
-      set('empAnnWhen', d.when ? 'Published ' + d.when : '');
 
-      var box = document.getElementById('empAnnJoiner');
-      var mail = document.getElementById('empAnnMail');
+      var joiner = document.getElementById('empAnnJoiner');
+      var plain = document.getElementById('empAnnPlain');
+      clearNote();
+
       if (d.name) {
-        box.classList.remove('d-none');
+        joiner.classList.remove('d-none');
+        plain.classList.add('d-none');
+        sendBtn.classList.remove('d-none');
+        sendBtn.disabled = false;
         set('empAnnName', d.name);
         set('empAnnDesig', d.desig);
-        set('empAnnDept', d.dept);
-        var em = document.getElementById('empAnnEmail');
-        em.textContent = d.email || '\u2014';
-        em.href = d.email ? 'mailto:' + d.email : '#';
+        set('empAnnDept', d.dept + (d.joined ? ' \u00b7 joined ' + d.joined : ''));
         var img = document.getElementById('empAnnPhoto');
         img.src = d.photo || avatar(d.name);
         img.onerror = function () { this.src = avatar(d.name); };
-        [['Phone', d.phone], ['Joined', d.joined]].forEach(function (pair) {
-          var l = document.getElementById('empAnn' + pair[0] + 'L');
-          var v = document.getElementById('empAnn' + pair[0] + 'V');
-          if (l && v) {
-            l.classList.toggle('d-none', !pair[1]);
-            v.classList.toggle('d-none', !pair[1]);
-            v.textContent = pair[1] || '';
-          }
-        });
-        if (mail) { mail.classList.toggle('d-none', !d.email); mail.href = d.email ? 'mailto:' + d.email : '#'; }
+        msgBox.value = 'Welcome aboard, ' + (d.name || '').split(' ')[0] + '! Great to have you with us.';
       } else {
-        box.classList.add('d-none');
-        if (mail) mail.classList.add('d-none');
+        joiner.classList.add('d-none');
+        plain.classList.remove('d-none');
+        sendBtn.classList.add('d-none');
+        set('empAnnBody', d.body);
+        set('empAnnWhen', d.when ? 'Published ' + d.when : '');
       }
       if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
     };
     row.addEventListener('click', open);
     row.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') open(e); });
   });
+
+  if (sendBtn) {
+    sendBtn.addEventListener('click', async function () {
+      if (!current || !current.uid) { note('Could not identify this person.', 'danger'); return; }
+      var message = (msgBox.value || '').trim();
+      if (!message) { note('Write a short message first.', 'warning'); return; }
+      sendBtn.disabled = true;
+      note('Sending\u2026', 'info');
+      try {
+        var res = await fetch('{{ url('/birthdays/send') }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', 'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ receiver_id: current.uid, message: message, wish_type: 'welcome' })
+        });
+        var body = await res.json().catch(function () { return {}; });
+        if (res.ok && body.success) {
+          note('Welcome message sent.', 'success');
+          setTimeout(function () { bootstrap.Modal.getOrCreateInstance(modalEl).hide(); }, 1100);
+        } else {
+          note(body.error || body.message || ('HTTP ' + res.status), 'danger');
+          sendBtn.disabled = false;
+        }
+      } catch (err) {
+        note('Could not send: ' + err.message, 'danger');
+        sendBtn.disabled = false;
+      }
+    });
+  }
 });
 </script>
 <script>

@@ -148,7 +148,8 @@
                 "admin",
                 "hr",
                 "manager",
-                "accounts"
+                "accounts",
+                "employee"
             ],
             "submenu": [
                 {

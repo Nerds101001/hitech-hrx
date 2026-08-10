@@ -138,12 +138,30 @@ class BirthdayController extends Controller
         $request->validate([
             'receiver_id' => 'required|exists:users,id',
             'message' => 'required|string|max:1000',
-            'wish_type' => 'required|in:birthday,anniversary',
+            'wish_type' => 'required|in:birthday,anniversary,welcome',
         ]);
 
         $receiver = User::findOrFail($request->receiver_id);
         $sender = auth()->user();
         $today = Carbon::today();
+
+        // Welcoming a new joiner. Gated on them actually being new, so the
+        // endpoint cannot be repurposed to message arbitrary staff.
+        if ($request->wish_type === 'welcome') {
+            if (!$receiver->date_of_joining) {
+                return response()->json(['error' => 'This user has no joining date set.'], 400);
+            }
+            if (Carbon::parse($receiver->date_of_joining)->lt($today->copy()->subDays(60))) {
+                return response()->json(['error' => 'This user is no longer a new joiner.'], 400);
+            }
+            try {
+                $receiver->notify(new \App\Notifications\WelcomeWishNotification($sender, $request->message));
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error('Welcome wish notification error: ' . $e->getMessage());
+            }
+
+            return response()->json(['success' => true, 'message' => 'Welcome message sent!']);
+        }
 
         if ($request->wish_type === 'birthday') {
             if ($receiver->dob) {

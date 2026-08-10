@@ -242,11 +242,14 @@ class UserDashboardController extends Controller
                     ->first(fn($u) => strcasecmp(preg_replace('/\s+/', ' ', trim($u->getFullName())), $needle) === 0);
                 if ($match) {
                     $n->joiner = [
+                        'id'          => $match->id,
                         'name'        => $match->getFullName(),
                         'designation' => optional($match->designation)->name ?: '—',
                         'department'  => optional($match->department)->name ?: '—',
                         'email'       => $match->email,
-                        'phone'       => $match->phone,
+                        // Deliberately no phone: a welcome announcement goes to
+                        // everyone, and a new joiner's personal mobile is not
+                        // theirs to broadcast. Email is the work address.
                         'photo'       => $match->getProfilePicture() ?: null,
                         'joined'      => $match->date_of_joining
                                           ? Carbon::parse($match->date_of_joining)->format('d M Y') : null,
@@ -1789,6 +1792,7 @@ class UserDashboardController extends Controller
                 'name' => $mgr->getFullName(), 'role' => 'Reporting Manager',
                 'phone' => $mgr->phone ?? null,
                 'email' => $mgr->email, 'bg' => '0d9488',
+                'photo' => $mgr->getProfilePicture() ?: null,
             ];
         }
         // Company-wide contacts every employee should be able to reach. Looked
@@ -1796,6 +1800,7 @@ class UserDashboardController extends Controller
         // live from their own user record.
         $keyContacts = [
             ['email' => 'suchita@rustx.com', 'role' => 'Human Resources',            'bg' => '6366f1'],
+            ['email' => 'hr@rustx.com',      'role' => 'Human Resources',            'bg' => 'ec4899'],
             ['email' => 'ai@rustx.com',      'role' => 'Manager - AI & IT Services', 'bg' => 'f59e0b'],
         ];
         $already = collect($importantContacts)->pluck('email')->all();
@@ -1811,6 +1816,7 @@ class UserDashboardController extends Controller
             $importantContacts[] = [
                 'name' => $c->getFullName(), 'role' => $kc['role'],
                 'phone' => $c->phone ?? null, 'email' => $c->email, 'bg' => $kc['bg'],
+                'photo' => $c->getProfilePicture() ?: null,
             ];
             $already[] = $c->email;
         }
@@ -1823,6 +1829,7 @@ class UserDashboardController extends Controller
                     'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
                     'phone' => $hrContact->phone ?? null,
                     'email' => $hrContact->email, 'bg' => '6366f1',
+                    'photo' => $hrContact->getProfilePicture() ?: null,
                 ];
             }
         }
