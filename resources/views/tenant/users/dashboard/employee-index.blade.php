@@ -103,7 +103,13 @@
       <div class="row g-4 mt-1">
         <div class="col-xl-7">
           <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">🏆 Kingo · Bingo · Super Kingo</h6><span class="adc-card-sub">{{ now()->format('F Y') }} · achieved {{ $fmtL($sp['achieved']) }}</span></div><a href="{{ url('/sales-visits/kingo-bingo') }}" class="adc-link">Details</a></div>
+            <div class="adc-card-head">
+              <div>
+                <h6 class="adc-card-title">{{ $sp['hasTargets'] ? '🏆 Kingo · Bingo · Super Kingo' : '📈 My Sales' }}</h6>
+                <span class="adc-card-sub">{{ now()->format('F Y') }} · achieved {{ $fmtL($sp['achieved']) }}</span>
+              </div>
+              <a href="{{ url($sp['hasTargets'] ? '/sales-visits/kingo-bingo' : '/sales-visits/pipeline') }}" class="adc-link">Details</a>
+            </div>
             @if($sp['hasTargets'])
               <div class="adc-tier-grid">
                 @foreach($sp['kingoTiers'] as $t)
@@ -116,8 +122,34 @@
                   </div>
                 @endforeach
               </div>
+            @elseif(!empty($sp['monthly']))
+              {{-- No Kingo/Bingo target is set for this person — the scheme only
+                   covers the Sales department — so show their own six months
+                   rather than an empty tier board. --}}
+              @php
+                $mMax = max(array_map(fn($m) => $m['value'], $sp['monthly'])) ?: 1;
+                $mom  = $sp['momPct'];
+              @endphp
+              <div class="d-flex flex-wrap gap-4 mb-3">
+                <div><div class="adc-card-sub">This month</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ $fmtL($sp['achieved']) }}</div></div>
+                <div><div class="adc-card-sub">Last month</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ $fmtL($sp['lastMonth']) }}</div></div>
+                <div><div class="adc-card-sub">Change</div>
+                  <div class="fw-bold" style="font-size:1.15rem;color:{{ $mom === null ? '#64748b' : ($mom >= 0 ? '#0d7377' : '#dc2626') }}">
+                    {{ $mom === null ? '—' : ($mom >= 0 ? '+' : '') . $mom . '%' }}
+                  </div>
+                </div>
+                <div><div class="adc-card-sub">My customers</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ number_format($sp['customerCount']) }}</div></div>
+              </div>
+              <div class="emp-spark">
+                @foreach($sp['monthly'] as $m)
+                  <div class="emp-spark-col" title="{{ $m['label'] }} · {{ $fmtL($m['value']) }}">
+                    <div class="emp-spark-bar" style="height:{{ max(3, round($m['value'] / $mMax * 100)) }}%"></div>
+                    <span class="emp-spark-lbl">{{ $m['label'] }}</span>
+                  </div>
+                @endforeach
+              </div>
             @else
-              <div class="adc-empty adc-empty-sm"><i class="bx bx-target-lock"></i><span>No Kingo/Bingo targets set this month.</span></div>
+              <div class="adc-empty adc-empty-sm"><i class="bx bx-target-lock"></i><span>No sales recorded against your name yet.</span></div>
             @endif
           </div>
         </div>
@@ -379,6 +411,14 @@
   .emp-hl-link{display:flex;align-items:center;gap:11px;width:100%;text-decoration:none;color:inherit;}
   .emp-hl-arrow{color:var(--faint);opacity:0;transition:opacity .12s,transform .12s;font-size:1.1rem;margin-left:auto;}
   .adc-events li:hover .emp-hl-arrow{opacity:1;transform:translateX(2px);}
+
+  /* Six-month sales bars, shown when no Kingo/Bingo target is set. Uses the
+     card's own tokens rather than a new palette. */
+  .emp-spark{display:flex;align-items:flex-end;gap:10px;height:104px;padding-top:4px;}
+  .emp-spark-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+  .emp-spark-bar{width:100%;max-width:44px;border-radius:6px 6px 0 0;background:linear-gradient(180deg,var(--hitech-primary,#0d9488),color-mix(in srgb,var(--hitech-primary,#0d9488) 45%,#fff));}
+  .emp-spark-col:last-child .emp-spark-bar{background:linear-gradient(180deg,#f59e0b,#fbbf24);}
+  .emp-spark-lbl{margin-top:6px;font-size:.68rem;font-weight:700;color:#94a3b8;}
 
   /* Kingo/Bingo tier board (sales) */
   .adc-tier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}

@@ -268,17 +268,44 @@ class SalesManagerSummary
 
                 // Achievement = realised sales this month from the Sales Report
                 // (locked rows), counted for whichever role the rep holds.
+                //
+                // Summing each role column separately double-counts anyone who
+                // holds two roles on the same customer — a rep who is both
+                // salesperson and ccare on a row was credited twice, reading up
+                // to 39% high. Resolve each row to the distinct set of reps on
+                // it, then credit the amount once per rep.
+                $rowRoles = DB::table('sales_pipelines')
+                    ->where(function ($w) use ($roleCols, $repIds) {
+                        foreach ($roleCols as $i => $c) {
+                            $i === 0 ? $w->whereIn($c, $repIds) : $w->orWhereIn($c, $repIds);
+                        }
+                    })
+                    ->where('is_locked', true)->whereNull('deleted_at')
+                    ->get(array_merge(['id'], $roleCols));
+
+                $monthAmounts = DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $rowRoles->pluck('id'))
+                    ->where('month_year', $mk)
+                    ->groupBy('sales_pipeline_id')
+                    ->selectRaw('sales_pipeline_id pid, SUM(sale_amount) amt')
+                    ->pluck('amt', 'pid');
+
+                $repLookup = array_flip($repIds);
                 $achievedBySp = [];
-                foreach ($roleCols as $col) {
-                    $rows = DB::table('sales_pipeline_months as m')
-                        ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
-                        ->where('m.month_year', $mk)->where('sp.is_locked', true)
-                        ->whereNull('sp.deleted_at')->whereIn('sp.' . $col, $repIds)
-                        ->groupBy('sp.' . $col)
-                        ->selectRaw('sp.' . $col . ' spid, SUM(m.sale_amount) achieved')
-                        ->pluck('achieved', 'spid');
-                    foreach ($rows as $spid => $a) {
-                        $achievedBySp[$spid] = ($achievedBySp[$spid] ?? 0) + (float) $a;
+                foreach ($rowRoles as $row) {
+                    $amt = (float) ($monthAmounts[$row->id] ?? 0);
+                    if ($amt == 0.0) {
+                        continue;
+                    }
+                    $onThisRow = [];
+                    foreach ($roleCols as $col) {
+                        $holder = $row->{$col} ?? null;
+                        if ($holder && isset($repLookup[$holder])) {
+                            $onThisRow[$holder] = true;   // set — one credit per rep
+                        }
+                    }
+                    foreach (array_keys($onThisRow) as $spid) {
+                        $achievedBySp[$spid] = ($achievedBySp[$spid] ?? 0) + $amt;
                     }
                 }
 

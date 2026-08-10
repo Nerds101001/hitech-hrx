@@ -29,6 +29,7 @@ use App\Notifications\Expense\NewExpenseRequest;
 use App\Services\LeavePolicyService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Constants\Constants as AppConstants;
 
@@ -1744,17 +1745,40 @@ class UserDashboardController extends Controller
     private function buildEmployeeSalesProfile(User $user): ?array
     {
         $dept = strtolower(optional($user->department)->name ?? '');
+        // Sales, Pre Sales, Sales Department, New Biz, Customer Care,
+        // Customer Care + New Biz and Export all work customer accounts.
         $isSalesDept = $dept !== '' && (
-            str_contains($dept, 'sales') || str_contains($dept, 'new biz') || str_contains($dept, 'customer care')
+            str_contains($dept, 'sales') || str_contains($dept, 'new biz')
+            || str_contains($dept, 'customer care') || str_contains($dept, 'export')
         );
         if (!$isSalesDept) {
             return null;
         }
 
+        // A customer is held under whichever column matches the person's role:
+        // salespeople sit on salesperson_id, Customer Care on ccare_id, New Biz
+        // on new_biz_id. Matching only salesperson_id left every CCare and New
+        // Biz employee looking at an empty card while their manager's dashboard
+        // showed their real numbers.
+        $roleCols = ['salesperson_id', 'ccare_id', 'new_biz_id'];
+        if (Schema::hasColumn('sales_pipelines', 'new_biz_2_id')) {
+            $roleCols[] = 'new_biz_2_id';
+        }
+        $heldByMe = function ($q) use ($roleCols, $user) {
+            foreach ($roleCols as $i => $c) {
+                $i === 0 ? $q->where($c, $user->id) : $q->orWhere($c, $user->id);
+            }
+        };
+
         $todayVisits = collect();
         try {
             $todayVisits = \App\Models\SalesVisit::with('client')
-                ->where('salesperson_id', $user->id)
+                ->where(function ($q) use ($user) {
+                    $q->where('salesperson_id', $user->id);
+                    if (Schema::hasColumn('sales_visits', 'cc_user_id')) {
+                        $q->orWhere('cc_user_id', $user->id);
+                    }
+                })
                 ->whereDate('scheduled_at', Carbon::today())
                 ->orderBy('scheduled_at')
                 ->get();
@@ -1768,11 +1792,19 @@ class UserDashboardController extends Controller
         $achieved = 0.0;
         $kingoTiers = [];
         $orderCustomers = [];
+        $monthly = [];
+        $customerCount = 0;
+        $lastMonth = 0.0;
+        $momPct = null;
         try {
             $monthKey = Carbon::today()->format('Y-m');
 
+            // Achieved means realised sales, which live on the locked rows —
+            // is_locked true is the Sales Report, false is the open pipeline.
+            // Without this filter the card counted forecast as money earned.
             $pipelines = \App\Models\SalesPipeline::with(['months' => fn($q) => $q->where('month_year', $monthKey)])
-                ->where('salesperson_id', $user->id)
+                ->where($heldByMe)
+                ->where('is_locked', true)
                 ->get();
 
             foreach ($pipelines as $p) {
@@ -1805,6 +1837,34 @@ class UserDashboardController extends Controller
                     'stage' => $p->status_stage ?? '',
                     'sale' => (float) ($p->months->first()->sale_amount ?? 0),
                 ])->values()->all();
+
+            // Kingo/Bingo targets are only set for the Sales department, so for
+            // Customer Care, New Biz and Export the tier board is permanently
+            // empty. Give them their own six months of sales instead — same
+            // figures, just measured against their own history rather than a
+            // target nobody sets for them.
+            $ids = \App\Models\SalesPipeline::where($heldByMe)->where('is_locked', true)->pluck('id');
+            if ($ids->isNotEmpty()) {
+                $keys = [];
+                for ($i = 5; $i >= 0; $i--) {
+                    $keys[] = Carbon::today()->subMonths($i)->format('Y-m');
+                }
+                $sums = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $ids)->whereIn('month_year', $keys)
+                    ->groupBy('month_year')
+                    ->selectRaw('month_year, SUM(sale_amount) total')
+                    ->pluck('total', 'month_year');
+                foreach ($keys as $k) {
+                    $monthly[] = [
+                        'label' => Carbon::createFromFormat('Y-m', $k)->format('M'),
+                        'value' => round((float) ($sums[$k] ?? 0), 2),
+                    ];
+                }
+                $customerCount = $ids->count();
+                $prev = (float) ($sums[Carbon::today()->subMonth()->format('Y-m')] ?? 0);
+                $lastMonth = $prev;
+                $momPct = $prev > 0 ? round((($achieved - $prev) / $prev) * 100, 1) : null;
+            }
         } catch (\Throwable $e) {
             // Sales tables absent/renamed — degrade to the "no targets" state.
         }
@@ -1816,6 +1876,10 @@ class UserDashboardController extends Controller
             'hasTargets' => !empty($kingoTiers),
             'kingoTiers' => $kingoTiers,
             'orderCustomers' => $orderCustomers,
+            'monthly' => $monthly,
+            'customerCount' => $customerCount,
+            'lastMonth' => $lastMonth,
+            'momPct' => $momPct,
         ];
     }
 }
