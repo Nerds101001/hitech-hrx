@@ -176,9 +176,9 @@
       </div>
       @endif
 
-      {{-- Schedule + KRA + Announcements --}}
+      {{-- Schedule + KRA (Announcements moved to the rail) --}}
       <div class="row g-4 mt-1">
-        <div class="col-xl-4">
+        <div class="col-xl-6">
           <div class="adc-card h-100">
             <div class="adc-card-head"><div><h6 class="adc-card-title">My Schedule</h6></div><a href="{{ url('/sales-visits') }}" class="adc-link">View Calendar</a></div>
             @if(collect($todayVisits)->isEmpty())
@@ -196,7 +196,7 @@
             @endif
           </div>
         </div>
-        <div class="col-xl-4">
+        <div class="col-xl-6">
           <div class="adc-card h-100">
             <div class="adc-card-head"><div><h6 class="adc-card-title">My KRA Progress</h6></div><a href="{{ url('/kpi/my') }}" class="adc-link">View KRA</a></div>
             @if(collect($kraItems ?? [])->isEmpty())
@@ -215,22 +215,7 @@
             @endif
           </div>
         </div>
-        <div class="col-xl-4">
-          <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Announcements</h6></div>@if(auth()->user()->hasRole(['admin','hr']))<a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>@endif</div>
-            @if(collect($recentNotices ?? [])->isEmpty())
-              <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
-            @else
-              <ul class="adc-feed">
-                @foreach(collect($recentNotices)->take(4) as $n)
-                  <li>
-                    <span class="adc-feed-dot adc-tone-info"><i class="bx bx-news"></i></span>
-                    <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->created_at)->diffForHumans() }}</div></div>
-                  </li>
-                @endforeach
-              </ul>
-            @endif
-          </div>
+      </div>
         </div>
       </div>
 
@@ -316,19 +301,104 @@
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Highlights</h6></div></div>
         @php
-          $todayBd = collect($todayBirthdays ?? [])->first();
-          $todayAn = collect($todayAnniversaries ?? [])->first();
+          // Birthdays and anniversaries have their own card below, so this one
+          // only carries the calendar and anything outstanding.
           $high = [];
-          if ($todayBd) $high[] = ['icon'=>'bx-cake','tone'=>'primary','title'=>'Birthday','sub'=>$todayBd->name,'url'=>url('/organizationHierarchy')];
-          if ($todayAn) $high[] = ['icon'=>'bx-gift','tone'=>'info','title'=>'Work Anniversary','sub'=>$todayAn->name,'url'=>url('/organizationHierarchy')];
           if (!empty($nextHoliday)) $high[] = ['icon'=>'bx-calendar-star','tone'=>'success','title'=>'Holiday','sub'=>($nextHoliday->name ?? 'Holiday').' · '.\Carbon\Carbon::parse($nextHoliday->date)->format('d M Y'),'url'=>url('/holidays')];
-          $high[] = ['icon'=>'bx-shield-quarter','tone'=>'warning','title'=>'Policy Acknowledgement','sub'=>'Code of Conduct · Pending','url'=>url('/my-policies')];
+          // Real acknowledgement state — this line used to read "Code of Conduct
+          // · Pending" for everyone, whether or not they had signed anything.
+          $pendPol = collect($pendingPolicies ?? []);
+          if ($pendPol->isNotEmpty()) {
+            $high[] = ['icon'=>'bx-shield-quarter','tone'=>'warning','title'=>'Policy Acknowledgement',
+                       'sub'=>$pendPol->count() === 1
+                            ? \Illuminate\Support\Str::limit($pendPol->first()->title ?? 'Policy', 34).' · Pending'
+                            : $pendPol->count().' policies pending','url'=>url('/my-policies')];
+          } else {
+            $high[] = ['icon'=>'bx-shield-quarter','tone'=>'success','title'=>'Policy Acknowledgement',
+                       'sub'=>'All signed','url'=>url('/my-policies')];
+          }
+          if (empty($high)) $high[] = ['icon'=>'bx-coffee','tone'=>'info','title'=>'Nothing today','sub'=>'No events on the calendar','url'=>url('/holidays')];
         @endphp
         <ul class="adc-events">
           @foreach($high as $h)
             <li><a href="{{ $h['url'] }}" class="emp-hl-link"><span class="adc-ev-icon adc-tone-{{ $h['tone'] }}"><i class="bx {{ $h['icon'] }}"></i></span><div class="flex-grow-1"><div class="adc-feed-title">{{ $h['title'] }}</div><div class="adc-feed-meta">{{ $h['sub'] }}</div></div><i class="bx bx-chevron-right emp-hl-arrow"></i></a></li>
           @endforeach
         </ul>
+      </div>
+
+      {{-- Celebrations: who to congratulate today, then who is coming up. --}}
+      @php
+        $celToday = collect($todayBirthdays ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Birthday','icon'=>'🎂','bg'=>'ec4899'])
+                    ->concat(collect($todayAnniversaries ?? [])->map(fn($u) => ['u'=>$u,'kind'=>'Work Anniversary','icon'=>'🎉','bg'=>'0d9488']));
+        $celSoon = collect($upcomingBirthdays ?? [])->reject(fn($u) => $u->is_today ?? false)->take(3)
+                    ->map(fn($u) => ['u'=>$u,'kind'=>'Birthday','date'=>$u->dob ?? null])
+                   ->concat(collect($upcomingAnniversaries ?? [])->reject(fn($u) => $u->is_today ?? false)->take(3)
+                    ->map(fn($u) => ['u'=>$u,'kind'=>'Anniversary','date'=>$u->date_of_joining ?? null]));
+      @endphp
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title"><i class="bx bx-party text-warning"></i> Celebrations</h6><span class="adc-card-sub">Today · and coming up</span></div><a href="{{ url('/organizationHierarchy') }}" class="adc-link">People</a></div>
+        @if($celToday->isEmpty() && $celSoon->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-calendar-heart"></i><span>Nothing today.</span></div>
+        @else
+          @if($celToday->isNotEmpty())
+            <ul class="adc-appr mb-0">
+              @foreach($celToday->take(6) as $c)
+                <li>
+                  <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($c['u']->name) }}&background={{ $c['bg'] }}&color=fff&bold=true" alt="">
+                  <div class="adc-appr-body"><div class="adc-appr-name">{{ $c['u']->name }}</div><div class="adc-appr-meta">{{ $c['kind'] }} {{ $c['icon'] }}</div></div>
+                </li>
+              @endforeach
+            </ul>
+            @if($celToday->count() > 6)
+              <div class="adc-card-sub mt-1">+{{ $celToday->count() - 6 }} more celebrating today</div>
+            @endif
+          @endif
+          @if($celSoon->isNotEmpty())
+            <div class="adc-card-sub mt-2 mb-1">Coming up</div>
+            <ul class="emp-cel-soon">
+              @foreach($celSoon->take(4) as $c)
+                <li>
+                  <span class="emp-cel-name">{{ $c['u']->name }}</span>
+                  <span class="emp-cel-meta">{{ $c['kind'] }}@if(!empty($c['date'])) · {{ \Carbon\Carbon::parse($c['date'])->format('d M') }}@endif</span>
+                </li>
+              @endforeach
+            </ul>
+          @endif
+        @endif
+      </div>
+
+      {{-- Upcoming Holidays --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Upcoming Holidays</h6></div><a href="{{ url('/holidays') }}" class="adc-link">All</a></div>
+        @if(collect($upcomingHolidays ?? [])->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-calendar-star"></i><span>No upcoming holidays.</span></div>
+        @else
+          <ul class="adc-cal">
+            @foreach($upcomingHolidays as $h)
+              <li>
+                <span class="adc-cal-date"><b>{{ \Carbon\Carbon::parse($h->date)->format('d') }}</b><small>{{ \Carbon\Carbon::parse($h->date)->format('M') }}</small></span>
+                <div><div class="adc-cal-name">{{ $h->name ?? $h->title ?? 'Holiday' }}</div><div class="adc-cal-day">{{ \Carbon\Carbon::parse($h->date)->format('l') }}</div></div>
+              </li>
+            @endforeach
+          </ul>
+        @endif
+      </div>
+
+      {{-- Latest Announcements --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Latest Announcements</h6></div>@if(auth()->user()->hasRole(['admin','hr']))<a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>@endif</div>
+        @if(collect($recentNotices ?? [])->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
+        @else
+          <ul class="adc-feed">
+            @foreach(collect($recentNotices)->take(5) as $n)
+              <li>
+                <span class="adc-feed-dot adc-tone-info"><i class="bx bx-news"></i></span>
+                <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->created_at)->diffForHumans() }}</div></div>
+              </li>
+            @endforeach
+          </ul>
+        @endif
       </div>
 
       {{-- Quick Actions --}}
@@ -411,6 +481,13 @@
   .emp-hl-link{display:flex;align-items:center;gap:11px;width:100%;text-decoration:none;color:inherit;}
   .emp-hl-arrow{color:var(--faint);opacity:0;transition:opacity .12s,transform .12s;font-size:1.1rem;margin-left:auto;}
   .adc-events li:hover .emp-hl-arrow{opacity:1;transform:translateX(2px);}
+
+  /* Upcoming celebrations list in the rail. */
+  .emp-cel-soon{list-style:none;margin:0;padding:0;}
+  .emp-cel-soon li{display:flex;align-items:center;justify-content:space-between;gap:8px;
+                   padding:6px 0;border-top:1px solid #f1f5f9;}
+  .emp-cel-name{font-size:.8rem;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .emp-cel-meta{font-size:.68rem;font-weight:700;color:#94a3b8;flex:0 0 auto;}
 
   /* Six-month sales bars, shown when no Kingo/Bingo target is set. Uses the
      card's own tokens rather than a new palette. */

@@ -207,6 +207,29 @@ class UserDashboardController extends Controller
             ->take(5)
             ->get();
 
+        // Rail widgets: the calendar ahead, and which mandatory policies this
+        // person still owes an acknowledgement for. The highlight used to say
+        // "Code of Conduct · Pending" for everyone regardless of whether they
+        // had signed anything.
+        $upcomingHolidays = collect();
+        $pendingPolicies = collect();
+        try {
+            $upcomingHolidays = \App\Models\Holiday::where('date', '>=', now()->toDateString())
+                ->orderBy('date')->take(5)->get();
+        } catch (\Throwable $e) {
+            $upcomingHolidays = collect();
+        }
+        try {
+            $ackedIds = \App\Models\HRPolicyAcknowledgment::where('user_id', $user->id)
+                ->pluck('hr_policy_id');
+            $pendingPolicies = \App\Models\HRPolicy::where('is_active', true)
+                ->where('is_mandatory', true)
+                ->whereNotIn('id', $ackedIds)
+                ->orderBy('title')->get();
+        } catch (\Throwable $e) {
+            $pendingPolicies = collect();
+        }
+
         // Team Out Today (Approved leaves for today)
         $teamOutTodayQuery = LeaveRequest::whereDate('from_date', '<=', now())
             ->whereDate('to_date', '>=', now())
@@ -315,7 +338,9 @@ class UserDashboardController extends Controller
                 'todayBirthdays',
                 'upcomingBirthdays',
                 'todayAnniversaries',
-                'upcomingAnniversaries'
+                'upcomingAnniversaries',
+                'upcomingHolidays',
+                'pendingPolicies'
             ), $personal));
         }
 
