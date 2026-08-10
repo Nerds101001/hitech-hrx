@@ -377,6 +377,8 @@
         </ul>
       </div>
 
+      @include('tenant.users.dashboard._adc-announcements')
+
       {{-- Today's Events --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Events</h6></div></div>

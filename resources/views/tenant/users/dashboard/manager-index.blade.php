@@ -479,6 +479,8 @@
         @endif
       </div>
 
+      @include('tenant.users.dashboard._adc-announcements')
+
       {{-- Team pending approvals --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Approvals Queue</h6><span class="adc-card-sub"><b data-approval-count>{{ collect($teamPendingLeaveRequests ?? [])->count() }}</b> team leave requests</span></div><a href="{{ url('/leaveRequests') }}" class="adc-link">All</a></div>

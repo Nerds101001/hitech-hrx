@@ -199,66 +199,8 @@ class UserDashboardController extends Controller
             ->orderBy('date', 'asc')
             ->first();
 
-        // Announcements published through Employee Lifecycle are the real feed.
-        // This used to read the legacy notices table, which on most tenants
-        // holds nothing but seeded "Notice 1/2/3" rows, so the card showed
-        // placeholders while genuine announcements went unseen. Fall back to
-        // notices only where no announcement is visible, so tenants still on
-        // the old table keep what they had.
-        $recentNotices = collect();
-        try {
-            $recentNotices = \App\Models\Announcement::current()
-                ->visibleTo($user)
-                ->orderByDesc('published_at')
-                ->take(5)
-                ->get();
-        } catch (\Throwable $e) {
-            Log::warning('Dashboard announcements: ' . $e->getMessage());
-            $recentNotices = collect();
-        }
-        if ($recentNotices->isEmpty()) {
-            $recentNotices = Notice::where('status', 1)
-                ->where(function ($q) {
-                    $q->whereNull('expiry_date')->orWhere('expiry_date', '>=', now());
-                })
-                ->orderBy('created_at', 'desc')
-                ->take(5)
-                ->get();
-        }
-
-        // Attach the employee behind a "Welcome to the team, X!" announcement so
-        // the popup can show their designation, department and email. Resolved
-        // from the user record, never parsed out of the stored HTML.
-        foreach ($recentNotices as $n) {
-            $n->joiner = null;
-            if (!preg_match('/welcome to the team,\s*(.+?)\s*!*$/i', (string) ($n->title ?? ''), $mm)) {
-                continue;
-            }
-            $needle = preg_replace('/\s+/', ' ', trim($mm[1]));
-            try {
-                $match = User::with(['designation', 'department'])
-                    ->where('status', UserAccountStatus::ACTIVE)
-                    ->get()
-                    ->first(fn($u) => strcasecmp(preg_replace('/\s+/', ' ', trim($u->getFullName())), $needle) === 0);
-                if ($match) {
-                    $n->joiner = [
-                        'id'          => $match->id,
-                        'name'        => $match->getFullName(),
-                        'designation' => optional($match->designation)->name ?: '—',
-                        'department'  => optional($match->department)->name ?: '—',
-                        'email'       => $match->email,
-                        // Deliberately no phone: a welcome announcement goes to
-                        // everyone, and a new joiner's personal mobile is not
-                        // theirs to broadcast. Email is the work address.
-                        'photo'       => $match->getProfilePicture() ?: null,
-                        'joined'      => $match->date_of_joining
-                                          ? Carbon::parse($match->date_of_joining)->format('d M Y') : null,
-                    ];
-                }
-            } catch (\Throwable $e) {
-                $n->joiner = null;
-            }
-        }
+        // Shared with every other dashboard so the feed cannot drift.
+        $recentNotices = \App\Support\DashboardAnnouncements::forUser($user);
 
         // Rail widgets: the calendar ahead, and which mandatory policies this
         // person still owes an acknowledgement for. The highlight used to say

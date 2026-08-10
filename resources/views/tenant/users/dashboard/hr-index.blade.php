@@ -209,6 +209,9 @@
     {{-- RAIL --}}
     <div class="col-xxl-3 col-lg-4">
 
+      @include('tenant.users.dashboard._adc-announcements')
+
+
       {{-- Celebrations --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title"><i class="bx bx-party text-warning"></i> Celebrations</h6><span class="adc-card-sub">Today across the org</span></div></div>

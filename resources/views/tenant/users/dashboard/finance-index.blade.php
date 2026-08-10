@@ -268,6 +268,9 @@
     {{-- RAIL --}}
     <div class="col-xxl-3 col-lg-4">
 
+      @include('tenant.users.dashboard._adc-announcements')
+
+
       {{-- Top claimants --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Top Claimants</h6><span class="adc-card-sub">{{ now()->format('M Y') }}</span></div></div>
