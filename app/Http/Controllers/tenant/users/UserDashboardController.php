@@ -226,6 +226,37 @@ class UserDashboardController extends Controller
                 ->get();
         }
 
+        // Attach the employee behind a "Welcome to the team, X!" announcement so
+        // the popup can show their designation, department and email. Resolved
+        // from the user record, never parsed out of the stored HTML.
+        foreach ($recentNotices as $n) {
+            $n->joiner = null;
+            if (!preg_match('/welcome to the team,\s*(.+?)\s*!*$/i', (string) ($n->title ?? ''), $mm)) {
+                continue;
+            }
+            $needle = preg_replace('/\s+/', ' ', trim($mm[1]));
+            try {
+                $match = User::with(['designation', 'department'])
+                    ->where('status', UserAccountStatus::ACTIVE)
+                    ->get()
+                    ->first(fn($u) => strcasecmp(preg_replace('/\s+/', ' ', trim($u->getFullName())), $needle) === 0);
+                if ($match) {
+                    $n->joiner = [
+                        'name'        => $match->getFullName(),
+                        'designation' => optional($match->designation)->name ?: '—',
+                        'department'  => optional($match->department)->name ?: '—',
+                        'email'       => $match->email,
+                        'phone'       => $match->phone,
+                        'photo'       => $match->getProfilePicture() ?: null,
+                        'joined'      => $match->date_of_joining
+                                          ? Carbon::parse($match->date_of_joining)->format('d M Y') : null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                $n->joiner = null;
+            }
+        }
+
         // Rail widgets: the calendar ahead, and which mandatory policies this
         // person still owes an acknowledgement for. The highlight used to say
         // "Code of Conduct · Pending" for everyone regardless of whether they
@@ -1760,13 +1791,40 @@ class UserDashboardController extends Controller
                 'email' => $mgr->email, 'bg' => '0d9488',
             ];
         }
-        $hrContact = User::role('hr')->where('status', UserAccountStatus::ACTIVE)->first();
-        if ($hrContact && $hrContact->id !== $user->id) {
+        // Company-wide contacts every employee should be able to reach. Looked
+        // up by email rather than hardcoded, so the name, phone and photo stay
+        // live from their own user record.
+        $keyContacts = [
+            ['email' => 'suchita@rustx.com', 'role' => 'Human Resources',            'bg' => '6366f1'],
+            ['email' => 'ai@rustx.com',      'role' => 'Manager - AI & IT Services', 'bg' => 'f59e0b'],
+        ];
+        $already = collect($importantContacts)->pluck('email')->all();
+        foreach ($keyContacts as $kc) {
+            if (in_array($kc['email'], $already, true)) {
+                continue;                        // already listed as their manager
+            }
+            $c = User::where('email', $kc['email'])
+                ->where('status', UserAccountStatus::ACTIVE)->first();
+            if (!$c || $c->id === $user->id) {
+                continue;
+            }
             $importantContacts[] = [
-                'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
-                'phone' => $hrContact->phone ?? null,
-                'email' => $hrContact->email, 'bg' => '6366f1',
+                'name' => $c->getFullName(), 'role' => $kc['role'],
+                'phone' => $c->phone ?? null, 'email' => $c->email, 'bg' => $kc['bg'],
             ];
+            $already[] = $c->email;
+        }
+
+        // Fall back to whoever holds the HR role if the named contact is gone.
+        if (!collect($importantContacts)->contains(fn($c) => $c['role'] === 'Human Resources')) {
+            $hrContact = User::role('hr')->where('status', UserAccountStatus::ACTIVE)->first();
+            if ($hrContact && $hrContact->id !== $user->id) {
+                $importantContacts[] = [
+                    'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
+                    'phone' => $hrContact->phone ?? null,
+                    'email' => $hrContact->email, 'bg' => '6366f1',
+                ];
+            }
         }
 
         // --- Sales-only board (Kingo/Bingo + today's visits) ---------------
@@ -1838,6 +1896,8 @@ class UserDashboardController extends Controller
         $orderCustomers = [];
         $monthly = [];
         $customerCount = 0;
+        $fySold = 0.0; $fyForecast = 0.0; $fyPending = 0.0; $book = 0.0;
+        $pctForecast = null; $pctPending = null; $openOrders = 0;
         $lastMonth = 0.0;
         $momPct = null;
         try {
@@ -1905,6 +1965,35 @@ class UserDashboardController extends Controller
                     ];
                 }
                 $customerCount = $ids->count();
+
+                // Financial-year figures, using the same definitions as the
+                // manager dashboard so an employee's card and their manager's
+                // row agree: Apr-Mar to date, sale/forecast/pending straight
+                // off the month rows, book = sold + still pending.
+                $fyStartYear = now()->month >= 4 ? now()->year : now()->year - 1;
+                $fyMonths = [];
+                $cur = Carbon::create($fyStartYear, 4, 1);
+                $end = now()->copy()->endOfMonth();
+                while ($cur <= $end) { $fyMonths[] = $cur->format('Y-m'); $cur->addMonth(); }
+
+                $fy = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $ids)
+                    ->whereIn('month_year', $fyMonths)
+                    ->selectRaw('SUM(sale_amount) sold, SUM(forecast_amount) fcst, SUM(pending_amount) pend')
+                    ->first();
+                $fySold     = (float) ($fy->sold ?? 0);
+                $fyForecast = (float) ($fy->fcst ?? 0);
+                $fyPending  = (float) ($fy->pend ?? 0);
+                $book       = $fySold + $fyPending;
+                $pctForecast = $fyForecast > 0 ? round($fySold / $fyForecast * 100, 1) : null;
+                $pctPending  = $book > 0 ? round($fySold / $book * 100, 1) : null;
+
+                // Customers still carrying a pending amount this FY.
+                $openOrders = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $ids)
+                    ->whereIn('month_year', $fyMonths)
+                    ->where('pending_amount', '>', 0)
+                    ->distinct()->count('sales_pipeline_id');
                 $prev = (float) ($sums[Carbon::today()->subMonth()->format('Y-m')] ?? 0);
                 $lastMonth = $prev;
                 $momPct = $prev > 0 ? round((($achieved - $prev) / $prev) * 100, 1) : null;
@@ -1922,6 +2011,9 @@ class UserDashboardController extends Controller
             'orderCustomers' => $orderCustomers,
             'monthly' => $monthly,
             'customerCount' => $customerCount,
+            'fySold' => $fySold, 'fyForecast' => $fyForecast, 'fyPending' => $fyPending,
+            'book' => $book, 'pctForecast' => $pctForecast, 'pctPending' => $pctPending,
+            'openOrders' => $openOrders,
             'lastMonth' => $lastMonth,
             'momPct' => $momPct,
         ];

@@ -63,6 +63,24 @@
         </div>
       </div>
 
+      {{-- Quick Actions — moved up from the sidebar so the shortcuts sit
+           with the content rather than below the fold. --}}
+      <div class="adc-card mt-1">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
+        <div class="emp-qa">
+          <a href="{{ url('/user/leaves') }}" class="adc-qa-btn"><i class="bx bx-calendar-plus"></i><span>Apply Leave</span></a>
+          <a href="{{ url('/user/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Mark Attendance</span></a>
+          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expense Claim</span></a>
+          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-trip"></i><span>Request Travel</span></a>
+          <a href="{{ url('/user/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>My Payroll</span></a>
+          <a href="{{ url('/training') }}" class="adc-qa-btn"><i class="bx bx-book"></i><span>Training</span></a>
+          <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
+          <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
+          <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
+          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Mind Speak</span></a>
+        </div>
+      </div>
+
       {{-- KPI cards --}}
       <div class="row g-3 mt-1">
         @php
@@ -105,11 +123,53 @@
           <div class="adc-card h-100">
             <div class="adc-card-head">
               <div>
-                <h6 class="adc-card-title">{{ $sp['hasTargets'] ? '🏆 Kingo · Bingo · Super Kingo' : '📈 My Sales' }}</h6>
-                <span class="adc-card-sub">{{ now()->format('F Y') }} · achieved {{ $fmtL($sp['achieved']) }}</span>
+                <h6 class="adc-card-title">📈 My Sales</h6>
+                <span class="adc-card-sub">This financial year · {{ $sp['customerCount'] }} customers I'm tagged on</span>
               </div>
-              <a href="{{ url($sp['hasTargets'] ? '/sales-visits/kingo-bingo' : '/sales-visits/pipeline') }}" class="adc-link">Details</a>
+              <a href="{{ url('/sales-visits/pipeline') }}" class="adc-link">Details</a>
             </div>
+
+            {{-- Same three views the manager card uses, so a rep and their
+                 manager read the same numbers the same way. --}}
+            @php
+              $spSold = (float) $sp['fySold']; $spFcst = (float) $sp['fyForecast'];
+              $spPend = (float) $sp['fyPending']; $spBook = (float) $sp['book'];
+              $spTabs = [
+                ['k'=>'fcst','label'=>'Sales vs Forecast','a'=>['Sales',$spSold],'b'=>['Forecast',$spFcst],
+                 'pct'=>$sp['pctForecast'],'pctLabel'=>'Of forecast'],
+                ['k'=>'pend','label'=>'Sales vs Pending','a'=>['Sales',$spSold],'b'=>['Pending orders',$spPend],
+                 'pct'=>$sp['pctPending'],'pctLabel'=>'Converted'],
+                ['k'=>'book','label'=>'Total Book','a'=>['Book (sales + pending)',$spBook],'b'=>['Open orders',null],
+                 'pct'=>null,'pctLabel'=>''],
+              ];
+            @endphp
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              @foreach($spTabs as $i => $t)
+                <button type="button" class="btn btn-sm emp-sales-tab {{ $i === 0 ? 'active' : '' }}" data-tab="{{ $t['k'] }}">{{ $t['label'] }}</button>
+              @endforeach
+            </div>
+            @foreach($spTabs as $i => $t)
+              <div class="emp-sales-pane {{ $i === 0 ? '' : 'd-none' }}" data-pane="{{ $t['k'] }}">
+                <div class="d-flex flex-wrap gap-4 mb-3">
+                  <div><div class="adc-card-sub">{{ $t['a'][0] }}</div><div class="emp-sales-fig">{{ $fmtL($t['a'][1]) }}</div></div>
+                  <div><div class="adc-card-sub">{{ $t['b'][0] }}</div>
+                    <div class="emp-sales-fig">{{ $t['b'][1] === null ? number_format($sp['openOrders']) : $fmtL($t['b'][1]) }}</div></div>
+                  @if($t['pct'] !== null)
+                    <div><div class="adc-card-sub">{{ $t['pctLabel'] }}</div>
+                      <div class="emp-sales-fig" style="color:{{ $t['pct'] >= 80 ? '#0d7377' : ($t['pct'] >= 50 ? '#d97706' : '#dc2626') }}">{{ $t['pct'] }}%</div></div>
+                  @endif
+                  <div><div class="adc-card-sub">This month</div><div class="emp-sales-fig">{{ $fmtL($sp['achieved']) }}</div></div>
+                </div>
+                @if($t['pct'] !== null)
+                  <div class="adc-bar mb-3"><span class="adc-tone-{{ $t['pct'] >= 80 ? 'success' : ($t['pct'] >= 50 ? 'warning' : 'danger') }}" style="width: {{ min(100, $t['pct']) }}%"></span></div>
+                @endif
+              </div>
+            @endforeach
+
+            {{-- Kingo / Bingo board. Targets are only set for the Sales
+                 department, so everyone else sees why it is empty instead of a
+                 board that can never fill in. --}}
+            <div class="emp-tier-head">🏆 Kingo · Bingo · Super Kingo <small>{{ now()->format('F Y') }}</small></div>
             @if($sp['hasTargets'])
               <div class="adc-tier-grid">
                 @foreach($sp['kingoTiers'] as $t)
@@ -122,23 +182,17 @@
                   </div>
                 @endforeach
               </div>
-            @elseif(!empty($sp['monthly']))
-              {{-- No Kingo/Bingo target is set for this person — the scheme only
-                   covers the Sales department — so show their own six months
-                   rather than an empty tier board. --}}
-              @php
-                $mMax = max(array_map(fn($m) => $m['value'], $sp['monthly'])) ?: 1;
-                $mom  = $sp['momPct'];
-              @endphp
-              <div class="d-flex flex-wrap gap-4 mb-3">
-                <div><div class="adc-card-sub">This month</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ $fmtL($sp['achieved']) }}</div></div>
-                <div><div class="adc-card-sub">Last month</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ $fmtL($sp['lastMonth']) }}</div></div>
-                <div><div class="adc-card-sub">Change</div>
-                  <div class="fw-bold" style="font-size:1.15rem;color:{{ $mom === null ? '#64748b' : ($mom >= 0 ? '#0d7377' : '#dc2626') }}">
-                    {{ $mom === null ? '—' : ($mom >= 0 ? '+' : '') . $mom . '%' }}
-                  </div>
-                </div>
-                <div><div class="adc-card-sub">My customers</div><div class="fw-bold" style="font-size:1.15rem;color:#0f172a">{{ number_format($sp['customerCount']) }}</div></div>
+            @else
+              <div class="adc-empty adc-empty-sm mb-2"><i class="bx bx-target-lock"></i><span>No Kingo/Bingo target set for you this month.</span></div>
+            @endif
+
+            {{-- Six months of my own sales --}}
+            @if(!empty($sp['monthly']))
+              @php $mMax = max(array_map(fn($m) => $m['value'], $sp['monthly'])) ?: 1; $mom = $sp['momPct']; @endphp
+              <div class="emp-tier-head mt-3">Last 6 months
+                <small>vs last month
+                  <b style="color:{{ $mom === null ? '#64748b' : ($mom >= 0 ? '#0d7377' : '#dc2626') }}">{{ $mom === null ? '—' : ($mom >= 0 ? '+' : '') . $mom . '%' }}</b>
+                </small>
               </div>
               <div class="emp-spark">
                 @foreach($sp['monthly'] as $m)
@@ -148,8 +202,6 @@
                   </div>
                 @endforeach
               </div>
-            @else
-              <div class="adc-empty adc-empty-sm"><i class="bx bx-target-lock"></i><span>No sales recorded against your name yet.</span></div>
             @endif
           </div>
         </div>
@@ -277,7 +329,12 @@
                 @foreach($importantContacts as $c)
                   <li>
                     <img class="emp-contact-av" src="https://ui-avatars.com/api/?name={{ urlencode($c['name']) }}&background={{ $c['bg'] ?? '0d9488' }}&color=fff" alt="">
-                    <div class="emp-contact-body"><div class="emp-contact-name">{{ $c['name'] }}</div><div class="emp-contact-role">{{ $c['role'] }}</div></div>
+                    <div class="emp-contact-body">
+                      <div class="emp-contact-name">{{ $c['name'] }}</div>
+                      <div class="emp-contact-role">{{ $c['role'] }}</div>
+                      @if(!empty($c['email']))<a class="emp-contact-line" href="mailto:{{ $c['email'] }}"><i class="bx bx-envelope"></i>{{ $c['email'] }}</a>@endif
+                      @if(!empty($c['phone']))<a class="emp-contact-line" href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}"><i class="bx bx-phone"></i>{{ $c['phone'] }}</a>@endif
+                    </div>
                     <span class="emp-contact-act">
                       @if(!empty($c['phone']))<a href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}" title="Call {{ $c['phone'] }}"><i class="bx bx-phone"></i></a>@endif
                       @if(!empty($c['email']))<a href="mailto:{{ $c['email'] }}" title="Email {{ $c['email'] }}"><i class="bx bx-message-rounded"></i></a>@endif
@@ -322,6 +379,43 @@
             <li><a href="{{ $h['url'] }}" class="emp-hl-link"><span class="adc-ev-icon adc-tone-{{ $h['tone'] }}"><i class="bx {{ $h['icon'] }}"></i></span><div class="flex-grow-1"><div class="adc-feed-title">{{ $h['title'] }}</div><div class="adc-feed-meta">{{ $h['sub'] }}</div></div><i class="bx bx-chevron-right emp-hl-arrow"></i></a></li>
           @endforeach
         </ul>
+      </div>
+
+      {{-- Latest Announcements --}}
+      <div class="adc-card mb-4">
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Latest Announcements</h6></div>@if(auth()->user()->hasRole(['admin','hr']))<a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>@endif</div>
+        @if(collect($recentNotices ?? [])->isEmpty())
+          <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
+        @else
+          <ul class="adc-feed">
+            @foreach(collect($recentNotices)->take(5) as $n)
+              @php
+                $j = $n->joiner ?? null;
+                // Announcements are stored as HTML. Flatten to text here so the
+                // popup can never inject stored markup into the page.
+                $body = trim(html_entity_decode(strip_tags(preg_replace('/<\s*br\s*\/?>/i', "\n", (string) ($n->content ?? '')))));
+                $body = preg_replace('/\n{2,}/', "\n", $body);
+              @endphp
+              <li role="button" tabindex="0" class="emp-ann-open"
+                  data-title="{{ $n->title ?? 'Announcement' }}"
+                  data-when="{{ optional($n->published_at ?? $n->created_at)->format('d M Y, h:i A') }}"
+                  data-body="{{ $body }}"
+                  @if($j)
+                    data-name="{{ $j['name'] }}" data-desig="{{ $j['designation'] }}"
+                    data-dept="{{ $j['department'] }}" data-email="{{ $j['email'] }}"
+                    data-phone="{{ $j['phone'] }}" data-joined="{{ $j['joined'] }}"
+                    data-photo="{{ $j['photo'] }}"
+                  @endif>
+                <span class="adc-feed-dot adc-tone-info"><i class="bx {{ $j ? 'bx-user-plus' : 'bx-news' }}"></i></span>
+                <div class="adc-feed-body">
+                  <div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div>
+                  <div class="adc-feed-meta">{{ optional($n->published_at ?? $n->created_at)->diffForHumans() }}@if($j) &middot; {{ $j['department'] }}@endif</div>
+                </div>
+                <i class="bx bx-chevron-right text-muted"></i>
+              </li>
+            @endforeach
+          </ul>
+        @endif
       </div>
 
       {{-- Celebrations: who to congratulate today, then who is coming up. --}}
@@ -394,40 +488,42 @@
         @endif
       </div>
 
-      {{-- Latest Announcements --}}
-      <div class="adc-card mb-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Latest Announcements</h6></div>@if(auth()->user()->hasRole(['admin','hr']))<a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>@endif</div>
-        @if(collect($recentNotices ?? [])->isEmpty())
-          <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
-        @else
-          <ul class="adc-feed">
-            @foreach(collect($recentNotices)->take(5) as $n)
-              <li>
-                <span class="adc-feed-dot adc-tone-info"><i class="bx bx-news"></i></span>
-                <div class="adc-feed-body"><div class="adc-feed-title">{{ $n->title ?? 'Notice' }}</div><div class="adc-feed-meta">{{ optional($n->published_at ?? $n->created_at)->diffForHumans() }}</div></div>
-              </li>
-            @endforeach
-          </ul>
-        @endif
-      </div>
+    </div>
+  </div>
 
-      {{-- Quick Actions --}}
-      <div class="adc-card">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
-        <div class="emp-qa">
-          <a href="{{ url('/user/leaves') }}" class="adc-qa-btn"><i class="bx bx-calendar-plus"></i><span>Apply Leave</span></a>
-          <a href="{{ url('/user/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Mark Attendance</span></a>
-          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expense Claim</span></a>
-          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-trip"></i><span>Request Travel</span></a>
-          <a href="{{ url('/user/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>My Payroll</span></a>
-          <a href="{{ url('/training') }}" class="adc-qa-btn"><i class="bx bx-book"></i><span>Training</span></a>
-          <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
-          <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
-          <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
-          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Mind Speak</span></a>
+  {{-- Announcement detail. For a new joiner it also carries their designation,
+       department and email, resolved from the user record. --}}
+  <div class="modal fade" id="empAnnModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="empAnnTitle">Announcement</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="empAnnJoiner" class="d-none">
+            <div class="d-flex align-items-center gap-3 mb-3 p-3" style="background:var(--hitech-bg-soft,#f1f5f9);border-radius:12px;">
+              <img id="empAnnPhoto" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;flex:0 0 56px;">
+              <div>
+                <div class="fw-bold" style="font-size:1rem;color:#0f172a;" id="empAnnName"></div>
+                <div class="text-muted" style="font-size:.8rem;" id="empAnnDesig"></div>
+              </div>
+            </div>
+            <dl class="row mb-3" style="font-size:.85rem;">
+              <dt class="col-4 text-muted fw-normal">Department</dt><dd class="col-8 fw-semibold" id="empAnnDept"></dd>
+              <dt class="col-4 text-muted fw-normal">Email</dt><dd class="col-8"><a id="empAnnEmail" href="#"></a></dd>
+              <dt class="col-4 text-muted fw-normal d-none" id="empAnnPhoneL">Phone</dt><dd class="col-8 d-none" id="empAnnPhoneV"></dd>
+              <dt class="col-4 text-muted fw-normal d-none" id="empAnnJoinedL">Joined</dt><dd class="col-8 fw-semibold d-none" id="empAnnJoinedV"></dd>
+            </dl>
+          </div>
+          <p id="empAnnBody" class="mb-1" style="white-space:pre-line;color:#475569;"></p>
+          <div class="adc-card-sub" id="empAnnWhen"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Close</button>
+          <a href="#" class="btn btn-primary d-none" id="empAnnMail"><i class="bx bx-envelope"></i> Say hello</a>
         </div>
       </div>
-
     </div>
   </div>
 </div>
@@ -495,6 +591,21 @@
   .emp-wish-btn{flex:0 0 auto;color:var(--hitech-primary,#0d9488);background:transparent;border:1px solid var(--hitech-border,#e2e8f0);}
   .emp-wish-btn:hover{background:var(--hitech-bg-soft,#f1f5f9);color:var(--hitech-primary,#0d9488);}
 
+  .emp-ann-open{cursor:pointer;border-radius:8px;transition:background .15s ease;}
+  .emp-ann-open:hover,.emp-ann-open:focus-visible{background:var(--hitech-bg-soft,#f1f5f9);}
+  .emp-contact-line{display:flex;align-items:center;gap:5px;font-size:.72rem;color:#64748b;text-decoration:none;margin-top:2px;}
+  .emp-contact-line:hover{color:var(--hitech-primary,#0d9488);}
+
+  /* My Sales — tabs, figures and the tier heading. Theme tokens only. */
+  .emp-sales-tab{border:1px solid var(--hitech-border,#e2e8f0);background:#fff;color:#64748b;
+                 font-size:.72rem;font-weight:700;padding:.25rem .6rem;border-radius:8px;}
+  .emp-sales-tab.active{background:var(--hitech-primary,#0d9488);border-color:var(--hitech-primary,#0d9488);color:#fff;}
+  .emp-sales-tab:hover:not(.active){background:var(--hitech-bg-soft,#f1f5f9);color:var(--hitech-primary,#0d9488);}
+  .emp-sales-fig{font-size:1.15rem;font-weight:800;color:#0f172a;line-height:1.2;}
+  .emp-tier-head{font-size:.78rem;font-weight:800;color:#334155;margin:14px 0 8px;
+                 padding-top:12px;border-top:1px solid #f1f5f9;}
+  .emp-tier-head small{font-weight:600;color:#94a3b8;margin-left:6px;}
+
   /* Upcoming celebrations list in the rail. */
   .emp-cel-soon{list-style:none;margin:0;padding:0;}
   .emp-cel-soon li{display:flex;align-items:center;justify-content:space-between;gap:8px;
@@ -527,6 +638,76 @@
 @endsection
 
 @section('page-script')
+<script>
+{{-- Announcement popup. Values come from data- attributes, already escaped by
+     Blade, and are written with textContent so nothing is re-parsed as HTML. --}}
+document.addEventListener('DOMContentLoaded', function () {
+  var modalEl = document.getElementById('empAnnModal');
+  if (!modalEl) return;
+  var set = function (id, val) { var n = document.getElementById(id); if (n) n.textContent = val || ''; };
+  var avatar = function (name) {
+    return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=0d9488&color=fff&bold=true&size=112';
+  };
+
+  document.querySelectorAll('.emp-ann-open').forEach(function (row) {
+    var open = function (e) {
+      e.preventDefault();
+      var d = row.dataset;
+      set('empAnnTitle', d.title);
+      set('empAnnBody', d.body);
+      set('empAnnWhen', d.when ? 'Published ' + d.when : '');
+
+      var box = document.getElementById('empAnnJoiner');
+      var mail = document.getElementById('empAnnMail');
+      if (d.name) {
+        box.classList.remove('d-none');
+        set('empAnnName', d.name);
+        set('empAnnDesig', d.desig);
+        set('empAnnDept', d.dept);
+        var em = document.getElementById('empAnnEmail');
+        em.textContent = d.email || '\u2014';
+        em.href = d.email ? 'mailto:' + d.email : '#';
+        var img = document.getElementById('empAnnPhoto');
+        img.src = d.photo || avatar(d.name);
+        img.onerror = function () { this.src = avatar(d.name); };
+        [['Phone', d.phone], ['Joined', d.joined]].forEach(function (pair) {
+          var l = document.getElementById('empAnn' + pair[0] + 'L');
+          var v = document.getElementById('empAnn' + pair[0] + 'V');
+          if (l && v) {
+            l.classList.toggle('d-none', !pair[1]);
+            v.classList.toggle('d-none', !pair[1]);
+            v.textContent = pair[1] || '';
+          }
+        });
+        if (mail) { mail.classList.toggle('d-none', !d.email); mail.href = d.email ? 'mailto:' + d.email : '#'; }
+      } else {
+        box.classList.add('d-none');
+        if (mail) mail.classList.add('d-none');
+      }
+      if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    };
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') open(e); });
+  });
+});
+</script>
+<script>
+{{-- My Sales tabs. Own listener so a chart failure below cannot disable them. --}}
+document.addEventListener('DOMContentLoaded', function () {
+  var tabs = document.querySelectorAll('.emp-sales-tab');
+  if (!tabs.length) return;
+  tabs.forEach(function (b) {
+    b.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('active'); });
+      this.classList.add('active');
+      var want = this.dataset.tab;
+      document.querySelectorAll('.emp-sales-pane').forEach(function (pane) {
+        pane.classList.toggle('d-none', pane.dataset.pane !== want);
+      });
+    });
+  });
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var el = document.querySelector('#empKra'); if (!el) return;

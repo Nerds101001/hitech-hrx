@@ -122,19 +122,36 @@ class SalesManagerSummary
                     // in whatever role. One customer can legitimately count for
                     // two teammates (its salesperson and its CCare), which is
                     // right for an individual scorecard...
-                    foreach ($roleCols as $col) {
-                        $rows = DB::table('sales_pipelines as sp')
-                            ->join('sales_pipeline_months as m', 'm.sales_pipeline_id', '=', 'sp.id')
-                            ->whereIn('sp.' . $col, $repIds)
-                            ->whereIn('m.month_year', $fyMonths)
-                            ->groupBy('sp.' . $col)
-                            ->selectRaw('sp.' . $col . ' uid, SUM(m.sale_amount) sold,
-                                         SUM(m.forecast_amount) fcst, SUM(m.pending_amount) pend')
-                            ->get();
-                        foreach ($rows as $r) {
-                            $salesByRep[$r->uid]    = ($salesByRep[$r->uid] ?? 0) + (float) $r->sold;
-                            $fcstByRep[$r->uid]     = ($fcstByRep[$r->uid] ?? 0) + (float) $r->fcst;
-                            $pendingByRep[$r->uid]  = ($pendingByRep[$r->uid] ?? 0) + (float) $r->pend;
+                    // Credit each customer once per rep. Summing the role
+                    // columns separately counted a rep who is both salesperson
+                    // and CCare on the same row twice.
+                    $rowHolders = DB::table('sales_pipelines')
+                        ->whereIn('id', $allPipeIds)
+                        ->get(array_merge(['id'], $roleCols));
+                    $fyTotals = DB::table('sales_pipeline_months')
+                        ->whereIn('sales_pipeline_id', $allPipeIds)
+                        ->whereIn('month_year', $fyMonths)
+                        ->groupBy('sales_pipeline_id')
+                        ->selectRaw('sales_pipeline_id pid, SUM(sale_amount) sold,
+                                     SUM(forecast_amount) fcst, SUM(pending_amount) pend')
+                        ->get()->keyBy('pid');
+                    $repLookupPerf = array_flip($repIds);
+                    foreach ($rowHolders as $row) {
+                        $t = $fyTotals[$row->id] ?? null;
+                        if (!$t) {
+                            continue;
+                        }
+                        $onRow = [];
+                        foreach ($roleCols as $col) {
+                            $holder = $row->{$col} ?? null;
+                            if ($holder && isset($repLookupPerf[$holder])) {
+                                $onRow[$holder] = true;
+                            }
+                        }
+                        foreach (array_keys($onRow) as $uid) {
+                            $salesByRep[$uid]   = ($salesByRep[$uid] ?? 0) + (float) $t->sold;
+                            $fcstByRep[$uid]    = ($fcstByRep[$uid] ?? 0) + (float) $t->fcst;
+                            $pendingByRep[$uid] = ($pendingByRep[$uid] ?? 0) + (float) $t->pend;
                         }
                     }
                     // ...but the TEAM total must count each customer once, or a
