@@ -368,9 +368,12 @@
                                         \App\Enums\UserAccountStatus::TERMINATED,
                                         \App\Enums\UserAccountStatus::RETIRED,
                                     ], true))
-                                    <button type="button" class="btn btn-outline-primary w-100 rounded-pill fw-bold small p-2 mb-2"
-                                        onclick="moveToOnboarding({{ $user->id }})"
-                                        style="border-style: dashed; border-width: 2px;">
+                                    {{-- btn-hitech-pill-outline, not btn-outline-primary: the theme
+                                         styles the former (teal on transparent) and does not style
+                                         the latter at all, which rendered as a plain white box next
+                                         to two properly themed buttons. --}}
+                                    <button type="button" class="btn btn-hitech-pill-outline btn-sm w-100 rounded-pill fw-bold shadow-sm mb-2"
+                                        onclick="moveToOnboarding({{ $user->id }})">
                                         <i class="bx bx-paper-plane me-1"></i> Move to Onboarding
                                     </button>
                                 @endif
