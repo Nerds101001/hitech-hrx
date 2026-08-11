@@ -138,10 +138,25 @@ class KingoBingoController extends Controller
         }
 
         foreach ($salespersonIds as $spId) {
-            // Pipeline data for Bingo/Kingo actual and Payment collection
+            // Every customer this person is tagged on, in ANY role. Matching on
+            // salesperson_id alone left every CCare and New Biz person showing
+            // 0.00 actual against a real target, because they are almost never
+            // the salesperson — they hold the customer as CCare, New Biz or an
+            // additional rep. This is the same definition the Sales Report page
+            // uses for "my customers", so the two pages agree.
             $pipelines = SalesPipeline::with(['months' => function ($q) use ($monthKeys) {
                 $q->whereIn('month_year', $monthKeys);
-            }])->where('salesperson_id', $spId)->get();
+            }])->where(function ($q) use ($spId) {
+                $q->where('salesperson_id', $spId)
+                  ->orWhere('ccare_id', $spId)
+                  ->orWhere('new_biz_id', $spId)
+                  ->orWhere('new_biz_2_id', $spId)
+                  ->orWhereExists(function ($s) use ($spId) {
+                      $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $spId);
+                  });
+            })->get();
 
             $lockedPipelines = $pipelines->where('is_locked', true);
 
