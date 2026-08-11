@@ -357,6 +357,24 @@
                                     @endif
                                 </div>
 
+                                {{-- Send an existing employee (back) through onboarding. Only
+                                     offered for someone who is not already in it and has not
+                                     left — the controller re-checks both. --}}
+                                @if (!in_array($user->status, [
+                                        \App\Enums\UserAccountStatus::ONBOARDING,
+                                        \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED,
+                                        \App\Enums\UserAccountStatus::ONBOARDING_REQUESTED,
+                                        \App\Enums\UserAccountStatus::RELIEVED,
+                                        \App\Enums\UserAccountStatus::TERMINATED,
+                                        \App\Enums\UserAccountStatus::RETIRED,
+                                    ], true))
+                                    <button type="button" class="btn btn-outline-primary w-100 rounded-pill fw-bold small p-2 mb-2"
+                                        onclick="moveToOnboarding({{ $user->id }})"
+                                        style="border-style: dashed; border-width: 2px;">
+                                        <i class="bx bx-paper-plane me-1"></i> Move to Onboarding
+                                    </button>
+                                @endif
+
                                 <!-- Separation Action -->
                                 <button type="button" class="btn btn-outline-danger w-100 rounded-pill fw-bold small p-2"
                                     data-bs-toggle="modal" data-bs-target="#terminateEmployeeModal"
@@ -4063,6 +4081,79 @@
                         // Reset the toggle if cancelled
                         document.getElementById('employeeStatusToggle').checked = !isActive;
                     }
+                });
+            }
+
+            // Move an employee (back) into onboarding. This re-issues their
+            // password and emails a fresh invite, so it asks twice when the
+            // account has already been used.
+            function moveToOnboarding(userId, force) {
+                Swal.fire({
+                    html: `
+                        <div class="text-center mb-4">
+                            <div class="mx-auto bg-label-primary rounded-circle d-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
+                                <i class="bx bx-paper-plane text-primary" style="font-size: 3rem;"></i>
+                            </div>
+                            <h4 class="mb-2 fw-bold text-dark">Move to Onboarding?</h4>
+                            <p class="text-muted small mb-0">
+                                A new temporary password is issued and the onboarding
+                                invitation is emailed. Any existing password stops working.
+                            </p>
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, send invite',
+                    cancelButtonText: 'Cancel',
+                    customClass: {
+                        popup: 'rounded-4 shadow-lg border-0',
+                        confirmButton: 'btn btn-hitech rounded-pill px-4 fw-bold',
+                        cancelButton: 'btn btn-hitech-secondary rounded-pill px-4 fw-bold ms-3'
+                    },
+                    buttonsStyling: false
+                }).then((result) => {
+                    if (!result.isConfirmed) return;
+
+                    // Success::response / Error::response both put the message in
+                    // `data`, and a refusal comes back as HTTP 400 — so it lands
+                    // in .fail(), not .done().
+                    $.post(`/employees/moveToOnboarding/${userId}`,
+                        { _token: '{{ csrf_token() }}', force: force ? 1 : 0 })
+                        .done(function (response) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Done',
+                                text: (response && response.data) || 'Moved to onboarding.',
+                                timer: 2500,
+                                showConfirmButton: false,
+                                customClass: { popup: 'rounded-4 shadow-lg border-0' }
+                            });
+                            setTimeout(() => location.reload(), 2500);
+                        })
+                        .fail(function (xhr) {
+                            const msg = (xhr.responseJSON && xhr.responseJSON.data)
+                                || 'Unable to move this employee to onboarding';
+
+                            // Already-used account: offer the explicit override
+                            // instead of just refusing.
+                            if (!force && xhr.status === 400 && /already been used/i.test(msg)) {
+                                Swal.fire({
+                                    icon: 'warning',
+                                    title: 'Account already in use',
+                                    text: msg,
+                                    showCancelButton: true,
+                                    confirmButtonText: 'Reset it anyway',
+                                    cancelButtonText: 'Cancel',
+                                    customClass: {
+                                        popup: 'rounded-4 shadow-lg border-0',
+                                        confirmButton: 'btn btn-danger rounded-pill px-4 fw-bold',
+                                        cancelButton: 'btn btn-hitech-secondary rounded-pill px-4 fw-bold ms-3'
+                                    },
+                                    buttonsStyling: false
+                                }).then((r) => { if (r.isConfirmed) moveToOnboarding(userId, true); });
+                                return;
+                            }
+                            Swal.fire('Error', msg, 'error');
+                        });
                 });
             }
 

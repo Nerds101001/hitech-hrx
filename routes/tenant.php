@@ -516,6 +516,7 @@ Route::middleware([
         Route::post('updateKpiStatus/{id}', [EmployeeController::class, 'updateKpiStatus'])->name('updateKpiStatus');
         Route::post('submitKpiSelfAssessment/{id}', [EmployeeController::class, 'submitKpiSelfAssessment'])->name('submitKpiSelfAssessment');
         Route::post('toggleStatus/{id}', [EmployeeController::class, 'toggleStatus'])->name('toggleStatus');
+        Route::post('moveToOnboarding/{id}', [EmployeeController::class, 'moveToOnboarding'])->name('moveToOnboarding');
         Route::post('relieve/{id}', [EmployeeController::class, 'relieveEmployee'])->name('relieve');
         Route::post('retire/{id}', [EmployeeController::class, 'retireEmployee'])->name('retire');
         Route::post('/{user}/terminate', [EmployeeController::class, 'initiateTermination'])->name('terminate');

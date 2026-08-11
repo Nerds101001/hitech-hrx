@@ -2075,6 +2075,77 @@ class EmployeeController extends Controller
     return Success::response('Status updated successfully');
   }
 
+  /**
+   * Put an existing employee back into onboarding and re-issue their invite.
+   *
+   * There was no way to do this from the UI — the status toggle only flips
+   * ACTIVE/INACTIVE — so accounts created straight as active had to be moved by
+   * hand at the database. Sets the same fields initiateOnboarding() does, then
+   * mails a fresh temporary password.
+   */
+  public function moveToOnboarding($id)
+  {
+    if (env('APP_DEMO')) {
+      return Error::response('This feature is disabled in the demo.');
+    }
+
+    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin']) && !auth()->user()->can('employee.lifecycle_action')) {
+      return Error::response('Unauthorized action.', 403);
+    }
+
+    $user = User::find($id);
+    if (!$user) {
+      return Error::response('Employee not found.', 404);
+    }
+
+    $onboardingStates = [
+      UserAccountStatus::ONBOARDING,
+      UserAccountStatus::ONBOARDING_SUBMITTED,
+      UserAccountStatus::ONBOARDING_REQUESTED,
+    ];
+    if (in_array($user->status, $onboardingStates, true)) {
+      return Error::response('This employee is already in onboarding.');
+    }
+    if (in_array($user->status, [UserAccountStatus::RELIEVED, UserAccountStatus::TERMINATED, UserAccountStatus::RETIRED], true)) {
+      return Error::response('This employee has left. Reactivate the account before starting onboarding.');
+    }
+
+    // This re-issues the password, so it must not be run on an account somebody
+    // is already using. users.last_login is never populated, so the audit trail
+    // is the only trustworthy evidence that the account has been used.
+    $hasActivity = DB::table('audits')->where('user_id', $user->id)->exists();
+    if ($hasActivity && !request()->boolean('force')) {
+      return Error::response(
+        'This account has already been used — moving it to onboarding resets the password. Confirm to proceed anyway.'
+      );
+    }
+
+    $plainPassword = \Illuminate\Support\Str::random(10);
+
+    DB::transaction(function () use ($user, $plainPassword) {
+      $user->forceFill([
+        'status'              => UserAccountStatus::ONBOARDING,
+        'onboarding_at'       => now(),
+        'onboarding_deadline' => now()->addDays(3),
+        'password'            => bcrypt($plainPassword),
+      ])->save();
+    });
+
+    Log::warning("Employee moved to onboarding: id={$user->id} email={$user->email} by user "
+      . auth()->id() . ' (' . auth()->user()->email . ')');
+
+    // A mail failure must not undo the status change — the same rule
+    // initiateOnboarding() follows.
+    try {
+      $user->notify(new OnboardingInvite($user, $plainPassword));
+    } catch (\Throwable $mailError) {
+      Log::error('Onboarding invite mail failed for ' . $user->email . ': ' . $mailError->getMessage());
+      return Success::response('Moved to onboarding, but the invitation email could not be sent.');
+    }
+
+    return Success::response('Moved to onboarding. Invitation sent to ' . $user->email . '.');
+  }
+
   public function relieveEmployee($id)
   {
     if (env('APP_DEMO')) {
