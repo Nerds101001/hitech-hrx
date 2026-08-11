@@ -56,7 +56,10 @@
         blocked: { title: 'Blocked', class: 'bg-label-danger' },
         onboarding: { title: 'Onboarding', class: 'bg-label-warning' },
         onboarding_submitted: { title: 'Review Required', class: 'bg-label-warning' },
+        onboarding_requested: { title: 'Onboarding Requested', class: 'bg-label-warning' },
+        invited: { title: 'Invited', class: 'bg-label-warning' },
         relieved: { title: 'Relieved', class: 'bg-label-danger' },
+        retired: { title: 'Retired', class: 'bg-label-danger' },
         terminated: { title: 'Terminated', class: 'bg-label-danger' },
         default: { title: 'Unknown', class: 'bg-label-secondary' }
       };
@@ -132,7 +135,7 @@
                 var $status = full['status'];
                 var statusInfo = statusObj[$status] || statusObj['default'];
                 var badgeClass = ($status === 'active') ? 'bg-success-light text-success' : 'bg-teal-light text-teal';
-                if (['inactive', 'relieved', 'terminated'].includes($status)) badgeClass = 'bg-danger-light text-danger';
+                if (['inactive', 'relieved', 'terminated', 'retired'].includes($status)) badgeClass = 'bg-danger-light text-danger';
                 return `<span class="badge ${badgeClass} rounded-pill px-3 py-1 fw-bold">${statusInfo.title}</span>`;
               }
             },
@@ -345,7 +348,7 @@
     </div>
 
     <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay: 0.15s">
-      <div class="hitech-stat-card dashboard-variant card-amber uniform-card clickable-stat" onclick="applyStatusFilter('onboarding')">
+      <div class="hitech-stat-card dashboard-variant card-amber uniform-card clickable-stat" onclick="applyStatusFilter('onboarding_group')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-amber" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-paper-plane"></i></div>
         </div>
@@ -357,7 +360,7 @@
     </div>
 
     <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay: 0.2s">
-      <div class="hitech-stat-card dashboard-variant card-red uniform-card clickable-stat" onclick="applyStatusFilter('relieved')">
+      <div class="hitech-stat-card dashboard-variant card-red uniform-card clickable-stat" onclick="applyStatusFilter('exited_group')">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-red" style="width:38px; height:38px; font-size:1.2rem;"><i class="bx bx-user-x"></i></div>
         </div>
@@ -445,10 +448,15 @@
               <select class="form-select select2" id="statusFilter">
                 <option value="">All Statuses</option>
                 <option value="active">Active</option>
-                <option value="onboarding">Onboarding</option>
-                <option value="onboarding_submitted">Review Required</option>
+                {{-- The group options mirror what the stat cards count, so a card
+                     and this dropdown can never disagree again. --}}
+                <option value="onboarding_group">In Onboarding (all)</option>
+                <option value="onboarding">&nbsp;&nbsp;— Onboarding</option>
+                <option value="onboarding_submitted">&nbsp;&nbsp;— Review Required</option>
                 <option value="inactive">Inactive</option>
-                <option value="relieved">Relieved</option>
+                <option value="exited_group">Relieved / Exited (all)</option>
+                <option value="terminated">&nbsp;&nbsp;— Terminated</option>
+                <option value="relieved">&nbsp;&nbsp;— Relieved</option>
               </select>
             </div>
             <div class="col-md-3">

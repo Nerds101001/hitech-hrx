@@ -57,6 +57,35 @@ use OwenIt\Auditing\Models\Audit;
 
 class EmployeeController extends Controller
 {
+  /**
+   * Every status that means "still coming on board". The In Onboarding card
+   * counts this whole set, so the status filter has to match the same set —
+   * when it did not, the card read 4 while clicking it listed only the single
+   * 'onboarding' row and hid the three awaiting review.
+   */
+  private const ONBOARDING_STATUSES = [
+    UserAccountStatus::ONBOARDING,
+    UserAccountStatus::ONBOARDING_SUBMITTED,
+    UserAccountStatus::ONBOARDING_REQUESTED,
+    UserAccountStatus::INVITED,
+  ];
+
+  /**
+   * Every status that means "has left". relieve() writes RELIEVED, but the
+   * people already on the system carry TERMINATED, so counting RELIEVED alone
+   * showed 0 while 31 ex-employees existed.
+   */
+  private const EXITED_STATUSES = [
+    UserAccountStatus::RELIEVED,
+    UserAccountStatus::TERMINATED,
+    UserAccountStatus::RETIRED,
+  ];
+
+  /** Filter values the cards send that stand for a whole group of statuses. */
+  private const STATUS_GROUPS = [
+    'onboarding_group' => self::ONBOARDING_STATUSES,
+    'exited_group'     => self::EXITED_STATUSES,
+  ];
 
   public function addOrUpdateLeaveCount(Request $request)
   {
@@ -1253,16 +1282,11 @@ class EmployeeController extends Controller
     if ($scopedIds) $inactiveQuery->whereIn('id', $scopedIds);
     $inactive = $inactiveQuery->count();
 
-    $relievedQuery = User::where('status', UserAccountStatus::RELIEVED);
+    $relievedQuery = User::whereIn('status', self::EXITED_STATUSES);
     if ($scopedIds) $relievedQuery->whereIn('id', $scopedIds);
     $relieved = $relievedQuery->count();
 
-    $onboardingQuery = User::whereIn('status', [
-      UserAccountStatus::ONBOARDING,
-      UserAccountStatus::ONBOARDING_SUBMITTED,
-      UserAccountStatus::ONBOARDING_REQUESTED,
-      UserAccountStatus::INVITED
-    ]);
+    $onboardingQuery = User::whereIn('status', self::ONBOARDING_STATUSES);
     if ($scopedIds) $onboardingQuery->whereIn('id', $scopedIds);
     $onboarding = $onboardingQuery->count();
 
@@ -1291,7 +1315,9 @@ class EmployeeController extends Controller
     if ($scopedIds) $usersQuery->whereIn('id', $scopedIds);
     
     return view('tenant.employees.index', [
-      'totalUser' => $active + $inactive + $relieved + $onboarding,
+      // Current headcount only. People who have left are deliberately excluded,
+      // otherwise counting them as "Relieved" would also inflate Total Team.
+      'totalUser' => $active + $inactive + $onboarding,
       'active' => $active,
       'inactive' => $inactive,
       'relieved' => $relieved,
@@ -1421,8 +1447,15 @@ class EmployeeController extends Controller
         $query->where('users.designation_id', $request->input('designationFilter'));
       }
 
-      if ($request->has('statusFilter') && !empty($request->input('statusFilter'))) {
-        $query->where('users.status', $request->input('statusFilter'));
+      if ($request->filled('statusFilter')) {
+        $statusFilter = $request->input('statusFilter');
+        // A card sends a group ('onboarding_group' / 'exited_group') because it
+        // counts several statuses at once; the dropdown sends one exact status.
+        if (isset(self::STATUS_GROUPS[$statusFilter])) {
+          $query->whereIn('users.status', self::STATUS_GROUPS[$statusFilter]);
+        } else {
+          $query->where('users.status', $statusFilter);
+        }
       }
 
       if ($request->has('siteFilter') && !empty($request->input('siteFilter'))) {
