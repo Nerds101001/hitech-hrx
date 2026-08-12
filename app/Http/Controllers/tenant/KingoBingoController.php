@@ -137,39 +137,32 @@ class KingoBingoController extends Controller
             $visitsBySpMonth[$v->salesperson_id][$mk][] = $v;
         }
 
-        // Which book each person is measured on. cc_salesperson_map.role is the
-        // assignment of record: a CCare agent is judged on the customers they
-        // hold as CCare, a New Biz agent on their New Biz customers. CCare wins
-        // when someone is mapped as both.
-        $mapRoles = CcSalespersonMap::whereIn('cc_user_id', $salespersonIds)
-            ->get()->groupBy('cc_user_id')
-            ->map(fn($rows) => $rows->pluck('role')->filter()->unique()->all());
-
         foreach ($salespersonIds as $spId) {
-            // Matching on salesperson_id alone left every CCare and New Biz
-            // person showing 0.00 against a real target — they are almost never
-            // the salesperson. But counting every role they appear in instead
-            // over-states them: it adds their New Biz book and extra-rep tags on
-            // top of their own book, which is not what the Sales Report shows.
-            // Count exactly the one book they are assigned to, so this page and
-            // the Sales Report agree to the rupee.
-            $roles = $mapRoles[$spId] ?? [];
-            if (in_array('ccare', $roles, true)) {
-                $ownColumn = 'ccare_id';
-            } elseif (in_array('newbiz', $roles, true)) {
-                $ownColumn = 'new_biz_id';
-            } else {
-                // Unmapped: a real salesperson keeps the original behaviour;
-                // otherwise fall back to whichever book they actually hold.
-                $ownColumn = 'salesperson_id';
-                foreach (['salesperson_id', 'ccare_id', 'new_biz_id'] as $col) {
-                    if (SalesPipeline::where($col, $spId)->exists()) { $ownColumn = $col; break; }
-                }
-            }
-
+            // Every customer this person is tagged on, in any capacity — as the
+            // salesperson, as CCare, as New Biz, or as an additional rep. All of
+            // that is their sale and all of it counts.
+            //
+            // Each customer is counted ONCE even when they hold several roles on
+            // it, which is common: of Manpreet Kaur Kohli's 136 extra-rep tags,
+            // 96 are on customers she already holds as CCare. This is a WHERE/OR
+            // with an EXISTS subquery, so a row satisfying two conditions still
+            // comes back a single time — a JOIN onto sales_pipeline_extra_reps
+            // would repeat it once per tag and inflate the total.
+            //
+            // Matches what the Sales Report shows the person for themselves.
             $pipelines = SalesPipeline::with(['months' => function ($q) use ($monthKeys) {
                 $q->whereIn('month_year', $monthKeys);
-            }])->where($ownColumn, $spId)->get();
+            }])->where(function ($q) use ($spId) {
+                $q->where('salesperson_id', $spId)
+                  ->orWhere('ccare_id', $spId)
+                  ->orWhere('new_biz_id', $spId)
+                  ->orWhere('new_biz_2_id', $spId)
+                  ->orWhereExists(function ($s) use ($spId) {
+                      $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $spId);
+                  });
+            })->get();
 
             $lockedPipelines = $pipelines->where('is_locked', true);
 
