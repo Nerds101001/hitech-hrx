@@ -25,6 +25,13 @@ class AppServiceProvider extends ServiceProvider
    */
   public function boot(): void
   {
+    // Never mail an address that cannot be delivered to. Registered explicitly
+    // rather than left to event discovery so it cannot quietly stop applying.
+    \Illuminate\Support\Facades\Event::listen(
+        \Illuminate\Notifications\Events\NotificationSending::class,
+        \App\Listeners\SkipUnmailableRecipients::class
+    );
+
     \Illuminate\Support\Facades\Gate::before(function ($user, $ability) {
         return $user->hasRole(['admin', 'Admin', 'super_admin']) ? true : null;
     });

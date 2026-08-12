@@ -53,8 +53,19 @@ class NotificationHelper
         $notifiables = $notifiables->where('id', '!=', $authUser->id);
       }
 
-      // Send the notification
-      Notification::send($notifiables, $notification);
+      // One send per recipient. Notification::send() mails a whole collection in
+      // a single loop, so a hard bounce — an ex-employee whose address was
+      // deliberately mangled on exit, say — threw and everybody queued behind
+      // them silently got nothing. The old catch below logged one line and the
+      // real manager and HR never learned a request existed.
+      foreach ($notifiables as $notifiable) {
+        try {
+          Notification::send([$notifiable], $notification);
+        } catch (Exception $e) {
+          Log::error('Notification failed for user ' . ($notifiable->id ?? '?')
+            . ' (' . ($notifiable->email ?? 'no address') . '): ' . $e->getMessage());
+        }
+      }
     } catch (Exception $e) {
       Log::error($e->getMessage());
     }
