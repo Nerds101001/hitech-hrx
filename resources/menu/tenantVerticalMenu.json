@@ -1069,6 +1069,15 @@
                         "admin",
                         "hr"
                     ]
+                },
+                {
+                    "url": "/uniform-requests/manage",
+                    "name": "Uniform Requests",
+                    "slug": "uniformRequests.manage",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
                 }
             ]
         },
@@ -1165,6 +1174,18 @@
                     "url": "/my-assets",
                     "name": "My Assets",
                     "slug": "myAssets.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/uniform-requests",
+                    "name": "Request Uniform",
+                    "slug": "uniformRequests.index",
                     "roles": [
                         "admin",
                         "hr",

@@ -35,6 +35,7 @@ use App\Http\Controllers\tenant\LeaveTypeController;
 use App\Http\Controllers\tenant\LeavePolicyProfileController;
 use App\Http\Controllers\tenant\LoanRequestController;
 use App\Http\Controllers\tenant\MyAssetsController;
+use App\Http\Controllers\tenant\UniformRequestController;
 use App\Http\Controllers\tenant\OrganisationHierarchyController;
 use App\Http\Controllers\tenant\PayrollController;
 use App\Http\Controllers\tenant\SalaryImportController;
@@ -948,6 +949,20 @@ Route::middleware([
             Route::post('addOrUpdateBankAccount', [EmployeeController::class, 'addOrUpdateBankAccount'])->name('addOrUpdateBankAccount');
             Route::post('addOrUpdateDocument', [EmployeeController::class, 'addOrUpdateDocument'])->name('addOrUpdateDocument');
           });
+        });
+
+        // Uniform requests (shirt / t-shirt) — open to every authenticated user.
+        // Its own prefix, not asset-management, because that group ends in a
+        // catch-all Route::get('{id}') which would swallow any new path.
+        Route::prefix('uniform-requests')->name('uniformRequests.')->group(function () {
+          // Approver screens first, so no later {id} route can match them.
+          Route::middleware(['role_or_permission:admin|hr|assets.assign'])->group(function () {
+            Route::get('manage', [UniformRequestController::class, 'manage'])->name('manage');
+            Route::post('{id}/decide', [UniformRequestController::class, 'decide'])->name('decide');
+          });
+          Route::get('', [UniformRequestController::class, 'index'])->name('index');
+          Route::post('', [UniformRequestController::class, 'store'])->name('store');
+          Route::post('{id}/cancel', [UniformRequestController::class, 'cancel'])->name('cancel');
         });
 
         // My Assets
