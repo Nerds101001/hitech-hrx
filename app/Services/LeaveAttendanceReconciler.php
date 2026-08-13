@@ -190,7 +190,30 @@ class LeaveAttendanceReconciler
                     $leave->status        = 'cancelled';
                     $leave->cancel_reason = self::MARK;
                     $leave->cancelled_at  = now();
-                    $leave->saveQuietly();   // balance already settled above
+                    $leave->saveQuietly();   // balance already settled above via
+                                              // self::credit(); saveQuietly() skips
+                                              // LeaveRequest::booted()'s own reversal
+                                              // so it cannot refund the same days twice.
+
+                    // But that reversal is also the ONLY place that deletes the
+                    // placeholder attendance row the approval auto-created (WFH,
+                    // half-day, or full-day leave alike) — skipped here for the
+                    // same reason, its absence left that row behind next to the
+                    // real, actually-worked punch. Two rows for one date then fed
+                    // PayrollService's calculateAttendanceStats() twice — 0.5 (the
+                    // stale leave placeholder) plus 1.0 (the real punch) instead of
+                    // the correct 1.0, silently overpaying every day this reconciler
+                    // reverted. Delete it explicitly instead of via the event hook.
+                    Attendance::where('user_id', $leave->user_id)
+                        ->whereBetween('check_in_time', [
+                            $leave->from_date->copy()->startOfDay(),
+                            $leave->to_date->copy()->endOfDay(),
+                        ])
+                        ->where(function ($q) use ($leave) {
+                            $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-Day', 'work_from_home'])
+                              ->orWhere('leave_request_id', $leave->id);
+                        })
+                        ->delete();
                 }
             }
         }
