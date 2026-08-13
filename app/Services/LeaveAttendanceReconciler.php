@@ -100,6 +100,12 @@ class LeaveAttendanceReconciler
             // nothing to give back — the day just reads as present.
             $isPaid = (bool) $type->is_paid && !$leave->is_lwp;
 
+            // WFH is paid but, like unpaid leave, never took anything off a
+            // balance either — it's paid directly via PayrollService, not by
+            // deducting ALP. Crediting ALP here would invent days that were
+            // never spent.
+            $isWfh = strtoupper($type->code) === 'WFH';
+
             $perDay   = $leave->is_half_day ? 0.5 : 1.0;
             $refundCap = self::paidDaysOf($leave);
             $refunded  = 0.0;
@@ -146,7 +152,7 @@ class LeaveAttendanceReconciler
                     $attended++;
                     $already = $att->admin_reason && str_contains($att->admin_reason, self::MARK);
 
-                    if (!$already && $isPaid && ($refunded + $perDay) <= $refundCap + 0.001) {
+                    if (!$already && $isPaid && !$isWfh && ($refunded + $perDay) <= $refundCap + 0.001) {
                         $conflicts++;
                         $refunded += $perDay;
 
@@ -173,6 +179,23 @@ class LeaveAttendanceReconciler
                             'date'  => $date,
                             'days'  => 0,
                         ];
+                    } elseif (!$already && $isWfh) {
+                        // Still counts toward $attended below (so the request
+                        // still auto-cancels once fully attended) — just
+                        // nothing to hand back to a pool that was never
+                        // touched. Stamped so it isn't re-flagged tomorrow.
+                        $rows[] = [
+                            'user'  => optional($leave->user)->getFullName(),
+                            'leave' => $leave->id,
+                            'type'  => $type->name . ' (WFH - no pool to credit)',
+                            'date'  => $date,
+                            'days'  => 0,
+                        ];
+                        if (!$dry) {
+                            $att->admin_reason = trim(($att->admin_reason ? $att->admin_reason . ' | ' : '')
+                                . self::MARK);
+                            $att->save();
+                        }
                     }
                 }
 

@@ -424,7 +424,20 @@ class LeavePolicyService
         
         $isMaternityPaternity = $leaveType && in_array($leaveType->code, ['ML', 'MAT', 'PL_PAT', 'PAT']);
         $isShortLeave = $leaveType && $leaveType->code === 'SHL';
+        $isWfh = $leaveType && strtoupper($leaveType->code) === 'WFH';
         $isPaidType = $leaveType ? $leaveType->is_paid : false;
+
+        // WFH never draws from any balance pool — it's always fully paid
+        // (see PayrollService), so the preview must show 0 impact, not a
+        // phantom 0.5-day deduction against the pool.
+        if ($isWfh) {
+            return [
+                'total_days' => $workingDays,
+                'paid_utilized' => $workingDays,
+                'unpaid_utilized' => 0,
+                'remaining_balance' => self::getPoolBalance($user),
+            ];
+        }
 
         if ($isPaidType && !$isMaternityPaternity && !$isShortLeave) {
             // Use Unified Pool

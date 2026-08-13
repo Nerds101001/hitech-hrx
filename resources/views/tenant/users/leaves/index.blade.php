@@ -766,8 +766,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // 3. Show Balance
             const userBalances = @json($leaveBalances);
             const userBalancesArr = Array.isArray(userBalances) ? userBalances : Object.values(userBalances);
-            // HDL deducts from PL pool (same as regular paid leave but 0.5 days)
-            const excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+            // HDL deducts from PL pool (same as regular paid leave but 0.5 days).
+            // WFH is paid but never pooled — it's always fully paid directly,
+            // never by deducting a balance, so it must never show as poolable.
+            const excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
             const isPoolable = selectedType.is_paid && !excludedCodes.includes(code);
             
             let availBalance = 0;
@@ -786,8 +788,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const balEl = document.getElementById('selected_type_balance');
             if(balEl) {
-                // Only show badge if it's NOT poolable or SHL (since those are in the top summary)
-                if (!isPoolable && !isSHL) {
+                // Only show badge if it's NOT poolable or SHL (since those are in the top summary).
+                // WFH has no balance concept at all — showing "0.0" would wrongly imply it's exhausted.
+                if (!isPoolable && !isSHL && !isWFH) {
                     balEl.innerText = 'Category Balance: ' + balFormatted;
                     balEl.classList.remove('d-none');
                 } else {

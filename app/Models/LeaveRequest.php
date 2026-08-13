@@ -78,7 +78,9 @@ class LeaveRequest extends Model implements AuditableContract
           $leaveTypeCode = $leaveRequest->leaveType->code;
           $plType      = \App\Models\LeaveType::where('code', 'ALP')->first();
           $legacyPaidType = \App\Models\LeaveType::where('code', 'PL')->first();
-          $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+          // WFH never draws from any balance pool — it's always fully paid
+          // via PayrollService directly, never via a balance deduction.
+          $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
 
           // Determine which balance record to deduct from
           $deductLeaveTypeId = $leaveRequest->leave_type_id;
@@ -224,7 +226,10 @@ class LeaveRequest extends Model implements AuditableContract
               $isPaidType    = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
               $plType        = \App\Models\LeaveType::where('code', 'ALP')->first();
-              $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+              // WFH excluded here too: approval above never deducts it from
+              // ALP, so refunding it into ALP on cancellation would credit
+              // days that were never taken out — inflating the shared pool.
+              $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
 
               $refundLeaveTypeId = $leaveRequest->leave_type_id;
               if ($isPaidType && $plType && !in_array($leaveTypeCode, $excludedPoolCodes)) {

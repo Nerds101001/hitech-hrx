@@ -1106,9 +1106,9 @@
                                 $excludedLeaveCodes = ['ML', 'MAT', 'PL_PAT', 'PAT'];
                                 $leaveBalances = $user->leaveBalances()->with('leaveType')->get();
 
-                                // Poolable balances (exclude ML/PAT/SHL)
+                                // Poolable balances (exclude ML/PAT/SHL/WFH — WFH is never pooled)
                                 $poolBalances = $leaveBalances->filter(fn($b) =>
-                                    $b->leaveType && !in_array(strtoupper($b->leaveType->code), array_merge($excludedLeaveCodes, ['SHL']))
+                                    $b->leaveType && !in_array(strtoupper($b->leaveType->code), array_merge($excludedLeaveCodes, ['SHL', 'WFH']))
                                 );
                                 $totalAllocated  = $poolBalances->sum('balance') + $poolBalances->sum('used');
                                 $totalUsed       = $poolBalances->sum('used');
