@@ -34,6 +34,12 @@ return Application::configure(basePath: dirname(__DIR__))
        and payroll jobs. */
     $schedule->command('hrx:archive-audits --live')->monthlyOn(2, '02:00');
     $schedule->command('leave:daily-digest')->dailyAt('09:00');
+    /* Credits back an approved PAID leave day (any type — WFH, half day, full
+       day) where the employee also turned up, and cancels the request once
+       every day it covers has been attended. Runs before the 09:00 digest so
+       that reflects same-day-reconciled numbers, not stale ones. --apply
+       makes this a real write, not the dry-run artisan defaults to. */
+    $schedule->command('leave:reconcile-attendance --apply')->dailyAt('01:00')->withoutOverlapping();
     /* Digital Library files the upload dialog could not wait for. Hourly and
        overlap-guarded because each file can hold the AI provider for minutes.
        Harmless if it finds nothing, and safe to run by hand. */
