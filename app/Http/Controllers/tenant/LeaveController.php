@@ -487,6 +487,24 @@ class LeaveController extends Controller
       return Error::response('Leave request not found');
     }
 
+    // This route requires admin/hr/accounts/manager/leave.approve, so a plain
+    // employee cannot reach it — but among those roles it had no ownership
+    // check of its own: any manager could read any OTHER manager's team's
+    // leave request, and accounts could read a still-pending one, by id alone.
+    // Mirror getListAjax's scope exactly rather than inventing a new one, and
+    // 404 (not 403) so an id outside someone's remit doesn't confirm it exists.
+    $user       = auth()->user();
+    $isManager  = $user->hasRole('manager') && !$user->hasRole(['admin', 'hr']);
+    $isAccounts = $user->hasRole('accounts') && !$user->hasRole(['admin', 'hr']);
+
+    if ($isManager) {
+      $scopedUserIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())
+        ->pluck('id')->push($user->id);
+      abort_unless($scopedUserIds->contains($leaveRequest->user_id), 404);
+    } elseif ($isAccounts) {
+      abort_unless($leaveRequest->status === LeaveRequestStatus::APPROVED, 404);
+    }
+
     $response = [
       'id' => $leaveRequest->id,
       'userName' => $leaveRequest->user->getFullName(),
