@@ -152,11 +152,18 @@
                                 // Short leave is detected from the request flag OR the leave type,
                                 // so older requests saved before the flag existed still show correctly
                                 $isShortReq = $req && ($req->is_short_leave || ($req->leaveType->is_short_leave ?? false));
+                                // WFH is functionally Half Day Leave (same is_half_day flag), so it
+                                // must be checked before the generic half-day branch below, or every
+                                // WFH request would display as "Half Day" instead of "WFH".
+                                $isWfhReq = $req && strtoupper($req->leaveType->code ?? '') === 'WFH';
 
                                 $leaveTypeDetail = 'Full Day';
                                 if ($req) {
                                     if ($isShortReq) {
                                         $leaveTypeDetail = 'Short Leave (' . ($req->duration_hours ?? 0) . ' hrs' . ($req->start_time ? ': ' . substr($req->start_time, 0, 5) . '-' . substr($req->end_time, 0, 5) : '') . ')';
+                                    } elseif ($isWfhReq) {
+                                        $sessionName = $req->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                                        $leaveTypeDetail = 'WFH (' . $sessionName . ')';
                                     } elseif ($req->is_half_day) {
                                         $sessionName = $req->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
                                         $leaveTypeDetail = 'Half Day (' . $sessionName . ')';
@@ -211,6 +218,8 @@
                                     @if($req ?? false)
                                         @if($isShortReq)
                                             <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#0dcaf0; color:#000 !important;">SHORT LEAVE</span>
+                                        @elseif($isWfhReq)
+                                            <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#0f766e; color:#fff !important;">WFH &bull; {{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }}</span>
                                         @elseif($req->is_half_day)
                                             <span class="badge" style="font-size: 0.65rem; font-weight:700; background-color:#6610f2; color:#fff !important;">HALF DAY &bull; {{ $req->half_day_session === 'second_half' ? '2ND HALF' : '1ST HALF' }}</span>
                                         @else
@@ -719,10 +728,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const isSpecial = isMAT || isPAT;
             const isSHL     = code === 'SHL';
             const isHDL     = code === 'HDL';  // Half Day Leave — always 0.5 days
+            const isWFH     = code === 'WFH';  // Work From Home — same as HDL, different label
 
             // Half day configuration
-            if (isHDL) {
-                // HDL: force half-day, show session picker, hide end date
+            if (isHDL || isWFH) {
+                // HDL/WFH: force half-day, show session picker, hide end date
                 document.getElementById('is_half_day').value = '1';
                 handleHalfDayToggle();
                 // Reset session picker to First Half by default

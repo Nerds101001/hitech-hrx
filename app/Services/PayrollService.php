@@ -328,7 +328,11 @@ class PayrollService
      */
     private function isLeaveStatus(string $status): bool
     {
-        return in_array($status, ['leave', 'paid_leave', 'unpaid_leave', 'on_leave'], true)
+        // 'work_from_home'/'wfh': WFH is functionally Half Day Leave with a
+        // different label (owner spec, 2026-08-13) — routing it through this
+        // same branch reuses the existing is_half_day + is_paid + is_lwp math
+        // below exactly as HDL gets it, rather than a bespoke calculation.
+        return in_array($status, ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'work_from_home', 'wfh'], true)
             || str_contains($status, '_leave');
     }
 
@@ -391,16 +395,25 @@ class PayrollService
                     ? ((bool) optional($leave->leaveType)->is_paid && !$leave->is_lwp)
                     : ($status === 'paid_leave');   // no linked request: trust an explicit paid status only
                 $isHalf   = $leave && $leave->is_half_day;
+                // Ordinary half-day leave is fully paid whenever the leave
+                // balance covers it, dropping to half-pay only once the
+                // balance runs out (is_lwp). WFH is deliberately different:
+                // it always pays exactly half a day, with no balance
+                // condition at all (owner confirmed 2026-08-13) — so it
+                // cannot share the $isPaid branch below despite sharing
+                // every other mechanic (application, approval, attendance).
+                $isWfh    = $leave && strtoupper(optional($leave->leaveType)->code ?? '') === 'WFH';
 
-                if ($isHalf) {
+                if ($isWfh) {
+                    $workedDays += 0.5;
+                    $absents += 0.5;
+                } elseif ($isHalf) {
                     // Half the day was worked either way; the other half is paid or not.
                     $workedDays += 0.5;
                     $isPaid ? $workedDays += 0.5 : $absents += 0.5;
                 } else {
                     $isPaid ? $workedDays += 1.0 : $absents += 1.0;
                 }
-            } elseif ($status === 'wfh' || str_contains($status, 'work_from_home')) {
-                $workedDays += 1.0;
             } elseif ($status === 'absent') {
                 // No leave applied for this day: it costs 1.5 days of salary,
                 // not one. Apply a back-dated leave and get it approved before

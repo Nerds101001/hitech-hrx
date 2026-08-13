@@ -12,9 +12,16 @@ use App\Enums\Status;
  *   1. All Purpose Leave (ALP)  — the single paid pool
  *   2. Short Leave (SHL)        — 1/month, hours-based
  *   3. Half Day Leave (HDL)     — 0.5 day, deducts from ALP
- *   4. Work From Home (WFH)     — paid, NO pool deduction, NO automatic
- *      attendance: on approval the accounts team marks attendance from the
- *      external tracking-software report (see LeaveRequest::booted()).
+ *   4. Work From Home (WFH)     — functionally identical to HDL: always
+ *      0.5 days, attendance marked automatically on approval (see
+ *      LeaveRequest::booted()), only the name/label differs (owner spec,
+ *      2026-08-13). Superseded design: this type was originally full-day
+ *      pay with no attendance/balance effect at all, attendance marked
+ *      manually by accounts from a tracking-software report. That design
+ *      never went live, so there is no migration concern in replacing it.
+ *      leave:ensure-wfh-type is the single source of truth for these flags;
+ *      kept here too only so re-running this command cannot recreate the
+ *      old, contradictory version if it somehow still exists.
  *
  * Legacy types (CL, SL, PL, UL, ML, PL_PAT) stay INACTIVE, not deleted —
  * historic requests still reference them and PL still holds legacy
@@ -56,10 +63,12 @@ class StandardizeLeaveTypesCommand extends Command
                 'is_proof_required'      => false,
                 'is_carry_forward'       => false,
                 'is_split_entitlement'   => false,
-                'is_consecutive_allowed' => true,
+                // Matches HDL exactly (see class docblock) — was previously
+                // `true` under the superseded full-day design.
+                'is_consecutive_allowed' => false,
                 'is_strict_rules'        => false,
                 'status'                 => Status::ACTIVE,
-                'notes'                  => 'Work From Home. Paid, no balance deduction. On approval the accounts team marks attendance from the tracking-software report.',
+                'notes'                  => 'Work From Home. Same as Half Day Leave: always 0.5 days, attendance is marked automatically on approval — nothing to capture by hand.',
             ]);
             $this->info('Work From Home (WFH) leave type created.');
         }

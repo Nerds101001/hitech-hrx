@@ -643,17 +643,19 @@ class UserDashboardController extends Controller
 
         $leaveType = LeaveType::find($validated['leave_type_id']);
 
-        // HDL (Half Day Leave) always forces half-day regardless of form value
+        // HDL (Half Day Leave) and WFH (functionally identical — see
+        // EnsureWfhLeaveTypeCommand) always force half-day regardless of form value
         $isHdl     = $leaveType && strtoupper($leaveType->code) === 'HDL';
-        $isHalfDay = $isHdl ? true : $request->boolean('is_half_day');
+        $isWfh     = $leaveType && strtoupper($leaveType->code) === 'WFH';
+        $isHalfDay = ($isHdl || $isWfh) ? true : $request->boolean('is_half_day');
         $isShort   = $leaveType && (bool)$leaveType->is_short_leave;
 
         if ($isHalfDay || $isShort) {
             $validated['to_date'] = $validated['from_date'];
         }
 
-        // HDL must have a session; default to first_half if omitted
-        if ($isHdl && empty($validated['half_day_session'])) {
+        // HDL/WFH must have a session; default to first_half if omitted
+        if (($isHdl || $isWfh) && empty($validated['half_day_session'])) {
             $validated['half_day_session'] = 'first_half';
         }
         $user = auth()->user();
@@ -1019,7 +1021,15 @@ class UserDashboardController extends Controller
                         $s = 'holiday';
                     }
                 } elseif (empty($attendance->admin_reason)) {
-                    if ($isShort) {
+                    // WFH: no attendance is ever expected (that is the whole
+                    // point), so unlike ordinary half-day leave this is never
+                    // gated on worked minutes — it is always "work_from_home",
+                    // checked before every other branch below.
+                    $isWfh = $leaveReq && strtoupper(optional($leaveReq->leaveType)->code ?? '') === 'WFH';
+
+                    if ($isWfh) {
+                        $s = 'work_from_home';
+                    } elseif ($isShort) {
                         if ($workMins >= 360) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {
@@ -1085,6 +1095,9 @@ class UserDashboardController extends Controller
                     $dayData['status'] = 'Late';
                     $lateDays++;
                     $presentDays++;
+                } elseif ($s === 'work_from_home' || $s === 'wfh') {
+                    $dayData['status'] = 'WFH';
+                    $presentDays += 1;
                 } elseif ($s === 'half-day-paid') {
                     $dayData['status'] = 'Half Day (HD-PL)';
                     $presentDays += 1;
@@ -1323,7 +1336,13 @@ class UserDashboardController extends Controller
                         $s = 'holiday';
                     }
                 } elseif (empty($attendance->admin_reason)) {
-                    if ($isShort) {
+                    // WFH: no attendance is ever expected, so unlike ordinary
+                    // half-day leave this is never gated on worked minutes.
+                    $isWfh = $leaveReq && strtoupper(optional($leaveReq->leaveType)->code ?? '') === 'WFH';
+
+                    if ($isWfh) {
+                        $s = 'work_from_home';
+                    } elseif ($isShort) {
                         if ($workMins >= 360) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {

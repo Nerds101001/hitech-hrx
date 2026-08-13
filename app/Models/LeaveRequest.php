@@ -73,14 +73,6 @@ class LeaveRequest extends Model implements AuditableContract
   protected static function booted()
   {
       $processApproval = function ($leaveRequest) {
-          // Work From Home: paid, but touches neither the leave pool nor
-          // attendance. Attendance for approved WFH days is marked manually
-          // by the accounts team from the external tracking-software report
-          // (owner-specified flow), so approval only flags the request.
-          if (strtoupper($leaveRequest->leaveType->code ?? '') === 'WFH') {
-              return;
-          }
-
           $user        = $leaveRequest->user;
           $isPaidType  = $leaveRequest->leaveType->is_paid;
           $leaveTypeCode = $leaveRequest->leaveType->code;
@@ -142,7 +134,10 @@ class LeaveRequest extends Model implements AuditableContract
                           }
                       }
                   } elseif ($leaveRequest->is_half_day) {
-                      $attendanceStatus = 'half-Day';
+                      // Same 0.5-day mechanics as any other half-day request —
+                      // only the attendance label differs, so WFH renders as
+                      // "WFH" everywhere instead of "Half Day" (owner spec).
+                      $attendanceStatus = (strtoupper($leaveTypeCode) === 'WFH') ? 'work_from_home' : 'half-Day';
                   } else {
                       if ($isPaidType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
                           $balanceChecked = true;
@@ -225,14 +220,6 @@ class LeaveRequest extends Model implements AuditableContract
               $leaveRequest->getOriginal('status') === LeaveRequestStatus::APPROVED &&
               ($leaveRequest->status === LeaveRequestStatus::CANCELLED || $leaveRequest->status === LeaveRequestStatus::REJECTED)) {
 
-              // WFH approval touched neither balance nor attendance (see
-              // $processApproval), so there is nothing to reverse — and the
-              // attendance rows accounts marked manually from the tracking
-              // report must NOT be deleted here.
-              if (strtoupper($leaveRequest->leaveType->code ?? '') === 'WFH') {
-                  return;
-              }
-
               $user          = $leaveRequest->user;
               $isPaidType    = $leaveRequest->leaveType->is_paid;
               $leaveTypeCode = $leaveRequest->leaveType->code;
@@ -271,7 +258,7 @@ class LeaveRequest extends Model implements AuditableContract
                       $leaveRequest->to_date->endOfDay()
                   ])
                   ->where(function ($q) use ($leaveRequest) {
-                      $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-Day'])
+                      $q->whereIn('status', ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-Day', 'work_from_home'])
                         ->orWhere('leave_request_id', $leaveRequest->id);
                   })
                   ->delete();
