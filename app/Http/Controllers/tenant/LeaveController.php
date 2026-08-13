@@ -512,13 +512,25 @@ class LeaveController extends Controller
   public function outdoorDutyListAjax(Request $request)
   {
     try {
-      $user      = auth()->user();
-      $isAdmin   = $user->hasRole(['admin', 'hr']);
-      $isManager = $user->hasRole('manager') && !$isAdmin;
+      $user = auth()->user();
+
+      // This method serves two different pages that share nothing but the
+      // endpoint: the admin/manager review list at leaveRequests.outdoorDuty.*
+      // and the personal "My Outdoor Duty Requests" card on the self-service
+      // My Leaves page at user.outdoor_duty.*. Role alone cannot tell them
+      // apart, so an admin or HR account viewing their OWN personal page was
+      // seeing every employee's requests under a "My" heading. The route name
+      // is fixed by which URL was actually hit, so it can't be spoofed by the
+      // client the way a request parameter could.
+      $selfOnly  = $request->route()?->getName() === 'user.outdoor_duty.listAjax';
+      $isAdmin   = !$selfOnly && $user->hasRole(['admin', 'hr']);
+      $isManager = !$selfOnly && $user->hasRole('manager') && !$isAdmin;
 
       $query = OutdoorDuty::with(['user', 'approvedBy'])->select('outdoor_duties.*');
 
-      if ($isManager) {
+      if ($selfOnly) {
+        $query->where('user_id', $user->id);
+      } elseif ($isManager) {
         $subIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
         $query->whereIn('user_id', array_merge($subIds, [$user->id]));
       } elseif (!$isAdmin) {
@@ -660,9 +672,27 @@ class LeaveController extends Controller
     }
   }
 
-  public function outdoorDutyGetByIdAjax($id)
+  public function outdoorDutyGetByIdAjax($id, Request $request)
   {
     $duty = OutdoorDuty::with('user', 'approvedBy')->findOrFail($id);
+
+    // Same scoping as outdoorDutyListAjax, applied to a single record: the
+    // "eye" button on the list only ever offers rows already visible there,
+    // but this endpoint had no check of its own — any signed-in user could
+    // read any employee's date, purpose and location by requesting an id
+    // directly. 404 rather than 403, so probing ids can't confirm one exists.
+    $user      = auth()->user();
+    $selfOnly  = $request->route()?->getName() === 'user.outdoor_duty.getByIdAjax';
+    $isAdmin   = !$selfOnly && $user->hasRole(['admin', 'hr']);
+    $isManager = !$selfOnly && $user->hasRole('manager') && !$isAdmin;
+
+    if ($selfOnly || (!$isAdmin && !$isManager)) {
+      abort_unless($duty->user_id === $user->id, 404);
+    } elseif ($isManager) {
+      $allowedIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->push($user->id);
+      abort_unless($allowedIds->contains($duty->user_id), 404);
+    }
+
     return response()->json([
       'id'                 => $duty->id,
       'userName'           => $duty->user->getFullName(),
