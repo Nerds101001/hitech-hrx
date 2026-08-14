@@ -252,7 +252,7 @@
                     </div>
                 </div>
                 
-                <button type="button" class="btn btn-primary w-100 rounded-pill py-3 shadow-lg fw-bold mt-2" onclick="saveTaxonomyAction()" style="background: linear-gradient(135deg, #00897b, #00695c); border: none;">
+                <button type="button" class="btn btn-primary w-100 rounded-pill py-3 shadow-lg fw-bold mt-2" onclick="saveTaxonomyAction()" style="background: linear-gradient(135deg, var(--hitech-primary), #006666); border: none;">
                     Save Structure
                 </button>
             </div>
@@ -742,7 +742,7 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
                 title: 'Missing Required Fields',
                 text: 'Video Title, Presenter, and Session Date are compulsory for Learn @ Hi Tech Sessions.',
                 icon: 'warning',
-                confirmButtonColor: '#00897b',
+                confirmButtonColor: 'var(--hitech-primary)',
                 customClass: {
                     popup: 'rounded-4 shadow-lg border-0',
                     title: 'fw-bold text-dark',
@@ -815,7 +815,7 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
             title: 'Success!',
             text: data.success || 'Asset secured to vault.',
             icon: 'success',
-            confirmButtonColor: '#00897b',
+            confirmButtonColor: 'var(--hitech-primary)',
             customClass: {
                 popup: 'rounded-4 shadow-lg border-0',
                 title: 'fw-bold text-dark',

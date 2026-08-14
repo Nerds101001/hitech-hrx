@@ -5,7 +5,10 @@
 @section('page-style')
 <style>
     :root {
-        --hitech-primary: #00897b;
+        /* --hitech-primary is already defined app-wide (hitech-portal.scss,
+           #008080) — this page was silently redeclaring it as #00897b,
+           a slightly different teal nobody chose on purpose, which is why
+           this page's accent never quite matched the rest of the app. */
         --hitech-dark: #0d3b33;
         --hitech-bg: #f8fafb;
     }
@@ -30,11 +33,13 @@
     .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
     .nav-row { border-top: 1px solid #eef2f4; }
 
+    .section-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 4px 0 12px; }
+
     /* Brand Selection - Streamlined */
-    .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 2rem; }
-    .brand-card { background: white; border: 1px solid #eef2f4; border-radius: 12px; padding: 12px 10px; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; text-align: center; display: block; text-decoration: none; color: inherit; }
-    .brand-card:hover { transform: translateY(-2px); border-color: #ddd; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-    .brand-card.active { border: 2px solid #ff7043; background: #fffdfc; box-shadow: 0 4px 12px rgba(255, 112, 67, 0.1); }
+    .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 28px; }
+    .brand-card { background: white; border: 1.5px solid #eef2f4; border-radius: 14px; padding: 16px 10px; cursor: pointer; transition: all 0.15s; position: relative; text-align: center; display: block; text-decoration: none; color: inherit; }
+    .brand-card:hover { border-color: #d8dee3; }
+    .brand-card.active { border-color: var(--hitech-primary); background: var(--hitech-primary-light); }
     .brand-card.drag-over { background: #fff3e0; border: 2px dashed #ff7043; transform: scale(1.05); }
     
     .action-dropdown { position: absolute; top: 6px; right: 6px; z-index: 50; }
@@ -64,20 +69,20 @@
     .brand-card .doc-count { font-size: 0.65rem; color: #aaa; font-weight: 700; letter-spacing: 0.2px; }
 
     /* Matrix Layout */
-    .main-grid { display: grid; grid-template-columns: 240px 1fr; gap: 25px; }
+    .main-grid { display: grid; grid-template-columns: 220px 1fr; gap: 22px; }
     .main-grid.no-sidebar { grid-template-columns: 1fr; }
-    .brand-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #eef2f4; }
-    .brand-header-dot { width: 14px; height: 14px; border-radius: 50%; }
-    .brand-header h2 { font-weight: 800; margin: 0; font-size: 1.6rem; color: #333; }
-    .stats-badge { background: #e0f2f1; color: var(--hitech-primary); font-size: 0.7rem; padding: 5px 14px; border-radius: 20px; font-weight: 800; }
+    .brand-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid #eef2f4; }
+    .brand-header-dot { width: 13px; height: 13px; border-radius: 50%; }
+    .brand-header h2 { font-weight: 800; margin: 0; font-size: 1.4rem; color: #333; }
+    .stats-badge { background: var(--hitech-primary-light); color: var(--hitech-primary); font-size: 0.68rem; padding: 4px 13px; border-radius: 20px; font-weight: 800; }
 
-    .side-navigation { background: white; border-radius: 16px; padding: 10px; border: 1px solid #eef2f4; align-self: start; }
-    .side-nav-item { padding: 12px 16px; border-radius: 12px; margin-bottom: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #777; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; text-decoration: none; }
+    .side-navigation { background: white; border-radius: 14px; padding: 8px; border: 1px solid #eef2f4; align-self: start; }
+    .side-nav-item { padding: 10px 13px; border-radius: 10px; margin-bottom: 3px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #777; font-weight: 700; font-size: 0.8rem; transition: all 0.2s; text-decoration: none; }
     .side-nav-item:hover { background: #f8fafb; color: #333; }
-    .side-nav-item.active { background: #e0f2f1; color: var(--hitech-primary); }
+    .side-nav-item.active { background: var(--hitech-primary-light); color: var(--hitech-primary); }
     .side-nav-item.drag-over { background: #b2dfdb; border-left: 4px solid var(--hitech-primary); }
-    .side-nav-item .count { background: #f0f2f5; padding: 2px 8px; border-radius: 8px; font-size: 0.65rem; color: #999; }
-    .side-nav-item.active .count { background: #b2dfdb; color: var(--hitech-primary); }
+    .side-nav-item .count { background: #f0f2f5; padding: 1px 7px; border-radius: 8px; font-size: 0.62rem; color: #999; }
+    .side-nav-item.active .count { background: #fff; color: var(--hitech-primary); }
 
     /* View Toggle */
     .view-switcher { display: flex; background: #f0f2f5; padding: 4px; border-radius: 10px; gap: 4px; }
@@ -92,24 +97,24 @@
     .page-btn.disabled { opacity: 0.35; pointer-events: none; }
 
     /* Cards */
-    .product-card { background: white; border: 1px solid #eef2f4; border-radius: 18px; height: 100%; display: flex; flex-direction: column; overflow: hidden; transition: all 0.3s; position: relative; cursor: grab; }
+    .product-card { background: white; border: 1px solid #eef2f4; border-radius: 16px; height: 100%; display: flex; flex-direction: column; overflow: hidden; transition: all 0.2s; position: relative; cursor: grab; }
     .product-card.dragging { opacity: 0.5; border: 2px dashed #ccc; }
-    .product-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.08); border-color: #d1d9e0; }
-    .card-main-content { padding: 25px 20px; flex-grow: 1; }
-    .product-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
-    .product-icon-box { width: 44px; height: 44px; background: #fff8f8; border: 1px solid #ffebee; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .product-title { font-weight: 800; color: #333; font-size: 1rem; margin-bottom: 4px; line-height: 1.3; }
-    .product-subtitle { font-size: 0.75rem; color: #aaa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-    .card-top-badge { position: absolute; right: 15px; top: 15px; font-size: 0.65rem; font-weight: 900; color: var(--hitech-primary); background: #e0f2f1; padding: 4px 12px; border-radius: 6px; z-index: 1; letter-spacing: 1px; }
-    .card-summary { font-size: 0.8rem; color: #666; line-height: 1.6; margin: 15px 0; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; min-height: 80px; }
-    .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
-    .action-btn { border: 1px solid #f0f2f5; border-radius: 10px; padding: 12px 4px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-    .action-btn:hover:not(.disabled) { background: #f8fafb; border-color: #ddd; transform: scale(1.02); box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
-    .action-btn span:first-child { font-size: 0.75rem; font-weight: 900; color: #444; }
-    .action-btn span:last-child { font-size: 0.65rem; color: #bbb; font-weight: 700; }
+    .product-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,0.06); border-color: #d1d9e0; }
+    .card-main-content { padding: 20px 16px 14px; flex-grow: 1; }
+    .product-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+    .product-icon-box { width: 38px; height: 38px; flex-shrink: 0; background: #fff8f8; border: 1px solid #ffebee; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    .product-title { font-weight: 800; color: #333; font-size: 0.88rem; margin-bottom: 3px; line-height: 1.25; }
+    .product-subtitle { font-size: 0.68rem; color: #aaa; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
+    .card-top-badge { position: absolute; right: 13px; top: 13px; font-size: 0.6rem; font-weight: 900; color: var(--hitech-primary); background: var(--hitech-primary-light); padding: 3px 10px; border-radius: 6px; z-index: 1; letter-spacing: 0.6px; }
+    .card-summary { font-size: 0.72rem; color: #666; line-height: 1.55; margin: 0 0 14px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; min-height: 68px; }
+    .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .action-btn { border: 1px solid #f0f2f5; border-radius: 9px; padding: 8px 4px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .action-btn:hover:not(.disabled) { background: #f8fafb; border-color: #ddd; }
+    .action-btn span:first-child { font-size: 0.68rem; font-weight: 900; color: #444; }
+    .action-btn span:last-child { font-size: 0.6rem; color: #bbb; font-weight: 700; }
     .action-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #fafafa; border-style: dashed; }
-    .card-footer { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
-    .file-size { font-size: 0.75rem; color: #bbb; font-weight: 700; }
+    .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
+    .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
     .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.8rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
 
     /* List View mode */
@@ -120,7 +125,7 @@
     .list-item-meta { font-size: 0.75rem; color: #aaa; font-weight: 600; }
     .list-item-actions { display: flex; gap: 12px; }
     .action-pill { padding: 5px 15px; border-radius: 20px; background: #f5f7f9; font-size: 0.65rem; font-weight: 800; color: #666; text-decoration: none; border: 1px solid transparent; transition: all 0.2s; }
-    .action-pill:hover:not(.disabled) { border-color: var(--hitech-primary); color: var(--hitech-primary); background: #e0f2f1; }
+    .action-pill:hover:not(.disabled) { border-color: var(--hitech-primary); color: var(--hitech-primary); background: var(--hitech-primary-light); }
     .action-pill.disabled { opacity: 0.3; cursor: not-allowed; }
 
     /* Floating Add Document button — always reachable without scrolling
@@ -658,11 +663,11 @@
                         <i class="ti ti-file-text fs-4 text-primary"></i>
                         <div class="text-dark small fw-bold text-truncate" style="max-width: 250px;">${file.name}</div>
                     </div>
-                    <div id="status-${id}" class="badge px-2 py-1" style="background: rgba(0, 137, 123, 0.1); color: #00897b; font-size: 0.65rem; font-weight: 800;">AI AUDITING...</div>
+                    <div id="status-${id}" class="badge px-2 py-1" style="background: var(--hitech-primary-light); color: var(--hitech-primary); font-size: 0.65rem; font-weight: 800;">AI AUDITING...</div>
                 </div>
                 <div class="p-4 bg-white">
                     <div class="progress mb-3" style="height: 6px; background: #f0f2f5; border-radius: 10px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="bar-${id}" style="width: 35%; border-radius: 10px; background-color: #00897b;"></div>
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="bar-${id}" style="width: 35%; border-radius: 10px; background-color: var(--hitech-primary);"></div>
                     </div>
                     <div id="summary-section-${id}">
                         <div id="summary-${id}" class="text-muted mb-3 italic" style="font-size: 0.75rem; line-height: 1.6; min-height: 40px;">
@@ -675,7 +680,7 @@
                         </div>
                         <div id="action-${id}" style="display:none;">
                             <hr class="my-4 opacity-10">
-                            <button class="btn w-100 py-3 fw-bold rounded-pill shadow-lg transition-all text-white" id="commit-${id}" style="background: #00897b; border: none;">
+                            <button class="btn w-100 py-3 fw-bold rounded-pill shadow-lg transition-all text-white" id="commit-${id}" style="background: var(--hitech-primary); border: none;">
                                 <i class="ti ti-shield-check me-2"></i> Confirm & Secure to Vault
                             </button>
                         </div>
