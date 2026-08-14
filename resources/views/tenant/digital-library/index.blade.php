@@ -163,7 +163,6 @@
     #videoPlayerMeta { width: 100%; }
     .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
     .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
-    .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.7rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
 
     /* List View mode */
     .list-view-item { background: white; border: 1px solid #eef2f4; border-radius: 14px; padding: 15px 25px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; }

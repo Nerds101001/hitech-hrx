@@ -47,8 +47,10 @@
             <a href="{{ $pres ? route('library.access', $pres->id) : 'javascript:void(0)' }}" target="{{ $pres ? '_blank' : '' }}" class="action-pill {{ !$pres ? 'disabled' : '' }}">PRES</a>
             <a href="{{ $testReport ? route('library.access', $testReport->id) : 'javascript:void(0)' }}" target="{{ $testReport ? '_blank' : '' }}" class="action-pill {{ !$testReport ? 'disabled' : '' }}">TEST</a>
         @endif
-        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-pill bg-primary text-white ms-1 border-0" title="View Details">
-            <i class="bx bx-link-external"></i> OPEN
+        @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
+        <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="action-pill bg-danger text-white ms-3 border-0" title="Delete Document">
+            <i class="bx bx-trash"></i> DEL
         </a>
+        @endif
     </div>
 </div>
