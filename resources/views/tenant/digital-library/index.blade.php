@@ -15,22 +15,32 @@
 
     body { background-color: var(--hitech-bg); font-family: 'Public Sans', sans-serif; }
     
-    /* Navigation Bar */
-    .nav-filters .nav-link { padding: 6px 18px; border-radius: 8px; color: #666; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; border: 1px solid transparent; }
+    /* Navigation Bar — values matched to the frontend-preview mockup: full
+       pill tabs, light-tint active state (same treatment brand-card.active
+       and side-nav-item.active already use), not a solid fill. */
+    .nav-filters .nav-link { padding: 7px 13px; border-radius: 999px; color: #94a3b8; font-weight: 700; font-size: 0.78rem; transition: all 0.2s; border: 1px solid transparent; }
     .nav-filters .nav-link:hover { background: #f0f2f5; }
-    .nav-filters .nav-link.active { background: var(--hitech-primary); color: white !important; }
+    .nav-filters .nav-link.active { background: var(--hitech-primary-light); color: var(--hitech-primary) !important; }
 
-    .search-input-wrapper { background: #f0f2f5; border-radius: 20px; padding: 8px 16px; display: flex; align-items: center; width: 250px; border: 1px solid #eef2f4; }
-    .search-input-wrapper input { border: none; background: transparent; font-size: 0.85rem; padding-left: 10px; width: 100%; outline: none; }
+    .search-input-wrapper { background: #f8fafb; border-radius: 999px; padding: 8px 16px; display: flex; align-items: center; min-width: 200px; border: 1px solid #eef2f4; }
+    .search-input-wrapper input { border: none; background: transparent; font-size: 0.78rem; padding-left: 10px; width: 100%; outline: none; }
 
     /* One card, two zones: the outer wrapper owns the rounded corners,
        border and shadow; the banner and nav row are flush panels inside it,
        not two separate boxes with a gap between them. */
     .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
-    .library-banner { background: var(--hitech-dark); padding: 22px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-    .banner-content h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 2px; }
-    .banner-content p { opacity: 0.8; font-size: 0.85rem; margin-bottom: 0; font-weight: 500; }
+    .library-banner { background: linear-gradient(120deg, var(--hitech-primary), var(--hitech-dark)); padding: 26px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .banner-content h1 { font-size: 1.25rem; font-weight: 800; margin-bottom: 4px; }
+    .banner-content p { opacity: 0.85; font-size: 0.8rem; margin-bottom: 0; }
     .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    /* hitech-portal.scss repurposes .btn-white app-wide into the same
+       transparent/outline treatment as .btn-secondary (presumably correct
+       for its other, light-background uses) — that silently wins over
+       Bootstrap's bg-white/text-dark utilities via !important, leaving "AI
+       Bulk Upload" a near-invisible teal-on-teal ghost against this dark
+       banner. Scoped, not global: only this banner needs an actual solid
+       white pill. */
+    .banner-btns .btn-white { background: #fff !important; color: #1e293b !important; border-color: #fff !important; }
     .nav-row { border-top: 1px solid #eef2f4; }
 
     .section-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 4px 0 12px; }
@@ -108,14 +118,14 @@
     .card-top-badge { position: absolute; right: 13px; top: 13px; font-size: 0.6rem; font-weight: 900; color: var(--hitech-primary); background: var(--hitech-primary-light); padding: 3px 10px; border-radius: 6px; z-index: 1; letter-spacing: 0.6px; }
     .card-summary { font-size: 0.72rem; color: #666; line-height: 1.55; margin: 0 0 14px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; font-style: italic; min-height: 68px; }
     .action-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .action-btn { border: 1px solid #f0f2f5; border-radius: 9px; padding: 8px 4px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+    .action-btn { border: 1px solid #f0f2f5; border-radius: 9px; padding: 8px 2px; text-align: center; text-decoration: none; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 3px; }
     .action-btn:hover:not(.disabled) { background: #f8fafb; border-color: #ddd; }
-    .action-btn span:first-child { font-size: 0.68rem; font-weight: 900; color: #444; }
+    .action-btn span:first-child { font-size: 0.62rem; font-weight: 900; color: #444; }
     .action-btn span:last-child { font-size: 0.6rem; color: #bbb; font-weight: 700; }
     .action-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #fafafa; border-style: dashed; }
     .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
     .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
-    .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.8rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
+    .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.7rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
 
     /* List View mode */
     .list-view-item { background: white; border: 1px solid #eef2f4; border-radius: 14px; padding: 15px 25px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s; }
