@@ -20,11 +20,15 @@
     .search-input-wrapper { background: #f0f2f5; border-radius: 20px; padding: 8px 16px; display: flex; align-items: center; width: 250px; border: 1px solid #eef2f4; }
     .search-input-wrapper input { border: none; background: transparent; font-size: 0.85rem; padding-left: 10px; width: 100%; outline: none; }
 
-    /* Hero Banner — compact header bar, not a full hero section */
-    .library-banner { background: var(--hitech-dark); border-radius: 16px; padding: 22px 28px; color: white; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    /* One card, two zones: the outer wrapper owns the rounded corners,
+       border and shadow; the banner and nav row are flush panels inside it,
+       not two separate boxes with a gap between them. */
+    .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
+    .library-banner { background: var(--hitech-dark); padding: 22px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
     .banner-content h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 2px; }
     .banner-content p { opacity: 0.8; font-size: 0.85rem; margin-bottom: 0; font-weight: 500; }
     .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-row { border-top: 1px solid #eef2f4; }
 
     /* Brand Selection - Streamlined */
     .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 2rem; }
@@ -142,7 +146,8 @@
     @media (max-width: 767.98px) {
         .container-xxl { padding-left: 12px; padding-right: 12px; }
 
-        .library-banner { padding: 18px 20px; border-radius: 14px; }
+        .vault-header-card { border-radius: 14px; }
+        .library-banner { padding: 18px 20px; }
         .banner-content h1 { font-size: 1.25rem; }
         .banner-btns { width: 100%; }
         .banner-btns .btn { flex: 1; }
@@ -211,51 +216,54 @@
 
 @section('content')
 <div class="container-xxl">
-    <!-- Hero Banner -->
-    <div class="library-banner">
-        <div class="banner-content">
-            <h1>Intelligent Vault</h1>
-            <p>Centralised technical archive for every brand.</p>
-        </div>
-        @php
-            /* Upload / creation controls. Admin and HR qualify by role, and so
-               does anyone granted vault.upload individually under Roles &
-               Permissions → User Special Permissions.
+    @php
+        /* Upload / creation controls. Admin and HR qualify by role, and so
+           does anyone granted vault.upload individually under Roles &
+           Permissions → User Special Permissions.
 
-               This used to check the role alone. The routes behind these
-               buttons have always accepted vault.upload, so the permission was
-               real on the server but invisible in the UI: a manager granted it
-               saw no Add Document / Bulk Upload button and reasonably concluded
-               the grant had not worked. */
-            $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR'])
-                || auth()->user()->can('vault.upload');
-        @endphp
-        @if($vaultCanManage)
-        <div class="banner-btns">
-            <button class="btn btn-white bg-white text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">AI Bulk Upload</button>
-            <button class="btn btn-outline-white border-white text-white rounded-pill px-4" onclick="openAddDocumentModal('{{ request('category') }}')">Add Document</button>
-        </div>
-        @endif
-    </div>
+           This used to check the role alone. The routes behind these
+           buttons have always accepted vault.upload, so the permission was
+           real on the server but invisible in the UI: a manager granted it
+           saw no Add Document / Bulk Upload button and reasonably concluded
+           the grant had not worked. */
+        $vaultCanManage = auth()->user()->hasRole(['admin','Admin','hr','HR'])
+            || auth()->user()->can('vault.upload');
+    @endphp
 
-    <!-- User Requested Navigation Bar Above Brands -->
-    <div class="nav-row d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border border-light">
-        <div class="d-flex align-items-center">
-            <h5 class="fw-bold mb-0 me-4 text-dark">Intelligent Vault</h5>
-            <div class="nav-filters d-flex gap-1">
-                <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
-                <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
-                <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
-                <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Report</a>
-                <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentation</a>
-                <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Report</a>
-                <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Video</a>
+    {{-- One card, two zones — the banner and the nav/search row used to be
+         two separate boxes with a gap between them. --}}
+    <div class="vault-header-card">
+        <div class="library-banner">
+            <div class="banner-content">
+                <h1>Intelligent Vault</h1>
+                <p>Centralised technical archive for every brand.</p>
             </div>
+            @if($vaultCanManage)
+            <div class="banner-btns">
+                <button class="btn btn-white bg-white text-dark fw-bold rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#bulkUploadModal">AI Bulk Upload</button>
+                <button class="btn btn-outline-white border-white text-white rounded-pill px-4" onclick="openAddDocumentModal('{{ request('category') }}')">Add Document</button>
+            </div>
+            @endif
         </div>
-        <div class="d-flex align-items-center gap-3">
-            <div class="search-input-wrapper">
-                <i class="ti ti-search text-muted"></i>
-                <input type="text" placeholder="Search technical assets..." id="librarySearch">
+
+        <div class="nav-row d-flex justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center">
+                <h5 class="fw-bold mb-0 me-4 text-dark">Intelligent Vault</h5>
+                <div class="nav-filters d-flex gap-1">
+                    <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
+                    <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
+                    <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
+                    <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Report</a>
+                    <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentation</a>
+                    <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Report</a>
+                    <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Video</a>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="search-input-wrapper">
+                    <i class="ti ti-search text-muted"></i>
+                    <input type="text" placeholder="Search technical assets..." id="librarySearch">
+                </div>
             </div>
         </div>
     </div>
