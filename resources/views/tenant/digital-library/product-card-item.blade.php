@@ -142,11 +142,6 @@
                 <a href="javascript:void(0)" onclick="openMoveModal('{{ addslashes($productName) }}', '{{ $brand }}', '{{ $category }}')" class="text-muted" title="Manage Archive">
                     <i class="bx bx-cog fs-5"></i>
                 </a>
-                @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
-                <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="text-danger ms-2" title="Delete Document">
-                    <i class="bx bx-trash fs-5"></i>
-                </a>
-                @endif
                 <a href="{{ route('library.access', $file->id) }}" target="_blank" class="view-details">View Details <i class="bx bx-right-arrow-alt"></i></a>
             </div>
         </div>
