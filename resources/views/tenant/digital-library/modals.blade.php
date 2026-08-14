@@ -102,7 +102,7 @@
                                         <option value="HITECH">HITECH</option>
                                     </select>
                                 </div>
-                                <div class="col-6">
+                                <div class="col-6" id="subCategorySection">
                                     <label class="form-label fw-bold small text-uppercase">Sub-Category / Subject</label>
                                     <select name="sub_category" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
                                         <option value="Cleaners">Cleaners</option>
@@ -367,14 +367,22 @@ let taxonomyModal = null;
 function toggleBrandSection() {
     const type = document.getElementById('manualDocType')?.value;
     const brandSection = document.getElementById('brandSection');
+    const subCategorySection = document.getElementById('subCategorySection');
     if (!brandSection) return;
     const independentTypes = ['Test Report', 'Comparison Report'];
     const hiddenTypes = ['LEARN', 'Video'];
+    // Presentations belong to a brand but not to a chemical sub-category —
+    // keep Brand, drop Sub-Category (owner spec: "presentations are only
+    // related to the brands, not the categories").
+    const brandOnlyTypes = ['Presentation'];
     if (hiddenTypes.includes(type)) {
         brandSection.style.display = 'none';
     } else {
         brandSection.style.display = 'flex';
         brandSection.style.opacity = independentTypes.includes(type) ? '0.4' : '1';
+        if (subCategorySection) {
+            subCategorySection.style.display = brandOnlyTypes.includes(type) ? 'none' : '';
+        }
     }
 }
 

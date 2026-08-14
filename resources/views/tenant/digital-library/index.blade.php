@@ -61,6 +61,7 @@
 
     /* Matrix Layout */
     .main-grid { display: grid; grid-template-columns: 240px 1fr; gap: 25px; }
+    .main-grid.no-sidebar { grid-template-columns: 1fr; }
     .brand-header { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid #eef2f4; }
     .brand-header-dot { width: 14px; height: 14px; border-radius: 50%; }
     .brand-header h2 { font-weight: 800; margin: 0; font-size: 1.6rem; color: #333; }
@@ -178,7 +179,12 @@
         </div>
     </div>
 
-    @php $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report', 'LEARN', 'Video']); @endphp
+    @php
+        $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report', 'LEARN', 'Video']);
+        // Presentations belong to a brand but never to a chemical sub-category
+        // (unlike SDS/TDS) — keep the brand grouping, drop the category sidebar.
+        $isBrandOnlyCat = $category === 'Presentation';
+    @endphp
 
     @if(!$isIndependentCat)
     <!-- Select Brand Row -->
@@ -297,10 +303,11 @@
                 </div>
             </div>
 
-            <div class="main-grid mt-4">
+            <div class="main-grid mt-4 @if($isBrandOnlyCat) no-sidebar @endif">
+                @unless($isBrandOnlyCat)
                 <!-- Category Sidebar (Brand Specific) -->
                 <div class="side-navigation shadow-sm">
-                    <div class="side-nav-item active" 
+                    <div class="side-nav-item active"
                          onclick="showSubCat('{{ $slug }}', 'all')"
                          data-cat-btn="{{ $slug }}-all">
                         <span>All Categories</span>
@@ -308,13 +315,13 @@
                     </div>
                     <hr class="my-2 opacity-25">
                     @foreach($brandCategories as $mCat)
-                        @php 
+                        @php
                             $mCatSlug = \Illuminate\Support\Str::slug($mCat);
                             $hasDocs = isset($brandFiles[$mCat]);
                             $prodCount = $hasDocs ? count($brandFiles[$mCat]) : 0;
                             $taxId = $brandTaxonomies->firstWhere('name', $mCat)?->id;
                         @endphp
-                        <div class="side-nav-item d-flex align-items-center justify-content-between" 
+                        <div class="side-nav-item d-flex align-items-center justify-content-between"
                              onclick="showSubCat('{{ $slug }}', '{{ $mCatSlug }}')"
                              data-cat-btn="{{ $slug }}-{{ $mCatSlug }}"
                              ondragover="handleDragOver(event)"
@@ -343,7 +350,7 @@
                             </div>
                         </div>
                     @endforeach
-                    
+
                     @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
                     <hr class="my-2 opacity-25">
                     <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $b->id }})">
@@ -351,6 +358,7 @@
                     </div>
                     @endif
                 </div>
+                @endunless
 
                 <!-- Products View Area -->
                 <div class="products-area">

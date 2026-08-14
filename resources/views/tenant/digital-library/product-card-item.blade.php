@@ -19,7 +19,7 @@
                 </div>
                 <div class="product-title-area overflow-hidden">
                     <div class="product-title text-truncate" title="{{ $productName }}">{{ $productName }}</div>
-                    <div class="product-subtitle">{{ $brand }} · {{ $category }}</div>
+                    <div class="product-subtitle">{{ $brand }}@if($file->category !== 'Presentation') · {{ $category }}@endif</div>
                 </div>
             </div>
             <div class="product-summary">

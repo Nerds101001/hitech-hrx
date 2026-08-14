@@ -14,7 +14,7 @@
         <div class="list-item-info">
             <div class="list-item-title">{{ $productName }}</div>
             <div class="list-item-meta">
-                {{ $brand }} · {{ $category }}
+                {{ $brand }}@if($file->category !== 'Presentation') · {{ $category }}@endif
                 @if($file->category === 'LEARN' && $file->presenter_id)
                     <span class="ms-2 border-start ps-2">
                         <i class="ti ti-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }}
