@@ -30,7 +30,11 @@
        not two separate boxes with a gap between them. */
     .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
     .library-banner { background: linear-gradient(120deg, var(--hitech-primary), var(--hitech-dark)); padding: 26px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-    .banner-content h1 { font-size: 1.25rem; font-weight: 800; margin-bottom: 4px; }
+    /* A global heading-color reset elsewhere applies directly to h1
+       elements — inheriting .library-banner's white doesn't beat that,
+       since a direct rule always wins over an inherited one regardless of
+       specificity. Without this, the title rendered dark-on-dark. */
+    .banner-content h1 { font-size: 1.25rem; font-weight: 800; margin-bottom: 4px; color: #fff; }
     .banner-content p { opacity: 0.85; font-size: 0.8rem; margin-bottom: 0; }
     .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
     /* hitech-portal.scss repurposes .btn-white app-wide into the same
@@ -44,6 +48,15 @@
     .nav-row { border-top: 1px solid #eef2f4; }
 
     .section-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 4px 0 12px; }
+
+    /* Phone-only brand dropdown — hidden on desktop, where the card grid
+       below is the real picker. */
+    .brand-select-mobile { display: none; }
+    .brand-select-mobile select {
+        width: 100%; font: inherit; font-size: 0.85rem; font-weight: 700; color: #333;
+        background: #f5f6f8; border: 1px solid #eef2f4; border-radius: 12px;
+        height: 44px; padding: 0 14px; margin-bottom: 16px;
+    }
 
     /* Brand Selection - Streamlined */
     .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 28px; }
@@ -181,9 +194,19 @@
         .nav-filters .nav-link { white-space: nowrap; }
         .search-input-wrapper { width: 100%; margin-top: 10px; }
 
-        .brand-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-        .brand-card { padding: 10px 6px; }
-        .brand-card h6 { font-size: 0.72rem; }
+        /* A 7-card grid has no good compact shrink on a phone — swap it for
+           the native dropdown built alongside it, and drop the label since
+           the dropdown's own placeholder already says what it's for. */
+        .section-label { display: none; }
+        .brand-grid { display: none; }
+        .brand-select-mobile { display: block; }
+
+        /* "Fixed" here meant literally CSS position:fixed — a floating
+           button parked over page content while scrolling. On a phone it
+           becomes a normal button at the end of the page instead; the
+           banner already carries its own Add Document entry point up top. */
+        .vault-fab { position: static; width: 100%; justify-content: center; margin: 20px 0 0; box-shadow: none; }
+        .container-xxl { padding-bottom: 20px; }
 
         /* Sidebar stacks above the product grid instead of sitting beside it —
            240px next to card content has no room to breathe on a phone.
@@ -203,7 +226,7 @@
         .action-btn { padding: 8px 2px; }
         .action-btn span:first-child { font-size: 0.68rem; }
 
-        .vault-fab { bottom: 16px; right: 16px; padding: 12px 18px; font-size: 0.78rem; }
+        .vault-fab { padding: 12px 18px; font-size: 0.78rem; }
 
         .vault-pagination { gap: 4px; }
         .page-btn { min-width: 30px; height: 30px; padding: 0 8px; }
@@ -283,6 +306,23 @@
     </div>
 
     @if($tier !== 'video')
+    {{-- Phone-only brand picker: a native <select>, not the card grid — a
+         7-card grid has no good compact form on a narrow screen, a dropdown
+         does. Desktop keeps the card grid; each shows/hides via CSS so
+         there's one server-rendered source of brands, not two client
+         copies to keep in sync. --}}
+    <div class="brand-select-mobile">
+        <select onchange="if (this.value) window.location.href = this.value;">
+            <option value="">Select Brand Ecosystem…</option>
+            @foreach($brands as $b)
+                @php $slug = \Illuminate\Support\Str::slug($b->name); @endphp
+                <option value="{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}" {{ ($activeBrand && $activeBrand->id === $b->id) ? 'selected' : '' }}>
+                    {{ $b->name }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+
     <!-- Select Brand Row — real links now: only the ACTIVE brand's files are
          fetched/rendered server-side, not all seven brands hidden with CSS. -->
     <div class="section-label">Select Brand Ecosystem</div>
