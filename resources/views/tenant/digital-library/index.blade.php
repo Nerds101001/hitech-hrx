@@ -312,7 +312,7 @@
             </div>
             <div class="d-flex align-items-center gap-3">
                 <div class="search-input-wrapper">
-                    <i class="ti ti-search text-muted"></i>
+                    <i class="bx bx-search text-muted"></i>
                     <input type="text" placeholder="Search technical assets..." id="librarySearch">
                 </div>
             </div>
@@ -346,11 +346,11 @@
                             <button class="brand-tab-dot" data-bs-toggle="dropdown" aria-expanded="false">⋮</button>
                             <div class="dropdown-menu dropdown-menu-custom shadow">
                                 <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('brand', {{ $b->id }})">
-                                    <i class="ti ti-edit fs-6"></i> Rename Brand
+                                    <i class="bx bx-edit fs-6"></i> Rename Brand
                                 </a>
                                 <div class="dropdown-divider opacity-10"></div>
                                 <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $b->id }})">
-                                    <i class="ti ti-trash fs-6"></i> Delete Ecosystem
+                                    <i class="bx bx-trash fs-6"></i> Delete Ecosystem
                                 </a>
                             </div>
                         </div>
@@ -395,8 +395,8 @@
                 <div class="stats-badge">{{ $totalScopedDocs }} Files</div>
             </div>
             <div class="view-switcher">
-                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-video"><i class="ti ti-layout-grid"></i> Grid View</button>
-                <button class="view-btn" onclick="switchView('list')" id="btn-list-video"><i class="ti ti-list"></i> List View</button>
+                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-video"><i class="bx bx-grid-alt"></i> Grid View</button>
+                <button class="view-btn" onclick="switchView('list')" id="btn-list-video"><i class="bx bx-list-ul"></i> List View</button>
             </div>
         </div>
 
@@ -428,10 +428,10 @@
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-custom shadow">
                                     <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('category', {{ $vTaxId }})">
-                                        <i class="ti ti-edit"></i> Rename
+                                        <i class="bx bx-edit"></i> Rename
                                     </a>
                                     <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $vTaxId }})">
-                                        <i class="ti ti-trash"></i> Delete
+                                        <i class="bx bx-trash"></i> Delete
                                     </a>
                                 </div>
                             </div>
@@ -443,7 +443,7 @@
                 @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
                 <hr class="my-2 opacity-25">
                 <div class="side-nav-item text-primary" onclick="openAddModal('category', null)">
-                    <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
+                    <span class="fw-bold"><i class="bx bx-plus me-1"></i> New Category</span>
                 </div>
                 @endif
             </div>
@@ -453,7 +453,7 @@
                 <div class="subcat-content">
                     @if(!$paginated || $paginated->total() == 0)
                         <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                            <i class="ti ti-video-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                            <i class="bx bx-video-off fs-1 text-muted mb-3 d-block opacity-25"></i>
                             <h6 class="text-muted fw-bold">No videos {{ $activeSubcat === 'all' ? 'uploaded yet' : 'in this category' }}</h6>
                         </div>
                     @else
@@ -486,8 +486,8 @@
                 <div class="stats-badge">{{ $totalScopedDocs }} Technical Files</div>
             </div>
             <div class="view-switcher">
-                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-{{ $slug }}"><i class="ti ti-layout-grid"></i> Grid View</button>
-                <button class="view-btn" onclick="switchView('list')" id="btn-list-{{ $slug }}"><i class="ti ti-list"></i> List View</button>
+                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-{{ $slug }}"><i class="bx bx-grid-alt"></i> Grid View</button>
+                <button class="view-btn" onclick="switchView('list')" id="btn-list-{{ $slug }}"><i class="bx bx-list-ul"></i> List View</button>
             </div>
         </div>
 
@@ -523,10 +523,10 @@
                                 </button>
                                 <div class="dropdown-menu dropdown-menu-custom shadow">
                                     <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('category', {{ $taxId }})">
-                                        <i class="ti ti-edit"></i> Rename
+                                        <i class="bx bx-edit"></i> Rename
                                     </a>
                                     <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $taxId }})">
-                                        <i class="ti ti-trash"></i> Delete
+                                        <i class="bx bx-trash"></i> Delete
                                     </a>
                                 </div>
                             </div>
@@ -538,7 +538,7 @@
                 @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
                 <hr class="my-2 opacity-25">
                 <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $activeBrand->id }})">
-                    <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
+                    <span class="fw-bold"><i class="bx bx-plus me-1"></i> New Category</span>
                 </div>
                 @endif
             </div>
@@ -549,7 +549,7 @@
                 <div class="subcat-content">
                     @if(!$paginated || $paginated->total() == 0)
                         <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                            <i class="ti ti-box-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                            <i class="bx bx-package fs-1 text-muted mb-3 d-block opacity-25"></i>
                             <h6 class="text-muted fw-bold">No assets found for {{ $activeBrand->name }}</h6>
                         </div>
                     @else
@@ -573,7 +573,7 @@
     </div>
     @else
     <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm mt-2">
-        <i class="ti ti-building-warehouse fs-1 text-muted mb-3 d-block opacity-25"></i>
+        <i class="bx bx-buildings fs-1 text-muted mb-3 d-block opacity-25"></i>
         <h6 class="text-muted fw-bold">No brand ecosystems yet</h6>
     </div>
     @endif
@@ -581,7 +581,7 @@
 
 @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
 <button type="button" class="vault-fab" onclick="openAddDocumentModal('{{ request('category') }}')">
-    <i class="ti ti-plus fs-5"></i> Add Document
+    <i class="bx bx-plus fs-5"></i> Add Document
 </button>
 @endif
 
@@ -717,7 +717,7 @@
             item.innerHTML = `
                 <div class="p-3 d-flex justify-content-between align-items-center" style="background: #fdfdfd; border-bottom: 1px solid #f0f0f0;">
                     <div class="d-flex align-items-center gap-2">
-                        <i class="ti ti-file-text fs-4 text-primary"></i>
+                        <i class="bx bx-file fs-4 text-primary"></i>
                         <div class="text-dark small fw-bold text-truncate" style="max-width: 250px;">${file.name}</div>
                     </div>
                     <div id="status-${id}" class="badge px-2 py-1" style="background: var(--hitech-primary-light); color: var(--hitech-primary); font-size: 0.65rem; font-weight: 800;">AI AUDITING...</div>
@@ -738,7 +738,7 @@
                         <div id="action-${id}" style="display:none;">
                             <hr class="my-4 opacity-10">
                             <button class="btn w-100 py-3 fw-bold rounded-pill shadow-lg transition-all text-white" id="commit-${id}" style="background: var(--hitech-primary); border: none;">
-                                <i class="ti ti-shield-check me-2"></i> Confirm & Secure to Vault
+                                <i class="bx bx-check-shield me-2"></i> Confirm & Secure to Vault
                             </button>
                         </div>
                     </div>
@@ -812,7 +812,7 @@
                     </div>
                     ${data.pending ? `
                     <div class="p-2 rounded-3 mb-3 text-start" style="font-size: 0.72rem; background:#fff7ed; color:#b45309; border:1px solid #fed7aa;">
-                        <i class="ti ti-clock me-1"></i>${data.notice || 'The AI is busy. Save the file — it will be classified automatically in the background.'}
+                        <i class="bx bx-time me-1"></i>${data.notice || 'The AI is busy. Save the file — it will be classified automatically in the background.'}
                     </div>` : ''}
                 `;
                 updateCategoryDropdown(id, data.sub_category);
@@ -838,7 +838,7 @@
                             const finalBrand = brandEl.value;
                             const finalCat = catEl.value;
                             commitBtn.disabled = true;
-                            commitBtn.innerHTML = '<i class="ti ti-loader-2 spin me-2"></i> Vaulting...';
+                            commitBtn.innerHTML = '<i class="bx bx-loader-alt spin me-2"></i> Vaulting...';
                             
                             await finalizeIngestion(id, { ...data, brand: finalBrand, sub_category: finalCat }, file);
                         } catch (err) {
@@ -892,7 +892,7 @@
                     card.style.opacity = '0.5';
                     card.querySelector(`#summary-section-${id}`).innerHTML = `
                         <div class="text-center py-3">
-                            <i class="ti ti-circle-check fs-2 text-success mb-2"></i>
+                            <i class="bx bx-check-circle fs-2 text-success mb-2"></i>
                             <div class="fw-bold text-success">Asset Secured to Vault</div>
                             <div class="text-muted small">${finalData.name}</div>
                         </div>
@@ -908,7 +908,7 @@
             const commitBtn = document.getElementById(`commit-${id}`);
             if (commitBtn) {
                 commitBtn.disabled = false;
-                commitBtn.innerHTML = '<i class="ti ti-shield-check me-2"></i> Confirm & Secure to Vault';
+                commitBtn.innerHTML = '<i class="bx bx-check-shield me-2"></i> Confirm & Secure to Vault';
             }
 
             const sumEl = document.getElementById(`summary-${id}`);
@@ -916,17 +916,17 @@
                 if (isDuplicate) {
                     sumEl.innerHTML = `
                         <div class="alert alert-warning py-3 px-3 small border-0 mb-3" style="font-size: 0.75rem; border-radius: 12px; background: rgba(255, 152, 0, 0.1); color: #e65100;">
-                            <i class="ti ti-alert-triangle me-2 fs-5"></i> <strong>Duplicate Detected:</strong> Asset already exists in the vault.
+                            <i class="bx bx-error me-2 fs-5"></i> <strong>Duplicate Detected:</strong> Asset already exists in the vault.
                         </div>
                         <button class="btn btn-warning w-100 py-2 fw-bold rounded-pill shadow-sm" onclick="finalizeIngestion('${id}', null, null, true)">
-                            <i class="ti ti-replace me-1"></i> Replace Existing File
+                            <i class="bx bx-transfer me-1"></i> Replace Existing File
                         </button>
                     `;
                     const actionArea = document.getElementById(`action-${id}`);
                     if (actionArea) actionArea.style.display = 'none';
                 } else {
                     sumEl.innerHTML = `<div class="alert alert-danger py-2 px-3 small border-0 mb-0" style="font-size: 0.7rem;">
-                        <i class="ti ti-alert-circle me-1"></i> ${err.message}
+                        <i class="bx bx-error-circle me-1"></i> ${err.message}
                     </div>`;
                 }
             }

@@ -21,9 +21,9 @@
                 @endif
                 @if($file->presenter_id)
                     <span class="ms-2 border-start ps-2">
-                        <i class="ti ti-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }}
+                        <i class="bx bx-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }}
                         @if($file->session_date)
-                            <i class="ti ti-calendar ms-1 text-primary"></i> {{ \Carbon\Carbon::parse($file->session_date)->format('M d') }}
+                            <i class="bx bx-calendar ms-1 text-primary"></i> {{ \Carbon\Carbon::parse($file->session_date)->format('M d') }}
                         @endif
                     </span>
                 @endif
@@ -37,7 +37,7 @@
                     $pName = $file->presenter ? trim($file->presenter->first_name . ' ' . $file->presenter->last_name) : '';
                     $sDate = $file->session_date ? \Carbon\Carbon::parse($file->session_date)->format('M d, Y') : '';
                 @endphp
-                <a href="javascript:void(0)" onclick="playVideo('{{ $file->youtube_url }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-pill bg-danger text-white border-0"><i class="ti ti-player-play"></i> PLAY</a>
+                <a href="javascript:void(0)" onclick="playVideo('{{ $file->youtube_url }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-pill border-0" style="background: var(--hitech-primary); color: #fff;"><i class="bx bx-play"></i> PLAY</a>
             @endif
         @elseif($tier === 'brand')
             <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-pill">{{ $file->category === 'Comparison Report' ? 'VIEW REPORT' : 'VIEW' }}</a>
@@ -49,11 +49,11 @@
         @endif
         @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
         <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="action-pill bg-danger text-white ms-3 border-0" title="Delete Document">
-            <i class="ti ti-trash"></i> DEL
+            <i class="bx bx-trash"></i> DEL
         </a>
         @endif
         <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-pill bg-primary text-white ms-1 border-0" title="View Details">
-            <i class="ti ti-external-link"></i> OPEN
+            <i class="bx bx-link-external"></i> OPEN
         </a>
     </div>
 </div>

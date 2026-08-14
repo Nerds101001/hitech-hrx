@@ -10,7 +10,7 @@
                 <!-- 🛡️ Strategic AI Parser Banner -->
                 <div class="alert alert-primary d-flex align-items-center mb-4 border-0" role="alert" style="border-radius: 15px; background: rgba(0, 255, 255, 0.05);">
                     <div class="p-3 bg-info rounded-circle me-3 shadow-sm">
-                        <i class="ti ti-scan text-white fs-4"></i>
+                        <i class="bx bx-scan text-white fs-4"></i>
                     </div>
                     <div>
                         <h6 class="alert-heading mb-1 fw-bold text-info">Phase 1: Content Guardian Active</h6>
@@ -20,7 +20,7 @@
 
                 <div class="bulk-uploader border-2 border-dashed border-info rounded-4 p-5 text-center transition-all cursor-pointer mb-4" id="dropzone" style="background: rgba(0,0,0,0.2);" onclick="document.getElementById('bulkFileInput').click()">
                     <div class="py-2">
-                        <i class="ti ti-cloud-upload display-4 text-info mb-3 opacity-50"></i>
+                        <i class="bx bx-cloud-upload display-4 text-info mb-3 opacity-50"></i>
                         <h5 class="fw-bold text-white">Ingest Hitech Assets</h5>
                         <p class="text-muted mb-0">Drag documents here to initiate AI Audit.</p>
                         <input type="file" id="bulkFileInput" multiple hidden accept=".pdf">
@@ -34,7 +34,7 @@
             <div class="modal-footer border-0 bg-black/10">
                 <button type="button" class="btn btn-outline-secondary px-4 rounded-pill text-white" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-info px-5 rounded-pill shadow-lg fw-bold" id="startBulkCommit" style="display:none;">
-                    <i class="ti ti-shield-check me-1"></i> Finalize All Assets
+                    <i class="bx bx-check-shield me-1"></i> Finalize All Assets
                 </button>
             </div>
         </div>
@@ -53,12 +53,12 @@
             <ul class="nav nav-tabs nav-fill mt-3 px-3 border-0" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link active border-0 rounded-pill" data-bs-toggle="tab" href="#fileTab" role="tab">
-                        <i class="ti ti-file-upload me-1"></i> File Upload
+                        <i class="bx bx-upload me-1"></i> File Upload
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link border-0 rounded-pill" data-bs-toggle="tab" href="#youtubeTab" role="tab">
-                        <i class="ti ti-brand-youtube me-1"></i> External Video Link
+                        <i class="bx bxl-youtube me-1"></i> External Video Link
                     </a>
                 </li>
             </ul>
@@ -70,7 +70,7 @@
                         <!-- File Upload Tab -->
                         <div class="tab-pane fade show active" id="fileTab" role="tabpanel">
                             <div class="alert alert-info d-flex align-items-center mb-4 border-0" style="border-radius: 12px; background: rgba(0, 172, 193, 0.1); color: #00838f;">
-                                <i class="ti ti-info-circle me-2"></i>
+                                <i class="bx bx-info-circle me-2"></i>
                                 <small>AI will detect category (SDS/TDS/Presentation/Video) and extract the 5-6 line crux.</small>
                             </div>
 
@@ -116,7 +116,7 @@
                                 <div class="file-upload-wrapper p-4 text-center bg-light rounded-4 border-2 border-dashed" style="border-color: #e0e0e0;">
                                      <input type="file" name="file" class="form-control d-none" id="fileSelector" accept=".pdf,.mp4">
                                      <div onclick="document.getElementById('fileSelector').click()" class="cursor-pointer">
-                                         <i class="ti ti-file-upload fs-1 text-primary mb-2"></i>
+                                         <i class="bx bx-upload fs-1 text-primary mb-2"></i>
                                          <p class="mb-0 text-muted" id="fileNameLabel">Click to browse file</p>
                                      </div>
                                 </div>
@@ -126,11 +126,11 @@
                         <!-- YouTube Tab -->
                         <div class="tab-pane fade" id="youtubeTab" role="tabpanel">
                             <div class="alert alert-warning d-flex align-items-center mb-2 border-0" style="border-radius: 12px;">
-                                <i class="ti ti-alert-circle me-2"></i>
+                                <i class="bx bx-error-circle me-2"></i>
                                 <small>External video links (YouTube/Google Drive) do not require AI validation.</small>
                             </div>
                             <div class="alert alert-danger d-flex align-items-center mb-4 border-0" style="border-radius: 12px;">
-                                <i class="ti ti-brand-google-drive me-2 fs-4"></i>
+                                <i class="bx bxl-google me-2 fs-4"></i>
                                 <small><strong>Google Drive Warning:</strong> Even if set to "Public", Google Drive often blocks embedded videos and forces viewers to log in. For seamless playback, please use the <strong>File Upload</strong> tab to upload your .mp4 files directly!</small>
                             </div>
                             <div class="mb-3">
@@ -172,7 +172,7 @@
                 </div>
                 <div class="modal-footer border-0">
                     <button type="submit" class="btn btn-primary w-100 rounded-pill py-3 shadow-lg fw-bold">
-                        <i class="ti ti-shield-check me-2"></i> Commit to Digital Vault
+                        <i class="bx bx-check-shield me-2"></i> Commit to Digital Vault
                     </button>
                 </div>
             </form>
@@ -190,7 +190,7 @@
             </div>
             <div class="modal-body p-4">
                 <div class="alert alert-warning small border-0 mb-4" style="border-radius: 12px; background: #fff3e0; color: #e65100;">
-                    <i class="ti ti-alert-triangle me-2"></i>
+                    <i class="bx bx-error me-2"></i>
                     This will move <strong>all files</strong> associated with this product title across the entire vault.
                 </div>
                 
@@ -270,8 +270,8 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div id="videoPlayerMeta" class="mt-2 text-white small d-none fw-bold">
-                    <span id="videoPlayerPresenter"><i class="ti ti-user me-1 text-primary"></i> Presenter: <span class="name"></span></span>
-                    <span class="ms-3" id="videoPlayerDate"><i class="ti ti-calendar me-1 text-primary"></i> Date: <span class="date"></span></span>
+                    <span id="videoPlayerPresenter"><i class="bx bx-user me-1 text-primary"></i> Presenter: <span class="name"></span></span>
+                    <span class="ms-3" id="videoPlayerDate"><i class="bx bx-calendar me-1 text-primary"></i> Date: <span class="date"></span></span>
                 </div>
             </div>
             <div class="modal-body p-0 mt-3 position-relative">
@@ -350,7 +350,7 @@
             </div>
             <div class="modal-footer border-0">
                 <button type="button" class="btn text-white w-100 rounded-pill py-3 shadow-lg fw-bold" style="background: #f57f17;" onclick="submitScorePresenter()">
-                    <i class="ti ti-star me-2"></i> Award Score to Presenter
+                    <i class="bx bx-star me-2"></i> Award Score to Presenter
                 </button>
             </div>
         </div>
@@ -784,7 +784,7 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
 
     const submitBtn = this.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = '<i class="ti ti-loader-2 spin me-2"></i> Committing...';
+    submitBtn.innerHTML = '<i class="bx bx-loader-alt spin me-2"></i> Committing...';
     submitBtn.disabled = true;
     
     try {

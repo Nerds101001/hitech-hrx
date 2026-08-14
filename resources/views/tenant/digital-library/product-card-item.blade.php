@@ -71,7 +71,7 @@
                                  bg-danger (red) reads as "stop/threat" to anyone
                                  who's used a video player before. Theme teal. --}}
                             <div class="rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 48px; height: 48px; background: var(--hitech-primary);">
-                                <i class="ti ti-player-play-filled text-white fs-4" style="margin-left: 3px;"></i>
+                                <i class="bx bx-play text-white fs-4" style="margin-left: 3px;"></i>
                             </div>
                         </div>
                     </div>
@@ -81,9 +81,9 @@
                 
                 @if($file->presenter_id)
                     <div class="d-flex flex-wrap gap-2 mt-2">
-                        <span class="badge bg-light text-dark border"><i class="ti ti-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }} {{ $file->presenter->last_name ?? '' }}</span>
+                        <span class="badge bg-light text-dark border"><i class="bx bx-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }} {{ $file->presenter->last_name ?? '' }}</span>
                         @if($file->session_date)
-                            <span class="badge bg-light text-dark border"><i class="ti ti-calendar text-primary"></i> {{ \Carbon\Carbon::parse($file->session_date)->format('M d, Y') }}</span>
+                            <span class="badge bg-light text-dark border"><i class="bx bx-calendar text-primary"></i> {{ \Carbon\Carbon::parse($file->session_date)->format('M d, Y') }}</span>
                         @endif
                     </div>
                 @endif
@@ -99,15 +99,15 @@
                             $sDate = $file->session_date ? \Carbon\Carbon::parse($file->session_date)->format('M d, Y') : '';
                         @endphp
                         <a href="javascript:void(0)" onclick="playVideo('{{ route('library.previewFrame', $file->id) }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-btn action-btn-wide action-btn-primary" style="grid-column: span 2;">
-                            <span><i class="ti ti-player-play fs-5"></i> Play</span>
+                            <span><i class="bx bx-play fs-5"></i> Play</span>
                         </a>
                     @else
                         <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn action-btn-wide action-btn-primary" style="grid-column: span 2;">
-                            <span><i class="ti ti-video fs-5"></i> Play</span>
+                            <span><i class="bx bx-video fs-5"></i> Play</span>
                         </a>
                     @endif
                     <button type="button" onclick="openVideoSummaryModal('{{ addslashes($productName) }}', '{{ addslashes($videoSummary) }}')" class="action-btn action-btn-wide" style="grid-column: span 2;">
-                        <span><i class="ti ti-file-text fs-5"></i> Summary</span>
+                        <span><i class="bx bx-file fs-5"></i> Summary</span>
                     </button>
                 @elseif($tier === 'brand')
                     {{-- One document, one action — a Presentation or Comparison
@@ -140,14 +140,14 @@
             <div class="file-size">{{ $sizeFormatted }}</div>
             <div class="d-flex align-items-center gap-3">
                 <a href="javascript:void(0)" onclick="openMoveModal('{{ addslashes($productName) }}', '{{ $brand }}', '{{ $category }}')" class="text-muted" title="Manage Archive">
-                    <i class="ti ti-settings fs-5"></i>
+                    <i class="bx bx-cog fs-5"></i>
                 </a>
                 @if(auth()->user()->hasRole(['admin', 'Admin', 'super_admin']))
                 <a href="javascript:void(0)" onclick="deleteDocument('{{ addslashes($productName) }}')" class="text-danger ms-2" title="Delete Document">
-                    <i class="ti ti-trash fs-5"></i>
+                    <i class="bx bx-trash fs-5"></i>
                 </a>
                 @endif
-                <a href="{{ route('library.access', $file->id) }}" target="_blank" class="view-details">View Details <i class="ti ti-arrow-right"></i></a>
+                <a href="{{ route('library.access', $file->id) }}" target="_blank" class="view-details">View Details <i class="bx bx-right-arrow-alt"></i></a>
             </div>
         </div>
     </div>
