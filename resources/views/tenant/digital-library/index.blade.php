@@ -138,7 +138,7 @@
        min-height: 38px matches hitech-portal.scss's real .btn min-height
        used app-wide, instead of guessing a padding value that happens to
        add up close to it — padding alone drifted 7px over on its own. */
-    .action-btn-wide { grid-column: span 4; flex-direction: row; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; min-height: 38px; }
+    .action-btn-wide { grid-column: span 4; flex-direction: row; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; min-height: 38px; border-radius: 12px; }
     .action-btn-wide span:first-child { font-size: 0.8rem; font-weight: 800; color: inherit; }
     .action-btn-wide i { font-size: 1rem !important; }
     /* Play is a primary action, not a passive "currently selected" state —
