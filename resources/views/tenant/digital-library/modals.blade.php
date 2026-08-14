@@ -71,27 +71,25 @@
                         <div class="tab-pane fade show active" id="fileTab" role="tabpanel">
                             <div class="alert alert-info d-flex align-items-center mb-4 border-0" style="border-radius: 12px; background: rgba(0, 172, 193, 0.1); color: #00838f;">
                                 <i class="ti ti-info-circle me-2"></i>
-                                <small>AI will detect category (SDS/TDS/Presentation/LEARN) and extract the 5-6 line crux.</small>
+                                <small>AI will detect category (SDS/TDS/Presentation/Video) and extract the 5-6 line crux.</small>
                             </div>
 
-                            {{-- Document Type --}}
+                            {{-- Document Type — options come from config/digital_library.php, the
+                                 same table toggleBrandSection() below reads, so a type only ever
+                                 needs to be added or re-tiered in one place. --}}
                             <div class="mb-3">
                                 <label class="form-label fw-bold small text-uppercase">Document Type</label>
                                 <select name="category" id="manualDocType" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;" onchange="toggleBrandSection()">
-                                    <option value="SDS">SDS – Safety Data Sheet</option>
-                                    <option value="TDS">TDS – Technical Data Sheet</option>
-                                    <option value="Presentation">Presentation</option>
-                                    <option value="LEARN">Learn @ Hitech</option>
-                                    <option value="Test Report">🧪 Test Report</option>
-                                    <option value="Comparison Report">📊 Comparison Report</option>
-                                    <option value="Video">Video</option>
+                                    @foreach(config('digital_library.document_types') as $code => $meta)
+                                        <option value="{{ $code }}">{{ $meta['label'] }}</option>
+                                    @endforeach
                                 </select>
                             </div>
 
                             <div class="row g-2 mb-3" id="brandSection">
-                                <div class="col-6">
+                                <div class="col-6" id="brandFieldCol">
                                     <label class="form-label fw-bold small text-uppercase">Brand <span class="text-muted fw-normal">(optional for reports)</span></label>
-                                    <select name="brand" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
+                                    <select name="brand" id="brandSelect" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
                                         <option value="General">General / No Brand</option>
                                         <option value="RUST-X">RUST-X</option>
                                         <option value="Dr.Bio">Dr.Bio</option>
@@ -103,24 +101,8 @@
                                     </select>
                                 </div>
                                 <div class="col-6" id="subCategorySection">
-                                    <label class="form-label fw-bold small text-uppercase">Sub-Category / Subject</label>
-                                    <select name="sub_category" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
-                                        <option value="Cleaners">Cleaners</option>
-                                        <option value="Cutting Oil">Cutting Oil</option>
-                                        <option value="Coatings">Coatings</option>
-                                        <option value="VCI Packaging">VCI Packaging</option>
-                                        <option value="Rust Preventive Oils">Oils</option>
-                                        <option value="VCI Emitters">Emitters</option>
-                                        <option value="Steel Coil Packaging">Packaging</option>
-                                        <option value="VCI Sprays">Sprays</option>
-                                        <option value="Zorbit Desiccant">Desiccant</option>
-                                        <option value="Industrial Lubricants">Lubricants</option>
-                                        <option value="Data Logger">Data Logger</option>
-                                        <option value="Multi-Product">Multi-Product Comparison</option>
-                                        <option value="Lab Test">Lab Test</option>
-                                        <option value="Field Test">Field Test</option>
-                                        <option value="Third Party Test">Third Party Test</option>
-                                    </select>
+                                    <label class="form-label fw-bold small text-uppercase" id="subCategoryLabel">Sub-Category / Subject</label>
+                                    <select name="sub_category" id="subCategorySelect" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;"></select>
                                 </div>
                             </div>
 
@@ -152,11 +134,8 @@
                                 <small><strong>Google Drive Warning:</strong> Even if set to "Public", Google Drive often blocks embedded videos and forces viewers to log in. For seamless playback, please use the <strong>File Upload</strong> tab to upload your .mp4 files directly!</small>
                             </div>
                             <div class="mb-3">
-                                <label class="form-label fw-bold small text-uppercase">Document Type / Category</label>
-                                <select name="video_category" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
-                                    <option value="LEARN">Learn @ Hitech</option>
-                                    <option value="Video">General Video</option>
-                                </select>
+                                <label class="form-label fw-bold small text-uppercase">Video Category</label>
+                                <select name="sub_category_yt" id="ytVideoCategorySelect" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;" onchange="toggleYtLearnFields()"></select>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label fw-bold small text-uppercase">Video Title</label>
@@ -166,7 +145,9 @@
                                 <label class="form-label fw-bold small text-uppercase">Video URL (YouTube/Drive)</label>
                                 <input type="url" name="youtube_url" class="form-control border-0 bg-light" placeholder="https://youtube.com/... or https://drive.google.com/..." style="border-radius: 12px; height: 45px;">
                             </div>
-                            <div class="row g-2 mb-3">
+                            {{-- Presenter/date only mean something for a Learn @ Hi Tech session —
+                                 shown and required only when that category is picked above. --}}
+                            <div class="row g-2 mb-3" id="ytLearnFields">
                                 <div class="col-6">
                                     <label class="form-label fw-bold small text-uppercase">Presenter <span class="text-danger">*</span></label>
                                     <select name="presenter_id" class="form-select border-0 bg-light" style="border-radius: 12px; height: 45px;">
@@ -364,37 +345,99 @@
 <script>
 let taxonomyModal = null;
 
+// Same table config/digital_library.php defines server-side — one place
+// says what each document type needs, both here and in the browse page.
+const DOCUMENT_TYPES = @json(config('digital_library.document_types'));
+const LEARN_CATEGORY = @json(\App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY);
+const VIDEO_CATEGORIES = @json($videoTaxonomies->pluck('name'));
+const CHEMICAL_SUBCATEGORIES = [
+    { value: 'Cleaners', label: 'Cleaners' },
+    { value: 'Cutting Oil', label: 'Cutting Oil' },
+    { value: 'Coatings', label: 'Coatings' },
+    { value: 'VCI Packaging', label: 'VCI Packaging' },
+    { value: 'Rust Preventive Oils', label: 'Oils' },
+    { value: 'VCI Emitters', label: 'Emitters' },
+    { value: 'Steel Coil Packaging', label: 'Packaging' },
+    { value: 'VCI Sprays', label: 'Sprays' },
+    { value: 'Zorbit Desiccant', label: 'Desiccant' },
+    { value: 'Industrial Lubricants', label: 'Lubricants' },
+    { value: 'Data Logger', label: 'Data Logger' },
+    { value: 'Multi-Product', label: 'Multi-Product Comparison' },
+    { value: 'Lab Test', label: 'Lab Test' },
+    { value: 'Field Test', label: 'Field Test' },
+    { value: 'Third Party Test', label: 'Third Party Test' },
+];
+
+function populateSelect(selectEl, options) {
+    if (!selectEl) return;
+    const list = options.length ? options : ['General'];
+    selectEl.innerHTML = list.map(o =>
+        typeof o === 'string' ? `<option value="${o}">${o}</option>` : `<option value="${o.value}">${o.label}</option>`
+    ).join('');
+}
+
 function toggleBrandSection() {
     const type = document.getElementById('manualDocType')?.value;
+    const level = DOCUMENT_TYPES[type]?.level || 'product';
     const brandSection = document.getElementById('brandSection');
+    const brandFieldCol = document.getElementById('brandFieldCol');
     const subCategorySection = document.getElementById('subCategorySection');
+    const subCategoryLabel = document.getElementById('subCategoryLabel');
+    const subCategorySelect = document.getElementById('subCategorySelect');
     if (!brandSection) return;
-    const independentTypes = ['Test Report', 'Comparison Report'];
-    const hiddenTypes = ['LEARN', 'Video'];
-    // Presentations belong to a brand but not to a chemical sub-category —
-    // keep Brand, drop Sub-Category (owner spec: "presentations are only
-    // related to the brands, not the categories").
-    const brandOnlyTypes = ['Presentation'];
-    if (hiddenTypes.includes(type)) {
-        brandSection.style.display = 'none';
+
+    brandSection.style.display = 'flex';
+
+    if (level === 'video') {
+        // Video is tied to its own category taxonomy, never a brand.
+        brandFieldCol.style.display = 'none';
+        subCategorySection.style.display = '';
+        subCategorySection.className = 'col-12';
+        subCategoryLabel.textContent = 'Video Category';
+        populateSelect(subCategorySelect, VIDEO_CATEGORIES);
+    } else if (level === 'brand') {
+        // Presentation / Comparison Report: brand only, no sub-category.
+        brandFieldCol.style.display = '';
+        brandFieldCol.className = 'col-12';
+        subCategorySection.style.display = 'none';
     } else {
-        brandSection.style.display = 'flex';
-        brandSection.style.opacity = independentTypes.includes(type) ? '0.4' : '1';
-        if (subCategorySection) {
-            subCategorySection.style.display = brandOnlyTypes.includes(type) ? 'none' : '';
-        }
+        // SDS / TDS / Test Report: brand + chemical sub-category, as before.
+        brandFieldCol.style.display = '';
+        brandFieldCol.className = 'col-6';
+        subCategorySection.style.display = '';
+        subCategorySection.className = 'col-6';
+        subCategoryLabel.textContent = 'Sub-Category / Subject';
+        populateSelect(subCategorySelect, CHEMICAL_SUBCATEGORIES);
     }
+}
+
+function toggleYtLearnFields() {
+    const sel = document.getElementById('ytVideoCategorySelect');
+    const learnFields = document.getElementById('ytLearnFields');
+    if (!sel || !learnFields) return;
+    const isLearn = sel.value === LEARN_CATEGORY;
+    learnFields.style.display = isLearn ? '' : 'none';
+    learnFields.querySelectorAll('select, input').forEach(el => {
+        if (isLearn) el.setAttribute('required', 'required');
+        else el.removeAttribute('required');
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     taxonomyModal = new bootstrap.Modal(document.getElementById('taxonomyModal'));
+    populateSelect(document.getElementById('ytVideoCategorySelect'), VIDEO_CATEGORIES);
     toggleBrandSection(); // set initial state
+    toggleYtLearnFields();
 });
 
 function openAddModal(type, parentId = null) {
     document.getElementById('taxId').value = '';
     document.getElementById('taxType').value = type;
-    document.getElementById('taxParentId').value = parentId;
+    // A brand has no parent; a video category's parent is also null (it isn't
+    // under any brand). Assigning JS null to an input's .value coerces to the
+    // literal string "null", which then fails the server's exists:... check —
+    // use '' so an empty field round-trips to real NULL like everywhere else.
+    document.getElementById('taxParentId').value = parentId ?? '';
     document.getElementById('taxModalTitle').innerText = 'Add ' + (type === 'brand' ? 'Brand Ecosystem' : 'Technical Category');
     document.getElementById('brandExtras').style.display = type === 'brand' ? 'block' : 'none';
     document.getElementById('taxName').value = '';
@@ -423,7 +466,8 @@ async function saveTaxonomyAction() {
     const id = document.getElementById('taxId').value;
     const type = document.getElementById('taxType').value;
     const name = document.getElementById('taxName').value;
-    const parent_id = document.getElementById('taxParentId').value;
+    const parentIdRaw = document.getElementById('taxParentId').value;
+    const parent_id = parentIdRaw ? parentIdRaw : null;
     const color = document.getElementById('taxColor').value;
     const description = document.getElementById('taxDesc').value;
 
@@ -635,39 +679,29 @@ function openAddDocumentModal(category) {
     const youtubeTabNav = document.querySelector('a[href="#youtubeTab"]').parentElement;
     const fileTabLink = new bootstrap.Tab(document.querySelector('a[href="#fileTab"]'));
     const youtubeTabLink = new bootstrap.Tab(document.querySelector('a[href="#youtubeTab"]'));
-    
+
     const fileDocTypeSelect = document.getElementById('manualDocType');
-    const videoDocTypeSelect = document.querySelector('select[name="video_category"]');
 
     // Reset visibility
     fileTabNav.style.display = 'block';
     youtubeTabNav.style.display = 'block';
-    
-    // Show all options initially
     Array.from(fileDocTypeSelect.options).forEach(opt => opt.style.display = 'block');
-    Array.from(videoDocTypeSelect.options).forEach(opt => opt.style.display = 'block');
 
-    if (category === 'LEARN' || category === 'Video') {
+    if (category === 'Video') {
+        // Video only ever creates entries via this quick-add shortcut on the
+        // external-link tab — a direct .mp4 upload is still possible from the
+        // generic "Add Document" button (no pre-selected category).
         fileTabNav.style.display = 'none';
         youtubeTabLink.show();
-        
-        // Hide non-matching options
-        Array.from(videoDocTypeSelect.options).forEach(opt => {
-            if (opt.value !== category) opt.style.display = 'none';
-        });
-        videoDocTypeSelect.value = category;
-        
     } else if (category && category !== 'All Files') {
-        // SDS, TDS, Presentation, Test Report, Comparison Report
+        // SDS, TDS, Test Report, Presentation, Comparison Report
         youtubeTabNav.style.display = 'none';
         fileTabLink.show();
-        
-        // Hide non-matching options
+
         Array.from(fileDocTypeSelect.options).forEach(opt => {
             if (opt.value !== category) opt.style.display = 'none';
         });
-        
-        // If the category exists in the dropdown, select it
+
         if (Array.from(fileDocTypeSelect.options).some(opt => opt.value === category)) {
             fileDocTypeSelect.value = category;
         }
@@ -675,7 +709,7 @@ function openAddDocumentModal(category) {
         // Default when no specific category
         fileTabLink.show();
     }
-    
+
     if (typeof toggleBrandSection === 'function') {
         toggleBrandSection();
     }
@@ -685,22 +719,28 @@ function openAddDocumentModal(category) {
 
 document.getElementById('singleUploadForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
-    // Validation for LEARN
+
     const formData = new FormData(this);
     const activeTab = document.querySelector('.nav-link.active').getAttribute('href');
     const isYoutube = activeTab === '#youtubeTab';
-    const category = isYoutube ? formData.get('video_category') : formData.get('category');
 
-    if (category === 'LEARN') {
-        const title = isYoutube ? formData.get('title_yt') : formData.get('name');
+    if (isYoutube) {
+        // The video-link tab's category select is named sub_category_yt so it
+        // never collides with the file tab's own sub_category field while
+        // both live in one form — promote it now that we know this is the
+        // tab actually being submitted.
+        formData.set('sub_category', formData.get('sub_category_yt'));
+    }
+
+    if (isYoutube && formData.get('sub_category') === LEARN_CATEGORY) {
+        const title = formData.get('title_yt');
         const presenter = formData.get('presenter_id');
         const date = formData.get('session_date');
-        
+
         if (!title || !presenter || !date) {
             Swal.fire({
                 title: 'Missing Required Fields',
-                text: 'Video Title, Presenter, and Session Date are compulsory for Learn @ HiTech Sessions.',
+                text: 'Video Title, Presenter, and Session Date are compulsory for Learn @ Hi Tech Sessions.',
                 icon: 'warning',
                 confirmButtonColor: '#00897b',
                 customClass: {
@@ -712,16 +752,13 @@ document.getElementById('singleUploadForm').addEventListener('submit', async fun
             return;
         }
     }
-    
+
     // Both tabs sit inside one form, so the tab you are NOT using still gets
-    // serialised. On a file upload that meant shipping video_category=LEARN
-    // (the select's first option) with every PDF, which the server read as a
-    // Learn @ HiTech session and rejected for a missing Video Title. Send only
-    // the fields belonging to the tab actually in use. Done after the check
-    // above so that validation still sees the whole form.
+    // serialised. Send only the fields belonging to the tab actually in use.
+    // Done after the checks above so validation still sees the whole form.
     (isYoutube
-        ? ['file', 'name']
-        : ['video_category', 'title_yt', 'youtube_url', 'presenter_id', 'session_date']
+        ? ['file', 'name', 'sub_category_yt']
+        : ['sub_category_yt', 'title_yt', 'youtube_url', 'presenter_id', 'session_date']
     ).forEach(field => formData.delete(field));
 
     const submitBtn = this.querySelector('button[type="submit"]');

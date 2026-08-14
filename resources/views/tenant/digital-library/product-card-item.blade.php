@@ -1,4 +1,4 @@
-@php 
+@php
     $file = $files->first();
     $tds = $files->firstWhere('category', 'TDS');
     $sds = $files->firstWhere('category', 'SDS');
@@ -7,6 +7,7 @@
     $totalSize = 0;
     foreach($files as $f) $totalSize += $f->size;
     $sizeFormatted = number_format($totalSize / 1024 / 1024, 2) . ' MB';
+    $tier = config("digital_library.document_types.{$file->category}.level", 'product');
 @endphp
 
 <div class="col-md-6 col-xl-4 product-item">
@@ -19,7 +20,12 @@
                 </div>
                 <div class="product-title-area overflow-hidden">
                     <div class="product-title text-truncate" title="{{ $productName }}">{{ $productName }}</div>
-                    <div class="product-subtitle">{{ $brand }}@if($file->category !== 'Presentation') · {{ $category }}@endif</div>
+                    <div class="product-subtitle">
+                        @if($tier === 'brand'){{ $brand }}
+                        @elseif($tier === 'video'){{ $category }}
+                        @else{{ $brand }} · {{ $category }}
+                        @endif
+                    </div>
                 </div>
             </div>
             <div class="product-summary">
@@ -63,7 +69,7 @@
                     <div class="card-summary mb-2">{{ trim(str_replace('**', '', $file->summary ?? 'AI technical overview for ' . $productName)) }}</div>
                 @endif
                 
-                @if($file->category === 'LEARN' && $file->presenter_id)
+                @if($file->presenter_id)
                     <div class="d-flex flex-wrap gap-2 mt-2">
                         <span class="badge bg-light text-dark border"><i class="ti ti-user text-primary"></i> {{ $file->presenter->first_name ?? 'Unknown' }} {{ $file->presenter->last_name ?? '' }}</span>
                         @if($file->session_date)
@@ -73,7 +79,7 @@
                 @endif
             </div>
             <div class="action-row">
-                @if($file->category === 'Video' || $file->category === 'LEARN')
+                @if($tier === 'video')
                     @if($file->youtube_url)
                         @php
                             $pName = $file->presenter ? trim($file->presenter->first_name . ' ' . $file->presenter->last_name) : '';
@@ -87,6 +93,13 @@
                             <span class="text-primary"><i class="ti ti-video fs-5"></i> Access Media</span>
                         </a>
                     @endif
+                @elseif($tier === 'brand')
+                    {{-- One document, one action — a Presentation or Comparison
+                         Report doesn't have sibling TDS/SDS/Test Report docs to
+                         switch between, so the 4-slot grid doesn't apply. --}}
+                    <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn w-100" style="grid-column: span 4;">
+                        <span>{{ $file->category === 'Comparison Report' ? 'View Report' : 'View Presentation' }}</span>
+                    </a>
                 @else
                     <a href="{{ $tds ? route('library.access', $tds->id) : 'javascript:void(0)' }}" target="{{ $tds ? '_blank' : '' }}" class="action-btn {{ !$tds ? 'disabled' : '' }}">
                         <span>TDS</span>

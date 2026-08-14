@@ -164,11 +164,10 @@
                 <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
                 <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
                 <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
-                <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentations</a>
-                <a href="{{ route('library.index', ['category' => 'LEARN']) }}" class="nav-link {{ request('category') === 'LEARN' ? 'active' : '' }}">Learn @ Hitech</a>
-                <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Videos</a>
-                <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Reports</a>
-                <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Reports</a>
+                <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Report</a>
+                <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentation</a>
+                <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Report</a>
+                <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Video</a>
             </div>
         </div>
         <div class="d-flex align-items-center gap-3">
@@ -179,14 +178,7 @@
         </div>
     </div>
 
-    @php
-        $isIndependentCat = in_array($category, ['Test Report', 'Comparison Report', 'LEARN', 'Video']);
-        // Presentations belong to a brand but never to a chemical sub-category
-        // (unlike SDS/TDS) — keep the brand grouping, drop the category sidebar.
-        $isBrandOnlyCat = $category === 'Presentation';
-    @endphp
-
-    @if(!$isIndependentCat)
+    @if($tier !== 'video')
     <!-- Select Brand Row -->
     <div class="section-label">Select Brand Ecosystem</div>
     <div class="brand-grid">
@@ -197,8 +189,8 @@
                 $count = 0;
                 foreach($brandFiles as $sc => $p) foreach($p as $f) $count += count($f);
             @endphp
-            <div class="brand-card @if($loop->first) active @endif" 
-                 onclick="showBrand('{{ $slug }}')" 
+            <div class="brand-card @if($loop->first) active @endif"
+                 onclick="showBrand('{{ $slug }}')"
                  data-brand-card="{{ $slug }}"
                  ondragover="handleDragOver(event)"
                  ondragleave="handleDragLeave(event)"
@@ -224,7 +216,7 @@
                 <div class="doc-count">{{ $count }} documents</div>
             </div>
         @endforeach
-        
+
         <!-- Add Brand Trigger (admin/HR only) -->
         @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
         <div class="brand-card add-trigger border-dashed" onclick="openAddModal('brand')">
@@ -236,46 +228,136 @@
         </div>
         @endif
     </div>
+    @endif {{-- end brand grid --}}
 
-    <!-- Main Content Matrix -->
-    @endif {{-- end !isIndependentCat brand grid --}}
-
-    @if($isIndependentCat)
-    {{-- ===== INDEPENDENT CATEGORY VIEW (Test Reports / Comparison Reports) ===== --}}
-    <div class="mt-2">
-        <div class="brand-header d-flex justify-content-between align-items-center mb-4">
+    @if($tier === 'video')
+    {{-- ===== VIDEO VIEW — its own category taxonomy, no brand at all ===== --}}
+    @php
+        $videoCatNames = $videoTaxonomies->pluck('name')->merge($videoFiles->keys())->unique()->values();
+        $totalVideoDocs = 0;
+        foreach($videoFiles as $vc => $p) foreach($p as $f) $totalVideoDocs += count($f);
+    @endphp
+    <div id="brand-container-video" class="brand-container mt-2">
+        <div class="brand-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-3">
-                <div class="brand-header-dot" style="background-color: {{ $category === 'Test Report' ? '#4caf50' : '#2196f3' }};"></div>
-                <h2>{{ $category }}s</h2>
-                <div class="stats-badge">{{ $allFiles->count() }} Files</div>
+                <div class="brand-header-dot" style="background-color: #64748b;"></div>
+                <h2>Video</h2>
+                <div class="stats-badge">{{ $totalVideoDocs }} Files</div>
             </div>
             <div class="view-switcher">
-                <button class="view-btn active" onclick="switchIndependentView('grid')"><i class="ti ti-layout-grid"></i> Grid View</button>
-                <button class="view-btn" onclick="switchIndependentView('list')"><i class="ti ti-list"></i> List View</button>
+                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-video"><i class="ti ti-layout-grid"></i> Grid View</button>
+                <button class="view-btn" onclick="switchView('list')" id="btn-list-video"><i class="ti ti-list"></i> List View</button>
             </div>
         </div>
 
-        @if($allFiles->isEmpty())
-            <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                <i class="ti ti-file-off fs-1 text-muted mb-3 d-block opacity-25"></i>
-                <h6 class="text-muted fw-bold">No {{ $category }}s uploaded yet</h6>
-                <p class="text-muted small">Use "Add Document" and select <strong>{{ $category }}</strong> as the type.</p>
-            </div>
-        @else
-            {{-- Group by sub_category (product/test subject) for better organisation --}}
-            <div id="independent-grid-view">
-                <div class="row g-4">
-                    @foreach($allFiles->groupBy('title') as $productName => $files)
-                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => $files->first()->brand ?? '', 'category' => $files->first()->sub_category ?? ''])
-                    @endforeach
+        <div class="main-grid mt-4">
+            <!-- Video Category Sidebar -->
+            <div class="side-navigation shadow-sm">
+                <div class="side-nav-item active"
+                     onclick="showSubCat('video', 'all')"
+                     data-cat-btn="video-all">
+                    <span>All Categories</span>
+                    <span class="count">{{ $totalVideoDocs }}</span>
                 </div>
+                <hr class="my-2 opacity-25">
+                @foreach($videoCatNames as $vCat)
+                    @php
+                        $vCatSlug = \Illuminate\Support\Str::slug($vCat);
+                        $vCount = isset($videoFiles[$vCat]) ? collect($videoFiles[$vCat])->sum(fn($g) => count($g)) : 0;
+                        $vTaxId = $videoTaxonomies->firstWhere('name', $vCat)?->id;
+                    @endphp
+                    <div class="side-nav-item d-flex align-items-center justify-content-between"
+                         onclick="showSubCat('video', '{{ $vCatSlug }}')"
+                         data-cat-btn="video-{{ $vCatSlug }}">
+                        <span>{{ $vCat }}</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="count">{{ $vCount }}</span>
+                            @if($vTaxId)
+                            <div class="dropdown">
+                                <button class="action-dot" style="width: 20px; height: 20px; gap: 2px;" data-bs-toggle="dropdown">
+                                    <span style="width: 3px; height: 3px;"></span>
+                                    <span style="width: 3px; height: 3px;"></span>
+                                    <span style="width: 3px; height: 3px;"></span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-custom shadow">
+                                    <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('category', {{ $vTaxId }})">
+                                        <i class="ti ti-edit"></i> Rename
+                                    </a>
+                                    <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $vTaxId }})">
+                                        <i class="ti ti-trash"></i> Delete
+                                    </a>
+                                </div>
+                            </div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+
+                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+                <hr class="my-2 opacity-25">
+                <div class="side-nav-item text-primary" onclick="openAddModal('category', null)">
+                    <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
+                </div>
+                @endif
             </div>
-            <div id="independent-list-view" style="display:none;">
-                @foreach($allFiles->groupBy('title') as $productName => $files)
-                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => $files->first()->brand ?? '', 'category' => $files->first()->sub_category ?? ''])
+
+            <!-- Video cards -->
+            <div class="products-area">
+                <div id="content-video-all" class="subcat-content">
+                    @if($totalVideoDocs == 0)
+                        <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
+                            <i class="ti ti-video-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                            <h6 class="text-muted fw-bold">No videos uploaded yet</h6>
+                        </div>
+                    @else
+                        <div class="view-mode mode-grid">
+                            <div class="row g-4">
+                                @foreach($videoFiles as $vCat => $products)
+                                    @foreach($products as $productName => $files)
+                                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
+                                    @endforeach
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="view-mode mode-list" style="display:none;">
+                            @foreach($videoFiles as $vCat => $products)
+                                @foreach($products as $productName => $files)
+                                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
+                                @endforeach
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
+                @foreach($videoCatNames as $vCat)
+                    @php
+                        $vCatSlug = \Illuminate\Support\Str::slug($vCat);
+                        $vProducts = $videoFiles[$vCat] ?? [];
+                    @endphp
+                    <div id="content-video-{{ $vCatSlug }}" class="subcat-content" style="display:none;">
+                        @if(count($vProducts) == 0)
+                            <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
+                                <i class="ti ti-folder-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                                <h6 class="text-muted fw-bold">No videos in {{ $vCat }}</h6>
+                            </div>
+                        @else
+                            <div class="view-mode mode-grid">
+                                <div class="row g-4">
+                                    @foreach($vProducts as $productName => $files)
+                                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
+                                    @endforeach
+                                </div>
+                            </div>
+                            <div class="view-mode mode-list" style="display:none;">
+                                @foreach($vProducts as $productName => $files)
+                                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
                 @endforeach
             </div>
-        @endif
+        </div>
     </div>
     @else
     {{-- ===== BRAND-BASED VIEW ===== --}}
@@ -303,8 +385,8 @@
                 </div>
             </div>
 
-            <div class="main-grid mt-4 @if($isBrandOnlyCat) no-sidebar @endif">
-                @unless($isBrandOnlyCat)
+            <div class="main-grid mt-4 @if($tier === 'brand') no-sidebar @endif">
+                @unless($tier === 'brand')
                 <!-- Category Sidebar (Brand Specific) -->
                 <div class="side-navigation shadow-sm">
                     <div class="side-nav-item active"
@@ -390,9 +472,9 @@
                     </div>
 
                     @foreach($brandCategories as $mCat)
-                        @php 
+                        @php
                             $mCatSlug = \Illuminate\Support\Str::slug($mCat);
-                            $products = $brandData[$mCat] ?? [];
+                            $products = $brandFiles[$mCat] ?? [];
                         @endphp
                         <div id="content-{{ $slug }}-{{ $mCatSlug }}" class="subcat-content" style="display:none;">
                             @if(count($products) == 0)
@@ -435,15 +517,6 @@
     let currentView = 'grid';
     const libraryTaxonomy = @json($taxonomies);
 
-    function switchIndependentView(view) {
-        const gridEl = document.getElementById('independent-grid-view');
-        const listEl = document.getElementById('independent-list-view');
-        if (!gridEl) return;
-        gridEl.style.display = view === 'grid' ? 'block' : 'none';
-        listEl.style.display = view === 'list' ? 'block' : 'none';
-        document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll(`.view-btn`).forEach(b => { if (b.textContent.toLowerCase().includes(view)) b.classList.add('active'); });
-    }
     const pendingFiles = new Map();
     const auditState = new Map();
 

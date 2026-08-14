@@ -16,6 +16,9 @@ class DigitalLibraryController extends Controller
     public function index(Request $request)
     {
         $category = $request->get('category');
+        $documentTypes = config('digital_library.document_types');
+        $tier = $documentTypes[$category]['level'] ?? 'product';
+
         $query = LibraryFile::query();
 
         if ($category && $category != 'all') {
@@ -23,7 +26,7 @@ class DigitalLibraryController extends Controller
         }
 
         $allFiles = $query->orderBy('created_at', 'desc')->get();
-        
+
         // Grouping logic for the Matrix View - Normalized to match taxonomy names
         $groupedFiles = $allFiles->groupBy(fn($f) => strtolower($f->brand))->map(function ($brandFiles) {
             return $brandFiles->groupBy('sub_category')->map(function ($subCatFiles) {
@@ -31,12 +34,21 @@ class DigitalLibraryController extends Controller
             });
         });
 
+        // Video has no brand dimension — group by its own category only.
+        $videoFiles = $allFiles->where('category', 'Video')
+            ->groupBy(fn($f) => $f->sub_category ?: 'General')
+            ->map(fn($subCatFiles) => $subCatFiles->groupBy('title'));
+
         // Fetch dynamic taxonomy from DB — deduplicate brands (case-insensitive)
         $brands = \App\Models\LibraryTaxonomy::where('type', 'brand')->orderBy('order')->get()
             ->unique(fn($b) => strtolower($b->name))->values();
-        $taxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->get()->groupBy('parent_id');
+        $taxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->whereNotNull('parent_id')->get()->groupBy('parent_id');
+        $videoTaxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->whereNull('parent_id')->orderBy('order')->get();
 
-        return view('tenant.digital-library.index', compact('groupedFiles', 'allFiles', 'category', 'brands', 'taxonomies'));
+        return view('tenant.digital-library.index', compact(
+            'groupedFiles', 'videoFiles', 'allFiles', 'category', 'tier',
+            'brands', 'taxonomies', 'videoTaxonomies', 'documentTypes'
+        ));
     }
 
     public function addTaxonomy(Request $request)
@@ -151,21 +163,19 @@ class DigitalLibraryController extends Controller
     {
         try {
             /*
-             * Learn @ HiTech only exists on the video-link tab — Video Title,
-             * Presenter and Session Date are all inputs of that tab.
+             * Learn @ Hi Tech is now just a Video category (see
+             * MigrateLearnToVideoCommand), not its own document type — Video
+             * Title, Presenter and Session Date only need to be required when
+             * that specific category is picked on the video-link tab.
              *
              * Both tabs of the Add Document dialog live in ONE form, so a plain
-             * file upload still serialises the video tab's fields, and its
-             * category select defaults to LEARN. Keying these rules off
-             * video_category alone therefore demanded a Video Title from every
-             * PDF upload — a Comparison Report was rejected with "Video Title
-             * is required for Learn @ HiTech sessions."
-             *
-             * Persistence below already decides which tab was used by looking
-             * at youtube_url, so validation now agrees with it.
+             * file upload still serialises the video tab's fields. Keying these
+             * rules off sub_category alone (rather than youtube_url) would
+             * therefore demand a Video Title from every PDF upload that happens
+             * to reuse that same category name — gate on youtube_url too.
              */
             $isLearnVideo = $request->filled('youtube_url')
-                && $request->input('video_category') === 'LEARN';
+                && $request->input('sub_category') === \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY;
             $learnRule = $isLearnVideo ? 'required' : 'nullable';
 
             $validator = Validator::make($request->all(), [
@@ -207,9 +217,12 @@ class DigitalLibraryController extends Controller
             $size = $file ? $file->getSize() : 0;
 
             if ($youtubeUrl) {
-                $category = $request->video_category ?? 'LEARN';
+                // Video-link tab only ever creates Video-type entries now —
+                // Learn @ Hi Tech is a category within Video, not a separate type.
+                $category = 'Video';
                 $productName = $request->title_yt ?? $productName;
-                if (!$request->title_yt && $productName === 'Hitech Asset') {
+                if (!$request->title_yt && $productName === 'Hitech Asset'
+                    && $request->sub_category === \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY) {
                     $productName = 'Learn @ HiTech Session';
                 }
                 $summary = "Digital Video Asset: " . $youtubeUrl;
@@ -230,14 +243,23 @@ class DigitalLibraryController extends Controller
             }
 
             // --- Final Persistence ---
-            $brandName = $request->brand ?? 'HITECH';
-            $taxBrand = \App\Models\LibraryTaxonomy::where('type', 'brand')->where('name', 'like', $brandName)->first();
-            if ($taxBrand) $brandName = $taxBrand->name;
+            $level = config("digital_library.document_types.{$category}.level", 'product');
+
+            if ($level === 'video') {
+                // Video is tied to its own category taxonomy, never a brand.
+                $brandName = null;
+                $defaultSubCategory = \App\Console\Commands\MigrateLearnToVideoCommand::GENERAL_CATEGORY;
+            } else {
+                $brandName = $request->brand ?? 'HITECH';
+                $taxBrand = \App\Models\LibraryTaxonomy::where('type', 'brand')->where('name', 'like', $brandName)->first();
+                if ($taxBrand) $brandName = $taxBrand->name;
+                $defaultSubCategory = $level === 'brand' ? null : 'Industrial Assets';
+            }
 
             LibraryFile::create([
                 'title' => $productName,
                 'brand' => $brandName,
-                'sub_category' => $request->sub_category ?? 'Industrial Assets',
+                'sub_category' => $request->sub_category ?? $defaultSubCategory,
                 'file_path' => $path,
                 'youtube_url' => $youtubeUrl,
                 'category' => $category,
@@ -545,7 +567,7 @@ USER REQUEST:
 
         try {
             $file = LibraryFile::findOrFail($request->library_file_id);
-            if ($file->category !== 'LEARN') {
+            if ($file->sub_category !== \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY) {
                 return response()->json(['error' => 'Only Learn @ HiTech sessions can be marked as completed.'], 400);
             }
 
@@ -605,7 +627,7 @@ USER REQUEST:
 
         try {
             $file = LibraryFile::findOrFail($request->library_file_id);
-            if ($file->category !== 'LEARN') {
+            if ($file->sub_category !== \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY) {
                 return response()->json(['error' => 'Only Learn @ HiTech sessions can be scored for presenters.'], 400);
             }
 

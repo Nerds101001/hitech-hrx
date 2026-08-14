@@ -1711,7 +1711,7 @@ class EmployeeController extends Controller
         }
     }
 
-    $learnHitechPresented = \App\Models\LibraryFile::where('category', 'LEARN')
+    $learnHitechPresented = \App\Models\LibraryFile::where('sub_category', \App\Console\Commands\MigrateLearnToVideoCommand::LEARN_CATEGORY)
       ->where('presenter_id', $id)
       ->orderByDesc('session_date')
       ->get(['id', 'title', 'session_date', 'youtube_url']);
