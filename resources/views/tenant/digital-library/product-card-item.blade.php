@@ -59,7 +59,14 @@
                         @else
                             <div class="w-100 h-100" style="background: linear-gradient(135deg, #232526, #414345);"></div>
                         @endif
-                        <div class="position-absolute top-50 start-50 translate-middle">
+                        {{-- Bootstrap's .ratio > * forces every direct child to
+                             width:100%;height:100% for the aspect-ratio hack —
+                             that fights translate-middle's centering math (it
+                             ends up translating by -50% of the full thumbnail
+                             size, not the button's own size, landing it in the
+                             top-left corner). w-auto/h-auto opt this one back
+                             out of the forced sizing. --}}
+                        <div class="position-absolute top-50 start-50 translate-middle w-auto h-auto">
                             <div class="bg-danger rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 48px; height: 48px;">
                                 <i class="ti ti-player-play-filled text-white fs-4" style="margin-left: 3px;"></i>
                             </div>
@@ -85,11 +92,11 @@
                             $pName = $file->presenter ? trim($file->presenter->first_name . ' ' . $file->presenter->last_name) : '';
                             $sDate = $file->session_date ? \Carbon\Carbon::parse($file->session_date)->format('M d, Y') : '';
                         @endphp
-                        <a href="javascript:void(0)" onclick="playVideo('{{ route('library.previewFrame', $file->id) }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-btn w-100" style="grid-column: span 4; background: #fff5f5; border-color: #ffcccc;">
+                        <a href="javascript:void(0)" onclick="playVideo('{{ route('library.previewFrame', $file->id) }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-btn action-btn-wide" style="background: #fff5f5; border-color: #ffcccc;">
                             <span class="text-danger"><i class="ti ti-player-play fs-5"></i> Play Video</span>
                         </a>
                     @else
-                        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn w-100" style="grid-column: span 4;">
+                        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn action-btn-wide">
                             <span class="text-primary"><i class="ti ti-video fs-5"></i> Access Media</span>
                         </a>
                     @endif
@@ -97,7 +104,7 @@
                     {{-- One document, one action — a Presentation or Comparison
                          Report doesn't have sibling TDS/SDS/Test Report docs to
                          switch between, so the 4-slot grid doesn't apply. --}}
-                    <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn w-100" style="grid-column: span 4;">
+                    <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn action-btn-wide">
                         <span>{{ $file->category === 'Comparison Report' ? 'View Report' : 'View Presentation' }}</span>
                     </a>
                 @else
