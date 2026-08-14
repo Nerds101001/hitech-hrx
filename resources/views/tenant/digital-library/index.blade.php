@@ -152,6 +152,15 @@
        padding — the thumbnail/summary above it sits right up against the
        button otherwise, with no breathing room between the two. */
     .action-row-wide { margin-top: 14px; }
+    /* .align-items-start on the header computes to align-items:center
+       anyway — something else wins that fight. Since .modal-title's own
+       row uses w-100, it fills the row regardless and the misalignment
+       never showed; the narrower presenter/date row has no w-100, so
+       "center" shrink-wraps it into the middle of the header instead of
+       flush under the title, floating disconnected from what it's
+       describing. */
+    #videoPlayerModal .modal-header { align-items: flex-start !important; }
+    #videoPlayerMeta { width: 100%; }
     .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
     .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
     .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.7rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
