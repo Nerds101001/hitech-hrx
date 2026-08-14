@@ -18,36 +18,87 @@ class DigitalLibraryController extends Controller
         $category = $request->get('category');
         $documentTypes = config('digital_library.document_types');
         $tier = $documentTypes[$category]['level'] ?? 'product';
+        $perPage = 12;
+        $page = max(1, (int) $request->get('page', 1));
 
-        $query = LibraryFile::query();
+        // Light rows across the whole category — just enough to compute the
+        // brand-card and sidebar counts. The expensive full records (with
+        // summary text etc.) are only fetched below for the ONE brand
+        // (or, for Video, the one category) actually being viewed, not all
+        // seven brands' worth every time someone switches tabs.
+        $countRows = LibraryFile::query()
+            ->when($category && $category !== 'all', fn($q) => $q->where('category', $category))
+            ->get(['id', 'brand', 'sub_category', 'title']);
 
-        if ($category && $category != 'all') {
-            $query->where('category', $category);
-        }
-
-        $allFiles = $query->orderBy('created_at', 'desc')->get();
-
-        // Grouping logic for the Matrix View - Normalized to match taxonomy names
-        $groupedFiles = $allFiles->groupBy(fn($f) => strtolower($f->brand))->map(function ($brandFiles) {
-            return $brandFiles->groupBy('sub_category')->map(function ($subCatFiles) {
-                return $subCatFiles->groupBy('title');
-            });
-        });
-
-        // Video has no brand dimension — group by its own category only.
-        $videoFiles = $allFiles->where('category', 'Video')
-            ->groupBy(fn($f) => $f->sub_category ?: 'General')
-            ->map(fn($subCatFiles) => $subCatFiles->groupBy('title'));
-
-        // Fetch dynamic taxonomy from DB — deduplicate brands (case-insensitive)
         $brands = \App\Models\LibraryTaxonomy::where('type', 'brand')->orderBy('order')->get()
             ->unique(fn($b) => strtolower($b->name))->values();
         $taxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->whereNotNull('parent_id')->get()->groupBy('parent_id');
         $videoTaxonomies = \App\Models\LibraryTaxonomy::where('type', 'category')->whereNull('parent_id')->orderBy('order')->get();
 
+        $paginated = null;
+        $activeBrand = null;
+        $brandTaxonomies = collect();
+        $brandCounts = collect();
+        $subCatCounts = collect();
+        $catNames = collect();
+        $activeSubcat = $request->get('subcat', 'all');
+        $totalScopedDocs = 0;
+
+        if ($tier === 'video') {
+            $subCatCounts = $countRows->groupBy(fn($f) => $f->sub_category ?: 'General')->map->count();
+            $totalScopedDocs = $countRows->count();
+            $catNames = $videoTaxonomies->pluck('name')->merge($subCatCounts->keys())->filter()->unique()->values();
+
+            $activeCatName = $activeSubcat === 'all' ? null
+                : $catNames->first(fn($n) => \Illuminate\Support\Str::slug($n) === $activeSubcat);
+
+            $fullQuery = LibraryFile::query()->where('category', 'Video');
+            if ($activeCatName) {
+                $fullQuery->where('sub_category', $activeCatName);
+            }
+            $products = $fullQuery->orderBy('created_at', 'desc')->get()->groupBy('title');
+
+            $paginated = new LengthAwarePaginator(
+                $products->forPage($page, $perPage), $products->count(), $perPage, $page,
+                ['path' => $request->url(), 'query' => $request->except('page')]
+            );
+        } else {
+            $brandCounts = $countRows->groupBy(fn($f) => strtolower($f->brand ?? ''))->map->count();
+
+            $activeBrandSlug = $request->get('brand');
+            $activeBrand = $activeBrandSlug
+                ? $brands->first(fn($b) => \Illuminate\Support\Str::slug($b->name) === $activeBrandSlug)
+                : $brands->first(fn($b) => ($brandCounts[strtolower($b->name)] ?? 0) > 0);
+            $activeBrand = $activeBrand ?? $brands->first();
+
+            if ($activeBrand) {
+                $brandTaxonomies = $taxonomies[$activeBrand->id] ?? collect();
+                $brandRows = $countRows->where('brand', $activeBrand->name);
+                $subCatCounts = $brandRows->groupBy('sub_category')->map->count();
+                $totalScopedDocs = $brandRows->count();
+                $catNames = $brandTaxonomies->pluck('name')->merge($subCatCounts->keys())->filter()->unique()->values();
+
+                $activeCatName = $activeSubcat === 'all' ? null
+                    : $catNames->first(fn($n) => \Illuminate\Support\Str::slug($n) === $activeSubcat);
+
+                $fullQuery = LibraryFile::query()
+                    ->when($category && $category !== 'all', fn($q) => $q->where('category', $category))
+                    ->where('brand', $activeBrand->name);
+                if ($activeCatName) {
+                    $fullQuery->where('sub_category', $activeCatName);
+                }
+                $products = $fullQuery->orderBy('created_at', 'desc')->get()->groupBy('title');
+
+                $paginated = new LengthAwarePaginator(
+                    $products->forPage($page, $perPage), $products->count(), $perPage, $page,
+                    ['path' => $request->url(), 'query' => $request->except('page')]
+                );
+            }
+        }
+
         return view('tenant.digital-library.index', compact(
-            'groupedFiles', 'videoFiles', 'allFiles', 'category', 'tier',
-            'brands', 'taxonomies', 'videoTaxonomies', 'documentTypes'
+            'category', 'tier', 'documentTypes', 'brands', 'brandCounts', 'activeBrand', 'brandTaxonomies',
+            'taxonomies', 'videoTaxonomies', 'subCatCounts', 'catNames', 'activeSubcat', 'totalScopedDocs', 'paginated'
         ));
     }
 

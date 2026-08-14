@@ -28,7 +28,7 @@
 
     /* Brand Selection - Streamlined */
     .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 2rem; }
-    .brand-card { background: white; border: 1px solid #eef2f4; border-radius: 12px; padding: 12px 10px; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; text-align: center; }
+    .brand-card { background: white; border: 1px solid #eef2f4; border-radius: 12px; padding: 12px 10px; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; text-align: center; display: block; text-decoration: none; color: inherit; }
     .brand-card:hover { transform: translateY(-2px); border-color: #ddd; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
     .brand-card.active { border: 2px solid #ff7043; background: #fffdfc; box-shadow: 0 4px 12px rgba(255, 112, 67, 0.1); }
     .brand-card.drag-over { background: #fff3e0; border: 2px dashed #ff7043; transform: scale(1.05); }
@@ -68,7 +68,7 @@
     .stats-badge { background: #e0f2f1; color: var(--hitech-primary); font-size: 0.7rem; padding: 5px 14px; border-radius: 20px; font-weight: 800; }
 
     .side-navigation { background: white; border-radius: 16px; padding: 10px; border: 1px solid #eef2f4; align-self: start; }
-    .side-nav-item { padding: 12px 16px; border-radius: 12px; margin-bottom: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #777; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; }
+    .side-nav-item { padding: 12px 16px; border-radius: 12px; margin-bottom: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #777; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; text-decoration: none; }
     .side-nav-item:hover { background: #f8fafb; color: #333; }
     .side-nav-item.active { background: #e0f2f1; color: var(--hitech-primary); }
     .side-nav-item.drag-over { background: #b2dfdb; border-left: 4px solid var(--hitech-primary); }
@@ -79,6 +79,13 @@
     .view-switcher { display: flex; background: #f0f2f5; padding: 4px; border-radius: 10px; gap: 4px; }
     .view-btn { border: none; background: transparent; color: #999; padding: 6px 14px; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; gap: 6px; }
     .view-btn.active { background: white; color: var(--hitech-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+    /* Pagination */
+    .vault-pagination { border-top: 1px solid #eef2f4; }
+    .page-btn { text-decoration: none; background: white; border: 1px solid #eef2f4; min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: #666; font-size: 0.78rem; font-weight: 800; transition: all 0.2s; }
+    .page-btn:hover:not(.disabled) { border-color: var(--hitech-primary); color: var(--hitech-primary); }
+    .page-btn.active { background: var(--hitech-primary); color: white; border-color: var(--hitech-primary); }
+    .page-btn.disabled { opacity: 0.35; pointer-events: none; }
 
     /* Cards */
     .product-card { background: white; border: 1px solid #eef2f4; border-radius: 18px; height: 100%; display: flex; flex-direction: column; overflow: hidden; transition: all 0.3s; position: relative; cursor: grab; }
@@ -179,19 +186,22 @@
     </div>
 
     @if($tier !== 'video')
-    <!-- Select Brand Row -->
+    <!-- Select Brand Row — real links now: only the ACTIVE brand's files are
+         fetched/rendered server-side, not all seven brands hidden with CSS. -->
     <div class="section-label">Select Brand Ecosystem</div>
     <div class="brand-grid">
         @foreach($brands as $b)
             @php
                 $slug = \Illuminate\Support\Str::slug($b->name);
-                $brandFiles = $groupedFiles[strtolower($b->name)] ?? collect([]);
-                $count = 0;
-                foreach($brandFiles as $sc => $p) foreach($p as $f) $count += count($f);
+                $isActive = $activeBrand && $activeBrand->id === $b->id;
+                $count = $brandCounts[strtolower($b->name)] ?? 0;
             @endphp
-            <div class="brand-card @if($loop->first) active @endif"
-                 onclick="showBrand('{{ $slug }}')"
+            {{-- A real <a> can't wrap the dropdown's own <a> items (invalid,
+                 nested-anchor HTML — browsers silently split the outer tag),
+                 so this stays a div navigated via onclick, same as before. --}}
+            <div class="brand-card @if($isActive) active @endif"
                  data-brand-card="{{ $slug }}"
+                 onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}';"
                  ondragover="handleDragOver(event)"
                  ondragleave="handleDragLeave(event)"
                  ondrop="handleBrandDrop(event, '{{ $b->name }}')">
@@ -232,17 +242,12 @@
 
     @if($tier === 'video')
     {{-- ===== VIDEO VIEW — its own category taxonomy, no brand at all ===== --}}
-    @php
-        $videoCatNames = $videoTaxonomies->pluck('name')->merge($videoFiles->keys())->unique()->values();
-        $totalVideoDocs = 0;
-        foreach($videoFiles as $vc => $p) foreach($p as $f) $totalVideoDocs += count($f);
-    @endphp
-    <div id="brand-container-video" class="brand-container mt-2">
+    <div class="mt-2">
         <div class="brand-header d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-3">
                 <div class="brand-header-dot" style="background-color: #64748b;"></div>
                 <h2>Video</h2>
-                <div class="stats-badge">{{ $totalVideoDocs }} Files</div>
+                <div class="stats-badge">{{ $totalScopedDocs }} Files</div>
             </div>
             <div class="view-switcher">
                 <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-video"><i class="ti ti-layout-grid"></i> Grid View</button>
@@ -253,22 +258,19 @@
         <div class="main-grid mt-4">
             <!-- Video Category Sidebar -->
             <div class="side-navigation shadow-sm">
-                <div class="side-nav-item active"
-                     onclick="showSubCat('video', 'all')"
-                     data-cat-btn="video-all">
+                <a href="{{ route('library.index', ['category' => 'Video']) }}" class="side-nav-item @if($activeSubcat === 'all') active @endif">
                     <span>All Categories</span>
-                    <span class="count">{{ $totalVideoDocs }}</span>
-                </div>
+                    <span class="count">{{ $totalScopedDocs }}</span>
+                </a>
                 <hr class="my-2 opacity-25">
-                @foreach($videoCatNames as $vCat)
+                @foreach($catNames as $vCat)
                     @php
                         $vCatSlug = \Illuminate\Support\Str::slug($vCat);
-                        $vCount = isset($videoFiles[$vCat]) ? collect($videoFiles[$vCat])->sum(fn($g) => count($g)) : 0;
+                        $vCount = $subCatCounts[$vCat] ?? 0;
                         $vTaxId = $videoTaxonomies->firstWhere('name', $vCat)?->id;
                     @endphp
-                    <div class="side-nav-item d-flex align-items-center justify-content-between"
-                         onclick="showSubCat('video', '{{ $vCatSlug }}')"
-                         data-cat-btn="video-{{ $vCatSlug }}">
+                    <div class="side-nav-item d-flex align-items-center justify-content-between @if($activeSubcat === $vCatSlug) active @endif"
+                         onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => 'Video', 'subcat' => $vCatSlug]) }}';">
                         <span>{{ $vCat }}</span>
                         <div class="d-flex align-items-center gap-2">
                             <span class="count">{{ $vCount }}</span>
@@ -301,212 +303,135 @@
                 @endif
             </div>
 
-            <!-- Video cards -->
+            <!-- Video cards — only this page's slice is rendered -->
             <div class="products-area">
-                <div id="content-video-all" class="subcat-content">
-                    @if($totalVideoDocs == 0)
+                <div class="subcat-content">
+                    @if(!$paginated || $paginated->total() == 0)
                         <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
                             <i class="ti ti-video-off fs-1 text-muted mb-3 d-block opacity-25"></i>
-                            <h6 class="text-muted fw-bold">No videos uploaded yet</h6>
+                            <h6 class="text-muted fw-bold">No videos {{ $activeSubcat === 'all' ? 'uploaded yet' : 'in this category' }}</h6>
                         </div>
                     @else
                         <div class="view-mode mode-grid">
                             <div class="row g-4">
-                                @foreach($videoFiles as $vCat => $products)
-                                    @foreach($products as $productName => $files)
-                                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
-                                    @endforeach
+                                @foreach($paginated as $productName => $files)
+                                    @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => '', 'category' => $files->first()->sub_category ?? ''])
                                 @endforeach
                             </div>
                         </div>
                         <div class="view-mode mode-list" style="display:none;">
-                            @foreach($videoFiles as $vCat => $products)
-                                @foreach($products as $productName => $files)
-                                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
-                                @endforeach
+                            @foreach($paginated as $productName => $files)
+                                @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => '', 'category' => $files->first()->sub_category ?? ''])
                             @endforeach
                         </div>
+                        @include('tenant.digital-library.pagination')
                     @endif
                 </div>
+            </div>
+        </div>
+    </div>
+    @elseif($activeBrand)
+    {{-- ===== BRAND-BASED VIEW — one brand at a time, server-paginated ===== --}}
+    @php $slug = \Illuminate\Support\Str::slug($activeBrand->name); @endphp
+    <div class="mt-2">
+        <div class="brand-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-3">
+                <div class="brand-header-dot" style="background-color: {{ $activeBrand->color ?? '#ccc' }};"></div>
+                <h2>{{ $activeBrand->name }}</h2>
+                <div class="stats-badge">{{ $totalScopedDocs }} Technical Files</div>
+            </div>
+            <div class="view-switcher">
+                <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-{{ $slug }}"><i class="ti ti-layout-grid"></i> Grid View</button>
+                <button class="view-btn" onclick="switchView('list')" id="btn-list-{{ $slug }}"><i class="ti ti-list"></i> List View</button>
+            </div>
+        </div>
 
-                @foreach($videoCatNames as $vCat)
+        <div class="main-grid mt-4 @if($tier === 'brand') no-sidebar @endif">
+            @unless($tier === 'brand')
+            <!-- Category Sidebar (Brand Specific) -->
+            <div class="side-navigation shadow-sm">
+                <a href="{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}" class="side-nav-item @if($activeSubcat === 'all') active @endif">
+                    <span>All Categories</span>
+                    <span class="count">{{ $totalScopedDocs }}</span>
+                </a>
+                <hr class="my-2 opacity-25">
+                @foreach($catNames as $mCat)
                     @php
-                        $vCatSlug = \Illuminate\Support\Str::slug($vCat);
-                        $vProducts = $videoFiles[$vCat] ?? [];
+                        $mCatSlug = \Illuminate\Support\Str::slug($mCat);
+                        $prodCount = $subCatCounts[$mCat] ?? 0;
+                        $taxId = $brandTaxonomies->firstWhere('name', $mCat)?->id;
                     @endphp
-                    <div id="content-video-{{ $vCatSlug }}" class="subcat-content" style="display:none;">
-                        @if(count($vProducts) == 0)
-                            <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                                <i class="ti ti-folder-off fs-1 text-muted mb-3 d-block opacity-25"></i>
-                                <h6 class="text-muted fw-bold">No videos in {{ $vCat }}</h6>
-                            </div>
-                        @else
-                            <div class="view-mode mode-grid">
-                                <div class="row g-4">
-                                    @foreach($vProducts as $productName => $files)
-                                        @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
-                                    @endforeach
+                    <div class="side-nav-item d-flex align-items-center justify-content-between @if($activeSubcat === $mCatSlug) active @endif"
+                         onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug, 'subcat' => $mCatSlug]) }}';"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleCategoryDrop(event, '{{ $activeBrand->name }}', '{{ $mCat }}')">
+                        <span>{{ $mCat }}</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="count">{{ $prodCount }}</span>
+                            @if($taxId)
+                            <div class="dropdown">
+                                <button class="action-dot" style="width: 20px; height: 20px; gap: 2px;" data-bs-toggle="dropdown">
+                                    <span style="width: 3px; height: 3px;"></span>
+                                    <span style="width: 3px; height: 3px;"></span>
+                                    <span style="width: 3px; height: 3px;"></span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-custom shadow">
+                                    <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('category', {{ $taxId }})">
+                                        <i class="ti ti-edit"></i> Rename
+                                    </a>
+                                    <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $taxId }})">
+                                        <i class="ti ti-trash"></i> Delete
+                                    </a>
                                 </div>
                             </div>
-                            <div class="view-mode mode-list" style="display:none;">
-                                @foreach($vProducts as $productName => $files)
-                                    @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => '', 'category' => $vCat])
-                                @endforeach
-                            </div>
-                        @endif
+                            @endif
+                        </div>
                     </div>
                 @endforeach
+
+                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+                <hr class="my-2 opacity-25">
+                <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $activeBrand->id }})">
+                    <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
+                </div>
+                @endif
+            </div>
+            @endunless
+
+            <!-- Products View Area — only this page's slice is rendered -->
+            <div class="products-area">
+                <div class="subcat-content">
+                    @if(!$paginated || $paginated->total() == 0)
+                        <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
+                            <i class="ti ti-box-off fs-1 text-muted mb-3 d-block opacity-25"></i>
+                            <h6 class="text-muted fw-bold">No assets found for {{ $activeBrand->name }}</h6>
+                        </div>
+                    @else
+                        <div class="view-mode mode-grid">
+                            <div class="row g-4">
+                                @foreach($paginated as $productName => $files)
+                                    @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => $activeBrand->name, 'category' => $files->first()->sub_category ?? ''])
+                                @endforeach
+                            </div>
+                        </div>
+                        <div class="view-mode mode-list" style="display:none;">
+                            @foreach($paginated as $productName => $files)
+                                @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => $activeBrand->name, 'category' => $files->first()->sub_category ?? ''])
+                            @endforeach
+                        </div>
+                        @include('tenant.digital-library.pagination')
+                    @endif
+                </div>
             </div>
         </div>
     </div>
     @else
-    {{-- ===== BRAND-BASED VIEW ===== --}}
-    @foreach($brands as $b)
-        @php
-            $slug = \Illuminate\Support\Str::slug($b->name);
-            $brandFiles = $groupedFiles[strtolower($b->name)] ?? collect([]);
-            $totalBrandDocs = 0;
-            foreach($brandFiles as $sc => $p) foreach($p as $f) $totalBrandDocs += count($f);
-            
-            // Dynamic categories from DB for this brand
-            $brandTaxonomies = $taxonomies[$b->id] ?? collect([]);
-            $brandCategories = $brandTaxonomies->pluck('name')->merge($brandFiles->keys())->unique()->values();
-        @endphp
-        <div id="brand-container-{{ $slug }}" class="brand-container" style="@if(!$loop->first) display:none; @endif">
-            <div class="brand-header d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="brand-header-dot" style="background-color: {{ $b->color ?? '#ccc' }};"></div>
-                    <h2>{{ $b->name }}</h2>
-                    <div class="stats-badge">{{ $totalBrandDocs }} Technical Files</div>
-                </div>
-                <div class="view-switcher">
-                    <button class="view-btn active" onclick="switchView('grid')" id="btn-grid-{{ $slug }}"><i class="ti ti-layout-grid"></i> Grid View</button>
-                    <button class="view-btn" onclick="switchView('list')" id="btn-list-{{ $slug }}"><i class="ti ti-list"></i> List View</button>
-                </div>
-            </div>
-
-            <div class="main-grid mt-4 @if($tier === 'brand') no-sidebar @endif">
-                @unless($tier === 'brand')
-                <!-- Category Sidebar (Brand Specific) -->
-                <div class="side-navigation shadow-sm">
-                    <div class="side-nav-item active"
-                         onclick="showSubCat('{{ $slug }}', 'all')"
-                         data-cat-btn="{{ $slug }}-all">
-                        <span>All Categories</span>
-                        <span class="count">{{ $totalBrandDocs }}</span>
-                    </div>
-                    <hr class="my-2 opacity-25">
-                    @foreach($brandCategories as $mCat)
-                        @php
-                            $mCatSlug = \Illuminate\Support\Str::slug($mCat);
-                            $hasDocs = isset($brandFiles[$mCat]);
-                            $prodCount = $hasDocs ? count($brandFiles[$mCat]) : 0;
-                            $taxId = $brandTaxonomies->firstWhere('name', $mCat)?->id;
-                        @endphp
-                        <div class="side-nav-item d-flex align-items-center justify-content-between"
-                             onclick="showSubCat('{{ $slug }}', '{{ $mCatSlug }}')"
-                             data-cat-btn="{{ $slug }}-{{ $mCatSlug }}"
-                             ondragover="handleDragOver(event)"
-                             ondragleave="handleDragLeave(event)"
-                             ondrop="handleCategoryDrop(event, '{{ $b->name }}', '{{ $mCat }}')">
-                            <span>{{ $mCat }}</span>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="count">{{ $prodCount }}</span>
-                                @if($taxId)
-                                <div class="dropdown">
-                                    <button class="action-dot" style="width: 20px; height: 20px; gap: 2px;" data-bs-toggle="dropdown">
-                                        <span style="width: 3px; height: 3px;"></span>
-                                        <span style="width: 3px; height: 3px;"></span>
-                                        <span style="width: 3px; height: 3px;"></span>
-                                    </button>
-                                    <div class="dropdown-menu dropdown-menu-custom shadow">
-                                        <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('category', {{ $taxId }})">
-                                            <i class="ti ti-edit"></i> Rename
-                                        </a>
-                                        <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $taxId }})">
-                                            <i class="ti ti-trash"></i> Delete
-                                        </a>
-                                    </div>
-                                </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endforeach
-
-                    @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
-                    <hr class="my-2 opacity-25">
-                    <div class="side-nav-item text-primary" onclick="openAddModal('category', {{ $b->id }})">
-                        <span class="fw-bold"><i class="ti ti-plus me-1"></i> New Category</span>
-                    </div>
-                    @endif
-                </div>
-                @endunless
-
-                <!-- Products View Area -->
-                <div class="products-area">
-                    <!-- All Categories View for this Brand -->
-                    <div id="content-{{ $slug }}-all" class="subcat-content">
-                        @if($totalBrandDocs == 0)
-                            <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                                <i class="ti ti-box-off fs-1 text-muted mb-3 d-block opacity-25"></i>
-                                <h6 class="text-muted fw-bold">No assets found for {{ $b->name }}</h6>
-                            </div>
-                        @else
-                            <div class="view-mode mode-grid">
-                                <div class="row g-4">
-                                    @foreach($brandFiles as $catName => $products)
-                                        @foreach($products as $productName => $files)
-                                            @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => $b->name, 'category' => $catName])
-                                        @endforeach
-                                    @endforeach
-                                </div>
-                            </div>
-                            <div class="view-mode mode-list" style="display:none;">
-                                @foreach($brandFiles as $catName => $products)
-                                    @foreach($products as $productName => $files)
-                                        @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => $b->name, 'category' => $catName])
-                                    @endforeach
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
-
-                    @foreach($brandCategories as $mCat)
-                        @php
-                            $mCatSlug = \Illuminate\Support\Str::slug($mCat);
-                            $products = $brandFiles[$mCat] ?? [];
-                        @endphp
-                        <div id="content-{{ $slug }}-{{ $mCatSlug }}" class="subcat-content" style="display:none;">
-                            @if(count($products) == 0)
-                                <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm">
-                                    <i class="ti ti-folder-off fs-1 text-muted mb-3 d-block opacity-25"></i>
-                                    <h6 class="text-muted fw-bold">No assets in {{ $mCat }}</h6>
-                                    <p class="text-muted small">Archiving technical data for {{ $b['name'] }} ecosystem.</p>
-                                </div>
-                            @else
-                                <!-- Grid View -->
-                                <div class="view-mode mode-grid">
-                                    <div class="row g-4">
-                                        @foreach($products as $productName => $files)
-                                            @include('tenant.digital-library.product-card-item', ['files' => $files, 'brand' => $b['name'], 'category' => $mCat])
-                                        @endforeach
-                                    </div>
-                                </div>
-
-                                <!-- List View -->
-                                <div class="view-mode mode-list" style="display:none;">
-                                    @foreach($products as $productName => $files)
-                                        @include('tenant.digital-library.list-item', ['files' => $files, 'brand' => $b['name'], 'category' => $mCat])
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    @endforeach
-    @endif {{-- end brand/independent view --}}
+    <div class="text-center p-5 bg-white rounded-4 border border-light shadow-sm mt-2">
+        <i class="ti ti-building-warehouse fs-1 text-muted mb-3 d-block opacity-25"></i>
+        <h6 class="text-muted fw-bold">No brand ecosystems yet</h6>
+    </div>
+    @endif
 </div>
 
 @include('tenant.digital-library.modals')
@@ -531,44 +456,9 @@
         document.querySelectorAll('[id^="btn-' + view + '"]').forEach(btn => btn.classList.add('active'));
     }
 
-    function showBrand(brandSlug) {
-        if (event.target.closest('.dropdown')) return;
-        
-        // Hide all brand containers
-        document.querySelectorAll('.brand-container').forEach(el => el.style.display = 'none');
-        const target = document.getElementById('brand-container-' + brandSlug);
-        if (target) target.style.display = 'block';
-        
-        // Update brand card active state
-        document.querySelectorAll('.brand-card').forEach(el => el.classList.remove('active'));
-        const card = document.querySelector(`[data-brand-card="${brandSlug}"]`);
-        if (card) card.classList.add('active');
-        
-        // Auto-select first sub-category of this brand
-        const firstCatBtn = document.querySelector('#brand-container-' + brandSlug + ' .side-nav-item');
-        if (firstCatBtn) firstCatBtn.click();
-        
-        // Persist current view mode
-        switchView(currentView);
-    }
-
-    function showSubCat(brandSlug, subCatSlug) {
-        if (event.target.closest('.dropdown')) return;
-
-        const containers = document.querySelectorAll('#brand-container-' + brandSlug + ' .subcat-content');
-        containers.forEach(el => el.style.display = 'none');
-        
-        const target = document.getElementById('content-' + brandSlug + '-' + subCatSlug);
-        if (target) target.style.display = 'block';
-        
-        const btns = document.querySelectorAll('#brand-container-' + brandSlug + ' .side-nav-item');
-        btns.forEach(el => el.classList.remove('active'));
-        
-        const btn = document.querySelector(`[data-cat-btn="${brandSlug}-${subCatSlug}"]`);
-        if (btn) btn.classList.add('active');
-        
-        switchView(currentView);
-    }
+    // Brand cards and category sidebar items are real links now (server
+    // renders only the active brand/category, not all seven hidden with
+    // CSS) — no client-side show/hide needed for switching between them.
 
     // Comprehensive Search
     document.getElementById('librarySearch').addEventListener('input', function(e) {
