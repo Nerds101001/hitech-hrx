@@ -16,8 +16,8 @@
     body { background-color: var(--hitech-bg); font-family: 'Public Sans', sans-serif; }
     
     /* Navigation Bar — values matched to the frontend-preview mockup: full
-       pill tabs, light-tint active state (same treatment brand-card.active
-       and side-nav-item.active already use), not a solid fill. */
+       pill tabs, light-tint active state (same treatment side-nav-item.active
+       already uses), not a solid fill. */
     .nav-filters .nav-link { padding: 7px 13px; border-radius: 999px; color: #94a3b8; font-weight: 700; font-size: 0.78rem; transition: all 0.2s; border: 1px solid transparent; }
     .nav-filters .nav-link:hover { background: #f0f2f5; }
     .nav-filters .nav-link.active { background: var(--hitech-primary-light); color: var(--hitech-primary) !important; }
@@ -25,9 +25,9 @@
     .search-input-wrapper { background: #f8fafb; border-radius: 999px; padding: 8px 16px; display: flex; align-items: center; min-width: 200px; border: 1px solid #eef2f4; }
     .search-input-wrapper input { border: none; background: transparent; font-size: 0.78rem; padding-left: 10px; width: 100%; outline: none; }
 
-    /* One card, two zones: the outer wrapper owns the rounded corners,
-       border and shadow; the banner and nav row are flush panels inside it,
-       not two separate boxes with a gap between them. */
+    /* One card, three flush panels: the outer wrapper owns the rounded
+       corners, border and shadow; banner, type row and brand row are flush
+       panels inside it, not separate boxes with gaps between them. */
     .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
     .library-banner { background: linear-gradient(120deg, var(--hitech-primary), var(--hitech-dark)); padding: 26px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
     /* A global heading-color reset elsewhere applies directly to h1
@@ -47,10 +47,8 @@
     .banner-btns .btn-white { background: #fff !important; color: #1e293b !important; border-color: #fff !important; }
     .nav-row { border-top: 1px solid #eef2f4; }
 
-    .section-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 4px 0 12px; }
-
-    /* Phone-only brand dropdown — hidden on desktop, where the card grid
-       below is the real picker. */
+    /* Phone-only brand dropdown — hidden on desktop, where the filter-tab
+       row is the real picker. */
     .brand-select-mobile { display: none; }
     .brand-select-mobile select {
         width: 100%; font: inherit; font-size: 0.85rem; font-weight: 700; color: #333;
@@ -58,15 +56,16 @@
         height: 44px; padding: 0 14px; margin-bottom: 16px;
     }
 
-    /* Brand Selection - Streamlined */
-    .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 28px; }
-    .brand-card { background: white; border: 1.5px solid #eef2f4; border-radius: 14px; padding: 16px 10px; cursor: pointer; transition: all 0.15s; position: relative; text-align: center; display: block; text-decoration: none; color: inherit; }
-    .brand-card:hover { border-color: #d8dee3; }
-    .brand-card.active { border-color: var(--hitech-primary); background: var(--hitech-primary-light); }
-    .brand-card.drag-over { background: #fff3e0; border: 2px dashed #ff7043; transform: scale(1.05); }
-    
-    .action-dropdown { position: absolute; top: 6px; right: 6px; z-index: 50; }
-    .action-dot { 
+    /* Brand filter-tabs — second bar, same .nav-link pill as the type row
+       above it (full pill, light-tint active state). */
+    .brand-row .nav-filters { flex-wrap: wrap; }
+    .brand-tab-add { color: var(--hitech-primary); border: 1px dashed #cfd8dc !important; }
+    .brand-tab-add:hover { background: var(--hitech-primary-light); }
+    .brand-tab.drag-over { background: #fff3e0 !important; border-color: #ff7043 !important; color: #ff7043 !important; }
+    .brand-tab-dot { border: none; background: rgba(0,0,0,0.06); color: inherit; width: 18px; height: 18px; border-radius: 50%; font-size: 0.7rem; line-height: 1; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .brand-tab-dot:hover { background: rgba(0,0,0,0.12); }
+
+    .action-dot {
         width: 30px; height: 30px; display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center; 
         cursor: pointer; transition: all 0.2s; border: none; background: transparent; padding: 0;
     }
@@ -85,11 +84,6 @@
     }
     .dropdown-item-custom:hover { background: #f8fafb; color: var(--hitech-primary); }
     .dropdown-item-custom.text-danger:hover { background: #fff5f5; color: #dc3545; }
-    
-    .brand-dot { width: 8px; height: 8px; border-radius: 50%; margin: 0 auto 8px auto; }
-    .brand-card h6 { font-weight: 800; margin-bottom: 2px; color: #333; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .brand-card p { display: none; } /* Hide description for ultra-compact view */
-    .brand-card .doc-count { font-size: 0.65rem; color: #aaa; font-weight: 700; letter-spacing: 0.2px; }
 
     /* Matrix Layout */
     .main-grid { display: grid; grid-template-columns: 220px 1fr; gap: 22px; }
@@ -136,6 +130,13 @@
     .action-btn span:first-child { font-size: 0.62rem; font-weight: 900; color: #444; }
     .action-btn span:last-child { font-size: 0.6rem; color: #bbb; font-weight: 700; }
     .action-btn.disabled { opacity: 0.3; cursor: not-allowed; background: #fafafa; border-style: dashed; }
+    /* The video/brand tiers get ONE full-width button instead of the
+       4-column grid, sharing .action-btn for the border/radius/hover — but
+       its narrow "2px horizontal padding + 0.62rem label" sizing was tuned
+       for a quarter-width grid cell, not a full-width primary action. It
+       rendered as ~10px text nearly touching the pill's own edges. */
+    .action-btn-wide { grid-column: span 4; flex-direction: row; gap: 8px; padding: 12px; }
+    .action-btn-wide span:first-child { font-size: 0.8rem; font-weight: 800; color: inherit; }
     .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
     .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
     .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.7rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }
@@ -167,7 +168,6 @@
 
     /* ============ Responsive ============ */
     @media (max-width: 991.98px) {
-        .brand-grid { grid-template-columns: repeat(4, 1fr); }
         .main-grid { grid-template-columns: 200px 1fr; gap: 16px; }
     }
 
@@ -194,11 +194,11 @@
         .nav-filters .nav-link { white-space: nowrap; }
         .search-input-wrapper { width: 100%; margin-top: 10px; }
 
-        /* A 7-card grid has no good compact shrink on a phone — swap it for
-           the native dropdown built alongside it, and drop the label since
-           the dropdown's own placeholder already says what it's for. */
-        .section-label { display: none; }
-        .brand-grid { display: none; }
+        /* A 7-tab row still needs horizontal scrolling to fit on a phone —
+           swap it for the native dropdown built alongside it instead.
+           !important: the row carries Bootstrap's d-flex utility, itself
+           !important in this app's build, so a plain display:none loses. */
+        .brand-row { display: none !important; }
         .brand-select-mobile { display: block; }
 
         /* "Fixed" here meant literally CSS position:fixed — a floating
@@ -233,7 +233,6 @@
     }
 
     @media (max-width: 480px) {
-        .brand-grid { grid-template-columns: repeat(2, 1fr); }
         .action-row { grid-template-columns: repeat(2, 1fr); row-gap: 6px; }
     }
 </style>
@@ -268,8 +267,7 @@
             || auth()->user()->can('vault.upload');
     @endphp
 
-    {{-- One card, two zones — the banner and the nav/search row used to be
-         two separate boxes with a gap between them. --}}
+    {{-- One card, three flush panels: banner, document-type row, brand row. --}}
     <div class="vault-header-card">
         <div class="library-banner">
             <div class="banner-content">
@@ -286,6 +284,7 @@
 
         <div class="nav-row d-flex justify-content-between align-items-center p-3">
             <div class="d-flex align-items-center">
+                <h5 class="fw-bold mb-0 me-4 text-dark">Intelligent Vault</h5>
                 <div class="nav-filters d-flex gap-1">
                     <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
                     <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
@@ -303,79 +302,73 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    @if($tier !== 'video')
-    {{-- Phone-only brand picker: a native <select>, not the card grid — a
-         7-card grid has no good compact form on a narrow screen, a dropdown
-         does. Desktop keeps the card grid; each shows/hides via CSS so
-         there's one server-rendered source of brands, not two client
-         copies to keep in sync. --}}
-    <div class="brand-select-mobile">
-        <select onchange="if (this.value) window.location.href = this.value;">
-            <option value="">Select Brand Ecosystem…</option>
-            @foreach($brands as $b)
-                @php $slug = \Illuminate\Support\Str::slug($b->name); @endphp
-                <option value="{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}" {{ ($activeBrand && $activeBrand->id === $b->id) ? 'selected' : '' }}>
-                    {{ $b->name }}
-                </option>
-            @endforeach
-        </select>
-    </div>
-
-    <!-- Select Brand Row — real links now: only the ACTIVE brand's files are
-         fetched/rendered server-side, not all seven brands hidden with CSS. -->
-    <div class="section-label">Select Brand Ecosystem</div>
-    <div class="brand-grid">
-        @foreach($brands as $b)
-            @php
-                $slug = \Illuminate\Support\Str::slug($b->name);
-                $isActive = $activeBrand && $activeBrand->id === $b->id;
-                $count = $brandCounts[strtolower($b->name)] ?? 0;
-            @endphp
-            {{-- A real <a> can't wrap the dropdown's own <a> items (invalid,
-                 nested-anchor HTML — browsers silently split the outer tag),
-                 so this stays a div navigated via onclick, same as before. --}}
-            <div class="brand-card @if($isActive) active @endif"
-                 data-brand-card="{{ $slug }}"
-                 onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}';"
-                 ondragover="handleDragOver(event)"
-                 ondragleave="handleDragLeave(event)"
-                 ondrop="handleBrandDrop(event, '{{ $b->name }}')">
-                <div class="action-dropdown dropdown">
-                    <button class="action-dot" data-bs-toggle="dropdown" aria-expanded="false">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-custom shadow">
-                        <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('brand', {{ $b->id }})">
-                            <i class="ti ti-edit fs-6"></i> Rename Brand
-                        </a>
-                        <div class="dropdown-divider opacity-10"></div>
-                        <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $b->id }})">
-                            <i class="ti ti-trash fs-6"></i> Delete Ecosystem
-                        </a>
+        @if($tier !== 'video')
+        {{-- Second bar, same treatment as the type row above it — brand
+             selection as filter-tabs, not a separate card grid below the
+             card. Phone gets a native <select> instead via CSS toggle: a
+             7-tab row still needs horizontal scrolling to fit, a dropdown
+             doesn't. --}}
+        <div class="nav-row brand-row d-flex align-items-center p-3">
+            <div class="nav-filters d-flex gap-1 flex-wrap">
+                @foreach($brands as $b)
+                    @php
+                        $slug = \Illuminate\Support\Str::slug($b->name);
+                        $isActive = $activeBrand && $activeBrand->id === $b->id;
+                    @endphp
+                    {{-- A real <a> can't wrap the dropdown's own <a> items
+                         (invalid, nested-anchor HTML — browsers silently
+                         split the outer tag), so this is a div navigated
+                         via onclick instead. --}}
+                    <div class="nav-link brand-tab {{ $isActive ? 'active' : '' }}"
+                         onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}';"
+                         ondragover="handleDragOver(event)"
+                         ondragleave="handleDragLeave(event)"
+                         ondrop="handleBrandDrop(event, '{{ $b->name }}')">
+                        {{ $b->name }}
+                        @if($isActive)
+                        <div class="dropdown d-inline-block ms-1">
+                            <button class="brand-tab-dot" data-bs-toggle="dropdown" aria-expanded="false">⋮</button>
+                            <div class="dropdown-menu dropdown-menu-custom shadow">
+                                <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('brand', {{ $b->id }})">
+                                    <i class="ti ti-edit fs-6"></i> Rename Brand
+                                </a>
+                                <div class="dropdown-divider opacity-10"></div>
+                                <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $b->id }})">
+                                    <i class="ti ti-trash fs-6"></i> Delete Ecosystem
+                                </a>
+                            </div>
+                        </div>
+                        @endif
                     </div>
-                </div>
-                <div class="brand-dot" style="background-color: {{ $b->color ?? '#ccc' }};"></div>
-                <h6>{{ $b->name }}</h6>
-                <div class="doc-count">{{ $count }} documents</div>
+                @endforeach
+                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+                <a href="javascript:void(0)" class="nav-link brand-tab-add" onclick="openAddModal('brand')">+ Add Brand</a>
+                @endif
             </div>
-        @endforeach
+        </div>
 
-        <!-- Add Brand Trigger (admin/HR only) -->
-        @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
-        <div class="brand-card add-trigger border-dashed" onclick="openAddModal('brand')">
-            <div class="brand-dot bg-light d-flex align-items-center justify-content-center">
-                <i class="ti ti-plus fs-6 text-muted"></i>
-            </div>
-            <h6>Add Brand</h6>
-            <div class="doc-count">New Ecosystem</div>
+        {{-- Phone-only brand picker: a native <select>, swapped in for the
+             tabs row above via CSS display toggle — one server-rendered
+             brand list, shown as tabs or dropdown options, nothing to keep
+             in sync client-side. --}}
+        <div class="brand-select-mobile">
+            <select onchange="if (this.value) window.location.href = this.value;">
+                <option value="">Select Brand Ecosystem…</option>
+                @foreach($brands as $b)
+                    @php $slug = \Illuminate\Support\Str::slug($b->name); @endphp
+                    <option value="{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}" {{ ($activeBrand && $activeBrand->id === $b->id) ? 'selected' : '' }}>
+                        {{ $b->name }}
+                    </option>
+                @endforeach
+            </select>
         </div>
         @endif
     </div>
-    @endif {{-- end brand grid --}}
+
+    {{-- Brand selection lives in the filter-tab row inside .vault-header-card
+         above (desktop) / the dropdown next to it (phone) — not a separate
+         card grid here. --}}
 
     @if($tier === 'video')
     {{-- ===== VIDEO VIEW — its own category taxonomy, no brand at all ===== --}}
