@@ -16,38 +16,34 @@
     body { background-color: var(--hitech-bg); font-family: 'Public Sans', sans-serif; }
     
     /* Navigation Bar */
-    .nav-filters { display: flex; flex-wrap: wrap; gap: 4px; }
-    .nav-filters .nav-link { padding: 6px 18px; border-radius: 999px; color: #666; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; border: 1px solid transparent; text-decoration: none; white-space: nowrap; cursor: pointer; }
+    .nav-filters .nav-link { padding: 6px 18px; border-radius: 8px; color: #666; font-weight: 600; font-size: 0.85rem; transition: all 0.2s; border: 1px solid transparent; }
     .nav-filters .nav-link:hover { background: #f0f2f5; }
     .nav-filters .nav-link.active { background: var(--hitech-primary); color: white !important; }
 
-    /* One card, every zone flush together: banner, search, then two compact
-       filter-tab rows (document type, brand) — replaces a title-bar tab row
-       plus a whole separate grid of brand cards below it, which took far
-       more vertical space than the same information needs. */
-    .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
-    .library-banner { background: var(--hitech-dark); padding: 18px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
-    .banner-content h1 { font-size: 1.3rem; font-weight: 800; margin-bottom: 1px; }
-    .banner-content p { opacity: 0.75; font-size: 0.78rem; margin-bottom: 0; font-weight: 500; }
-    .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
-
-    .search-row { padding: 12px 18px; border-top: 1px solid #eef2f4; }
-    .search-input-wrapper { background: #f0f2f5; border-radius: 20px; padding: 8px 16px; display: flex; align-items: center; width: 100%; border: 1px solid #eef2f4; }
+    .search-input-wrapper { background: #f0f2f5; border-radius: 20px; padding: 8px 16px; display: flex; align-items: center; width: 250px; border: 1px solid #eef2f4; }
     .search-input-wrapper input { border: none; background: transparent; font-size: 0.85rem; padding-left: 10px; width: 100%; outline: none; }
 
-    .filter-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-top: 1px solid #eef2f4; }
-    .filter-row-label { flex-shrink: 0; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; width: 44px; }
-    .filter-row .nav-filters { flex-wrap: nowrap; overflow-x: auto; min-width: 0; padding-bottom: 2px; }
-
-    .brand-tab-add { color: var(--hitech-primary); border: 1px dashed #cfd8dc !important; }
-    .brand-tab-add:hover { background: var(--hitech-primary-light); }
-    .brand-tab.drag-over { background: #fff3e0 !important; border-color: #ff7043 !important; color: #ff7043 !important; }
-    .brand-tab-dot { border: none; background: rgba(255,255,255,0.25); color: inherit; width: 18px; height: 18px; border-radius: 50%; font-size: 0.7rem; line-height: 1; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-    .brand-tab-dot:hover { background: rgba(255,255,255,0.4); }
+    /* One card, two zones: the outer wrapper owns the rounded corners,
+       border and shadow; the banner and nav row are flush panels inside it,
+       not two separate boxes with a gap between them. */
+    .vault-header-card { background: white; border-radius: 16px; border: 1px solid #eef2f4; box-shadow: 0 1px 2px rgba(0,0,0,0.02); overflow: hidden; margin-bottom: 2rem; }
+    .library-banner { background: var(--hitech-dark); padding: 22px 28px; color: white; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .banner-content h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 2px; }
+    .banner-content p { opacity: 0.8; font-size: 0.85rem; margin-bottom: 0; font-weight: 500; }
+    .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
+    .nav-row { border-top: 1px solid #eef2f4; }
 
     .section-label { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #94a3b8; margin: 4px 0 12px; }
 
-    .action-dot {
+    /* Brand Selection - Streamlined */
+    .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 28px; }
+    .brand-card { background: white; border: 1.5px solid #eef2f4; border-radius: 14px; padding: 16px 10px; cursor: pointer; transition: all 0.15s; position: relative; text-align: center; display: block; text-decoration: none; color: inherit; }
+    .brand-card:hover { border-color: #d8dee3; }
+    .brand-card.active { border-color: var(--hitech-primary); background: var(--hitech-primary-light); }
+    .brand-card.drag-over { background: #fff3e0; border: 2px dashed #ff7043; transform: scale(1.05); }
+    
+    .action-dropdown { position: absolute; top: 6px; right: 6px; z-index: 50; }
+    .action-dot { 
         width: 30px; height: 30px; display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center; 
         cursor: pointer; transition: all 0.2s; border: none; background: transparent; padding: 0;
     }
@@ -66,6 +62,11 @@
     }
     .dropdown-item-custom:hover { background: #f8fafb; color: var(--hitech-primary); }
     .dropdown-item-custom.text-danger:hover { background: #fff5f5; color: #dc3545; }
+    
+    .brand-dot { width: 8px; height: 8px; border-radius: 50%; margin: 0 auto 8px auto; }
+    .brand-card h6 { font-weight: 800; margin-bottom: 2px; color: #333; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand-card p { display: none; } /* Hide description for ultra-compact view */
+    .brand-card .doc-count { font-size: 0.65rem; color: #aaa; font-weight: 700; letter-spacing: 0.2px; }
 
     /* Matrix Layout */
     .main-grid { display: grid; grid-template-columns: 220px 1fr; gap: 22px; }
@@ -143,6 +144,7 @@
 
     /* ============ Responsive ============ */
     @media (max-width: 991.98px) {
+        .brand-grid { grid-template-columns: repeat(4, 1fr); }
         .main-grid { grid-template-columns: 200px 1fr; gap: 16px; }
     }
 
@@ -150,21 +152,28 @@
         .container-xxl { padding-left: 12px; padding-right: 12px; }
 
         .vault-header-card { border-radius: 14px; }
-        .library-banner { padding: 16px 20px; }
+        .library-banner { padding: 18px 20px; }
         .banner-content h1 { font-size: 1.25rem; }
         .banner-btns { width: 100%; }
         .banner-btns .btn { flex: 1; }
 
-        /* Search/filter rows: label keeps a fixed narrow width, tabs scroll
-           horizontally in the remaining space instead of wrapping into a
-           tall multi-row block. min-width: 0 is load-bearing here — without
-           it, a flex child with overflow-x:auto still won't shrink below
-           its content's natural width, so it drags every ancestor's width
-           out with it instead of scrolling in place (the actual cause of
-           the page-wide horizontal scroll this was meant to prevent). */
-        .search-row, .filter-row { padding: 10px 14px; }
-        .filter-row-label { width: 38px; font-size: 0.62rem; }
-        .filter-row .nav-filters .nav-link { padding: 5px 13px; font-size: 0.78rem; }
+        /* Nav row: title above, tabs scroll horizontally instead of wrapping
+           into a tall multi-row block, search moves to its own full row.
+           min-width: 0 is load-bearing here — without it, a flex/grid child
+           with overflow-x:auto still won't shrink below its content's
+           natural width, so it drags every ancestor's width out with it
+           instead of scrolling in place (the actual cause of the page-wide
+           horizontal scroll this was meant to prevent). */
+        .nav-row { flex-direction: column; align-items: stretch !important; padding: 12px; }
+        .nav-row > div:first-child { width: 100%; min-width: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+        .nav-row h5 { margin-bottom: 8px; margin-right: 0 !important; }
+        .nav-filters { flex-wrap: nowrap !important; min-width: 0; }
+        .nav-filters .nav-link { white-space: nowrap; }
+        .search-input-wrapper { width: 100%; margin-top: 10px; }
+
+        .brand-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .brand-card { padding: 10px 6px; }
+        .brand-card h6 { font-size: 0.72rem; }
 
         /* Sidebar stacks above the product grid instead of sitting beside it —
            240px next to card content has no room to breathe on a phone.
@@ -191,6 +200,7 @@
     }
 
     @media (max-width: 480px) {
+        .brand-grid { grid-template-columns: repeat(2, 1fr); }
         .action-row { grid-template-columns: repeat(2, 1fr); row-gap: 6px; }
     }
 </style>
@@ -225,15 +235,13 @@
             || auth()->user()->can('vault.upload');
     @endphp
 
-    {{-- One card, every zone flush together: banner, then search (the thing
-         you reach for first), then two compact filter-tab rows — document
-         type and brand — instead of a title-bar tab row plus a whole separate
-         grid of brand cards below it. --}}
+    {{-- One card, two zones — the banner and the nav/search row used to be
+         two separate boxes with a gap between them. --}}
     <div class="vault-header-card">
         <div class="library-banner">
             <div class="banner-content">
                 <h1>Intelligent Vault</h1>
-                <p>Centralised technical archive for every brand</p>
+                <p>Centralised technical archive for every brand.</p>
             </div>
             @if($vaultCanManage)
             <div class="banner-btns">
@@ -243,67 +251,81 @@
             @endif
         </div>
 
-        <div class="search-row">
-            <div class="search-input-wrapper">
-                <i class="ti ti-search text-muted"></i>
-                <input type="text" placeholder="Search technical assets..." id="librarySearch">
+        <div class="nav-row d-flex justify-content-between align-items-center p-3">
+            <div class="d-flex align-items-center">
+                <div class="nav-filters d-flex gap-1">
+                    <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
+                    <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
+                    <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
+                    <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Report</a>
+                    <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentation</a>
+                    <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Report</a>
+                    <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Video</a>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="search-input-wrapper">
+                    <i class="ti ti-search text-muted"></i>
+                    <input type="text" placeholder="Search technical assets..." id="librarySearch">
+                </div>
             </div>
         </div>
+    </div>
 
-        <div class="filter-row">
-            <span class="filter-row-label">Type</span>
-            <div class="nav-filters">
-                <a href="{{ route('library.index') }}" class="nav-link {{ !request()->has('category') ? 'active' : '' }}">All Files</a>
-                <a href="{{ route('library.index', ['category' => 'SDS']) }}" class="nav-link {{ request('category') === 'SDS' ? 'active' : '' }}">SDS</a>
-                <a href="{{ route('library.index', ['category' => 'TDS']) }}" class="nav-link {{ request('category') === 'TDS' ? 'active' : '' }}">TDS</a>
-                <a href="{{ route('library.index', ['category' => 'Test Report']) }}" class="nav-link {{ request('category') === 'Test Report' ? 'active' : '' }}">🧪 Test Report</a>
-                <a href="{{ route('library.index', ['category' => 'Presentation']) }}" class="nav-link {{ request('category') === 'Presentation' ? 'active' : '' }}">Presentation</a>
-                <a href="{{ route('library.index', ['category' => 'Comparison Report']) }}" class="nav-link {{ request('category') === 'Comparison Report' ? 'active' : '' }}">📊 Comparison Report</a>
-                <a href="{{ route('library.index', ['category' => 'Video']) }}" class="nav-link {{ request('category') === 'Video' ? 'active' : '' }}">Video</a>
-            </div>
-        </div>
-
-        @if($tier !== 'video')
-        <div class="filter-row">
-            <span class="filter-row-label">Brand</span>
-            <div class="nav-filters">
-                @foreach($brands as $b)
-                    @php
-                        $slug = \Illuminate\Support\Str::slug($b->name);
-                        $isActive = $activeBrand && $activeBrand->id === $b->id;
-                    @endphp
-                    <div class="nav-link brand-tab {{ $isActive ? 'active' : '' }}"
-                         onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}';"
-                         ondragover="handleDragOver(event)"
-                         ondragleave="handleDragLeave(event)"
-                         ondrop="handleBrandDrop(event, '{{ $b->name }}')">
-                        {{ $b->name }}
-                        @if($isActive)
-                        <div class="dropdown d-inline-block ms-1">
-                            <button class="brand-tab-dot" data-bs-toggle="dropdown" aria-expanded="false">⋮</button>
-                            <div class="dropdown-menu dropdown-menu-custom shadow">
-                                <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('brand', {{ $b->id }})">
-                                    <i class="ti ti-edit fs-6"></i> Rename Brand
-                                </a>
-                                <div class="dropdown-divider opacity-10"></div>
-                                <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $b->id }})">
-                                    <i class="ti ti-trash fs-6"></i> Delete Ecosystem
-                                </a>
-                            </div>
-                        </div>
-                        @endif
+    @if($tier !== 'video')
+    <!-- Select Brand Row — real links now: only the ACTIVE brand's files are
+         fetched/rendered server-side, not all seven brands hidden with CSS. -->
+    <div class="section-label">Select Brand Ecosystem</div>
+    <div class="brand-grid">
+        @foreach($brands as $b)
+            @php
+                $slug = \Illuminate\Support\Str::slug($b->name);
+                $isActive = $activeBrand && $activeBrand->id === $b->id;
+                $count = $brandCounts[strtolower($b->name)] ?? 0;
+            @endphp
+            {{-- A real <a> can't wrap the dropdown's own <a> items (invalid,
+                 nested-anchor HTML — browsers silently split the outer tag),
+                 so this stays a div navigated via onclick, same as before. --}}
+            <div class="brand-card @if($isActive) active @endif"
+                 data-brand-card="{{ $slug }}"
+                 onclick="if (!event.target.closest('.dropdown')) window.location.href = '{{ route('library.index', ['category' => $category, 'brand' => $slug]) }}';"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleBrandDrop(event, '{{ $b->name }}')">
+                <div class="action-dropdown dropdown">
+                    <button class="action-dot" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end dropdown-menu-custom shadow">
+                        <a class="dropdown-item dropdown-item-custom" href="javascript:void(0)" onclick="editTaxonomy('brand', {{ $b->id }})">
+                            <i class="ti ti-edit fs-6"></i> Rename Brand
+                        </a>
+                        <div class="dropdown-divider opacity-10"></div>
+                        <a class="dropdown-item dropdown-item-custom text-danger" href="javascript:void(0)" onclick="deleteTaxonomy({{ $b->id }})">
+                            <i class="ti ti-trash fs-6"></i> Delete Ecosystem
+                        </a>
                     </div>
-                @endforeach
-                @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
-                <a href="javascript:void(0)" class="nav-link brand-tab-add" onclick="openAddModal('brand')">+ Add Brand</a>
-                @endif
+                </div>
+                <div class="brand-dot" style="background-color: {{ $b->color ?? '#ccc' }};"></div>
+                <h6>{{ $b->name }}</h6>
+                <div class="doc-count">{{ $count }} documents</div>
             </div>
+        @endforeach
+
+        <!-- Add Brand Trigger (admin/HR only) -->
+        @if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+        <div class="brand-card add-trigger border-dashed" onclick="openAddModal('brand')">
+            <div class="brand-dot bg-light d-flex align-items-center justify-content-center">
+                <i class="ti ti-plus fs-6 text-muted"></i>
+            </div>
+            <h6>Add Brand</h6>
+            <div class="doc-count">New Ecosystem</div>
         </div>
         @endif
     </div>
-
-    {{-- Brand selection now lives in the filter-row above, as tabs next to
-         the document-type row, instead of a separate card grid here. --}}
+    @endif {{-- end brand grid --}}
 
     @if($tier === 'video')
     {{-- ===== VIDEO VIEW — its own category taxonomy, no brand at all ===== --}}
