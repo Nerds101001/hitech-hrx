@@ -20,11 +20,11 @@
     .search-input-wrapper { background: #f0f2f5; border-radius: 20px; padding: 8px 16px; display: flex; align-items: center; width: 250px; border: 1px solid #eef2f4; }
     .search-input-wrapper input { border: none; background: transparent; font-size: 0.85rem; padding-left: 10px; width: 100%; outline: none; }
 
-    /* Hero Banner */
-    .library-banner { background: var(--hitech-dark); border-radius: 16px; padding: 40px 50px; color: white; margin-bottom: 2rem; position: relative; overflow: hidden; }
-    .banner-content h1 { font-size: 2.4rem; font-weight: 800; margin-bottom: 8px; }
-    .banner-content p { opacity: 0.8; font-size: 1rem; margin-bottom: 0; font-weight: 500; }
-    .banner-btns { position: absolute; right: 50px; top: 50%; transform: translateY(-50%); display: flex; gap: 15px; }
+    /* Hero Banner — compact header bar, not a full hero section */
+    .library-banner { background: var(--hitech-dark); border-radius: 16px; padding: 22px 28px; color: white; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    .banner-content h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 2px; }
+    .banner-content p { opacity: 0.8; font-size: 0.85rem; margin-bottom: 0; font-weight: 500; }
+    .banner-btns { display: flex; gap: 12px; flex-wrap: wrap; }
 
     /* Brand Selection - Streamlined */
     .brand-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 2rem; }
@@ -118,6 +118,81 @@
     .action-pill { padding: 5px 15px; border-radius: 20px; background: #f5f7f9; font-size: 0.65rem; font-weight: 800; color: #666; text-decoration: none; border: 1px solid transparent; transition: all 0.2s; }
     .action-pill:hover:not(.disabled) { border-color: var(--hitech-primary); color: var(--hitech-primary); background: #e0f2f1; }
     .action-pill.disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* Floating Add Document button — always reachable without scrolling
+       back up to the banner */
+    .vault-fab {
+        position: fixed; bottom: 26px; right: 26px; z-index: 1030;
+        background: var(--hitech-primary); color: #fff; border: none;
+        padding: 13px 22px; border-radius: 999px; font-weight: 800; font-size: 0.82rem;
+        box-shadow: 0 10px 24px -6px rgba(0,137,123,0.5); cursor: pointer;
+        display: flex; align-items: center; gap: 8px; text-decoration: none;
+    }
+    .vault-fab:hover { background: #00695c; color: #fff; }
+    /* Reserve room so the fixed button never sits on top of real content —
+       matters most on a short page (e.g. a brand with only 1-2 products). */
+    .container-xxl { padding-bottom: 90px; }
+
+    /* ============ Responsive ============ */
+    @media (max-width: 991.98px) {
+        .brand-grid { grid-template-columns: repeat(4, 1fr); }
+        .main-grid { grid-template-columns: 200px 1fr; gap: 16px; }
+    }
+
+    @media (max-width: 767.98px) {
+        .container-xxl { padding-left: 12px; padding-right: 12px; }
+
+        .library-banner { padding: 18px 20px; border-radius: 14px; }
+        .banner-content h1 { font-size: 1.25rem; }
+        .banner-btns { width: 100%; }
+        .banner-btns .btn { flex: 1; }
+
+        /* Nav row: title above, tabs scroll horizontally instead of wrapping
+           into a tall multi-row block, search moves to its own full row.
+           min-width: 0 is load-bearing here — without it, a flex/grid child
+           with overflow-x:auto still won't shrink below its content's
+           natural width, so it drags every ancestor's width out with it
+           instead of scrolling in place (the actual cause of the page-wide
+           horizontal scroll this was meant to prevent). */
+        .nav-row { flex-direction: column; align-items: stretch !important; padding: 12px; }
+        .nav-row > div:first-child { width: 100%; min-width: 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+        .nav-row h5 { margin-bottom: 8px; margin-right: 0 !important; }
+        .nav-filters { flex-wrap: nowrap !important; min-width: 0; }
+        .nav-filters .nav-link { white-space: nowrap; }
+        .search-input-wrapper { width: 100%; margin-top: 10px; }
+
+        .brand-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .brand-card { padding: 10px 6px; }
+        .brand-card h6 { font-size: 0.72rem; }
+
+        /* Sidebar stacks above the product grid instead of sitting beside it —
+           240px next to card content has no room to breathe on a phone.
+           minmax(0, 1fr), not bare 1fr: a plain 1fr track still sizes itself
+           to fit its content's minimum width, which is exactly the bug this
+           rule exists to prevent (the sidebar's un-wrapped category chips
+           are ~2300px wide; minmax(0, ...) is what actually caps the track). */
+        .main-grid { grid-template-columns: minmax(0, 1fr); }
+        .side-navigation { display: flex; width: 100%; min-width: 0; overflow-x: auto; gap: 6px; padding: 8px; -webkit-overflow-scrolling: touch; }
+        .side-navigation hr { display: none; }
+        .side-nav-item { flex: 0 0 auto; white-space: nowrap; margin-bottom: 0; }
+
+        .brand-header { flex-wrap: wrap; gap: 12px; }
+        .brand-header h2 { font-size: 1.2rem; }
+
+        .action-row { gap: 6px; }
+        .action-btn { padding: 8px 2px; }
+        .action-btn span:first-child { font-size: 0.68rem; }
+
+        .vault-fab { bottom: 16px; right: 16px; padding: 12px 18px; font-size: 0.78rem; }
+
+        .vault-pagination { gap: 4px; }
+        .page-btn { min-width: 30px; height: 30px; padding: 0 8px; }
+    }
+
+    @media (max-width: 480px) {
+        .brand-grid { grid-template-columns: repeat(2, 1fr); }
+        .action-row { grid-template-columns: repeat(2, 1fr); row-gap: 6px; }
+    }
 </style>
 @endsection
 
@@ -139,8 +214,8 @@
     <!-- Hero Banner -->
     <div class="library-banner">
         <div class="banner-content">
-            <h1>AI Digital Library</h1>
-            <p>Secure documents & intelligent assistant powered by Nerds Bot.</p>
+            <h1>Intelligent Vault</h1>
+            <p>Centralised technical archive for every brand.</p>
         </div>
         @php
             /* Upload / creation controls. Admin and HR qualify by role, and so
@@ -164,7 +239,7 @@
     </div>
 
     <!-- User Requested Navigation Bar Above Brands -->
-    <div class="d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border border-light">
+    <div class="nav-row d-flex justify-content-between align-items-center mb-4 bg-white p-3 rounded-4 shadow-sm border border-light">
         <div class="d-flex align-items-center">
             <h5 class="fw-bold mb-0 me-4 text-dark">Intelligent Vault</h5>
             <div class="nav-filters d-flex gap-1">
@@ -433,6 +508,12 @@
     </div>
     @endif
 </div>
+
+@if($vaultCanManage ?? (auth()->user()->hasRole(['admin','Admin','hr','HR']) || auth()->user()->can('vault.upload')))
+<button type="button" class="vault-fab" onclick="openAddDocumentModal('{{ request('category') }}')">
+    <i class="ti ti-plus fs-5"></i> Add Document
+</button>
+@endif
 
 @include('tenant.digital-library.modals')
 @endsection
