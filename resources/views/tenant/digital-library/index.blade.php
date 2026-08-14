@@ -134,9 +134,24 @@
        4-column grid, sharing .action-btn for the border/radius/hover — but
        its narrow "2px horizontal padding + 0.62rem label" sizing was tuned
        for a quarter-width grid cell, not a full-width primary action. It
-       rendered as ~10px text nearly touching the pill's own edges. */
-    .action-btn-wide { grid-column: span 4; flex-direction: row; gap: 8px; padding: 12px; }
+       rendered as ~10px text nearly touching the pill's own edges.
+       min-height: 38px matches hitech-portal.scss's real .btn min-height
+       used app-wide, instead of guessing a padding value that happens to
+       add up close to it — padding alone drifted 7px over on its own. */
+    .action-btn-wide { grid-column: span 4; flex-direction: row; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; min-height: 38px; }
     .action-btn-wide span:first-child { font-size: 0.8rem; font-weight: 800; color: inherit; }
+    .action-btn-wide i { font-size: 1rem !important; }
+    /* Play is a primary action, not a passive "currently selected" state —
+       it gets the app's real solid-fill button treatment (matching e.g.
+       Add Employee), not the light-tint used for active tabs/cards
+       elsewhere on this page. Those are two different UI roles. */
+    .action-btn-primary { background: var(--hitech-primary) !important; border-color: var(--hitech-primary) !important; }
+    .action-btn-primary span { color: #fff !important; }
+    .action-btn-primary:hover { background: #006666 !important; }
+    /* Gap ABOVE the button row (video/brand tiers), not the button's own
+       padding — the thumbnail/summary above it sits right up against the
+       button otherwise, with no breathing room between the two. */
+    .action-row-wide { margin-top: 14px; }
     .card-footer { padding: 11px 16px; display: flex; justify-content: space-between; align-items: center; background: #fcfcfc; border-top: 1px solid #f8fafb; }
     .file-size { font-size: 0.68rem; color: #bbb; font-weight: 700; }
     .view-details { color: var(--hitech-primary); font-weight: 800; font-size: 0.7rem; text-decoration: none; display: flex; align-items: center; gap: 6px; }

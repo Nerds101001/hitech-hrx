@@ -284,6 +284,21 @@
     </div>
 </div>
 
+<!-- Video Summary Modal -->
+<div class="modal fade" id="videoSummaryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
+            <div class="modal-header border-0 bg-dark py-4 px-4">
+                <h5 class="modal-title fw-bold text-white mb-0" id="videoSummaryTitle">Video Summary</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 bg-white">
+                <p class="mb-0" id="videoSummaryText" style="color: #555; line-height: 1.7; font-size: 0.9rem;"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Assign Completion Modal -->
 <div class="modal fade" id="assignCompletionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -593,6 +608,12 @@ function playVideo(url, title, presenterName = '', sessionDate = '') {
 document.getElementById('videoPlayerModal')?.addEventListener('hidden.bs.modal', function () {
     document.getElementById('videoPlayerIframe').src = ''; // Stop video playback
 });
+
+function openVideoSummaryModal(title, summary) {
+    document.getElementById('videoSummaryTitle').innerText = title;
+    document.getElementById('videoSummaryText').innerText = summary || 'No summary available for this video yet.';
+    new bootstrap.Modal(document.getElementById('videoSummaryModal')).show();
+}
 
 function openAssignCompletionModal(fileId, title) {
     document.getElementById('assignFileId').value = fileId;

@@ -67,7 +67,10 @@
                              top-left corner). w-auto/h-auto opt this one back
                              out of the forced sizing. --}}
                         <div class="position-absolute top-50 start-50 translate-middle w-auto h-auto">
-                            <div class="bg-danger rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 48px; height: 48px;">
+                            {{-- Play is a neutral, positive action, not a warning —
+                                 bg-danger (red) reads as "stop/threat" to anyone
+                                 who's used a video player before. Theme teal. --}}
+                            <div class="rounded-circle d-flex align-items-center justify-content-center shadow" style="width: 48px; height: 48px; background: var(--hitech-primary);">
                                 <i class="ti ti-player-play-filled text-white fs-4" style="margin-left: 3px;"></i>
                             </div>
                         </div>
@@ -85,21 +88,27 @@
                     </div>
                 @endif
             </div>
-            <div class="action-row">
+            <div class="action-row {{ in_array($tier, ['video', 'brand']) ? 'action-row-wide' : '' }}">
                 @if($tier === 'video')
+                    @php
+                        $videoSummary = trim(str_replace('**', '', $file->summary ?? ''));
+                    @endphp
                     @if($file->youtube_url)
                         @php
                             $pName = $file->presenter ? trim($file->presenter->first_name . ' ' . $file->presenter->last_name) : '';
                             $sDate = $file->session_date ? \Carbon\Carbon::parse($file->session_date)->format('M d, Y') : '';
                         @endphp
-                        <a href="javascript:void(0)" onclick="playVideo('{{ route('library.previewFrame', $file->id) }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-btn action-btn-wide" style="background: #fff5f5; border-color: #ffcccc;">
-                            <span class="text-danger"><i class="ti ti-player-play fs-5"></i> Play Video</span>
+                        <a href="javascript:void(0)" onclick="playVideo('{{ route('library.previewFrame', $file->id) }}', '{{ addslashes($productName) }}', '{{ addslashes($pName) }}', '{{ addslashes($sDate) }}')" class="action-btn action-btn-wide action-btn-primary" style="grid-column: span 2;">
+                            <span><i class="ti ti-player-play fs-5"></i> Play</span>
                         </a>
                     @else
-                        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn action-btn-wide">
-                            <span class="text-primary"><i class="ti ti-video fs-5"></i> Access Media</span>
+                        <a href="{{ route('library.access', $file->id) }}" target="_blank" class="action-btn action-btn-wide action-btn-primary" style="grid-column: span 2;">
+                            <span><i class="ti ti-video fs-5"></i> Play</span>
                         </a>
                     @endif
+                    <button type="button" onclick="openVideoSummaryModal('{{ addslashes($productName) }}', '{{ addslashes($videoSummary) }}')" class="action-btn action-btn-wide" style="grid-column: span 2;">
+                        <span><i class="ti ti-file-text fs-5"></i> Summary</span>
+                    </button>
                 @elseif($tier === 'brand')
                     {{-- One document, one action — a Presentation or Comparison
                          Report doesn't have sibling TDS/SDS/Test Report docs to
