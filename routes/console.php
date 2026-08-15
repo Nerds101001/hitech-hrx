@@ -3,7 +3,6 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
-use App\Console\Commands\RouteMenuValidator;
 
 Artisan::command('inspire', function () {
   $this->comment(Inspiring::quote());
@@ -19,29 +18,31 @@ Artisan::command('logs:clear', function () {
 
 })->describe('Clear log files');
 
-Artisan::command('routes:validate-menu', function () {
-  $this->call('routes:validate-menu');
-})->describe('Validate route-menu consistency');
+// routes:validate-menu is a real command class (RouteMenuValidator) — Laravel
+// auto-discovers it from app/Console/Commands, no registration needed here.
 // Properly schedule the class-based leave:accrue command instead of a recursive closure
 Schedule::command('leave:accrue')->monthly();
 
 // leave:grant-short-leave — class-based, scheduled via facade so signature is preserved
+
 Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');
 
-Artisan::command('leave:auto-reject-expired', function () {
-    $this->call('leave:auto-reject-expired');
-})->describe('Auto-reject leave requests pending for more than 48 hours')->daily();
+// The five commands below were each previously registered as
+// Artisan::command('name', fn () => $this->call('name')) — a closure whose
+// only job was to call the command by its own name, which just re-enters
+// the same closure forever until the PHP stack overflows. Every one of
+// these already exists as a real Command class (AutoRejectLeavesCommand,
+// SendLeaveDailyDigest, EnforceOnboardingDeadline, ProcessProbationExpirations)
+// that Laravel auto-discovers; scheduling them via Schedule::command(), the
+// same pattern already used above for leave:accrue, needs no closure at all.
+// onboarding:enforce-deadlines was also a typo for the real command's
+// signature, onboarding:enforce-deadline (singular) — silently never
+// resolving even before the recursion, since Artisan::command() defines
+// whatever name you give it rather than validating it against an existing
+// command.
+Schedule::command('leave:auto-reject-expired')->daily()->description('Auto-reject leave requests pending for more than 48 hours');
+Schedule::command('leave:daily-digest')->dailyAt('10:15')->description('Send daily digest of team members on leave');
+Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce onboarding completion deadlines');
+Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
 
-Artisan::command('leave:daily-digest', function () {
-    $this->call('leave:daily-digest');
-})->describe('Send daily digest of team members on leave')->dailyAt('10:15');
-
-Artisan::command('onboarding:enforce-deadlines', function () {
-    $this->call('onboarding:enforce-deadlines');
-})->describe('Enforce onboarding completion deadlines')->daily();
-
-Artisan::command('probation:process-expirations', function () {
-    $this->call('probation:process-expirations');
-})->describe('Process employee probation expirations')->daily();
-Schedule::command('hrx:transfer-newbiz-ccare')->daily(); 
- 
+Schedule::command('hrx:transfer-newbiz-ccare')->daily();
