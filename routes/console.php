@@ -20,28 +20,36 @@ Artisan::command('logs:clear', function () {
 
 // routes:validate-menu is a real command class (RouteMenuValidator) — Laravel
 // auto-discovers it from app/Console/Commands, no registration needed here.
-// Properly schedule the class-based leave:accrue command instead of a recursive closure
-Schedule::command('leave:accrue')->monthly();
+
+// leave:accrue and leave:daily-digest are scheduled in bootstrap/app.php's
+// withSchedule() block, not here — they used to ALSO be registered here,
+// meaning both would fire independently every run. leave:accrue survived
+// that unharmed only because LeaveAccrualService has its own idempotency
+// guard (added specifically to make a second pass safe); leave:daily-digest
+// has no such guard, so its duplicate really was sending each team's digest
+// twice a day, once from each registration's own time. bootstrap/app.php
+// is the more complete picture for scheduling — it sequences
+// leave:reconcile-attendance to run before the digest so the numbers it
+// shows are same-day-accurate — so that's the one source of truth to keep.
 
 // leave:grant-short-leave — class-based, scheduled via facade so signature is preserved
-
 Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');
 
-// The five commands below were each previously registered as
+// The four commands below were each previously registered as
 // Artisan::command('name', fn () => $this->call('name')) — a closure whose
 // only job was to call the command by its own name, which just re-enters
 // the same closure forever until the PHP stack overflows. Every one of
 // these already exists as a real Command class (AutoRejectLeavesCommand,
-// SendLeaveDailyDigest, EnforceOnboardingDeadline, ProcessProbationExpirations)
-// that Laravel auto-discovers; scheduling them via Schedule::command(), the
-// same pattern already used above for leave:accrue, needs no closure at all.
+// EnforceOnboardingDeadline, ProcessProbationExpirations) that Laravel
+// auto-discovers; scheduling them via Schedule::command(), the same
+// pattern already used for leave:grant-short-leave above, needs no
+// closure at all.
 // onboarding:enforce-deadlines was also a typo for the real command's
 // signature, onboarding:enforce-deadline (singular) — silently never
 // resolving even before the recursion, since Artisan::command() defines
 // whatever name you give it rather than validating it against an existing
 // command.
 Schedule::command('leave:auto-reject-expired')->daily()->description('Auto-reject leave requests pending for more than 48 hours');
-Schedule::command('leave:daily-digest')->dailyAt('10:15')->description('Send daily digest of team members on leave');
 Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce onboarding completion deadlines');
 Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
 
