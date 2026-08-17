@@ -292,6 +292,7 @@
                             <th rowspan="2" class="text-center align-middle col-sno">S.No.</th>
                             <th rowspan="2" class="align-middle col-party" style="cursor:pointer;" onclick="sortPipeline('party', this)" title="Click to sort">Party Name<span class="sort-caret"></span></th>
                             <th rowspan="2" class="align-middle col-status" style="cursor:pointer;" onclick="sortPipeline('type', this)" title="Click to sort">Type<span class="sort-caret"></span></th>
+                            <th rowspan="2" class="align-middle col-order-interval" style="min-width:110px;cursor:pointer;" onclick="sortPipeline('order_interval', this)" title="Click to sort">Order Interval<span class="sort-caret"></span></th>
                             <th rowspan="2" class="align-middle col-category" style="min-width:90px;cursor:pointer;" onclick="sortPipeline('category', this)" title="Click to sort">Category<span class="sort-caret"></span></th>
                             <th rowspan="2" class="align-middle col-repname" style="min-width:130px;cursor:pointer;" onclick="sortPipeline('rep', this)" title="Click to sort">Representative<span class="sort-caret"></span></th>
                             <th rowspan="2" class="text-end align-middle col-potential" style="cursor:pointer;" onclick="sortPipeline('potential', this)" title="Click to sort">
@@ -473,6 +474,21 @@
                                         <option value="Packer"      {{ $isPacker ? 'selected' : '' }}>Packer</option>
                                         @if($row->type && !$isCustomer && !$isDistributor && !$isDealer && !$isPacker)
                                             <option value="{{ $row->type }}" selected>{{ $row->type }}</option>
+                                        @endif
+                                    </select>
+                                </td>
+
+                                {{-- Order Interval — how often this customer places an order.
+                                     Left blank ("-Select-") by default; not required. --}}
+                                <td class="col-order-interval p-0 align-middle">
+                                    <select class="excel-select row-field status-select text-truncate" data-field="order_interval">
+                                        <option value="">-Select-</option>
+                                        <option value="Monthly"        {{ $row->order_interval === 'Monthly' ? 'selected' : '' }}>Monthly</option>
+                                        <option value="Quarterly"      {{ $row->order_interval === 'Quarterly' ? 'selected' : '' }}>Quarterly</option>
+                                        <option value="Semi-Annually"  {{ $row->order_interval === 'Semi-Annually' ? 'selected' : '' }}>Semi-Annually</option>
+                                        <option value="Annually"       {{ $row->order_interval === 'Annually' ? 'selected' : '' }}>Annually</option>
+                                        @if($row->order_interval && !in_array($row->order_interval, ['Monthly', 'Quarterly', 'Semi-Annually', 'Annually']))
+                                            <option value="{{ $row->order_interval }}" selected>{{ $row->order_interval }}</option>
                                         @endif
                                     </select>
                                 </td>

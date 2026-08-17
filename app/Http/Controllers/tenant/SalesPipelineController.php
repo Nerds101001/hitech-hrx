@@ -327,6 +327,8 @@ class SalesPipelineController extends Controller
             $textSort('party_name');
         } elseif ($sort === 'type') {
             $textSort('type');
+        } elseif ($sort === 'order_interval') {
+            $textSort('order_interval');
         } elseif ($sort === 'brand') {
             $textSort('product');
         } elseif ($sort === 'category') {
@@ -1593,7 +1595,8 @@ class SalesPipelineController extends Controller
             'yoy_24_25',
             'yoy_25_26',
             'address',
-            'product'
+            'product',
+            'order_interval'
         ]);
 
         if (isset($data['status_stage']) && in_array($data['status_stage'], ['Order', 'Repeat Order'])) {
