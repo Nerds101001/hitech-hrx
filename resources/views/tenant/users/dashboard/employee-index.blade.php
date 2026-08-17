@@ -98,7 +98,8 @@
                  ? rtrim(rtrim(number_format($kpiEarned ?? 0, 1), '0'), '.').' / '.rtrim(rtrim(number_format($kpiPossible, 1), '0'), '.')
                  : '—',
              'sub'=>($kpiPossible ?? 0) > 0
-                 ? ($kraOverall ?? 0).'% of marks'.(($kpiDueSoon ?? 0) > 0 ? ' · '.$kpiDueSoon.' due soon' : '')
+                 ? ($kraOverall ?? 0).'% of marks · '.($kpiPending ?? 0).' pending · '.($kpiCompleted ?? 0).' completed'
+                     .(($kpiDueSoon ?? 0) > 0 ? ' · '.$kpiDueSoon.' due soon' : '')
                  : 'No KPIs assigned',
              'btn'=>'View Performance','url'=>url('/kpi/my'),'big'=>true],
           ];

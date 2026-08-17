@@ -1630,41 +1630,43 @@ class UserDashboardController extends Controller
         // every KPI and scored nothing showed 100%. It also read only the first
         // six KPIs by title, which on a 13-KPI scorecard hid Revenue — the
         // single biggest weight — from the card entirely.
-        $kraOverall  = 0;
-        $kpiEarned   = 0.0;
-        $kpiPossible = 0.0;
-        $kpiDueSoon  = 0;
+        $kraOverall    = 0;
+        $kpiEarned     = 0.0;
+        $kpiPossible   = 0.0;
+        $kpiDueSoon    = 0;
+        $kpiPending    = 0;
+        $kpiCompleted  = 0;
         try {
-            $assignments = \App\Models\KpiAssignment::where('user_id', $user->id)
-                ->where('is_active', true)
-                ->orderBy('title')
-                ->get();                       // every KPI, not the first six
+            // syncUser() backfills the current period's check for every active
+            // assignment before returning them. Reading KpiCheck rows directly
+            // (the old approach) silently dropped anything nobody had ever
+            // opened /kpi/my or /kpi/manage for — no row existed yet, so it
+            // never counted as due/pending no matter how close the deadline.
+            $assignments = \App\Services\KpiPeriodService::syncUser($user->id);
 
             if ($assignments->isNotEmpty()) {
                 $today = \Carbon\Carbon::today();
 
-                // The check covering today for each assignment — the period the
-                // employee is actually being measured on right now.
-                $current = \App\Models\KpiCheck::where('user_id', $user->id)
-                    ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
-                    ->whereDate('period_start', '<=', $today)
-                    ->whereDate('period_end', '>=', $today)
-                    ->get()
-                    ->keyBy('kpi_assignment_id');
-
                 foreach ($assignments as $a) {
-                    $check = $current->get($a->id);
+                    $check = $a->currentCheck;
                     $max   = (float) $a->max_marks;
                     $score = $check && $check->score !== null ? (float) $check->score : 0.0;
 
                     $kpiPossible += $max;
                     $kpiEarned   += $score;
 
-                    // Still open and the deadline is within a week.
-                    if ($check && $check->status === 'pending' && $check->due_date) {
-                        $due = \Carbon\Carbon::parse($check->due_date);
-                        if ($due->gte($today) && $due->diffInDays($today) <= 7) {
-                            $kpiDueSoon++;
+                    if ($check) {
+                        if (in_array($check->status, ['completed_on_time', 'completed_late'], true)) {
+                            $kpiCompleted++;
+                        } elseif ($check->status === 'pending') {
+                            $kpiPending++;
+                            // Still open and the deadline is within a week.
+                            if ($check->due_date) {
+                                $due = \Carbon\Carbon::parse($check->due_date);
+                                if ($due->gte($today) && $due->diffInDays($today) <= 7) {
+                                    $kpiDueSoon++;
+                                }
+                            }
                         }
                     }
 
@@ -1673,6 +1675,12 @@ class UserDashboardController extends Controller
                         'pct'  => $max > 0 ? (int) round(($score / $max) * 100) : 0,
                     ];
                 }
+
+                // syncUser() orders by category/frequency for the scoring
+                // engine's own use; the dashboard list has always read
+                // alphabetically, so restore that here rather than change
+                // what every employee already sees.
+                usort($kraItems, fn ($x, $y) => strcasecmp($x['name'], $y['name']));
 
                 $kraOverall = $kpiPossible > 0
                     ? (int) round(($kpiEarned / $kpiPossible) * 100)
@@ -1758,6 +1766,7 @@ class UserDashboardController extends Controller
             'todayAttendance', 'todayHours', 'presentThisWeek', 'weekWorkingDays',
             'leaveDaysAvailable', 'expensesThisMonth',
             'kraItems', 'kraOverall', 'kpiEarned', 'kpiPossible', 'kpiDueSoon',
+            'kpiPending', 'kpiCompleted',
             'upcomingLeaves', 'myTimeline', 'myDocs', 'importantContacts',
             'salesProfile'
         );

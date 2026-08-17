@@ -264,4 +264,37 @@ class KpiPeriodService
 
         return $assignments;
     }
+
+    /**
+     * Human label for a period, shaped by frequency — "August 2026" for a
+     * monthly assignment, "Q2 FY26-27" for quarterly, a date range for
+     * anything shorter. Matches the fiscal-quarter/year definition in
+     * currentPeriod() (Apr-Mar) so a label always names the same window the
+     * scoring engine actually used.
+     */
+    public static function periodLabel(string $frequency, $periodStart, $periodEnd): string
+    {
+        $start = Carbon::parse($periodStart);
+        $end = Carbon::parse($periodEnd);
+
+        return match ($frequency) {
+            'daily' => $start->format('d M Y'),
+            'monthly' => $start->format('F Y'),
+            'quarterly' => self::fiscalQuarterLabel($start),
+            'yearly' => self::fiscalYearLabel($start),
+            default => $start->format('d M') . ' – ' . $end->format('d M Y'), // weekly, fortnightly
+        };
+    }
+
+    private static function fiscalQuarterLabel(Carbon $start): string
+    {
+        $q = (int) floor((($start->month - 4 + 12) % 12) / 3) + 1; // Apr-Jun=1 ... Jan-Mar=4
+        return "Q{$q} " . self::fiscalYearLabel($start);
+    }
+
+    private static function fiscalYearLabel(Carbon $start): string
+    {
+        $fyStart = $start->month >= 4 ? $start->year : $start->year - 1;
+        return 'FY' . substr((string) $fyStart, 2, 2) . '-' . substr((string) ($fyStart + 1), 2, 2);
+    }
 }
