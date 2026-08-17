@@ -237,6 +237,19 @@
                 <option value="auto:total_pipeline">Auto — total pipeline</option>
                 <option value="auto:customers_added">Auto — customers added</option>
                 <option value="auto:customers_retained">Auto — customers retained</option>
+                <option value="auto:bingo_achievement">Auto — Bingo achievement</option>
+                <option value="auto:kingo_achievement">Auto — Kingo achievement</option>
+                <option value="auto:super_kingo_achievement">Auto — Super Kingo achievement</option>
+                <option value="auto:rate_increase_visits">Auto — rate increase visits</option>
+                <option value="auto:upsell_visits">Auto — upsell visits</option>
+                <option value="auto:nif_recovery_visits">Auto — NIF recovery visits</option>
+                <option value="auto:competitor_insight_visits">Auto — competitor insight visits</option>
+                <option value="auto:product_idea_visits">Auto — product idea visits</option>
+                <option value="auto:new_customer_visits">Auto — new customer visits</option>
+                <option value="auto:trial_demo_visits">Auto — trial/demo visits</option>
+                <option value="auto:sales_pitches">Auto — sales pitches (Mind Speak)</option>
+                <option value="auto:seminars_conducted">Auto — seminars conducted (Mind Speak)</option>
+                <option value="auto:learn_hitech_sessions">Auto — Learn@HiTech sessions</option>
               </select>
             </div>
             <div class="col-md-6 kpi-only">

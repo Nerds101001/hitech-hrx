@@ -26,6 +26,33 @@ class KpiAutoSourceService
         'auto:total_pipeline'      => 'Revenue as a % of pipeline potential',
         'auto:customers_added'     => 'Customers whose first ever order falls in the period',
         'auto:customers_retained'  => '% of customers first seen 6+ months ago still ordering',
+
+        // Kingo/Bingo — salesperson_id ONLY (not the broader "book" the sources
+        // above use), matching the real Kingo/Bingo scorecard exactly
+        // (SalesPipelineController@index's $targetAchieversByMonth) so a KPI
+        // score never disagrees with what the scorecard itself shows.
+        'auto:bingo_achievement'       => 'Sale ÷ Bingo target, as a % (matches the Kingo/Bingo scorecard)',
+        'auto:kingo_achievement'       => 'Sale ÷ Kingo target, as a %',
+        'auto:super_kingo_achievement' => 'Sale ÷ Super Kingo target, as a %',
+
+        // sales_visits boolean flags — a straight count of completed visits
+        // flagged for that activity in the period.
+        'auto:rate_increase_visits'      => 'Completed visits flagged Rate Increase',
+        'auto:upsell_visits'             => 'Completed visits flagged Upsell',
+        'auto:nif_recovery_visits'       => 'Completed visits flagged NIF Recovery',
+        'auto:competitor_insight_visits' => 'Completed visits flagged Competitor Insight',
+        'auto:product_idea_visits'       => 'Completed visits flagged Product Idea',
+        'auto:new_customer_visits'       => 'Completed visits flagged New Customer',
+        'auto:trial_demo_visits'         => 'Completed visits of type Product Trial',
+
+        // Mind Speak — only APPROVED submissions count, so an unreviewed or
+        // rejected entry can't inflate a score before a reviewer has seen it.
+        'auto:sales_pitches'      => 'Approved Sales Pitch submissions (Mind Speak)',
+        'auto:seminars_conducted' => 'Approved Seminar submissions (Mind Speak)',
+
+        // Digital Library — videos presented under the "Learn @ Hi Tech"
+        // shelf, credited to whoever is tagged as presenter_id.
+        'auto:learn_hitech_sessions' => 'Learn @ Hi Tech videos presented (Digital Library)',
     ];
 
     /** Null = this KPI is not auto-sourced, or the figure cannot be derived. */
@@ -43,7 +70,25 @@ class KpiAutoSourceService
             'auto:total_pipeline'     => self::totalPipeline($a->user_id, $start, $end),
             'auto:customers_added'    => self::customersAdded($a->user_id, $start, $end),
             'auto:customers_retained' => self::customersRetained($a->user_id, $start, $end),
-            default                   => null,
+
+            'auto:bingo_achievement'       => self::scorecardAchievement($a->user_id, $start, $end, 'bingo_target'),
+            'auto:kingo_achievement'       => self::scorecardAchievement($a->user_id, $start, $end, 'kingo_target'),
+            'auto:super_kingo_achievement' => self::scorecardAchievement($a->user_id, $start, $end, 'super_kingo_target'),
+
+            'auto:rate_increase_visits'      => self::visitFlagCount($a->user_id, $start, $end, 'rate_increase'),
+            'auto:upsell_visits'             => self::visitFlagCount($a->user_id, $start, $end, 'is_upsell'),
+            'auto:nif_recovery_visits'       => self::visitFlagCount($a->user_id, $start, $end, 'is_nif'),
+            'auto:competitor_insight_visits' => self::visitFlagCount($a->user_id, $start, $end, 'competitor_insight'),
+            'auto:product_idea_visits'       => self::visitFlagCount($a->user_id, $start, $end, 'product_idea'),
+            'auto:new_customer_visits'       => self::visitFlagCount($a->user_id, $start, $end, 'is_new_customer'),
+            'auto:trial_demo_visits'         => self::visitTypeCount($a->user_id, $start, $end, 'Product Trial'),
+
+            'auto:sales_pitches'      => self::mindSpeakCount($a->user_id, $start, $end, 'Sales Pitch'),
+            'auto:seminars_conducted' => self::mindSpeakCount($a->user_id, $start, $end, 'Seminar'),
+
+            'auto:learn_hitech_sessions' => self::learnHitechCount($a->user_id, $start, $end),
+
+            default => null,
         };
     }
 
@@ -175,5 +220,92 @@ class KpiAutoSourceService
             ->distinct()->count('sales_pipeline_id');
 
         return round($still / $eligible->count() * 100, 2);
+    }
+
+    /**
+     * Sale ÷ target for one Kingo/Bingo target column, as a %. Deliberately
+     * salesperson_id ONLY — not self::book()'s broader ccare/new_biz reach —
+     * because this must match SalesPipelineController@index's
+     * $targetAchieversByMonth (the actual Kingo/Bingo scorecard) exactly, or
+     * a KPI could say "achieved" while the scorecard everyone actually looks
+     * at says otherwise.
+     *
+     * Null when no target is set for the period — scoring against a zero
+     * target would read as "0% achieved" when really nothing was asked of
+     * them.
+     */
+    public static function scorecardAchievement(int $userId, Carbon $start, Carbon $end, string $targetColumn): ?float
+    {
+        $target = (float) DB::table('salesperson_targets')
+            ->where('salesperson_id', $userId)
+            ->whereIn('month_year', self::monthKeys($start, $end))
+            ->sum($targetColumn);
+
+        if ($target <= 0) {
+            return null;
+        }
+
+        $actual = (float) DB::table('sales_pipeline_months as m')
+            ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
+            ->where('sp.salesperson_id', $userId)
+            ->where('sp.is_locked', true)
+            ->whereNull('sp.deleted_at')
+            ->whereIn('m.month_year', self::monthKeys($start, $end))
+            ->sum('m.sale_amount');
+
+        return round($actual / $target * 100, 2);
+    }
+
+    /** How many of this user's COMPLETED visits in the period have $flagColumn set. */
+    public static function visitFlagCount(int $userId, Carbon $start, Carbon $end, string $flagColumn): float
+    {
+        return (float) DB::table('sales_visits')
+            ->where('salesperson_id', $userId)
+            ->where('status', 'completed')
+            ->where($flagColumn, true)
+            ->whereBetween('completed_at', [$start->startOfDay(), $end->endOfDay()])
+            ->count();
+    }
+
+    /** How many of this user's COMPLETED visits in the period are of $visitType. */
+    public static function visitTypeCount(int $userId, Carbon $start, Carbon $end, string $visitType): float
+    {
+        return (float) DB::table('sales_visits')
+            ->where('salesperson_id', $userId)
+            ->where('status', 'completed')
+            ->where('visit_type', $visitType)
+            ->whereBetween('completed_at', [$start->startOfDay(), $end->endOfDay()])
+            ->count();
+    }
+
+    /**
+     * Approved Mind Speak submissions of $category in the period. Only
+     * 'approved' counts — pending or rejected entries can't inflate a score
+     * before a reviewer has actually signed off on them.
+     */
+    public static function mindSpeakCount(int $userId, Carbon $start, Carbon $end, string $category): float
+    {
+        return (float) DB::table('mind_speaks')
+            ->where('user_id', $userId)
+            ->where('category', $category)
+            ->where('status', 'approved')
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [$start->startOfDay(), $end->endOfDay()])
+            ->count();
+    }
+
+    /**
+     * Digital Library videos under the "Learn @ Hi Tech" shelf, credited to
+     * whoever presented them (presenter_id) — see
+     * MigrateLearnToVideoCommand::LEARN_CATEGORY for the exact sub_category
+     * string this must match.
+     */
+    public static function learnHitechCount(int $userId, Carbon $start, Carbon $end): float
+    {
+        return (float) DB::table('library_files')
+            ->where('presenter_id', $userId)
+            ->where('sub_category', 'Learn @ Hi Tech')
+            ->whereBetween('session_date', [$start->toDateString(), $end->toDateString()])
+            ->count();
     }
 }
