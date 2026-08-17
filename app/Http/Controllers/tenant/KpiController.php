@@ -251,7 +251,20 @@ class KpiController extends Controller
         $earned = $history->whereNotNull('score')->sum('score');
         $possible = $assignments->sum('max_marks');
 
-        return view('tenant.kpi.my', compact('assignments', 'months', 'grid', 'history', 'earned', 'possible'));
+        $pendingCount = $completedCount = 0;
+        foreach ($assignments as $a) {
+            $status = optional($a->currentCheck)->status;
+            if (in_array($status, ['completed_on_time', 'completed_late'], true)) {
+                $completedCount++;
+            } elseif ($status === 'pending') {
+                $pendingCount++;
+            }
+        }
+
+        return view('tenant.kpi.my', compact(
+            'assignments', 'months', 'grid', 'history', 'earned', 'possible',
+            'pendingCount', 'completedCount'
+        ));
     }
 
     /** Employee marks a timeline task done for the current period. */
