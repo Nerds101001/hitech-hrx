@@ -7,8 +7,10 @@ use App\Models\Department;
 use App\Models\KpiAssignment;
 use App\Models\KpiCheck;
 use App\Models\User;
+use App\Models\KpiTemplate;
 use App\Models\WorkControlRoutine;
 use App\Services\KpiPeriodService;
+use App\Services\KpiTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -250,6 +252,195 @@ class KpiController extends Controller
             'message' => $check->status === 'completed_on_time' ? 'Marked complete (on time).' : 'Marked complete (late).',
             'check_status' => $check->status,
             'score' => $check->score,
+        ]);
+    }
+
+    // ── Department templates ──────────────────────────────────────────────
+    // A KPI/KRA is defined once for a department and stamped onto everyone in
+    // it, instead of an admin repeating the same row per employee. Unlike
+    // manage(), this covers EVERY department including sales — the exclusion
+    // there is about DWM routines, not about who can hold a scorecard.
+
+    private function assertCanManageTemplates(): ?string
+    {
+        return Auth::user()->hasRole(['admin', 'hr']) ? null : 'Unauthorized.';
+    }
+
+    public function templates(Request $request)
+    {
+        if ($msg = $this->assertCanManageTemplates()) {
+            return redirect()->route('tenant.dashboard')->with('error', $msg);
+        }
+
+        $departmentId = $request->input('department_id');
+
+        $templates = KpiTemplate::with(['department', 'parent'])
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
+            ->orderBy('department_id')->orderBy('parent_template_id')->orderBy('category', 'desc')->orderBy('id')
+            ->get();
+
+        // How many employees each template currently covers, for the UI count.
+        $assignmentCounts = KpiAssignment::whereNotNull('kpi_template_id')
+            ->selectRaw('kpi_template_id, COUNT(*) c, SUM(is_active) active')
+            ->groupBy('kpi_template_id')->get()->keyBy('kpi_template_id');
+
+        $departments = Department::orderBy('name')->get(['id', 'name']);
+        $kras = KpiTemplate::where('category', 'KRA')->orderBy('title')->get(['id', 'title', 'department_id']);
+        $approvers = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
+
+        return view('tenant.kpi.templates', compact(
+            'templates', 'departments', 'kras', 'approvers', 'departmentId', 'assignmentCounts'
+        ));
+    }
+
+    private function templateRules(): array
+    {
+        return [
+            'title'              => 'required|string|max:255',
+            'description'        => 'nullable|string|max:255',
+            'category'           => 'required|in:KPI,KRA',
+            'parent_template_id' => 'nullable|exists:kpi_templates,id',
+            'department_id'      => 'nullable|exists:departments,id',
+            'frequency'          => 'required|in:daily,weekly,fortnightly,monthly,quarterly,yearly',
+            'scoring_type'       => 'required|in:timeline,target,threshold,banded',
+            'max_marks'          => 'required|numeric|min:0',
+            'target_value'       => 'nullable|numeric',
+            'threshold_percent'  => 'nullable|numeric|min:0|max:1000',
+            'bands'              => 'nullable|array',
+            'bands.*.min'        => 'required_with:bands|numeric|min:0',
+            'bands.*.marks'      => 'required_with:bands|numeric|min:0',
+            'late_policy'        => 'required|in:none,fixed,percent,per_day',
+            'late_score'         => 'nullable|numeric|min:0',
+            'late_percent'       => 'nullable|numeric|min:0|max:100',
+            'grace_days'         => 'nullable|integer|min:0|max:60',
+            'per_day_penalty'    => 'nullable|numeric|min:0',
+            'data_source'        => 'nullable|string|max:40',
+            'approver_id'        => 'nullable|exists:users,id',
+            'check_day'          => 'nullable|integer|min:1|max:31',
+            'check_month'        => 'nullable|integer|min:1|max:12',
+        ];
+    }
+
+    /** Reject combinations the scoring engine cannot act on. */
+    private function templateConsistencyError(array $d): ?string
+    {
+        $needsTarget = in_array($d['scoring_type'], ['target', 'threshold', 'banded'], true);
+        if ($needsTarget && $d['category'] === 'KPI' && ($d['target_value'] ?? null) === null) {
+            return 'A target value is required for target, threshold and banded scoring.';
+        }
+        if ($d['scoring_type'] === 'threshold' && ($d['threshold_percent'] ?? null) === null) {
+            return 'Threshold scoring needs the % of target that earns full marks.';
+        }
+        if ($d['scoring_type'] === 'banded' && empty($d['bands'])) {
+            return 'Banded scoring needs at least one band.';
+        }
+        if ($d['late_policy'] === 'percent' && ($d['late_percent'] ?? null) === null) {
+            return 'A late percentage is required for the percent late policy.';
+        }
+        if ($d['late_policy'] === 'per_day' && ($d['per_day_penalty'] ?? null) === null) {
+            return 'A per-day penalty is required for the per-day late policy.';
+        }
+        return null;
+    }
+
+    public function storeTemplate(Request $request)
+    {
+        if ($msg = $this->assertCanManageTemplates()) {
+            return response()->json(['status' => 'error', 'message' => $msg], 403);
+        }
+        $data = $request->validate($this->templateRules());
+        if ($err = $this->templateConsistencyError($data)) {
+            return response()->json(['status' => 'error', 'message' => $err], 422);
+        }
+
+        $data['tenant_id'] = Auth::user()->tenant_id;
+        $data['created_by_id'] = Auth::id();
+        $data['is_active'] = true;
+        // A KRA is a heading: it holds no marks and no schedule of its own.
+        if ($data['category'] === 'KRA') {
+            $data['max_marks'] = 0;
+            $data['parent_template_id'] = null;
+        }
+
+        $t = KpiTemplate::create($data);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $data['category'] . ' created. Use Apply to give it to the department.',
+            'id' => $t->id,
+        ]);
+    }
+
+    public function updateTemplate(Request $request, $id)
+    {
+        if ($msg = $this->assertCanManageTemplates()) {
+            return response()->json(['status' => 'error', 'message' => $msg], 403);
+        }
+        $t = KpiTemplate::findOrFail($id);
+        $data = $request->validate($this->templateRules());
+        if ($err = $this->templateConsistencyError($data)) {
+            return response()->json(['status' => 'error', 'message' => $err], 422);
+        }
+        if ($data['category'] === 'KRA') {
+            $data['max_marks'] = 0;
+            $data['parent_template_id'] = null;
+        }
+        // A template cannot be its own parent.
+        if (($data['parent_template_id'] ?? null) == $t->id) {
+            $data['parent_template_id'] = null;
+        }
+
+        $t->update($data);
+
+        // Existing assignments follow the edit, so a weight change does not
+        // leave half the department scored on the old number.
+        $res = KpiTemplateService::apply($t, true);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Saved. {$res['updated']} existing assignment(s) refreshed, {$res['created']} added.",
+        ]);
+    }
+
+    public function destroyTemplate($id)
+    {
+        if ($msg = $this->assertCanManageTemplates()) {
+            return response()->json(['status' => 'error', 'message' => $msg], 403);
+        }
+        $t = KpiTemplate::findOrFail($id);
+
+        // Assignments are deactivated, never deleted: their kpi_checks hold
+        // scores that people have already been measured on.
+        $deactivated = KpiAssignment::where('kpi_template_id', $t->id)->update(['is_active' => false]);
+        $t->update(['is_active' => false]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Template retired. {$deactivated} assignment(s) deactivated; past scores kept.",
+        ]);
+    }
+
+    /** Stamp the template onto every employee in its department. */
+    public function applyTemplate(Request $request, $id)
+    {
+        if ($msg = $this->assertCanManageTemplates()) {
+            return response()->json(['status' => 'error', 'message' => $msg], 403);
+        }
+        $t = KpiTemplate::findOrFail($id);
+        if ($t->category === 'KRA') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'A KRA is a heading — apply the KPIs underneath it instead.',
+            ], 422);
+        }
+
+        $res = KpiTemplateService::apply($t, true);
+        $pruned = KpiTemplateService::prune($t);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Applied: {$res['created']} added, {$res['updated']} refreshed"
+                . ($pruned ? ", {$pruned} deactivated (left the department)." : '.'),
         ]);
     }
 }

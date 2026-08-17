@@ -125,8 +125,11 @@ class KpiPeriodService
                 $s->status = 'missed';
                 $s->score = self::targetScore($a, (float)($s->achieved_value ?? 0));
             } else {
+                // Missed is not the same as late: the work never happened, so
+                // the late policy does not rescue it. 'fixed' keeps its
+                // configured consolation score, everything else scores nothing.
                 $s->status = 'missed';
-                $s->score = $a->late_score;
+                $s->score = ($a->late_policy ?? 'fixed') === 'fixed' ? $a->late_score : 0;
             }
             $s->save();
         }
@@ -149,7 +152,9 @@ class KpiPeriodService
         if ($remarks) $check->remarks = $remarks;
 
         if ($a->scoring_type === 'timeline') {
-            $check->score = $onTime ? $a->max_marks : $a->late_score;
+            $check->score = $onTime
+                ? $a->max_marks
+                : self::lateScore($a, $now, Carbon::parse($check->due_date));
         }
         $check->save();
 
@@ -172,11 +177,75 @@ class KpiPeriodService
         return $check;
     }
 
+    /**
+     * Value-based score for the achieved figure.
+     *
+     *  target    : min(achieved/target, 1) * max_marks          (linear)
+     *  threshold : max_marks once achieved/target >= threshold%, else 0
+     *  banded    : marks of the highest band whose min% is met
+     *
+     * A threshold or banded assignment with nothing configured falls back to
+     * linear rather than silently scoring everyone zero.
+     */
     public static function targetScore(KpiAssignment $a, float $achieved): float
     {
-        $target = (float)$a->target_value;
+        $target = (float) $a->target_value;
         if ($target <= 0) return 0.0;
+
+        $pct = ($achieved / $target) * 100;
+
+        if ($a->scoring_type === 'threshold' && $a->threshold_percent !== null) {
+            return $pct + 1e-9 >= (float) $a->threshold_percent ? round((float) $a->max_marks, 2) : 0.0;
+        }
+
+        if ($a->scoring_type === 'banded') {
+            $bands = $a->bands;
+            if (is_string($bands)) $bands = json_decode($bands, true);
+            if (is_array($bands) && $bands) {
+                // Highest qualifying band wins, whatever order they are stored in.
+                $best = null;
+                foreach ($bands as $b) {
+                    $min = (float) ($b['min'] ?? 0);
+                    if ($pct + 1e-9 >= $min && ($best === null || $min > (float) ($best['min'] ?? 0))) {
+                        $best = $b;
+                    }
+                }
+                return $best ? round((float) ($best['marks'] ?? 0), 2) : 0.0;
+            }
+        }
+
         return round(min($achieved / $target, 1) * $a->max_marks, 2);
+    }
+
+    /**
+     * Marks for work that landed after the due date.
+     *
+     *  none    : lateness is not penalised
+     *  fixed   : the flat late_score (original behaviour, still the default)
+     *  percent : late_percent of max_marks
+     *  per_day : full marks, less per_day_penalty for each day beyond grace_days
+     */
+    public static function lateScore(KpiAssignment $a, ?Carbon $completedAt = null, ?Carbon $dueDate = null): float
+    {
+        $max = (float) $a->max_marks;
+
+        switch ($a->late_policy ?? 'fixed') {
+            case 'none':
+                return round($max, 2);
+
+            case 'percent':
+                return round($max * ((float) ($a->late_percent ?? 0) / 100), 2);
+
+            case 'per_day':
+                if (!$completedAt || !$dueDate) return round((float) $a->late_score, 2);
+                $daysLate = $dueDate->diffInDays($completedAt->copy()->startOfDay(), false);
+                $billable = max(0, $daysLate - (int) ($a->grace_days ?? 0));
+                return round(max(0, $max - $billable * (float) ($a->per_day_penalty ?? 0)), 2);
+
+            case 'fixed':
+            default:
+                return round((float) $a->late_score, 2);
+        }
     }
 
     /** Sync all active assignments for a user and return them with current checks. */

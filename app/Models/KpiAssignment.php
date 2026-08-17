@@ -26,6 +26,17 @@ class KpiAssignment extends Model implements AuditableContract
         'check_month',
         'is_active',
         'created_by_id',
+        // Stamped from a KpiTemplate (null when hand-created for one person)
+        'kpi_template_id',
+        'kra_group',
+        'threshold_percent',
+        'bands',
+        'late_policy',
+        'late_percent',
+        'grace_days',
+        'per_day_penalty',
+        'data_source',
+        'approver_id',
     ];
 
     protected $casts = [
@@ -33,7 +44,18 @@ class KpiAssignment extends Model implements AuditableContract
         'late_score' => 'float',
         'target_value' => 'float',
         'is_active' => 'boolean',
+        'threshold_percent' => 'float',
+        'late_percent' => 'float',
+        'per_day_penalty' => 'float',
+        'grace_days' => 'integer',
+        // Scoring reads this as an array of {min, marks}
+        'bands' => 'array',
     ];
+
+    public function template()
+    {
+        return $this->belongsTo(KpiTemplate::class, 'kpi_template_id');
+    }
 
     public function user()
     {

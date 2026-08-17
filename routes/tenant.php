@@ -1003,13 +1003,26 @@ Route::middleware([
         // hr|manager, even though KpiController itself allows them) to avoid a
         // live access change without explicit sign-off — kpi.manage is
         // available for individual delegation.
-        Route::middleware(['role_or_permission:admin|kpi.manage'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
+        // HR added alongside admin: the sidebar has always offered these to
+        // both, but 'kpi.manage' was never created as a permission, so the
+        // role_or_permission check resolved to admin-only and HR got a 403 on
+        // a link they could see. The permission stays listed for future
+        // per-person delegation.
+        Route::middleware(['role_or_permission:admin|hr|kpi.manage'])->prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/manage', [\App\Http\Controllers\tenant\KpiController::class, 'manage'])->name('manage');
             Route::post('/store', [\App\Http\Controllers\tenant\KpiController::class, 'store'])->name('store');
             Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
             Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
             Route::post('/assign-from-routine', [\App\Http\Controllers\tenant\KpiController::class, 'assignFromRoutine'])->name('assignFromRoutine');
+
+            // Department-level KPI/KRA catalogue. No clash with the /{id}
+            // routes above: those match a single segment, these are two.
+            Route::get('/templates', [\App\Http\Controllers\tenant\KpiController::class, 'templates'])->name('templates');
+            Route::post('/templates', [\App\Http\Controllers\tenant\KpiController::class, 'storeTemplate'])->name('templates.store');
+            Route::put('/templates/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'updateTemplate'])->name('templates.update');
+            Route::delete('/templates/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroyTemplate'])->name('templates.destroy');
+            Route::post('/templates/{id}/apply', [\App\Http\Controllers\tenant\KpiController::class, 'applyTemplate'])->name('templates.apply');
         });
     });
 

@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+/**
+ * A department-level KPI/KRA definition. Stamped onto each matching employee as
+ * a KpiAssignment, which is what the scoring engine reads.
+ */
+class KpiTemplate extends Model
+{
+    protected $guarded = ['id'];
+
+    protected $casts = [
+        'bands'             => 'array',
+        'is_active'         => 'boolean',
+        'max_marks'         => 'decimal:2',
+        'target_value'      => 'decimal:2',
+        'threshold_percent' => 'decimal:2',
+        'late_score'        => 'decimal:2',
+        'late_percent'      => 'decimal:2',
+        'per_day_penalty'   => 'decimal:2',
+    ];
+
+    public const SCORING_TYPES = ['timeline', 'target', 'threshold', 'banded'];
+    public const LATE_POLICIES = ['none', 'fixed', 'percent', 'per_day'];
+
+    /** The fields a generated KpiAssignment inherits verbatim. */
+    public const INHERITED = [
+        'title', 'category', 'frequency', 'scoring_type', 'max_marks', 'target_value',
+        'threshold_percent', 'bands', 'late_policy', 'late_score', 'late_percent',
+        'grace_days', 'per_day_penalty', 'data_source', 'approver_id',
+        'check_day', 'check_month',
+    ];
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    /** The KRA this KPI sits under, if any. */
+    public function parent()
+    {
+        return $this->belongsTo(self::class, 'parent_template_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(self::class, 'parent_template_id');
+    }
+
+    public function assignments()
+    {
+        return $this->hasMany(KpiAssignment::class, 'kpi_template_id');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approver_id');
+    }
+
+    /** null department = every department in the tenant. */
+    public function appliesToWholeCompany(): bool
+    {
+        return $this->department_id === null;
+    }
+}
