@@ -49,21 +49,21 @@
 
         <div class="table-responsive" style="border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);max-height:calc(100vh - 320px);">
             <table class="table table-bordered table-sm align-middle m-0" id="kpiTable" style="white-space:nowrap;font-size:0.85rem;">
-                <thead class="position-sticky top-0 text-white" style="z-index:10;background-color:#0f766e;">
-                    <tr>
+                <thead class="position-sticky top-0" style="z-index:10;">
+                    <tr class="kpi-head-main">
                         <th rowspan="2" class="align-middle">KRA</th>
                         <th rowspan="2" class="align-middle">KPI</th>
                         <th rowspan="2" class="text-end align-middle">Target</th>
                         <th rowspan="2" class="text-end align-middle">Max Marks</th>
                         @foreach($months as $m)
-                            <th colspan="2" class="text-center align-middle border-bottom border-white" style="background-color:#0d9488;">{{ $m['label'] }}</th>
+                            <th colspan="2" class="text-center align-middle kpi-head-sub border-bottom border-white">{{ $m['label'] }}</th>
                         @endforeach
                         <th rowspan="2" class="text-end align-middle">Total Score</th>
                     </tr>
-                    <tr>
+                    <tr class="kpi-head-sub">
                         @foreach($months as $m)
-                            <th class="text-end align-middle" style="min-width:70px;background-color:#0d9488;">Achieved</th>
-                            <th class="text-end align-middle" style="min-width:60px;background-color:#0d9488;">Score</th>
+                            <th class="text-end align-middle" style="min-width:70px;">Achieved</th>
+                            <th class="text-end align-middle" style="min-width:60px;">Score</th>
                         @endforeach
                     </tr>
                 </thead>
@@ -132,6 +132,22 @@
                border-radius:8px; padding:.5rem 1rem; display:flex; flex-direction:column; min-width:120px; }
   .stat-chip .stat-label { font-size:.7rem; text-transform:uppercase; color:#64748b; font-weight:600; letter-spacing:.03em; }
   .stat-chip .stat-value { font-size:1.1rem; font-weight:700; color:#1e293b; }
+
+  /* hitech-portal.scss's own .table thead th rule (line ~4657) sets
+     background/color with !important, which beats a plain inline style
+     regardless of specificity — an id-scoped rule at the same !important
+     tier is the only thing that reliably wins. */
+  #kpiTable thead tr.kpi-head-main th {
+    background-color: #0f766e !important;
+    color: #fff !important;
+    border-color: #0f766e !important;
+  }
+  #kpiTable thead th.kpi-head-sub,
+  #kpiTable thead tr.kpi-head-sub th {
+    background-color: #0d9488 !important;
+    color: #fff !important;
+    border-color: #0d9488 !important;
+  }
 </style>
 @endsection
 
