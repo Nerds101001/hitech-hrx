@@ -3079,14 +3079,16 @@ class EmployeeController extends Controller
   /**
    * Announce an approved joiner.
    *
-   *  1. One combined email — accounts + the reporting manager on To, HR on Cc,
-   *     so everyone sees the same thread.
+   *  1. One combined email — HR, IT, Accounts and the reporting manager,
+   *     so everyone with an action to take sees the same thread.
    *  2. A separate email to accounts only, carrying the ID documents, so
    *     personal papers never reach the wider list.
+   *  3. A lighter welcome note to the joiner's own teammates only — none of
+   *     the internal detail from #1.
    *
-   * Each send is wrapped on its own: a failure is logged and the other mail
-   * is still attempted. The caller has already committed, so nothing here can
-   * undo the approval.
+   * Each send is wrapped on its own: a failure is logged and the other mails
+   * are still attempted. The caller has already committed, so nothing here
+   * can undo the approval.
    */
   private function sendNewJoinerNotifications(User $user): void
   {
@@ -3111,6 +3113,18 @@ class EmployeeController extends Controller
       }
     } catch (\Throwable $e) {
       Log::error("New joiner documents mail failed for user {$user->id}: " . $e->getMessage());
+    }
+
+    try {
+      if (config('hr_notifications.onboarding.notify_team', true)) {
+        $teamTo = \App\Services\HrNotificationService::teamRecipients($user);
+        if (!empty($teamTo)) {
+          \Illuminate\Support\Facades\Mail::to($teamTo)
+            ->send(new \App\Mail\NewJoinerTeamWelcome($user));
+        }
+      }
+    } catch (\Throwable $e) {
+      Log::error("New joiner team welcome failed for user {$user->id}: " . $e->getMessage());
     }
 
     // Organisation-wide welcome post — photo, name, designation and

@@ -17,22 +17,28 @@ return [
     /*
      | ---------------- JOINING: onboarding approved ----------------
      |
-     | One combined email so everyone can see the others on the thread:
-     |   to  → accounts + the new joiner's REPORTING MANAGER (resolved at runtime)
-     |   cc  → HR
+     | THREE separate emails go out when an onboarding is approved:
      |
-     | A second, separate email carrying the ID documents goes to
-     | `documents_to` only.
+     |   1. 'to' below — HR, IT, Accounts and the new joiner's REPORTING
+     |      MANAGER (resolved at runtime), all on one thread so everyone
+     |      sees the same announcement.
+     |   2. `documents_to` only — the ID documents (photo, cancelled cheque,
+     |      Aadhaar, PAN — see `share_documents`), deliberately kept off the
+     |      wider list above so personal documents don't reach IT/HR/manager.
+     |   3. `notify_team` — a lighter welcome note to the joiner's own
+     |      teammates (same `team_id`), with none of the internal detail the
+     |      first email carries.
      */
     'onboarding' => [
         'to' => array_filter([
+            env('HR_NOTIFY_HR_1', 'suchita@rustx.com'),
+            env('HR_NOTIFY_HR_2', 'priyal@rustx.com'),
+            env('HR_NOTIFY_HR_3', 'hr@rustx.com'),        // Ramandeep Kaur Gill
+            env('HR_NOTIFY_IT', 'ai@rustx.com'),           // Nagender Kumar
             env('HR_NOTIFY_ACCOUNTS', 'accounts5@rustx.com'),
         ]),
 
-        'cc' => array_filter([
-            env('HR_NOTIFY_HR_1', 'suchita@rustx.com'),
-            env('HR_NOTIFY_HR_2', 'priyal@rustx.com'),
-        ]),
+        'cc' => [],
 
         // The reporting manager is added to the recipients automatically when
         // the new joiner has one; set false to keep the list fixed.
@@ -42,6 +48,9 @@ return [
         'documents_to' => array_filter([
             env('HR_NOTIFY_ACCOUNTS', 'accounts5@rustx.com'),
         ]),
+
+        // Send mail 3 (team welcome) when the joiner has a team assigned.
+        'notify_team' => true,
 
         /*
          | Which onboarding documents accounts actually receives.

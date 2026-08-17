@@ -50,6 +50,27 @@ class HrNotificationService
     }
 
     /**
+     * The joiner's new teammates: active users sharing the same team_id,
+     * excluding the joiner themself. Empty (not an error) when the joiner
+     * has no team assigned, or is the only member of it.
+     */
+    public static function teamRecipients(User $joiner): array
+    {
+        if (!$joiner->team_id) {
+            return [];
+        }
+
+        return User::where('team_id', $joiner->team_id)
+            ->where('id', '!=', $joiner->id)
+            ->get()
+            ->filter(fn($u) => self::isActive($u))
+            ->pluck('email')
+            ->filter(fn($e) => filter_var($e, FILTER_VALIDATE_EMAIL))
+            ->map(fn($e) => strtolower(trim($e)))
+            ->unique()->values()->all();
+    }
+
+    /**
      * Recipients for exit alerts and NOC updates: everyone holding the
      * configured roles, the named managers, and the leaver's own manager.
      *
@@ -95,6 +116,18 @@ class HrNotificationService
      *
      * @return array<int, array{name: string, mime: string, data: string}>
      */
+    /**
+     * Total attachment budget for one NewJoinerDocuments email. Gmail rejects
+     * anything over 25MB once MIME/base64-encoded (~1.37x raw), and a large
+     * enough payload can kill the PHP process outright before Symfony Mailer
+     * ever gets a chance to throw a catchable exception — which is exactly
+     * what silently dropped this email for a joiner whose upload folder had
+     * ballooned to 105MB (2026-08-17). The 500KB-per-file cap at upload time
+     * (OnboardingController::uploadFile) stops new folders from growing this
+     * large, but folders uploaded before that cap existed can still hit it.
+     */
+    private const MAX_TOTAL_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
     public static function onboardingDocuments(User $user): array
     {
         $folder = Constants::BaseFolderOnboardingDocuments . $user->id;
@@ -109,6 +142,7 @@ class HrNotificationService
         $allowed = (array) config('hr_notifications.onboarding.share_documents', []);
 
         $out = [];
+        $totalBytes = 0;
         foreach ($disk->files($folder) as $file) {
             if ($allowed && !self::isShareable(basename($file), $allowed)) {
                 continue;
@@ -119,11 +153,21 @@ class HrNotificationService
                     Log::warning("Onboarding document unreadable, skipped: {$file}");
                     continue;
                 }
+
+                if ($totalBytes + strlen($data) > self::MAX_TOTAL_ATTACHMENT_BYTES) {
+                    Log::warning("Onboarding documents mail for user {$user->id} hit the "
+                        . round(self::MAX_TOTAL_ATTACHMENT_BYTES / 1024 / 1024) . "MB attachment "
+                        . "budget — {$file} and any remaining files were left out so the email "
+                        . "could still send instead of failing outright. Check the folder manually.");
+                    break;
+                }
+
                 $out[] = [
                     'name' => self::friendlyName(basename($file)),
                     'mime' => self::mimeFor(pathinfo($file, PATHINFO_EXTENSION)),
                     'data' => $data,
                 ];
+                $totalBytes += strlen($data);
             } catch (\Throwable $e) {
                 Log::warning("Onboarding document failed to decrypt ({$file}): " . $e->getMessage());
             }
