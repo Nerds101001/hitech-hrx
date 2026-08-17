@@ -214,4 +214,36 @@ class Holiday extends Model implements AuditableContract
       ->mapWithKeys(fn ($h) => [\Carbon\Carbon::parse($h->date)->toDateString() => $h->name])
       ->all();
   }
+
+  protected static function booted()
+  {
+    static::saved(function ($holiday) {
+      // Only a full-day holiday can earn a comp-off (appliesTo() already
+      // excludes part-day concessions from crediting), and only creating one
+      // or moving its date can newly affect attendance already on the books.
+      if ($holiday->holiday_type !== 'full') {
+        return;
+      }
+      if (!$holiday->wasRecentlyCreated && !$holiday->wasChanged('date')) {
+        return;
+      }
+      if (!$holiday->date) {
+        return;
+      }
+
+      // Re-save every attendance record already on this date so Attendance's
+      // own saved-hook (Sunday/Holiday/OFF-Saturday comp-off credit) picks
+      // them up now that this holiday exists here — covers a holiday added
+      // for a backdated day after attendance was already marked, and an
+      // existing holiday's date being corrected. Each row's own hook still
+      // decides eligibility per-user via Holiday::appliesTo(), so site- and
+      // department-scoped holidays are unaffected by this being unscoped.
+      $date = \Carbon\Carbon::parse($holiday->date)->toDateString();
+
+      \App\Models\Attendance::whereDate('check_in_time', $date)
+        ->whereNotNull('check_out_time')
+        ->get()
+        ->each(fn ($attendance) => $attendance->save());
+    });
+  }
 }
