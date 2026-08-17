@@ -372,6 +372,7 @@
                             <td class="text-center col-sno" style="background:#d1fae5!important;color:#065f46;">∑</td>
                             <td class="col-party" style="background:#d1fae5!important;color:#065f46;">Total</td>
                             <td class="col-status" style="background:#d1fae5!important;"></td>
+                            <td class="col-order-interval" style="background:#d1fae5!important;"></td>
                             <td class="col-category" style="background:#d1fae5!important;"></td>
                             <td class="col-repname" style="background:#d1fae5!important;"></td>
                             <td class="col-potential text-end font-monospace" style="background:#d1fae5!important;color:#065f46;" id="totalPotential">{{ number_format($totalPotential ?? 0, 2) }}</td>
