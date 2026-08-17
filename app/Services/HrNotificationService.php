@@ -327,6 +327,7 @@ class HrNotificationService
                 'created_by_id'           => auth()->id() ?: $joiner->id,
                 'title'                   => 'Welcome to the team, ' . $name . '!',
                 'content'                 => $content,
+                'is_html'                 => true, // server-rendered from a fixed partial, not user input
                 'type'                    => 'general',
                 // announcements.priority is enum('low','medium','high','critical')
                 'priority'                => 'medium',

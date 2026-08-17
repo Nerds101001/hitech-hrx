@@ -63,7 +63,17 @@
             </div>
           </div>
 
-          <div class="mt-3 ps-md-5" style="white-space: pre-line; color:#334155; line-height:1.7;">{{ $a->content }}</div>
+          <div class="mt-3 ps-md-5" style="white-space: pre-line; color:#334155; line-height:1.7;">
+            {{-- is_html is only ever set by trusted, server-generated content (see
+                 HrNotificationService::publishWelcomeAnnouncement) — never by the
+                 plain-textarea creation forms, so this can't render unsanitised
+                 user input. --}}
+            @if($a->is_html)
+              {!! $a->content !!}
+            @else
+              {{ $a->content }}
+            @endif
+          </div>
 
           @if($a->end_date)
             <div class="mt-3 ps-md-5 small text-muted">

@@ -51,6 +51,7 @@ class AnnouncementPublished extends Notification
                 'notifiable'   => $notifiable,
                 'title'        => $a->title,
                 'content'      => $a->content,
+                'isHtml'       => (bool) $a->is_html,
                 'type'         => ucfirst($a->type),
                 'priority'     => ucfirst($a->priority),
                 'author'       => $a->createdBy?->getFullName() ?? 'HR',

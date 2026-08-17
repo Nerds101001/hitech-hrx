@@ -40,7 +40,13 @@
     @if($endDate) &ndash; {{ $endDate }} @endif
 </div>
 
-<div class="ann-body">{{ $content }}</div>
+<div class="ann-body">
+    @if($isHtml ?? false)
+        {!! $content !!}
+    @else
+        {{ $content }}
+    @endif
+</div>
 
 @if($needsAck)
 <div class="ack-note">

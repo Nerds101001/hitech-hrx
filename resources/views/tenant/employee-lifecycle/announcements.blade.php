@@ -58,7 +58,10 @@
                 </div>
               </div>
               <h5 class="card-title fw-bold mb-2">{{ $announcement->title }}</h5>
-              <p class="card-text text-muted mb-4 announcement-content">{{ \Illuminate\Support\Str::limit($announcement->content, 150) }}</p>
+              {{-- A card preview truncates either way, so HTML content is
+                   flattened to text first — raw markup (or a mid-tag cut)
+                   has no place in a 150-char snippet. --}}
+              <p class="card-text text-muted mb-4 announcement-content">{{ \Illuminate\Support\Str::limit($announcement->is_html ? strip_tags($announcement->content) : $announcement->content, 150) }}</p>
               
               <div class="d-flex align-items-center justify-content-between mt-auto pt-3 border-top">
                 <div class="d-flex align-items-center">
