@@ -3,11 +3,11 @@
 namespace App\Notifications;
 
 use App\Models\HRPolicyAcknowledgment;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class PolicyAcknowledgedNotification extends Notification
 {
@@ -50,25 +50,22 @@ class PolicyAcknowledgedNotification extends Notification
             ->subject('Policy Acknowledged: ' . ($policy->title ?? 'Company Policy'))
             ->view('emails.policy_acknowledged', $data);
 
-        // The receipt is the point of the email, but a PDF failure must not cost
+        // Attach the actual policy document the employee just agreed to — not
+        // a generated acknowledgement receipt. A fetch failure must not cost
         // the employee their confirmation — send the mail either way.
         try {
-            $pdf = Pdf::loadView('tenant.hr-policies.receipt-pdf', [
-                'userName'        => $data['userName'],
-                'user'            => $user,
-                'policy'          => $policy,
-                'acknowledged_at' => $this->acknowledgment->acknowledged_at,
-                'ip_address'      => $this->acknowledgment->ip_address,
-                'signature_hash'  => $data['signatureHash'],
-            ]);
-
-            $mail->attachData(
-                $pdf->output(),
-                'Policy-Acknowledgement-' . $this->acknowledgment->id . '.pdf',
-                ['mime' => 'application/pdf']
-            );
+            if ($policy->file_path && Storage::disk('r2')->exists($policy->file_path)) {
+                $mail->attachData(
+                    Storage::disk('r2')->get($policy->file_path),
+                    ($policy->title ?: 'Company Policy') . '.pdf',
+                    ['mime' => 'application/pdf']
+                );
+            } else {
+                Log::warning('Policy acknowledgement mail: no file_path on disk for policy '
+                    . ($policy->id ?? 'unknown') . ', sent without attachment.');
+            }
         } catch (\Throwable $e) {
-            Log::error('Policy acknowledgement PDF could not be generated for acknowledgment '
+            Log::error('Policy PDF could not be attached for acknowledgment '
                 . $this->acknowledgment->id . ': ' . $e->getMessage());
         }
 
