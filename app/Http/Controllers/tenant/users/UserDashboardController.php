@@ -1759,10 +1759,14 @@ class UserDashboardController extends Controller
         // Company-wide contacts every employee should be able to reach. Looked
         // up by email rather than hardcoded, so the name, phone and photo stay
         // live from their own user record.
+        //
+        // Deliberately HR only — an earlier version also listed a named IT
+        // contact here, which meant that person's own phone/email went out to
+        // every employee's dashboard by default rather than being something
+        // they had to look up. Removed 2026-08-17.
         $keyContacts = [
-            ['email' => 'suchita@rustx.com', 'role' => 'Human Resources',            'bg' => '6366f1'],
-            ['email' => 'hr@rustx.com',      'role' => 'Human Resources',            'bg' => 'ec4899'],
-            ['email' => 'ai@rustx.com',      'role' => 'Manager - AI & IT Services', 'bg' => 'f59e0b'],
+            ['email' => 'suchita@rustx.com', 'role' => 'Human Resources', 'bg' => '6366f1'],
+            ['email' => 'hr@rustx.com',      'role' => 'Human Resources', 'bg' => 'ec4899'],
         ];
         $already = collect($importantContacts)->pluck('email')->all();
         foreach ($keyContacts as $kc) {
