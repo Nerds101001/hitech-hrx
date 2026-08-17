@@ -44,6 +44,12 @@ return Application::configure(basePath: dirname(__DIR__))
        overlap-guarded because each file can hold the AI provider for minutes.
        Harmless if it finds nothing, and safe to run by hand. */
     $schedule->command('vault:audit-pending --limit=20')->hourly()->withoutOverlapping();
+    /* Fills in the achieved figure for every auto-sourced KPI (data_source
+       auto:*) and scores it. Idempotent — overwrites the current period's
+       check rather than adding another — so daily is safe for weekly,
+       monthly and quarterly assignments alike; each only actually changes
+       when its own period rolls over. */
+    $schedule->command('kpi:auto-score')->dailyAt('05:00')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);
