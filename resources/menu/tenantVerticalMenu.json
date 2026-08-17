@@ -736,14 +736,32 @@
             "slug": [
                 "performance.scorecards.index",
                 "performance.ninety-day-goals.index",
-                "tenant.kpi.manage"
+                "tenant.kpi.manage",
+                "tenant.kpi.templates",
+                "tenant.kpi.my"
             ],
             "roles": [
                 "admin",
                 "hr",
-                "manager"
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
             ],
             "submenu": [
+                {
+                    "url": "/kpi/my",
+                    "name": "My Scorecard",
+                    "slug": "tenant.kpi.my",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts",
+                        "office_employee"
+                    ]
+                },
                 {
                     "url": "/performance/scorecards",
                     "name": "Scorecards",
@@ -766,6 +784,15 @@
                     "url": "/kpi/manage",
                     "name": "KPI / KRA",
                     "slug": "tenant.kpi.manage",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/kpi/templates",
+                    "name": "KPI / KRA Setup",
+                    "slug": "tenant.kpi.templates",
                     "roles": [
                         "admin",
                         "hr"
