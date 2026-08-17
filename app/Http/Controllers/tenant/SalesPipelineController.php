@@ -37,6 +37,63 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * For an unrestricted viewer (admin/hr/sales_ops.view_all) who has picked
+     * one specific person via any of the role filters, widen the query to
+     * every row that person touches across ALL of $roleCols — not just the
+     * one column the dropdown they used implies. Picking "Ishan" as
+     * Salesperson previously showed only rows where he is literally the
+     * salesperson_id, missing rows where he is the CCare or New Biz rep.
+     *
+     * When $teamView is also on and that person has their own direct
+     * reports, the same widened filter covers their whole team too — the
+     * "Show Team Sales" control, letting admin see exactly what that person
+     * would see themselves as a manager, without leaving their own account.
+     *
+     * Regular managers/CCare/New Biz picking a teammate keep their existing,
+     * separately-handled behaviour ($memberPicked in the callers) — this only
+     * fires for unrestricted viewers, so nothing changes for anyone else.
+     *
+     * @param array<int, string|int|null> $candidates raw filter values, checked in order; first valid one wins
+     * @param string[] $roleCols every column a person can be tagged on for this table (e.g. salesperson_id, ccare_id)
+     * @return array{isUnrestricted: bool, selectedPersonId: ?int, selectedPersonHasTeam: bool, showTeamActive: bool}
+     */
+    private static function applyUnrestrictedPersonOrTeamFilter($query, ?array $allowedSpIds, bool $teamView, array $candidates, array $roleCols): array
+    {
+        $isUnrestricted = $allowedSpIds === null;
+
+        $selectedPersonId = null;
+        foreach ($candidates as $candidate) {
+            if ($candidate !== null && $candidate !== '' && $candidate !== self::FILTER_NONE && is_numeric($candidate)) {
+                $selectedPersonId = (int) $candidate;
+                break;
+            }
+        }
+
+        $teamIds = collect();
+        if ($isUnrestricted && $selectedPersonId) {
+            $teamIds = User::where('reporting_to_id', $selectedPersonId)->pluck('id');
+        }
+        $selectedPersonHasTeam = $teamIds->isNotEmpty();
+        $showTeamActive = $selectedPersonHasTeam && $teamView;
+
+        if ($isUnrestricted && $selectedPersonId) {
+            $expandedIds = $showTeamActive ? $teamIds->push($selectedPersonId)->all() : [$selectedPersonId];
+            $query->where(function ($q) use ($expandedIds, $roleCols) {
+                foreach ($roleCols as $i => $col) {
+                    $i === 0 ? $q->whereIn($col, $expandedIds) : $q->orWhereIn($col, $expandedIds);
+                }
+                $q->orWhereExists(function ($s) use ($expandedIds) {
+                    $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                      ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                      ->whereIn('er.user_id', $expandedIds);
+                });
+            });
+        }
+
+        return compact('isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive');
+    }
+
+    /**
      * May this user change anything on the Sales Report / Sales Pipeline book?
      *
      * Plain salespeople are READ-ONLY on both pages by decision of 2026-08-05:
@@ -166,6 +223,7 @@ class SalesPipelineController extends Controller
         $fType   = trim((string) $request->input('type', ''));
         $fSp     = $request->input('sp');      // salesperson_id
         $fCcare  = $request->input('ccare');   // ccare_id
+        $fNb     = $request->input('nb');      // new_biz_id
         if ($fParty !== '') {
             $query->where('party_name', 'like', '%' . $fParty . '%');
         }
@@ -189,12 +247,24 @@ class SalesPipelineController extends Controller
             && is_array($teamMemberIds)
             && in_array((int) $fSp, $teamMemberIds, true);
 
-        if (!$memberPicked) {
-            self::applyPersonFilter($query, 'salesperson_id', $fSp);
+        // "Show Team Sales" — see applyUnrestrictedPersonOrTeamFilter()'s docblock.
+        $personOrTeam = self::applyUnrestrictedPersonOrTeamFilter(
+            $query, $allowedSpIds, $teamView,
+            [$fSp, $fCcare, $fNb],
+            ['salesperson_id', 'ccare_id', 'new_biz_id', 'new_biz_2_id']
+        );
+        $isUnrestricted        = $personOrTeam['isUnrestricted'];
+        $selectedPersonId      = $personOrTeam['selectedPersonId'];
+        $selectedPersonHasTeam = $personOrTeam['selectedPersonHasTeam'];
+        $showTeamActive        = $personOrTeam['showTeamActive'];
+
+        if (!($isUnrestricted && $selectedPersonId)) {
+            if (!$memberPicked) {
+                self::applyPersonFilter($query, 'salesperson_id', $fSp);
+            }
+            self::applyPersonFilter($query, 'ccare_id', $fCcare);
+            self::applyPersonFilter($query, 'new_biz_id', $fNb);
         }
-        self::applyPersonFilter($query, 'ccare_id', $fCcare);
-        $fNb = $request->input('nb');      // new_biz_id
-        self::applyPersonFilter($query, 'new_biz_id', $fNb);
         // Brand filter. The Brand column is the free-text `product` field, which
         // holds things like "dr. bio - fillezy - rustx", so filtering on exact
         // values would offer hundreds of one-off options. Match the real brands
@@ -577,7 +647,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -691,11 +761,26 @@ class SalesPipelineController extends Controller
             && is_array($teamMemberIds)
             && in_array((int) $fSp, $teamMemberIds, true);
 
-        if (!empty($fSp) && !$memberPicked) {
-            $query->where('salesperson_id', $fSp);
-        }
-        if (!empty($fNewBiz)) {
-            $query->where('new_biz_id', $fNewBiz);
+        // "Show Team Sales" — see applyUnrestrictedPersonOrTeamFilter()'s docblock.
+        // No CCare filter dropdown on this page, but CCare stays a valid role
+        // column since a rep can still be tagged ccare_id on a pipeline row.
+        $personOrTeam = self::applyUnrestrictedPersonOrTeamFilter(
+            $query, $allowedSpIds, $teamView,
+            [$fSp, $fNewBiz],
+            ['salesperson_id', 'ccare_id', 'new_biz_id']
+        );
+        $isUnrestricted        = $personOrTeam['isUnrestricted'];
+        $selectedPersonId      = $personOrTeam['selectedPersonId'];
+        $selectedPersonHasTeam = $personOrTeam['selectedPersonHasTeam'];
+        $showTeamActive        = $personOrTeam['showTeamActive'];
+
+        if (!($isUnrestricted && $selectedPersonId)) {
+            if (!empty($fSp) && !$memberPicked) {
+                $query->where('salesperson_id', $fSp);
+            }
+            if (!empty($fNewBiz)) {
+                $query->where('new_biz_id', $fNewBiz);
+            }
         }
 
         // ── Aggregates over the FULL filtered set (before pagination) ──
@@ -867,7 +952,7 @@ class SalesPipelineController extends Controller
         // read-only (2026-08-05) so they cannot.
         $canDeleteCustomer = $canEditBook;
 
-        return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers'));
+        return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
     }
 
     public function store(Request $request)

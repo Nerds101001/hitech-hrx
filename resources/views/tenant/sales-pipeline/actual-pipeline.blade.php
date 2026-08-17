@@ -132,6 +132,22 @@
                         @endforeach
                     </select>
                 @endif
+                {{-- Admin/HR only: appears when the selected Salesperson/New Biz is
+                     themselves a manager with direct reports. See
+                     SalesPipelineController::applyUnrestrictedPersonOrTeamFilter(). --}}
+                @if($selectedPersonHasTeam ?? false)
+                    @if($showTeamActive ?? false)
+                        <a href="{{ route('sales-visits.actual-pipeline.index', collect(request()->except(['page', 'team']))->all()) }}"
+                           class="btn btn-success" title="Showing this person's whole team — click to show just them">
+                            <i class="bx bx-group"></i> Team Sales: ON
+                        </a>
+                    @else
+                        <a href="{{ route('sales-visits.actual-pipeline.index', array_merge(request()->except('page'), ['team' => 1])) }}"
+                           class="btn btn-outline-primary" title="Show sales for this person's whole team, not just them">
+                            <i class="bx bx-group"></i> Show Team Sales
+                        </a>
+                    @endif
+                @endif
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.actual-pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear

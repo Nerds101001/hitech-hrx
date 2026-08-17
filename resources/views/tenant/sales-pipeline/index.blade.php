@@ -249,6 +249,23 @@
                     @endforeach
                     <option value="all" {{ request('per') === 'all' ? 'selected' : '' }}>All rows</option>
                 </select>
+                {{-- Admin/HR only: appears when the selected Salesperson/CCare/New Biz
+                     is themselves a manager with direct reports, so their whole team's
+                     data can be included, not just their own. See
+                     SalesPipelineController::applyUnrestrictedPersonOrTeamFilter(). --}}
+                @if($selectedPersonHasTeam ?? false)
+                    @if($showTeamActive ?? false)
+                        <a href="{{ route('sales-visits.pipeline.index', collect(request()->except(['page', 'team']))->all()) }}"
+                           class="btn btn-success" title="Showing this person's whole team — click to show just them">
+                            <i class="bx bx-group"></i> Team Sales: ON
+                        </a>
+                    @else
+                        <a href="{{ route('sales-visits.pipeline.index', array_merge(request()->except('page'), ['team' => 1])) }}"
+                           class="btn btn-outline-primary" title="Show sales for this person's whole team, not just them">
+                            <i class="bx bx-group"></i> Show Team Sales
+                        </a>
+                    @endif
+                @endif
                 <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
                 <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
                     <i class="bx bx-x"></i> Clear
