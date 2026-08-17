@@ -326,7 +326,7 @@ class OnboardingController extends Controller
 
         $inputName = $request->input('field');
         $file = $request->file('file');
-        
+
         // Strict MIME Check based on actual file signature (magic bytes)
         $mime = $file->getMimeType();
         $allowedMimes = ['image/jpeg', 'image/png', 'application/pdf'];
@@ -334,7 +334,19 @@ class OnboardingController extends Controller
             Log::warning('Security: Blocked invalid file upload attempt. Mime detected: ' . $mime);
             return response()->json(['success' => false, 'message' => 'Invalid file type. Only JPG, PNG, and PDF are allowed.'], 400);
         }
-        
+
+        // This endpoint bypasses store()'s $request->validate() rules entirely
+        // (it's a separate AJAX upload, not the main form submit), so the
+        // per-type max: (KB) limits enforced there never applied here — the
+        // one gap that let a 100MB+ folder of raw phone-camera uploads
+        // through and later broke the onboarding-documents email trying to
+        // attach all of it in one message.
+        $maxSizeBytes = 500 * 1024;
+        if ($file->getSize() > $maxSizeBytes) {
+            Log::warning("Onboarding upload rejected: {$inputName} is " . round($file->getSize() / 1024) . "KB, over the 500KB limit.");
+            return response()->json(['success' => false, 'message' => 'File is too large. Maximum size is 500KB.'], 400);
+        }
+
         // Map input field to file prefix
         $filePrefixes = [
             'photo' => 'profile_photo',
