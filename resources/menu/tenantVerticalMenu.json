@@ -731,15 +731,11 @@
             "menuHeader": "Performance & Learning"
         },
         {
-            "name": "Performance",
-            "icon": "menu-icon bx bx-trending-up",
-            "slug": [
-                "performance.scorecards.index",
-                "performance.ninety-day-goals.index",
-                "tenant.kpi.manage",
-                "tenant.kpi.templates",
-                "tenant.kpi.my"
-            ],
+            "url": "/kpi/my",
+            "name": "My Scorecard",
+            "icon": "menu-icon bx bx-bullseye",
+            "slug": "tenant.kpi.my",
+            "department": "New Biz",
             "roles": [
                 "admin",
                 "hr",
@@ -747,21 +743,23 @@
                 "employee",
                 "accounts",
                 "office_employee"
+            ]
+        },
+        {
+            "name": "Performance",
+            "icon": "menu-icon bx bx-trending-up",
+            "slug": [
+                "performance.scorecards.index",
+                "performance.ninety-day-goals.index",
+                "tenant.kpi.manage",
+                "tenant.kpi.templates"
+            ],
+            "roles": [
+                "admin",
+                "hr",
+                "manager"
             ],
             "submenu": [
-                {
-                    "url": "/kpi/my",
-                    "name": "My Scorecard",
-                    "slug": "tenant.kpi.my",
-                    "roles": [
-                        "admin",
-                        "hr",
-                        "manager",
-                        "employee",
-                        "accounts",
-                        "office_employee"
-                    ]
-                },
                 {
                     "url": "/performance/scorecards",
                     "name": "Scorecards",
