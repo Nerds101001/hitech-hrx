@@ -1340,8 +1340,76 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function uploadFileAJAX(input) {
-        const file = input.files[0];
+    /**
+     * Client-side image compression before upload — same approach WhatsApp
+     * uses for photos: cap resolution and re-encode as JPEG at reduced
+     * quality, entirely in the browser via <canvas>, so an oversized photo
+     * shrinks silently instead of hitting the server's 500KB reject. PDFs
+     * and files already under the target pass through untouched; any
+     * failure along the way falls back to the original file so a
+     * compression bug never blocks a real upload.
+     */
+    function compressImageFile(file) {
+        const MAX_EDGE = 1600;
+        const TARGET_BYTES = 500 * 1024;
+
+        if (!file.type.startsWith('image/') || file.size <= TARGET_BYTES) {
+            return Promise.resolve(file);
+        }
+
+        return new Promise((resolve) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+
+                let width = img.naturalWidth;
+                let height = img.naturalHeight;
+                const longEdge = Math.max(width, height);
+                if (longEdge > MAX_EDGE) {
+                    const scale = MAX_EDGE / longEdge;
+                    width = Math.round(width * scale);
+                    height = Math.round(height * scale);
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+
+                const tryQuality = (quality) => {
+                    canvas.toBlob((blob) => {
+                        if (!blob) {
+                            resolve(file);
+                            return;
+                        }
+                        if (blob.size > TARGET_BYTES && quality > 0.4) {
+                            tryQuality(quality - 0.15);
+                            return;
+                        }
+                        if (blob.size >= file.size) {
+                            resolve(file); // re-encoding didn't actually help — keep the original
+                            return;
+                        }
+                        const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+                        resolve(new File([blob], newName, { type: 'image/jpeg', lastModified: Date.now() }));
+                    }, 'image/jpeg', quality);
+                };
+                tryQuality(0.85);
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                resolve(file); // not a loadable image — let the server validate/reject as usual
+            };
+
+            img.src = objectUrl;
+        });
+    }
+
+    async function uploadFileAJAX(input) {
+        const file = await compressImageFile(input.files[0]);
         const fieldName = input.name;
         const wrapperId = `progress_wrapper_${input.id || input.name}`;
         const wrapper = document.getElementById(wrapperId);
@@ -1390,7 +1458,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     input.removeAttribute('required');
                     input.classList.remove('is-invalid');
                     input.classList.add('is-valid');
-                    
+
+                    // Clear the raw (pre-compression) file from the input now that
+                    // it's uploaded, so later validateFile() calls on this same
+                    // input — e.g. on step navigation — see "no new file selected"
+                    // (matching how a file uploaded in an earlier session is
+                    // already handled) instead of re-checking the ORIGINAL file's
+                    // size, which may have been well over the limit before
+                    // compressImageFile() shrank it for the actual upload.
+                    input.value = '';
+
                     // Setup replace button
                     replaceBtn.onclick = () => {
                         statusCompact.style.display = 'none';
