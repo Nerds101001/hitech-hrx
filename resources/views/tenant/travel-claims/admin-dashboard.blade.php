@@ -479,7 +479,16 @@
                   <p class="mb-1"><strong>Company:</strong> {{ $claim->company }}</p>
                 </div>
                 <div class="col-md-4">
-                  <p class="mb-1"><strong>Bank:</strong> {{ $claim->bank_account_name }} ({{ $claim->bank_account_no }})</p>
+                  @php
+                    // Full account number only for Accounts, who actually execute
+                    // payment — hr/admin/travel_claim.verify can reach this page
+                    // to verify claims but don't need the raw number for that.
+                    $acctNo = $claim->bank_account_no ?? '';
+                    $acctNoShown = auth()->user()->hasRole('accounts')
+                        ? $acctNo
+                        : (strlen($acctNo) > 4 ? str_repeat('•', strlen($acctNo) - 4) . substr($acctNo, -4) : $acctNo);
+                  @endphp
+                  <p class="mb-1"><strong>Bank:</strong> {{ $claim->bank_account_name }} ({{ $acctNoShown }})</p>
                   <p class="mb-1"><strong>IFSC:</strong> {{ $claim->bank_ifsc }}</p>
                 </div>
                 <div class="col-md-4 text-end">
