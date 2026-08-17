@@ -50,6 +50,75 @@ class HrNotificationService
     }
 
     /**
+     * "Important Contacts" card data for any dashboard: the viewer's own
+     * reporting manager (if any) plus HR — never the viewer themself.
+     *
+     * Shared across all 5 role dashboards (admin/hr/manager/finance/employee)
+     * so every one shows the same thing rather than each maintaining its own
+     * copy. HR contacts are looked up by email rather than hardcoded ids, so
+     * name/phone/photo stay live from their own user record; if both named
+     * HR addresses are gone, falls back to whoever currently holds the `hr`
+     * role.
+     *
+     * Deliberately HR + manager only — an earlier version also hardcoded a
+     * named IT contact here, which meant that person's own phone/email went
+     * out to every viewer's dashboard by default rather than being something
+     * they had to look up. Removed 2026-08-17.
+     *
+     * @return array<int, array{name: string, role: string, phone: ?string, email: string, bg: string, photo: ?string}>
+     */
+    public static function importantContactsFor(User $user): array
+    {
+        $contacts = [];
+
+        if ($user->reporting_to_id && ($mgr = User::find($user->reporting_to_id))) {
+            $contacts[] = [
+                'name' => $mgr->getFullName(), 'role' => 'Reporting Manager',
+                'phone' => $mgr->phone ?? null,
+                'email' => $mgr->email, 'bg' => '0d9488',
+                'photo' => $mgr->getProfilePicture() ?: null,
+            ];
+        }
+
+        $keyContacts = [
+            ['email' => 'suchita@rustx.com', 'role' => 'Human Resources', 'bg' => '6366f1'],
+            ['email' => 'hr@rustx.com',      'role' => 'Human Resources', 'bg' => 'ec4899'],
+        ];
+        $already = collect($contacts)->pluck('email')->all();
+        foreach ($keyContacts as $kc) {
+            if (in_array($kc['email'], $already, true)) {
+                continue; // already listed as their manager
+            }
+            $c = \App\Models\User::where('email', $kc['email'])
+                ->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+            if (!$c || $c->id === $user->id) {
+                continue;
+            }
+            $contacts[] = [
+                'name' => $c->getFullName(), 'role' => $kc['role'],
+                'phone' => $c->phone ?? null, 'email' => $c->email, 'bg' => $kc['bg'],
+                'photo' => $c->getProfilePicture() ?: null,
+            ];
+            $already[] = $c->email;
+        }
+
+        // Fall back to whoever holds the HR role if the named contacts are gone.
+        if (!collect($contacts)->contains(fn($c) => $c['role'] === 'Human Resources')) {
+            $hrContact = User::role('hr')->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+            if ($hrContact && $hrContact->id !== $user->id) {
+                $contacts[] = [
+                    'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
+                    'phone' => $hrContact->phone ?? null,
+                    'email' => $hrContact->email, 'bg' => '6366f1',
+                    'photo' => $hrContact->getProfilePicture() ?: null,
+                ];
+            }
+        }
+
+        return $contacts;
+    }
+
+    /**
      * The joiner's new teammates: active users sharing the same team_id,
      * excluding the joiner themself. Empty (not an error) when the joiner
      * has no team assigned, or is the only member of it.

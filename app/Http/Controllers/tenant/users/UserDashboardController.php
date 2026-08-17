@@ -1747,57 +1747,8 @@ class UserDashboardController extends Controller
         }
 
         // --- Important contacts: reporting manager + HR ---------------------
-        $importantContacts = [];
-        if ($user->reporting_to_id && ($mgr = User::find($user->reporting_to_id))) {
-            $importantContacts[] = [
-                'name' => $mgr->getFullName(), 'role' => 'Reporting Manager',
-                'phone' => $mgr->phone ?? null,
-                'email' => $mgr->email, 'bg' => '0d9488',
-                'photo' => $mgr->getProfilePicture() ?: null,
-            ];
-        }
-        // Company-wide contacts every employee should be able to reach. Looked
-        // up by email rather than hardcoded, so the name, phone and photo stay
-        // live from their own user record.
-        //
-        // Deliberately HR only — an earlier version also listed a named IT
-        // contact here, which meant that person's own phone/email went out to
-        // every employee's dashboard by default rather than being something
-        // they had to look up. Removed 2026-08-17.
-        $keyContacts = [
-            ['email' => 'suchita@rustx.com', 'role' => 'Human Resources', 'bg' => '6366f1'],
-            ['email' => 'hr@rustx.com',      'role' => 'Human Resources', 'bg' => 'ec4899'],
-        ];
-        $already = collect($importantContacts)->pluck('email')->all();
-        foreach ($keyContacts as $kc) {
-            if (in_array($kc['email'], $already, true)) {
-                continue;                        // already listed as their manager
-            }
-            $c = User::where('email', $kc['email'])
-                ->where('status', UserAccountStatus::ACTIVE)->first();
-            if (!$c || $c->id === $user->id) {
-                continue;
-            }
-            $importantContacts[] = [
-                'name' => $c->getFullName(), 'role' => $kc['role'],
-                'phone' => $c->phone ?? null, 'email' => $c->email, 'bg' => $kc['bg'],
-                'photo' => $c->getProfilePicture() ?: null,
-            ];
-            $already[] = $c->email;
-        }
-
-        // Fall back to whoever holds the HR role if the named contact is gone.
-        if (!collect($importantContacts)->contains(fn($c) => $c['role'] === 'Human Resources')) {
-            $hrContact = User::role('hr')->where('status', UserAccountStatus::ACTIVE)->first();
-            if ($hrContact && $hrContact->id !== $user->id) {
-                $importantContacts[] = [
-                    'name' => $hrContact->getFullName(), 'role' => 'Human Resources',
-                    'phone' => $hrContact->phone ?? null,
-                    'email' => $hrContact->email, 'bg' => '6366f1',
-                    'photo' => $hrContact->getProfilePicture() ?: null,
-                ];
-            }
-        }
+        // Shared across all 5 role dashboards — see HrNotificationService::importantContactsFor().
+        $importantContacts = \App\Services\HrNotificationService::importantContactsFor($user);
 
         // --- Sales-only board (Kingo/Bingo + today's visits) ---------------
         $salesProfile = $this->buildEmployeeSalesProfile($user);

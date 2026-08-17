@@ -721,6 +721,7 @@ class DashboardController extends Controller
 
         return view('tenant.users.dashboard.admin-index', [
             'recentNotices' => \App\Support\DashboardAnnouncements::forUser($user ?? auth()->user()),
+          'importantContacts'    => \App\Services\HrNotificationService::importantContactsFor($user ?? auth()->user()),
           'todayVisits'           => $todayVisits,
           'pageConfigs'           => ['contentLayout' => 'wide'],
           // Celebrations card — computed above for the HR dashboard, but the
@@ -889,6 +890,7 @@ class DashboardController extends Controller
 
         return view('tenant.users.dashboard.manager-index', array_merge($mgrRail, [
             'recentNotices' => \App\Support\DashboardAnnouncements::forUser($user ?? auth()->user()),
+            'importantContacts' => \App\Services\HrNotificationService::importantContactsFor($user ?? auth()->user()),
             'mgrVariant' => \App\Support\ManagerDashboard::variant($user),
             'mgrDept' => \App\Support\ManagerDashboard::departmentName($user),
             'sm' => $sm,
@@ -955,6 +957,7 @@ class DashboardController extends Controller
       // Return HR dashboard view directly
       return view('tenant.users.dashboard.hr-index', [
           'recentNotices' => \App\Support\DashboardAnnouncements::forUser($user ?? auth()->user()),
+        'importantContacts' => \App\Services\HrNotificationService::importantContactsFor($user ?? auth()->user()),
         'todayVisits' => $todayVisits,
         'pageConfigs' => ['contentLayout' => 'wide'],
         'totalUser' => $totalUser,
@@ -1246,6 +1249,7 @@ class DashboardController extends Controller
 
     return view('tenant.users.dashboard.finance-index', [
         'recentNotices' => \App\Support\DashboardAnnouncements::forUser($user ?? auth()->user()),
+      'importantContacts'   => \App\Services\HrNotificationService::importantContactsFor($user ?? auth()->user()),
       'pageConfigs'         => ['contentLayout' => 'wide'],
       'money'               => $money,
       'activeHeadcount'     => $active,
