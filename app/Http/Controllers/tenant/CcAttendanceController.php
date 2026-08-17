@@ -59,20 +59,30 @@ class CcAttendanceController extends Controller
 
         // ── Summary over the WHOLE register, before any filter is applied, so
         //    the cards keep telling the truth while you narrow the list down.
-        $shortFor = function ($att) {
+        // 'Present', 'Sunday working' and 'Holiday working' all save as the
+        // identical status='present' + 09:30-18:30 punches (alignWithDecisionMatrix) —
+        // the actual comp-off-earning distinction is date-derived, not stored, so
+        // PS/HP must be derived here from the date the same way, not from $att->status.
+        $shortFor = function ($att, $person) {
             if (!$att) return null;
             $s = strtolower(str_replace('_', '-', (string) $att->status));
             if ($s === 'absent') return 'A';
             if (str_contains($s, 'half')) return 'HD';
             if (str_contains($s, 'home') || str_contains($s, 'wfh')) return 'WFH';
-            if (str_contains($s, 'sunday')) return 'PS';
             if (in_array($s, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave'], true)) return 'L';
+            if ($s === 'present' && $att->check_in_time) {
+                $workMins = $att->check_out_time ? $att->check_in_time->diffInMinutes($att->check_out_time) : 0;
+                if ($workMins >= 240) {
+                    if ($att->check_in_time->isSunday()) return 'PS';
+                    if (\App\Models\Holiday::appliesTo($person, $att->check_in_time)) return 'HP';
+                }
+            }
             return 'P';
         };
         $summary = ['total' => $salespeople->count(), 'marked' => 0, 'pending' => 0,
-                    'P' => 0, 'A' => 0, 'HD' => 0, 'WFH' => 0, 'PS' => 0, 'L' => 0];
+                    'P' => 0, 'A' => 0, 'HD' => 0, 'WFH' => 0, 'PS' => 0, 'HP' => 0, 'L' => 0];
         foreach ($salespeople as $p) {
-            $code = $shortFor($attendances->get($p->id));
+            $code = $shortFor($attendances->get($p->id), $p);
             if ($code === null) { $summary['pending']++; continue; }
             $summary['marked']++;
             $summary[$code]++;
@@ -98,7 +108,7 @@ class CcAttendanceController extends Controller
             if ($fCc !== '' && ($p->mapped_cc_name ?? '') !== $fCc) return false;
             if ($fDesig !== '' && optional($p->designation)->name !== $fDesig) return false;
             if ($fStatus !== '') {
-                $code = $shortFor($attendances->get($p->id));
+                $code = $shortFor($attendances->get($p->id), $p);
                 if ($fStatus === 'pending' && $code !== null) return false;
                 if ($fStatus === 'marked' && $code === null) return false;
                 if (!in_array($fStatus, ['pending', 'marked'], true) && $code !== $fStatus) return false;
@@ -111,7 +121,7 @@ class CcAttendanceController extends Controller
                 'code'   => (string) $p->code,
                 'desig'  => (string) optional($p->designation)->name,
                 'cc'     => (string) ($p->mapped_cc_name ?? ''),
-                'status' => (string) ($shortFor($attendances->get($p->id)) ?? 'ZZ'), // unmarked last
+                'status' => (string) ($shortFor($attendances->get($p->id), $p) ?? 'ZZ'), // unmarked last
                 default  => strtolower($p->getFullName()),
             };
         }, SORT_NATURAL | SORT_FLAG_CASE, $dir === 'desc')->values();
@@ -360,7 +370,7 @@ class CcAttendanceController extends Controller
         $request->validate([
             'date' => 'required|date',
             'attendance' => 'required|array',
-            'attendance.*' => 'nullable|in:Present,Absent,Work from home,Half day,Sunday working,__clear',
+            'attendance.*' => 'nullable|in:Present,Absent,Work from home,Half day,Sunday working,Holiday working,__clear',
             'wfh_proof' => 'nullable|array',
             'wfh_proof.*' => 'nullable|image|max:5120',
             'notes' => 'nullable|array',
@@ -514,7 +524,7 @@ class CcAttendanceController extends Controller
         if ($saved === 0 && $cleared === 0) {
             $why = $onLeave
                 ? "those salespeople are on approved leave for {$date} — leave is managed by the Leave module."
-                : 'no attendance status was ticked. Choose P / A / HD / WFH / PS for at least one salesperson.';
+                : 'no attendance status was ticked. Choose P / A / HD / WFH / PS / HP for at least one salesperson.';
             return redirect()->back()->withInput()
                 ->with('error', "Nothing was saved — {$why}");
         }
@@ -682,7 +692,7 @@ class CcAttendanceController extends Controller
                 if ($this->isLockedFor($dateStr, Auth::user())) continue;
                 
                 // Allowed statuses
-                if (!in_array($status, ['Present', 'Absent', 'Half day', 'Work from home', 'Sunday working'])) continue;
+                if (!in_array($status, ['Present', 'Absent', 'Half day', 'Work from home', 'Sunday working', 'Holiday working'])) continue;
 
                 $existing = Attendance::where('user_id', $userId)
                     ->whereDate('check_in_time', $dateStr)
@@ -736,7 +746,7 @@ class CcAttendanceController extends Controller
     }
 
     /**
-     * Process Compensatory Off logic for Sunday working (credit) and Absent (debit).
+     * Process Compensatory Off logic for Sunday/Holiday working (credit) and Absent (debit).
      */
     private function processCompOffLogic($userId, $tenantId, &$dbStatus)
     {
@@ -744,7 +754,7 @@ class CcAttendanceController extends Controller
 
         if (!$compOffType) return null;
 
-        if ($dbStatus === 'Sunday working') {
+        if ($dbStatus === 'Sunday working' || $dbStatus === 'Holiday working') {
             // Credit is granted by the Attendance saved-hook (Sunday/Holiday
             // Working Credit) once the record is stored with >= 4h punches,
             // exactly like biometric users. No manual credit here or it
@@ -786,6 +796,7 @@ class CcAttendanceController extends Controller
             case 'Present':
                 return ['present', Carbon::parse($date . ' 09:30:00'), Carbon::parse($date . ' 18:30:00'), $reason];
             case 'Sunday working':
+            case 'Holiday working':
                 // Stored as present with >= 4h punches on the Sunday/holiday:
                 // the matrix derives SP/HP from the date, and the Attendance
                 // saved-hook grants the working credit

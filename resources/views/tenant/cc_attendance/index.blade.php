@@ -160,6 +160,7 @@
       <div class="cc-sum"><span class="l">Half day</span><span class="v">{{ $summary['HD'] }}</span></div>
       <div class="cc-sum"><span class="l">WFH</span><span class="v">{{ $summary['WFH'] }}</span></div>
       <div class="cc-sum"><span class="l">Sun. working</span><span class="v">{{ $summary['PS'] }}</span></div>
+      <div class="cc-sum"><span class="l">Holiday working</span><span class="v">{{ $summary['HP'] }}</span></div>
       <div class="cc-sum"><span class="l">On leave</span><span class="v">{{ $summary['L'] }}</span></div>
     </div>
 
@@ -206,6 +207,7 @@
               <option value="HD" {{ $fStatus === 'HD' ? 'selected' : '' }}>Half day</option>
               <option value="WFH" {{ $fStatus === 'WFH' ? 'selected' : '' }}>Work from home</option>
               <option value="PS" {{ $fStatus === 'PS' ? 'selected' : '' }}>Sunday working</option>
+              <option value="HP" {{ $fStatus === 'HP' ? 'selected' : '' }}>Holiday working</option>
               <option value="L" {{ $fStatus === 'L' ? 'selected' : '' }}>On leave</option>
             </select>
           </div>
@@ -282,14 +284,27 @@
                                         // Previous submissions can be corrected while the date is open
                                         // (Admin/HR always). Approved-leave rows stay read-only.
                                         $canEditRow = !$isLeave && empty($isLocked);
-                                        // Pre-select the existing choice.
+                                        // Pre-select the existing choice. 'Present', 'Sunday working'
+                                        // and 'Holiday working' all save identically (see
+                                        // alignWithDecisionMatrix) — which of the three re-selects
+                                        // is derived from the date, same as the summary badges.
                                         $sel = null;
                                         if ($currentStatus) {
                                             if ($currentStatus === 'absent') $sel = 'Absent';
                                             elseif (str_contains($currentStatus, 'home') || str_contains($currentStatus, 'wfh')) $sel = 'Work from home';
-                                            elseif (str_contains($currentStatus, 'sunday')) $sel = 'Sunday working';
                                             elseif (str_contains($currentStatus, 'half')) $sel = 'Half day';
-                                            elseif (str_contains($currentStatus, 'present')) $sel = 'Present';
+                                            elseif (str_contains($currentStatus, 'present') && $record->check_in_time) {
+                                                $workMins = $record->check_out_time ? $record->check_in_time->diffInMinutes($record->check_out_time) : 0;
+                                                if ($workMins >= 240 && $record->check_in_time->isSunday()) {
+                                                    $sel = 'Sunday working';
+                                                } elseif ($workMins >= 240 && \App\Models\Holiday::appliesTo($emp, $record->check_in_time)) {
+                                                    $sel = 'Holiday working';
+                                                } else {
+                                                    $sel = 'Present';
+                                                }
+                                            } elseif (str_contains($currentStatus, 'present')) {
+                                                $sel = 'Present';
+                                            }
                                         }
                                     @endphp
                                     <tr>
@@ -360,6 +375,10 @@
                                                         <div class="form-check custom-option custom-option-icon mb-0">
                                                             <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="sunday_{{ $emp->id }}" value="Sunday working" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Sunday working' ? 'checked' : '' }}>
                                                             <label class="form-check-label text-info fw-bold px-3" for="sunday_{{ $emp->id }}">PS</label>
+                                                        </div>
+                                                        <div class="form-check custom-option custom-option-icon mb-0">
+                                                            <input class="form-check-input" type="radio" name="attendance[{{ $emp->id }}]" id="holiday_{{ $emp->id }}" value="Holiday working" onchange="ccToggleWfh({{ $emp->id }}, this.value)" {{ $sel === 'Holiday working' ? 'checked' : '' }}>
+                                                            <label class="form-check-label text-info fw-bold px-3" for="holiday_{{ $emp->id }}">HP</label>
                                                         </div>
                                                         {{-- Clear removes a wrongly-marked day so it can be
                                                              re-marked, or left blank altogether. --}}
@@ -457,7 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const parts = [];
             if (!anyTicked) {
-                parts.push('No attendance status was ticked. Choose <b>P / A / HD / WFH / PS</b> for at least one salesperson.');
+                parts.push('No attendance status was ticked. Choose <b>P / A / HD / WFH / PS / HP</b> for at least one salesperson.');
             }
             if (bad.length) {
                 parts.push('<b>Reporting</b> is required for every marked salesperson — fill the highlighted box'

@@ -64,6 +64,7 @@
   .cc-opt-hd { color: #ff9800; font-weight: 600; }
   .cc-opt-wfh { color: #17a2b8; font-weight: 600; }
   .cc-opt-ps { color: #28a745; font-weight: 600; }
+  .cc-opt-hp { color: #28a745; font-weight: 600; }
 </style>
 @endsection
 
@@ -220,6 +221,15 @@
                             
                             <tbody>
                                 @foreach($salespeople as $emp)
+                                    @php
+                                        // Once per employee, not per day — Holiday::appliesTo()
+                                        // would run daysInMonth times per row otherwise.
+                                        $empHolidayDates = \App\Models\Holiday::mapForUser(
+                                            $emp,
+                                            \Carbon\Carbon::create($year, $month, 1)->startOfMonth(),
+                                            \Carbon\Carbon::create($year, $month, 1)->endOfMonth()
+                                        );
+                                    @endphp
                                     <tr>
                                         <td class="text-start position-sticky start-0 bg-white shadow-sm fw-semibold" style="z-index: 1;">
                                             {{ $emp->getFullName() }} <br>
@@ -279,13 +289,25 @@
                                                 @if($status)
                                                     {{-- Marked --}}
                                                     @php
+                                                        // 'Present', 'Sunday working' and 'Holiday working' all
+                                                        // save identically (see alignWithDecisionMatrix) — PS/HP
+                                                        // are derived from the date here, not from $status.
                                                         $displayStatus = 'P';
                                                         if ($status === 'absent') $displayStatus = 'A';
                                                         elseif (str_contains($status, 'half')) $displayStatus = 'HD';
                                                         elseif (str_contains($status, 'home') || str_contains($status, 'wfh')) $displayStatus = 'WFH';
-                                                        elseif (str_contains($status, 'sunday')) $displayStatus = 'PS';
                                                         elseif ($status === 'paid-leave') $displayStatus = 'P(C)';
                                                         elseif (str_contains($status, 'leave')) $displayStatus = 'LV';
+                                                        elseif ($status === 'present' && $record->check_in_time) {
+                                                            $workMins = $record->check_out_time ? $record->check_in_time->diffInMinutes($record->check_out_time) : 0;
+                                                            if ($workMins >= 240) {
+                                                                if ($dateObj->isSunday()) {
+                                                                    $displayStatus = 'PS';
+                                                                } elseif (isset($empHolidayDates[$dateStr])) {
+                                                                    $displayStatus = 'HP';
+                                                                }
+                                                            }
+                                                        }
                                                     @endphp
                                                     <div class="opacity-75 fw-bold {{ $status == 'absent' ? 'text-danger' : 'text-success' }}" title="{{ ucwords($record->status) }}{{ $record->notes ? "\nReporting: " . $record->notes : '' }}">
                                                         {{ $displayStatus }}
@@ -311,6 +333,7 @@
                                                                 <option value="Half day" class="cc-opt-hd">HD</option>
                                                                 <option value="Work from home" class="cc-opt-wfh">WFH</option>
                                                                 <option value="Sunday working" class="cc-opt-ps">PS</option>
+                                                                <option value="Holiday working" class="cc-opt-hp">HP</option>
                                                             </select>
                                                             <input type="hidden" name="notes[{{ $emp->id }}][{{ $dateStr }}]" id="note_{{ $emp->id }}_{{ $dateStr }}">
                                                             <a href="javascript:void(0)" onclick="let n = prompt('Enter Reporting Notes:'); if(n) { document.getElementById('note_{{ $emp->id }}_{{ $dateStr }}').value = n; this.style.color = '#25D366'; this.innerHTML = '<i class=\'ti ti-check\'></i> Note Added'; }" class="text-muted mt-1" style="font-size: 0.65rem; text-decoration: none;" title="Add Reporting Note">
