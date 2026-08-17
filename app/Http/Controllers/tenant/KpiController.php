@@ -218,23 +218,40 @@ class KpiController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Achievement recorded.', 'score' => $check->score]);
     }
 
-    /** Employee's own KPI/KRA dashboard. */
+    /** Employee's own KPI/KRA dashboard: one row per KPI, one column per month. */
     public function my(Request $request)
     {
         $user = Auth::user();
         $assignments = KpiPeriodService::syncUser($user->id);
 
-        // Score summary for the current fiscal year
+        // Fiscal year to date (Apr -> current month), newest first — same
+        // window convention the Sales Report month columns use.
+        $fyStart = now()->month >= 4
+            ? now()->copy()->startOfMonth()->month(4)
+            : now()->copy()->subYear()->startOfMonth()->month(4);
+        $months = [];
+        for ($cursor = $fyStart->copy(); $cursor->lte(now()); $cursor->addMonth()) {
+            $months[] = ['key' => $cursor->format('Y-m'), 'label' => $cursor->format('M Y')];
+        }
+        $months = array_reverse($months);
+
         $history = KpiCheck::with('assignment')
             ->where('user_id', $user->id)
+            ->where('period_start', '>=', $fyStart->toDateString())
             ->orderByDesc('period_start')
-            ->limit(200)
             ->get();
+
+        // Every check this FY, keyed by [assignment_id][Y-m of period_start] —
+        // a KPI's row can then look up any month's cell by simple array access.
+        $grid = [];
+        foreach ($history as $h) {
+            $grid[$h->kpi_assignment_id][\Carbon\Carbon::parse($h->period_start)->format('Y-m')] = $h;
+        }
 
         $earned = $history->whereNotNull('score')->sum('score');
         $possible = $assignments->sum('max_marks');
 
-        return view('tenant.kpi.my', compact('assignments', 'history', 'earned', 'possible'));
+        return view('tenant.kpi.my', compact('assignments', 'months', 'grid', 'history', 'earned', 'possible'));
     }
 
     /** Employee marks a timeline task done for the current period. */

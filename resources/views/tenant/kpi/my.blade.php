@@ -7,108 +7,91 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h5 class="mb-0 fw-bold"><i class="bx bx-target-lock me-1"></i> My KPI / KRA</h5>
         <div class="text-end">
-            <span class="badge bg-label-primary fs-6">Score: {{ rtrim(rtrim(number_format($earned,2),'0'),'.') }} / {{ rtrim(rtrim(number_format($possible,2),'0'),'.') }}</span>
+            <span class="badge bg-label-hitech fs-6">Score: {{ rtrim(rtrim(number_format($earned,2),'0'),'.') }} / {{ rtrim(rtrim(number_format($possible,2),'0'),'.') }}</span>
         </div>
     </div>
 
     @if($assignments->isEmpty())
         <div class="alert alert-info">No KPI/KRA has been assigned to you yet.</div>
-    @endif
+    @else
+        @php
+            // Colour by outcome, not a badge per cell — a dense grid reads
+            // cleaner as coloured numbers than a wall of pills. Hex values are
+            // the theme's own status tones (hitech-portal.scss), not guesses.
+            $tone = ['completed_on_time' => '#059669', 'completed_late' => '#d97706', 'missed' => '#e11d48', 'pending' => '#94a3b8'];
+            $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format($v,2),'0'),'.');
+            $rows = $assignments->sortBy([['kra_group','asc'],['title','asc']]);
 
-    @php
-        $statusBadge = ['completed_on_time'=>'success','completed_late'=>'warning','missed'=>'danger','pending'=>'secondary'];
-        $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format($v,2),'0'),'.');
-    @endphp
+            // Column totals across whatever's actually scored this FY.
+            $monthTotals = [];
+            foreach ($months as $m) { $monthTotals[$m['key']] = 0.0; }
+        @endphp
 
-    {{-- Current period, one row per assigned KPI/KRA --}}
-    <div class="card mb-4">
-        <div class="card-header"><h6 class="mb-0">This Period</h6></div>
-        <div class="card-body table-responsive p-0">
-            <table class="table table-hover mb-0 align-middle">
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>KPI / KRA</th>
-                        <th>Period</th>
-                        <th>Due</th>
-                        <th>Status</th>
-                        <th class="text-end">Target</th>
-                        <th class="text-end">Achieved</th>
-                        <th class="text-end">Score</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                @forelse($assignments as $a)
-                    @php
-                        $check = $a->currentCheck;
-                        $done = in_array($check->status, ['completed_on_time', 'completed_late']);
-                        $onTime = $check->status === 'completed_on_time';
-                        $periodLabel = \App\Services\KpiPeriodService::periodLabel($a->frequency, $check->period_start, $check->period_end);
-                    @endphp
-                    <tr>
-                        <td><span class="badge bg-label-{{ $a->category === 'KRA' ? 'warning' : 'primary' }}">{{ $a->category }}</span></td>
-                        <td>
-                            {{ $a->title }}
-                            <div class="small text-muted text-capitalize">{{ $a->frequency }} · {{ $a->scoring_type }}</div>
-                        </td>
-                        <td class="small">{{ $periodLabel }}</td>
-                        <td class="small">{{ \Carbon\Carbon::parse($check->due_date)->format('d M Y') }}</td>
-                        <td>
-                            <span class="badge bg-label-{{ $statusBadge[$check->status] ?? 'secondary' }}">{{ ucwords(str_replace('_',' ',$check->status)) }}</span>
-                        </td>
-                        @if($a->scoring_type === 'timeline')
-                            <td class="text-end text-muted">—</td>
-                            <td class="text-end text-muted">—</td>
-                            <td class="text-end">{{ $fmt($check->score) }} / {{ $fmt($a->max_marks) }}</td>
-                            <td class="text-end">
-                                @if(!$done)
-                                    <button class="btn btn-primary btn-sm complete-kpi" data-id="{{ $a->id }}">
-                                        <i class="bx bx-check"></i> Mark complete
-                                    </button>
-                                @endif
+        <div class="card">
+            <div class="card-header"><h6 class="mb-0">Fiscal Year {{ $months ? end($months)['label'] : '' }} – {{ $months ? $months[0]['label'] : '' }}</h6></div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover mb-0 align-middle" style="white-space:nowrap;">
+                    <thead>
+                        <tr>
+                            <th>KRA</th>
+                            <th>KPI</th>
+                            <th class="text-end">Max</th>
+                            @foreach($months as $m)
+                                <th class="text-end">{{ $m['label'] }}</th>
+                            @endforeach
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($rows as $a)
+                        @php
+                            $rowTotal = 0.0;
+                            $currentCheckId = optional($a->currentCheck)->id;
+                        @endphp
+                        <tr>
+                            <td class="small text-muted">{{ $a->kra_group ?? '—' }}</td>
+                            <td>
+                                {{ $a->title }}
+                                <div class="small text-muted text-capitalize">{{ $a->scoring_type }}</div>
                             </td>
-                        @else
-                            <td class="text-end">{{ $fmt($a->target_value) }}</td>
-                            <td class="text-end">{{ $fmt($check->achieved_value) }}</td>
-                            <td class="text-end">{{ $fmt($check->score) }} / {{ $fmt($a->max_marks) }}</td>
-                            <td class="text-end text-muted small">HR / Manager</td>
-                        @endif
-                    </tr>
-                @empty
-                    <tr><td colspan="9" class="text-center text-muted py-4">No KPI/KRA has been assigned to you yet.</td></tr>
-                @endforelse
-                </tbody>
-            </table>
+                            <td class="text-end">{{ $fmt($a->max_marks) }}</td>
+                            @foreach($months as $m)
+                                @php
+                                    $check = $grid[$a->id][$m['key']] ?? null;
+                                    if ($check && $check->score !== null) { $rowTotal += (float) $check->score; $monthTotals[$m['key']] += (float) $check->score; }
+                                    $isCurrentCell = $check && $check->id === $currentCheckId;
+                                @endphp
+                                <td class="text-end">
+                                    @if($check && $check->status === 'pending' && $isCurrentCell && $a->scoring_type === 'timeline')
+                                        <button class="btn btn-hitech-primary btn-sm complete-kpi" data-id="{{ $a->id }}">
+                                            <i class="bx bx-check"></i> Mark complete
+                                        </button>
+                                    @elseif($check)
+                                        <span style="color:{{ $tone[$check->status] ?? '#78716c' }};font-weight:600;"
+                                              title="Achieved: {{ $fmt($check->achieved_value) }}">
+                                            {{ $fmt($check->score) }}
+                                        </span>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
+                            @endforeach
+                            <td class="text-end fw-semibold">{{ $fmt($rowTotal) }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-semibold" style="background:var(--hitech-bg-soft, #f8fafc);">
+                            <td colspan="3">Total</td>
+                            @foreach($months as $m)
+                                <td class="text-end">{{ $fmt($monthTotals[$m['key']]) }}</td>
+                            @endforeach
+                            <td class="text-end">{{ $fmt(array_sum($monthTotals)) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         </div>
-    </div>
-
-    {{-- History --}}
-    @if($history->isNotEmpty())
-    <div class="card mt-2">
-        <div class="card-header"><h6 class="mb-0">History</h6></div>
-        <div class="card-body table-responsive p-0">
-            <table class="table table-sm mb-0">
-                <thead><tr><th>Type</th><th>KPI/KRA</th><th>Period</th><th>Due</th><th>Status</th><th class="text-end">Achieved</th><th class="text-end">Score</th></tr></thead>
-                <tbody>
-                @foreach($history as $h)
-                    @php $hAssignment = $h->assignment; @endphp
-                    <tr>
-                        <td><span class="badge bg-label-{{ optional($hAssignment)->category === 'KRA' ? 'warning' : 'primary' }}">{{ optional($hAssignment)->category ?? '—' }}</span></td>
-                        <td>{{ optional($hAssignment)->title ?? '—' }}</td>
-                        <td class="small">{{ $hAssignment ? \App\Services\KpiPeriodService::periodLabel($hAssignment->frequency, $h->period_start, $h->period_end) : \Carbon\Carbon::parse($h->period_start)->format('d M Y') }}</td>
-                        <td class="small">{{ \Carbon\Carbon::parse($h->due_date)->format('d M Y') }}</td>
-                        <td>
-                            <span class="badge bg-label-{{ $statusBadge[$h->status] ?? 'secondary' }}">{{ ucwords(str_replace('_',' ',$h->status)) }}</span>
-                        </td>
-                        <td class="text-end">{{ $fmt($h->achieved_value) }}</td>
-                        <td class="text-end">{{ $fmt($h->score) }}</td>
-                    </tr>
-                @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
     @endif
 </div>
 @endsection
