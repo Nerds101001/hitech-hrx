@@ -463,6 +463,8 @@
 
       @include('tenant.users.dashboard._adc-important-contacts')
 
+      @include('tenant.users.dashboard._adc-telephony-stats')
+
       {{-- Quick Actions --}}
       <div class="adc-card">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>

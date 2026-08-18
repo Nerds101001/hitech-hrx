@@ -719,6 +719,20 @@ class DashboardController extends Controller
           ['name' => 'Training',     'icon' => 'bx-book',           'value' => (string) $trainingModules,      'sub' => 'Modules',     'url' => url('/training/manage'),              'tone' => 'primary'],
         ];
 
+        // Telephony call tracking — wrapped defensively since the table is
+        // brand new and may not be migrated on every environment yet.
+        try {
+          $telephonyStats = [
+            'total'     => \App\Models\TelephonyCall::count(),
+            'today'     => \App\Models\TelephonyCall::whereDate('created_at', today())->count(),
+            'hrx'       => \App\Models\TelephonyCall::where('origin', \App\Enums\CallOrigin::HRX)->count(),
+            'external'  => \App\Models\TelephonyCall::where('origin', \App\Enums\CallOrigin::EXTERNAL)->count(),
+            'connected' => \App\Models\TelephonyCall::where('status', \App\Enums\TelephonyCallStatus::CONNECTED)->count(),
+          ];
+        } catch (\Throwable $e) {
+          $telephonyStats = ['total' => 0, 'today' => 0, 'hrx' => 0, 'external' => 0, 'connected' => 0];
+        }
+
         return view('tenant.users.dashboard.admin-index', [
             'recentNotices' => \App\Support\DashboardAnnouncements::forUser($user ?? auth()->user()),
           'importantContacts'    => \App\Services\HrNotificationService::importantContactsFor($user ?? auth()->user()),
@@ -799,6 +813,7 @@ class DashboardController extends Controller
           'ceoTopReps'            => $ceoTopReps,
           'ceoBottomReps'         => $ceoBottomReps,
           'ceoDeptCost'           => $ceoDeptCost,
+          'telephonyStats'        => $telephonyStats,
         ]);
       }
 
