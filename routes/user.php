@@ -59,6 +59,11 @@ Route::middleware([
       ->middleware('throttle:10,1')->name('redial');
   });
 
+  /* Cross-agent calls report — narrower than the API above, admin/hr only
+     since it lists every agent's calls, not just the viewer's own. */
+  Route::get('/telephony/calls', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'dashboard'])
+    ->middleware('role:admin|hr')->name('telephony.calls.dashboard');
+
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
 

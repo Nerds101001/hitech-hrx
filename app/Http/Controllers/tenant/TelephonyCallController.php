@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Enums\CallEndedBy;
+use App\Enums\CallOrigin;
+use App\Enums\TelephonyCallStatus;
 use App\Http\Controllers\Controller;
 use App\Models\TelephonyCall;
+use App\Models\User;
 use App\Services\TelephonyCallService;
+use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,6 +34,49 @@ class TelephonyCallController extends Controller
   private function notFound(): JsonResponse
   {
     return response()->json(['error' => 'call_not_found', 'message' => 'No call with that ID.'], 404);
+  }
+
+  /** Cross-agent report: every tracked call, filterable, admin/hr only. */
+  public function dashboard(Request $request): View
+  {
+    $query = TelephonyCall::with('agent')->orderByDesc('created_at');
+
+    if ($origin = $request->query('origin')) {
+      $query->where('origin', $origin);
+    }
+    if ($status = $request->query('status')) {
+      $query->where('status', $status);
+    }
+    if ($agentId = $request->query('agent_id')) {
+      $query->where('agent_id', $agentId);
+    }
+    if ($from = $request->query('from')) {
+      $query->whereDate('created_at', '>=', $from);
+    }
+    if ($to = $request->query('to')) {
+      $query->whereDate('created_at', '<=', $to);
+    }
+
+    $calls = $query->paginate(25)->withQueryString();
+
+    $stats = [
+      'total'     => TelephonyCall::count(),
+      'hrx'       => TelephonyCall::where('origin', CallOrigin::HRX)->count(),
+      'external'  => TelephonyCall::where('origin', CallOrigin::EXTERNAL)->count(),
+      'connected' => TelephonyCall::where('status', TelephonyCallStatus::CONNECTED)->count(),
+      'ended'     => TelephonyCall::where('status', TelephonyCallStatus::ENDED)->count(),
+    ];
+
+    $agentIds = TelephonyCall::whereNotNull('agent_id')->distinct()->pluck('agent_id');
+    $agents = User::whereIn('id', $agentIds)->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
+
+    return view('tenant.telephony.dashboard', [
+      'pageConfigs' => ['contentLayout' => 'wide'],
+      'calls'       => $calls,
+      'stats'       => $stats,
+      'agents'      => $agents,
+      'filters'     => $request->only(['origin', 'status', 'agent_id', 'from', 'to']),
+    ]);
   }
 
   public function initiate(Request $request): JsonResponse
