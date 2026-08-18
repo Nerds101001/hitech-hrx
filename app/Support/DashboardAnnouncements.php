@@ -63,8 +63,12 @@ class DashboardAnnouncements
      * Resolve the employee behind a "Welcome to the team, X!" post so the popup
      * can show their designation, department and email. Taken from the user
      * record, never parsed out of the stored HTML.
+     *
+     * Public: also used by AnnouncementController::myFeed() so the full feed
+     * page's joiner cards stay on the same live-lookup logic as the dashboard
+     * rail instead of re-deriving it from the stored HTML a second way.
      */
-    private static function attachJoiners($items)
+    public static function attachJoiners($items)
     {
         $needles = [];
         foreach ($items as $n) {

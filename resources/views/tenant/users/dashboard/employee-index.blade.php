@@ -551,15 +551,9 @@
   .emp-doc-name{flex:1;font-size:.83rem;font-weight:500;}
   .emp-docs li > i{font-size:1.2rem;}
 
-  .emp-contacts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;}
-  .emp-contacts li{display:flex;gap:10px;align-items:center;}
-  .emp-contact-av{width:36px;height:36px;border-radius:50%;flex:none;}
-  .emp-contact-body{flex:1;min-width:0;}
-  .emp-contact-name{font-size:.83rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .emp-contact-role{font-size:.72rem;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .emp-contact-act{display:flex;gap:6px;flex:none;}
-  .emp-contact-act a{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--bg);color:var(--p);text-decoration:none;font-size:1rem;transition:all .12s;}
-  .emp-contact-act a:hover{background:var(--p);color:#fff;}
+  /* .emp-contact-* now lives in _adc-important-contacts.blade.php itself —
+     that partial is shared across 5 dashboards and only this page defined
+     these rules, so the other 4 rendered the avatar photo unsized. */
 
   /* 5 across, 2 down. Collapses on narrow screens. */
   .emp-qa{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;}

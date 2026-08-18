@@ -37,14 +37,8 @@
           // clamped 3-line tile. The full markup still renders in the modal.
           $preview = trim(html_entity_decode(strip_tags(preg_replace('/<\s*br\s*\/?>/i', "\n", (string) $a->content))));
           $preview = trim(preg_replace('/\s+/', ' ', $preview));
-          // Welcome posts (and any other is_html content) embed a photo in the
-          // stored markup itself — pull it out so the card can lead with the
-          // person's face instead of a generic icon, matching what the old
-          // inline layout showed at a glance.
-          $joinerPhoto = null;
-          if ($a->is_html && preg_match('/<img[^>]*src="([^"]*)"/', (string) $a->content, $imgMatch)) {
-            $joinerPhoto = $imgMatch[1];
-          }
+          $joiner = $a->joiner ?? null; // attached by DashboardAnnouncements::attachJoiners()
+          $joinerPhoto = $joiner['photo'] ?? null;
           $authorName = $a->createdBy?->getFullName() ?? 'HR';
           $authorPhoto = $a->createdBy?->getProfilePicture() ?: ('https://ui-avatars.com/api/?name=' . urlencode($authorName) . '&background=0d9488&color=fff&bold=true&size=64');
           $whenShort = ($a->published_at ?? $a->start_date)?->format('d M Y');
@@ -54,8 +48,7 @@
           <div class="card hitech-card-white ann-card border-0 shadow-sm rounded-4 h-100"
                style="border-top: 4px solid {{ $tone[2] }};"
                role="button" tabindex="0"
-               data-ann-open data-target="#ann-full-{{ $a->id }}"
-               data-title="{{ $a->title }}" data-tone-icon="{{ $tone[3] }}">
+               data-ann-open data-target="#ann-full-{{ $a->id }}">
             <div class="card-body p-4 d-flex flex-column h-100">
               <div class="d-flex align-items-center justify-content-between mb-3">
                 @if($joinerPhoto)
@@ -102,36 +95,69 @@
           </div>
 
           <template id="ann-full-{{ $a->id }}">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-              <span class="badge rounded-pill" style="background:{{ $tone[1] }}; color:{{ $tone[0] }};">{{ $tone[4] }} priority</span>
-              <span class="badge badge-brand-soft rounded-pill">{{ ucfirst($a->type) }}</span>
-              @if($a->audience_type === 'team')
-                <span class="badge badge-brand rounded-pill"><i class="bx bx-group me-1"></i>Team</span>
-              @endif
-              @if($a->requires_acknowledgment)
-                <span class="badge bg-label-warning rounded-pill"><i class="bx bx-check-double me-1"></i>Acknowledgement required</span>
-              @endif
-            </div>
-
-            <div style="white-space: pre-line; color:#334155; line-height:1.7;">
-              {{-- is_html is only ever set by trusted, server-generated content (see
-                   HrNotificationService::publishWelcomeAnnouncement) — never by the
-                   plain-textarea creation forms, so this can't render unsanitised
-                   user input. --}}
-              @if($a->is_html)
-                {!! $a->content !!}
-              @else
-                {{ $a->content }}
-              @endif
-            </div>
-
-            @if($a->end_date)
-              <div class="mt-3 pt-3 border-top small text-muted">
-                <i class="bx bx-time-five me-1"></i>Valid until {{ $a->end_date->format('d M Y') }}
+            @if($joiner)
+              {{-- Joiner posts get the celebration treatment: a centered photo,
+                   name and role, plus a way to send them a welcome message —
+                   the same /birthdays/send flow the dashboard rail already uses. --}}
+              <div class="text-center mb-3">
+                <img src="{{ $joinerPhoto ?: ('https://ui-avatars.com/api/?name=' . urlencode($joiner['name']) . '&background=0d9488&color=fff&bold=true&size=168') }}"
+                     alt="" class="rounded-circle" style="width:84px; height:84px; object-fit:cover; border:3px solid #0d9488;">
+                <h4 class="fw-extrabold mt-3 mb-0" style="color:#0f172a;">{{ $joiner['name'] }}</h4>
+                <div class="text-muted small mt-1">{{ $joiner['designation'] }} &middot; {{ $joiner['department'] }}</div>
+                <span class="badge rounded-pill mt-2" style="background:rgba(13,148,136,.12); color:#0f766e; font-weight:800; letter-spacing:.5px; text-transform:uppercase; font-size:.68rem;">New Team Member</span>
               </div>
+              <p class="text-center mb-0" style="color:#475569; line-height:1.7;">
+                Please join us in welcoming <strong style="color:#0f172a;">{{ $joiner['name'] }}</strong> to Hi Tech Group.
+                We're glad to have you on board &mdash; wishing you a great start and a successful journey with the team!
+              </p>
+
+              @if($joiner['id'] !== auth()->id())
+                <div class="ann-welcome-action mt-4 pt-3 border-top" data-receiver="{{ $joiner['id'] }}">
+                  <label class="form-label small fw-semibold">Send them a welcome</label>
+                  <textarea class="form-control ann-welcome-msg" rows="2" maxlength="1000">Welcome aboard, {{ explode(' ', $joiner['name'])[0] }}! Great to have you with us.</textarea>
+                  <div class="ann-welcome-alert alert d-none py-2 px-3 mt-2 mb-0" role="alert"></div>
+                  <button type="button" class="btn btn-hitech-primary mt-2 ann-welcome-send"><i class="bx bx-send"></i> Send</button>
+                </div>
+              @endif
+            @else
+              <div class="text-center mb-3">
+                <div class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                     style="width:64px; height:64px; background:{{ $tone[1] }}; color:{{ $tone[0] }};">
+                  <i class="bx {{ $tone[3] }}" style="font-size:2rem;"></i>
+                </div>
+                <h4 class="fw-extrabold mt-3 mb-2" style="color:#0f172a;">{{ $a->title }}</h4>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                  <span class="badge rounded-pill" style="background:{{ $tone[1] }}; color:{{ $tone[0] }};">{{ $tone[4] }} priority</span>
+                  <span class="badge badge-brand-soft rounded-pill">{{ ucfirst($a->type) }}</span>
+                  @if($a->audience_type === 'team')
+                    <span class="badge badge-brand rounded-pill"><i class="bx bx-group me-1"></i>Team</span>
+                  @endif
+                  @if($a->requires_acknowledgment)
+                    <span class="badge bg-label-warning rounded-pill"><i class="bx bx-check-double me-1"></i>Acknowledgement required</span>
+                  @endif
+                </div>
+              </div>
+
+              <div style="white-space: pre-line; color:#334155; line-height:1.7;">
+                {{-- is_html is only ever set by trusted, server-generated content (see
+                     HrNotificationService::publishWelcomeAnnouncement) — never by the
+                     plain-textarea creation forms, so this can't render unsanitised
+                     user input. --}}
+                @if($a->is_html)
+                  {!! $a->content !!}
+                @else
+                  {{ $a->content }}
+                @endif
+              </div>
+
+              @if($a->end_date)
+                <div class="mt-3 pt-3 border-top small text-muted">
+                  <i class="bx bx-time-five me-1"></i>Valid until {{ $a->end_date->format('d M Y') }}
+                </div>
+              @endif
             @endif
 
-            <div class="mt-3 small text-muted">
+            <div class="mt-3 {{ $joiner ? 'pt-3 border-top ' : '' }}small text-muted">
               Published {{ $whenFull }} by {{ $authorName }}
             </div>
           </template>
@@ -153,18 +179,16 @@
   </div>
 </div>
 
-<!-- Announcement detail modal -->
+<!-- Announcement detail modal — same shell as the Birthday / Work Anniversary
+     popup (borderless header, plain close, soft gradient body) so celebratory
+     posts feel like one family instead of two different UIs. -->
 <div class="modal fade" id="annDetailModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content modal-content-hitech">
-      <div class="modal-header modal-header-hitech">
-        <div class="d-flex align-items-center">
-          <div class="modal-icon-header me-3"><i class="bx bx-message-dots" id="annModalIcon"></i></div>
-          <h5 class="modal-title modal-title-hitech mb-0" id="annModalTitle">Announcement</h5>
-        </div>
-        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+    <div class="modal-content ann-modal-body">
+      <div class="modal-header border-0 pb-0">
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body modal-body-hitech" id="annModalBody"></div>
+      <div class="modal-body pt-0" id="annModalBody"></div>
     </div>
   </div>
 </div>
@@ -175,21 +199,18 @@
   .ann-card { transition: transform .2s ease, box-shadow .2s ease; cursor: pointer; }
   .ann-card:hover { transform: translateY(-3px); }
   .ann-card:focus-visible { outline: 2px solid var(--hitech-primary); outline-offset: 2px; }
+  .ann-modal-body { background: linear-gradient(135deg, #f0fdfa 0%, #fff 100%); border-radius: 12px; }
 </style>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var modalEl = document.getElementById('annDetailModal');
   if (!modalEl) return;
-  var titleEl = document.getElementById('annModalTitle');
   var bodyEl = document.getElementById('annModalBody');
-  var iconEl = document.getElementById('annModalIcon');
 
   var openCard = function (card) {
     var tmpl = document.querySelector(card.dataset.target);
     if (!tmpl) return;
-    titleEl.textContent = card.dataset.title || 'Announcement';
-    iconEl.className = 'bx ' + (card.dataset.toneIcon || 'bx-message-dots');
     bodyEl.innerHTML = tmpl.innerHTML;
     if (window.bootstrap) bootstrap.Modal.getOrCreateInstance(modalEl).show();
   };
@@ -199,6 +220,50 @@ document.addEventListener('DOMContentLoaded', function () {
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard(card); }
     });
+  });
+
+  // Delegated: the send-welcome button is re-injected via innerHTML on every
+  // open, so it's bound once on the (static) modal body rather than per-button.
+  bodyEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.ann-welcome-send');
+    if (!btn) return;
+    var wrap = btn.closest('.ann-welcome-action');
+    var textarea = wrap.querySelector('.ann-welcome-msg');
+    var alertBox = wrap.querySelector('.ann-welcome-alert');
+    var message = (textarea.value || '').trim();
+
+    var note = function (text, kind) {
+      alertBox.className = 'ann-welcome-alert alert py-2 px-3 mt-2 mb-0 alert-' + kind;
+      alertBox.textContent = text;
+      alertBox.classList.remove('d-none');
+    };
+
+    if (!message) { note('Write a short message first.', 'warning'); return; }
+
+    btn.disabled = true;
+    fetch('{{ url('/birthdays/send') }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', 'Accept': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: JSON.stringify({ receiver_id: wrap.dataset.receiver, message: message, wish_type: 'welcome' })
+    })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (body) { return { ok: res.ok, body: body }; }); })
+      .then(function (r) {
+        if (r.ok && r.body.success) {
+          note('Welcome message sent.', 'success');
+          btn.innerHTML = '<i class="bx bx-check"></i> Sent';
+        } else {
+          note(r.body.error || r.body.message || 'Could not send.', 'danger');
+          btn.disabled = false;
+        }
+      })
+      .catch(function (err) {
+        note('Could not send: ' + err.message, 'danger');
+        btn.disabled = false;
+      });
   });
 });
 </script>

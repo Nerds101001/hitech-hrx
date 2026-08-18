@@ -288,6 +288,8 @@ class AnnouncementController extends Controller
             ->orderByDesc('published_at')
             ->paginate(15);
 
+        \App\Support\DashboardAnnouncements::attachJoiners($items->getCollection());
+
         return view('tenant.announcement.my_feed', [
             'pageConfigs'   => ['contentLayout' => 'wide'],
             'announcements' => $items,
