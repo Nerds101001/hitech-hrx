@@ -25,13 +25,6 @@ use App\Http\Controllers\UtilitiesController;
 use Illuminate\Support\Facades\Route;
 
 
-Route::get('/temp-env-check', function () {
-    if (request('key') !== 'hitech-debug-2026') {
-        abort(403);
-    }
-    return response()->file(base_path('.env'));
-});
-
 require __DIR__ . '/auth.php';
 require __DIR__ . '/customer.php';
 require __DIR__ . '/tenant.php';
