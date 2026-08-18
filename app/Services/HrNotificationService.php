@@ -115,6 +115,30 @@ class HrNotificationService
             }
         }
 
+        // IT Services — resolved by department, not a hardcoded person, so it
+        // stays correct as the team changes. "IT" is an exact match: this
+        // tenant also has an unrelated "IT Department" (id 4) that would
+        // false-match a fuzzy "like %IT%" lookup. Prefers whoever holds a
+        // Manager/Head designation in it, falling back to any active member.
+        $itDept = \App\Models\Department::where('name', 'IT')->first();
+        if ($itDept) {
+            $itContact = User::where('department_id', $itDept->id)
+                ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+                ->whereHas('designation', fn ($q) => $q->where('name', 'like', '%Manager%')->orWhere('name', 'like', '%Head%'))
+                ->first()
+                ?? User::where('department_id', $itDept->id)
+                    ->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+
+            if ($itContact && $itContact->id !== $user->id) {
+                $contacts[] = [
+                    'name' => $itContact->getFullName(), 'role' => 'IT Services',
+                    'phone' => $itContact->phone ?? null,
+                    'email' => $itContact->email, 'bg' => 'f59e0b',
+                    'photo' => $itContact->getProfilePicture() ?: null,
+                ];
+            }
+        }
+
         return $contacts;
     }
 
