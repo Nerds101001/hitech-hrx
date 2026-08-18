@@ -38,6 +38,27 @@ Route::middleware([
       ->name('sub-dispositions');
   });
 
+  /* HRX's own canonical call-control API. A vendor-agnostic contract —
+     TelephonyCallService is a local mock today; a real vendor adapter
+     (Convoque, the current dialer, or anything else) can replace its
+     internals later without this contract or any of these routes changing. */
+  Route::prefix('api/v1/calls')->name('calls.')->group(function () {
+    Route::post('/', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'initiate'])
+      ->middleware('throttle:10,1')->name('initiate');
+    Route::get('/{callId}', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'show'])
+      ->name('show');
+    Route::post('/{callId}/hangup', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'hangup'])
+      ->middleware('throttle:20,1')->name('hangup');
+    Route::post('/{callId}/simulate-customer-hangup', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'simulateCustomerHangup'])
+      ->middleware('throttle:20,1')->name('simulate-customer-hangup');
+    Route::post('/{callId}/disposition', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'disposition'])
+      ->middleware('throttle:20,1')->name('disposition');
+    Route::get('/{callId}/recording', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'recording'])
+      ->name('recording');
+    Route::post('/{callId}/redial', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'redial'])
+      ->middleware('throttle:10,1')->name('redial');
+  });
+
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
 
