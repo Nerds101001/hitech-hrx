@@ -88,7 +88,10 @@ class TelephonyCallService
       return $call;
     }
 
-    $duration = $call->connected_at ? now()->diffInSeconds($call->connected_at) : 0;
+    // Carbon 3's diffInSeconds() is signed by default (direction-aware, not
+    // absolute) and can return a fractional value — abs()+round() guards
+    // against both, since duration is an unsigned integer column.
+    $duration = $call->connected_at ? (int) round(abs($call->connected_at->diffInSeconds(now()))) : 0;
 
     $call->update([
       'status'     => TelephonyCallStatus::ENDED,

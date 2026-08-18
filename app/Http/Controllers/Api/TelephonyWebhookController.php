@@ -124,14 +124,19 @@ class TelephonyWebhookController extends Controller
         break;
 
       case 'call.ended':
+        // Carbon 3's diffInSeconds() is signed (direction-aware, not
+        // absolute) and can return a fractional value — abs()+round()
+        // guards against both, since duration is an unsigned integer column.
+        $duration = $call->connected_at
+          ? (int) round(abs($call->connected_at->diffInSeconds(now())))
+          : (isset($payload['duration']) ? (int) $payload['duration'] : null);
+
         $call->update([
           'status'     => TelephonyCallStatus::ENDED,
           'ended_by'   => $this->mapEndedBy($payload['ended_by'] ?? null),
           'end_reason' => $payload['end_reason'] ?? null,
           'ended_at'   => now(),
-          'duration'   => $call->connected_at
-            ? now()->diffInSeconds($call->connected_at)
-            : ($payload['duration'] ?? null),
+          'duration'   => $duration,
         ]);
         break;
 
