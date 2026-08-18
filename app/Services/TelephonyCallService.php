@@ -51,16 +51,21 @@ class TelephonyCallService
     ]);
 
     $outcome = $this->mockOutcomeFor($to);
+    $ringSeconds = (int) round(abs($call->ringing_at->diffInSeconds(now()))) ?: random_int(3, 12);
 
     if ($outcome === TelephonyCallStatus::CONNECTED) {
       $call->update([
-        'status'       => TelephonyCallStatus::CONNECTED,
-        'connected_at' => now(),
+        'status'             => TelephonyCallStatus::CONNECTED,
+        'connected_at'       => now(),
+        'ring_seconds'       => $ringSeconds,
+        'vendor_disposition' => $this->vendorDispositionFor($outcome),
       ]);
     } else {
       $call->update([
-        'status'   => $outcome,
-        'ended_at' => now(),
+        'status'             => $outcome,
+        'ended_at'           => now(),
+        'ring_seconds'       => $ringSeconds,
+        'vendor_disposition' => $this->vendorDispositionFor($outcome),
       ]);
     }
 
@@ -74,6 +79,25 @@ class TelephonyCallService
       '8'     => TelephonyCallStatus::NO_ANSWER,
       '9'     => TelephonyCallStatus::INVALID_NUMBER,
       default => TelephonyCallStatus::CONNECTED,
+    };
+  }
+
+  /**
+   * CentroVision's own disposition wording, confirmed from a real CDR
+   * report pull on 2026-08-18 (Answered By Agent / Ringing - No Answer /
+   * Rejected By Switch were all observed live). Busy isn't confirmed from
+   * that sample but follows the same house style. Kept alongside, not
+   * instead of, our normalised TelephonyCallStatus.
+   */
+  private function vendorDispositionFor(TelephonyCallStatus $status): string
+  {
+    return match ($status) {
+      TelephonyCallStatus::CONNECTED      => 'Answered By Agent',
+      TelephonyCallStatus::NO_ANSWER      => 'Ringing - No Answer',
+      TelephonyCallStatus::BUSY           => 'Busy',
+      TelephonyCallStatus::INVALID_NUMBER,
+      TelephonyCallStatus::FAILED         => 'Rejected By Switch',
+      default                             => ucfirst(str_replace('_', ' ', $status->value)),
     };
   }
 

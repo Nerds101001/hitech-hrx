@@ -59,12 +59,21 @@ class TelephonyCallController extends Controller
 
     $calls = $query->paginate(25)->withQueryString();
 
+    $total = TelephonyCall::count();
+    $connected = TelephonyCall::where('status', TelephonyCallStatus::CONNECTED)->count();
+    $endedCount = TelephonyCall::where('status', TelephonyCallStatus::ENDED)->count();
+    // "Answered" = ever connected, whether still live or already ended --
+    // mirrors CentroVision's own Answered/Offered % on its summary page.
+    $answered = TelephonyCall::whereNotNull('connected_at')->count();
+
     $stats = [
-      'total'     => TelephonyCall::count(),
-      'hrx'       => TelephonyCall::where('origin', CallOrigin::HRX)->count(),
-      'external'  => TelephonyCall::where('origin', CallOrigin::EXTERNAL)->count(),
-      'connected' => TelephonyCall::where('status', TelephonyCallStatus::CONNECTED)->count(),
-      'ended'     => TelephonyCall::where('status', TelephonyCallStatus::ENDED)->count(),
+      'total'       => $total,
+      'hrx'         => TelephonyCall::where('origin', CallOrigin::HRX)->count(),
+      'external'    => TelephonyCall::where('origin', CallOrigin::EXTERNAL)->count(),
+      'connected'   => $connected,
+      'ended'       => $endedCount,
+      'answered'    => $answered,
+      'answer_rate' => $total > 0 ? round($answered / $total * 100, 1) : 0,
     ];
 
     $agentIds = TelephonyCall::whereNotNull('agent_id')->distinct()->pluck('agent_id');

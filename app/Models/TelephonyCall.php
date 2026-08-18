@@ -33,8 +33,10 @@ class TelephonyCall extends Model
     'connected_at',
     'ended_at',
     'duration',
+    'ring_seconds',
     'disposition_code',
     'disposition_notes',
+    'vendor_disposition',
     'recording_url',
     'redial_of_call_uuid',
     'idempotency_key',
@@ -53,6 +55,7 @@ class TelephonyCall extends Model
     'connected_at' => 'datetime',
     'ended_at' => 'datetime',
     'duration' => 'integer',
+    'ring_seconds' => 'integer',
     'raw_vendor_response' => 'array',
   ];
 
@@ -85,12 +88,18 @@ class TelephonyCall extends Model
       'connected_at'  => $this->connected_at?->toIso8601String(),
       'ended_at'      => $this->ended_at?->toIso8601String(),
       'duration'      => $this->duration,
+      'ring_seconds'  => $this->ring_seconds,
       'ended_by'      => $this->ended_by?->value,
       'end_reason'    => $this->end_reason,
       'disposition'   => $this->disposition_code ? [
         'code'  => $this->disposition_code,
         'notes' => $this->disposition_notes,
       ] : null,
+      // The vendor's own wording ("Answered By Agent", "Ringing - No
+      // Answer", "Rejected By Switch", ...) -- kept alongside the
+      // normalised `status` above, not instead of it, so reports can show
+      // language people already recognise from CentroVision's own reports.
+      'vendor_disposition' => $this->vendor_disposition,
       'recording_url' => $this->recording_url,
       'redial_of'     => $this->redial_of_call_uuid,
       'vendor'        => $this->vendor,

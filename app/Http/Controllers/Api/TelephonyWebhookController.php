@@ -113,13 +113,15 @@ class TelephonyWebhookController extends Controller
       case 'call.invalid_number':
       case 'call.failed':
         $call->update([
-          'status'   => match ($event) {
+          'status'             => match ($event) {
             'call.busy'           => TelephonyCallStatus::BUSY,
             'call.no_answer'      => TelephonyCallStatus::NO_ANSWER,
             'call.invalid_number' => TelephonyCallStatus::INVALID_NUMBER,
             'call.failed'         => TelephonyCallStatus::FAILED,
           },
-          'ended_at' => now(),
+          'ended_at'           => now(),
+          'ring_seconds'       => isset($payload['ring_seconds']) ? (int) $payload['ring_seconds'] : $call->ring_seconds,
+          'vendor_disposition' => $payload['vendor_disposition'] ?? $call->vendor_disposition,
         ]);
         break;
 
@@ -132,19 +134,22 @@ class TelephonyWebhookController extends Controller
           : (isset($payload['duration']) ? (int) $payload['duration'] : null);
 
         $call->update([
-          'status'     => TelephonyCallStatus::ENDED,
-          'ended_by'   => $this->mapEndedBy($payload['ended_by'] ?? null),
-          'end_reason' => $payload['end_reason'] ?? null,
-          'ended_at'   => now(),
-          'duration'   => $duration,
+          'status'             => TelephonyCallStatus::ENDED,
+          'ended_by'           => $this->mapEndedBy($payload['ended_by'] ?? null),
+          'end_reason'         => $payload['end_reason'] ?? null,
+          'ended_at'           => now(),
+          'duration'           => $duration,
+          'vendor_disposition' => $payload['vendor_disposition'] ?? $call->vendor_disposition,
         ]);
         break;
 
       case 'call.completed':
         $call->update([
-          'status'        => TelephonyCallStatus::ENDED,
-          'duration'      => $payload['duration'] ?? $call->duration,
-          'recording_url' => $payload['recording_url'] ?? $call->recording_url,
+          'status'             => TelephonyCallStatus::ENDED,
+          'duration'           => $payload['duration'] ?? $call->duration,
+          'ring_seconds'       => isset($payload['ring_seconds']) ? (int) $payload['ring_seconds'] : $call->ring_seconds,
+          'vendor_disposition' => $payload['vendor_disposition'] ?? $call->vendor_disposition,
+          'recording_url'      => $payload['recording_url'] ?? $call->recording_url,
         ]);
         break;
 
