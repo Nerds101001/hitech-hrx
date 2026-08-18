@@ -37,6 +37,14 @@
           // clamped 3-line tile. The full markup still renders in the modal.
           $preview = trim(html_entity_decode(strip_tags(preg_replace('/<\s*br\s*\/?>/i', "\n", (string) $a->content))));
           $preview = trim(preg_replace('/\s+/', ' ', $preview));
+          // Welcome posts (and any other is_html content) embed a photo in the
+          // stored markup itself — pull it out so the card can lead with the
+          // person's face instead of a generic icon, matching what the old
+          // inline layout showed at a glance.
+          $joinerPhoto = null;
+          if ($a->is_html && preg_match('/<img[^>]*src="([^"]*)"/', (string) $a->content, $imgMatch)) {
+            $joinerPhoto = $imgMatch[1];
+          }
           $authorName = $a->createdBy?->getFullName() ?? 'HR';
           $authorPhoto = $a->createdBy?->getProfilePicture() ?: ('https://ui-avatars.com/api/?name=' . urlencode($authorName) . '&background=0d9488&color=fff&bold=true&size=64');
           $whenShort = ($a->published_at ?? $a->start_date)?->format('d M Y');
@@ -50,10 +58,15 @@
                data-title="{{ $a->title }}" data-tone-icon="{{ $tone[3] }}">
             <div class="card-body p-4 d-flex flex-column h-100">
               <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
-                     style="width:42px; height:42px; background:{{ $tone[1] }}; color:{{ $tone[0] }};">
-                  <i class="bx {{ $tone[3] }}" style="font-size:1.35rem;"></i>
-                </div>
+                @if($joinerPhoto)
+                  <img src="{{ $joinerPhoto }}" alt="" class="rounded-circle flex-shrink-0"
+                       style="width:42px; height:42px; object-fit:cover; border:2px solid {{ $tone[1] }};">
+                @else
+                  <div class="d-flex align-items-center justify-content-center rounded-3 flex-shrink-0"
+                       style="width:42px; height:42px; background:{{ $tone[1] }}; color:{{ $tone[0] }};">
+                    <i class="bx {{ $tone[3] }}" style="font-size:1.35rem;"></i>
+                  </div>
+                @endif
                 <span class="badge rounded-pill" style="background:{{ $tone[1] }}; color:{{ $tone[0] }};">{{ $tone[4] }}</span>
               </div>
 
