@@ -54,4 +54,10 @@ return [
     'key' => env('GOOGLE_MAPS_API_KEY'),
   ],
 
+  // Shared secret a telephony vendor must send back on every call-event
+  // push to our webhook receiver. See App\Http\Controllers\Api\TelephonyWebhookController.
+  'telephony_webhook' => [
+    'secret' => env('TELEPHONY_WEBHOOK_SECRET'),
+  ],
+
 ];

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\LeaveController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SOSController;
+use App\Http\Controllers\Api\TelephonyWebhookController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserSettingsController;
 use App\Http\Controllers\Api\VisitController;
@@ -66,6 +67,15 @@ Route::middleware('api')->group(function () {
 
 
 });
+
+/* Telephony vendor webhook. No user is logged in on this request — the
+   caller is a vendor's server, not a browser — so this sits outside any
+   session/auth group and is authenticated by a shared secret inside the
+   controller instead. Throttled generously; a burst of real call events
+   should never be mistaken for abuse. */
+Route::post('V1/telephony/webhook', [TelephonyWebhookController::class, 'handle'])
+  ->middleware(['api', 'throttle:120,1'])
+  ->name('api.telephony.webhook');
 
 // Protected routes
 
