@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\CallEndedBy;
+use App\Enums\CallOrigin;
 use App\Enums\TelephonyCallStatus;
 use App\Models\TelephonyCall;
 use App\Models\User;
@@ -37,6 +38,7 @@ class TelephonyCallService
     $call = TelephonyCall::create([
       'call_uuid'       => (string) Str::uuid(),
       'vendor'          => 'mock',
+      'origin'          => CallOrigin::HRX,
       'agent_id'        => $agent->id,
       'campaign_id'     => $campaignId,
       'from_number'     => $agent->phone ?: 'agent-extension',

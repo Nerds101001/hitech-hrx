@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\CallEndedBy;
+use App\Enums\CallOrigin;
 use App\Enums\TelephonyCallStatus;
 use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
@@ -17,7 +18,9 @@ class TelephonyCall extends Model
 
   protected $fillable = [
     'call_uuid',
+    'vendor_ref',
     'vendor',
+    'origin',
     'agent_id',
     'campaign_id',
     'from_number',
@@ -44,6 +47,7 @@ class TelephonyCall extends Model
   protected $casts = [
     'status' => TelephonyCallStatus::class,
     'ended_by' => CallEndedBy::class,
+    'origin' => CallOrigin::class,
     'queued_at' => 'datetime',
     'ringing_at' => 'datetime',
     'connected_at' => 'datetime',
@@ -72,6 +76,7 @@ class TelephonyCall extends Model
     return [
       'call_id'       => $this->call_uuid,
       'status'        => $this->status?->value,
+      'origin'        => $this->origin?->value,
       'from'          => $this->from_number,
       'to'            => $this->to_number,
       'agent_id'      => $this->agent_id,

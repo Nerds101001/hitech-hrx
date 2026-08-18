@@ -3,21 +3,27 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\CallEndedBy;
+use App\Enums\CallOrigin;
 use App\Enums\TelephonyCallStatus;
 use App\Http\Controllers\Controller;
 use App\Models\TelephonyCall;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Receives call-event pushes from a telephony vendor and folds them into
  * HRX's own canonical call record (see TelephonyCall::toContract()).
  *
- * The vendor is expected to echo back the call_id we handed them when the
- * call was placed (as their own 'refID'/reference field) so an event can be
- * matched back to the call it belongs to. Authenticated by a shared secret,
- * not a session — the caller is a vendor's server, not a logged-in user.
+ * A call HRX itself placed is matched by the call_id/refID we handed the
+ * vendor. A call the vendor reports that HRX never placed -- someone
+ * dialing manually, or any path outside the click-to-call button -- gets
+ * a new record instead of being dropped, so "how many calls were made"
+ * isn't limited to only the ones that went through our own button.
+ * Authenticated by a shared secret, not a session — the caller is a
+ * vendor's server, not a logged-in user.
  */
 class TelephonyWebhookController extends Controller
 {
@@ -43,18 +49,46 @@ class TelephonyWebhookController extends Controller
       ], 422);
     }
 
-    $call = TelephonyCall::where('call_uuid', $callId)->first();
-
-    if (!$call) {
-      Log::warning('Telephony webhook: no matching call', ['call_id' => $callId, 'event' => $event]);
-
-      return response()->json(['error' => 'call_not_found'], 404);
-    }
+    // call_uuid first (a call HRX itself placed, correlated by the id we
+    // generated) — vendor_ref second (a second+ event for an externally
+    // discovered call, correlated by the vendor's own raw id instead).
+    $call = TelephonyCall::where('call_uuid', $callId)->first()
+      ?? TelephonyCall::where('vendor_ref', $callId)->first()
+      ?? $this->createExternalCall($callId, $payload);
 
     $call->update(['raw_vendor_response' => $payload]);
     $this->applyEvent($call, $event, $payload);
 
     return response()->json(['received' => true, 'call_id' => $call->call_uuid]);
+  }
+
+  /**
+   * A call the vendor knows about that HRX never initiated. call_uuid is
+   * always our own freshly generated id, so the public contract stays a
+   * clean UUID regardless of origin; vendor_ref holds the vendor's own raw
+   * id so the *next* event for this same call finds this row instead of
+   * creating a duplicate. agent_id is left null unless the 'from' number
+   * matches a known user, since manual dialing carries no guarantee we can
+   * identify who placed it.
+   */
+  private function createExternalCall(string $callId, array $payload): TelephonyCall
+  {
+    Log::info('Telephony webhook: no matching call, recording as external', ['vendor_ref' => $callId]);
+
+    $fromNumber = $payload['from'] ?? null;
+    $agent = $fromNumber ? User::where('phone', $fromNumber)->first() : null;
+
+    return TelephonyCall::create([
+      'call_uuid'   => (string) Str::uuid(),
+      'vendor_ref'  => $callId,
+      'vendor'      => $payload['vendor'] ?? 'unknown',
+      'origin'      => CallOrigin::EXTERNAL,
+      'agent_id'    => $agent?->id,
+      'from_number' => $fromNumber ?? 'unknown',
+      'to_number'   => $payload['to'] ?? 'unknown',
+      'status'      => TelephonyCallStatus::RINGING,
+      'queued_at'   => now(),
+    ]);
   }
 
   private function applyEvent(TelephonyCall $call, string $event, array $payload): void
