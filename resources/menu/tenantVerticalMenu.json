@@ -651,9 +651,10 @@
                     "url": "/travel-claims/admin/dashboard",
                     "name": "Admin Dashboard",
                     "slug": "travel-claims.adminDashboard",
-                    "roles": [
-                        "admin",
-                        "hr"
+                    "permission": [
+                        "travel_claim.verify",
+                        "travel_claim.approve",
+                        "travel_claim.pay"
                     ]
                 }
             ]
