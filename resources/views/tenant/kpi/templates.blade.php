@@ -357,7 +357,12 @@
             <div class="col-md-6 needs-target">
               <label class="form-label">Target value</label>
               <input type="number" step="0.01" id="tpl_target_value" class="form-control" placeholder="e.g. 100">
-              <div class="form-text">What 100% looks like. Score compares achieved against this.</div>
+              <div class="form-text">
+                What 100% looks like. Score compares achieved against this.
+                This seeds each person's target when they first get the KPI — change
+                it per person in the Per-employee view, and editing this will not
+                overwrite what you set there.
+              </div>
             </div>
             <div class="col-md-6 needs-threshold">
               <label class="form-label">Earns full marks at (% of target)</label>

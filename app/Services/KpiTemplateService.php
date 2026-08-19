@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\KpiAssignment;
 use App\Models\KpiTemplate;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -57,7 +58,11 @@ class KpiTemplateService
 
                 if (isset($existing[$user->id])) {
                     if ($refreshExisting) {
-                        KpiAssignment::where('id', $existing[$user->id])->update($payload);
+                        // Keep whatever target this person has been given. It
+                        // was seeded from the template when the assignment was
+                        // created and belongs to them from then on.
+                        KpiAssignment::where('id', $existing[$user->id])
+                            ->update(Arr::except($payload, KpiTemplate::SEEDED_ONCE));
                         $updated++;
                     } else {
                         $skipped++;

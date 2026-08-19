@@ -59,7 +59,7 @@ class KpiController extends Controller
             $selected = User::find($selectedId);
             if ($selected) {
                 $routines = WorkControlRoutine::where('user_id', $selectedId)->get();
-                $assignments = KpiAssignment::with('routine')
+                $assignments = KpiAssignment::with(['routine', 'template'])
                     ->where('user_id', $selectedId)
                     ->orderBy('category')
                     ->get();

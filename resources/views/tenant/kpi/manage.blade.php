@@ -77,7 +77,18 @@
                                 <td class="text-capitalize">{{ $a->frequency }}</td>
                                 <td class="text-capitalize">{{ $a->scoring_type }}</td>
                                 <td>{{ rtrim(rtrim(number_format($a->max_marks,2),'0'),'.') }}</td>
-                                <td>{{ $a->scoring_type === 'target' ? rtrim(rtrim(number_format($a->target_value,2),'0'),'.') : '—' }}</td>
+                                <td>
+                                    @if($a->scoring_type === 'target')
+                                        {{ rtrim(rtrim(number_format($a->target_value,2),'0'),'.') }}
+                                        @php $tplTarget = optional($a->template)->target_value; @endphp
+                                        @if($tplTarget !== null && abs((float)$tplTarget - (float)$a->target_value) > 0.001)
+                                            {{-- Their own target, not the department's. Editing the template
+                                                 no longer drags this back to the shared number. --}}
+                                            <span class="badge badge-hitech badge-brand-soft ms-1"
+                                                  title="Set for this person. Department default is {{ rtrim(rtrim(number_format($tplTarget,2),'0'),'.') }}.">own</span>
+                                        @endif
+                                    @else — @endif
+                                </td>
                                 <td>{!! $a->is_active ? '<span class="badge bg-label-success">Active</span>' : '<span class="badge bg-label-secondary">Inactive</span>' !!}</td>
                                 <td class="text-end">
                                     @if($a->scoring_type === 'target' && $a->is_active)

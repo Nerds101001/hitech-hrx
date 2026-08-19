@@ -34,6 +34,18 @@ class KpiTemplate extends Model
         'check_day', 'check_month',
     ];
 
+    /**
+     * Inherited when the assignment is first created, then owned by the person.
+     *
+     * A target is individual — Archana's revenue target is 13 lakh and Dipika's
+     * is 202 — so re-saving the template must not drag everyone back to one
+     * shared number. Everything else (weights, scoring rules, late policy) is
+     * department policy and does keep following the template.
+     */
+    public const SEEDED_ONCE = [
+        'target_value',
+    ];
+
     public function department()
     {
         return $this->belongsTo(Department::class);
