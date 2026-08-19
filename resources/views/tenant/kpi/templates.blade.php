@@ -410,28 +410,17 @@
             <div class="col-md-6 kpi-only">
               <label class="form-label">How it is measured</label>
               <select id="tpl_data_source" class="form-select">
-                <option value="manual">Manual entry</option>
-                <option value="approval">Manual, needs approval</option>
-                <option value="auto:revenue">Auto — revenue</option>
-                <option value="auto:target_achievement">Auto — target achievement</option>
-                <option value="auto:customer_health">Auto — customer health</option>
-                <option value="auto:total_pipeline">Auto — total pipeline</option>
-                <option value="auto:customers_added">Auto — customers added</option>
-                <option value="auto:customers_retained">Auto — customers retained</option>
-                <option value="auto:bingo_achievement">Auto — Bingo achievement</option>
-                <option value="auto:kingo_achievement">Auto — Kingo achievement</option>
-                <option value="auto:super_kingo_achievement">Auto — Super Kingo achievement</option>
-                <option value="auto:rate_increase_visits">Auto — rate increase visits</option>
-                <option value="auto:upsell_visits">Auto — upsell visits</option>
-                <option value="auto:nif_recovery_visits">Auto — NIF recovery visits</option>
-                <option value="auto:competitor_insight_visits">Auto — competitor insight visits</option>
-                <option value="auto:product_idea_visits">Auto — product idea visits</option>
-                <option value="auto:new_customer_visits">Auto — new customer visits</option>
-                <option value="auto:trial_demo_visits">Auto — trial/demo visits</option>
-                <option value="auto:sales_pitches">Auto — sales pitches (Mind Speak)</option>
-                <option value="auto:seminars_conducted">Auto — seminars conducted (Mind Speak)</option>
-                <option value="auto:learn_hitech_sessions">Auto — Learn@HiTech sessions</option>
+                <optgroup label="Someone types it in">
+                  <option value="manual">Manual entry</option>
+                  <option value="approval">Manual, needs approval</option>
+                </optgroup>
+                <optgroup label="Worked out from live data">
+                  @foreach($autoSources as $key => $label)
+                    <option value="{{ $key }}" title="{{ $label }}">{{ $label }}</option>
+                  @endforeach
+                </optgroup>
               </select>
+              <div class="form-text" id="tpl_source_help"></div>
             </div>
             <div class="col-md-6 kpi-only">
               <label class="form-label">Approver</label>
@@ -486,6 +475,18 @@
     show('.late-percent',    !isKra && late === 'percent');
     show('.late-perday',     !isKra && late === 'per_day');
   }
+  // What the chosen source actually measures, straight from the service.
+  const SOURCE_HELP = @json($autoSources);
+  function sourceHelp() {
+    const v = $('tpl_data_source').value;
+    const el = $('tpl_source_help');
+    if (!el) return;
+    el.textContent = v === 'manual' ? 'The person enters this themselves; it counts as soon as they send it.'
+      : v === 'approval' ? 'The person enters it, then HR approves before it scores.'
+      : (SOURCE_HELP[v] || '');
+  }
+  $('tpl_data_source').addEventListener('change', sourceHelp);
+
   ['tpl_scoring_type','tpl_late_policy'].forEach(id => $(id).addEventListener('change', toggleFields));
 
   // A KPI may only sit under a KRA of the same department (or a company-wide
@@ -567,6 +568,7 @@
     (bands || []).forEach(b => $('bandRows').appendChild(bandRow(b.min, b.marks)));
 
     toggleFields();
+    sourceHelp();
     modal().show();
   }
 

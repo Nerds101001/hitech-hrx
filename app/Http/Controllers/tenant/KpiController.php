@@ -449,8 +449,14 @@ class KpiController extends Controller
         $kras = KpiTemplate::where('category', 'KRA')->orderBy('title')->get(['id', 'title', 'department_id']);
         $approvers = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
 
+        // Built from the service rather than a second list in the view, so a new
+        // calculation shows up in the dropdown the moment it is added and the
+        // two can never disagree about what exists.
+        $autoSources = \App\Services\KpiAutoSourceService::SOURCES;
+
         return view('tenant.kpi.templates', compact(
-            'templates', 'departments', 'kras', 'approvers', 'departmentId', 'assignmentCounts'
+            'templates', 'departments', 'kras', 'approvers', 'departmentId',
+            'assignmentCounts', 'autoSources'
         ));
     }
 
