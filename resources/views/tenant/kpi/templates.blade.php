@@ -14,7 +14,8 @@
   </div>
   <div class="d-flex gap-2">
     <a href="{{ route('tenant.kpi.manage') }}" class="btn btn-outline-secondary">Per-employee view</a>
-    <button class="btn btn-primary" id="btnNewTemplate"><i class="bx bx-plus me-1"></i> New KPI / KRA</button>
+    <button class="btn btn-outline-primary" id="btnNewKra"><i class="bx bx-folder-plus me-1"></i> New KRA</button>
+    <button class="btn btn-primary" id="btnNewKpi"><i class="bx bx-plus me-1"></i> New KPI</button>
   </div>
 </div>
 
@@ -37,87 +38,164 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>Title</th>
-          <th>Department</th>
-          <th>Scoring</th>
-          <th class="text-end">Marks</th>
-          <th>Late policy</th>
-          <th>Frequency</th>
-          <th class="text-center">Assigned</th>
-          <th class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        @forelse($templates as $t)
-          @php $counts = $assignmentCounts[$t->id] ?? null; @endphp
-          <tr class="{{ $t->is_active ? '' : 'opacity-50' }}">
-            <td>
-              @if($t->category === 'KRA')
-                <span class="badge bg-label-dark me-1">KRA</span>
-                <strong>{{ $t->title }}</strong>
-              @else
-                <span class="ms-3 text-muted">&#8627;</span>
-                {{ $t->title }}
-                @if($t->parent)<div class="small text-muted ms-4">under {{ $t->parent->title }}</div>@endif
-              @endif
-              @if(!$t->is_active)<span class="badge bg-label-secondary ms-1">retired</span>@endif
-              @if($t->description)<div class="small text-muted">{{ $t->description }}</div>@endif
-            </td>
-            <td>{{ $t->department->name ?? 'All departments' }}</td>
-            <td>
-              @if($t->category === 'KRA')
-                <span class="text-muted">—</span>
-              @else
-                <span class="badge bg-label-info">{{ $t->scoring_type }}</span>
-                @if($t->scoring_type === 'threshold')
-                  <div class="small text-muted">≥ {{ rtrim(rtrim((string)$t->threshold_percent,'0'),'.') }}% of target</div>
-                @elseif($t->scoring_type === 'banded')
-                  <div class="small text-muted">{{ count($t->bands ?? []) }} band(s)</div>
-                @elseif($t->target_value !== null)
-                  <div class="small text-muted">target {{ rtrim(rtrim((string)$t->target_value,'0'),'.') }}</div>
-                @endif
-              @endif
-            </td>
-            <td class="text-end">{{ $t->category === 'KRA' ? '—' : rtrim(rtrim((string)$t->max_marks,'0'),'.') }}</td>
-            <td>
-              @if($t->category === 'KRA')<span class="text-muted">—</span>
-              @elseif($t->late_policy === 'none')<span class="text-muted">not penalised</span>
-              @elseif($t->late_policy === 'percent'){{ rtrim(rtrim((string)$t->late_percent,'0'),'.') }}% of marks
-              @elseif($t->late_policy === 'per_day'){{ rtrim(rtrim((string)$t->per_day_penalty,'0'),'.') }}/day after {{ $t->grace_days }}d
-              @else {{ rtrim(rtrim((string)$t->late_score,'0'),'.') }} marks
-              @endif
-            </td>
-            <td>{{ ucfirst($t->frequency) }}</td>
-            <td class="text-center">
-              @if($t->category === 'KRA')<span class="text-muted">—</span>
-              @else <span class="badge bg-label-success">{{ $counts->active ?? 0 }}</span>
-              @endif
-            </td>
-            <td class="text-end text-nowrap">
-              @if($t->category !== 'KRA')
-                <button class="btn btn-sm btn-icon text-success tpl-apply" data-id="{{ $t->id }}"
-                        title="Give this KPI to everyone in the department"><i class="bx bx-user-plus"></i></button>
-              @endif
-              <button class="btn btn-sm btn-icon text-primary tpl-edit" data-json='@json($t)' title="Edit"><i class="bx bx-edit"></i></button>
-              <button class="btn btn-sm btn-icon text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
-            </td>
-          </tr>
-        @empty
-          <tr><td colspan="8" class="text-center text-muted py-5">
-            No templates yet. Create a KRA heading first, then the KPIs that sit under it.
-          </td></tr>
-        @endforelse
-      </tbody>
-    </table>
+@php
+  // Split the flat list into headings and scored KPIs, then group each by
+  // department so the page reads department-by-department instead of one long
+  // mixed table where a KRA and a KPI looked the same.
+  $allKras = $templates->where('category', 'KRA');
+  $allKpis = $templates->where('category', '!=', 'KRA');
+  $kraById = $allKras->keyBy('id');
+  $deptName = fn($t) => $t->department->name ?? 'All departments';
+  $kpisByDept = $allKpis->groupBy($deptName);
+  $krasByDept = $allKras->groupBy($deptName);
+  $marksOf = fn($t) => rtrim(rtrim((string) $t->max_marks, '0'), '.');
+@endphp
+
+<ul class="nav nav-tabs mb-0" id="tplTabs">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabKpis" type="button">
+      KPIs <span class="badge bg-label-primary ms-1">{{ $allKpis->count() }}</span>
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabKras" type="button">
+      KRAs <span class="badge bg-label-dark ms-1">{{ $allKras->count() }}</span>
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content p-0 border-0">
+
+  {{-- ===================== KPIs ===================== --}}
+  <div class="tab-pane fade show active" id="tabKpis">
+    <div class="card border-top-0 rounded-top-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width:220px">KPI</th>
+              <th style="min-width:150px">Sits under (KRA)</th>
+              <th>Scoring</th>
+              <th class="text-end">Marks</th>
+              <th>Late policy</th>
+              <th>Frequency</th>
+              <th class="text-center">Assigned</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @forelse($kpisByDept as $dept => $rows)
+              <tr class="table-secondary">
+                <td colspan="8" class="fw-semibold py-2">
+                  <i class="bx bx-buildings me-1"></i>{{ $dept }}
+                  <span class="text-muted fw-normal small ms-2">
+                    {{ $rows->count() }} KPI{{ $rows->count() === 1 ? '' : 's' }} ·
+                    {{ rtrim(rtrim((string) $rows->sum('max_marks'), '0'), '.') }} marks total
+                  </span>
+                </td>
+              </tr>
+              @foreach($rows as $t)
+                <tr>
+                  <td>
+                    <div class="fw-medium">{{ $t->title }}</div>
+                    @if($t->description)<small class="text-muted">{{ $t->description }}</small>@endif
+                  </td>
+                  <td>
+                    @if($t->parent_template_id && $kraById->has($t->parent_template_id))
+                      <span class="badge bg-label-dark">{{ $kraById[$t->parent_template_id]->title }}</span>
+                    @elseif($t->parent_template_id)
+                      <span class="badge bg-label-danger" title="The KRA this points at no longer exists">orphaned</span>
+                    @else
+                      <span class="text-muted">— ungrouped —</span>
+                    @endif
+                  </td>
+                  <td>
+                    <span class="badge bg-label-info">{{ $t->scoring_type }}</span>
+                    @if($t->target_value)<small class="text-muted d-block">target {{ rtrim(rtrim((string)$t->target_value,'0'),'.') }}</small>@endif
+                  </td>
+                  <td class="text-end fw-semibold">{{ $marksOf($t) }}</td>
+                  <td>
+                    @if($t->late_policy === 'fixed'){{ $marksOf((object)['max_marks' => $t->late_score]) }} marks
+                    @elseif($t->late_policy === 'percent'){{ $t->late_percent }}%
+                    @elseif($t->late_policy === 'per_day'){{ $t->grace_days }}d grace, -{{ $t->per_day_penalty }}/day
+                    @else <span class="text-muted">none</span>@endif
+                  </td>
+                  <td>{{ ucfirst($t->frequency) }}</td>
+                  <td class="text-center">
+                    @php $c = $assignmentCounts[$t->id] ?? null; @endphp
+                    @if($c)<span class="badge bg-label-success">{{ $c->active }}</span>
+                    @else<span class="text-muted">—</span>@endif
+                  </td>
+                  <td class="text-end text-nowrap">
+                    <button class="btn btn-sm btn-icon text-success tpl-apply" data-id="{{ $t->id }}"
+                            title="Apply to everyone in this department"><i class="bx bx-user-plus"></i></button>
+                    <button class="btn btn-sm btn-icon tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
+                    <button class="btn btn-sm btn-icon text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
+                  </td>
+                </tr>
+              @endforeach
+            @empty
+              <tr><td colspan="8" class="text-center text-muted py-5">
+                No KPIs yet. Create a KRA heading first, then add the KPIs that sit under it.
+              </td></tr>
+            @endforelse
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {{-- ===================== KRAs ===================== --}}
+  <div class="tab-pane fade" id="tabKras">
+    <div class="card border-top-0 rounded-top-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th style="min-width:240px">KRA</th>
+              <th>Frequency</th>
+              <th class="text-center">KPIs under it</th>
+              <th class="text-end">Marks in this KRA</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @forelse($krasByDept as $dept => $rows)
+              <tr class="table-secondary">
+                <td colspan="5" class="fw-semibold py-2"><i class="bx bx-buildings me-1"></i>{{ $dept }}</td>
+              </tr>
+              @foreach($rows as $t)
+                @php $children = $allKpis->where('parent_template_id', $t->id); @endphp
+                <tr>
+                  <td>
+                    <span class="badge bg-label-dark me-1">KRA</span>
+                    <span class="fw-medium">{{ $t->title }}</span>
+                    @if($t->description)<small class="text-muted d-block">{{ $t->description }}</small>@endif
+                  </td>
+                  <td>{{ ucfirst($t->frequency) }}</td>
+                  <td class="text-center">
+                    @if($children->count())<span class="badge bg-label-primary">{{ $children->count() }}</span>
+                    @else<span class="badge bg-label-warning" title="Nothing sits under this heading yet">empty</span>@endif
+                  </td>
+                  <td class="text-end fw-semibold">{{ rtrim(rtrim((string) $children->sum('max_marks'), '0'), '.') }}</td>
+                  <td class="text-end text-nowrap">
+                    <button class="btn btn-sm btn-icon tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
+                    <button class="btn btn-sm btn-icon text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
+                  </td>
+                </tr>
+              @endforeach
+            @empty
+              <tr><td colspan="5" class="text-center text-muted py-5">
+                No KRAs yet. A KRA is the heading a group of KPIs sits under — create one first.
+              </td></tr>
+            @endforelse
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
-{{-- Create / edit --}}
 <div class="modal fade" id="tplModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -129,16 +207,12 @@
         <div class="modal-body">
           <input type="hidden" id="tpl_id">
           <div class="row g-3">
-            <div class="col-md-8">
+            <div class="col-12">
               <label class="form-label">Title <span class="text-danger">*</span></label>
               <input type="text" id="tpl_title" class="form-control" required placeholder="e.g. Revenue (Newbiz/CCare)">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label">Type</label>
-              <select id="tpl_category" class="form-select">
-                <option value="KPI">KPI — scored</option>
-                <option value="KRA">KRA — heading only</option>
-              </select>
+              {{-- Type comes from which button opened the dialog, not a dropdown:
+                   a KRA and a KPI are different things and no longer share a form. --}}
+              <input type="hidden" id="tpl_category" value="KPI">
             </div>
 
             <div class="col-md-6">
@@ -152,11 +226,11 @@
               <label class="form-label">Sits under (KRA)</label>
               <select id="tpl_parent_template_id" class="form-select">
                 <option value="">— none —</option>
-                @foreach($kras as $k)<option value="{{ $k->id }}">{{ $k->title }}</option>@endforeach
+                @foreach($kras as $k)<option value="{{ $k->id }}" data-dept="{{ $k->department_id }}">{{ $k->title }}</option>@endforeach
               </select>
             </div>
 
-            <div class="col-md-4 kpi-only">
+            <div class="col-md-4">
               <label class="form-label">Frequency</label>
               <select id="tpl_frequency" class="form-select">
                 @foreach(['daily','weekly','fortnightly','monthly','quarterly','yearly'] as $f)
@@ -305,7 +379,25 @@
     show('.late-percent',    !isKra && late === 'percent');
     show('.late-perday',     !isKra && late === 'per_day');
   }
-  ['tpl_category','tpl_scoring_type','tpl_late_policy'].forEach(id => $(id).addEventListener('change', toggleFields));
+  ['tpl_scoring_type','tpl_late_policy'].forEach(id => $(id).addEventListener('change', toggleFields));
+
+  // A KPI may only sit under a KRA of the same department (or a company-wide
+  // one). Showing every KRA regardless of department invited nonsense pairings.
+  function filterKras() {
+    const dept = $('tpl_department_id').value;
+    const sel = $('tpl_parent_template_id');
+    let clearedCurrent = false;
+    Array.from(sel.options).forEach(function (o) {
+      if (!o.value) return;
+      const od = o.dataset.dept || '';
+      const ok = !dept || !od || od === dept;
+      o.hidden = !ok;
+      o.disabled = !ok;
+      if (!ok && sel.value === o.value) clearedCurrent = true;
+    });
+    if (clearedCurrent) sel.value = '';
+  }
+  $('tpl_department_id').addEventListener('change', filterKras);
 
   function bandRow(min, marks) {
     const wrap = document.createElement('div');
@@ -332,17 +424,23 @@
     })).filter(b => !isNaN(b.min) && !isNaN(b.marks));
   }
 
-  function openModal(t) {
+  function openModal(t, kind) {
+    // kind is only supplied when creating; editing takes it from the record.
+    const cat = t ? (t.category ?? 'KPI') : (kind ?? 'KPI');
+    const isKra = cat === 'KRA';
+
     $('tplError').classList.add('d-none');
     $('bandRows').innerHTML = '';
     $('tpl_id').value = t ? t.id : '';
-    $('tplModalTitle').textContent = t ? 'Edit KPI / KRA' : 'New KPI / KRA';
+    $('tpl_category').value = cat;
+    $('tplModalTitle').textContent = (t ? 'Edit ' : 'New ') + (isKra ? 'KRA — heading' : 'KPI — scored');
+    $('tpl_title').placeholder = isKra ? 'e.g. Revenue & Target' : 'e.g. Revenue (Newbiz/CCare)';
 
     const set = (id, v, dflt) => $(id).value = (v === null || v === undefined) ? (dflt ?? '') : v;
     set('tpl_title', t?.title);
     set('tpl_description', t?.description);
-    $('tpl_category').value           = t?.category ?? 'KPI';
     set('tpl_department_id', t?.department_id);
+    filterKras();
     set('tpl_parent_template_id', t?.parent_template_id);
     $('tpl_frequency').value          = t?.frequency ?? 'monthly';
     $('tpl_scoring_type').value       = t?.scoring_type ?? 'target';
@@ -365,7 +463,8 @@
     modal().show();
   }
 
-  $('btnNewTemplate').addEventListener('click', () => openModal(null));
+  $('btnNewKpi').addEventListener('click', () => openModal(null, 'KPI'));
+  $('btnNewKra').addEventListener('click', () => openModal(null, 'KRA'));
   document.querySelectorAll('.tpl-edit').forEach(b =>
     b.addEventListener('click', () => openModal(JSON.parse(b.dataset.json))));
 
