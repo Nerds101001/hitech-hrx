@@ -73,96 +73,50 @@
   <div class="px-4" id="filter-section">
     <div class="hitech-card-white mb-6 overflow-hidden">
       <div class="card-body p-sm-5 p-4">
-        <div class="row align-items-center g-6">
-          <div class="col-lg-8 d-flex flex-wrap align-items-center gap-3">
-            <div class="search-wrapper-hitech w-px-400 mw-100">
+        <div class="row align-items-end g-4">
+          <div class="col-lg-4">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Search</label>
+            <div class="search-wrapper-hitech mw-100">
               <i class="bx bx-search text-muted ms-3"></i>
               <input type="text" class="form-control" placeholder="Search KPI or KRA..." id="tplSearch">
               <button class="btn-search shadow-sm" type="button" id="tplSearchBtn">
                 <i class="bx bx-search fs-5"></i><span>Search</span>
               </button>
             </div>
-            <button class="btn btn-white shadow-sm rounded-pill px-4 border d-flex justify-content-center align-items-center gap-2"
-                    type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
-              <i class="bx bx-filter-alt text-muted"></i>
-              <span class="fw-semibold">Filters</span>
-              <span class="badge badge-hitech badge-brand-soft d-none" id="tplFilterCount">0</span>
-            </button>
           </div>
-          <div class="col-lg-4 d-flex flex-wrap align-items-center justify-content-lg-end gap-3 mt-3 mt-lg-0">
-            <span class="text-muted fw-semibold small" id="tplShowing"></span>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
+            <select class="form-select" id="fDept">
+              <option value="">All Departments</option>
+              <option value="__none__">Company-wide</option>
+              @foreach($departments as $d)
+                <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Interval</label>
+            <select class="form-select" id="fFreq">
+              <option value="">All Intervals</option>
+              @foreach(['daily','weekly','fortnightly','monthly','quarterly','yearly'] as $f)
+                <option value="{{ $f }}">{{ ucfirst($f) }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Scoring</label>
+            <select class="form-select" id="fScoring">
+              <option value="">All Scoring</option>
+              @foreach(['target','threshold','banded','timeline'] as $sc)
+                <option value="{{ $sc }}">{{ ucfirst($sc) }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-lg-2 d-flex align-items-center gap-3">
             <button class="btn btn-white shadow-sm rounded-pill px-4 border fw-semibold" type="button" id="tplClear">
               <i class="bx bx-reset me-1"></i>Clear
             </button>
-          </div>
-        </div>
-
-        <div class="collapse" id="advancedFilters">
-          <div class="row g-6 pt-5 mt-4 border-top">
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
-              <select class="form-select" id="fDept">
-                <option value="">All Departments</option>
-                <option value="__none__">All departments (company-wide)</option>
-                @foreach($departments as $d)
-                  <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
-                @endforeach
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Interval</label>
-              <select class="form-select" id="fFreq">
-                <option value="">All Intervals</option>
-                @foreach(['daily','weekly','fortnightly','monthly','quarterly','yearly'] as $f)
-                  <option value="{{ $f }}">{{ ucfirst($f) }}</option>
-                @endforeach
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Scoring</label>
-              <select class="form-select" id="fScoring">
-                <option value="">All Scoring</option>
-                @foreach(['target','threshold','banded','timeline'] as $sc)
-                  <option value="{{ $sc }}">{{ ucfirst($sc) }}</option>
-                @endforeach
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Sits under (KRA)</label>
-              <select class="form-select" id="fKra">
-                <option value="">Any KRA</option>
-                <option value="__none__">Ungrouped only</option>
-                @foreach($kras as $k)
-                  <option value="{{ $k->id }}">{{ $k->title }}</option>
-                @endforeach
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Marks from</label>
-              <input type="number" step="0.5" min="0" class="form-control" id="fMarksMin" placeholder="min">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Marks to</label>
-              <input type="number" step="0.5" min="0" class="form-control" id="fMarksMax" placeholder="max">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Assigned</label>
-              <select class="form-select" id="fAssigned">
-                <option value="">Any</option>
-                <option value="yes">Assigned to staff</option>
-                <option value="no">Not assigned yet</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Late policy</label>
-              <select class="form-select" id="fLate">
-                <option value="">Any</option>
-                <option value="fixed">Fixed marks</option>
-                <option value="percent">% of marks</option>
-                <option value="per_day">Per day</option>
-                <option value="none">No penalty</option>
-              </select>
-            </div>
+            <span class="text-muted fw-semibold small text-nowrap" id="tplShowing"></span>
           </div>
         </div>
       </div>
@@ -610,26 +564,13 @@
   // ---- Filtering -------------------------------------------------------
   // Everything is already on the page, so filtering is done here rather than
   // by reloading. A department heading hides itself once all its rows are out.
-  const FILTERS = ['fDept', 'fFreq', 'fScoring', 'fKra', 'fMarksMin', 'fMarksMax', 'fAssigned', 'fLate'];
+  const FILTERS = ['fDept', 'fFreq', 'fScoring'];
 
   function applyFilters() {
     const q       = ($('tplSearch').value || '').trim().toLowerCase();
     const dept    = $('fDept').value;
     const freq    = $('fFreq').value;
     const scoring = $('fScoring').value;
-    const kra     = $('fKra').value;
-    const late    = $('fLate').value;
-    const assigned= $('fAssigned').value;
-    const min     = $('fMarksMin').value === '' ? null : parseFloat($('fMarksMin').value);
-    const max     = $('fMarksMax').value === '' ? null : parseFloat($('fMarksMax').value);
-
-    let active = 0;
-    [q, dept, freq, scoring, kra, late, assigned].forEach(v => { if (v) active++; });
-    if (min !== null) active++;
-    if (max !== null) active++;
-    const badge = $('tplFilterCount');
-    badge.textContent = active;
-    badge.classList.toggle('d-none', active === 0);
 
     let shown = 0, total = 0;
     document.querySelectorAll('.tpl-row').forEach(function (row) {
@@ -641,20 +582,9 @@
       if (q && !(d.title || '').includes(q)) ok = false;
       if (ok && dept && d.dept !== dept) ok = false;
       if (ok && freq && d.freq !== freq) ok = false;
-      // Scoring, KRA, marks, late and assigned only describe a KPI. Applying
-      // them hides KRA rows rather than pretending they match.
-      if (ok && scoring)  ok = !isKra && d.scoring === scoring;
-      if (ok && kra)      ok = !isKra && d.kra === kra;
-      if (ok && late)     ok = !isKra && d.late === late;
-      if (ok && assigned) ok = !isKra && d.assigned === assigned;
-      if (ok && (min !== null || max !== null)) {
-        if (isKra) { ok = false; }
-        else {
-          const m = parseFloat(d.marks || '0');
-          if (min !== null && m < min) ok = false;
-          if (max !== null && m > max) ok = false;
-        }
-      }
+      // Scoring only describes a KPI, so filtering by it hides KRA headings
+      // rather than pretending a heading matches a scored condition.
+      if (ok && scoring) ok = !isKra && d.scoring === scoring;
 
       row.classList.toggle('d-none', !ok);
       if (ok) shown++;
