@@ -726,6 +726,10 @@ Route::middleware([
         Route::get('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'index'])->name('cc-attendance.index');
         Route::post('/cc-attendance', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'store'])->name('cc-attendance.store');
         
+        // WFH approval snapshots are private: only the salesperson, their CCare
+        // owner, or Admin/HR may fetch one. They are no longer served from
+        // public storage, where anyone with the URL could read them.
+        Route::get('/cc-attendance/proof/{id}', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'proof'])->name('cc-attendance.proof');
         Route::get('/cc-attendance/report', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'report'])->name('cc-attendance.report');
         Route::get('/cc-attendance/report/export', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'exportReport'])->name('cc-attendance.report.export');
         Route::get('/cc-attendance/monthly', [\App\Http\Controllers\tenant\CcAttendanceController::class, 'monthly'])->name('cc-attendance.monthly');
@@ -743,8 +747,17 @@ Route::middleware([
         // --- MIND SPEAK ---
         Route::prefix('mind-speak')->name('mind-speak.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'index'])->name('index');
-            Route::post('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'store'])->name('store');
+            // Nothing stopped a script posting thousands of entries (or 20 MB
+            // uploads) in a loop and burying the reviewers' dashboard.
+            Route::post('/', [\App\Http\Controllers\tenant\MindSpeakController::class, 'store'])
+                ->middleware('throttle:15,1')->name('store');
             Route::get('/export', [\App\Http\Controllers\tenant\MindSpeakController::class, 'export'])->name('export');
+            // Attachments are private: only the submitter or a reviewer may
+            // fetch one. They are no longer served from public storage.
+            Route::get('/{id}/attachment', [\App\Http\Controllers\tenant\MindSpeakController::class, 'attachment'])->name('attachment');
+            // Admin / HR act on a submission (approve, acknowledge or reject
+            // with a reason). The controller re-checks the role.
+            Route::post('/{id}/review', [\App\Http\Controllers\tenant\MindSpeakController::class, 'review'])->name('review');
         });
 
         // --- SALES FIELD OPERATIONS & CRM ---
@@ -770,6 +783,8 @@ Route::middleware([
             Route::get('/delete-requests', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'index'])->name('pipeline.delete-requests.index');
             Route::post('/delete-requests/{id}/approve', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'approve'])->name('pipeline.delete-requests.approve');
             Route::post('/delete-requests/{id}/reject', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'reject'])->name('pipeline.delete-requests.reject');
+            // Approve or reject a whole selection in one action.
+            Route::post('/delete-requests/bulk', [\App\Http\Controllers\tenant\SalesDeleteRequestController::class, 'bulk'])->name('pipeline.delete-requests.bulk');
             Route::post('/sales-report/{id}/extra-rep', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'addExtraRep'])->name('pipeline.extra.add');
             Route::delete('/sales-report/{id}/extra-rep/{userId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'removeExtraRep'])->name('pipeline.extra.remove');
             // Search any customer company-wide, then claim a role on it — GET
@@ -892,6 +907,9 @@ Route::middleware([
             Route::post('/{id}/update', [\App\Http\Controllers\tenant\TravelClaimController::class, 'update'])->name('update');
             Route::get('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'show'])->name('show');
             Route::get('/{id}/download-attachments', [\App\Http\Controllers\tenant\TravelClaimController::class, 'downloadAttachments'])->name('download-attachments');
+            // One claim as a spreadsheet, so it can be verified line by line
+            // away from the screen. Same gate as the attachment download.
+            Route::get('/{id}/export', [\App\Http\Controllers\tenant\TravelClaimController::class, 'exportExcel'])->name('export');
             Route::delete('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroy'])->name('destroy');
             
             // Admin/HR specific
@@ -997,6 +1015,8 @@ Route::middleware([
         Route::prefix('kpi')->name('tenant.kpi.')->group(function () {
             Route::get('/my', [\App\Http\Controllers\tenant\KpiController::class, 'my'])->name('my');
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
+            // Weekly self-reporting for manually measured KPIs.
+            Route::post('/{id}/entry', [\App\Http\Controllers\tenant\KpiController::class, 'submitEntry'])->name('entry');
         });
 
         // Management side. NOTE: kept admin-only by default (not widened to
@@ -1014,6 +1034,9 @@ Route::middleware([
             Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
             Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
+            // HR review queue for weekly submissions.
+            Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
+            Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
             Route::post('/assign-from-routine', [\App\Http\Controllers\tenant\KpiController::class, 'assignFromRoutine'])->name('assignFromRoutine');
 
             // Department-level KPI/KRA catalogue. No clash with the /{id}

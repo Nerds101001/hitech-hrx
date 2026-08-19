@@ -331,6 +331,46 @@
     {{-- ============ RAIL ============ --}}
     <div class="col-xxl-3 col-lg-4">
 
+      {{-- My KPI tasks. Only appears when something actually needs doing, so
+           it never becomes a permanent "all clear" box people learn to skip. --}}
+      @php
+        $kDue  = (int) ($kpiWeekDue ?? 0);
+        $kWait = (int) ($kpiWeekWaiting ?? 0);
+        $kBack = (int) ($kpiSentBack ?? 0);
+      @endphp
+      @if($kDue + $kWait + $kBack > 0)
+        <div class="adc-card mb-4">
+          <div class="adc-card-head">
+            <div><h6 class="adc-card-title"><i class="bx bx-task text-warning"></i> My KPI Tasks</h6>
+              <span class="adc-card-sub">This week</span></div>
+            <a href="{{ url('/kpi/my') }}" class="adc-link">Open</a>
+          </div>
+          <ul class="adc-events">
+            @if($kBack > 0)
+              <li role="button" tabindex="0" onclick="window.location='{{ url('/kpi/my') }}'" style="cursor:pointer">
+                <span class="adc-ev-icon adc-tone-danger"><i class="bx bx-undo"></i></span>
+                <span class="adc-ev-label">Sent back — needs correcting</span>
+                <span class="adc-ev-count">{{ $kBack }}</span>
+              </li>
+            @endif
+            @if($kDue > 0)
+              <li role="button" tabindex="0" onclick="window.location='{{ url('/kpi/my') }}'" style="cursor:pointer">
+                <span class="adc-ev-icon adc-tone-warning"><i class="bx bx-edit"></i></span>
+                <span class="adc-ev-label">Waiting for your number</span>
+                <span class="adc-ev-count">{{ $kDue }}</span>
+              </li>
+            @endif
+            @if($kWait > 0)
+              <li>
+                <span class="adc-ev-icon adc-tone-info"><i class="bx bx-time-five"></i></span>
+                <span class="adc-ev-label">Sent — waiting for HR</span>
+                <span class="adc-ev-count">{{ $kWait }}</span>
+              </li>
+            @endif
+          </ul>
+        </div>
+      @endif
+
       {{-- Today's Highlights --}}
       <div class="adc-card mb-4">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Highlights</h6></div></div>

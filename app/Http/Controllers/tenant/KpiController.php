@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\KpiTemplate;
 use App\Models\WorkControlRoutine;
 use App\Services\KpiPeriodService;
+use App\Services\KpiEntryService;
 use App\Services\KpiTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -261,9 +262,22 @@ class KpiController extends Controller
             }
         }
 
+        // This week's self-reported figures, so the page can show one row per
+        // manually measured KPI with whatever was already sent.
+        [$weekStart, $weekEnd] = KpiEntryService::weekOf();
+        $manualAssignments = $assignments->filter(fn ($a) => KpiEntryService::isManual($a))->values();
+        $weekEntries = \App\Models\KpiEntry::where('user_id', $user->id)
+            ->whereDate('period_start', $weekStart->toDateString())
+            ->get()->keyBy('kpi_assignment_id');
+        // Anything sent back needs re-doing, whichever week it was for.
+        $sentBack = \App\Models\KpiEntry::where('user_id', $user->id)
+            ->where('status', \App\Models\KpiEntry::REJECTED)
+            ->orderByDesc('period_start')->get();
+
         return view('tenant.kpi.my', compact(
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
-            'pendingCount', 'completedCount'
+            'pendingCount', 'completedCount',
+            'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack'
         ));
     }
 
@@ -283,6 +297,81 @@ class KpiController extends Controller
             'check_status' => $check->status,
             'score' => $check->score,
         ]);
+    }
+
+    // ── Weekly submissions ────────────────────────────────────────────────
+    // A person reports their own number each week; HR signs it off and the
+    // month's check is rescored from the approved weeks.
+
+    /** Employee submits (or corrects) this week's figure for one KPI. */
+    public function submitEntry(Request $request, $id)
+    {
+        $user = Auth::user();
+        $assignment = KpiAssignment::where('id', $id)->where('user_id', $user->id)->firstOrFail();
+
+        if (!KpiEntryService::isManual($assignment)) {
+            return response()->json(['status' => 'error', 'message' => 'This KPI is calculated automatically.'], 422);
+        }
+
+        $data = $request->validate([
+            'value' => 'required|numeric|min:0',
+            'note'  => 'nullable|string|max:255',
+            'week'  => 'nullable|date',
+        ]);
+
+        $day = !empty($data['week']) ? \Carbon\Carbon::parse($data['week']) : null;
+        // Only the current or a past week — nobody reports a week that has not happened.
+        if ($day && $day->gt(\Carbon\Carbon::today())) {
+            return response()->json(['status' => 'error', 'message' => 'That week has not started yet.'], 422);
+        }
+
+        $entry = KpiEntryService::submit($assignment, (float) $data['value'], $data['note'] ?? null, $day);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => $entry->status === \App\Models\KpiEntry::SUBMITTED
+                ? 'Sent to HR for approval.'
+                : 'Recorded.',
+            'entry_status' => $entry->status,
+        ]);
+    }
+
+    /** HR/manager approves or sends back one weekly entry. */
+    public function reviewEntry(Request $request, $entryId)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+            return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
+        }
+        $data = $request->validate([
+            'action' => 'required|in:approve,reject',
+            'note'   => 'nullable|string|max:255',
+        ]);
+        $entry = \App\Models\KpiEntry::findOrFail($entryId);
+
+        $entry = $data['action'] === 'approve'
+            ? KpiEntryService::approve($entry, $user->id, $data['note'] ?? null)
+            : KpiEntryService::reject($entry, $user->id, $data['note'] ?? null);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => $data['action'] === 'approve' ? 'Approved.' : 'Sent back.',
+            'score'   => optional($entry->check)->score,
+        ]);
+    }
+
+    /** The review queue: everything staff have submitted and nobody has judged. */
+    public function approvals(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
+        }
+        $departmentId = $request->input('department_id');
+        $entries = KpiEntryService::queue($departmentId);
+        $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
+
+        return view('tenant.kpi.approvals', compact('entries', 'departments', 'departmentId'));
     }
 
     // ── Department templates ──────────────────────────────────────────────

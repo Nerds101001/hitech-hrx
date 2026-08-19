@@ -789,6 +789,16 @@
                     ]
                 },
                 {
+                    "url": "/kpi/approvals",
+                    "name": "KPI Approvals",
+                    "slug": "tenant.kpi.approvals",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager"
+                    ]
+                },
+                {
                     "url": "/kpi/templates",
                     "name": "KPI / KRA Setup",
                     "slug": "tenant.kpi.templates",

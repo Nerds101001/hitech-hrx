@@ -1636,6 +1636,9 @@ class UserDashboardController extends Controller
         $kpiDueSoon    = 0;
         $kpiPending    = 0;
         $kpiCompleted  = 0;
+        $kpiWeekDue    = 0;
+        $kpiWeekWaiting = 0;
+        $kpiSentBack   = 0;
         try {
             // syncUser() backfills the current period's check for every active
             // assignment before returning them. Reading KpiCheck rows directly
@@ -1643,6 +1646,18 @@ class UserDashboardController extends Controller
             // opened /kpi/my or /kpi/manage for — no row existed yet, so it
             // never counted as due/pending no matter how close the deadline.
             $assignments = \App\Services\KpiPeriodService::syncUser($user->id);
+
+            // What this person still owes on their own KPIs this week, and what
+            // is sitting with HR — the dashboard card is the only place they
+            // find out without opening the scorecard.
+            [$wkStart] = \App\Services\KpiEntryService::weekOf();
+            $manualIds = $assignments->filter(fn ($a) => \App\Services\KpiEntryService::isManual($a))->pluck('id');
+            $weekRows = \App\Models\KpiEntry::where('user_id', $user->id)
+                ->whereDate('period_start', $wkStart->toDateString())->get()->keyBy('kpi_assignment_id');
+            $kpiWeekDue = $manualIds->reject(fn ($id) => isset($weekRows[$id]))->count();
+            $kpiWeekWaiting = $weekRows->where('status', \App\Models\KpiEntry::SUBMITTED)->count();
+            $kpiSentBack = \App\Models\KpiEntry::where('user_id', $user->id)
+                ->where('status', \App\Models\KpiEntry::REJECTED)->count();
 
             if ($assignments->isNotEmpty()) {
                 $today = \Carbon\Carbon::today();
@@ -1766,6 +1781,7 @@ class UserDashboardController extends Controller
             'todayAttendance', 'todayHours', 'presentThisWeek', 'weekWorkingDays',
             'leaveDaysAvailable', 'expensesThisMonth',
             'kraItems', 'kraOverall', 'kpiEarned', 'kpiPossible', 'kpiDueSoon',
+            'kpiWeekDue', 'kpiWeekWaiting', 'kpiSentBack',
             'kpiPending', 'kpiCompleted',
             'upcomingLeaves', 'myTimeline', 'myDocs', 'importantContacts',
             'salesProfile'

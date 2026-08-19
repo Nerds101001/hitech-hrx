@@ -29,6 +29,94 @@
             <div class="stat-chip" style="border-left-color:#059669;"><span class="stat-label">Completed</span><span class="stat-value">{{ $completedCount }}</span></div>
         </div>
 
+        {{-- This week's own reporting. Scoring stays monthly; these weekly
+             figures add up into the month, which is why a weekly KPI does not
+             award its marks four times over. --}}
+        @if($manualAssignments->isNotEmpty())
+          @php
+            $stateTone = [
+              'submitted' => ['#d97706', 'Waiting for HR'],
+              'approved'  => ['#059669', 'Approved'],
+              'rejected'  => ['#e11d48', 'Sent back'],
+            ];
+          @endphp
+          <div class="hitech-card mb-4">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                <div>
+                  <h6 class="fw-bold mb-0">This week — what did you do?</h6>
+                  <small class="text-muted">
+                    {{ $weekStart->format('d M') }} – {{ $weekEnd->format('d M Y') }}
+                    · your figures roll up into this month's score
+                  </small>
+                </div>
+                @if($sentBack->isNotEmpty())
+                  <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
+                    {{ $sentBack->count() }} sent back — please correct
+                  </span>
+                @endif
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="min-width:200px">KPI</th>
+                      <th class="text-center">Approval</th>
+                      <th style="width:150px">Your number</th>
+                      <th style="min-width:170px">Note (optional)</th>
+                      <th class="text-end" style="width:150px">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @foreach($manualAssignments as $a)
+                      @php
+                        $entry = $weekEntries[$a->id] ?? null;
+                        $needsAppr = $a->data_source === 'approval';
+                        [$tc, $tl] = $entry ? ($stateTone[$entry->status] ?? ['#78716c', ucfirst($entry->status)]) : ['#94a3b8', 'Not sent'];
+                      @endphp
+                      <tr class="wk-row" data-id="{{ $a->id }}">
+                        <td>
+                          <div class="fw-medium">{{ $a->title }}</div>
+                          <small class="text-muted">
+                            {{ rtrim(rtrim(number_format((float) $a->max_marks, 2, '.', ''), '0'), '.') }} marks
+                            @if($a->kra_group) · {{ $a->kra_group }} @endif
+                          </small>
+                        </td>
+                        <td class="text-center">
+                          @if($needsAppr)
+                            <span class="badge badge-hitech badge-muted">HR signs off</span>
+                          @else
+                            <span class="badge badge-hitech badge-brand-soft">Counts at once</span>
+                          @endif
+                        </td>
+                        <td>
+                          <input type="number" step="0.01" min="0" class="form-control form-control-sm wk-val"
+                                 value="{{ $entry ? rtrim(rtrim(number_format((float) $entry->value, 2, '.', ''), '0'), '.') : '' }}"
+                                 placeholder="0">
+                        </td>
+                        <td>
+                          <input type="text" maxlength="255" class="form-control form-control-sm wk-note"
+                                 value="{{ $entry->note ?? '' }}" placeholder="anything worth saying">
+                        </td>
+                        <td class="text-end text-nowrap">
+                          <span class="wk-state fw-semibold small" style="color:{{ $tc }}">{{ $tl }}</span>
+                          <button class="btn btn-hitech-primary btn-sm wk-send ms-2" title="Send">
+                            <i class="bx bx-send"></i>
+                          </button>
+                          @if($entry && $entry->status === 'rejected' && $entry->review_note)
+                            <small class="d-block text-danger mt-1">HR: {{ $entry->review_note }}</small>
+                          @endif
+                        </td>
+                      </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        @endif
+
         {{-- Filter row --}}
         <div class="d-flex flex-wrap gap-2 mb-2">
             <input type="text" id="kpiSearch" class="form-control form-control-sm" style="max-width:220px;" placeholder="Search KPI or KRA...">
@@ -154,6 +242,39 @@
 @section('page-script')
 <script>
 const CSRF = '{{ csrf_token() }}';
+document.querySelectorAll('.wk-send').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+        const row = btn.closest('.wk-row');
+        const val = row.querySelector('.wk-val').value;
+        if (val === '' || isNaN(parseFloat(val))) { alert('Enter a number first.'); return; }
+        const state = row.querySelector('.wk-state');
+        btn.disabled = true;
+        const before = state.textContent;
+        state.textContent = 'Sending...';
+        try {
+            const res = await fetch('/kpi/' + row.dataset.id + '/entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+                credentials: 'same-origin',
+                body: JSON.stringify({ value: parseFloat(val), note: row.querySelector('.wk-note').value || null })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.status === 'success') {
+                const approved = data.entry_status === 'approved';
+                state.textContent = approved ? 'Approved' : 'Waiting for HR';
+                state.style.color = approved ? '#059669' : '#d97706';
+            } else {
+                state.textContent = before;
+                alert(data.message || 'Could not send that.');
+            }
+        } catch (err) {
+            state.textContent = before;
+            alert('Could not send that: ' + err.message);
+        }
+        btn.disabled = false;
+    });
+});
+
 document.querySelectorAll('.complete-kpi').forEach(b => b.addEventListener('click', function() {
     const id = this.dataset.id;
     this.disabled = true;
