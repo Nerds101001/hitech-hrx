@@ -1017,6 +1017,12 @@ Route::middleware([
             Route::post('/{id}/complete', [\App\Http\Controllers\tenant\KpiController::class, 'complete'])->name('complete');
             // Weekly self-reporting for manually measured KPIs.
             Route::post('/{id}/entry', [\App\Http\Controllers\tenant\KpiController::class, 'submitEntry'])->name('entry');
+
+            // Review queue for weekly submissions. Deliberately outside the
+            // admin|hr group below: a reporting manager reviews their own team,
+            // and KpiController re-checks the role on every one of these.
+            Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
+            Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
         });
 
         // Management side. NOTE: kept admin-only by default (not widened to
@@ -1034,9 +1040,6 @@ Route::middleware([
             Route::put('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'update'])->name('update');
             Route::delete('/{id}', [\App\Http\Controllers\tenant\KpiController::class, 'destroy'])->name('destroy');
             Route::post('/{id}/evaluate', [\App\Http\Controllers\tenant\KpiController::class, 'evaluate'])->name('evaluate');
-            // HR review queue for weekly submissions.
-            Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
-            Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
             Route::post('/assign-from-routine', [\App\Http\Controllers\tenant\KpiController::class, 'assignFromRoutine'])->name('assignFromRoutine');
 
             // Department-level KPI/KRA catalogue. No clash with the /{id}
