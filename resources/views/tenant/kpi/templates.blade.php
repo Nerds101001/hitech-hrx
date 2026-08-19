@@ -32,6 +32,10 @@
     $allKrasTop = $templates->where('category', 'KRA');
     $allKpisTop = $templates->where('category', '!=', 'KRA');
     $deptsCovered = $templates->pluck('department_id')->unique()->filter()->count();
+    // Trim only the zeros AFTER a decimal point. Stripping them off the raw
+    // string turned 150 into 15 and 100 into 1 wherever a sum came back as a
+    // float rather than the DB's "150.00".
+    $num = fn($v) => rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
   @endphp
 
   {{-- Stats bar, matching the directory's cards. --}}
@@ -65,7 +69,7 @@
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-medal"></i></div>
         </div>
-        <div><h3 class="stat-value mb-0">{{ rtrim(rtrim((string) $allKpisTop->sum('max_marks'), '0'), '.') }}</h3><span class="stat-label">Marks defined</span></div>
+        <div><h3 class="stat-value mb-0">{{ $num($allKpisTop->sum('max_marks')) }}</h3><span class="stat-label">Marks defined</span></div>
       </div>
     </div>
   </div>
@@ -132,7 +136,7 @@
   $deptName = fn($t) => $t->department->name ?? 'All departments';
   $kpisByDept = $allKpis->groupBy($deptName);
   $krasByDept = $allKras->groupBy($deptName);
-  $marksOf = fn($t) => rtrim(rtrim((string) $t->max_marks, '0'), '.');
+  $marksOf = fn($t) => $num($t->max_marks);
 @endphp
 
 <ul class="nav nav-pills hitech-tabs-sm mb-4" id="tplTabs">
@@ -174,7 +178,7 @@
                   <i class="bx bx-buildings me-1"></i>{{ $dept }}
                   <span class="text-muted fw-normal small ms-2">
                     {{ $rows->count() }} KPI{{ $rows->count() === 1 ? '' : 's' }} ·
-                    {{ rtrim(rtrim((string) $rows->sum('max_marks'), '0'), '.') }} marks total
+                    {{ $num($rows->sum('max_marks')) }} marks total
                   </span>
                 </td>
               </tr>
@@ -203,7 +207,7 @@
                   </td>
                   <td>
                     <span class="badge badge-hitech badge-muted">{{ $t->scoring_type }}</span>
-                    @if($t->target_value)<small class="text-muted d-block">target {{ rtrim(rtrim((string)$t->target_value,'0'),'.') }}</small>@endif
+                    @if($t->target_value)<small class="text-muted d-block">target {{ $num($t->target_value) }}</small>@endif
                   </td>
                   <td class="text-end fw-semibold">{{ $marksOf($t) }}</td>
                   <td>
@@ -273,7 +277,7 @@
                     @if($children->count())<span class="badge badge-hitech badge-brand-soft">{{ $children->count() }}</span>
                     @else<span class="badge badge-hitech badge-muted" title="Nothing sits under this heading yet">empty</span>@endif
                   </td>
-                  <td class="text-end fw-semibold">{{ rtrim(rtrim((string) $children->sum('max_marks'), '0'), '.') }}</td>
+                  <td class="text-end fw-semibold">{{ $num($children->sum('max_marks')) }}</td>
                   <td class="text-end text-nowrap">
                     <button class="btn btn-sm btn-icon icon-sophisticated tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
                     <button class="btn btn-sm btn-icon icon-sophisticated text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
