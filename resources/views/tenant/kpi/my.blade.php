@@ -3,9 +3,19 @@
 @section('title', 'My KPI / KRA')
 
 @section('content')
-<div class="container-xxl flex-grow-1 container-p-y">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h5 class="mb-0 fw-bold"><i class="bx bx-target-lock me-1"></i> My KPI / KRA</h5>
+<div class="layout-full-width animate__animated animate__fadeIn">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
+        <div>
+            <h3 class="fw-extrabold mb-1 text-dark">My Scorecard</h3>
+            <p class="text-muted mb-0 small">
+                Your KPIs and KRAs, what you have reported, and what has been scored.
+            </p>
+        </div>
+        <div class="d-flex gap-3 flex-wrap">
+            <a href="{{ url('/user/dashboard') }}" class="btn btn-hitech-cancel shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
+                <i class="bx bx-home-alt fs-5"></i><span class="fw-bold">Dashboard</span>
+            </a>
+        </div>
     </div>
 
     @if($assignments->isEmpty())
@@ -21,12 +31,40 @@
             foreach ($months as $m) { $monthScoreTotals[$m['key']] = 0.0; }
         @endphp
 
-        {{-- Summary chips, same pattern as the Sales Report page --}}
-        <div class="d-flex flex-wrap gap-2 mb-3">
-            <div class="stat-chip"><span class="stat-label">Marks Earned</span><span class="stat-value">{{ $fmt($earned) }} / {{ $fmt($possible) }}</span></div>
-            <div class="stat-chip" style="border-left-color:#10b981;"><span class="stat-label">Overall</span><span class="stat-value">{{ $overallPct }}%</span></div>
-            <div class="stat-chip" style="border-left-color:#94a3b8;"><span class="stat-label">Pending</span><span class="stat-value">{{ $pendingCount }}</span></div>
-            <div class="stat-chip" style="border-left-color:#059669;"><span class="stat-label">Completed</span><span class="stat-value">{{ $completedCount }}</span></div>
+        {{-- Stat cards, same four-across row the Employee Directory uses. --}}
+        <div class="row g-6 mb-6 mx-0 px-4">
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.05s">
+                <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-medal"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $fmt($earned) }}</h3><span class="stat-label">Marks earned</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.1s">
+                <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-target-lock"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $overallPct }}%</h3><span class="stat-label">Of {{ $fmt($possible) }} possible</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.15s">
+                <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-time-five"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $pendingCount }}</h3><span class="stat-label">Pending</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.2s">
+                <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-check-circle"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $completedCount }}</h3><span class="stat-label">Completed</span></div>
+                </div>
+            </div>
         </div>
 
         {{-- This week's own reporting. Scoring stays monthly; these weekly
@@ -117,22 +155,41 @@
           </div>
         @endif
 
-        {{-- Filter row --}}
-        <div class="d-flex flex-wrap gap-2 mb-2">
-            <input type="text" id="kpiSearch" class="form-control form-control-sm" style="max-width:220px;" placeholder="Search KPI or KRA...">
-            <select id="kraFilter" class="form-select form-select-sm" style="max-width:220px;">
-                <option value="">All KRAs</option>
-                @foreach($rows->pluck('kra_group')->filter()->unique()->sort() as $kra)
-                    <option value="{{ $kra }}">{{ $kra }}</option>
-                @endforeach
-            </select>
-            <select id="statusFilter" class="form-select form-select-sm" style="max-width:180px;">
-                <option value="">All statuses</option>
-                <option value="completed_on_time">Completed</option>
-                <option value="pending">Pending</option>
-                <option value="completed_late">Completed late</option>
-                <option value="missed">Missed</option>
-            </select>
+        {{-- Filter panel, matching the Employee Directory. --}}
+        <div class="px-4">
+        <div class="hitech-card-white mb-6 overflow-hidden">
+          <div class="card-body p-sm-5 p-4">
+            <div class="row align-items-end g-4">
+              <div class="col-lg-5">
+                <label class="form-label fw-bold small text-muted text-uppercase mb-2">Search</label>
+                <div class="search-wrapper-hitech mw-100">
+                  <i class="bx bx-search text-muted ms-3"></i>
+                  <input type="text" id="kpiSearch" class="form-control" placeholder="Search KPI or KRA...">
+                  <button class="btn-search shadow-sm" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+                </div>
+              </div>
+              <div class="col-lg-2 col-md-6">
+                <label class="form-label fw-bold small text-muted text-uppercase mb-2">KRA</label>
+                <select id="kraFilter" class="form-select">
+                    <option value="">All KRAs</option>
+                    @foreach($rows->pluck('kra_group')->filter()->unique()->sort() as $kra)
+                        <option value="{{ $kra }}">{{ $kra }}</option>
+                    @endforeach
+                </select>
+              </div>
+              <div class="col-lg-2 col-md-6">
+                <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
+                <select id="statusFilter" class="form-select">
+                    <option value="">All statuses</option>
+                    <option value="completed_on_time">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed_late">Completed late</option>
+                    <option value="missed">Missed</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
         </div>
 
         <div class="table-responsive" style="border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);max-height:calc(100vh - 320px);">
