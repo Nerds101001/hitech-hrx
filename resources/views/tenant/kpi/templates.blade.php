@@ -4,39 +4,91 @@
 @section('title', 'KPI / KRA Templates')
 
 @section('content')
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <h4 class="mb-1">KPI / KRA Templates</h4>
-    <p class="text-muted mb-0 small">
-      Define a scorecard once for a department — every active employee in it receives the KPI.
-      A <strong>KRA</strong> is a heading that groups KPIs and carries no marks of its own.
-    </p>
-  </div>
-  <div class="d-flex gap-2">
-    <a href="{{ route('tenant.kpi.manage') }}" class="btn btn-outline-secondary">Per-employee view</a>
-    <button class="btn btn-outline-primary" id="btnNewKra"><i class="bx bx-folder-plus me-1"></i> New KRA</button>
-    <button class="btn btn-primary" id="btnNewKpi"><i class="bx bx-plus me-1"></i> New KPI</button>
-  </div>
-</div>
+<div class="layout-full-width animate__animated animate__fadeIn">
 
-<div class="card mb-4">
-  <div class="card-body">
-    <form method="GET" action="{{ route('tenant.kpi.templates') }}" class="row g-2 align-items-end">
-      <div class="col-md-4">
-        <label class="form-label">Department</label>
-        <select name="department_id" class="form-select" onchange="this.form.submit()">
-          <option value="">All departments</option>
-          @foreach($departments as $d)
-            <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
-          @endforeach
-        </select>
-      </div>
-      <div class="col-md-8 text-muted small">
-        A template with no department applies to every department in the company.
-      </div>
-    </form>
+  {{-- Header — same shape as the Employee Directory. --}}
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
+    <div>
+      <h3 class="fw-extrabold mb-1 text-dark">KPI / KRA Templates</h3>
+      <p class="text-muted mb-0 small">
+        Define a scorecard once for a department — every active employee in it receives the KPI.
+        A <strong>KRA</strong> is a heading that groups KPIs and carries no marks of its own.
+      </p>
+    </div>
+    <div class="d-flex gap-3 flex-wrap">
+      <a href="{{ route('tenant.kpi.manage') }}" class="btn btn-hitech-cancel shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
+        <i class="bx bx-user-detail fs-5"></i><span class="fw-bold">Per-employee view</span>
+      </a>
+      <button type="button" id="btnNewKra" class="btn btn-hitech-cancel shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
+        <i class="bx bx-folder-plus fs-5"></i><span class="fw-bold">New KRA</span>
+      </button>
+      <button type="button" id="btnNewKpi" class="btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
+        <i class="bx bx-plus-circle fs-5"></i><span class="fw-bold">New KPI</span>
+      </button>
+    </div>
   </div>
-</div>
+
+  @php
+    $allKrasTop = $templates->where('category', 'KRA');
+    $allKpisTop = $templates->where('category', '!=', 'KRA');
+    $deptsCovered = $templates->pluck('department_id')->unique()->filter()->count();
+  @endphp
+
+  {{-- Stats bar, matching the directory's cards. --}}
+  <div class="row g-6 mb-6 mx-0 px-4">
+    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.05s">
+      <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
+        <div class="stat-card-header mb-2">
+          <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-target-lock"></i></div>
+        </div>
+        <div><h3 class="stat-value mb-0">{{ $allKpisTop->count() }}</h3><span class="stat-label">Scored KPIs</span></div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.1s">
+      <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+        <div class="stat-card-header mb-2">
+          <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-folder"></i></div>
+        </div>
+        <div><h3 class="stat-value mb-0">{{ $allKrasTop->count() }}</h3><span class="stat-label">KRA headings</span></div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.15s">
+      <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
+        <div class="stat-card-header mb-2">
+          <div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-buildings"></i></div>
+        </div>
+        <div><h3 class="stat-value mb-0">{{ $deptsCovered }}</h3><span class="stat-label">Departments covered</span></div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.2s">
+      <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+        <div class="stat-card-header mb-2">
+          <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-medal"></i></div>
+        </div>
+        <div><h3 class="stat-value mb-0">{{ rtrim(rtrim((string) $allKpisTop->sum('max_marks'), '0'), '.') }}</h3><span class="stat-label">Marks defined</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4">
+  <div class="hitech-card mb-4">
+    <div class="card-body">
+      <form method="GET" action="{{ route('tenant.kpi.templates') }}" class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Department</label>
+          <select name="department_id" class="form-select" onchange="this.form.submit()">
+            <option value="">All departments</option>
+            @foreach($departments as $d)
+              <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+            @endforeach
+          </select>
+        </div>
+        <div class="col-md-8 text-muted small pb-2">
+          A template with no department applies to every department in the company.
+        </div>
+      </form>
+    </div>
+  </div>
 
 @php
   // Split the flat list into headings and scored KPIs, then group each by
@@ -51,15 +103,15 @@
   $marksOf = fn($t) => rtrim(rtrim((string) $t->max_marks, '0'), '.');
 @endphp
 
-<ul class="nav nav-tabs mb-0" id="tplTabs">
+<ul class="nav nav-pills hitech-tabs-sm mb-4" id="tplTabs">
   <li class="nav-item">
     <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabKpis" type="button">
-      KPIs <span class="badge bg-label-primary ms-1">{{ $allKpis->count() }}</span>
+      <i class="bx bx-target-lock"></i> KPIs <span class="badge badge-brand-soft badge-hitech ms-1">{{ $allKpis->count() }}</span>
     </button>
   </li>
   <li class="nav-item">
     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabKras" type="button">
-      KRAs <span class="badge bg-label-dark ms-1">{{ $allKras->count() }}</span>
+      <i class="bx bx-folder"></i> KRAs <span class="badge badge-muted badge-hitech ms-1">{{ $allKras->count() }}</span>
     </button>
   </li>
 </ul>
@@ -68,7 +120,7 @@
 
   {{-- ===================== KPIs ===================== --}}
   <div class="tab-pane fade show active" id="tabKpis">
-    <div class="card border-top-0 rounded-top-0">
+    <div class="hitech-card">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -102,15 +154,15 @@
                   </td>
                   <td>
                     @if($t->parent_template_id && $kraById->has($t->parent_template_id))
-                      <span class="badge bg-label-dark">{{ $kraById[$t->parent_template_id]->title }}</span>
+                      <span class="badge badge-hitech badge-brand-soft">{{ $kraById[$t->parent_template_id]->title }}</span>
                     @elseif($t->parent_template_id)
-                      <span class="badge bg-label-danger" title="The KRA this points at no longer exists">orphaned</span>
+                      <span class="badge badge-hitech badge-hitech-danger" title="The KRA this points at no longer exists">orphaned</span>
                     @else
                       <span class="text-muted">— ungrouped —</span>
                     @endif
                   </td>
                   <td>
-                    <span class="badge bg-label-info">{{ $t->scoring_type }}</span>
+                    <span class="badge badge-hitech badge-muted">{{ $t->scoring_type }}</span>
                     @if($t->target_value)<small class="text-muted d-block">target {{ rtrim(rtrim((string)$t->target_value,'0'),'.') }}</small>@endif
                   </td>
                   <td class="text-end fw-semibold">{{ $marksOf($t) }}</td>
@@ -123,14 +175,14 @@
                   <td>{{ ucfirst($t->frequency) }}</td>
                   <td class="text-center">
                     @php $c = $assignmentCounts[$t->id] ?? null; @endphp
-                    @if($c)<span class="badge bg-label-success">{{ $c->active }}</span>
+                    @if($c)<span class="badge badge-hitech badge-hitech-success">{{ $c->active }}</span>
                     @else<span class="text-muted">—</span>@endif
                   </td>
                   <td class="text-end text-nowrap">
-                    <button class="btn btn-sm btn-icon text-success tpl-apply" data-id="{{ $t->id }}"
+                    <button class="btn btn-sm btn-icon icon-sophisticated text-success tpl-apply" data-id="{{ $t->id }}"
                             title="Apply to everyone in this department"><i class="bx bx-user-plus"></i></button>
-                    <button class="btn btn-sm btn-icon tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
-                    <button class="btn btn-sm btn-icon text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
+                    <button class="btn btn-sm btn-icon icon-sophisticated tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
+                    <button class="btn btn-sm btn-icon icon-sophisticated text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
                   </td>
                 </tr>
               @endforeach
@@ -147,7 +199,7 @@
 
   {{-- ===================== KRAs ===================== --}}
   <div class="tab-pane fade" id="tabKras">
-    <div class="card border-top-0 rounded-top-0">
+    <div class="hitech-card">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
@@ -168,19 +220,19 @@
                 @php $children = $allKpis->where('parent_template_id', $t->id); @endphp
                 <tr>
                   <td>
-                    <span class="badge bg-label-dark me-1">KRA</span>
+                    <span class="badge badge-hitech badge-muted me-1">KRA</span>
                     <span class="fw-medium">{{ $t->title }}</span>
                     @if($t->description)<small class="text-muted d-block">{{ $t->description }}</small>@endif
                   </td>
                   <td>{{ ucfirst($t->frequency) }}</td>
                   <td class="text-center">
-                    @if($children->count())<span class="badge bg-label-primary">{{ $children->count() }}</span>
-                    @else<span class="badge bg-label-warning" title="Nothing sits under this heading yet">empty</span>@endif
+                    @if($children->count())<span class="badge badge-hitech badge-brand-soft">{{ $children->count() }}</span>
+                    @else<span class="badge badge-hitech badge-muted" title="Nothing sits under this heading yet">empty</span>@endif
                   </td>
                   <td class="text-end fw-semibold">{{ rtrim(rtrim((string) $children->sum('max_marks'), '0'), '.') }}</td>
                   <td class="text-end text-nowrap">
-                    <button class="btn btn-sm btn-icon tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
-                    <button class="btn btn-sm btn-icon text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
+                    <button class="btn btn-sm btn-icon icon-sophisticated tpl-edit" data-json="{{ json_encode($t) }}" title="Edit"><i class="bx bx-edit"></i></button>
+                    <button class="btn btn-sm btn-icon icon-sophisticated text-danger tpl-retire" data-id="{{ $t->id }}" title="Retire"><i class="bx bx-x-circle"></i></button>
                   </td>
                 </tr>
               @endforeach
@@ -195,6 +247,8 @@
     </div>
   </div>
 </div>
+  </div>{{-- /px-4 --}}
+</div>{{-- /layout-full-width --}}
 
 <div class="modal fade" id="tplModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
