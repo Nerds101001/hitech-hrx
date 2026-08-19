@@ -8,12 +8,16 @@ use App\Models\KpiEntry;
 use Carbon\Carbon;
 
 /**
- * The weekly submit → HR approve loop for manually measured KPIs.
+ * The submit → HR approve loop for manually measured KPIs.
  *
  * Scoring stays on the monthly KpiCheck. A weekly *check* would award its full
  * marks every week and turn a 150-mark scorecard into roughly 250, so staff log
- * a number per week here instead and the month's achieved value is the sum of
- * whatever HR has approved.
+ * a number here instead and the month's achieved value is the sum of whatever
+ * HR has approved.
+ *
+ * How often they log it follows the KPI's own frequency — see periodFor(). A
+ * monthly KPI is reported once for the month, which is the only correct thing
+ * to do for the ones that count unique customers.
  */
 class KpiEntryService
 {
@@ -38,13 +42,42 @@ class KpiEntryService
     }
 
     /**
+     * The window one entry covers, taken from the KPI's own frequency.
+     *
+     * This matters beyond tidiness. Several of these count *unique customers* —
+     * visits, quotations, freight, upgrades — and a customer seen in two
+     * different weeks is still one customer. Summing weekly entries would count
+     * them twice, so a monthly KPI is reported once for the whole month.
+     */
+    public static function periodFor(KpiAssignment $a, ?Carbon $day = null): array
+    {
+        $day = ($day ?: Carbon::today())->copy()->startOfDay();
+
+        return match ($a->frequency) {
+            'weekly', 'fortnightly' => self::weekOf($day),
+            'daily'                 => [$day->copy(), $day->copy()],
+            default                 => [$day->copy()->startOfMonth(), $day->copy()->endOfMonth()],
+        };
+    }
+
+    /** How the entry window reads on screen. */
+    public static function periodLabel(KpiAssignment $a, ?Carbon $day = null): string
+    {
+        [$start, $end] = self::periodFor($a, $day);
+
+        return in_array($a->frequency, ['weekly', 'fortnightly'], true)
+            ? $start->format('d M') . ' – ' . $end->format('d M Y')
+            : $start->format('F Y');
+    }
+
+    /**
      * Record what someone is reporting for a week. Re-submitting the same week
      * overwrites it, so a correction does not create a second row.
      */
     public static function submit(KpiAssignment $a, float $value, ?string $note = null, ?Carbon $day = null): KpiEntry
     {
-        [$start, $end] = self::weekOf($day);
-        $check = KpiPeriodService::sync($a);   // the monthly check this rolls into
+        [$start, $end] = self::periodFor($a, $day);
+        $check = KpiPeriodService::sync($a);   // the check this rolls into
 
         $entry = KpiEntry::updateOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
@@ -109,6 +142,13 @@ class KpiEntryService
      */
     public static function recalculate(KpiAssignment $a, ?KpiCheck $check = null): ?KpiCheck
     {
+        // An auto KPI is filled by kpi:auto-score from real data and has no
+        // entries of its own. Recalculating one would set its achieved value to
+        // the sum of nothing and wipe a figure that was correct.
+        if (!self::isManual($a)) {
+            return null;
+        }
+
         $check = $check ?: KpiPeriodService::sync($a);
         if (!$check) {
             return null;

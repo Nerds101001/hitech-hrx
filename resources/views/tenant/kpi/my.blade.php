@@ -82,10 +82,9 @@
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <div>
-                  <h6 class="fw-bold mb-0">This week — what did you do?</h6>
+                  <h6 class="fw-bold mb-0">What did you do?</h6>
                   <small class="text-muted">
-                    {{ $weekStart->format('d M') }} – {{ $weekEnd->format('d M Y') }}
-                    · your figures roll up into this month's score
+                    Report each one over its own period — the period is shown on every row.
                   </small>
                 </div>
                 @if($sentBack->isNotEmpty())
@@ -100,6 +99,7 @@
                   <thead class="table-light">
                     <tr>
                       <th style="min-width:200px">KPI</th>
+                      <th>Period</th>
                       <th class="text-center">Approval</th>
                       <th style="width:150px">Your number</th>
                       <th style="min-width:170px">Note (optional)</th>
@@ -120,6 +120,10 @@
                             {{ rtrim(rtrim(number_format((float) $a->max_marks, 2, '.', ''), '0'), '.') }} marks
                             @if($a->kra_group) · {{ $a->kra_group }} @endif
                           </small>
+                        </td>
+                        <td class="text-nowrap">
+                          <span class="small">{{ $entryPeriod[$a->id] ?? '' }}</span>
+                          <small class="text-muted d-block text-capitalize" style="font-size:.68rem">{{ $a->frequency }}</small>
                         </td>
                         <td class="text-center">
                           @if($needsAppr)

@@ -295,11 +295,21 @@ class KpiController extends Controller
 
         // This week's self-reported figures, so the page can show one row per
         // manually measured KPI with whatever was already sent.
-        [$weekStart, $weekEnd] = KpiEntryService::weekOf();
         $manualAssignments = $assignments->filter(fn ($a) => KpiEntryService::isManual($a))->values();
-        $weekEntries = \App\Models\KpiEntry::where('user_id', $user->id)
-            ->whereDate('period_start', $weekStart->toDateString())
-            ->get()->keyBy('kpi_assignment_id');
+        // Each KPI reports over its own window — monthly ones once a month,
+        // weekly ones per week — so the current entry is looked up per row.
+        $entryPeriod = [];
+        $weekEntries = collect();
+        foreach ($manualAssignments as $a) {
+            [$ps, $pe] = KpiEntryService::periodFor($a);
+            $entryPeriod[$a->id] = KpiEntryService::periodLabel($a);
+            $row = \App\Models\KpiEntry::where('kpi_assignment_id', $a->id)
+                ->whereDate('period_start', $ps->toDateString())->first();
+            if ($row) {
+                $weekEntries[$a->id] = $row;
+            }
+        }
+        [$weekStart, $weekEnd] = KpiEntryService::weekOf();
         // Anything sent back needs re-doing, whichever week it was for.
         $sentBack = \App\Models\KpiEntry::where('user_id', $user->id)
             ->where('status', \App\Models\KpiEntry::REJECTED)
@@ -309,7 +319,7 @@ class KpiController extends Controller
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
             'pendingCount', 'completedCount',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
-            'targetNote'
+            'targetNote', 'entryPeriod'
         ));
     }
 
