@@ -70,32 +70,110 @@
     </div>
   </div>
 
-  <div class="px-4">
-  <div class="hitech-card mb-4">
-    <div class="card-body">
-      <form method="GET" action="{{ route('tenant.kpi.templates') }}" class="row g-3 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label fw-semibold">Department</label>
-          <select name="department_id" class="form-select" onchange="this.form.submit()">
-            <option value="">All departments</option>
-            @foreach($departments as $d)
-              <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
-            @endforeach
-          </select>
+  <div class="px-4" id="filter-section">
+    <div class="hitech-card-white mb-6 overflow-hidden">
+      <div class="card-body p-sm-5 p-4">
+        <div class="row align-items-center g-6">
+          <div class="col-lg-8 d-flex flex-wrap align-items-center gap-3">
+            <div class="search-wrapper-hitech w-px-400 mw-100">
+              <i class="bx bx-search text-muted ms-3"></i>
+              <input type="text" class="form-control" placeholder="Search KPI or KRA..." id="tplSearch">
+              <button class="btn-search shadow-sm" type="button" id="tplSearchBtn">
+                <i class="bx bx-search fs-5"></i><span>Search</span>
+              </button>
+            </div>
+            <button class="btn btn-white shadow-sm rounded-pill px-4 border d-flex justify-content-center align-items-center gap-2"
+                    type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
+              <i class="bx bx-filter-alt text-muted"></i>
+              <span class="fw-semibold">Filters</span>
+              <span class="badge badge-hitech badge-brand-soft d-none" id="tplFilterCount">0</span>
+            </button>
+          </div>
+          <div class="col-lg-4 d-flex flex-wrap align-items-center justify-content-lg-end gap-3 mt-3 mt-lg-0">
+            <span class="text-muted fw-semibold small" id="tplShowing"></span>
+            <button class="btn btn-white shadow-sm rounded-pill px-4 border fw-semibold" type="button" id="tplClear">
+              <i class="bx bx-reset me-1"></i>Clear
+            </button>
+          </div>
         </div>
-        <div class="col-md-8 text-muted small pb-2">
-          A template with no department applies to every department in the company.
+
+        <div class="collapse" id="advancedFilters">
+          <div class="row g-6 pt-5 mt-4 border-top">
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
+              <select class="form-select" id="fDept">
+                <option value="">All Departments</option>
+                <option value="__none__">All departments (company-wide)</option>
+                @foreach($departments as $d)
+                  <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Interval</label>
+              <select class="form-select" id="fFreq">
+                <option value="">All Intervals</option>
+                @foreach(['daily','weekly','fortnightly','monthly','quarterly','yearly'] as $f)
+                  <option value="{{ $f }}">{{ ucfirst($f) }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Scoring</label>
+              <select class="form-select" id="fScoring">
+                <option value="">All Scoring</option>
+                @foreach(['target','threshold','banded','timeline'] as $sc)
+                  <option value="{{ $sc }}">{{ ucfirst($sc) }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Sits under (KRA)</label>
+              <select class="form-select" id="fKra">
+                <option value="">Any KRA</option>
+                <option value="__none__">Ungrouped only</option>
+                @foreach($kras as $k)
+                  <option value="{{ $k->id }}">{{ $k->title }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Marks from</label>
+              <input type="number" step="0.5" min="0" class="form-control" id="fMarksMin" placeholder="min">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Marks to</label>
+              <input type="number" step="0.5" min="0" class="form-control" id="fMarksMax" placeholder="max">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Assigned</label>
+              <select class="form-select" id="fAssigned">
+                <option value="">Any</option>
+                <option value="yes">Assigned to staff</option>
+                <option value="no">Not assigned yet</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Late policy</label>
+              <select class="form-select" id="fLate">
+                <option value="">Any</option>
+                <option value="fixed">Fixed marks</option>
+                <option value="percent">% of marks</option>
+                <option value="per_day">Per day</option>
+                <option value="none">No penalty</option>
+              </select>
+            </div>
+          </div>
         </div>
-      </form>
+      </div>
     </div>
-  </div>
 
 @php
   // Split the flat list into headings and scored KPIs, then group each by
   // department so the page reads department-by-department instead of one long
   // mixed table where a KRA and a KPI looked the same.
-  $allKras = $templates->where('category', 'KRA');
-  $allKpis = $templates->where('category', '!=', 'KRA');
+  $allKras = $allKrasTop;
+  $allKpis = $allKpisTop;
   $kraById = $allKras->keyBy('id');
   $deptName = fn($t) => $t->department->name ?? 'All departments';
   $kpisByDept = $allKpis->groupBy($deptName);
@@ -137,7 +215,7 @@
           </thead>
           <tbody>
             @forelse($kpisByDept as $dept => $rows)
-              <tr class="table-secondary">
+              <tr class="table-secondary tpl-group" data-group-dept="">
                 <td colspan="8" class="fw-semibold py-2">
                   <i class="bx bx-buildings me-1"></i>{{ $dept }}
                   <span class="text-muted fw-normal small ms-2">
@@ -147,7 +225,15 @@
                 </td>
               </tr>
               @foreach($rows as $t)
-                <tr>
+                <tr class="tpl-row"
+                    data-title="{{ strtolower($t->title . ' ' . $t->description) }}"
+                    data-dept="{{ $t->department_id ?: '__none__' }}"
+                    data-freq="{{ $t->frequency }}"
+                    data-scoring="{{ $t->scoring_type }}"
+                    data-kra="{{ $t->parent_template_id ?: '__none__' }}"
+                    data-marks="{{ (float) $t->max_marks }}"
+                    data-late="{{ $t->late_policy }}"
+                    data-assigned="{{ optional($assignmentCounts[$t->id] ?? null)->active > 0 ? 'yes' : 'no' }}">
                   <td>
                     <div class="fw-medium">{{ $t->title }}</div>
                     @if($t->description)<small class="text-muted">{{ $t->description }}</small>@endif
@@ -213,12 +299,16 @@
           </thead>
           <tbody>
             @forelse($krasByDept as $dept => $rows)
-              <tr class="table-secondary">
+              <tr class="table-secondary tpl-group" data-group-dept="">
                 <td colspan="5" class="fw-semibold py-2"><i class="bx bx-buildings me-1"></i>{{ $dept }}</td>
               </tr>
               @foreach($rows as $t)
                 @php $children = $allKpis->where('parent_template_id', $t->id); @endphp
-                <tr>
+                <tr class="tpl-row"
+                    data-title="{{ strtolower($t->title . ' ' . $t->description) }}"
+                    data-dept="{{ $t->department_id ?: '__none__' }}"
+                    data-freq="{{ $t->frequency }}"
+                    data-scoring="" data-kra="" data-marks="" data-late="" data-assigned="">
                   <td>
                     <span class="badge badge-hitech badge-muted me-1">KRA</span>
                     <span class="fw-medium">{{ $t->title }}</span>
@@ -516,6 +606,98 @@
     toggleFields();
     modal().show();
   }
+
+  // ---- Filtering -------------------------------------------------------
+  // Everything is already on the page, so filtering is done here rather than
+  // by reloading. A department heading hides itself once all its rows are out.
+  const FILTERS = ['fDept', 'fFreq', 'fScoring', 'fKra', 'fMarksMin', 'fMarksMax', 'fAssigned', 'fLate'];
+
+  function applyFilters() {
+    const q       = ($('tplSearch').value || '').trim().toLowerCase();
+    const dept    = $('fDept').value;
+    const freq    = $('fFreq').value;
+    const scoring = $('fScoring').value;
+    const kra     = $('fKra').value;
+    const late    = $('fLate').value;
+    const assigned= $('fAssigned').value;
+    const min     = $('fMarksMin').value === '' ? null : parseFloat($('fMarksMin').value);
+    const max     = $('fMarksMax').value === '' ? null : parseFloat($('fMarksMax').value);
+
+    let active = 0;
+    [q, dept, freq, scoring, kra, late, assigned].forEach(v => { if (v) active++; });
+    if (min !== null) active++;
+    if (max !== null) active++;
+    const badge = $('tplFilterCount');
+    badge.textContent = active;
+    badge.classList.toggle('d-none', active === 0);
+
+    let shown = 0, total = 0;
+    document.querySelectorAll('.tpl-row').forEach(function (row) {
+      const d = row.dataset;
+      const isKra = d.marks === '';          // KRA rows carry no scored fields
+      total++;
+
+      let ok = true;
+      if (q && !(d.title || '').includes(q)) ok = false;
+      if (ok && dept && d.dept !== dept) ok = false;
+      if (ok && freq && d.freq !== freq) ok = false;
+      // Scoring, KRA, marks, late and assigned only describe a KPI. Applying
+      // them hides KRA rows rather than pretending they match.
+      if (ok && scoring)  ok = !isKra && d.scoring === scoring;
+      if (ok && kra)      ok = !isKra && d.kra === kra;
+      if (ok && late)     ok = !isKra && d.late === late;
+      if (ok && assigned) ok = !isKra && d.assigned === assigned;
+      if (ok && (min !== null || max !== null)) {
+        if (isKra) { ok = false; }
+        else {
+          const m = parseFloat(d.marks || '0');
+          if (min !== null && m < min) ok = false;
+          if (max !== null && m > max) ok = false;
+        }
+      }
+
+      row.classList.toggle('d-none', !ok);
+      if (ok) shown++;
+    });
+
+    // Hide a department heading when nothing under it survived.
+    document.querySelectorAll('.tpl-group').forEach(function (head) {
+      let any = false;
+      for (let r = head.nextElementSibling; r && !r.classList.contains('tpl-group'); r = r.nextElementSibling) {
+        if (r.classList.contains('tpl-row') && !r.classList.contains('d-none')) { any = true; break; }
+      }
+      head.classList.toggle('d-none', !any);
+    });
+
+    // "No matches" line per tab.
+    document.querySelectorAll('.tab-pane').forEach(function (pane) {
+      const body = pane.querySelector('tbody');
+      if (!body) return;
+      const visible = body.querySelectorAll('.tpl-row:not(.d-none)').length;
+      let msg = body.querySelector('.tpl-nomatch');
+      if (!visible && !msg) {
+        const cols = pane.querySelectorAll('thead th').length || 8;
+        const tr = document.createElement('tr');
+        tr.className = 'tpl-nomatch';
+        tr.innerHTML = '<td colspan="' + cols + '" class="text-center text-muted py-5">Nothing matches these filters.</td>';
+        body.appendChild(tr);
+      } else if (visible && msg) {
+        msg.remove();
+      }
+    });
+
+    $('tplShowing').textContent = shown + ' of ' + total + ' shown';
+  }
+
+  FILTERS.forEach(id => $(id).addEventListener('change', applyFilters));
+  $('tplSearch').addEventListener('input', applyFilters);
+  $('tplSearchBtn').addEventListener('click', applyFilters);
+  $('tplClear').addEventListener('click', function () {
+    FILTERS.forEach(id => $(id).value = '');
+    $('tplSearch').value = '';
+    applyFilters();
+  });
+  applyFilters();
 
   $('btnNewKpi').addEventListener('click', () => openModal(null, 'KPI'));
   $('btnNewKra').addEventListener('click', () => openModal(null, 'KRA'));
