@@ -60,7 +60,9 @@
           <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-hourglass"></i></div>
         </div>
         @php $oldest = $entries->sortBy('created_at')->first(); @endphp
-        <div><h3 class="stat-value mb-0">{{ $oldest ? \Carbon\Carbon::parse($oldest->created_at)->diffInDays() : 0 }}</h3><span class="stat-label">Days oldest has waited</span></div>
+        {{-- diffInDays() returns a float here, so an entry made minutes ago
+             rendered as 0.00022 rather than 0. --}}
+        <div><h3 class="stat-value mb-0">{{ $oldest ? (int) floor(abs(\Carbon\Carbon::parse($oldest->created_at)->diffInDays(now()))) : 0 }}</h3><span class="stat-label">Days oldest has waited</span></div>
       </div>
     </div>
   </div>
