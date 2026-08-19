@@ -67,12 +67,25 @@
                 <div class="card-body table-responsive">
                     <table class="table table-sm">
                         <thead><tr>
-                            <th>Title</th><th>Type</th><th>Freq</th><th>Scoring</th><th>Marks</th><th>Target</th><th>Status</th><th></th>
+                            <th>Title</th><th>Where from</th><th>Type</th><th>Freq</th><th>Scoring</th><th>Marks</th><th>Target</th><th>Status</th><th></th>
                         </tr></thead>
                         <tbody>
                         @forelse($assignments as $a)
                             <tr class="{{ $a->is_active ? '' : 'opacity-50' }}">
                                 <td class="fw-semibold">{{ $a->title }}</td>
+                                <td>
+                                    {{-- Two ways a KPI gets here: inherited with the department
+                                         template, or added for this person from their DWM. --}}
+                                    @if($a->kpi_template_id)
+                                        <span class="badge badge-hitech badge-brand-soft"
+                                              title="Comes with the department template. Weights and rules follow it; the target is yours to set.">Department</span>
+                                    @elseif($a->work_control_routine_id)
+                                        <span class="badge badge-hitech badge-muted"
+                                              title="Added for this person from their DWM routine. The department template never touches it.">DWM</span>
+                                    @else
+                                        <span class="badge badge-hitech badge-muted">Added here</span>
+                                    @endif
+                                </td>
                                 <td><span class="badge bg-label-{{ $a->category === 'KRA' ? 'warning' : 'primary' }}">{{ $a->category }}</span></td>
                                 <td class="text-capitalize">{{ $a->frequency }}</td>
                                 <td class="text-capitalize">{{ $a->scoring_type }}</td>
@@ -106,7 +119,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="8" class="text-center text-muted py-3">No KPI/KRA assigned yet.</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-3">No KPI/KRA assigned yet.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
