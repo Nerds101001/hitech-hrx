@@ -225,7 +225,10 @@
                             {{ $a->title }}
                             <div class="small text-muted text-capitalize">{{ $a->scoring_type }}@if($a->scoring_type === 'threshold') ≥ {{ $fmt($a->threshold_percent) }}% @endif</div>
                         </td>
-                        <td class="text-end">{{ $fmt($a->target_value) }}</td>
+                        <td class="text-end">
+                            {{ $fmt($a->target_value) }}@if(str_starts_with((string) $a->data_source, 'auto:') && (float) $a->target_value == 100.0)<span class="text-muted">%</span>@endif
+                            <div class="small text-muted" style="font-size:.68rem;white-space:nowrap">{{ $targetNote[$a->id] ?? '' }}</div>
+                        </td>
                         <td class="text-end">{{ $fmt($a->max_marks) }}</td>
                         @foreach($months as $m)
                             @php

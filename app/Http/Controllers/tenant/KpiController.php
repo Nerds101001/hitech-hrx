@@ -262,6 +262,37 @@ class KpiController extends Controller
             }
         }
 
+        // What the target on each row actually means for this person.
+        // A percentage-based auto KPI stores 100, which reads as a flat "100"
+        // but means "100% of your own figure" — so show the real number behind
+        // it. A manual KPI shows its own value, flagged when it has been set
+        // for this person rather than inherited from the department.
+        $mk = now()->format('Y-m');
+        $myKingo = (float) \Illuminate\Support\Facades\DB::table('salesperson_targets')
+            ->where('salesperson_id', $user->id)->where('month_year', $mk)
+            ->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(kingo_target, 0)'));
+        $targetNote = [];
+        foreach ($assignments as $a) {
+            $src = (string) $a->data_source;
+            if ($src === 'auto:target_achievement') {
+                $targetNote[$a->id] = $myKingo > 0
+                    ? '= ' . rtrim(rtrim(number_format($myKingo, 2), '0'), '.') . ' L, your target'
+                    : 'no target set for you';
+            } elseif ($src === 'auto:customer_health') {
+                $targetNote[$a->id] = 'of your own customers';
+            } elseif ($src === 'auto:total_pipeline') {
+                $targetNote[$a->id] = 'of your own pipeline';
+            } elseif ($src === 'auto:customers_retained') {
+                $targetNote[$a->id] = 'of your own retained';
+            } elseif (str_starts_with($src, 'auto:')) {
+                $targetNote[$a->id] = 'counted for you';
+            } else {
+                $tpl = optional($a->template)->target_value;
+                $targetNote[$a->id] = ($tpl !== null && abs((float) $tpl - (float) $a->target_value) > 0.001)
+                    ? 'set for you' : 'department default';
+            }
+        }
+
         // This week's self-reported figures, so the page can show one row per
         // manually measured KPI with whatever was already sent.
         [$weekStart, $weekEnd] = KpiEntryService::weekOf();
@@ -277,7 +308,8 @@ class KpiController extends Controller
         return view('tenant.kpi.my', compact(
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
             'pendingCount', 'completedCount',
-            'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack'
+            'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
+            'targetNote'
         ));
     }
 
