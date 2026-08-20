@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Client for the CentroVision agent API (ACTION=DIAL/MODE/DISPOSE/HANGUP/LIST).
@@ -112,7 +113,16 @@ class ClickToCallService
      */
     public function dial(User $user, string $phone, bool $autoFixMode = true): array
     {
-        $result = $this->send($user, 'DIAL', ['line' => 0, 'phone' => $phone]);
+        // The correlation id that ties this click to a CDR row hours later.
+        // CentroVision does not echo it yet -- see centrovision-required-v1.yaml
+        // -- but sending it costs nothing, and the ingest side already stores
+        // it the moment they start. Until then it is still worth having in the
+        // log, because it is the only thing linking "who pressed the button" to
+        // an entry on the dialer's own screen.
+        $refId = (string) Str::uuid();
+
+        $result = $this->send($user, 'DIAL', ['line' => 0, 'phone' => $phone, 'ref_id' => $refId]);
+        $result['ref_id'] = $refId;
 
         if ($result['result'] !== 'wrong_mode' || !$autoFixMode) {
             return $result;
@@ -125,10 +135,14 @@ class ClickToCallService
         if ($switch['result'] !== 'success') {
             // Report why the mode could not be changed, not the original
             // refusal — that is the part the agent can act on.
-            return $switch + ['mode_fix_attempted' => true];
+            return $switch + ['mode_fix_attempted' => true, 'ref_id' => $refId];
         }
 
-        $retry = $this->send($user, 'DIAL', ['line' => 0, 'phone' => $phone]);
+        // Deliberately the same ref_id as the first attempt: this is one dial
+        // from the agent's point of view, and minting a second id here would
+        // leave the failed attempt correlating to nothing.
+        $retry = $this->send($user, 'DIAL', ['line' => 0, 'phone' => $phone, 'ref_id' => $refId]);
+        $retry['ref_id'] = $refId;
         $retry['mode_fix_attempted'] = true;
 
         if ($retry['result'] === 'success') {
