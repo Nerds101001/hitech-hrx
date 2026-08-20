@@ -1,0 +1,643 @@
+openapi: 3.0.3
+
+# =============================================================================
+#  CentroVision API required by HRX  --  v1
+#  Direction: HRX  ->  CentroVision
+#
+#  The counterpart to hrms-telephony-webhook-v1.yaml. That file is what HRX
+#  publishes for you to push into; this is what HRX needs you to expose so it
+#  can place calls, fetch a recording for playback, and prove nightly that the
+#  two systems agree.
+#
+#  HOW TO READ THIS
+#  ----------------
+#  These are the shapes HRX is coded against today
+#  (App\Services\Telephony\CentroVisionClient). If your existing endpoints
+#  differ in path, verb or field name, that is fine and expected -- say so and
+#  HRX adapts that one class. What matters is that the CAPABILITY exists and
+#  the DATA is available. Do not build new endpoints to match these names.
+#
+#  We know your live agent API today speaks plain text over
+#  GET ?ACTION=DIAL&campaign=&agent=&client_id= and answers HTTP 200 for both
+#  success and failure. HRX already integrates with that for click-to-call.
+#  Sections marked PRIORITY below are the genuinely new pieces.
+#
+#  PRIORITY ORDER, if this has to be staged:
+#    1. GET  /cdr                              -- without this there is no audit
+#    2. GET  /recordings/{uid}/signed-url      -- without this there is no playback
+#    3. POST /calls/originate returning call_uid and echoing ref_id
+#    4. GET  /agents                           -- keeps the mapping table honest
+#    5. Everything else
+# =============================================================================
+
+info:
+  title: CentroVision API required by HRX
+  version: "1.0.0"
+  description: |
+    ## The single most important field
+
+    `call_uid`. It must be **the same value shown as RID/UID on the
+    CentroVision CDR screen**, and the same value sent on every webhook. When
+    HRX and CentroVision disagree about a call, this is what lets both sides
+    open the same record instead of arguing from screenshots.
+
+    ## The second most important thing
+
+    `POST /calls/originate` must accept an arbitrary `ref_id` from HRX and
+    **echo it back** — on the originate response, on every webhook for that
+    call, and in the CDR row. That is what ties a click in the HRX UI to a CDR
+    row hours later.
+
+    If arbitrary pass-through is not possible, say so explicitly. HRX can fall
+    back to correlating on `call_uid` alone, but then the pending-call row has
+    to be matched heuristically and some click-to-call attempts will not tie
+    up. It is worth checking before ruling it out.
+
+    ## Authentication
+
+    HRX sends `Authorization: Bearer <api_key>`, issued by you. If you use a
+    different scheme — a query-string `client_id`, basic auth, an IP allowlist
+    with no credential at all — say which and HRX will match it.
+
+    ## Transport
+
+    The gateway is on-prem at `192.168.2.5` with a self-signed certificate, so
+    HRX is configured to skip certificate verification for this host only
+    (`TELEPHONY_VENDOR_VERIFY_TLS=false`). A real certificate would be better;
+    this is not a blocker.
+
+    ## A note on load
+
+    The CDR and recording screens on `192.168.2.5` were slow to respond during
+    review. HRX therefore pulls only once a night at 02:00 IST, pages at 500
+    rows, and prefers push over pull everywhere else. If even that is too much
+    load, say so and the page size or schedule can change.
+
+  contact:
+    name: Nagender Kumar, Hi Tech Group
+
+servers:
+  - url: http://192.168.2.5/smart/api/v1
+    description: On-prem gateway (LAN). Path is a placeholder — tell us the real one.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Reconciliation
+    description: PRIORITY 1. Without this there is no way to prove nothing was lost.
+  - name: Recordings
+    description: PRIORITY 2. Without this HRX cannot offer playback safely.
+  - name: Call control
+    description: PRIORITY 3. Click-to-call and supervisor actions.
+  - name: Masters
+    description: PRIORITY 4. Keeps the HRX agent mapping and dropdowns honest.
+
+paths:
+
+  /cdr:
+    get:
+      tags: [Reconciliation]
+      summary: One page of CDR for a time window
+      description: |
+        **The most important endpoint in this file.**
+
+        HRX calls this nightly at 02:00 IST for the previous day and compares
+        the result against its own records. It is the only thing that can prove
+        no call was lost, and the only thing that can recover a call whose
+        webhook was never delivered.
+
+        The push integration is what makes HRX useful; this is what makes it
+        *trustworthy*. Without it, "we are missing calls" can never be
+        answered.
+
+        Requirements:
+
+        * `total_count` must be the count for the **whole window**, not the
+          page. HRX compares that number against its own count first, and only
+          pages through records when they disagree.
+        * Cursor paging, 500 per page. Offset paging is acceptable if that is
+          what exists.
+        * Records should carry the same shape as a `call.completed` webhook, so
+          a backfilled call is indistinguishable from a pushed one.
+        * The window is an **Indian business day** — `2026-08-19T00:00:00+05:30`
+          to `2026-08-19T23:59:59+05:30`. Please honour the offset rather than
+          treating it as UTC; a 03:00 IST call belongs to the 19th.
+      operationId: getCdr
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+          example: "2026-08-19T00:00:00+05:30"
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+          example: "2026-08-19T23:59:59+05:30"
+        - name: cursor
+          in: query
+          schema: { type: string }
+          description: Opaque; echo back `next_cursor` from the previous page.
+        - name: limit
+          in: query
+          schema: { type: integer, default: 500, maximum: 500 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total_count, records]
+                properties:
+                  total_count:
+                    type: integer
+                    description: Total for the WHOLE window, not this page.
+                    example: 1284
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: Null on the last page.
+                  records:
+                    type: array
+                    description: Same field set as a `call.completed` webhook.
+                    items: { $ref: "#/components/schemas/CdrRecord" }
+
+  /recordings/{recording_uid}/signed-url:
+    get:
+      tags: [Recordings]
+      summary: A short-lived, unguessable link to one recording
+      description: |
+        **PRIORITY 2.** Called server-to-server the moment a permitted HRX user
+        presses play. HRX then streams the bytes through its own permission
+        layer — the URL never reaches the browser, so it cannot be copied out
+        of devtools or forwarded in a chat.
+
+        This is why the `recording.ready` webhook must carry only a
+        `recording_uid` and never a playable URL: a URL in a webhook is a URL
+        in a log file.
+
+        Requirements:
+
+        * TTL **300 seconds or less**, honoured on your side. An
+          effectively-permanent link defeats the design.
+        * The URL must be **unguessable** — a signature or random token, not
+          `/recordings/12345.wav`. Sequential filenames mean anyone who can
+          reach the gateway can walk the entire recording archive.
+        * It must support HTTP **Range** requests, otherwise the player cannot
+          seek and a 40-minute call has to be downloaded in full to hear the
+          last minute.
+      operationId: getRecordingSignedUrl
+      parameters:
+        - name: recording_uid
+          in: path
+          required: true
+          schema: { type: string }
+        - name: ttl_seconds
+          in: query
+          schema: { type: integer, default: 300, maximum: 300 }
+      responses:
+        "200":
+          description: A link HRX may fetch immediately and once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url, expires_at]
+                properties:
+                  url: { type: string, format: uri }
+                  expires_at: { type: string, format: date-time }
+                  content_type: { type: string, example: audio/wav }
+                  size_bytes: { type: integer }
+        "404": { description: Unknown, or past its retention date. }
+
+  /calls/originate:
+    post:
+      tags: [Call control]
+      summary: Place a click-to-call
+      description: |
+        **PRIORITY 3.** The agent's own phone rings first, then the customer —
+        the behaviour the existing HRX dial modal already describes.
+
+        Two hard requirements:
+
+        1. **Return `call_uid` synchronously.** HRX writes a pending call row
+           and needs the identifier to attach subsequent webhooks to it.
+        2. **Echo `ref_id` unchanged** on this response, on every webhook for
+           the call, and in the CDR row.
+
+        HRX already drives your plain-text `ACTION=DIAL` API for dialling
+        today. The gap is that it returns `"Success to dial"` and nothing else
+        — no call identifier — so there is no way to connect that dial to the
+        CDR row it eventually produces. Returning an id is the whole ask here.
+      operationId: originate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ref_id, agent_id, destination]
+              properties:
+                ref_id:
+                  type: string
+                  format: uuid
+                  description: HRX's correlation id. Echo it back everywhere.
+                agent_id: { type: string, example: AG-1042 }
+                agent_number:
+                  type: string
+                  description: The agent leg to ring first, if it differs from their default.
+                destination: { type: string, example: "+919876543210" }
+                campaign_id: { type: string, example: CMP-07 }
+                caller_id: { type: string, description: DID to present to the customer. }
+                record: { type: boolean, default: true }
+                timeout_seconds: { type: integer, default: 45 }
+                variables:
+                  type: object
+                  additionalProperties: true
+                  description: |
+                    Optional custom variables echoed into the CDR. Useful for
+                    carrying an HRX lead id. Tell us if unsupported.
+      responses:
+        "200":
+          description: Accepted for dialling.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [call_uid]
+                properties:
+                  call_uid:
+                    type: string
+                    description: Must match the RID/UID on your CDR screen.
+                  ref_id: { type: string, format: uuid }
+                  status: { type: string, example: queued }
+        "409":
+          description: |
+            Agent busy, in wrap-up, not logged in, or the campaign is in a mode
+            that refuses manual dialling. Please distinguish these in the body
+            — HRX already turns each into a specific message for the agent
+            ("You are not logged into Smart Agent", "Your campaign is not in
+            manual or progressive mode") rather than a generic failure.
+
+  /calls/{call_uid}/hangup:
+    post:
+      tags: [Call control]
+      summary: End a call
+      operationId: hangup
+      parameters: [{ name: call_uid, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/Ack" }
+
+  /calls/{call_uid}/hold:
+    post:
+      tags: [Call control]
+      summary: Place the customer on hold
+      operationId: hold
+      parameters: [{ name: call_uid, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/Ack" }
+
+  /calls/{call_uid}/unhold:
+    post:
+      tags: [Call control]
+      summary: Take the customer off hold
+      operationId: unhold
+      parameters: [{ name: call_uid, in: path, required: true, schema: { type: string } }]
+      responses:
+        "200": { $ref: "#/components/responses/Ack" }
+
+  /calls/{call_uid}/transfer:
+    post:
+      tags: [Call control]
+      summary: Transfer a call
+      description: |
+        Return the `child_call_uid` so HRX can link the two legs. Without it
+        the transfer report can show that a transfer happened but not where the
+        call went.
+      operationId: transfer
+      parameters: [{ name: call_uid, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [blind, attended, warm] }
+                to_agent_id: { type: string }
+                to_extension: { type: string }
+                to_external_number: { type: string }
+                to_queue: { type: string }
+      responses:
+        "200":
+          description: Transfer initiated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  call_uid: { type: string }
+                  child_call_uid: { type: string }
+                  status: { type: string }
+
+  /calls/{call_uid}/conference:
+    post:
+      tags: [Call control]
+      summary: Add a participant to a conference
+      operationId: conferenceAdd
+      parameters: [{ name: call_uid, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                number: { type: string }
+                agent_id: { type: string }
+                extension: { type: string }
+                muted: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Participant added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conference_id: { type: string }
+                  status: { type: string }
+
+  /agents/{agent_id}/state:
+    post:
+      tags: [Call control]
+      summary: Set an agent's state
+      description: |
+        Lets HRX offer break and ready controls in its own UI instead of
+        sending people to a second application. Optional, but it is the
+        difference between one tool and two.
+      operationId: setAgentState
+      parameters: [{ name: agent_id, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state: { type: string, enum: [ready, break, offline, paused] }
+                reason: { type: string, description: Break reason, for the Offtime report. }
+      responses:
+        "200": { $ref: "#/components/responses/Ack" }
+
+  /agents:
+    get:
+      tags: [Masters]
+      summary: The full agent master
+      description: |
+        **PRIORITY 4.** HRX reconciles its `telephony_agent_map` against this
+        nightly.
+
+        Every integration of this kind that goes wrong, goes wrong here first:
+        a new joiner gets an extension nobody told HRX about, and their calls
+        land on the exceptions screen as unassigned until somebody notices.
+        This endpoint is what turns that from a discovery into a diff.
+
+        `hrms_employee_id` is included so the mapping can be checked in both
+        directions. Hi Tech Group will supply the mapping to seed it.
+      operationId: listAgents
+      responses:
+        "200":
+          description: Every agent the dialer knows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        agent_id: { type: string }
+                        agent_code: { type: string }
+                        agent_name: { type: string }
+                        extension: { type: string }
+                        agent_number: { type: string, description: SIM / handset MSISDN. }
+                        hrms_employee_id: { type: string, nullable: true }
+                        default_campaign_id: { type: string }
+                        is_active: { type: boolean }
+
+  /agents/live:
+    get:
+      tags: [Masters]
+      summary: Current state of every logged-in agent
+      description: |
+        Optional. A fallback for the wallboard if live `agent.state` webhooks
+        are not available. Push is much better — this would have to be polled.
+      operationId: liveAgents
+      parameters:
+        - name: campaign_id
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Live snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        agent_id: { type: string }
+                        state: { type: string }
+                        since: { type: string, format: date-time }
+                        call_uid: { type: string, nullable: true }
+
+  /dispositions:
+    get:
+      tags: [Masters]
+      summary: The disposition and sub-disposition master
+      description: |
+        HRX shows these in its own disposition form and validates against them
+        before sending a code back, so an agent cannot save a disposition the
+        campaign does not offer.
+
+        Please include the full list with sub-dispositions per disposition.
+        HRX reads the pipe-delimited `ACTION=LIST` form today; JSON here is
+        preferable but not essential.
+      operationId: listDispositions
+      responses:
+        "200":
+          description: Full master.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dispositions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code: { type: string }
+                        name: { type: string }
+                        campaign_id: { type: string, nullable: true }
+                        sub_dispositions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              code: { type: string }
+                              name: { type: string }
+
+  /agent-sessions:
+    get:
+      tags: [Reconciliation]
+      summary: Agent session totals for a window
+      description: |
+        The pull counterpart to the `agent.logout` webhook, used to reconcile
+        the HRX daily productivity report against your User Session report.
+
+        If these totals are computed differently from the ones on that screen,
+        please say so — HRX will show your numbers either way, but it should
+        not claim they are the same if they are not.
+      operationId: getAgentSessions
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: agent_id
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Sessions in the window.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_count: { type: integer }
+                  sessions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        session_id: { type: string }
+                        agent_id: { type: string }
+                        extension: { type: string }
+                        login_at: { type: string, format: date-time }
+                        logout_at: { type: string, format: date-time }
+                        login_seconds: { type: integer }
+                        ready_seconds: { type: integer }
+                        talk_seconds: { type: integer }
+                        hold_seconds: { type: integer }
+                        wrap_seconds: { type: integer }
+                        idle_seconds: { type: integer }
+                        break_seconds: { type: integer }
+                        occupancy_percent: { type: number }
+                        calls_handled: { type: integer }
+                        calls_missed: { type: integer }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        HRX sends `Authorization: Bearer <api_key>` using a key you issue. If
+        your API authenticates differently, tell us which scheme and HRX will
+        match it — this is a one-class change on our side.
+
+  responses:
+    Ack:
+      description: Action accepted.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              call_uid: { type: string }
+              status: { type: string, example: ok }
+
+  schemas:
+    CdrRecord:
+      type: object
+      description: |
+        One CDR row. Deliberately the same shape as a `call.completed` webhook
+        so that a call recovered by reconciliation is indistinguishable from
+        one that was pushed. See `CallEvent` in hrms-telephony-webhook-v1.yaml
+        for the full field list and meanings; the fields below are the minimum
+        that makes reconciliation work.
+      required: [call_uid]
+      properties:
+        call_uid: { type: string, description: Must equal the RID/UID on your CDR screen. }
+        ref_id: { type: string, nullable: true }
+        origin: { type: string }
+        direction: { type: string }
+        mode: { type: string }
+        agent:
+          type: object
+          properties:
+            agent_id: { type: string }
+            agent_code: { type: string }
+            extension: { type: string }
+            agent_number: { type: string }
+            hrms_employee_id: { type: string }
+        caller_number: { type: string }
+        callee_number: { type: string }
+        did_number: { type: string }
+        status: { type: string }
+        hangup_by: { type: string }
+        hangup_cause: { type: string }
+        timestamps:
+          type: object
+          properties:
+            initiated_at:
+              type: string
+              format: date-time
+              description: |
+                Required in practice. HRX windows the reconciliation day on
+                this field, so a record without it cannot be counted into any
+                day and will read as a permanent gap.
+            answered_at: { type: string, format: date-time }
+            ended_at: { type: string, format: date-time }
+        durations:
+          type: object
+          properties:
+            talk_seconds:
+              type: integer
+              description: |
+                Compared against the HRX total to within 2 seconds per call.
+                This is the check that catches timezone and rounding drift.
+            customer_ring_seconds: { type: integer }
+            hold_seconds: { type: integer }
+            wrap_seconds: { type: integer }
+            total_seconds: { type: integer }
+        disposition:
+          type: object
+          properties:
+            code: { type: string }
+            name: { type: string }
+            sub_code: { type: string }
+            sub_name: { type: string }
+        recording:
+          type: object
+          properties:
+            available: { type: boolean }
+            recording_uid: { type: string }

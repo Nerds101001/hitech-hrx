@@ -1,0 +1,1013 @@
+openapi: 3.0.3
+
+# =============================================================================
+#  HRX Telephony Ingest API  --  v1
+#  Direction: CentroVision  ->  HRX
+#
+#  This is the API Hi Tech Group publishes for CentroVision to push into. It is
+#  generated from the running implementation, not from a design document: every
+#  status code, error code and required field below is enforced by
+#  App\Http\Middleware\VerifyTelephonySignature and
+#  App\Http\Controllers\Api\Telephony\TelephonyIngestController.
+#
+#  THE ONE RULE THAT MATTERS MOST
+#  ------------------------------
+#  Every call must be reported here, including calls dialled manually on the
+#  handset or SIM -- not only calls originated through /calls/originate. A
+#  manual dial sends exactly the same events with `origin: manual_dial` and
+#  `ref_id: null`. Integrations of this kind usually fail because only
+#  API-originated calls are hooked; see UAT-05, which is a go/no-go item.
+# =============================================================================
+
+info:
+  title: HRX Telephony Ingest API
+  version: "1.0.0"
+  description: |
+    Call events, agent sessions and recording notifications pushed from the
+    CentroVision 3.0 dialer / GSM gateway into HRX.
+
+    ## Authentication
+
+    Three independent checks, all required on every request:
+
+    | Header | Value |
+    |---|---|
+    | `Authorization` | `Bearer <api_key>` |
+    | `X-HRX-Timestamp` | Unix epoch **seconds**, integer, no milliseconds |
+    | `X-HRX-Nonce` | A value unique per request. A UUID is ideal |
+    | `X-HRX-Signature` | `sha256=<hex>` — see below |
+    | `Idempotency-Key` | The event's `event_id`. Recommended, not enforced |
+
+    ## Computing the signature
+
+    ```
+    signable  = timestamp + "." + nonce + "." + raw_request_body
+    signature = "sha256=" + lowercase_hex( HMAC_SHA256(shared_secret, signable) )
+    ```
+
+    Two rules, because these are the two things that go wrong:
+
+    1. **Sign the raw body bytes you are about to send.** Do not parse the JSON
+       and re-serialise it before signing — key order and whitespace will
+       differ and every signature will fail. Build the body string once, sign
+       that string, send that string.
+    2. **For `GET /health` the body is the empty string**, so the signable
+       value is `"<timestamp>.<nonce>."` — note the trailing dot.
+
+    HRX compares in constant time. Please do the same on your side.
+
+    ## Worked example
+
+    Given secret `s3cr3t`, timestamp `1755691200`, nonce
+    `4f8c1a2e-6b3d-4e7a-9c15-2d8f0b6a1e93` and body `{"a":1}`:
+
+    ```
+    signable = 1755691200.4f8c1a2e-6b3d-4e7a-9c15-2d8f0b6a1e93.{"a":1}
+    ```
+
+    ## Clock skew and replay
+
+    A request whose `X-HRX-Timestamp` is more than **300 seconds** from HRX
+    server time is refused with `stale_timestamp`. Please run NTP. A nonce is
+    remembered for **10 minutes**; reusing one inside that window is refused
+    with `replayed_nonce`, so generate a fresh nonce per HTTP request — even
+    when retrying the same `event_id`.
+
+    ## Retry policy we expect from you
+
+    * On `5xx` or timeout: retry at 1s, 5s, 30s, 2m, 10m, 1h, then hourly for
+      up to 24 hours.
+    * On `4xx` other than `429`: **do not retry.** Log it and escalate — the
+      payload is malformed and retrying will not fix it.
+    * On `429`: back off and respect `Retry-After`.
+    * `202` means *stored*, not *processed*. Do not wait for processing.
+
+    Re-delivering an event HRX already holds is always safe: it answers `200`
+    with `status: "duplicate"` and writes nothing further.
+
+    ## Formats
+
+    * **Timestamps** — ISO-8601 with an explicit offset: `2026-08-19T15:01:44+05:30`.
+      Never a naive local string, never `HH:MM:SS`.
+    * **Durations** — integer seconds.
+    * **Phone numbers** — E.164 with country code: `+919876543210`. If the
+      gateway emits bare 10-digit numbers, normalise before sending. HRX stores
+      what you send.
+    * **Encoding** — UTF-8, `Content-Type: application/json`.
+
+  contact:
+    name: Nagender Kumar, Hi Tech Group
+  license:
+    name: Proprietary — Hi Tech Group
+
+servers:
+  - url: https://hrx-uat.hitechgroup.in/api/telephony/v1
+    description: UAT — use this for all integration work
+  - url: https://hrx.hitechgroup.in/api/telephony/v1
+    description: Production — only after UAT sign-off
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Handshake
+    description: Prove credentials, clock and network path before sending data.
+  - name: Call events
+    description: The live event stream. This is the bulk of the integration.
+  - name: Recordings
+    description: Notification that audio is on disk. Never send a playable URL.
+  - name: Agent sessions
+    description: Login, state, break and logout with vendor-computed totals.
+  - name: Reconciliation
+    description: Bulk CDR replay, used to close gaps found by the nightly audit.
+
+paths:
+
+  /health:
+    get:
+      tags: [Handshake]
+      summary: Verify credentials, clock skew and IP allowlist in one call
+      description: |
+        Milestone 1 of the delivery plan. A `200` proves all four at once: the
+        API key is right, the shared secret is right, your clock is within
+        300s of ours, and your egress IP is on the allowlist.
+
+        **Do not start pushing call data until this returns 200.** Every other
+        failure mode is easier to diagnose once this passes.
+
+        The request body is empty, so the signable string ends with a dot.
+      operationId: health
+      responses:
+        "200":
+          description: Everything checks out.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  server_time:
+                    type: string
+                    format: date-time
+                    description: Compare against your own clock if you get stale_timestamp.
+                    example: "2026-08-20T11:04:22+05:30"
+                  vendor: { type: string, example: centrovision }
+                  api_version: { type: string, example: v1 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /events:
+    post:
+      tags: [Call events]
+      summary: Report one call event
+      description: |
+        The main endpoint. Send one event per request, as it happens.
+
+        **Latency targets:** live events within 5s of occurring;
+        `call.completed` within 30s of hangup.
+
+        `call.completed` is the important one — it carries the full CDR and is
+        what every report is built from. The lifecycle events before it drive
+        live screens; if you can only deliver one event per call, deliver
+        `call.completed`, but a live agent popup then becomes impossible.
+
+        Events may arrive out of order. Include a monotonically increasing
+        `sequence` per `call_uid` and HRX will never let a late `call.answered`
+        overwrite a `call.completed`.
+      operationId: postEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CallEvent" }
+            examples:
+              completed:
+                summary: call.completed — the full CDR (the one that matters most)
+                value:
+                  event: call.completed
+                  event_id: 9f1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d
+                  occurred_at: "2026-08-19T15:01:44+05:30"
+                  sequence: 6
+                  call_uid: CV-20260819-000512
+                  ref_id: null
+                  origin: manual_dial
+                  direction: outbound
+                  mode: manual
+                  agent:
+                    agent_id: AG-1042
+                    agent_code: mehak
+                    agent_name: Mehak Bhatia
+                    extension: "1042"
+                    agent_number: "+919812345678"
+                    hrms_employee_id: EMP-096
+                  caller_number: "+919812345678"
+                  callee_number: "+919812309876"
+                  did_number: "+911244567890"
+                  campaign:
+                    campaign_id: CMP-07
+                    campaign_name: Customer Care
+                    queue: CustomerCare
+                    skill: Hindi
+                    lead_source: website
+                  gateway:
+                    gateway_id: GW-2
+                    channel: "12"
+                    sim_msisdn: "+919812300001"
+                    operator: Airtel
+                    trunk: GSM-A
+                  status: answered
+                  hangup_by: customer
+                  hangup_cause: NORMAL_CLEARING
+                  hangup_cause_code: 16
+                  timestamps:
+                    initiated_at: "2026-08-19T14:58:02+05:30"
+                    agent_ring_at: "2026-08-19T14:58:03+05:30"
+                    agent_answer_at: "2026-08-19T14:58:08+05:30"
+                    customer_ring_at: "2026-08-19T14:58:10+05:30"
+                    answered_at: "2026-08-19T14:58:22+05:30"
+                    ended_at: "2026-08-19T15:01:40+05:30"
+                    wrapup_start_at: "2026-08-19T15:01:40+05:30"
+                    wrapup_end_at: "2026-08-19T15:01:44+05:30"
+                  durations:
+                    agent_ring_seconds: 5
+                    customer_ring_seconds: 12
+                    pdd_seconds: 8
+                    queue_wait_seconds: 0
+                    talk_seconds: 198
+                    hold_seconds: 0
+                    wrap_seconds: 4
+                    total_seconds: 218
+                    billed_seconds: 240
+                  disposition:
+                    code: NI
+                    name: Not Interested
+                    sub_code: NI-PRICE
+                    sub_name: Price too high
+                    remarks: Asked to be called after Diwali
+                    callback_at: "2026-11-02T11:00:00+05:30"
+                  recording:
+                    available: true
+                    recording_uid: REC-20260819-000512
+                    duration_seconds: 198
+                    format: wav
+                    channels: stereo
+                    size_bytes: 3168000
+                  quality: { mos: 4.1, jitter_ms: 12, packet_loss_percent: 0.2 }
+                  cost: { billed_seconds: 240, pulse_seconds: 60, amount: 1.2, currency: INR }
+              manual_dial:
+                summary: manual_dial — dialled on the handset, no ref_id (UAT-05)
+                description: |
+                  This is the case that decides whether the integration is
+                  trusted. The agent dialled on the handset; HRX never placed
+                  the call and there is no ref_id. The agent block is how HRX
+                  finds the employee, so send as much of it as the gateway
+                  knows — extension alone is enough, but agent_id or
+                  hrms_employee_id is better.
+                value:
+                  event: call.completed
+                  event_id: 1a2b3c4d-5e6f-4071-8213-495a6b7c8d9e
+                  occurred_at: "2026-08-19T16:22:10+05:30"
+                  sequence: 4
+                  call_uid: CV-20260819-000640
+                  ref_id: null
+                  origin: manual_dial
+                  direction: outbound
+                  mode: manual
+                  agent: { extension: "1042" }
+                  caller_number: "+919812345678"
+                  callee_number: "+919811122233"
+                  status: no_answer
+                  hangup_by: timeout
+                  timestamps:
+                    initiated_at: "2026-08-19T16:21:40+05:30"
+                    customer_ring_at: "2026-08-19T16:21:44+05:30"
+                    ended_at: "2026-08-19T16:22:10+05:30"
+                  durations: { customer_ring_seconds: 26, talk_seconds: 0, total_seconds: 30 }
+              answered:
+                summary: call.answered — legs bridged, talk time starts here
+                value:
+                  event: call.answered
+                  event_id: 2b3c4d5e-6f70-4182-93a4-5b6c7d8e9f01
+                  occurred_at: "2026-08-19T14:58:22+05:30"
+                  sequence: 4
+                  call_uid: CV-20260819-000512
+                  ref_id: 7c9e6f41-2b3a-4d5c-8e1f-0a9b8c7d6e5f
+                  origin: api_click_to_call
+                  direction: outbound
+                  agent: { agent_id: AG-1042, extension: "1042" }
+                  caller_number: "+919812345678"
+                  callee_number: "+919812309876"
+              transfer:
+                summary: call.transfer.completed — attended transfer with a child leg
+                value:
+                  event: call.transfer.completed
+                  event_id: 3c4d5e6f-7081-4293-a4b5-6c7d8e9f0a12
+                  occurred_at: "2026-08-19T14:34:02+05:30"
+                  sequence: 6
+                  call_uid: CV-20260819-000481
+                  agent: { agent_id: AG-1042, extension: "1042" }
+                  transfer:
+                    type: attended
+                    from_agent_id: AG-1042
+                    to_agent_id: AG-1077
+                    to_extension: "1077"
+                    transferred_at: "2026-08-19T14:34:02+05:30"
+                    child_call_uid: CV-20260819-000482
+                    consult_seconds: 18
+                    recording_uid: REC-TL-20260819-000482
+              abandoned:
+                summary: queue.abandoned — caller hung up while queued
+                value:
+                  event: queue.abandoned
+                  event_id: 4d5e6f70-8192-43a4-b5c6-7d8e9f0a1b23
+                  occurred_at: "2026-08-19T15:12:31+05:30"
+                  sequence: 2
+                  call_uid: CV-20260819-000525
+                  origin: inbound
+                  direction: inbound
+                  caller_number: "+919812311111"
+                  queue_name: CustomerCare
+                  wait_seconds: 96
+                  abandon_point: queue
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "200": { $ref: "#/components/responses/Duplicate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+  /events/batch:
+    post:
+      tags: [Call events]
+      summary: Drain a backlog after an outage
+      description: |
+        **Backlog drain only — never live traffic.** If HRX was unreachable and
+        you buffered events, replay them here rather than one at a time.
+
+        At most **500** events per request. Each is processed independently, so
+        one bad row never rejects the batch: the response is `207` with a
+        per-item result. Items already held are reported `duplicate`, not
+        rejected.
+
+        Send them in the order they occurred where you can — not required, but
+        it keeps the event log tidy.
+      operationId: postEventBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { $ref: "#/components/schemas/CallEvent" }
+      responses:
+        "207":
+          description: |
+            Processed per item. Always inspect `results` — a `207` does not
+            mean everything was accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: integer, example: 498 }
+                  rejected: { type: integer, example: 2 }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event_id: { type: string, nullable: true }
+                        status: { type: string, enum: [accepted, duplicate, rejected] }
+                        error: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413":
+          description: More than 500 events in one request. Split and resend.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /recordings/ready:
+    post:
+      tags: [Recordings]
+      summary: Tell HRX the audio for a call is on disk
+      description: |
+        Sent once the recording is written and fetchable. Target: within 5
+        minutes of `call.completed`.
+
+        **Never send a playable URL here.** Send only `recording_uid`. When a
+        permitted HRX user presses play, HRX asks your `/recordings/{uid}/signed-url`
+        endpoint for a short-lived link and streams the bytes itself, so the
+        audio never leaves your gateway unauthenticated and every playback is
+        permission-checked and logged.
+
+        Stereo is strongly preferred — agent and customer on separate channels
+        makes talk-over analysis possible later. Mono is accepted.
+      operationId: postRecordingReady
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordingReady" }
+            examples:
+              default:
+                value:
+                  event: recording.ready
+                  event_id: 5e6f7081-92a3-44b5-c6d7-8e9f0a1b2c34
+                  occurred_at: "2026-08-19T15:02:10+05:30"
+                  call_uid: CV-20260819-000512
+                  recording_uid: REC-20260819-000512
+                  recording_type: call
+                  duration_seconds: 198
+                  format: wav
+                  channels: stereo
+                  size_bytes: 3168000
+                  checksum_sha256: 9b74c9897bac770ffc029102a200c5de00000000000000000000000000000000
+                  retention_until: "2027-08-19"
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "200": { $ref: "#/components/responses/Duplicate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /agent-sessions:
+    post:
+      tags: [Agent sessions]
+      summary: Report agent login, state change, break or logout
+      description: |
+        This is what produces total login time and active time on the HRX
+        productivity report.
+
+        **Send your own computed totals on `agent.logout`.** HRX stores them
+        verbatim rather than deriving them from the state stream, specifically
+        so that the HRX report and your own User Session report can never
+        disagree. If HRX had to add up state transitions itself, the two
+        numbers would drift and every disagreement would become a support
+        ticket.
+
+        `agent.state`, `agent.break.start` and `agent.break.end` are streamed
+        live and drive the wallboard.
+      operationId: postAgentSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentSessionEvent" }
+            examples:
+              logout:
+                summary: agent.logout — with the totals HRX will report
+                value:
+                  event: agent.logout
+                  event_id: 6f708192-a3b4-45c6-d7e8-9f0a1b2c3d45
+                  occurred_at: "2026-08-19T19:02:11+05:30"
+                  session_id: SES-20260819-1042-01
+                  agent:
+                    agent_id: AG-1042
+                    agent_code: mehak
+                    extension: "1042"
+                    agent_number: "+919812345678"
+                    hrms_employee_id: EMP-096
+                  login_at: "2026-08-19T09:58:40+05:30"
+                  logout_at: "2026-08-19T19:02:11+05:30"
+                  mode: manual
+                  totals:
+                    login_seconds: 32611
+                    ready_seconds: 14980
+                    talk_seconds: 9120
+                    hold_seconds: 340
+                    wrap_seconds: 2210
+                    idle_seconds: 3105
+                    break_seconds: 2856
+                    occupancy_percent: 41.2
+                    calls_handled: 63
+                    calls_missed: 4
+                  breaks:
+                    - reason: Lunch
+                      from: "2026-08-19T13:30:00+05:30"
+                      to: "2026-08-19T14:05:12+05:30"
+                      seconds: 2112
+                  device: { type: gsm_handset, ip: 192.168.2.87 }
+              state:
+                summary: agent.state — live wallboard tick
+                value:
+                  event: agent.state
+                  event_id: 708192a3-b4c5-46d7-e8f9-0a1b2c3d4e56
+                  occurred_at: "2026-08-19T11:14:02+05:30"
+                  session_id: SES-20260819-1042-01
+                  agent: { agent_id: AG-1042, extension: "1042" }
+                  state: oncall
+                  previous_state: ready
+      responses:
+        "202": { $ref: "#/components/responses/Accepted" }
+        "200": { $ref: "#/components/responses/Duplicate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+  /cdr/import:
+    post:
+      tags: [Reconciliation]
+      summary: Bulk CDR replay
+      description: |
+        Used to close a gap the nightly reconciliation found — for example
+        after a long outage, or when a webhook was never delivered at all.
+
+        Records need no `event_id`: HRX derives a stable one from `call_uid`,
+        so replaying the same CDR row twice collapses to a single event rather
+        than duplicating it. Only `call_uid` is required per record, but send
+        the full CDR shape — a partial record produces a partial call row.
+
+        Prefer push. Use this to repair, not as a substitute for webhooks.
+      operationId: postCdrImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records]
+              properties:
+                records:
+                  type: array
+                  items: { $ref: "#/components/schemas/CallEvent" }
+      responses:
+        "202":
+          description: Accepted for import.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  inserted: { type: integer }
+                  updated: { type: integer, description: Records already held. }
+                  rejected: { type: integer, description: Records with no call_uid. }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `Authorization: Bearer <api_key>`. Issued by Hi Tech Group, one key per
+        vendor, rotated every 180 days. The key alone is not sufficient — every
+        request must also carry a valid HMAC signature, so a leaked key cannot
+        by itself forge call records into an HR system.
+
+  responses:
+
+    Accepted:
+      description: |
+        Stored. **`202` means stored, not processed** — normalisation happens
+        after the response. Do not retry a 202.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status: { type: string, enum: [accepted] }
+              event_id: { type: string, format: uuid }
+              received_at: { type: string, format: date-time }
+
+    Duplicate:
+      description: |
+        This `event_id` was already delivered. Nothing was written a second
+        time. This is the expected, successful answer to a retry — treat it as
+        a success, not an error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              status: { type: string, enum: [duplicate] }
+              event_id: { type: string, format: uuid }
+              received_at: { type: string, format: date-time }
+
+    Unauthorized:
+      description: |
+        Authentication failed. Read `error.code` to know which check:
+
+        | code | meaning | what to do |
+        |---|---|---|
+        | `invalid_api_key` | Bearer token missing or wrong | Check the key. Do not retry |
+        | `missing_timestamp` | `X-HRX-Timestamp` absent or not epoch seconds | Send integer seconds |
+        | `stale_timestamp` | More than 300s from HRX server time | **Fix your clock — run NTP** |
+        | `missing_nonce` | `X-HRX-Nonce` absent | Send a UUID per request |
+        | `replayed_nonce` | That nonce was used in the last 10 minutes | Generate a fresh nonce per HTTP request |
+        | `missing_signature` | Not in `sha256=<hex>` form | Check the header format |
+        | `invalid_signature` | HMAC did not match | You almost certainly re-serialised the JSON before signing |
+
+        None of these are retryable. Fix and resend.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    Forbidden:
+      description: |
+        `ip_not_allowed` — the source IP is not on the allowlist. Send Hi Tech
+        Group your fixed egress IP, or route over the LAN link.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    ValidationFailed:
+      description: |
+        The payload is missing a required field or has one in the wrong format.
+        **Do not retry** — it will fail identically. HRX stores the rejected
+        payload so it can be inspected, so quoting the `request_id` will get
+        you a precise answer.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    RateLimited:
+      description: 600 requests per minute per IP exceeded. Back off and resend.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: invalid_signature }
+            message: { type: string, example: HMAC signature did not match }
+            request_id:
+              type: string
+              format: uuid
+              description: |
+                Quote this when asking why a request was refused. Every
+                rejection is logged against it, so "why did you 401 us at
+                14:32" can be answered exactly rather than guessed at.
+
+    Agent:
+      type: object
+      description: |
+        Who was on the call. **This block is how HRX finds the employee for a
+        manual dial**, where there is no `ref_id` to correlate on. Send as many
+        of these as the gateway knows; HRX tries them in the order listed.
+
+        If none resolve, the call is stored as *unassigned* and raised on an
+        exceptions screen. It is never silently dropped — a dropped call is
+        invisible, an unassigned one gets fixed.
+      properties:
+        hrms_employee_id:
+          type: string
+          example: EMP-096
+          description: |
+            The HRX employee code. **Most reliable — please carry this if you
+            can.** Hi Tech Group will supply the mapping.
+        agent_id: { type: string, example: AG-1042 }
+        agent_code: { type: string, example: mehak }
+        agent_name: { type: string, example: Mehak Bhatia }
+        extension:
+          type: string
+          example: "1042"
+          description: Often the only identity a handset dial carries. Always send it if known.
+        agent_number:
+          type: string
+          example: "+919812345678"
+          description: The agent's own phone/SIM leg — the one that rings first.
+
+    Campaign:
+      type: object
+      properties:
+        campaign_id: { type: string, example: CMP-07 }
+        campaign_name: { type: string, example: Customer Care }
+        queue: { type: string, example: CustomerCare }
+        skill: { type: string, example: Hindi }
+        lead_source: { type: string, example: website }
+
+    Gateway:
+      type: object
+      description: Which physical GSM port and SIM carried the call.
+      properties:
+        gateway_id: { type: string, example: GW-2 }
+        channel: { type: string, example: "12" }
+        sim_msisdn: { type: string, example: "+919812300001" }
+        operator: { type: string, example: Airtel }
+        trunk: { type: string, example: GSM-A }
+
+    Timestamps:
+      type: object
+      description: |
+        All ISO-8601 with an explicit offset. Send every one the gateway knows
+        — the gaps between them are the whole value of the CDR.
+      properties:
+        initiated_at: { type: string, format: date-time, description: API accepted, or manual dial started. }
+        agent_ring_at: { type: string, format: date-time, description: Agent leg started ringing. }
+        agent_answer_at: { type: string, format: date-time, description: Agent picked up. }
+        customer_ring_at: { type: string, format: date-time, description: Customer leg started ringing. }
+        answered_at: { type: string, format: date-time, description: Both legs bridged — talk time starts here. }
+        ended_at: { type: string, format: date-time, description: Hangup. }
+        wrapup_start_at: { type: string, format: date-time }
+        wrapup_end_at: { type: string, format: date-time }
+        queue_enter_at: { type: string, format: date-time }
+        queue_exit_at: { type: string, format: date-time }
+
+    Durations:
+      type: object
+      description: Integer seconds. Never "HH:MM:SS".
+      properties:
+        agent_ring_seconds: { type: integer, description: How long the agent's phone rang. }
+        customer_ring_seconds: { type: integer, description: How long the customer's phone rang. }
+        pdd_seconds:
+          type: integer
+          description: |
+            Post-dial delay — dial to first ring. The number that exposes a bad
+            GSM route, so worth carrying even though it is rarely asked for.
+        queue_wait_seconds: { type: integer }
+        talk_seconds: { type: integer, description: Bridged conversation, EXCLUDING hold. }
+        hold_seconds: { type: integer }
+        wrap_seconds: { type: integer }
+        total_seconds: { type: integer, description: initiated_at to ended_at. }
+        billed_seconds: { type: integer, description: Operator-billed pulse. }
+
+    Disposition:
+      type: object
+      properties:
+        code: { type: string, example: NI }
+        name: { type: string, example: Not Interested }
+        sub_code: { type: string, example: NI-PRICE }
+        sub_name: { type: string, example: Price too high }
+        remarks: { type: string }
+        callback_at: { type: string, format: date-time }
+
+    CallEvent:
+      type: object
+      required: [event, event_id, occurred_at, call_uid]
+      description: |
+        One event in a call's life. The four required fields are enforced;
+        everything else is sent when the gateway knows it.
+
+        `call.completed` should carry the full object — it is the CDR row and
+        the source of every report.
+      properties:
+        event:
+          type: string
+          description: |
+            **The event catalogue.** Send every one your platform raises.
+          enum:
+            - call.originated
+            - call.agent_ringing
+            - call.agent_answered
+            - call.customer_ringing
+            - call.answered
+            - call.hold
+            - call.unhold
+            - call.mute
+            - call.unmute
+            - call.transfer.initiated
+            - call.transfer.completed
+            - call.transfer.failed
+            - call.conference.started
+            - call.conference.participant_joined
+            - call.conference.participant_left
+            - call.conference.ended
+            - call.forwarded
+            - queue.enqueued
+            - queue.dequeued
+            - queue.abandoned
+            - ivr.abandoned
+            - call.completed
+        event_id:
+          type: string
+          format: uuid
+          description: |
+            Unique per event, for all time. This is the idempotency key —
+            re-sending the same `event_id` is safe and returns `duplicate`.
+            **Keep it stable across your retries**, otherwise a retry writes a
+            second copy.
+        occurred_at:
+          type: string
+          format: date-time
+          description: When the event happened on the gateway, not when you sent it.
+        sequence:
+          type: integer
+          description: |
+            Monotonically increasing within one `call_uid`. Lets HRX tolerate
+            out-of-order delivery: a late `call.answered` will never overwrite
+            a `call.completed` that already arrived.
+          example: 6
+        call_uid:
+          type: string
+          description: |
+            Your call identifier. **Must be the same value shown as RID/UID on
+            the CentroVision CDR screen**, so both sides can look up the same
+            call when there is a disagreement.
+          example: CV-20260819-000512
+        ref_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            HRX's correlation id, supplied on `/calls/originate` and echoed
+            back on every event for that call. `null` for manual, inbound and
+            IVR calls — that is expected, not an error.
+        parent_call_uid:
+          type: string
+          nullable: true
+          description: Set on legs created by a transfer or a forward.
+        origin:
+          type: string
+          description: |
+            How the call started. **`manual_dial` is the one that is usually
+            forgotten** — see UAT-05.
+          enum: [api_click_to_call, manual_dial, inbound, ivr, predictive, preview, progressive, callback, internal]
+        direction: { type: string, enum: [inbound, outbound, internal] }
+        mode: { type: string, enum: [auto, manual], description: The CentroVision dialling mode. }
+        agent: { $ref: "#/components/schemas/Agent" }
+        caller_number: { type: string, description: "A-party, E.164.", example: "+919812345678" }
+        callee_number: { type: string, description: "B-party, E.164.", example: "+919812309876" }
+        did_number: { type: string, description: Caller ID presented to the customer. }
+        campaign: { $ref: "#/components/schemas/Campaign" }
+        gateway: { $ref: "#/components/schemas/Gateway" }
+        customer:
+          type: object
+          properties:
+            lead_id: { type: string }
+            name: { type: string }
+        status:
+          type: string
+          enum: [answered, no_answer, busy, failed, congestion, cancelled, abandoned, rejected, not_reachable, switched_off]
+        hangup_by: { type: string, enum: [agent, customer, system, supervisor, timeout] }
+        hangup_cause: { type: string, example: NORMAL_CLEARING, description: Q.850 or SIP cause name. }
+        hangup_cause_code: { type: integer, example: 16 }
+        timestamps: { $ref: "#/components/schemas/Timestamps" }
+        durations: { $ref: "#/components/schemas/Durations" }
+        disposition: { $ref: "#/components/schemas/Disposition" }
+        recording:
+          type: object
+          properties:
+            available: { type: boolean }
+            recording_uid: { type: string }
+            duration_seconds: { type: integer }
+            format: { type: string, enum: [wav, mp3, ogg, gsm] }
+            channels: { type: string, enum: [mono, stereo] }
+            size_bytes: { type: integer }
+        transfer:
+          type: object
+          properties:
+            type: { type: string, enum: [blind, attended, warm] }
+            from_agent_id: { type: string }
+            to_agent_id: { type: string }
+            to_extension: { type: string }
+            to_external_number: { type: string }
+            to_queue: { type: string }
+            transferred_at: { type: string, format: date-time }
+            child_call_uid: { type: string }
+            consult_seconds: { type: integer }
+            recording_uid: { type: string }
+        conference:
+          type: object
+          properties:
+            conference_id: { type: string }
+            started_at: { type: string, format: date-time }
+            ended_at: { type: string, format: date-time }
+            recording_uid: { type: string }
+            participants:
+              type: array
+              items:
+                type: object
+                properties:
+                  number: { type: string }
+                  role: { type: string, enum: [agent, customer, supervisor, external] }
+                  joined_at: { type: string, format: date-time }
+                  left_at: { type: string, format: date-time }
+                  muted: { type: boolean }
+        forwarding:
+          type: object
+          properties:
+            type: { type: string, enum: [unconditional, busy, no_answer, not_reachable, dnd] }
+            from_number: { type: string }
+            to_number: { type: string }
+            forwarded_at: { type: string, format: date-time }
+            child_call_uid: { type: string }
+        hold_events:
+          type: array
+          items:
+            type: object
+            properties:
+              from: { type: string, format: date-time }
+              to: { type: string, format: date-time }
+              seconds: { type: integer }
+        quality:
+          type: object
+          description: Optional, but it settles "the line was bad" disputes.
+          properties:
+            mos: { type: number }
+            jitter_ms: { type: number }
+            packet_loss_percent: { type: number }
+        cost:
+          type: object
+          description: Optional. Enables cost-per-lead reporting.
+          properties:
+            billed_seconds: { type: integer }
+            pulse_seconds: { type: integer }
+            amount: { type: number }
+            currency: { type: string, example: INR }
+        queue_name: { type: string, description: On queue.* events. }
+        wait_seconds: { type: integer, description: On queue.abandoned. }
+        abandon_point: { type: string, enum: [queue, ivr] }
+        state: { type: string, description: On call-level state notes. }
+
+    RecordingReady:
+      type: object
+      required: [event_id, call_uid, recording_uid]
+      properties:
+        event: { type: string, enum: [recording.ready] }
+        event_id: { type: string, format: uuid }
+        occurred_at: { type: string, format: date-time }
+        call_uid: { type: string }
+        recording_uid:
+          type: string
+          description: |
+            The handle HRX will later exchange for a signed URL. **Not a
+            playable URL** — see the endpoint description.
+        recording_type:
+          type: string
+          enum: [call, transfer_leg, conference, voicemail]
+          default: call
+          description: |
+            Only `call` flips the play button on the parent call. A
+            transfer-leg or conference recording belongs to its own leg.
+        duration_seconds: { type: integer }
+        format: { type: string, enum: [wav, mp3, ogg, gsm] }
+        channels: { type: string, enum: [mono, stereo], description: Stereo strongly preferred. }
+        size_bytes: { type: integer }
+        checksum_sha256: { type: string }
+        retention_until:
+          type: string
+          format: date
+          description: |
+            After this date HRX stops offering playback rather than showing a
+            broken player. Send it if retention is finite.
+
+    AgentSessionEvent:
+      type: object
+      required: [event, event_id, occurred_at, agent]
+      properties:
+        event:
+          type: string
+          enum: [agent.login, agent.logout, agent.state, agent.break.start, agent.break.end]
+        event_id: { type: string, format: uuid }
+        occurred_at: { type: string, format: date-time }
+        session_id:
+          type: string
+          description: |
+            One login-to-logout session. Required on `agent.login` and
+            `agent.logout` — without it the session cannot be stored.
+        agent: { $ref: "#/components/schemas/Agent" }
+        mode: { type: string, enum: [auto, manual] }
+        campaign: { $ref: "#/components/schemas/Campaign" }
+        login_at: { type: string, format: date-time }
+        logout_at: { type: string, format: date-time }
+        state:
+          type: string
+          enum: [ready, oncall, hangup, wrapup, idle, break, offline, dialing, paused]
+        previous_state: { type: string }
+        reason: { type: string, description: Break reason — maps to the Offtime report. }
+        totals:
+          type: object
+          description: |
+            **Send these on `agent.logout`.** HRX stores them as given rather
+            than deriving them, so the HRX productivity report and your User
+            Session report cannot drift apart.
+          properties:
+            login_seconds: { type: integer }
+            ready_seconds: { type: integer, description: Active / available time. }
+            talk_seconds: { type: integer }
+            hold_seconds: { type: integer }
+            wrap_seconds: { type: integer }
+            idle_seconds: { type: integer }
+            break_seconds: { type: integer, description: Offtime. }
+            occupancy_percent: { type: number, description: "(talk + hold + wrap) / (login - break)." }
+            calls_handled: { type: integer }
+            calls_missed: { type: integer }
+        breaks:
+          type: array
+          items:
+            type: object
+            properties:
+              reason: { type: string }
+              from: { type: string, format: date-time }
+              to: { type: string, format: date-time }
+              seconds: { type: integer }
+        device:
+          type: object
+          properties:
+            type: { type: string, enum: [softphone, sip_phone, gsm_handset, mobile_app, webrtc] }
+            ip: { type: string }
+            user_agent: { type: string }
