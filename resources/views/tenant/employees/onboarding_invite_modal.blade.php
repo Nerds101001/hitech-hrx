@@ -228,9 +228,20 @@
             </div>
           </div>
 
+          {{-- Which button was pressed. The controller reads this: 'active'
+               creates a usable account straight away, 'invite' sends the
+               onboarding form. Without it every account came out as
+               onboarding, whichever button you clicked. --}}
+          <input type="hidden" name="creation_mode" id="onboardingCreationMode" value="invite">
+
           <div class="d-flex justify-content-end gap-3 mt-4 pt-2">
             <button type="button" class="btn btn-label-danger px-6 rounded-pill" data-bs-dismiss="modal">Cancel</button>
-            <button type="submit" id="onboardingSubmitBtn" class="btn btn-hitech px-8 rounded-pill fw-bold">Send Invitation</button>
+            <button type="submit" id="onboardingActivateBtn" data-mode="active"
+                    class="btn btn-label-success px-6 rounded-pill fw-bold"
+                    title="Create the account as ACTIVE. The employee can log in immediately and never sees the onboarding form.">
+              <i class="bx bx-user-check me-1"></i> Create &amp; Activate
+            </button>
+            <button type="submit" id="onboardingSubmitBtn" data-mode="invite" class="btn btn-hitech px-8 rounded-pill fw-bold">Send Invitation</button>
           </div>
         </form>
       </div>
@@ -263,14 +274,28 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
+        // Remember which of the two submit buttons was used, and tell the
+        // controller through the hidden creation_mode field.
+        let clickedBtn = submitBtn;
+        form.querySelectorAll('button[type="submit"][data-mode]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                clickedBtn = btn;
+                document.getElementById('onboardingCreationMode').value = btn.dataset.mode;
+            });
+        });
+
         form.addEventListener('submit', function(e) {
             e.preventDefault();
-            
-            // UI State: Loading
-            const originalBtnHtml = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Sending...';
-            
+
+            const activating = document.getElementById('onboardingCreationMode').value === 'active';
+
+            // UI State: Loading — on whichever button was actually pressed
+            const busyBtn = clickedBtn || submitBtn;
+            const originalBtnHtml = busyBtn.innerHTML;
+            busyBtn.disabled = true;
+            busyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> '
+                              + (activating ? 'Activating...' : 'Sending...');
+
             const formData = new FormData(form);
             
             fetch(form.action, {
@@ -292,6 +317,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     document.getElementById('successDetailsEmail').innerText = formData.get('email');
                     document.getElementById('successDetailsPass').innerText = data.plain_password || '********';
                     
+                    // Say which of the two things actually happened — an active
+                    // account and an onboarding invite are not the same result.
+                    document.getElementById('successTitle').innerText =
+                        activating ? 'Account Activated!' : 'Invitation Sent!';
+                    document.getElementById('successSubtitle').innerText = activating
+                        ? 'The account is active — they can sign in with these credentials right away.'
+                        : 'The candidate has been registered and must complete the onboarding form.';
+
                     const successModal = new bootstrap.Modal(document.getElementById('onboardingSuccessDetailsModal'));
                     successModal.show();
                     
@@ -321,8 +354,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .finally(() => {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalBtnHtml;
+                // Restore the button that was actually pressed, not always the
+                // Send Invitation one, or Create & Activate stays spinning.
+                busyBtn.disabled = false;
+                busyBtn.innerHTML = originalBtnHtml;
             });
         });
     }
@@ -338,8 +373,8 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="mb-4 animate__animated animate__bounceIn">
                 <i class="bx bx-check-circle text-white" style="font-size: 5rem;"></i>
             </div>
-            <h3 class="text-white fw-bold mb-1">Invitation Sent!</h3>
-            <p class="text-white opacity-75 small mb-0">The candidate has been registered in the system.</p>
+            <h3 class="text-white fw-bold mb-1" id="successTitle">Invitation Sent!</h3>
+            <p class="text-white opacity-75 small mb-0" id="successSubtitle">The candidate has been registered in the system.</p>
         </div>
         
         <div class="p-6 bg-white">

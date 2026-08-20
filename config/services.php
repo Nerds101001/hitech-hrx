@@ -60,4 +60,13 @@ return [
     'secret' => env('TELEPHONY_WEBHOOK_SECRET'),
   ],
 
+  // Dinstar SMS/GSM gateway (office LAN, e.g. 192.168.2.6) -- auth is plain
+  // HTTP Basic using the device's own web-login credentials, not a
+  // separate API token. See App\Services\DinstarSmsService.
+  'dinstar' => [
+    'base_url' => env('DINSTAR_BASE_URL'),
+    'username' => env('DINSTAR_USERNAME'),
+    'password' => env('DINSTAR_PASSWORD'),
+  ],
+
 ];

@@ -158,9 +158,28 @@ $customizerHidden = 'customizer-hide';
 
 {{-- LOCAL DEVELOPMENT QUICK LOGIN --}}
 @if (app()->isLocal())
-<div class="quick-login-panel animate__animated animate__fadeInUp" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); padding: 15px; border-radius: 16px; border: 1px solid rgba(6, 237, 249, 0.3); box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 220px;">
-    <div style="color: #06edf9; font-size: 11px; font-weight: 800; letter-spacing: 1px; margin-bottom: 10px; text-align: center; border-bottom: 1px solid rgba(6, 237, 249, 0.2); padding-bottom: 5px;">DEV QUICK ACCESS</div>
-    <div class="d-grid gap-2">
+<style>
+  /* The panel is anchored to the bottom and grows upward. At 16 accounts it
+     ran off the top of the screen and those buttons became unreachable, so it
+     is capped to the viewport and the list scrolls inside it. */
+  .quick-login-panel { max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+  .quick-login-panel .qlp-list {
+    overflow-y: auto; overflow-x: hidden; min-height: 0;
+    scrollbar-width: thin; scrollbar-color: rgba(6,237,249,.45) transparent;
+  }
+  .quick-login-panel .qlp-list::-webkit-scrollbar { width: 6px; }
+  .quick-login-panel .qlp-list::-webkit-scrollbar-thumb {
+    background: rgba(6,237,249,.45); border-radius: 3px;
+  }
+  /* Compact enough that the whole list fits on a laptop screen. */
+  .quick-login-panel .btn {
+    font-size: 9px !important; line-height: 1.15; padding: 4px 6px !important;
+    white-space: normal; text-align: left;
+  }
+</style>
+<div class="quick-login-panel animate__animated animate__fadeInUp" style="position: fixed; bottom: 20px; right: 20px; z-index: 9999; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); padding: 10px; border-radius: 14px; border: 1px solid rgba(6, 237, 249, 0.3); box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 205px;">
+    <div style="color: #06edf9; font-size: 10px; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; text-align: center; border-bottom: 1px solid rgba(6, 237, 249, 0.2); padding-bottom: 4px; flex-shrink: 0;">DEV QUICK ACCESS</div>
+    <div class="d-grid gap-1 qlp-list">
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('ai@rustx.com', 'admin')">LOGIN AS ADMIN (NAGENDER)</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('suchita@rustx.com', 'admin')">LOGIN AS HR (SUCHITA)</button>
         <button type="button" class="btn btn-sm btn-outline-info" style="font-size: 10px; border-color: rgba(6, 237, 249, 0.5); color: #fff;" onclick="quickLogin('manager@demo.com', 'employee')">LOGIN AS MANAGER</button>
@@ -177,7 +196,7 @@ $customizerHidden = 'customizer-hide';
         <button type="button" class="btn btn-sm" style="font-size: 10px; border: 1px solid rgba(168,85,247,0.6); color: #d8b4fe; background: rgba(168,85,247,0.12);" onclick="quickLogin('tanisharana0910@gmail.com', 'employee')">📋 SUBMITTED (REVIEW)</button>
         <button type="button" class="btn btn-sm" style="font-size: 10px; border: 1px solid rgba(251,146,60,0.6); color: #fdba74; background: rgba(251,146,60,0.12);" onclick="quickLogin('JAIPRABHU18@GMAIL.COM', 'employee')">🎓 SUBMITTED + TRAINING</button>
     </div>
-    <div style="color: rgba(255,255,255,0.5); font-size: 9px; margin-top: 10px; text-align: center;">OTP bypass enabled: 123456</div>
+    <div style="color: rgba(255,255,255,0.5); font-size: 8px; margin-top: 6px; text-align: center; flex-shrink: 0;">OTP bypass enabled: 123456</div>
 </div>
 
 <script>

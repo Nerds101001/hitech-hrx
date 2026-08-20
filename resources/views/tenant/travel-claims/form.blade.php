@@ -99,7 +99,7 @@
             <li><strong>Last date of submission:</strong> the <strong>7th of the following month</strong>. Claims submitted after the 7th incur a <strong>10% late-submission penalty</strong> on the net payable amount.</li>
             <li><strong>Bill attachments are now uploaded once for the whole month</strong> at the bottom of this form — <em>not</em> per day. Combine all of a category's bills into a single file (PDF or image).</li>
             <li>For every category where you have claimed an amount, the matching consolidated bill file is <strong>mandatory</strong> — e.g. if your Food total is above ₹0 you must attach the combined Food bills. <strong>The form will not submit</strong> until each claimed category has its bill attached.</li>
-            <li><strong>Odometer photos are only needed if you travelled by bike or car</strong> (personal or official). If your month is only food, courier, cab, bus, train or flight, leave them blank — you can still submit. On bike/car days, fill the <strong>start and end meter</strong> readings in the grid; no photo is asked for per day.</li>
+            <li><strong>An odometer photo is only needed if you travelled by bike or car</strong> (personal or official). <strong>One photo is enough</strong> — if a single image shows both the month start and month end readings, upload it in either box. If your month is only food, courier, cab, bus, train or flight, leave them blank and you can still submit. On bike/car days, fill the <strong>start and end meter</strong> readings in the grid; no photo is asked for per day.</li>
         </ul>
     </div>
 
@@ -164,8 +164,16 @@
                     </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label fw-semibold text-secondary small mb-1">Month Start Odometer Proof <span class="text-danger odo-required" style="display:none;">*</span> <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the start of the month"></i></label>
-                        <input type="file" name="month_start_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                        {{-- No asterisk on either box: one photo covering both
+                             readings satisfies the rule, so marking each field
+                             individually required would be wrong. --}}
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month Start Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Photo of the odometer at the start of the month. If one image shows both the start and end readings, upload it in either box."></i></label>
+                        {{-- data-has-file tells the warning below that a proof is
+                             already stored, so an edited claim does not keep
+                             demanding a photo it already has. --}}
+                        <input type="file" name="month_start_odometer_proof" class="form-control odo-proof"
+                               data-has-file="{{ (isset($claim) && $claim->month_start_odometer_proof) ? '1' : '0' }}"
+                               accept="image/jpeg,image/png,image/jpg,application/pdf">
                         @if(isset($claim) && $claim->month_start_odometer_proof)
                             <div class="mt-2 text-primary small">
                                 <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->month_start_odometer_proof) }}" target="_blank">View File</a>
@@ -175,8 +183,10 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-group">
-                        <label class="form-label fw-semibold text-secondary small mb-1">Month End Odometer Proof <span class="text-danger odo-required" style="display:none;">*</span> <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Upload a photo of your vehicle's odometer at the end of the month"></i></label>
-                        <input type="file" name="month_end_odometer_proof" class="form-control" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                        <label class="form-label fw-semibold text-secondary small mb-1">Month End Odometer Proof <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip" title="Photo of the odometer at the end of the month. Optional if a single image already shows both readings."></i></label>
+                        <input type="file" name="month_end_odometer_proof" class="form-control odo-proof"
+                               data-has-file="{{ (isset($claim) && $claim->month_end_odometer_proof) ? '1' : '0' }}"
+                               accept="image/jpeg,image/png,image/jpg,application/pdf">
                         @if(isset($claim) && $claim->month_end_odometer_proof)
                             <div class="mt-2 text-primary small">
                                 <i class="bi bi-check-circle-fill"></i> Uploaded: <a href="{{ asset('storage/' . $claim->month_end_odometer_proof) }}" target="_blank">View File</a>
@@ -468,14 +478,39 @@
 
     // Reflects the server rule on screen so nobody hunts for a photo they do
     // not owe, and nobody is surprised at submit time.
+    // A proof counts as present when it is already stored on the claim OR the
+    // user has just picked a file. Without the stored case, reopening a claim
+    // that already has both photos kept showing the red "required" warning.
+    function odoProofPresent(name) {
+        const el = document.querySelector('input[name="' + name + '"]');
+        if (!el) return false;
+        return (el.files && el.files.length > 0) || el.dataset.hasFile === '1';
+    }
+
     function updateOdometerRequirement() {
         let needed = monthHasVehicleRow();
-        $('.odo-required').toggle(needed);
-        $('#odometerRequirementNote')
-            .html(needed
-                ? '<span class="text-danger fw-semibold"><i class="bx bx-error-circle"></i> This claim includes bike/car travel, so both odometer photos are required to submit.</span>'
-                : '<span class="text-muted">No bike or car travel entered — odometer photos are optional for this claim.</span>');
+
+        if (!needed) {
+            $('#odometerRequirementNote').html(
+                '<span class="text-muted">No bike or car travel entered — odometer photos are optional for this claim.</span>');
+            return;
+        }
+
+        // One photo is enough: many people capture the opening and closing
+        // readings in a single image, so we ask for proof, not for two files.
+        const haveAny = odoProofPresent('month_start_odometer_proof')
+                     || odoProofPresent('month_end_odometer_proof');
+
+        $('#odometerRequirementNote').html(haveAny
+            ? '<span class="text-success fw-semibold"><i class="bx bx-check-circle"></i> Odometer photo attached — this claim can be submitted.</span>'
+            : '<span class="text-danger fw-semibold"><i class="bx bx-error-circle"></i> This claim includes bike/car travel, so an odometer photo is required. '
+              + 'One image showing both the month start and month end readings is fine.</span>');
     }
+
+    // NOTE: the binding for this lives inside DOMContentLoaded below. It must
+    // not run at top level — jQuery is not loaded yet at that point, and a
+    // "$ is not defined" here kills the whole script, so the day grid never
+    // renders and a saved draft looks empty.
 
     function calculateRow(idx) {
         let row = $('#row_' + idx);
@@ -605,9 +640,22 @@
         attachRefreshCount(box);
     }
 
+    // The host's firewall rejects a multipart filename containing an apostrophe
+    // with a bare 403 — before Laravel runs, so no error of ours is ever shown.
+    // "Bill-July'26.pdf" is blocked; the same file as "Bill-July_26.pdf" is not.
+    // Upload under a sanitised name and carry the real one alongside, so what
+    // the user sees and downloads is unchanged.
+    function attachSafeName(name) {
+        const dot  = name.lastIndexOf('.');
+        const ext  = dot > 0 ? name.slice(dot).replace(/[^A-Za-z0-9.]/g, '') : '';
+        const base = (dot > 0 ? name.slice(0, dot) : name).replace(/[^A-Za-z0-9 _-]/g, '_');
+        return (base.trim() || 'file') + ext;
+    }
+
     async function attachUploadOne(box, file) {
         const data = new FormData();
-        data.append('file', file);
+        data.append('file', file, attachSafeName(file.name));
+        data.append('original_name', file.name);
         data.append('category', box.data('category'));
         data.append('upload_token', $('#uploadToken').val());
         if (ATTACH_CLAIM_ID) data.append('claim_id', ATTACH_CLAIM_ID);
@@ -707,6 +755,9 @@
         if ($('#claimMonthInput').val()) {
             generateMonthGrid();
         }
+        // Picking a photo clears the odometer warning straight away.
+        $(document).on('change', '.odo-proof', updateOdometerRequirement);
+
         updateOdometerRequirement();
         initAttachmentBoxes();
 
