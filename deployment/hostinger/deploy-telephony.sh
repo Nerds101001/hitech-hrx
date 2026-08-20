@@ -187,14 +187,24 @@ echo "  all ${#NEW_FILES[@]} new + ${#REPLACE_FILES[@]} replacement files presen
 
 # Refuse to overwrite a file that production has changed since the baseline.
 for f in "${REPLACE_FILES[@]}"; do
-  local_base="$(git show fea8e2634:"$f" | md5sum | cut -d' ' -f1)"
+  baseline="$(git show fea8e2634:"$f" | md5sum | cut -d' ' -f1)"
+  mine="$(md5sum "$f" | cut -d' ' -f1)"
   prod="$(remote "cd $APP && md5sum $f" 2>/dev/null | cut -d' ' -f1)"
-  if [[ "$local_base" != "$prod" ]]; then
-    echo "  ABORT: $f has drifted on production ($prod != $local_base)."
-    echo "         Patch it by hand instead of replacing it."
+
+  if [[ "$prod" == "$baseline" ]]; then
+    echo "  $f untouched since the baseline — safe to replace"
+  elif [[ "$prod" == "$mine" ]]; then
+    # Our own previous deploy. Overwriting it with the identical file is a
+    # no-op, and refusing here would make every deploy after the first one
+    # impossible.
+    echo "  $f already matches this build — safe to replace"
+  else
+    echo "  ABORT: $f has been edited on production."
+    echo "         prod=$prod  baseline=$baseline  local=$mine"
+    echo "         Someone changed it on the server. Patch it by hand rather"
+    echo "         than overwriting whatever they did."
     exit 1
   fi
-  echo "  $f matches the baseline — safe to replace"
 done
 
 # Refuse to run twice.
