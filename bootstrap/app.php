@@ -81,6 +81,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'admin.guard' => \App\Http\Middleware\AdminRoleGuard::class,
       'sales.guard' => \App\Http\Middleware\SalesAccessGuard::class,
       'telephony.signed' => \App\Http\Middleware\VerifyTelephonySignature::class,
+      'telephony.restricted' => \App\Http\Middleware\RestrictTelephonyAccess::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

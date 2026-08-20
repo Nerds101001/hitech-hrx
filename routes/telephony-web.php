@@ -27,6 +27,11 @@ Route::middleware([
   'web',
   'auth',
   'role:admin|hr|manager|employee|office_employee|accounts',
+  // Temporary, while the feature is being proven. Driven by
+  // TELEPHONY_RESTRICT_TO_EMAILS; a no-op when that is empty. Covers the
+  // screens only -- the vendor ingest API is authenticated separately and
+  // keeps receiving data throughout.
+  'telephony.restricted',
 ])->prefix('user')->name('user.')->group(function () {
 
   /* Recording playback. The audio never lands on HRX disk and the gateway's

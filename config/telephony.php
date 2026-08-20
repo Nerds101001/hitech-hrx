@@ -62,6 +62,27 @@ return [
 
   /*
   |----------------------------------------------------------------------
+  | Testing-phase access restriction
+  |----------------------------------------------------------------------
+  | While the feature is being proven, limit the telephony SCREENS to a named
+  | list of people. Comma separated emails; empty or unset means no
+  | restriction and the normal role rules apply on their own.
+  |
+  | This does not replace those rules, it sits on top of them -- so removing
+  | the gate at the end of testing is one env change and a config:clear. No
+  | deploy, no code change, nothing to remember to delete.
+  |
+  | Note this covers the browser screens only. The vendor ingest API is
+  | authenticated by API key and HMAC and is unaffected: CentroVision can keep
+  | pushing data while nobody but the project team can look at it.
+  */
+  'restrict_to_emails' => array_values(array_filter(array_map(
+    fn ($e) => strtolower(trim($e)),
+    explode(',', (string) env('TELEPHONY_RESTRICT_TO_EMAILS', ''))
+  ))),
+
+  /*
+  |----------------------------------------------------------------------
   | Outbound: the gateway we call
   |----------------------------------------------------------------------
   */
