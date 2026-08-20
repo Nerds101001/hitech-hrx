@@ -90,6 +90,14 @@ return [
         'crm_clients.manage' => 'Manage CRM Client Mappings',
     ],
 
+    'Telephony' => [
+        'telephony.reports.own'    => 'View Own Call Reports',
+        'telephony.reports.team'   => 'View Team Call Reports',
+        'telephony.reports.all'    => 'View All Call Reports',
+        'telephony.recording.play' => 'Play Call Recordings',
+        'telephony.admin'          => 'Manage Agent Mapping, Webhook Log and Reconciliation',
+    ],
+
     'CCare Attendance' => [
         'cc_attendance.manage' => 'Manage Salesperson Attendance (Full Register, All Submissions, Mark for Anyone)',
     ],

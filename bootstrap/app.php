@@ -34,6 +34,10 @@ return Application::configure(basePath: dirname(__DIR__))
        and payroll jobs. */
     $schedule->command('hrx:archive-audits --live')->monthlyOn(2, '02:00');
     $schedule->command('leave:daily-digest')->dailyAt('09:00');
+    /* Nightly proof that HRX and the CentroVision CDR agree about yesterday,
+       and the only thing that recovers calls a webhook never delivered. 02:00
+       is off-peak for the gateway, whose CDR screens are slow under load. */
+    $schedule->command('telephony:reconcile')->dailyAt('02:00')->withoutOverlapping();
     /* Credits back an approved PAID leave day (any type — WFH, half day, full
        day) where the employee also turned up, and cancels the request once
        every day it covers has been attended. Runs before the 09:00 digest so
@@ -76,6 +80,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'onboarding' => \App\Http\Middleware\OnboardingMiddleware::class,
       'admin.guard' => \App\Http\Middleware\AdminRoleGuard::class,
       'sales.guard' => \App\Http\Middleware\SalesAccessGuard::class,
+      'telephony.signed' => \App\Http\Middleware\VerifyTelephonySignature::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

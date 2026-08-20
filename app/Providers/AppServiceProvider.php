@@ -25,6 +25,14 @@ class AppServiceProvider extends ServiceProvider
    */
   public function boot(): void
   {
+    /* Telephony ingest. A burst from the gateway - a backlog drain after an
+       outage, or a busy hour on the floor - must not exhaust the web workers
+       every other page depends on. 600/min is ~10 events a second, well above
+       any real call volume here and well below anything that hurts. */
+    \Illuminate\Support\Facades\RateLimiter::for('telephony', function ($request) {
+      return \Illuminate\Cache\RateLimiting\Limit::perMinute(600)->by($request->ip());
+    });
+
     // Never mail an address that cannot be delivered to. Registered explicitly
     // rather than left to event discovery so it cannot quietly stop applying.
     \Illuminate\Support\Facades\Event::listen(

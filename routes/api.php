@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 use Modules\Calendar\app\Http\Controllers\Api\EventApiController;
 
 require __DIR__ . '/chat.php';
+require __DIR__ . '/telephony.php';
 
 Route::middleware([
   'api'

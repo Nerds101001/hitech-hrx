@@ -59,6 +59,16 @@ Route::middleware([
       ->middleware('throttle:10,1')->name('redial');
   });
 
+  /* Recording playback. The audio never lands on HRX disk and the gateway's
+     signed URL never reaches the browser: the controller authorises the
+     viewer, fetches a <=300s signed URL server-side, streams the bytes back
+     with Range support, and writes an access-log row for every attempt
+     including refusals. Placed here rather than in tenant.php so all
+     telephony routes stay in one file. */
+  Route::get('/telephony/recording/{recordingUid}', [\App\Http\Controllers\tenant\TelephonyRecordingController::class, 'stream'])
+    ->middleware('role_or_permission:admin|hr|manager|telephony.recording.play')
+    ->name('telephony.recording.stream');
+
   /* Cross-agent calls report — narrower than the API above, admin/hr only
      since it lists every agent's calls, not just the viewer's own. */
   Route::get('/telephony/calls', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'dashboard'])
