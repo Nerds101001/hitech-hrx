@@ -33,6 +33,14 @@ return [
     // Max events accepted in one /events/batch call.
     'max_batch' => 500,
 
+    // Hard ceiling on the raw request body, in bytes.
+    //
+    // A rich call.completed event is 2-3 KB and the largest honest request is
+    // a 500-event batch at roughly 1.5 MB, so 5 MB is generous. Anything above
+    // it is a vendor bug or an attempt to fill the disk: the payload column is
+    // longText, so without this an oversized body is accepted and stored.
+    'max_body_bytes' => (int) env('TELEPHONY_MAX_BODY_BYTES', 5 * 1024 * 1024),
+
     // Webhooks arrive unauthenticated by session, so there is no tenant in
     // context. HRX resolves the tenant from the matched agent-map row and
     // falls back to this when the agent is unknown.

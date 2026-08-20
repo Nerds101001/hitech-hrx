@@ -12,8 +12,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Guards every /api/telephony/v1 route.
  *
- * Four independent checks, cheapest first: source IP, bearer key, clock skew
- * and nonce, then the HMAC itself. A caller holding the API key but not the
+ * Five independent checks, cheapest first: source IP, body size, bearer key,
+ * clock skew and nonce, then the HMAC itself. A caller holding the API key but not the
  * shared secret still gets a 401.
  *
  * The signature is computed over the RAW body bytes. Do not json_decode and
@@ -32,14 +32,27 @@ class VerifyTelephonySignature
       return $this->deny($request, 403, 'ip_not_allowed', 'Source IP is not on the allowlist');
     }
 
-    // 2. Bearer key.
+    // 2. Size. Checked before the HMAC so an oversized body is refused
+    // without hashing megabytes first, and before the controller so it is
+    // never written to the payload column.
+    $max = (int) ($cfg['max_body_bytes'] ?? 0);
+    if ($max > 0 && strlen($request->getContent()) > $max) {
+      return $this->deny(
+        $request,
+        413,
+        'payload_too_large',
+        'Request body exceeds ' . $max . ' bytes. Split a large backlog across several /events/batch calls.'
+      );
+    }
+
+    // 3. Bearer key.
     $key = (string) $cfg['api_key'];
     $presented = (string) $request->bearerToken();
     if ($key === '' || !hash_equals($key, $presented)) {
       return $this->deny($request, 401, 'invalid_api_key', 'API key missing or incorrect');
     }
 
-    // 3. Freshness. Rejects a captured request replayed later.
+    // 4. Freshness. Rejects a captured request replayed later.
     $timestamp = (string) $request->header('X-HRX-Timestamp', '');
     if ($timestamp === '' || !ctype_digit($timestamp)) {
       return $this->deny($request, 401, 'missing_timestamp', 'X-HRX-Timestamp missing or not epoch seconds');
@@ -58,7 +71,7 @@ class VerifyTelephonySignature
       return $this->deny($request, 401, 'replayed_nonce', 'This nonce has already been used');
     }
 
-    // 4. HMAC over timestamp . nonce . raw body.
+    // 5. HMAC over timestamp . nonce . raw body.
     $header = (string) $request->header('X-HRX-Signature', '');
     if (!str_starts_with($header, 'sha256=')) {
       return $this->deny($request, 401, 'missing_signature', 'X-HRX-Signature must be sha256=<hex>');

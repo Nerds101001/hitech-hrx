@@ -130,6 +130,31 @@ class TelephonyIngestTest extends TelephonyTestCase
       ->assertJsonPath('error.code', 'replayed_nonce');
   }
 
+  public function test_an_oversized_body_is_refused_before_it_is_stored(): void
+  {
+    config(['telephony.inbound.max_body_bytes' => 1024]);
+
+    $payload = $this->completedCallPayload();
+    $payload['remarks'] = str_repeat('A', 4096);
+
+    $this->signed('POST', '/api/telephony/v1/events', $payload)
+      ->assertStatus(413)
+      ->assertJsonPath('error.code', 'payload_too_large');
+
+    // The point of checking in the middleware rather than the controller: an
+    // oversized body must never reach the longText payload column at all.
+    $this->assertSame(0, TelephonyWebhookDelivery::count());
+  }
+
+  public function test_a_normal_event_is_unaffected_by_the_size_cap(): void
+  {
+    $payload = $this->completedCallPayload();
+
+    $this->signed('POST', '/api/telephony/v1/events', $payload)->assertStatus(202);
+
+    $this->assertSame(1, TelephonyCall::where('call_uid', $payload['call_uid'])->count());
+  }
+
   // ──────────────────────────────────────────────────────────── idempotency
 
   public function test_a_replayed_event_id_is_accepted_once_then_reported_duplicate(): void

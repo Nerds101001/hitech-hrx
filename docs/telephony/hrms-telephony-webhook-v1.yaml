@@ -85,6 +85,13 @@ info:
     Re-delivering an event HRX already holds is always safe: it answers `200`
     with `status: "duplicate"` and writes nothing further.
 
+    ## Size limits
+
+    * At most **500 events** per `/events/batch` request.
+    * At most **5 MB** of raw body on any request. A rich `call.completed`
+      is 2–3 KB, so only a bug or a very large backlog gets near it — split
+      the backlog rather than sending one big request.
+
     ## Formats
 
     * **Timestamps** — ISO-8601 with an explicit offset: `2026-08-19T15:01:44+05:30`.
@@ -334,6 +341,7 @@ paths:
         "200": { $ref: "#/components/responses/Duplicate" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
         "429": { $ref: "#/components/responses/RateLimited" }
 
@@ -388,7 +396,9 @@ paths:
                         error: { type: string, nullable: true }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "413":
-          description: More than 500 events in one request. Split and resend.
+          description: |
+            Either more than 500 events, or a body over the 5 MB ceiling.
+            Split and resend either way.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -624,6 +634,19 @@ components:
         **Do not retry** — it will fail identically. HRX stores the rejected
         payload so it can be inspected, so quoting the `request_id` will get
         you a precise answer.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+    PayloadTooLarge:
+      description: |
+        `payload_too_large` — the raw body is over 5 MB.
+
+        Nothing legitimate comes close: a rich `call.completed` is 2–3 KB and
+        a full 500-event batch is around 1.5 MB. If you are draining a
+        backlog, split it across several `/events/batch` calls rather than
+        one large request. The body is refused before it is stored, so
+        nothing is kept.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
