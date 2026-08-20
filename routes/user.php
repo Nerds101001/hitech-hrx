@@ -74,6 +74,64 @@ Route::middleware([
   Route::get('/telephony/calls', [\App\Http\Controllers\tenant\TelephonyCallController::class, 'dashboard'])
     ->middleware('role:admin|hr')->name('telephony.calls.dashboard');
 
+  /* CentroVision telephony reporting.
+
+     Everything built on the data the gateway pushes into
+     /api/telephony/v1/events.
+
+     These carry no role middleware on purpose. Scope is decided inside the
+     controller by TelephonyCall::visibleTo() -- own calls, the manager's team
+     including delegated identities, or everything for admin and HR -- so an
+     employee opening "My Calls" sees their own calls rather than a 403. A role
+     gate here would take the feature away from the very people whose calls it
+     reports. */
+  Route::prefix('telephony')->name('telephony.')->group(function () {
+    Route::get('/my-calls', [\App\Http\Controllers\tenant\Telephony\TelephonyReportController::class, 'calls'])
+      ->name('reports.calls');
+    Route::get('/productivity', [\App\Http\Controllers\tenant\Telephony\TelephonyReportController::class, 'productivity'])
+      ->name('reports.productivity');
+    Route::get('/analytics', [\App\Http\Controllers\tenant\Telephony\TelephonyReportController::class, 'analytics'])
+      ->name('reports.analytics');
+    /* Declared last so /my-calls and /productivity are not swallowed by the
+       {callUid} wildcard. */
+    Route::get('/call/{callUid}', [\App\Http\Controllers\tenant\Telephony\TelephonyReportController::class, 'show'])
+      ->name('reports.call');
+  });
+
+  /* Telephony administration: the webhook log, the agent mapping the whole
+     feature hangs off, the nightly audit, and the unassigned-call queue.
+     Genuinely admin-only -- the webhook log holds raw vendor payloads,
+     including every customer number. */
+  Route::prefix('telephony/admin')->name('telephony.admin.')
+    ->middleware('role_or_permission:admin|hr|telephony.admin')
+    ->group(function () {
+      Route::get('/webhook-log', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'webhookLog'])
+        ->name('webhook-log');
+      Route::get('/webhook-log/{delivery}', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'showDelivery'])
+        ->name('delivery');
+      Route::post('/webhook-log/{delivery}/replay', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'replayDelivery'])
+        ->name('delivery.replay');
+
+      Route::get('/agent-map', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'agentMap'])
+        ->name('agent-map');
+      Route::post('/agent-map', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'storeAgent'])
+        ->name('agent-map.store');
+      Route::put('/agent-map/{agentMap}', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'updateAgent'])
+        ->name('agent-map.update');
+      Route::delete('/agent-map/{agentMap}', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'destroyAgent'])
+        ->name('agent-map.destroy');
+
+      Route::get('/reconciliation', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'reconciliation'])
+        ->name('reconciliation');
+      Route::post('/reconciliation/run', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'runReconciliation'])
+        ->name('reconciliation.run');
+
+      Route::get('/exceptions', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'exceptions'])
+        ->name('exceptions');
+      Route::post('/exceptions/assign', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'assignException'])
+        ->name('exceptions.assign');
+    });
+
   // Announcements targeted at this employee (department / location / role / team)
   Route::get('/announcements', [\App\Http\Controllers\tenant\AnnouncementController::class, 'myFeed'])->name('announcements.feed');
 

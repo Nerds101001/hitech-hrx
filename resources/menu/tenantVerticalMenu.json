@@ -1077,6 +1077,64 @@
             ]
         },
         {
+            "name": "Telephony",
+            "icon": "menu-icon bx bx-phone-call",
+            "slug": [
+                "user.telephony.reports.calls",
+                "user.telephony.reports.productivity",
+                "user.telephony.reports.analytics",
+                "user.telephony.admin.webhook-log",
+                "user.telephony.admin.agent-map",
+                "user.telephony.admin.exceptions",
+                "user.telephony.admin.reconciliation"
+            ],
+            "submenu": [
+                {
+                    "url": "/user/telephony/my-calls",
+                    "name": "Calls",
+                    "slug": "user.telephony.reports.calls"
+                },
+                {
+                    "url": "/user/telephony/productivity",
+                    "name": "Productivity",
+                    "slug": "user.telephony.reports.productivity"
+                },
+                {
+                    "url": "/user/telephony/analytics",
+                    "name": "Analytics",
+                    "slug": "user.telephony.reports.analytics"
+                },
+                {
+                    "url": "/user/telephony/admin/webhook-log",
+                    "name": "Webhook Log",
+                    "slug": "user.telephony.admin.webhook-log",
+                    "permission": ["telephony.admin"],
+                    "roles": ["admin", "hr"]
+                },
+                {
+                    "url": "/user/telephony/admin/agent-map",
+                    "name": "Agent Mapping",
+                    "slug": "user.telephony.admin.agent-map",
+                    "permission": ["telephony.admin"],
+                    "roles": ["admin", "hr"]
+                },
+                {
+                    "url": "/user/telephony/admin/exceptions",
+                    "name": "Exceptions",
+                    "slug": "user.telephony.admin.exceptions",
+                    "permission": ["telephony.admin"],
+                    "roles": ["admin", "hr"]
+                },
+                {
+                    "url": "/user/telephony/admin/reconciliation",
+                    "name": "Reconciliation",
+                    "slug": "user.telephony.admin.reconciliation",
+                    "permission": ["telephony.admin"],
+                    "roles": ["admin", "hr"]
+                }
+            ]
+        },
+        {
             "name": "Asset Management",
             "icon": "menu-icon bx bx-archive",
             "permission": "assets.view",

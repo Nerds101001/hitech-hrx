@@ -2,35 +2,44 @@
 
 namespace Tests\Feature\Telephony;
 
-use Illuminate\Foundation\Application;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Forces the telephony suite onto an in-memory SQLite database.
+ * Puts the telephony suite on an in-memory SQLite database.
  *
- * This repository's phpunit.xml deliberately has DB_CONNECTION/DB_DATABASE
- * commented out, so tests otherwise run against the real development MySQL
- * database. These tests provision their own schema with Schema::create() —
- * pointed at MySQL that either collides with real tables or, worse on a fresh
- * database, writes into one. Overriding the connection here rather than
- * re-enabling those lines in phpunit.xml keeps every other suite running
- * exactly as it does today.
+ * This repository's phpunit.xml deliberately leaves DB_CONNECTION and
+ * DB_DATABASE commented out, so tests otherwise run against the real
+ * development MySQL database. These tests provision their own schema with
+ * Schema::create(), which against MySQL either collides with real tables or,
+ * on a fresh database, writes into one. Overriding here rather than
+ * re-enabling those lines keeps every other suite running exactly as it does
+ * today.
  *
- * Each test gets a brand-new application, and ":memory:" is per-connection, so
- * every test also gets an empty database without needing RefreshDatabase.
+ * The switch is made through config rather than putenv(). putenv() is
+ * process-wide and survives the test class that set it, so it silently forced
+ * every later suite in the same PHPUnit run onto SQLite too -- ClickToCall
+ * passed alone and failed when run after this one. Connections resolve their
+ * config lazily, so changing it after boot is enough and affects nothing
+ * outside this test's own application instance.
+ *
+ * Each test gets a fresh application, and ":memory:" is per-connection, so
+ * every test also starts from an empty database without RefreshDatabase.
  */
 abstract class TelephonyTestCase extends TestCase
 {
-  public function createApplication(): Application
+  protected function setUp(): void
   {
-    // Set before the framework boots: config/database.php reads these through
-    // env() during bootstrap, so changing them afterwards would be too late.
-    foreach (['DB_CONNECTION' => 'sqlite', 'DB_DATABASE' => ':memory:'] as $key => $value) {
-      putenv("{$key}={$value}");
-      $_ENV[$key] = $value;
-      $_SERVER[$key] = $value;
-    }
+    parent::setUp();
 
-    return parent::createApplication();
+    config([
+      'database.default' => 'sqlite',
+      'database.connections.sqlite.database' => ':memory:',
+    ]);
+
+    // Drop any connection resolved during boot so the next query builds a new
+    // one from the config above.
+    DB::purge('sqlite');
+    DB::setDefaultConnection('sqlite');
   }
 }
