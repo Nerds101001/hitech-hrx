@@ -121,26 +121,56 @@ mailing both together throws that away.
 
 ## What is already built on the HRX side
 
-Live and tested (`tests/Feature/Telephony`, 26 tests):
+### The ingest API
 
 - `POST /api/telephony/v1/events`, `/events/batch`, `/recordings/ready`,
-  `/agent-sessions`, `/cdr/import`, `GET /health`
+  `/agent-sessions`, `/cdr/import`, and `GET /health`
 - `VerifyTelephonySignature` — bearer key, HMAC over the raw body, ±300s clock
   skew, 10-minute nonce cache, IP allowlist
 - Ten tables including a raw webhook delivery log and an append-only event log
 - `telephony:reconcile`, scheduled nightly at 02:00
 
-Deliberately not built yet, because they need real data flowing first: the
-report screens, the admin Webhook Log UI, and the agent-mapping admin screen.
+### The screens — `/user/telephony`
+
+| Screen | Who sees it | What it is for |
+|---|---|---|
+| **Calls** | Everyone, scoped | Every call, filtered by date, direction, origin, outcome, disposition, employee or number |
+| **Call detail** | Everyone, scoped | The full timeline, legs, recordings, hold periods, line quality and raw events |
+| **Productivity** | Everyone, scoped | Login, active, talk, hold, wrap, idle, break, occupancy |
+| **Analytics** | Everyone, scoped | Daily volume, dispositions, outcomes, abandons, call flows |
+| **Webhook Log** | Admin / HR | Every raw payload, searchable, with replay |
+| **Agent Mapping** | Admin / HR | The employee ↔ dialer-agent table the whole feature hangs off |
+| **Exceptions** | Admin / HR | Unassigned calls, grouped so one action fixes a whole group |
+| **Reconciliation** | Admin / HR | The nightly audit, with a run-it-now control |
+
+"Scoped" means own calls for an employee, the team (including delegated
+identities) for a manager, and everything for admin and HR — decided in one
+place, `TelephonyCall::visibleTo()`. Customer numbers are masked for anyone
+outside `telephony.recording.unmasked_roles`.
+
+The menu entry sits under **Sales & Operations → Telephony**.
+
+### What still waits on CentroVision
 
 `CentroVisionClient` and the outbound half of `telephony:reconcile` are coded
-against a JSON API **CentroVision has not built yet** — the live box speaks
-plain-text `ACTION=DIAL` today (see `app/Services/ClickToCallService.php`).
-Those methods are correct as a specification and dead until the vendor
-responds, which is what `centrovision-required-v1.yaml` is asking for.
+against a JSON API **CentroVision has not built yet**. The live box speaks
+plain-text `ACTION=DIAL` at `45.120.40.194:18111` and answers HTTP 200 whether
+the dial worked or not (see `app/Services/ClickToCallService.php`). So until
+they respond to `centrovision-required-v1.yaml`:
+
+- **Reconciliation** has nothing to pull — it needs their `GET /cdr`, priority 1.
+- **Recording playback** has nothing to fetch — it needs their signed-URL
+  endpoint, priority 2.
+- **Click-to-call correlation** is one-way. HRX now sends a `ref_id` on every
+  dial, but their API returns no `call_uid` to store against it, and does not
+  echo the `ref_id` back. The moment they do either, the ingest side stores it
+  with no further change.
+
+Everything driven by the **push** side — every screen above — works as soon as
+they start posting events, which is the thing they can do without building
+anything new.
 
 ## Running the collection yourself
-
 ```bash
 npx newman run docs/telephony/HRX-Telephony.postman_collection.json --env-var "base_url=http://127.0.0.1:8000/api/telephony/v1" --env-var "api_key=YOUR_KEY" --env-var "shared_secret=YOUR_SECRET"
 ```
