@@ -2,7 +2,7 @@
   "info": {
     "name": "HRX × CentroVision Telephony",
     "_postman_id": "hrx-telephony-v1-0000-0000-000000000001",
-    "description": "# HRX Telephony Ingest — runnable contract\n\nEverything CentroVision needs to prove their side works before writing a line of production code, and everything Hi Tech Group needs to prove the endpoint is wired up correctly.\n\n## Setup (2 minutes)\n\n1. Open the collection **Variables** tab.\n2. Set `base_url` to the UAT host.\n3. Set `api_key` and `shared_secret` to the values Hi Tech Group issued you. These arrive separately from this file — never in the same email.\n4. Run **1.1 GET /health**. Do not go further until it is green.\n\n## Then\n\nPress **Run collection**. Every request carries assertions, so the run report is the evidence — attach it to the UAT sign-off.\n\nRun folders in order. Section 5 (the negatives) depends on 2.8 having run immediately before, because 5.2 replays its event.\n\n## Signing\n\nThe collection-level **Pre-request Script** does the signing. Read it once and you have the whole integration:\n\n```\nsignable  = timestamp + \".\" + nonce + \".\" + raw_body\nsignature = \"sha256=\" + hex(HMAC_SHA256(shared_secret, signable))\n```\n\nSign the bytes you are about to send. Do not parse the JSON and re-serialise it before signing — key order and whitespace will differ and every signature will fail. That is the single most common cause of a 401 here.\n\n## The one that matters\n\n**3.1 MANUAL DIAL (UAT-05)** is the go/no-go item. Most integrations of this kind fail because only API-originated calls are reported while half the floor dials manually. If your platform cannot raise that event, say so at kickoff, not at UAT.",
+    "description": "# HRX Telephony Ingest — runnable contract\n\nEverything CentroVision needs to prove their side works before writing a line of production code, and everything Hi Tech Group needs to prove the endpoint is wired up correctly.\n\n## Setup (2 minutes)\n\n1. Open the collection **Variables** tab.\n2. `base_url` is already set to the live endpoint. There is no separate\n   UAT host, and testing against this one is safe — see below.\n3. Set `api_key` and `shared_secret` to the values Hi Tech Group issued you. These arrive separately from this file — never in the same email.\n4. Run **1.1 GET /health**. Do not go further until it is green.\n\n## Then\n\nPress **Run collection**. Every request carries assertions, so the run report is the evidence — attach it to the UAT sign-off.\n\nRun folders in order. Section 5 (the negatives) depends on 2.8 having run immediately before, because 5.2 replays its event.\n\n## Signing\n\nThe collection-level **Pre-request Script** does the signing. Read it once and you have the whole integration:\n\n```\nsignable  = timestamp + \".\" + nonce + \".\" + raw_body\nsignature = \"sha256=\" + hex(HMAC_SHA256(shared_secret, signable))\n```\n\nSign the bytes you are about to send. Do not parse the JSON and re-serialise it before signing — key order and whitespace will differ and every signature will fail. That is the single most common cause of a 401 here.\n\n## The one that matters\n\n**3.1 MANUAL DIAL (UAT-05)** is the go/no-go item. Most integrations of this kind fail because only API-originated calls are reported while half the floor dials manually. If your platform cannot raise that event, say so at kickoff, not at UAT.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -97,8 +97,8 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "https://hrx-uat.hitechgroup.in/api/telephony/v1",
-      "description": "UAT host. Switch to hrx.hitechgroup.in only after sign-off."
+      "value": "https://hrx.hitechgroup.in/api/telephony/v1",
+      "description": "Live endpoint. There is no separate UAT host."
     },
     {
       "key": "api_key",

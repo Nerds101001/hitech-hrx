@@ -5,6 +5,8 @@ push into it. This folder is what you hand them.
 
 | File | Direction | What it is |
 |---|---|---|
+| `vendor-pack/` + `HRX-Telephony-Integration-Pack.zip` | Vendor → HRX | **What you actually send.** The five vendor-facing files, swept clean of anything internal. This README is NOT in it. |
+| `EMAIL-TO-VENDOR.md` | internal | The two messages to send, ready to copy — pack first, credentials separately. |
 | `INTEGRATION-GUIDE.md` | Vendor → HRX | **Send this first.** The whole integration in five minutes, with working code in PHP, C#, Java, Python, Node and curl. The PHP/Python/Node/curl samples were executed against the real endpoint. |
 | `hrms-telephony-webhook-v1.yaml` | Vendor → HRX | **The API we publish.** Every call event, agent session and recording notification they must POST. This is the file they asked for. |
 | `centrovision-required-v1.yaml` | HRX → Vendor | The counterpart: what they must expose so HRX can dial, pull a signed recording URL, and reconcile the CDR nightly. |

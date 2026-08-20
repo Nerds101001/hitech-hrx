@@ -1,0 +1,1746 @@
+{
+  "info": {
+    "name": "HRX × CentroVision Telephony",
+    "_postman_id": "hrx-telephony-v1-0000-0000-000000000001",
+    "description": "# HRX Telephony Ingest — runnable contract\n\nEverything CentroVision needs to prove their side works before writing a line of production code, and everything Hi Tech Group needs to prove the endpoint is wired up correctly.\n\n## Setup (2 minutes)\n\n1. Open the collection **Variables** tab.\n2. `base_url` is already set to the live endpoint. There is no separate\n   UAT host, and testing against this one is safe — see below.\n3. Set `api_key` and `shared_secret` to the values Hi Tech Group issued you. These arrive separately from this file — never in the same email.\n4. Run **1.1 GET /health**. Do not go further until it is green.\n\n## Then\n\nPress **Run collection**. Every request carries assertions, so the run report is the evidence — attach it to the UAT sign-off.\n\nRun folders in order. Section 5 (the negatives) depends on 2.8 having run immediately before, because 5.2 replays its event.\n\n## Signing\n\nThe collection-level **Pre-request Script** does the signing. Read it once and you have the whole integration:\n\n```\nsignable  = timestamp + \".\" + nonce + \".\" + raw_body\nsignature = \"sha256=\" + hex(HMAC_SHA256(shared_secret, signable))\n```\n\nSign the bytes you are about to send. Do not parse the JSON and re-serialise it before signing — key order and whitespace will differ and every signature will fail. That is the single most common cause of a 401 here.\n\n## The one that matters\n\n**3.1 MANUAL DIAL (UAT-05)** is the go/no-go item. Most integrations of this kind fail because only API-originated calls are reported while half the floor dials manually. If your platform cannot raise that event, say so at kickoff, not at UAT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// ===========================================================================",
+          "//  HRX telephony request signer",
+          "//  Runs before every request in this collection. You should not need to edit",
+          "//  it -- port the logic to your own language and you have the integration.",
+          "//",
+          "//  signable  = timestamp + \".\" + nonce + \".\" + raw_body",
+          "//  signature = \"sha256=\" + hex( HMAC_SHA256(shared_secret, signable) )",
+          "// ===========================================================================",
+          "",
+          "function uuidv4() {",
+          "    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {",
+          "        var r = Math.random() * 16 | 0;",
+          "        var v = c === 'x' ? r : (r & 0x3 | 0x8);",
+          "        return v.toString(16);",
+          "    });",
+          "}",
+          "",
+          "var requestName = pm.info.requestName || '';",
+          "",
+          "// --- 1. event_id -----------------------------------------------------------",
+          "// Fresh for every request, except the duplicate-detection test, which has to",
+          "// re-send an event_id HRX has already seen. Request 2.8 saves its id and 5.2",
+          "// is matched here BY NAME rather than by \"whatever runs next\" -- the folders",
+          "// in between would otherwise consume it, and 5.2 would silently test nothing.",
+          "var replayId = pm.collectionVariables.get('replay_event_id');",
+          "if (requestName.indexOf('replayed event_id') !== -1 && replayId) {",
+          "    pm.collectionVariables.set('event_id', replayId);",
+          "} else {",
+          "    pm.collectionVariables.set('event_id', uuidv4());",
+          "}",
+          "",
+          "// --- 2. Freshness ----------------------------------------------------------",
+          "// Decided here, by request name, rather than in a per-request script: a",
+          "// request-level pre-request script runs AFTER this one, so anything it set",
+          "// would arrive too late for its own request and leak into the next.",
+          "var nowSeconds = Math.floor(Date.now() / 1000);",
+          "var wantsStale = requestName.indexOf('stale timestamp') !== -1;",
+          "pm.collectionVariables.set('ts', String(wantsStale ? nowSeconds - 3600 : nowSeconds));",
+          "",
+          "// A nonce is remembered for 10 minutes, so it must be fresh per HTTP request",
+          "// -- including per retry of the same event_id.",
+          "pm.collectionVariables.set('nonce', uuidv4());",
+          "",
+          "// --- 3. Sign ---------------------------------------------------------------",
+          "// IMPORTANT: sign the bytes you are about to SEND. replaceIn() resolves the",
+          "// {{variables}} exactly as Postman will when it transmits, so the signed",
+          "// string and the sent string are identical. Do NOT JSON.parse and re-stringify",
+          "// here -- key order and whitespace would differ and the signature would fail.",
+          "var raw = '';",
+          "if (pm.request.body && pm.request.body.raw) {",
+          "    raw = pm.variables.replaceIn(pm.request.body.raw);",
+          "}",
+          "",
+          "var ts = pm.collectionVariables.get('ts');",
+          "var nonce = pm.collectionVariables.get('nonce');",
+          "",
+          "// pm.variables.get() -- NOT pm.collectionVariables.get() -- so the secret is",
+          "// found whether it is set as a collection variable, an environment variable,",
+          "// or passed with newman --env-var. Reading the collection scope directly",
+          "// silently signs with an empty secret and every request 401s.",
+          "var secret = pm.variables.get('shared_secret');",
+          "",
+          "if (!secret) {",
+          "    console.error('shared_secret is not set. Open the collection Variables tab and paste the secret Hi Tech Group issued you.');",
+          "}",
+          "",
+          "var signable = ts + '.' + nonce + '.' + raw;",
+          "var signature = CryptoJS.HmacSHA256(signable, secret).toString(CryptoJS.enc.Hex);",
+          "",
+          "// The negative test for a forged signature sets its own bad value and marks",
+          "// itself so this script leaves it alone.",
+          "if (pm.request.headers.get('X-HRX-Skip-Signing')) {",
+          "    pm.request.headers.remove('X-HRX-Skip-Signing');",
+          "} else {",
+          "    pm.request.headers.upsert({ key: 'X-HRX-Signature', value: 'sha256=' + signature });",
+          "}",
+          "",
+          "pm.request.headers.upsert({ key: 'X-HRX-Timestamp', value: ts });",
+          "pm.request.headers.upsert({ key: 'X-HRX-Nonce', value: nonce });"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://hrx.hitechgroup.in/api/telephony/v1",
+      "description": "Live endpoint. There is no separate UAT host."
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "description": "Issued by Hi Tech Group. Sent as Authorization: Bearer."
+    },
+    {
+      "key": "shared_secret",
+      "value": "",
+      "description": "Issued by Hi Tech Group, separately from the key. Never sent on the wire — only used to compute the HMAC."
+    },
+    {
+      "key": "ref_id",
+      "value": "7c9e6f41-2b3a-4d5c-8e1f-0a9b8c7d6e5f",
+      "description": "Stands in for the correlation id HRX supplies on originate."
+    },
+    {
+      "key": "event_id",
+      "value": "",
+      "description": "Set per request by the signer."
+    },
+    {
+      "key": "ts",
+      "value": "",
+      "description": "Set per request by the signer."
+    },
+    {
+      "key": "nonce",
+      "value": "",
+      "description": "Set per request by the signer."
+    },
+    {
+      "key": "replay_event_id",
+      "value": "",
+      "description": "Internal. Set by 2.8, replayed by 5.2."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Handshake — start here",
+      "item": [
+        {
+          "name": "1.1  GET /health  -- start here",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Milestone 1. A 200 proves the API key, the shared secret, your clock skew and the IP allowlist all at once.\n\nThe body is empty, so the signed string is \"<ts>.<nonce>.\" with a trailing dot.\n\nDo not proceed until this passes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"reports api_version v1\", function () {",
+                  "    pm.expect(pm.response.json().api_version).to.eql(\"v1\");",
+                  "});",
+                  "pm.test(\"clock is in sync with HRX\", function () {",
+                  "    var skew = Math.abs(Math.floor(Date.now()/1000)",
+                  "             - Math.floor(new Date(pm.response.json().server_time).getTime()/1000));",
+                  "    pm.expect(skew, \"seconds of clock skew -- over 300 means every request will be refused\").to.be.below(300);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Prove credentials, clock and network path. Nothing else matters until 1.1 is green."
+    },
+    {
+      "name": "2. A call, event by event",
+      "item": [
+        {
+          "name": "2.1  call.originated",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.originated\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 1,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": \"{{ref_id}}\",\n  \"origin\": \"api_click_to_call\",\n  \"direction\": \"outbound\",\n  \"mode\": \"manual\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"caller_number\": \"+919812345678\",\n  \"callee_number\": \"+919812309876\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2  call.agent_ringing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.agent_ringing\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 2,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": \"{{ref_id}}\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.3  call.agent_answered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.agent_answered\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 3,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": \"{{ref_id}}\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4  call.customer_ringing",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.customer_ringing\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 4,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": \"{{ref_id}}\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"callee_number\": \"+919812309876\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5  call.answered  -- talk time starts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.answered\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 5,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": \"{{ref_id}}\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"answered_at\": \"2026-08-19T14:58:22+05:30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6  call.hold",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.hold\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 6,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.7  call.unhold",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.unhold\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 7,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"hold_events\": [\n    {\n      \"from\": \"2026-08-19T14:59:00+05:30\",\n      \"to\": \"2026-08-19T14:59:22+05:30\",\n      \"seconds\": 22\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.8  call.completed  -- THE CDR ROW",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "The most important single request in this collection. It carries the full CDR and is what every HRX report is built from.\n\nThis one also pins its event_id so request 5.2 can prove that re-delivering it is safe.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 6,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": null,\n  \"origin\": \"manual_dial\",\n  \"direction\": \"outbound\",\n  \"mode\": \"manual\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"caller_number\": \"+919812345678\",\n  \"callee_number\": \"+919812309876\",\n  \"did_number\": \"+911244567890\",\n  \"campaign\": {\n    \"campaign_id\": \"CMP-07\",\n    \"campaign_name\": \"Customer Care\",\n    \"queue\": \"CustomerCare\",\n    \"skill\": \"Hindi\"\n  },\n  \"gateway\": {\n    \"gateway_id\": \"GW-2\",\n    \"channel\": \"12\",\n    \"sim_msisdn\": \"+919812300001\",\n    \"operator\": \"Airtel\"\n  },\n  \"status\": \"answered\",\n  \"hangup_by\": \"customer\",\n  \"hangup_cause\": \"NORMAL_CLEARING\",\n  \"hangup_cause_code\": 16,\n  \"timestamps\": {\n    \"initiated_at\": \"2026-08-19T14:58:02+05:30\",\n    \"agent_ring_at\": \"2026-08-19T14:58:03+05:30\",\n    \"agent_answer_at\": \"2026-08-19T14:58:08+05:30\",\n    \"customer_ring_at\": \"2026-08-19T14:58:10+05:30\",\n    \"answered_at\": \"2026-08-19T14:58:22+05:30\",\n    \"ended_at\": \"2026-08-19T15:01:40+05:30\",\n    \"wrapup_start_at\": \"2026-08-19T15:01:40+05:30\",\n    \"wrapup_end_at\": \"2026-08-19T15:01:44+05:30\"\n  },\n  \"durations\": {\n    \"agent_ring_seconds\": 5,\n    \"customer_ring_seconds\": 12,\n    \"pdd_seconds\": 8,\n    \"queue_wait_seconds\": 0,\n    \"talk_seconds\": 198,\n    \"hold_seconds\": 0,\n    \"wrap_seconds\": 4,\n    \"total_seconds\": 218,\n    \"billed_seconds\": 240\n  },\n  \"disposition\": {\n    \"code\": \"NI\",\n    \"name\": \"Not Interested\",\n    \"sub_code\": \"NI-PRICE\",\n    \"sub_name\": \"Price too high\",\n    \"remarks\": \"Asked to be called after Diwali\"\n  },\n  \"recording\": {\n    \"available\": true,\n    \"recording_uid\": \"REC-20260819-000512\",\n    \"duration_seconds\": 198,\n    \"format\": \"wav\",\n    \"channels\": \"stereo\",\n    \"size_bytes\": 3168000\n  },\n  \"quality\": {\n    \"mos\": 4.1,\n    \"jitter_ms\": 12,\n    \"packet_loss_percent\": 0.2\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "// Save this event_id so 5.2 can replay exactly this event and prove that",
+                  "// re-delivering something HRX already holds is safe.",
+                  "pm.collectionVariables.set(\"replay_event_id\", pm.collectionVariables.get(\"event_id\"));",
+                  "pm.test(\"status is accepted\", function () {",
+                  "    pm.expect(pm.response.json().status).to.eql(\"accepted\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "The full lifecycle of one click-to-call, in order."
+    },
+    {
+      "name": "3. Manual dial and inbound — THE GO/NO-GO",
+      "item": [
+        {
+          "name": "3.1  MANUAL DIAL (UAT-05)  -- go/no-go",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "THE TEST THAT DECIDES WHETHER THIS INTEGRATION IS TRUSTED.\n\nThe agent dialled on the handset. HRX never placed the call, so there is no ref_id and the agent block carries only an extension -- often all a handset dial knows.\n\nMost integrations of this kind fail because only API-originated calls are hooked, while half the floor dials manually. If your platform cannot raise this event, say so now rather than at UAT.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T16:22:10+05:30\",\n  \"sequence\": 4,\n  \"call_uid\": \"CV-20260819-000640\",\n  \"ref_id\": null,\n  \"origin\": \"manual_dial\",\n  \"direction\": \"outbound\",\n  \"mode\": \"manual\",\n  \"agent\": {\n    \"extension\": \"1042\"\n  },\n  \"caller_number\": \"+919812345678\",\n  \"callee_number\": \"+919811122233\",\n  \"status\": \"no_answer\",\n  \"hangup_by\": \"timeout\",\n  \"timestamps\": {\n    \"initiated_at\": \"2026-08-19T16:21:40+05:30\",\n    \"customer_ring_at\": \"2026-08-19T16:21:44+05:30\",\n    \"ended_at\": \"2026-08-19T16:22:10+05:30\"\n  },\n  \"durations\": {\n    \"customer_ring_seconds\": 26,\n    \"talk_seconds\": 0,\n    \"total_seconds\": 30\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2  inbound call",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 3,\n  \"call_uid\": \"CV-20260819-000701\",\n  \"ref_id\": null,\n  \"origin\": \"inbound\",\n  \"direction\": \"inbound\",\n  \"agent\": {\n    \"extension\": \"1042\"\n  },\n  \"caller_number\": \"+919899988877\",\n  \"callee_number\": \"+911244567890\",\n  \"did_number\": \"+911244567890\",\n  \"status\": \"answered\",\n  \"timestamps\": {\n    \"initiated_at\": \"2026-08-19T11:02:00+05:30\",\n    \"queue_enter_at\": \"2026-08-19T11:02:02+05:30\",\n    \"answered_at\": \"2026-08-19T11:02:19+05:30\",\n    \"ended_at\": \"2026-08-19T11:05:31+05:30\"\n  },\n  \"durations\": {\n    \"queue_wait_seconds\": 17,\n    \"talk_seconds\": 192,\n    \"total_seconds\": 211\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Calls HRX never placed. This is where these integrations usually fall down."
+    },
+    {
+      "name": "4. Transfer, conference, forward, abandon",
+      "item": [
+        {
+          "name": "4.1  call.transfer.completed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.transfer.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 6,\n  \"call_uid\": \"CV-20260819-000481\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"transfer\": {\n    \"type\": \"attended\",\n    \"from_agent_id\": \"AG-1042\",\n    \"to_agent_id\": \"AG-1077\",\n    \"to_extension\": \"1077\",\n    \"transferred_at\": \"2026-08-19T14:34:02+05:30\",\n    \"child_call_uid\": \"CV-20260819-000482\",\n    \"consult_seconds\": 18,\n    \"recording_uid\": \"REC-TL-20260819-000482\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2  call.conference.participant_joined",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.conference.participant_joined\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 7,\n  \"call_uid\": \"CV-20260819-000481\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"conference\": {\n    \"conference_id\": \"CONF-20260819-0033\",\n    \"started_at\": \"2026-08-19T14:35:05+05:30\",\n    \"recording_uid\": \"REC-CF-20260819-0033\",\n    \"participants\": [\n      {\n        \"number\": \"+919812345678\",\n        \"role\": \"agent\",\n        \"joined_at\": \"2026-08-19T14:35:05+05:30\"\n      },\n      {\n        \"number\": \"+919876543210\",\n        \"role\": \"customer\",\n        \"joined_at\": \"2026-08-19T14:35:05+05:30\"\n      },\n      {\n        \"number\": \"+919812300099\",\n        \"role\": \"supervisor\",\n        \"joined_at\": \"2026-08-19T14:35:20+05:30\"\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3  call.forwarded",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.forwarded\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 8,\n  \"call_uid\": \"CV-20260819-000481\",\n  \"forwarding\": {\n    \"type\": \"no_answer\",\n    \"from_number\": \"+919812345678\",\n    \"to_number\": \"+919812300055\",\n    \"forwarded_at\": \"2026-08-19T14:36:00+05:30\",\n    \"child_call_uid\": \"CV-20260819-000491\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.4  queue.abandoned",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"queue.abandoned\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 2,\n  \"call_uid\": \"CV-20260819-000525\",\n  \"origin\": \"inbound\",\n  \"direction\": \"inbound\",\n  \"caller_number\": \"+919812311111\",\n  \"queue_name\": \"CustomerCare\",\n  \"wait_seconds\": 96,\n  \"abandon_point\": \"queue\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.5  ivr.abandoned",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"ivr.abandoned\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 2,\n  \"call_uid\": \"CV-20260819-000526\",\n  \"origin\": \"ivr\",\n  \"direction\": \"inbound\",\n  \"caller_number\": \"+919812322222\",\n  \"wait_seconds\": 14,\n  \"abandon_point\": \"ivr\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "The advanced flows. Each links a child leg to its parent."
+    },
+    {
+      "name": "5. Negative tests — security must hold",
+      "item": [
+        {
+          "name": "5.1  NEGATIVE: forged signature -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              },
+              {
+                "key": "X-HRX-Signature",
+                "value": "sha256=deadbeef"
+              },
+              {
+                "key": "X-HRX-Skip-Signing",
+                "value": "true"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "Everything valid except the signature. If this returns 202, the signature middleware is not wired up and anyone who obtains the API key can forge call records into an HR system.\n\nNote the timestamp and nonce are still valid -- sending a bad signature with no timestamp would fail on a cheaper check first and prove nothing about the HMAC.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 1,\n  \"call_uid\": \"FORGED-SHOULD-NOT-EXIST\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"refused specifically for the signature\", function () {",
+                  "    pm.expect(pm.response.json().error.code).to.eql(\"invalid_signature\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.2  NEGATIVE: replayed event_id -> 200 duplicate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "Re-sends the exact event from 2.8. HRX must answer 200 with status \"duplicate\" and must not write a second copy.\n\nThis is the expected answer to any of your retries -- treat it as success, not as an error.\n\nRun 2.8 immediately before this.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n  \"sequence\": 6,\n  \"call_uid\": \"CV-20260819-000512\",\n  \"ref_id\": null,\n  \"origin\": \"manual_dial\",\n  \"direction\": \"outbound\",\n  \"mode\": \"manual\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"caller_number\": \"+919812345678\",\n  \"callee_number\": \"+919812309876\",\n  \"did_number\": \"+911244567890\",\n  \"campaign\": {\n    \"campaign_id\": \"CMP-07\",\n    \"campaign_name\": \"Customer Care\",\n    \"queue\": \"CustomerCare\",\n    \"skill\": \"Hindi\"\n  },\n  \"gateway\": {\n    \"gateway_id\": \"GW-2\",\n    \"channel\": \"12\",\n    \"sim_msisdn\": \"+919812300001\",\n    \"operator\": \"Airtel\"\n  },\n  \"status\": \"answered\",\n  \"hangup_by\": \"customer\",\n  \"hangup_cause\": \"NORMAL_CLEARING\",\n  \"hangup_cause_code\": 16,\n  \"timestamps\": {\n    \"initiated_at\": \"2026-08-19T14:58:02+05:30\",\n    \"agent_ring_at\": \"2026-08-19T14:58:03+05:30\",\n    \"agent_answer_at\": \"2026-08-19T14:58:08+05:30\",\n    \"customer_ring_at\": \"2026-08-19T14:58:10+05:30\",\n    \"answered_at\": \"2026-08-19T14:58:22+05:30\",\n    \"ended_at\": \"2026-08-19T15:01:40+05:30\",\n    \"wrapup_start_at\": \"2026-08-19T15:01:40+05:30\",\n    \"wrapup_end_at\": \"2026-08-19T15:01:44+05:30\"\n  },\n  \"durations\": {\n    \"agent_ring_seconds\": 5,\n    \"customer_ring_seconds\": 12,\n    \"pdd_seconds\": 8,\n    \"queue_wait_seconds\": 0,\n    \"talk_seconds\": 198,\n    \"hold_seconds\": 0,\n    \"wrap_seconds\": 4,\n    \"total_seconds\": 218,\n    \"billed_seconds\": 240\n  },\n  \"disposition\": {\n    \"code\": \"NI\",\n    \"name\": \"Not Interested\",\n    \"sub_code\": \"NI-PRICE\",\n    \"sub_name\": \"Price too high\",\n    \"remarks\": \"Asked to be called after Diwali\"\n  },\n  \"recording\": {\n    \"available\": true,\n    \"recording_uid\": \"REC-20260819-000512\",\n    \"duration_seconds\": 198,\n    \"format\": \"wav\",\n    \"channels\": \"stereo\",\n    \"size_bytes\": 3168000\n  },\n  \"quality\": {\n    \"mos\": 4.1,\n    \"jitter_ms\": 12,\n    \"packet_loss_percent\": 0.2\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"reported as duplicate, not written twice\", function () {",
+                  "    pm.expect(pm.response.json().status).to.eql(\"duplicate\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.3  NEGATIVE: stale timestamp -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Pins a timestamp an hour old. Proves the freshness window is enforced, which is what stops a captured request being replayed later.\n\nIf you see this code in real traffic, your server clock has drifted -- run NTP."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"refused as stale\", function () {",
+                  "    pm.expect(pm.response.json().error.code).to.eql(\"stale_timestamp\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.4  NEGATIVE: malformed payload -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "Missing event_id, occurred_at and call_uid. HRX stores the rejected payload anyway so it can be inspected -- quote the request_id and you get a precise answer.\n\nDo NOT retry a 422. It will fail identically.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"call.completed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test(\"names the validation failure\", function () {",
+                  "    pm.expect(pm.response.json().error.code).to.eql(\"validation_failed\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5.5  NEGATIVE: wrong API key -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer definitely-not-the-key"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"refused on the key\", function () {",
+                  "    pm.expect(pm.response.json().error.code).to.eql(\"invalid_api_key\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "If any of these pass when they should fail, stop and fix it before sending real call data."
+    },
+    {
+      "name": "6. Recordings, sessions, batch, import",
+      "item": [
+        {
+          "name": "6.1  recording.ready",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/recordings/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "recordings",
+                "ready"
+              ]
+            },
+            "description": "Send only the recording_uid, never a playable URL. HRX exchanges it for a short-lived signed URL at play time and streams the bytes through its own permission layer.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"recording.ready\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T15:02:10+05:30\",\n  \"call_uid\": \"CV-20260819-000512\",\n  \"recording_uid\": \"REC-20260819-000512\",\n  \"recording_type\": \"call\",\n  \"duration_seconds\": 198,\n  \"format\": \"wav\",\n  \"channels\": \"stereo\",\n  \"size_bytes\": 3168000,\n  \"retention_until\": \"2027-08-19\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.2  agent.login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent-sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent-sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"agent.login\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T09:58:40+05:30\",\n  \"session_id\": \"SES-20260819-1042-01\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"login_at\": \"2026-08-19T09:58:40+05:30\",\n  \"mode\": \"manual\",\n  \"device\": {\n    \"type\": \"gsm_handset\",\n    \"ip\": \"192.168.2.87\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.3  agent.state",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent-sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent-sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"agent.state\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T11:14:02+05:30\",\n  \"session_id\": \"SES-20260819-1042-01\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"state\": \"oncall\",\n  \"previous_state\": \"ready\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.4  agent.break.start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent-sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent-sessions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"agent.break.start\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T13:30:00+05:30\",\n  \"session_id\": \"SES-20260819-1042-01\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"state\": \"break\",\n  \"reason\": \"Lunch\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.5  agent.logout  -- with totals",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/agent-sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "agent-sessions"
+              ]
+            },
+            "description": "Send YOUR computed totals here. HRX stores them verbatim rather than deriving them from the state stream, specifically so the HRX productivity report and your User Session report cannot drift apart and become a support ticket.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"agent.logout\",\n  \"event_id\": \"{{event_id}}\",\n  \"occurred_at\": \"2026-08-19T19:02:11+05:30\",\n  \"session_id\": \"SES-20260819-1042-01\",\n  \"agent\": {\n    \"agent_id\": \"AG-1042\",\n    \"agent_code\": \"mehak\",\n    \"extension\": \"1042\",\n    \"agent_number\": \"+919812345678\",\n    \"hrms_employee_id\": \"EMP-096\"\n  },\n  \"login_at\": \"2026-08-19T09:58:40+05:30\",\n  \"logout_at\": \"2026-08-19T19:02:11+05:30\",\n  \"mode\": \"manual\",\n  \"totals\": {\n    \"login_seconds\": 32611,\n    \"ready_seconds\": 14980,\n    \"talk_seconds\": 9120,\n    \"hold_seconds\": 340,\n    \"wrap_seconds\": 2210,\n    \"idle_seconds\": 3105,\n    \"break_seconds\": 2856,\n    \"occupancy_percent\": 41.2,\n    \"calls_handled\": 63,\n    \"calls_missed\": 4\n  },\n  \"breaks\": [\n    {\n      \"reason\": \"Lunch\",\n      \"from\": \"2026-08-19T13:30:00+05:30\",\n      \"to\": \"2026-08-19T14:05:12+05:30\",\n      \"seconds\": 2112\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.6  events/batch  -- backlog drain",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/events/batch",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "events",
+                "batch"
+              ]
+            },
+            "description": "Backlog drain only, never live traffic. Max 500 per request.\n\nThe second event here deliberately has no event_id, to show that one bad row does not reject the batch -- you get a 207 with a per-item result.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"events\": [\n    {\n      \"event\": \"call.completed\",\n      \"event_id\": \"{{event_id}}\",\n      \"occurred_at\": \"2026-08-19T15:01:44+05:30\",\n      \"sequence\": 1,\n      \"call_uid\": \"CV-BATCH-1\",\n      \"agent\": {\n        \"agent_id\": \"AG-1042\",\n        \"agent_code\": \"mehak\",\n        \"extension\": \"1042\",\n        \"agent_number\": \"+919812345678\",\n        \"hrms_employee_id\": \"EMP-096\"\n      },\n      \"status\": \"answered\",\n      \"timestamps\": {\n        \"initiated_at\": \"2026-08-19T10:00:00+05:30\",\n        \"ended_at\": \"2026-08-19T10:02:00+05:30\"\n      },\n      \"durations\": {\n        \"talk_seconds\": 110,\n        \"total_seconds\": 120\n      }\n    },\n    {\n      \"event\": \"call.completed\",\n      \"call_uid\": \"CV-BATCH-NO-ID\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 207\", function () {",
+                  "    pm.response.to.have.status(207);",
+                  "});",
+                  "",
+                  "pm.test(\"good row accepted, bad row rejected, batch not lost\", function () {",
+                  "    var b = pm.response.json();",
+                  "    pm.expect(b.accepted).to.eql(1);",
+                  "    pm.expect(b.rejected).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6.7  cdr/import  -- gap repair",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{event_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cdr/import",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "cdr",
+                "import"
+              ]
+            },
+            "description": "Used to close a gap the nightly reconciliation found. Records need no event_id -- HRX derives a stable one from call_uid, so replaying the same row twice collapses to a single event.\n\nPrefer push. Use this to repair, not as a substitute.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"call_uid\": \"CV-RECOVERED-1\",\n      \"origin\": \"manual_dial\",\n      \"direction\": \"outbound\",\n      \"agent\": {\n        \"extension\": \"1042\"\n      },\n      \"caller_number\": \"+919812345678\",\n      \"callee_number\": \"+919812309876\",\n      \"status\": \"answered\",\n      \"timestamps\": {\n        \"initiated_at\": \"2026-08-19T12:00:00+05:30\",\n        \"ended_at\": \"2026-08-19T12:04:10+05:30\"\n      },\n      \"durations\": {\n        \"talk_seconds\": 240,\n        \"total_seconds\": 250\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 202\", function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "The remaining surfaces."
+    }
+  ]
+}

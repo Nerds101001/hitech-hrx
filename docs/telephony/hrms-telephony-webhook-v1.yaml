@@ -118,10 +118,14 @@ info:
     name: Proprietary — Hi Tech Group
 
 servers:
-  - url: https://hrx-uat.hitechgroup.in/api/telephony/v1
-    description: UAT — use this for all integration work
   - url: https://hrx.hitechgroup.in/api/telephony/v1
-    description: Production — only after UAT sign-off
+    description: |
+      Live. There is no separate UAT host — integrate against this one.
+
+      That is safe to do: until Hi Tech Group configure your API key the
+      endpoint refuses everything, and once configured, your test events land
+      in a call log that starts empty. Nothing you send here affects any other
+      part of the HR system.
 
 security:
   - bearerAuth: []
