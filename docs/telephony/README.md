@@ -5,6 +5,7 @@ push into it. This folder is what you hand them.
 
 | File | Direction | What it is |
 |---|---|---|
+| `INTEGRATION-GUIDE.md` | Vendor → HRX | **Send this first.** The whole integration in five minutes, with working code in PHP, C#, Java, Python, Node and curl. The PHP/Python/Node/curl samples were executed against the real endpoint. |
 | `hrms-telephony-webhook-v1.yaml` | Vendor → HRX | **The API we publish.** Every call event, agent session and recording notification they must POST. This is the file they asked for. |
 | `centrovision-required-v1.yaml` | HRX → Vendor | The counterpart: what they must expose so HRX can dial, pull a signed recording URL, and reconcile the CDR nightly. |
 | `HRX-Telephony.postman_collection.json` | Both | 28 runnable requests with a working HMAC signing script, a sample payload for every event, and five negative tests. Both sides prove their half works before writing production code. |
@@ -89,7 +90,11 @@ mailing both together throws that away.
 > As discussed, HRX is publishing the ingest API rather than asking you to build
 > reports for us. Four files are attached.
 >
-> **`hrms-telephony-webhook-v1.yaml`** is the API we are publishing — the one
+> **`INTEGRATION-GUIDE.md`** is the five-minute version — start there. It has
+> working code for the signing in PHP, C#, Java, Python, Node and curl, so your
+> developer can be sending a test event within the hour.
+>
+> **`hrms-telephony-webhook-v1.yaml`** is the full formal spec — the one
 > you asked for. Everything you need to POST to us is in it, with a worked
 > example for every event type.
 >
