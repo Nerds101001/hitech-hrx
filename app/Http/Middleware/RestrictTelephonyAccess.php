@@ -26,22 +26,37 @@ class RestrictTelephonyAccess
 {
   public function handle(Request $request, Closure $next): Response
   {
-    $allowed = config('telephony.restrict_to_emails', []);
-
-    // No list configured: the feature is open to whoever the role rules allow.
-    if (empty($allowed)) {
-      return $next($request);
-    }
-
-    $user = $request->user();
-    $email = strtolower(trim((string) ($user->email ?? '')));
-
-    if ($email !== '' && in_array($email, $allowed, true)) {
+    if (static::permits($request->user())) {
       return $next($request);
     }
 
     // 403 rather than a redirect: this is a deliberate refusal, and bouncing
     // someone to a dashboard with no explanation reads as a broken link.
     abort(403, 'Telephony reporting is still being tested and is limited to the project team.');
+  }
+
+  /**
+   * May this user see the telephony feature at all?
+   *
+   * The single definition of that, so the middleware and the sidebar cannot
+   * disagree. App\Support\Nav consults this when deciding whether to draw a
+   * menu item, which is what stops the group appearing for people who would
+   * only get a 403 -- a visible link that refuses you is worse than no link,
+   * because it advertises the feature and reads as a bug.
+   *
+   * @param  \App\Models\User|null  $user
+   */
+  public static function permits($user): bool
+  {
+    $allowed = config('telephony.restrict_to_emails', []);
+
+    // No list configured: the feature is open to whoever the role rules allow.
+    if (empty($allowed)) {
+      return true;
+    }
+
+    $email = strtolower(trim((string) ($user->email ?? '')));
+
+    return $email !== '' && in_array($email, $allowed, true);
   }
 }

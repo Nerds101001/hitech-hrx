@@ -35,6 +35,19 @@ class Nav
         return self::$cache[$key] ??= self::evaluate($path, $user);
     }
 
+    /**
+     * Drop the memo.
+     *
+     * The cache is keyed on user and path, which is right for a single
+     * request, but it also survives a change to the CONFIG that a decision
+     * depended on -- so a test that flips telephony.restrict_to_emails and
+     * re-asks would get the previous answer.
+     */
+    public static function flush(): void
+    {
+        self::$cache = [];
+    }
+
     /** Filter a list of ['url' => ...] rows down to what the user can open. */
     public static function filter(array $items, string $urlKey = 'url', $user = null): array
     {
@@ -54,6 +67,18 @@ class Nav
 
         foreach ($route->gatherMiddleware() as $m) {
             if (!is_string($m)) {
+                continue;
+            }
+
+            // A feature gated to named testers. Aliases are opaque strings
+            // here, so Nav cannot infer this one the way it does role: and
+            // permission: -- and without it the sidebar draws a link that only
+            // 403s. The rule itself lives on the middleware, so there is one
+            // definition rather than two that can drift.
+            if ($m === 'telephony.restricted') {
+                if (!\App\Http\Middleware\RestrictTelephonyAccess::permits($user)) {
+                    return false;
+                }
                 continue;
             }
 
