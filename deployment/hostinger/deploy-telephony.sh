@@ -115,7 +115,10 @@ PATCH_FILES=(
 )
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
-BACKUP="\$HOME/hrx-backups/telephony-$STAMP"
+# Resolved to an absolute path: pscp does NOT expand $HOME in a remote
+# destination, it uses it literally and fails.
+REMOTE_HOME="$(remote 'echo $HOME' 2>/dev/null | tr -d '\r\n')"
+BACKUP="$REMOTE_HOME/hrx-backups/telephony-$STAMP"
 
 echo "════════════════════════════════════════════════════════════════════"
 echo " HRX telephony deploy"
@@ -125,7 +128,7 @@ echo "  new files     : ${#NEW_FILES[@]}"
 echo "  replaced      : ${#REPLACE_FILES[@]}  (verified identical to baseline first)"
 echo "  patched live  : ${#PATCH_FILES[@]}  (append / targeted insert only)"
 echo "  migrations    : 10 new tables, nothing altered or dropped"
-echo "  backup + undo : ~/hrx-backups/telephony-$STAMP/REVERT.sh"
+echo "  backup + undo : $BACKUP/REVERT.sh"
 echo
 
 if [[ $VERIFY_ONLY -eq 1 ]]; then
@@ -359,5 +362,5 @@ echo
 echo "════════════════════════════════════════════════════════════════════"
 echo " Done. To undo everything:"
 echo "   ssh -p $HRX_SSH_PORT $SSH"
-echo "   bash ~/hrx-backups/telephony-$STAMP/REVERT.sh"
+echo "   bash $BACKUP/REVERT.sh"
 echo "════════════════════════════════════════════════════════════════════"
