@@ -65,6 +65,16 @@ info:
     signable = 1755691200.4f8c1a2e-6b3d-4e7a-9c15-2d8f0b6a1e93.{"a":1}
     ```
 
+    ## Source IP allowlist
+
+    HRX allowlists **45.120.40.194**, the address of your gateway that HRX
+    already reaches for click-to-call. Requests from anywhere else are refused
+    with `403 ip_not_allowed`.
+
+    **If your webhooks leave from a different address, tell us before you start
+    testing.** Every request will be refused otherwise, and from your side it
+    looks the same as a dead endpoint.
+
     ## Clock skew and replay
 
     A request whose `X-HRX-Timestamp` is more than **300 seconds** from HRX
@@ -622,8 +632,13 @@ components:
 
     Forbidden:
       description: |
-        `ip_not_allowed` — the source IP is not on the allowlist. Send Hi Tech
-        Group your fixed egress IP, or route over the LAN link.
+        `ip_not_allowed` — the request came from an address that is not on the
+        allowlist. HRX currently allows **45.120.40.194**.
+
+        This is not retryable and will not fix itself. Send Hi Tech Group the
+        fixed egress address your webhook sender actually uses, and they will
+        add it. Note that the host issuing the webhooks may not be the host
+        that answers your agent API — check before assuming.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

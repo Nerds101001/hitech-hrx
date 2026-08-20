@@ -90,7 +90,19 @@ class TelephonyIngestTest extends TelephonyTestCase
       'X-HRX-Signature' => 'sha256=deadbeef',
     ])->assertStatus(401)->assertJsonPath('error.code', 'invalid_signature');
 
-    $this->assertSame(0, TelephonyWebhookDelivery::count());
+    // A refused request IS recorded now, so the Webhook Log can answer
+    // "they say they are sending and we see nothing". What must never
+    // happen is a call record.
+    $this->assertSame(0, TelephonyCall::count(), 'a forged request must not create a call');
+
+    $rejected = TelephonyWebhookDelivery::sole();
+    $this->assertSame('rejected', $rejected->status);
+    $this->assertFalse((bool) $rejected->signature_valid);
+    $this->assertStringContainsString('invalid_signature', (string) $rejected->error);
+    // The caller's own event_id is deliberately not stored: writing it to a
+    // unique-indexed column would let an unauthenticated request reserve an
+    // id and block the genuine delivery of that event later.
+    $this->assertNull($rejected->event_id);
   }
 
   public function test_a_wrong_api_key_is_rejected(): void
@@ -141,9 +153,13 @@ class TelephonyIngestTest extends TelephonyTestCase
       ->assertStatus(413)
       ->assertJsonPath('error.code', 'payload_too_large');
 
-    // The point of checking in the middleware rather than the controller: an
-    // oversized body must never reach the longText payload column at all.
-    $this->assertSame(0, TelephonyWebhookDelivery::count());
+    // The point of checking in the middleware rather than the controller:
+    // the 4 KB body must never reach the longText payload column in full.
+    // The refusal is recorded, but only a bounded excerpt of it.
+    $rejected = TelephonyWebhookDelivery::sole();
+    $this->assertSame('rejected', $rejected->status);
+    $this->assertStringContainsString('payload_too_large', (string) $rejected->error);
+    $this->assertLessThan(2100, strlen((string) $rejected->payload), 'the excerpt must stay bounded');
   }
 
   public function test_a_normal_event_is_unaffected_by_the_size_cap(): void
@@ -153,6 +169,35 @@ class TelephonyIngestTest extends TelephonyTestCase
     $this->signed('POST', '/api/telephony/v1/events', $payload)->assertStatus(202);
 
     $this->assertSame(1, TelephonyCall::where('call_uid', $payload['call_uid'])->count());
+  }
+
+  public function test_a_source_ip_off_the_allowlist_is_refused_and_recorded(): void
+  {
+    // Production allowlists 45.120.40.194, the CentroVision gateway. Anything
+    // else is refused before the bearer key is even looked at.
+    config(['telephony.inbound.allowed_ips' => ['45.120.40.194']]);
+
+    $this->signed('POST', '/api/telephony/v1/events', $this->completedCallPayload())
+      ->assertStatus(403)
+      ->assertJsonPath('error.code', 'ip_not_allowed');
+
+    $this->assertSame(0, TelephonyCall::count());
+
+    // The whole reason this is recorded rather than only logged: a wrong
+    // allowlist entry otherwise leaves the Webhook Log completely empty,
+    // which is indistinguishable from the vendor never having started.
+    $rejected = TelephonyWebhookDelivery::sole();
+    $this->assertSame('rejected', $rejected->status);
+    $this->assertStringContainsString('ip_not_allowed', (string) $rejected->error);
+    $this->assertNotNull($rejected->source_ip, 'the log has to name the IP that was refused');
+  }
+
+  public function test_an_allowlisted_source_ip_passes(): void
+  {
+    // 127.0.0.1 is what the test client presents.
+    config(['telephony.inbound.allowed_ips' => ['127.0.0.1', '45.120.40.194']]);
+
+    $this->signed('GET', '/api/telephony/v1/health')->assertOk();
   }
 
   // ──────────────────────────────────────────────────────────── idempotency

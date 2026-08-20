@@ -68,6 +68,51 @@
       @endforeach
     </div>
 
+    @if($rejections->isNotEmpty())
+      <div class="hitech-card-white border-0 shadow-sm rounded-4 overflow-hidden mb-4"
+           style="border-left:4px solid #b32020 !important;">
+        <div class="p-3 border-bottom">
+          <h6 class="fw-bold mb-0 text-danger">
+            <i class="bx bx-shield-x me-1"></i>Requests refused in the last 7 days
+          </h6>
+          <p class="text-muted small mb-0">
+            These never reached the application. If the vendor insists they are sending and you
+            see nothing else on this page, the answer is almost always here.
+          </p>
+        </div>
+        <div class="table-responsive">
+          <table class="table mb-0">
+            <thead><tr><th>Reason</th><th>From IP</th><th class="text-end">Count</th><th>Last seen</th><th>What to do</th></tr></thead>
+            <tbody>
+              @foreach($rejections as $r)
+                @php
+                  $fix = match ($r->reason) {
+                    'ip_not_allowed'    => 'Add this IP to TELEPHONY_ALLOWED_IPS, or ask the vendor to send from the allowlisted host.',
+                    'invalid_api_key'   => 'They are using the wrong key, or it was rotated without telling them.',
+                    'invalid_signature' => 'Almost always the JSON being re-serialised before signing. The raw bytes must be signed.',
+                    'stale_timestamp'   => 'Their server clock has drifted. Ask them to run NTP.',
+                    'replayed_nonce'    => 'They are reusing a nonce. It must be fresh per HTTP request, even on a retry.',
+                    'missing_signature',
+                    'missing_timestamp',
+                    'missing_nonce'     => 'A required header is absent — they have not finished implementing the signing.',
+                    'payload_too_large' => 'Over 5 MB. A backlog drain should be split across several /events/batch calls.',
+                    default             => 'See the delivery for the full reason.',
+                  };
+                @endphp
+                <tr>
+                  <td><code class="text-danger">{{ $r->reason }}</code></td>
+                  <td class="small">{{ $r->source_ip ?: 'unknown' }}</td>
+                  <td class="text-end small fw-semibold">{{ number_format($r->n) }}</td>
+                  <td class="small text-muted">{{ \Carbon\Carbon::parse($r->last_seen)->diffForHumans() }}</td>
+                  <td class="small text-muted">{{ $fix }}</td>
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      </div>
+    @endif
+
     <div class="hitech-card-white border-0 shadow-sm rounded-4 p-3 mb-4">
       <form method="GET" class="row g-2 align-items-end">
         <div class="col-6 col-md-2">
@@ -164,8 +209,9 @@
                   <i class="bx bx-transfer text-muted" style="font-size:2.4rem;"></i>
                   <p class="text-muted mb-1 mt-2">No deliveries yet.</p>
                   <p class="text-muted small mb-0">
-                    Rejected requests never reach this table — a bad signature is refused by the
-                    middleware before the controller runs, and is recorded in the application log instead.
+                    If CentroVision say they are sending, check the refused-requests panel above —
+                    a wrong entry in <code>TELEPHONY_ALLOWED_IPS</code> refuses every request
+                    before it gets this far.
                   </p>
                 </td>
               </tr>

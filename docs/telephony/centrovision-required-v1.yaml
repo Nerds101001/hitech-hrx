@@ -59,6 +59,22 @@ info:
     different scheme — a query-string `client_id`, basic auth, an IP allowlist
     with no credential at all — say which and HRX will match it.
 
+    ## Which address will your webhooks come from?
+
+    HRX allowlists **45.120.40.194** — the address it already reaches for
+    click-to-call. If your webhook sender egresses from somewhere else, say so
+    at kickoff: every request would be refused with `403 ip_not_allowed`, and
+    that looks identical to HRX being down.
+
+    Two related asks while you are checking:
+
+    * Please allowlist the HRX production server on **your** side too, so
+      click-to-call and the CDR pull work. Hi Tech Group will supply the
+      address.
+    * Your agent API at `45.120.40.194:18111` currently answers only the
+      production host, so click-to-call cannot be exercised from a UAT box
+      until that host is allowed as well.
+
     ## Transport
 
     The gateway is on-prem at `192.168.2.5` with a self-signed certificate, so

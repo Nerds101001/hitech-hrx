@@ -19,6 +19,12 @@ return [
     ))),
 
     // Comma separated IPv4/IPv6 or CIDR. Empty = allowlist disabled (dev only).
+    //
+    // Production value is 45.120.40.194, the CentroVision gateway's public
+    // address -- the same host access.click_to_call.endpoint dials out to. It
+    // is deliberately NOT defaulted here: a default would silently enforce the
+    // check in local and CI environments, where requests come from elsewhere,
+    // and the resulting 403s look exactly like a broken integration.
     'allowed_ips' => array_values(array_filter(array_map(
       'trim',
       explode(',', (string) env('TELEPHONY_ALLOWED_IPS', ''))

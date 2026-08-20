@@ -46,11 +46,38 @@ class TelephonyAdminController extends Controller
     $counts = TelephonyWebhookDelivery::selectRaw('status, COUNT(*) as n')
       ->groupBy('status')->pluck('n', 'status');
 
+    // Refusals happen in middleware, before anything is interpreted, and are
+    // grouped by reason and source IP because the useful question is never
+    // "which request failed" but "what is systematically wrong". A wrong
+    // allowlist entry shows up here as one row with a large count.
+    // Grouped in PHP rather than with SUBSTRING_INDEX, which is MySQL-only
+    // and would break the moment anyone pointed a test at SQLite. The set of
+    // distinct error strings is small and bounded, so this aggregates a
+    // handful of rows rather than a table scan's worth.
+    $rejections = TelephonyWebhookDelivery::where('status', 'rejected')
+      ->where('received_at', '>=', now()->subDays(7))
+      ->selectRaw('source_ip, error, COUNT(*) as n, MAX(received_at) as last_seen')
+      ->groupBy('source_ip', 'error')
+      ->get()
+      ->groupBy(fn ($r) => $r->source_ip . '|' . strtok((string) $r->error, ':'))
+      ->map(fn ($group) => (object) [
+        'source_ip' => $group->first()->source_ip,
+        'reason' => strtok((string) $group->first()->error, ':'),
+        'n' => $group->sum('n'),
+        'last_seen' => $group->max('last_seen'),
+      ])
+      ->sortByDesc('n')
+      ->values();
+
     return view('tenant.telephony.admin.webhook-log', [
       'pageConfigs' => ['contentLayout' => 'wide'],
       'deliveries' => $deliveries,
       'counts' => $counts,
-      'lastReceived' => TelephonyWebhookDelivery::max('received_at'),
+      'rejections' => $rejections,
+      // Deliberately the last ACCEPTED delivery, not the last of any kind: a
+      // stream of refusals must not make the "last event received" tile look
+      // healthy.
+      'lastReceived' => TelephonyWebhookDelivery::where('status', '!=', 'rejected')->max('received_at'),
       'filters' => $request->only(['status', 'endpoint', 'q']),
     ]);
   }

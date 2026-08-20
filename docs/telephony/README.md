@@ -42,7 +42,7 @@ php -r 'echo "KEY=".bin2hex(random_bytes(24))."\nSECRET=".bin2hex(random_bytes(3
 # Issued BY HRX TO the vendor
 TELEPHONY_INBOUND_API_KEY=
 TELEPHONY_INBOUND_SECRETS=          # comma separated; new secret FIRST during a rotation
-TELEPHONY_ALLOWED_IPS=              # their fixed egress IP or CIDR; empty disables the check
+TELEPHONY_ALLOWED_IPS=45.120.40.194  # the CentroVision gateway; empty disables the check
 TELEPHONY_DEFAULT_TENANT_ID=default
 
 # Issued BY the vendor TO HRX — leave blank until they provide them
@@ -59,7 +59,22 @@ index as distinct — a null tenant silently stops `(tenant_id, event_id)` from
 deduplicating anything, so a replayed event would be written twice with no
 error. The config defaults it to `default` for exactly this reason.
 
-### 3. Send the key and secret separately
+### 3. Confirm the allowlist address
+
+`45.120.40.194` is the gateway HRX already dials for click-to-call, so it is
+the best first guess for where their webhooks will come from — but it is a
+guess. **Ask them to confirm the egress address of the host that will send the
+webhooks**, which is not necessarily the host that answers their agent API.
+
+If it is wrong, every request is refused with `403 ip_not_allowed`. That used
+to be invisible in the UI; the Webhook Log now shows refused requests grouped
+by reason and source IP, with the fix spelled out, so a wrong entry here is a
+five-minute problem rather than a week of "we are sending" / "we see nothing".
+
+To disable the check while testing, set `TELEPHONY_ALLOWED_IPS=` (empty). Do
+not leave it empty in production.
+
+### 4. Send the key and secret separately
 
 Not in the same email as the spec. The whole point of the HMAC layer is that a
 leaked API key alone is not enough to forge call records into an HR system;

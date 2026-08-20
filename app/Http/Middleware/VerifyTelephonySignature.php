@@ -95,7 +95,15 @@ class VerifyTelephonySignature
 
   /**
    * Rejections are logged with the request id so a vendor asking "why did you
-   * 401 us at 14:32" can be answered without guesswork.
+   * 401 us at 14:32" can be answered without guesswork, AND recorded in
+   * telephony_webhook_deliveries so the answer is visible in the admin UI
+   * rather than only to whoever can read the log file on the server.
+   *
+   * That second part matters most when the IP allowlist is wrong. Every
+   * request is then refused here, before the controller, so without this the
+   * Webhook Log would show nothing at all -- identical to the vendor never
+   * having started, and the single most expensive misdiagnosis available in
+   * this integration.
    */
   private function deny(Request $request, int $status, string $code, string $message): Response
   {
@@ -109,6 +117,8 @@ class VerifyTelephonySignature
       'event_id' => $request->input('event_id'),
     ]);
 
+    $this->record($request, $code, $message, $requestId);
+
     return response()->json([
       'error' => [
         'code' => $code,
@@ -116,5 +126,49 @@ class VerifyTelephonySignature
         'request_id' => $requestId,
       ],
     ], $status);
+  }
+
+  /**
+   * Store a refused request, without trusting a word of it.
+   *
+   * Only a bounded excerpt of the body is kept: an unauthenticated caller
+   * controls this content entirely, and the whole point of refusing them is
+   * that they do not get to write megabytes into the database. The
+   * throttle:telephony limiter caps how often this can happen at all.
+   *
+   * Wrapped in a catch because a logging failure must never turn a clean 401
+   * into a 500 -- that would hand a caller a way to make refusals look like
+   * server errors, which the vendor's retry policy treats very differently.
+   */
+  private function record(Request $request, string $code, string $message, string $requestId): void
+  {
+    try {
+      $body = $request->getContent();
+
+      \App\Models\Telephony\TelephonyWebhookDelivery::create([
+        'tenant_id' => config('telephony.inbound.default_tenant_id'),
+        // Never trust a refused caller's event_id as an identity: writing it
+        // to the unique-indexed column would let an unauthenticated request
+        // block a later genuine delivery of the same event.
+        'event_id' => null,
+        'event_type' => null,
+        'call_uid' => null,
+        'endpoint' => \Illuminate\Support\Str::limit($request->path(), 60, ''),
+        'source_ip' => $request->ip(),
+        'headers' => [
+          'timestamp' => \Illuminate\Support\Str::limit((string) $request->header('X-HRX-Timestamp'), 40, ''),
+          'nonce' => \Illuminate\Support\Str::limit((string) $request->header('X-HRX-Nonce'), 60, ''),
+          'user_agent' => \Illuminate\Support\Str::limit((string) $request->userAgent(), 120, ''),
+          'request_id' => $requestId,
+        ],
+        'payload' => \Illuminate\Support\Str::limit($body, 2000, ' ...[truncated]'),
+        'signature_valid' => false,
+        'status' => 'rejected',
+        'error' => $code . ': ' . $message,
+        'received_at' => now(),
+      ]);
+    } catch (\Throwable $e) {
+      Log::warning('[telephony] could not record a rejected webhook', ['message' => $e->getMessage()]);
+    }
   }
 }
