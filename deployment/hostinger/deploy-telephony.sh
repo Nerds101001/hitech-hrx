@@ -31,6 +31,10 @@ ROOT="$(pwd)"
 # The file begins with a UTF-8 BOM, which `source` would try to execute.
 set -a; source <(tr -d '\357\273\277' < deployment/.env.deploy); set +a
 
+# A local PHP, for obfuscating and for comparing code rather than bytes.
+PHP_LOCAL="${PHP_LOCAL:-$(command -v php || echo /c/laragon/bin/php/php-8.3.28-Win32-vs16-x64/php.exe)}"
+TOKENISER="deployment/hostinger/php-tokens.php"
+
 PLINK="/c/Program Files/PuTTY/plink.exe"
 PSCP="/c/Program Files/PuTTY/pscp.exe"
 SSH="$HRX_SSH_USER@$HRX_SSH_HOST"
@@ -111,6 +115,17 @@ REPLACE_FILES=(
   config/permissions_registry.php
 )
 
+# Files that ship OBFUSCATED on production. Uploading the plain-text local copy
+# would strip protection somebody deliberately applied, so these are obfuscated
+# into a staging copy first, and production's own version is decoded and
+# token-compared before anything is overwritten.
+#
+# Nav.php is here because it decides which menu items get drawn -- without it
+# the sidebar keeps advertising a feature the routes refuse.
+OBFUSCATE_FILES=(
+  app/Support/Nav.php
+)
+
 # Files patched IN PLACE on the server. Never uploaded from here.
 PATCH_FILES=(
   routes/api.php
@@ -131,6 +146,7 @@ echo "════════════════════════�
 echo "  target        : $SSH:$APP"
 echo "  new files     : ${#NEW_FILES[@]}"
 echo "  replaced      : ${#REPLACE_FILES[@]}  (verified identical to baseline first)"
+echo "  obfuscated    : ${#OBFUSCATE_FILES[@]}  (shipped obfuscated, as production has them)"
 echo "  patched live  : ${#PATCH_FILES[@]}  (append / targeted insert only)"
 echo "  migrations    : new tables only, nothing altered or dropped"
 echo "  backup + undo : $BACKUP/REVERT.sh"
@@ -208,6 +224,30 @@ for f in "${REPLACE_FILES[@]}"; do
   fi
 done
 
+# The obfuscated ones: decode what production actually has and compare the CODE,
+# not the bytes. Whitespace and comments differ by definition after obfuscation,
+# so a checksum would always mismatch and tell us nothing.
+for f in "${OBFUSCATE_FILES[@]}"; do
+  remote "cat $APP/$f" > /tmp/prod-obf.php 2>/dev/null
+  $PHP_LOCAL deployment/hostinger/obfuscate-one.php --decode /tmp/prod-obf.php > /tmp/prod-plain.php 2>/dev/null
+
+  git show fea8e2634:"$f" > /tmp/base-plain.php
+
+  base_tok="$($PHP_LOCAL "$TOKENISER" /tmp/base-plain.php | md5sum | cut -d' ' -f1)"
+  prod_tok="$($PHP_LOCAL "$TOKENISER" /tmp/prod-plain.php | md5sum | cut -d' ' -f1)"
+  mine_tok="$($PHP_LOCAL "$TOKENISER" "$f" | md5sum | cut -d' ' -f1)"
+
+  if [[ "$prod_tok" == "$base_tok" ]]; then
+    echo "  $f is the baseline (obfuscated) — safe to replace"
+  elif [[ "$prod_tok" == "$mine_tok" ]]; then
+    echo "  $f already matches this build — safe to replace"
+  else
+    echo "  ABORT: $f has been changed on production, beyond obfuscation."
+    echo "         Decode it and merge by hand; do not overwrite."
+    exit 1
+  fi
+done
+
 # Refuse to run twice.
 if remote "test -f $APP/routes/telephony.php" 2>/dev/null; then
   echo
@@ -226,7 +266,7 @@ remote "set -e
   cd $APP
   # Only the files that already exist need backing up; the new ones are
   # reverted by deletion.
-  tar czf $BACKUP/existing-files.tar.gz ${PATCH_FILES[*]} ${REPLACE_FILES[*]}
+  tar czf $BACKUP/existing-files.tar.gz ${PATCH_FILES[*]} ${REPLACE_FILES[*]} ${OBFUSCATE_FILES[*]}
   echo '  backed up:'; tar tzf $BACKUP/existing-files.tar.gz | sed 's/^/    /'
 "
 
@@ -318,10 +358,22 @@ remote "cd $APP && mkdir -p \
   app/Http/Controllers/Api/Telephony app/Http/Controllers/tenant/Telephony \
   resources/views/tenant/telephony/_partials resources/views/tenant/telephony/admin"
 
+# Obfuscated files go up from a staging tree, so the working copy stays
+# readable and the uploaded copy matches production's convention.
+STAGE="/tmp/telephony-stage"
+rm -rf "$STAGE"
+for f in "${OBFUSCATE_FILES[@]}"; do
+  $PHP_LOCAL deployment/hostinger/obfuscate-one.php "$f" "$STAGE/$f" | sed 's/^/  /'
+done
+
 tar czf /tmp/telephony-payload.tar.gz "${NEW_FILES[@]}" "${REPLACE_FILES[@]}"
+tar rzf /dev/null 2>/dev/null || true
+( cd "$STAGE" && tar czf /tmp/telephony-obf.tar.gz "${OBFUSCATE_FILES[@]}" )
 echo "  payload: $(du -h /tmp/telephony-payload.tar.gz | cut -f1)"
 upload /tmp/telephony-payload.tar.gz "$APP/telephony-payload.tar.gz"
-remote "cd $APP && tar xzf telephony-payload.tar.gz && rm -f telephony-payload.tar.gz && echo '  extracted in place'"
+upload /tmp/telephony-obf.tar.gz "$APP/telephony-obf.tar.gz"
+remote "cd $APP && tar xzf telephony-payload.tar.gz && tar xzf telephony-obf.tar.gz \
+  && rm -f telephony-payload.tar.gz telephony-obf.tar.gz && echo '  extracted in place'"
 
 # ───────────────────────────────────────────────────────────── patch ────────
 
