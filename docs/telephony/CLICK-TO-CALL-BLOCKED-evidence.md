@@ -36,6 +36,51 @@ One host, every protocol, every port, from one source address only.
 
 ---
 
+## The measurement that settles whose side it is
+
+From the HRX server (`89.117.188.10`), pinging four addresses in the dialer's
+own /24:
+
+| Target | Result |
+|---|---|
+| `45.120.40.193` | **0% packet loss — reachable** |
+| `45.120.40.194` (the dialer) | 100% packet loss |
+| `45.120.40.1` | 100% packet loss |
+| `45.120.40.195` | 100% packet loss |
+| `8.8.8.8`, `1.1.1.1` (control) | 0% packet loss |
+
+`45.120.40.193` is in the same /24 as the dialer and answers our server
+perfectly. Packets from `89.117.188.10` therefore reach Vayutel's network
+without obstruction.
+
+That rules out, by measurement rather than argument:
+
+- Hostinger filtering outbound traffic — it reaches `.193` in that same range
+- a block on hosting or datacentre ASNs — same evidence
+- a geographic or country rule — same evidence
+- a routing failure between the two networks — the route demonstrably works
+
+**What remains is that `45.120.40.194` specifically refuses traffic from
+`89.117.188.10`** — a rule on that host or on a firewall directly in front of
+it. That is Vayutel's or CentroVision's to change; nothing Hostinger or Hi Tech
+Group controls can affect it.
+
+Note the network owners differ:
+
+| IP | Network | Role |
+|---|---|---|
+| `89.117.188.10` | AS47583 Hostinger, Mumbai | HRX server (blocked source) |
+| `45.120.40.194` | **AS134040 Vayutel Technology Services**, Ludhiana | the dialer |
+| `112.196.44.154` | AS17917 Quadrant Televentures, Ludhiana | Hi Tech office (works fine) |
+
+The dialer is hosted on **Vayutel**, not on CentroVision's own infrastructure.
+So "no IP allowlist is configured" can be entirely true of the dialer software
+while a Vayutel firewall drops the traffic before that software ever sees it.
+Those are different layers, and only one of them is visible from CentroVision's
+admin panel.
+
+---
+
 ## Message 1 — to Hostinger support
 
 > **Subject:** Outbound connectivity blocked to a single host from my hosting account
@@ -60,16 +105,18 @@ One host, every protocol, every port, from one source address only.
 > From my office network, `45.120.40.194:18111` connects in 51ms and responds
 > correctly, so the destination is up and serving.
 >
-> Could you please:
+> One further measurement, which I think largely clears your side: from the
+> same server, `45.120.40.193` — in the **same /24 as the unreachable host** —
+> answers at 0% packet loss. So traffic from `89.117.188.10` is reaching that
+> network fine, and only `.194` is silent.
 >
-> 1. Confirm whether outbound traffic to `45.120.40.194` is blocked at your
->    network or firewall for this account or for the shared IP range?
-> 2. Run a traceroute from the server to `45.120.40.194` and share the output?
->    I do not have `traceroute` or `tracepath` available on the account, so I
->    cannot see which hop the packets stop at.
+> Given that, could you please just run `traceroute 45.120.40.194` from the
+> server and share the output? I have neither `traceroute` nor `tracepath` on
+> the account, so I cannot see the final hop myself. That output is what I need
+> to take to the destination's operator.
 >
-> If your side is clear, that is equally useful — I will take the traceroute to
-> the destination's operator.
+> If it shows the packets leaving your network normally, that is exactly the
+> confirmation I am after.
 >
 > Thank you.
 
@@ -97,9 +144,18 @@ One host, every protocol, every port, from one source address only.
 >
 > One source address, one destination host, everything dropped.
 >
-> Because it is dropped before anything application-level sees it, this would
-> not appear in your dialer's own allowlist or agent configuration. Could
-> someone check for:
+> One measurement makes this specific: from our server, `45.120.40.193` — in
+> the **same /24 as your dialer** — replies at 0% packet loss, while `.194` is
+> silent on every protocol. So our traffic reaches that network without
+> obstruction and only your dialer's address refuses it. It is not routing, not
+> our host, and not our hosting provider.
+>
+> We also note `45.120.40.194` is on Vayutel Technology Services (AS134040)
+> rather than your own infrastructure, so a firewall there could be dropping
+> this before your dialer software ever sees it — which would explain why no
+> allowlist entry appears misconfigured at your end.
+>
+> Could someone check with Vayutel for:
 >
 > - a firewall or security appliance in front of the dialer that blocks
 >   **hosting or datacentre address ranges** by default — this is a common
