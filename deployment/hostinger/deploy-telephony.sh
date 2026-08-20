@@ -62,12 +62,14 @@ NEW_FILES=(
   app/Http/Controllers/tenant/TelephonyRecordingController.php
   app/Http/Controllers/tenant/Telephony/TelephonyReportController.php
   app/Http/Controllers/tenant/Telephony/TelephonyAdminController.php
+  app/Http/Controllers/tenant/Telephony/TelephonyConnectionController.php
   app/Models/Telephony/TelephonyAgentMap.php
   app/Models/Telephony/TelephonyAgentSession.php
   app/Models/Telephony/TelephonyAgentStateChange.php
   app/Models/Telephony/TelephonyCall.php
   app/Models/Telephony/TelephonyCallEvent.php
   app/Models/Telephony/TelephonyCallLeg.php
+  app/Models/Telephony/TelephonyCredential.php
   app/Models/Telephony/TelephonyReconciliationRun.php
   app/Models/Telephony/TelephonyRecording.php
   app/Models/Telephony/TelephonyWebhookDelivery.php
@@ -85,12 +87,14 @@ NEW_FILES=(
   database/migrations/2026_08_19_100700_create_telephony_agent_sessions_table.php
   database/migrations/2026_08_19_100800_create_telephony_agent_state_changes_table.php
   database/migrations/2026_08_19_100900_create_telephony_reconciliation_runs_table.php
+  database/migrations/2026_08_20_120000_create_telephony_credentials_table.php
   resources/views/tenant/telephony/_partials/_header.blade.php
   resources/views/tenant/telephony/_partials/_helpers.blade.php
   resources/views/tenant/telephony/calls.blade.php
   resources/views/tenant/telephony/call-detail.blade.php
   resources/views/tenant/telephony/productivity.blade.php
   resources/views/tenant/telephony/analytics.blade.php
+  resources/views/tenant/telephony/admin/connection.blade.php
   resources/views/tenant/telephony/admin/webhook-log.blade.php
   resources/views/tenant/telephony/admin/delivery-detail.blade.php
   resources/views/tenant/telephony/admin/agent-map.blade.php
@@ -127,7 +131,7 @@ echo "  target        : $SSH:$APP"
 echo "  new files     : ${#NEW_FILES[@]}"
 echo "  replaced      : ${#REPLACE_FILES[@]}  (verified identical to baseline first)"
 echo "  patched live  : ${#PATCH_FILES[@]}  (append / targeted insert only)"
-echo "  migrations    : 10 new tables, nothing altered or dropped"
+echo "  migrations    : new tables only, nothing altered or dropped"
 echo "  backup + undo : $BACKUP/REVERT.sh"
 echo
 

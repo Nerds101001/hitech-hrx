@@ -20,6 +20,31 @@
  * uploading the local copies would silently roll production backwards.
  */
 
+/**
+ * The Telephony menu, as one list.
+ *
+ * Shared so that creating the group and topping up a group that already exists
+ * cannot drift apart -- which is exactly how a screen ends up deployed but
+ * unreachable from the menu.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function telephonySubmenu(): array
+{
+    $admin = ['permission' => ['telephony.admin'], 'roles' => ['admin', 'hr']];
+
+    return [
+        ['url' => '/user/telephony/my-calls', 'name' => 'Calls', 'slug' => 'user.telephony.reports.calls'],
+        ['url' => '/user/telephony/productivity', 'name' => 'Productivity', 'slug' => 'user.telephony.reports.productivity'],
+        ['url' => '/user/telephony/analytics', 'name' => 'Analytics', 'slug' => 'user.telephony.reports.analytics'],
+        ['url' => '/user/telephony/admin/connection', 'name' => 'Connection', 'slug' => 'user.telephony.admin.connection'] + $admin,
+        ['url' => '/user/telephony/admin/webhook-log', 'name' => 'Webhook Log', 'slug' => 'user.telephony.admin.webhook-log'] + $admin,
+        ['url' => '/user/telephony/admin/agent-map', 'name' => 'Agent Mapping', 'slug' => 'user.telephony.admin.agent-map'] + $admin,
+        ['url' => '/user/telephony/admin/exceptions', 'name' => 'Exceptions', 'slug' => 'user.telephony.admin.exceptions'] + $admin,
+        ['url' => '/user/telephony/admin/reconciliation', 'name' => 'Reconciliation', 'slug' => 'user.telephony.admin.reconciliation'] + $admin,
+    ];
+}
+
 $root = __DIR__;
 $ok = true;
 
@@ -115,36 +140,52 @@ if (!is_file($file)) {
 } else {
     $raw = file_get_contents($file);
 
-    if (str_contains($raw, '"name": "Telephony"') || str_contains($raw, '"name":"Telephony"')) {
-        report('tenantVerticalMenu.json', 'already patched');
-    } else {
-        $doc = json_decode($raw, true);
+    $doc = json_decode($raw, true);
 
-        if (!isset($doc['menu']) || !is_array($doc['menu'])) {
-            report('tenantVerticalMenu.json', 'ABORTED — unexpected shape');
-            $ok = false;
+    if (!isset($doc['menu']) || !is_array($doc['menu'])) {
+        report('tenantVerticalMenu.json', 'ABORTED — unexpected shape');
+        $ok = false;
+    } else {
+        // Find an existing Telephony group rather than testing whether one
+        // exists at all. On a re-deploy the group is already there and it is
+        // the individual sub-items that may be missing -- guarding on the
+        // group alone means a newly added screen is reachable only by URL.
+        $existingIndex = null;
+        foreach ($doc['menu'] as $i => $item) {
+            if (($item['name'] ?? null) === 'Telephony') {
+                $existingIndex = $i;
+                break;
+            }
+        }
+
+        if ($existingIndex !== null) {
+            $have = array_column($doc['menu'][$existingIndex]['submenu'] ?? [], 'slug');
+            $added = [];
+
+            foreach (telephonySubmenu() as $item) {
+                if (!in_array($item['slug'], $have, true)) {
+                    $doc['menu'][$existingIndex]['submenu'][] = $item;
+                    $doc['menu'][$existingIndex]['slug'][] = $item['slug'];
+                    $added[] = $item['name'];
+                }
+            }
+
+            if ($added === []) {
+                report('tenantVerticalMenu.json', 'already complete');
+            } else {
+                $encoded = json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                if (safeWrite($file, $encoded, false)) {
+                    report('tenantVerticalMenu.json', '+ ' . implode(', ', $added));
+                } else {
+                    $ok = false;
+                }
+            }
         } else {
             $entry = [
                 'name' => 'Telephony',
                 'icon' => 'menu-icon bx bx-phone-call',
-                'slug' => [
-                    'user.telephony.reports.calls',
-                    'user.telephony.reports.productivity',
-                    'user.telephony.reports.analytics',
-                    'user.telephony.admin.webhook-log',
-                    'user.telephony.admin.agent-map',
-                    'user.telephony.admin.exceptions',
-                    'user.telephony.admin.reconciliation',
-                ],
-                'submenu' => [
-                    ['url' => '/user/telephony/my-calls', 'name' => 'Calls', 'slug' => 'user.telephony.reports.calls'],
-                    ['url' => '/user/telephony/productivity', 'name' => 'Productivity', 'slug' => 'user.telephony.reports.productivity'],
-                    ['url' => '/user/telephony/analytics', 'name' => 'Analytics', 'slug' => 'user.telephony.reports.analytics'],
-                    ['url' => '/user/telephony/admin/webhook-log', 'name' => 'Webhook Log', 'slug' => 'user.telephony.admin.webhook-log', 'permission' => ['telephony.admin'], 'roles' => ['admin', 'hr']],
-                    ['url' => '/user/telephony/admin/agent-map', 'name' => 'Agent Mapping', 'slug' => 'user.telephony.admin.agent-map', 'permission' => ['telephony.admin'], 'roles' => ['admin', 'hr']],
-                    ['url' => '/user/telephony/admin/exceptions', 'name' => 'Exceptions', 'slug' => 'user.telephony.admin.exceptions', 'permission' => ['telephony.admin'], 'roles' => ['admin', 'hr']],
-                    ['url' => '/user/telephony/admin/reconciliation', 'name' => 'Reconciliation', 'slug' => 'user.telephony.admin.reconciliation', 'permission' => ['telephony.admin'], 'roles' => ['admin', 'hr']],
-                ],
+                'slug' => array_column(telephonySubmenu(), 'slug'),
+                'submenu' => telephonySubmenu(),
             ];
 
             // Put it next to Payment Collections if that exists (Sales &
