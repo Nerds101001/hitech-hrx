@@ -45,7 +45,12 @@ class TelephonyReconcileTest extends TelephonyTestCase
       $t->timestamps();
     });
 
-    foreach (glob(database_path('migrations/2026_08_19_10*.php')) as $file) {
+    foreach (array_merge(
+      // array_merge, NOT `+`: the union operator keys on index, so the
+      // second array's element 0 would be silently discarded.
+      glob(database_path('migrations/2026_08_19_10*.php')),
+      glob(database_path('migrations/2026_08_2*_1*.php'))
+    ) as $file) {
       (require $file)->up();
     }
   }

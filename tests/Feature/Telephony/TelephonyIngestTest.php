@@ -5,6 +5,7 @@ namespace Tests\Feature\Telephony;
 use App\Models\Telephony\TelephonyAgentMap;
 use App\Models\Telephony\TelephonyAgentSession;
 use App\Models\Telephony\TelephonyCall;
+use App\Models\Telephony\TelephonyCredential;
 use App\Models\Telephony\TelephonyCallLeg;
 use App\Models\Telephony\TelephonyRecording;
 use App\Models\Telephony\TelephonyWebhookDelivery;
@@ -62,7 +63,12 @@ class TelephonyIngestTest extends TelephonyTestCase
       $t->timestamps();
     });
 
-    foreach (glob(database_path('migrations/2026_08_19_10*.php')) as $file) {
+    foreach (array_merge(
+      // array_merge, NOT `+`: the union operator keys on index, so the
+      // second array's element 0 would be silently discarded.
+      glob(database_path('migrations/2026_08_19_10*.php')),
+      glob(database_path('migrations/2026_08_2*_1*.php'))
+    ) as $file) {
       (require $file)->up();
     }
   }
@@ -198,6 +204,158 @@ class TelephonyIngestTest extends TelephonyTestCase
     config(['telephony.inbound.allowed_ips' => ['127.0.0.1', '45.120.40.194']]);
 
     $this->signed('GET', '/api/telephony/v1/health')->assertOk();
+  }
+
+  // ────────────────────────────────────────── UI-managed credentials
+
+  /**
+   * A credential created from the admin screen authenticates a request,
+   * without anything being set in config. This is the whole point of the
+   * Connection screen: rotating a key should not need SSH access.
+   */
+  public function test_a_credential_from_the_database_authenticates(): void
+  {
+    // Prove config is not what is letting the request through.
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => []]);
+
+    $secret = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    TelephonyCredential::create([
+      'tenant_id' => 'default',
+      'label' => 'Test Vendor',
+      'api_key' => $key,
+      'secret' => $secret,
+      'is_active' => true,
+    ]);
+
+    $this->signedWith($key, $secret, 'GET', '/api/telephony/v1/health')->assertOk();
+  }
+
+  public function test_the_shared_secret_is_encrypted_at_rest(): void
+  {
+    $secret = TelephonyCredential::newSecret();
+
+    $c = TelephonyCredential::create([
+      'tenant_id' => 'default',
+      'label' => 'Test Vendor',
+      'api_key' => TelephonyCredential::newApiKey(),
+      'secret' => $secret,
+    ]);
+
+    $stored = \Illuminate\Support\Facades\DB::table('telephony_credentials')
+      ->where('id', $c->id)->value('secret');
+
+    $this->assertStringNotContainsString($secret, (string) $stored,
+      'the secret must never be readable in the database');
+    $this->assertSame($secret, $c->fresh()->secret, 'but the app must still be able to read it');
+  }
+
+  /**
+   * Rotation keeps the old secret working for a grace window, so the
+   * vendor can switch over on their own schedule without a coordinated
+   * cutover and without dropping a call.
+   */
+  public function test_rotation_accepts_both_secrets_during_the_grace_window(): void
+  {
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => []]);
+
+    $old = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    $c = TelephonyCredential::create([
+      'tenant_id' => 'default', 'label' => 'V', 'api_key' => $key,
+      'secret' => $old, 'is_active' => true,
+    ]);
+
+    $new = $c->rotateSecret(14);
+
+    $this->signedWith($key, $new, 'GET', '/api/telephony/v1/health')->assertOk();
+    $this->signedWith($key, $old, 'GET', '/api/telephony/v1/health')->assertOk();
+  }
+
+  public function test_rotation_with_no_grace_invalidates_the_old_secret_at_once(): void
+  {
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => []]);
+
+    $old = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    $c = TelephonyCredential::create([
+      'tenant_id' => 'default', 'label' => 'V', 'api_key' => $key,
+      'secret' => $old, 'is_active' => true,
+    ]);
+
+    $new = $c->rotateSecret(0);
+
+    $this->signedWith($key, $new, 'GET', '/api/telephony/v1/health')->assertOk();
+    $this->signedWith($key, $old, 'GET', '/api/telephony/v1/health')
+      ->assertStatus(401)->assertJsonPath('error.code', 'invalid_signature');
+  }
+
+  public function test_a_deactivated_credential_is_refused(): void
+  {
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => []]);
+
+    $secret = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    TelephonyCredential::create([
+      'tenant_id' => 'default', 'label' => 'V', 'api_key' => $key,
+      'secret' => $secret, 'is_active' => false,
+    ]);
+
+    $this->signedWith($key, $secret, 'GET', '/api/telephony/v1/health')
+      ->assertStatus(401)->assertJsonPath('error.code', 'invalid_api_key');
+  }
+
+  /**
+   * The usage counter is what the Connection screen shows as "are they
+   * actually sending?". Counting unverified requests would let anyone
+   * inflate it.
+   */
+  public function test_usage_is_counted_only_for_verified_requests(): void
+  {
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => []]);
+
+    $secret = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    $c = TelephonyCredential::create([
+      'tenant_id' => 'default', 'label' => 'V', 'api_key' => $key,
+      'secret' => $secret, 'is_active' => true,
+    ]);
+
+    $this->signedWith($key, $secret, 'GET', '/api/telephony/v1/health')->assertOk();
+    $this->signedWith($key, 'nonsense', 'GET', '/api/telephony/v1/health')->assertStatus(401);
+
+    $this->assertSame(1, (int) $c->fresh()->use_count);
+    $this->assertNotNull($c->fresh()->last_used_at);
+  }
+
+  /**
+   * A per-credential allowlist, so two vendors can have different ones.
+   */
+  public function test_a_per_credential_allowlist_is_enforced(): void
+  {
+    config(['telephony.inbound.api_key' => '', 'telephony.inbound.secrets' => [], 'telephony.inbound.allowed_ips' => []]);
+
+    $secret = TelephonyCredential::newSecret();
+    $key = TelephonyCredential::newApiKey();
+
+    $c = TelephonyCredential::create([
+      'tenant_id' => 'default', 'label' => 'V', 'api_key' => $key,
+      'secret' => $secret, 'is_active' => true,
+      'allowed_ips' => '45.120.40.194',
+    ]);
+
+    $this->signedWith($key, $secret, 'GET', '/api/telephony/v1/health')
+      ->assertStatus(403)->assertJsonPath('error.code', 'ip_not_allowed');
+
+    $c->update(['allowed_ips' => '45.120.40.194, 127.0.0.1']);
+    \Illuminate\Support\Facades\Cache::flush();
+
+    $this->signedWith($key, $secret, 'GET', '/api/telephony/v1/health')->assertOk();
   }
 
   // ──────────────────────────────────────────────────────────── idempotency
@@ -644,6 +802,27 @@ class TelephonyIngestTest extends TelephonyTestCase
       'disposition' => ['code' => 'NI', 'name' => 'Not Interested'],
       'recording' => ['available' => true, 'recording_uid' => 'REC-20260819-000512'],
     ];
+  }
+
+  /**
+   * Sign with an explicit key and secret, rather than the ones in config.
+   * Also clears the middleware credential cache, which is keyed on the API
+   * key and would otherwise carry a stale lookup between tests.
+   */
+  private function signedWith(string $key, string $secret, string $method, string $uri, array $body = [])
+  {
+    \Illuminate\Support\Facades\Cache::forget('telephony:cred:' . hash('sha256', $key));
+
+    $raw = $body === [] ? '' : json_encode($body);
+    $ts = (string) time();
+    $nonce = (string) Str::uuid();
+
+    return $this->raw($method, $uri, $raw, [
+      'Authorization' => 'Bearer ' . $key,
+      'X-HRX-Timestamp' => $ts,
+      'X-HRX-Nonce' => $nonce,
+      'X-HRX-Signature' => 'sha256=' . hash_hmac('sha256', "{$ts}.{$nonce}.{$raw}", $secret),
+    ]);
   }
 
   private function signed(string $method, string $uri, array $body = [], array $override = [])

@@ -26,13 +26,7 @@ class VerifyTelephonySignature
   {
     $cfg = config('telephony.inbound');
 
-    // 1. Source IP. An empty allowlist disables the check (local dev only).
-    $allowed = $cfg['allowed_ips'] ?? [];
-    if (!empty($allowed) && !IpUtils::checkIp($request->ip(), $allowed)) {
-      return $this->deny($request, 403, 'ip_not_allowed', 'Source IP is not on the allowlist');
-    }
-
-    // 2. Size. Checked before the HMAC so an oversized body is refused
+    // 1. Size. Checked before the HMAC so an oversized body is refused
     // without hashing megabytes first, and before the controller so it is
     // never written to the payload column.
     $max = (int) ($cfg['max_body_bytes'] ?? 0);
@@ -45,11 +39,21 @@ class VerifyTelephonySignature
       );
     }
 
-    // 3. Bearer key.
-    $key = (string) $cfg['api_key'];
+    // 2. Bearer key. Resolved against the credentials table first, falling
+    // back to config so an install that predates the admin UI keeps working.
     $presented = (string) $request->bearerToken();
-    if ($key === '' || !hash_equals($key, $presented)) {
+    $credential = $this->resolveCredential($presented);
+
+    if ($credential === null) {
       return $this->deny($request, 401, 'invalid_api_key', 'API key missing or incorrect');
+    }
+
+    // 3. Source IP. AFTER the key, because which allowlist applies depends on
+    // which credential is presenting -- a per-vendor allowlist is the whole
+    // point of having more than one. Falls back to the global config list.
+    $allowed = $credential['allowed_ips'] ?? ($cfg['allowed_ips'] ?? []);
+    if (!empty($allowed) && !IpUtils::checkIp($request->ip(), $allowed)) {
+      return $this->deny($request, 403, 'ip_not_allowed', 'Source IP is not on the allowlist');
     }
 
     // 4. Freshness. Rejects a captured request replayed later.
@@ -80,7 +84,7 @@ class VerifyTelephonySignature
     $signable = $timestamp . '.' . $nonce . '.' . $request->getContent();
 
     $matched = false;
-    foreach (($cfg['secrets'] ?? []) as $secret) {
+    foreach ($credential['secrets'] as $secret) {
       if ($secret !== '' && hash_equals(hash_hmac('sha256', $signable, $secret), $presentedSig)) {
         $matched = true;
         break;
@@ -90,7 +94,73 @@ class VerifyTelephonySignature
       return $this->deny($request, 401, 'invalid_signature', 'HMAC signature did not match');
     }
 
+    // Only now, once the request is proven genuine. Counting unverified
+    // requests would let anyone inflate the "last seen" that the admin screen
+    // uses to decide whether the vendor is really sending.
+    if (isset($credential['model'])) {
+      $credential['model']->markUsed($request->ip());
+    }
+
     return $next($request);
+  }
+
+  /**
+   * Find the credential presenting this API key.
+   *
+   * Database first, config second. The config path is what an install that
+   * predates the admin UI uses, and what a fresh deploy falls back to before
+   * anyone has generated a key.
+   *
+   * Cached for a minute: this runs on every webhook, and a busy floor is
+   * several requests a second. A minute is short enough that deactivating a
+   * credential takes effect while you are still looking at the screen.
+   *
+   * @return array{secrets:array<int,string>,allowed_ips:array<int,string>|null,model?:\App\Models\Telephony\TelephonyCredential}|null
+   */
+  private function resolveCredential(string $presentedKey): ?array
+  {
+    if ($presentedKey === '') {
+      return null;
+    }
+
+    try {
+      $id = Cache::remember(
+        'telephony:cred:' . hash('sha256', $presentedKey),
+        60,
+        fn () => \App\Models\Telephony\TelephonyCredential::where('api_key', $presentedKey)
+          ->where('is_active', true)
+          ->value('id') ?? 0
+      );
+
+      if ($id) {
+        $model = \App\Models\Telephony\TelephonyCredential::find($id);
+
+        if ($model && $model->is_active) {
+          return [
+            'secrets' => $model->acceptedSecrets(),
+            'allowed_ips' => $model->allowlist(),
+            'model' => $model,
+          ];
+        }
+      }
+    } catch (\Throwable $e) {
+      // The table may not exist yet on an install mid-upgrade. Fall through to
+      // config rather than 500-ing the vendor.
+      Log::warning('[telephony] credential lookup failed, using config', ['message' => $e->getMessage()]);
+    }
+
+    // ── config fallback ──
+    $cfg = config('telephony.inbound');
+    $configured = (string) ($cfg['api_key'] ?? '');
+
+    if ($configured === '' || !hash_equals($configured, $presentedKey)) {
+      return null;
+    }
+
+    return [
+      'secrets' => array_values(array_filter($cfg['secrets'] ?? [])),
+      'allowed_ips' => $cfg['allowed_ips'] ?? [],
+    ];
   }
 
   /**

@@ -64,6 +64,21 @@ Route::middleware([
   Route::prefix('telephony/admin')->name('telephony.admin.')
     ->middleware('role_or_permission:admin|hr|telephony.admin')
     ->group(function () {
+      /* Credentials and push volume. Deliberately the first thing in this
+         group: generating a key used to mean SSH access and a .env edit, and
+         a credential that needs a terminal to rotate is one that never gets
+         rotated. */
+      Route::get('/connection', [\App\Http\Controllers\tenant\Telephony\TelephonyConnectionController::class, 'index'])
+        ->name('connection');
+      Route::post('/connection', [\App\Http\Controllers\tenant\Telephony\TelephonyConnectionController::class, 'store'])
+        ->name('connection.store');
+      Route::put('/connection/{credential}', [\App\Http\Controllers\tenant\Telephony\TelephonyConnectionController::class, 'update'])
+        ->name('connection.update');
+      Route::post('/connection/{credential}/rotate', [\App\Http\Controllers\tenant\Telephony\TelephonyConnectionController::class, 'rotate'])
+        ->name('connection.rotate');
+      Route::delete('/connection/{credential}', [\App\Http\Controllers\tenant\Telephony\TelephonyConnectionController::class, 'destroy'])
+        ->name('connection.destroy');
+
       Route::get('/webhook-log', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'webhookLog'])
         ->name('webhook-log');
       Route::get('/webhook-log/{delivery}', [\App\Http\Controllers\tenant\Telephony\TelephonyAdminController::class, 'showDelivery'])

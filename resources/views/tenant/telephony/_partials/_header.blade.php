@@ -8,6 +8,7 @@
     ['route' => 'user.telephony.reports.calls',        'label' => 'Calls',        'icon' => 'bx-phone'],
     ['route' => 'user.telephony.reports.productivity', 'label' => 'Productivity', 'icon' => 'bx-time-five'],
     ['route' => 'user.telephony.reports.analytics',    'label' => 'Analytics',    'icon' => 'bx-bar-chart-alt-2'],
+    ['route' => 'user.telephony.admin.connection',     'label' => 'Connection',   'icon' => 'bx-key'],
     ['route' => 'user.telephony.admin.webhook-log',    'label' => 'Webhook Log',  'icon' => 'bx-transfer'],
     ['route' => 'user.telephony.admin.agent-map',      'label' => 'Agent Mapping','icon' => 'bx-id-card'],
     ['route' => 'user.telephony.admin.exceptions',     'label' => 'Exceptions',   'icon' => 'bx-error-circle'],

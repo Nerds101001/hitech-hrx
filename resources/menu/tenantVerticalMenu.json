@@ -1083,6 +1083,7 @@
                 "user.telephony.reports.calls",
                 "user.telephony.reports.productivity",
                 "user.telephony.reports.analytics",
+                "user.telephony.admin.connection",
                 "user.telephony.admin.webhook-log",
                 "user.telephony.admin.agent-map",
                 "user.telephony.admin.exceptions",
@@ -1103,6 +1104,18 @@
                     "url": "/user/telephony/analytics",
                     "name": "Analytics",
                     "slug": "user.telephony.reports.analytics"
+                },
+                {
+                    "url": "/user/telephony/admin/connection",
+                    "name": "Connection",
+                    "slug": "user.telephony.admin.connection",
+                    "permission": [
+                        "telephony.admin"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
                 },
                 {
                     "url": "/user/telephony/admin/webhook-log",
