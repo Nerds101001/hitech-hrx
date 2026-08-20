@@ -58,6 +58,7 @@ NEW_FILES=(
   routes/telephony.php
   routes/telephony-web.php
   app/Http/Middleware/VerifyTelephonySignature.php
+  app/Http/Middleware/RestrictTelephonyAccess.php
   app/Http/Controllers/Api/Telephony/TelephonyIngestController.php
   app/Http/Controllers/tenant/TelephonyRecordingController.php
   app/Http/Controllers/tenant/Telephony/TelephonyReportController.php

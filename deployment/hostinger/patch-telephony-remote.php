@@ -88,33 +88,59 @@ function safeWrite(string $file, string $content, bool $isPhp): bool
 $file = $root . '/bootstrap/app.php';
 $s = file_get_contents($file);
 
-if (str_contains($s, 'telephony.signed')) {
+// Both aliases are checked independently: the first deploy added only
+// telephony.signed, so a guard on that alone would skip the second one
+// forever and the restriction middleware would be unresolvable.
+$needsSigned = !str_contains($s, 'telephony.signed');
+$needsRestricted = !str_contains($s, 'telephony.restricted');
+
+if (!$needsSigned && !$needsRestricted && str_contains($s, 'telephony:reconcile')) {
     report('bootstrap/app.php', 'already patched');
 } else {
     $before = $s;
 
-    // 1. The middleware alias. Anchored on the closing of the alias array.
-    if (preg_match("/('sales\.guard'\s*=>\s*\\\\App\\\\Http\\\\Middleware\\\\SalesAccessGuard::class,)/", $s, $m)) {
+    // 1. The middleware aliases. Anchored on the closing of the alias array.
+    if ($needsSigned && preg_match("/('sales\.guard'\s*=>\s*\\\\App\\\\Http\\\\Middleware\\\\SalesAccessGuard::class,)/", $s, $m)) {
         $s = str_replace(
             $m[1],
             $m[1] . "\n      'telephony.signed' => \\App\\Http\\Middleware\\VerifyTelephonySignature::class,",
             $s
         );
-    } elseif (preg_match("/(\\\$middleware->alias\(\[)/", $s, $m)) {
+    } elseif ($needsSigned && preg_match("/(\\\$middleware->alias\(\[)/", $s, $m)) {
         // Fall back to the top of the array if that specific alias is absent.
+        // Guarded like the branch above. Without $needsSigned this fires
+        // whenever the sales.guard anchor is missing OR the alias already
+        // exists, inserting a duplicate on every single deploy.
         $s = str_replace(
             $m[1],
             $m[1] . "\n      'telephony.signed' => \\App\\Http\\Middleware\\VerifyTelephonySignature::class,",
             $s
         );
-    } else {
+    } elseif ($needsSigned) {
+        // Only reachable when the alias is genuinely needed and neither
+        // anchor was found. Previously this also fired when the alias was
+        // already present, reporting a failure after a successful patch.
         report('bootstrap/app.php', 'ABORTED — no alias array found');
         $ok = false;
         $s = $before;
     }
 
+    // 1b. The restriction alias, inserted next to the one above.
+    if ($needsRestricted && str_contains($s, "'telephony.signed'")) {
+        $s = preg_replace(
+            "/(
+\s*'telephony\.signed' => [^
+]+
+)/",
+            "$1      'telephony.restricted' => \App\Http\Middleware\RestrictTelephonyAccess::class,
+",
+            $s,
+            1
+        );
+    }
+
     // 2. The nightly reconciliation.
-    if ($s !== $before && preg_match("/(->withSchedule\(function\s*\([^)]*\)\s*\{)/", $s, $m)) {
+    if (!str_contains($s, 'telephony:reconcile') && preg_match("/(->withSchedule\(function\s*\([^)]*\)\s*\{)/", $s, $m)) {
         $s = str_replace(
             $m[1],
             $m[1] . "\n    \$schedule->command('telephony:reconcile')->dailyAt('02:00')->withoutOverlapping();",
@@ -124,7 +150,7 @@ if (str_contains($s, 'telephony.signed')) {
 
     if ($s !== $before) {
         if (safeWrite($file, $s, true)) {
-            report('bootstrap/app.php', '+ telephony.signed alias, + nightly reconcile');
+            report('bootstrap/app.php', 'aliases and schedule brought up to date');
         } else {
             $ok = false;
         }
