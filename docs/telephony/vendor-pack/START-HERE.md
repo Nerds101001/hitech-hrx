@@ -47,6 +47,25 @@ like a dead endpoint.
 Note the host that *sends* webhooks is not always the host that *answers* your
 agent API. Worth checking rather than assuming.
 
+## Third thing — click-to-call is currently broken, and it is at your end
+
+HRX has a Click to Call button that calls your agent API at
+`45.120.40.194:18111`. **It stopped working.** We measured it on 20 August:
+
+| From | Result |
+|---|---|
+| Hi Tech Group office network | connects in **33ms**, returns real data |
+| **HRX production server (89.117.188.10)** | **blocked — times out** |
+
+Your API is healthy; it is refusing our server specifically. It is blocked on
+port 80 as well as 18111, while our server reaches other hosts on unusual high
+ports without trouble — so this is a source-address allowlist on your side, not
+a firewall on ours.
+
+**Please add `89.117.188.10` to the allowlist for the agent API.** Until then
+every click-to-call attempt hangs for ten seconds and reports that the dialer
+is unreachable.
+
 ## Credentials
 
 Two values, arriving in a **separate message** from this pack:
