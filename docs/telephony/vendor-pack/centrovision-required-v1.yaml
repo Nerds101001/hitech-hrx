@@ -68,16 +68,12 @@ info:
 
     Two related asks while you are checking:
 
-    * **Please allowlist `89.117.188.10` — the HRX production server — on the
-      agent API at `45.120.40.194:18111`.** This is currently blocking
-      click-to-call outright. Measured 20 August 2026: the API answers the Hi
-      Tech Group office network in 33ms with valid data, and times out from
-      89.117.188.10 on both port 18111 and port 80, while that same server
-      reaches other hosts on unusual high ports normally. Every click-to-call
-      attempt therefore hangs for ten seconds and reports the dialer
-      unreachable.
-    * The same allowlist entry is needed for the nightly CDR pull once
-      `GET /cdr` exists.
+    * `89.117.188.10` — the HRX production server — was allowlisted on the
+      agent API at `45.120.40.194:18111` on 20 August 2026, and click-to-call
+      is working again (the API now answers that server in 0.1s). **Please keep
+      that entry in place**: the nightly CDR reconciliation described below
+      will use the same address once `GET /cdr` exists.
+    * If HRX ever moves host, we will send the new address before the change.
 
     ## Transport
 

@@ -1,20 +1,48 @@
 # Ready-to-send messages
 
+**Who this goes to:** CentroVision — your telephony vendor, the people who run
+the dialer / GSM gateway at `45.120.40.194` and who asked you to publish an API
+they can push call data into. Send it to their technical contact, the same
+people who fixed the allowlist on 20 August.
+
+*(Note the gateway IP itself belongs to Vayutel Technology Services, their
+hosting/network provider. You deal with CentroVision; they deal with Vayutel.)*
+
 Two messages, deliberately separate. Copy, paste, send.
+
+---
+
+## Before you send — three steps
+
+**1. Generate the credentials** in HRX:
+**Telephony → Connection → Generate**. Copy the shared secret immediately; it
+is encrypted afterwards and cannot be shown again.
+
+**2. Leave the allowlist field blank** on that form for now. `TELEPHONY_ALLOWED_IPS`
+restricts who may push *into* HRX, and we do not yet know which address their
+webhook sender uses — it is not necessarily the gateway address. If the guess
+is wrong they are refused before they can prove their credentials work, and it
+looks to them like a dead endpoint. Set it once you see their real IP on the
+Webhook Log.
+
+**3. Attach `HRX-Telephony-Integration-Pack.zip`** to message 1.
 
 ---
 
 ## Message 1 — the pack
 
-**Attach:** `HRX-Telephony-Integration-Pack.zip`
-
 **Subject:** HRX telephony integration — our API, spec and test collection
 
 > Dear [name],
 >
-> As discussed, rather than asking you to build reports for us, HRX now
-> publishes an endpoint for you to push call data into. Everything you need is
-> attached.
+> Thank you for sorting the allowlist — click-to-call is working again at our
+> end, and your API is now answering our server in about a tenth of a second.
+> Please keep `89.117.188.10` allowlisted, as the nightly CDR reconciliation
+> described in the attached files will use the same address.
+>
+> Now for the main piece. As discussed, rather than asking you to build reports
+> for us, HRX now publishes an endpoint for you to push call data into.
+> Everything you need is attached.
 >
 > Open **START-HERE.md** first — it lists the five files in the order to read
 > them. Your developer will want **INTEGRATION-GUIDE.md**, which covers the
@@ -49,14 +77,12 @@ Two messages, deliberately separate. Copy, paste, send.
 > having. A large share of our calls are dialled manually; if those are not
 > reported, every report is wrong and nobody will trust the system. It is test
 > case UAT-05 in the attached workbook and it is a go/no-go item for us. Please
-> confirm plainly whether your platform can raise webhooks on those paths —
-> a "no" now is far cheaper than a "no" during acceptance testing.
+> confirm plainly whether your platform can raise webhooks on those paths — a
+> "no" now is far cheaper than a "no" during acceptance testing.
 >
-> **2. Which IP address will your webhooks originate from?** We currently
-> allowlist 45.120.40.194, the gateway we already reach for click-to-call. If
-> your webhook sender goes out from a different address, tell me and I will add
-> it. Note the host that sends webhooks is not always the host that answers
-> your agent API.
+> **2. Which IP address will your webhooks originate from?** We need to
+> allowlist it at our end. Note this is not necessarily the same host as your
+> agent API, so it is worth checking rather than assuming.
 >
 > Two tabs of **HRX-Telephony-UAT.xlsx** need your input before we can agree
 > scope: the **Vendor Questionnaire** (15 numbered questions) and **Field
@@ -67,6 +93,11 @@ Two messages, deliberately separate. Copy, paste, send.
 > telephony development — every field we are asking for already appears on your
 > own CDR, Recording and User Session screens. If you see it differently on any
 > specific field, please say which one in that tab.
+>
+> Separately: we would like to enable click-to-call for more of our agents.
+> Could you send a `campaign`, `agent` and `client_id` for each of the users we
+> nominate? Nothing is needed on the network side now that the allowlist is in
+> place.
 >
 > Could you come back to me within five working days so we can agree the scope
 > and timeline?
@@ -82,16 +113,10 @@ Two messages, deliberately separate. Copy, paste, send.
 **Send separately.** Different channel if you can — WhatsApp, SMS, or a phone
 call. Not a reply on the same email thread.
 
-Generate them first:
-
-```bash
-php -r 'echo "API KEY: ".bin2hex(random_bytes(24))."\nSECRET : ".bin2hex(random_bytes(32))."\n";'
-```
-
 > Credentials for the HRX telephony endpoint, as mentioned:
 >
-> API key: `<paste>`
-> Shared secret: `<paste>`
+> API key: `<paste from the Connection screen>`
+> Shared secret: `<paste from the Connection screen>`
 >
 > Both go in the collection's Variables tab — `api_key` and `shared_secret`.
 >
@@ -109,33 +134,16 @@ system. Sending them apart means it is not.
 
 ---
 
-## Before you send
-
-- [ ] Generate the key and secret with the command above
-- [ ] Set them on production (see below) — **the vendor gets 401 until you do**
-- [ ] Send message 1 with the zip attached
-- [ ] Send message 2 on a different channel
-
-Set on the production server, in `.env`:
-
-```dotenv
-TELEPHONY_INBOUND_API_KEY=<the key>
-TELEPHONY_INBOUND_SECRETS=<the secret>
-TELEPHONY_ALLOWED_IPS=
-TELEPHONY_DEFAULT_TENANT_ID=default
-```
-
-Then `php artisan config:clear`.
-
-Leave `TELEPHONY_ALLOWED_IPS` **empty** for their first handshake. If our guess
-at their egress address is wrong, an allowlist blocks them before they can even
-prove the credentials work, and it looks to them like a dead endpoint. Once you
-see their real address in **Telephony → Webhook Log**, set it and clear the
-config cache again.
-
 ## After they start
 
-Watch **Telephony → Webhook Log**. It shows refused requests grouped by reason
-and source IP with the fix for each, so the usual first-week problems — wrong
-clock, re-serialised JSON, unlisted IP — diagnose themselves rather than
+Watch **Telephony → Connection** and **Telephony → Webhook Log**.
+
+The Connection screen shows how many pushes have arrived, when the last
+accepted one was, and which event types they are sending — so you can see at a
+glance whether `manual_dial` events are actually coming through, which is the
+UAT-05 question.
+
+The Webhook Log shows refused requests grouped by reason and source IP, each
+with the fix spelled out. The usual first-week problems — a drifted clock,
+re-serialised JSON, an unlisted IP — diagnose themselves there rather than
 becoming a week of "we are sending" / "we see nothing".
