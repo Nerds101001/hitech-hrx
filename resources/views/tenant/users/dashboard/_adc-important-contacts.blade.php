@@ -32,7 +32,11 @@
             <div class="emp-contact-role">{{ $c['role'] }}</div>
           </div>
           <span class="emp-contact-act">
-            @if(!empty($c['phone']))<a href="tel:{{ preg_replace('/[^0-9+]/','',$c['phone']) }}" title="Call {{ $c['phone'] }}"><i class="bx bx-phone"></i></a>@endif
+            {{-- The number is carried as data, not a tel: href. A tel: link is an
+                 external-protocol reference and Brave prompts "access other apps
+                 and services on this device" for it; dialling on click keeps the
+                 behaviour without putting the scheme in the document. --}}
+            @if(!empty($c['phone']))<a href="javascript:void(0);" class="adc-contact-call" data-tel="{{ preg_replace('/[^0-9+]/','',$c['phone']) }}" title="Call {{ $c['phone'] }}"><i class="bx bx-phone"></i></a>@endif
             @if(!empty($c['email']))<a href="mailto:{{ $c['email'] }}" title="Email {{ $c['email'] }}"><i class="bx bx-message-rounded"></i></a>@endif
           </span>
         </li>
@@ -40,3 +44,18 @@
     </ul>
   @endif
 </div>
+
+<script>
+// Bound once even if more than one dashboard partial ends up on a page.
+(function () {
+  if (window.__adcContactCallBound) return;
+  window.__adcContactCallBound = true;
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('.adc-contact-call');
+    if (!a) return;
+    e.preventDefault();
+    var n = a.dataset.tel;
+    if (n) window.location.href = 'tel:' + n;
+  });
+})();
+</script>
