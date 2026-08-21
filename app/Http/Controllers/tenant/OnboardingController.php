@@ -368,10 +368,12 @@ class OnboardingController extends Controller
 
         try {
             $path = \App\Helpers\FileSecurityHelper::encryptAndStore($file, $folder, $prefix, 'public');
-            
+
             if (!$path) {
                 throw new \Exception('Encryption or storage failed.');
             }
+
+            self::replacePriorUploads($folder, $prefix, $path);
 
             if ($inputName === 'photo') {
                 $user->profile_picture = $path;
@@ -466,8 +468,10 @@ class OnboardingController extends Controller
             if ($request->hasFile($inputName)) {
                 $file = $request->file($inputName);
                 $path = \App\Helpers\FileSecurityHelper::encryptAndStore($file, $folder, $fileNamePrefix, 'public');
-                
+
                 if ($path) {
+                    self::replacePriorUploads($folder, $fileNamePrefix, $path);
+
                     if ($inputName === 'photo') {
                         $user->profile_picture = $path;
                         $user->save();
@@ -514,6 +518,27 @@ class OnboardingController extends Controller
                         );
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Onboarding documents are one-per-type: each field (Aadhaar, PAN,
+     * cancelled cheque, photo, ...) should only ever have the most recently
+     * uploaded file on disk. encryptAndStore() always writes a fresh
+     * prefix_<random>.ext name and never looks at what's already there, so
+     * without this every re-upload (a blurry retry, a wrong file, a form
+     * resubmit) left the old one behind permanently — folders accumulated
+     * duplicate Aadhaar/cheque/photo files indefinitely, which is what
+     * eventually broke the documents-to-accounts email's attachment size
+     * for one joiner. Called only after the new file is safely stored, so a
+     * failed upload never deletes a working previous one.
+     */
+    private static function replacePriorUploads(string $folder, string $prefix, string $justStoredPath): void
+    {
+        foreach (Storage::disk('public')->files($folder) as $existing) {
+            if ($existing !== $justStoredPath && str_starts_with(basename($existing), $prefix . '_')) {
+                Storage::disk('public')->delete($existing);
             }
         }
     }
