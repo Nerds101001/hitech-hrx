@@ -103,6 +103,9 @@ class SalesPipelineController extends Controller
      *
      * Note this deliberately does NOT accept "is the salesperson on this row",
      * which is exactly the clause that used to let them through.
+     *
+     * See canEditOwnPipelineRow() below for the narrower carve-out added on
+     * top of this rule for the still-open Sales Pipeline specifically.
      */
     private static function canEditBook($user): bool
     {
@@ -114,6 +117,36 @@ class SalesPipelineController extends Controller
             || $user->isCcareAgent()
             || $user->isNewBizAgent()
             || $user->can('sales_report.manage');
+    }
+
+    /**
+     * May this user add/edit THIS Sales Pipeline row, even where
+     * canEditBook() alone would say no?
+     *
+     * A narrow carve-out on top of the 2026-08-05 read-only rule: a plain
+     * salesperson may add a new prospect, or edit one they are personally
+     * the salesperson on, as long as it is still open (not_locked). Once a
+     * row is locked (status Order / Repeat Order) it has become the booked
+     * business CCare / New Biz reconcile against, and canEditBook() alone
+     * governs it from that point — exactly the "shared customer" scenario
+     * the original decision was written to stop. $pipeline null means a
+     * brand-new row (store()), which is always unlocked at creation.
+     */
+    private static function canEditOwnPipelineRow($user, $pipeline = null): bool
+    {
+        if (self::canEditBook($user)) {
+            return true;
+        }
+
+        if (!\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user)) {
+            return false;
+        }
+
+        if ($pipeline === null) {
+            return true;
+        }
+
+        return !$pipeline->is_locked && (int) $pipeline->salesperson_id === (int) $user->id;
     }
 
     /**
@@ -941,18 +974,20 @@ class SalesPipelineController extends Controller
             ];
         }
 
-        // Deleting a customer wipes its whole sales history, so it is
-        // admin-only (plus an explicit sales_report.manage grant).
-        // Single source of truth for "may this user change the book at all".
-        // The view uses it to render read-only; the write endpoints enforce it.
-        $canEditBook = self::canEditBook($user);
+        // This page only ever lists rows that are both unlocked (query
+        // above filters is_locked=false) and within this user's personal
+        // visibility scope -- so unlike the Sales Report page, every row a
+        // plain salesperson can see here is one canEditOwnPipelineRow()
+        // would let them write to. Broadening the flag the view uses to
+        // decide whether to render edit controls at all keeps that in sync
+        // with the write endpoints instead of showing controls that 403.
+        $canEditBook = self::canEditBook($user)
+            || \App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user);
 
-        // The trash icon raises a delete REQUEST, it does not delete anything
-        // directly — approval is a separate admin/HR step and every delete is
-        // audited. CCare / New Biz may raise one so reps can clear their own
-        // duplicates without waiting on an admin; plain salespeople are
-        // read-only (2026-08-05) so they cannot.
-        $canDeleteCustomer = $canEditBook;
+        // Deletion is NOT part of this carve-out (add/edit only) -- the
+        // trash icon stays gated by the strict rule regardless of this
+        // page's broader edit flag above.
+        $canDeleteCustomer = self::canEditBook($user);
 
         return view('tenant.sales-pipeline.actual-pipeline', compact('canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'nbFilterCounts', 'kbByName', 'fParty', 'fStage', 'fSp', 'fNewBiz', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
     }
@@ -964,10 +999,10 @@ class SalesPipelineController extends Controller
         ]);
 
         $user = auth()->user();
-        // Adding a customer is book editing — read-only roles (plain
-        // salespeople) must not create rows either. This endpoint previously
-        // had no authorization check at all.
-        if (!self::canEditBook($user)) {
+        // Adding a customer is book editing, but a brand-new row is always
+        // an open Sales Pipeline prospect (never locked/booked yet), so
+        // plain salespeople may create one -- see canEditOwnPipelineRow().
+        if (!self::canEditOwnPipelineRow($user)) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
@@ -1576,7 +1611,12 @@ class SalesPipelineController extends Controller
         // grids now send.
         $wantsJson = $request->ajax() || $request->expectsJson();
 
-        if (!self::canEditBook($user)) {
+        // A plain salesperson may reach here from either the Sales Report
+        // grid or the Sales Pipeline grid -- same endpoint, same model.
+        // canEditOwnPipelineRow() only extends past canEditBook() when
+        // $pipeline is still open (not_locked) and they are its own
+        // salesperson, i.e. only ever a Sales Pipeline row.
+        if (!self::canEditOwnPipelineRow($user, $pipeline)) {
             if ($wantsJson) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
@@ -1722,7 +1762,9 @@ class SalesPipelineController extends Controller
 
         $pipeline = SalesPipeline::findOrFail($request->sales_pipeline_id);
         $user = auth()->user();
-        if (!self::canEditBook($user)) {
+        // Monthly forecast/sale/pending figures are pipeline data too --
+        // same carve-out as update() above for a salesperson's own open row.
+        if (!self::canEditOwnPipelineRow($user, $pipeline)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
