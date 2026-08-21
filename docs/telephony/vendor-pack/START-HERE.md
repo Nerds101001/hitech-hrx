@@ -9,11 +9,12 @@ open them.
 
 | # | File | What it is |
 |---|---|---|
-| 1 | **`INTEGRATION-GUIDE.md`** | **Open this first.** The whole integration in five minutes, with working code in PHP, C#, Java, Python, Node and curl. |
-| 2 | `HRX-Telephony.postman_collection.json` | 28 runnable requests. Import, set two variables, press Run. The signing is already written for you. |
-| 3 | `hrms-telephony-webhook-v1.yaml` | The full OpenAPI spec — every field, every status code. Reference, once you are past the guide. |
-| 4 | `centrovision-required-v1.yaml` | What we need from your side, in priority order. |
-| 5 | `HRX-Telephony-UAT.xlsx` | The acceptance tests, plus two tabs we need you to fill in. |
+| 1 | **`HRX-Telephony-API-Reference.pdf`** | **The full reference.** Endpoints, parameters, worked examples, the event catalogue, error codes and the acceptance checklist. Start here if you prefer a document. |
+| 2 | **`INTEGRATION-GUIDE.md`** | **Open this first.** The whole integration in five minutes, with working code in PHP, C#, Java, Python, Node and curl. |
+| 3 | `HRX-Telephony.postman_collection.json` | 28 runnable requests. Import, set two variables, press Run. The signing is already written for you. |
+| 4 | `hrms-telephony-webhook-v1.yaml` | The full OpenAPI spec — every field, every status code. Reference, once you are past the guide. |
+| 5 | `centrovision-required-v1.yaml` | What we need from your side, in priority order. |
+| 6 | `HRX-Telephony-UAT.xlsx` | The acceptance tests, plus two tabs we need you to fill in. |
 
 ---
 
