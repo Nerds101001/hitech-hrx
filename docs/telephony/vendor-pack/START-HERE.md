@@ -39,26 +39,12 @@ development starts rather than at acceptance.
 
 **2. Which address will your webhooks come from?**
 
-We allowlist `45.120.40.194`, the gateway we already reach for click-to-call.
-If your webhook sender goes out from somewhere else, tell us and we will add
-it — otherwise every request is refused and from your side it looks exactly
-like a dead endpoint.
+Tell us the address your webhook sender uses and we will allowlist it at our
+end. Until we have it, requests from an unrecognised address are refused, which
+from your side looks like a dead endpoint.
 
 Note the host that *sends* webhooks is not always the host that *answers* your
-agent API. Worth checking rather than assuming.
-
-## Third thing — thank you for the allowlist fix
-
-Click-to-call is working again. Confirmed on 20 August: from our production
-server (`89.117.188.10`) your agent API now answers in **0.1 seconds**, where
-it had been timing out entirely.
-
-**Please keep `89.117.188.10` allowlisted.** The nightly CDR reconciliation
-will use the same address once `GET /cdr` exists, so removing it would break
-that too.
-
-If you add more of our agents later, nothing further is needed on the network
-side — we just need a `campaign`, `agent` and `client_id` for each person.
+agent API, so it is worth confirming rather than assuming.
 
 ## Credentials
 
