@@ -2,9 +2,9 @@ openapi: 3.0.3
 
 # =============================================================================
 #  HRX Telephony Ingest API  --  v1
-#  Direction: CentroVision  ->  HRX
+#  Direction: telephony vendor  ->  HRX
 #
-#  This is the API Hi Tech Group publishes for CentroVision to push into. It is
+#  This is the API Hi Tech Group publishes for the vendor to push into. It is
 #  generated from the running implementation, not from a design document: every
 #  status code, error code and required field below is enforced by
 #  App\Http\Middleware\VerifyTelephonySignature and
@@ -24,7 +24,7 @@ info:
   version: "1.0.0"
   description: |
     Call events, agent sessions and recording notifications pushed from the
-    CentroVision 3.0 dialer / GSM gateway into HRX.
+    dialer or GSM gateway into HRX.
 
     ## Authentication
 
@@ -172,7 +172,7 @@ paths:
                     format: date-time
                     description: Compare against your own clock if you get stale_timestamp.
                     example: "2026-08-20T11:04:22+05:30"
-                  vendor: { type: string, example: centrovision }
+                  vendor: { type: string, example: the vendor }
                   api_version: { type: string, example: v1 }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -847,7 +847,7 @@ components:
           type: string
           description: |
             Your call identifier. **Must be the same value shown as RID/UID on
-            the CentroVision CDR screen**, so both sides can look up the same
+            your own CDR screen**, so both sides can look up the same
             call when there is a disagreement.
           example: CV-20260819-000512
         ref_id:
@@ -869,7 +869,7 @@ components:
             forgotten** — see UAT-05.
           enum: [api_click_to_call, manual_dial, inbound, ivr, predictive, preview, progressive, callback, internal]
         direction: { type: string, enum: [inbound, outbound, internal] }
-        mode: { type: string, enum: [auto, manual], description: The CentroVision dialling mode. }
+        mode: { type: string, enum: [auto, manual], description: The the vendor dialling mode. }
         agent: { $ref: "#/components/schemas/Agent" }
         caller_number: { type: string, description: "A-party, E.164.", example: "+919812345678" }
         callee_number: { type: string, description: "B-party, E.164.", example: "+919812309876" }

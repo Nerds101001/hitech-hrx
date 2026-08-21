@@ -30,6 +30,12 @@ from reportlab.platypus.tableofcontents import TableOfContents
 
 OUT = 'docs/telephony/vendor-pack/HRX-Telephony-API-Reference.pdf'
 
+# Optional. Blank -- the default -- produces the generic document that can go
+# to any telephony vendor. Set HRX_DOC_VENDOR to address one by name for a
+# specific onboarding. Read as an environment variable rather than plumbed
+# through every helper because only the cover and the footer ever use it.
+VENDOR = os.environ.get('HRX_DOC_VENDOR', '').strip()
+
 TEAL = colors.HexColor('#00706E')
 INK = colors.HexColor('#1F2933')
 MUTED = colors.HexColor('#5B6B7B')
@@ -95,7 +101,9 @@ def furniture(canvas, doc):
     canvas.setLineWidth(0.5)
     canvas.line(20 * mm, h - 14 * mm, w - 20 * mm, h - 14 * mm)
     canvas.line(20 * mm, 15 * mm, w - 20 * mm, 15 * mm)
-    canvas.drawString(20 * mm, 11 * mm, 'Confidential - for CentroVision integration use')
+    canvas.drawString(20 * mm, 11 * mm,
+                      'Confidential - for %s integration use'
+                      % (VENDOR or 'telephony vendor'))
     canvas.drawRightString(w - 20 * mm, 11 * mm, 'Page %d' % doc.page)
     canvas.restoreState()
 
@@ -111,14 +119,17 @@ def cover(canvas, doc):
     canvas.setFont('Helvetica-Bold', 27)
     canvas.drawString(20 * mm, h - 50 * mm, 'Telephony Ingest API')
     canvas.setFont('Helvetica', 13)
-    canvas.drawString(20 * mm, h - 61 * mm, 'Integration reference for CentroVision')
+    canvas.drawString(20 * mm, h - 61 * mm,
+                      'Integration reference for %s'
+                      % (VENDOR or 'telephony vendors'))
     canvas.setFont('Helvetica', 9.5)
     canvas.drawString(20 * mm, h - 76 * mm, 'Version 1.0    |    HRX HRMS    |    hrx.hitechgroup.in')
 
     canvas.setFillColor(MUTED)
     canvas.setFont('Helvetica', 8)
     canvas.drawString(20 * mm, 20 * mm,
-                      'Confidential. Issued to CentroVision for the purpose of integrating with HRX.')
+                      'Confidential. Issued to %s for the purpose of '
+                      'integrating with HRX.' % (VENDOR or 'the recipient'))
     canvas.restoreState()
 
 
@@ -194,8 +205,8 @@ def section(title):
 
 # ---- cover ---------------------------------------------------------------
 S.append(Spacer(1, 150 * mm))
-S.append(p('This document specifies the API that HRX publishes for CentroVision '
-           'to send call data into. It is generated from the running '
+S.append(p('This document specifies the API that HRX publishes for telephony '
+           'vendors to send call data into. It is generated from the running '
            'implementation: every status code, error code, required field and '
            'example below is enforced by the live endpoint.', LEAD))
 S.append(NextPageTemplate('body'))
@@ -214,10 +225,10 @@ S.append(toc)
 
 # ---- 1. overview ---------------------------------------------------------
 section('1. Overview')
-S.append(p('When a call happens on the CentroVision gateway, send a small JSON '
+S.append(p('When a call happens on your gateway, send a small JSON '
            'object describing it to the HRX endpoint. That is the entire '
            'integration. HRX stores, normalises and reports on the data; '
-           'CentroVision is not asked to build reports, storage or any user '
+           'you are not asked to build reports, storage or any user '
            'interface.', BODY))
 
 S.append(p('Base URL', H3))
@@ -237,10 +248,10 @@ S.append(p('The integration uses webhook push as the primary channel, with a '
 
 S.append(table([
     hdr(['Channel', 'Direction', 'When', 'Carries']),
-    ['PUSH (primary)', 'CentroVision to HRX', 'As each event happens',
+    ['PUSH (primary)', 'Vendor to HRX', 'As each event happens',
      'Call lifecycle, transfers, conferences, forwards, queue events, '
      'recordings, agent sessions'],
-    ['PULL (audit)', 'HRX to CentroVision', 'Nightly at 02:00 IST',
+    ['PULL (audit)', 'HRX to vendor', 'Nightly at 02:00 IST',
      'Full CDR for the previous day, to detect and backfill anything the push '
      'channel never delivered'],
 ], [30 * mm, 34 * mm, 32 * mm, 74 * mm]))

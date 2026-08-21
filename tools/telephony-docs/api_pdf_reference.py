@@ -105,9 +105,9 @@ S.append(table([
     [p('ref_id', CELLC), 'HRX',
      'Sent on originate. Echo it on every event for that call and in the CDR. '
      'Present only for API-initiated calls.'],
-    [p('call_uid', CELLC), 'CentroVision',
+    [p('call_uid', CELLC), 'Vendor',
      'Primary key for the whole call life. Must be the same value shown as '
-     'RID/UID on the CentroVision CDR screen, so both sides can look up the '
+     'RID/UID on your own CDR screen, so both sides can look up the '
      'same call when there is a disagreement.'],
 ], [26 * mm, 28 * mm, 100 * mm]))
 
@@ -135,7 +135,7 @@ S.append(p('If none of them resolve, the call is stored as unassigned and '
 
 # ---- 6. data dictionary --------------------------------------------------
 section('6. Data dictionary')
-S.append(p('Anything CentroVision cannot supply should be flagged in writing '
+S.append(p('Anything your platform cannot supply should be flagged in writing '
            'before the scope is agreed, not discovered during acceptance '
            'testing.', BODY))
 
@@ -265,13 +265,13 @@ S.append(table([
 section('9. Reconciliation (pull)')
 S.append(p('HRX runs a reconciliation nightly at 02:00 IST for the previous '
            'day. It compares its own call count and total talk time against the '
-           'CentroVision CDR for the same window, and backfills anything the '
+           'vendor CDR for the same window, and backfills anything the '
            'push channel never delivered.', BODY))
 S.append(p('This is what makes the integration trustworthy rather than merely '
            'useful. Without it, "we think we are missing calls" can never be '
            'answered.', BODY))
 
-S.append(p('What CentroVision needs to expose', H2))
+S.append(p('What the vendor needs to expose', H2))
 S.append(table([
     hdr(['Priority', 'Endpoint', 'Purpose']),
     ['1', p('GET /cdr', CELLC),
@@ -316,7 +316,7 @@ S.append(table([
     ['9', 'Three-way conference', 'Conference leg listing all participants'],
     ['10', 'Queue abandon', 'status abandoned, wait_seconds populated'],
     ['11', 'Recording playback in HRX', 'Audio plays, access is logged'],
-    ['12', 'Agent shift with a break', 'Totals match the CentroVision User Session report'],
+    ['12', 'Agent shift with a break', 'Totals match the vendor user session report'],
     ['13', 'Ten-minute HRX outage during business hours',
      'Every call made during it arrives via retry or the nightly reconciliation'],
     ['14', 'Seven consecutive nights of reconciliation', 'Zero count gap'],
@@ -332,7 +332,7 @@ S.append(callout(
 
 S.append(Spacer(1, 12))
 S.append(p('Questions', H2))
-S.append(p('Anything unclear, or any field the CentroVision platform cannot '
+S.append(p('Anything unclear, or any field your platform cannot '
            'supply, should be raised now in the Field Confirmation tab of '
            'HRX-Telephony-UAT.xlsx. A field flagged at kickoff is a short '
            'conversation. The same field discovered during acceptance testing '

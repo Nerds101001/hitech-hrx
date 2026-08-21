@@ -1,15 +1,18 @@
-# HRX × CentroVision — telephony integration pack
+# HRX — telephony integration pack
 
-CentroVision cannot build reports for us, so HRX publishes an endpoint and they
-push into it. This folder is what you hand them.
+Our telephony vendors cannot build reports for us, so HRX publishes an endpoint
+and they push into it. This folder is what you hand any of them: nothing in the
+pack names a particular vendor, so the same files go to each one. What differs
+per vendor is only the credential, issued separately from
+**Telephony → Connection**.
 
 | File | Direction | What it is |
 |---|---|---|
 | `vendor-pack/` + `HRX-Telephony-Integration-Pack.zip` | Vendor → HRX | **What you actually send.** The five vendor-facing files, swept clean of anything internal. This README is NOT in it. |
-| `EMAIL-TO-VENDOR.md` | internal | The two messages to send, ready to copy — pack first, credentials separately. |
+| `EMAIL-TO-VENDOR.md` | internal | The two messages to send, ready to copy — pack first, credentials separately. Fill in the vendor name where marked. |
 | `INTEGRATION-GUIDE.md` | Vendor → HRX | **Send this first.** The whole integration in five minutes, with working code in PHP, C#, Java, Python, Node and curl. The PHP/Python/Node/curl samples were executed against the real endpoint. |
 | `hrms-telephony-webhook-v1.yaml` | Vendor → HRX | **The API we publish.** Every call event, agent session and recording notification they must POST. This is the file they asked for. |
-| `centrovision-required-v1.yaml` | HRX → Vendor | The counterpart: what they must expose so HRX can dial, pull a signed recording URL, and reconcile the CDR nightly. |
+| `vendor-required-v1.yaml` | HRX → Vendor | The counterpart: what they must expose so HRX can dial, pull a signed recording URL, and reconcile the CDR nightly. |
 | `HRX-Telephony.postman_collection.json` | Both | 28 runnable requests with a working HMAC signing script, a sample payload for every event, and five negative tests. Both sides prove their half works before writing production code. |
 | `HRX-Telephony-UAT.xlsx` | Both | The evidence file: 20 UAT cases, the 15-question vendor questionnaire, field-by-field confirmation, the 7-day reconciliation log, and the acceptance sign-off. |
 
@@ -45,7 +48,7 @@ php -r 'echo "KEY=".bin2hex(random_bytes(24))."\nSECRET=".bin2hex(random_bytes(3
 # Issued BY HRX TO the vendor
 TELEPHONY_INBOUND_API_KEY=
 TELEPHONY_INBOUND_SECRETS=          # comma separated; new secret FIRST during a rotation
-TELEPHONY_ALLOWED_IPS=45.120.40.194  # the CentroVision gateway; empty disables the check
+TELEPHONY_ALLOWED_IPS=45.120.40.194  # the the vendor gateway; empty disables the check
 TELEPHONY_DEFAULT_TENANT_ID=default
 
 # Issued BY the vendor TO HRX — leave blank until they provide them
@@ -83,7 +86,7 @@ Not in the same email as the spec. The whole point of the HMAC layer is that a
 leaked API key alone is not enough to forge call records into an HR system;
 mailing both together throws that away.
 
-## Draft note to CentroVision
+## Draft note to the vendor
 
 > Subject: HRX telephony integration — API spec and test collection
 >
@@ -107,7 +110,7 @@ mailing both together throws that away.
 > with request 1.1 `GET /health`; a 200 there proves your key, your secret, your
 > clock and your IP allowlist all at once.
 >
-> **`centrovision-required-v1.yaml`** is the counterpart — what we need from
+> **`vendor-required-v1.yaml`** is the counterpart — what we need from
 > your side. Please do not build new endpoints to match those names. If your
 > existing API differs in path or field naming, tell us and we adapt on our
 > side; what matters is that the capability and the data exist. The file is
@@ -172,13 +175,13 @@ outside `telephony.recording.unmasked_roles`.
 
 The menu entry sits under **Sales & Operations → Telephony**.
 
-### What still waits on CentroVision
+### What still waits on the vendor
 
-`CentroVisionClient` and the outbound half of `telephony:reconcile` are coded
-against a JSON API **CentroVision has not built yet**. The live box speaks
+`the vendorClient` and the outbound half of `telephony:reconcile` are coded
+against a JSON API **the vendor has not built yet**. The live box speaks
 plain-text `ACTION=DIAL` at `45.120.40.194:18111` and answers HTTP 200 whether
 the dial worked or not (see `app/Services/ClickToCallService.php`). So until
-they respond to `centrovision-required-v1.yaml`:
+they respond to `vendor-required-v1.yaml`:
 
 - **Reconciliation** has nothing to pull — it needs their `GET /cdr`, priority 1.
 - **Recording playback** has nothing to fetch — it needs their signed-URL

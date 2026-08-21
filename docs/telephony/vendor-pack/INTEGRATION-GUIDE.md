@@ -1,4 +1,4 @@
-# HRX Telephony — integration guide for CentroVision
+# HRX Telephony — integration guide for telephony vendors
 
 **Read this first. It is the whole integration in about five minutes.**
 

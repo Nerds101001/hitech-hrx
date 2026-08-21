@@ -26,7 +26,7 @@ S.append(p('Request', H3))
 S.append(code("""
 GET /api/telephony/v1/health HTTP/1.1
 Host: hrx.hitechgroup.in
-Authorization: Bearer hrx_9bf004780caeb3bb25c8f81284a8adcc
+Authorization: Bearer hrx_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6
 X-HRX-Timestamp: 1755691200
 X-HRX-Nonce: 4f8c1a2e-6b3d-4e7a-9c15-2d8f0b6a1e93
 X-HRX-Signature: sha256=6b2f1c...e9a4
@@ -37,10 +37,14 @@ S.append(code("""
 {
   "status": "ok",
   "server_time": "2026-08-20T16:04:22+05:30",
-  "vendor": "centrovision",
+  "vendor": "Acme Telecom",
   "api_version": "v1"
 }
 """))
+S.append(p('vendor echoes the label on the credential that authenticated the '
+           'request. Seeing your own name there confirms you are using the '
+           'key issued to you, which is worth checking if more than one set '
+           'of credentials is in circulation at your end.', BODY))
 S.append(p('Compare server_time against your own clock if you ever receive '
            'stale_timestamp.', NOTE))
 
@@ -72,7 +76,7 @@ S.append(table([
      'When the event happened on the gateway, not when it was sent. Must carry '
      'an explicit offset, e.g. 2026-08-19T15:01:44+05:30'],
     [p('call_uid', CELLC), 'string',
-     'Your call identifier. Must equal the RID/UID shown on the CentroVision '
+     'Your call identifier. Must equal the RID/UID shown on your own '
      'CDR screen, so both sides can open the same record in a dispute.'],
 ], [30 * mm, 20 * mm, 104 * mm]))
 
@@ -91,7 +95,7 @@ S.append(table([
      'api_click_to_call, manual_dial, inbound, ivr, predictive, preview, '
      'progressive, callback, internal'],
     [p('direction', CELLC), 'enum', 'inbound, outbound, internal'],
-    [p('mode', CELLC), 'enum', 'auto, manual - the CentroVision dialling mode'],
+    [p('mode', CELLC), 'enum', 'auto, manual - the dialling mode on your platform'],
     [p('agent', CELLC), 'object', 'See section 5. This is how HRX identifies the employee.'],
     [p('status', CELLC), 'enum',
      'answered, no_answer, busy, failed, congestion, cancelled, abandoned, '
@@ -231,7 +235,7 @@ S.append(callout(
     'Integrations of this kind usually fail because only the API-originated '
     'path is instrumented, while a large share of calls are dialled manually. '
     'The reports are then wrong in week one and confidence does not recover. '
-    'If the CentroVision platform cannot raise webhooks for manual, inbound and '
+    'If your platform cannot raise webhooks for manual, inbound and '
     'IVR calls, please say so at kickoff rather than at acceptance testing.',
     WARN))
 
@@ -274,7 +278,7 @@ S.append(p('3.5  POST /recordings/ready', H2))
 S.append(p('Sent once the recording is written and fetchable. Send only a '
            'recording_uid - never a playable URL. When a permitted HRX user '
            'presses play, HRX requests a short-lived signed URL from '
-           'CentroVision and streams the bytes itself, so audio never leaves '
+           'your platform and streams the bytes itself, so audio never leaves '
            'the gateway unauthenticated and every playback is permission '
            'checked and logged. A URL in a webhook is a URL in a log file.', BODY))
 S.append(code("""
@@ -311,10 +315,10 @@ S.append(table([
 S.append(PageBreak())
 S.append(p('3.6  POST /agent-sessions', H2))
 S.append(p('This is what produces total login time and active time on the HRX '
-           'productivity report. Send the CentroVision-computed totals on '
+           'productivity report. Send your own computed totals on '
            'agent.logout: HRX stores them verbatim rather than deriving them '
-           'from the state stream, specifically so that the HRX report and the '
-           'CentroVision User Session report cannot drift apart and turn every '
+           'from the state stream, specifically so that the HRX report and your '
+           'own user session report cannot drift apart and turn every '
            'discrepancy into a support ticket.', BODY))
 S.append(code("""
 {

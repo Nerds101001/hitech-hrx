@@ -1,10 +1,19 @@
-# Email to CentroVision — ready to send
+# Email to a telephony vendor — ready to send
+
+Vendor-neutral. Replace `[Name]` and address it to whichever vendor is being
+onboarded; the attached pack itself names nobody, so it does not change.
 
 **Attach:** `HRX-Telephony-Integration-Pack.zip`
 
 **Before sending:** generate the key and secret in HRX —
 **Telephony → Connection → Generate**. Copy the shared secret immediately; it is
 encrypted afterwards and cannot be shown again.
+
+**Issue one credential per vendor**, labelled with their name. Never reuse a
+credential across two vendors: the label is what `GET /health` echoes back and
+what the Connection screen attributes each push to, so a shared key makes it
+impossible to tell whose traffic is whose — or to cut one vendor off without
+cutting off the other.
 
 ---
 
@@ -29,7 +38,7 @@ encrypted afterwards and cannot be shown again.
 > | `INTEGRATION-GUIDE.md` | For your developer — includes working code in PHP, C#, Java, Python, Node and curl |
 > | `HRX-Telephony.postman_collection.json` | 28 runnable requests — import, add credentials, press Run |
 > | `hrms-telephony-webhook-v1.yaml` | Full OpenAPI specification |
-> | `centrovision-required-v1.yaml` | What we require from your side |
+> | `vendor-required-v1.yaml` | What we require from your side |
 > | `HRX-Telephony-UAT.xlsx` | Acceptance tests and two tabs for your input |
 >
 > **Getting started**

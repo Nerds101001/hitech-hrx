@@ -1,8 +1,8 @@
 openapi: 3.0.3
 
 # =============================================================================
-#  CentroVision API required by HRX  --  v1
-#  Direction: HRX  ->  CentroVision
+#  Vendor API required by HRX  --  v1
+#  Direction: HRX  ->  telephony vendor
 #
 #  The counterpart to hrms-telephony-webhook-v1.yaml. That file is what HRX
 #  publishes for you to push into; this is what HRX needs you to expose so it
@@ -11,8 +11,8 @@ openapi: 3.0.3
 #
 #  HOW TO READ THIS
 #  ----------------
-#  These are the shapes HRX is coded against today
-#  (App\Services\Telephony\CentroVisionClient). If your existing endpoints
+#  These are the shapes the HRX outbound client is coded against today. If
+#  your existing endpoints
 #  differ in path, verb or field name, that is fine and expected -- say so and
 #  HRX adapts that one class. What matters is that the CAPABILITY exists and
 #  the DATA is available. Do not build new endpoints to match these names.
@@ -31,14 +31,14 @@ openapi: 3.0.3
 # =============================================================================
 
 info:
-  title: CentroVision API required by HRX
+  title: Vendor API required by HRX
   version: "1.0.0"
   description: |
     ## The single most important field
 
-    `call_uid`. It must be **the same value shown as RID/UID on the
-    CentroVision CDR screen**, and the same value sent on every webhook. When
-    HRX and CentroVision disagree about a call, this is what lets both sides
+    `call_uid`. It must be **the same value shown as RID/UID on your own
+    CDR screen**, and the same value sent on every webhook. When HRX and your
+    platform disagree about a call, this is what lets both sides
     open the same record instead of arguing from screenshots.
 
     ## The second most important thing
