@@ -1,5 +1,7 @@
 # WhatsApp message — sending the API pack
 
+Vendor-neutral. Replace `[Name]`; the attached PDF names nobody.
+
 WhatsApp uses *bold*, _italic_ and ```monospace```. Keep paragraphs short; long
 blocks collapse behind "Read more" on a phone.
 
@@ -79,8 +81,8 @@ Nagender Kumar
 
 Subject: HRX Telephony API — credentials
 
-> API key: hrx_6b6bbe8bb401da23ec86d44d225a97b210851333d5ebfff3
-> Shared secret: 01348634aa0d66851316addb8b208c3c0095169a2516c464733ed1b6797b2303
+> API key: <paste from Telephony → Connection>
+> Shared secret: <paste from Telephony → Connection>
 >
 > Both go into the Postman collection's Variables tab, as api_key and
 > shared_secret.
