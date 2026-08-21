@@ -907,7 +907,7 @@
         },
         {
             "url": "/mind-speak",
-            "name": "Innovation Hub",
+            "name": "Mind Speak",
             "icon": "menu-icon bx bx-brain",
             "slug": "mind-speak.index",
             "roles": [
