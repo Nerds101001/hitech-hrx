@@ -21,12 +21,16 @@ use Throwable;
 class TelephonyIngestController extends Controller
 {
   /** GET /health - proves key, secret, clock skew and IP allowlist together. */
-  public function health(): JsonResponse
+  public function health(Request $request): JsonResponse
   {
     return response()->json([
       'status' => 'ok',
       'server_time' => now()->toIso8601String(),
-      'vendor' => 'centrovision',
+      // The label on the credential that authenticated this request, so each
+      // vendor is named back to itself rather than being greeted with somebody
+      // else's name. It also answers "which key am I actually presenting?",
+      // which is the question when the wrong one has been handed out.
+      'vendor' => $request->attributes->get('telephony_credential_label') ?? 'unnamed',
       'api_version' => 'v1',
     ]);
   }

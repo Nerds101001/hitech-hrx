@@ -5,8 +5,8 @@ namespace Tests\Feature\Telephony;
 use App\Models\Telephony\TelephonyAgentMap;
 use App\Models\Telephony\TelephonyAgentSession;
 use App\Models\Telephony\TelephonyCall;
-use App\Models\Telephony\TelephonyCredential;
 use App\Models\Telephony\TelephonyCallLeg;
+use App\Models\Telephony\TelephonyCredential;
 use App\Models\Telephony\TelephonyRecording;
 use App\Models\Telephony\TelephonyWebhookDelivery;
 use App\Services\Telephony\CallEventNormalizer;
@@ -71,6 +71,33 @@ class TelephonyIngestTest extends TelephonyTestCase
     ) as $file) {
       (require $file)->up();
     }
+  }
+
+  public function test_health_names_the_caller_back_to_itself(): void
+  {
+    // With several telephony vendors onboarded, a hardcoded vendor name is
+    // wrong for all but one of them -- and /health is the first response
+    // anybody sees. It echoes the label on the credential that actually
+    // authenticated the request instead.
+    $credential = TelephonyCredential::create([
+      'tenant_id' => 'default',
+      'label' => 'Acme Telecom',
+      'api_key' => 'acme-key',
+      'secret' => 'acme-secret',
+      'is_active' => true,
+    ]);
+
+    config(['telephony.inbound.api_key' => 'ignored-when-a-credential-matches']);
+
+    $this->signed('GET', '/api/telephony/v1/health', [], [
+      'Authorization' => 'Bearer acme-key',
+    ], 'acme-secret')
+      ->assertOk()
+      ->assertJsonPath('vendor', 'Acme Telecom');
+
+    // And the credential records that it was used, which is what the admin
+    // screen reports as "last seen".
+    $this->assertNotNull($credential->fresh()->last_used_at);
   }
 
   // ─────────────────────────────────────────────────────── transport security
@@ -825,16 +852,22 @@ class TelephonyIngestTest extends TelephonyTestCase
     ]);
   }
 
-  private function signed(string $method, string $uri, array $body = [], array $override = [])
-  {
+  private function signed(
+    string $method,
+    string $uri,
+    array $body = [],
+    array $override = [],
+    ?string $secret = null
+  ) {
     $raw = $body === [] ? '' : json_encode($body);
     $ts = (string) time();
     $nonce = (string) Str::uuid();
+    $secret = $secret ?? $this->secret;
 
     return $this->raw($method, $uri, $raw, array_merge([
       'X-HRX-Timestamp' => $ts,
       'X-HRX-Nonce' => $nonce,
-      'X-HRX-Signature' => 'sha256=' . hash_hmac('sha256', "{$ts}.{$nonce}.{$raw}", $this->secret),
+      'X-HRX-Signature' => 'sha256=' . hash_hmac('sha256', "{$ts}.{$nonce}.{$raw}", $secret),
       'Idempotency-Key' => $body['event_id'] ?? null,
     ], $override));
   }

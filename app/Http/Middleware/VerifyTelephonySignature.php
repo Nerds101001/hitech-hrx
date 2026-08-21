@@ -101,6 +101,11 @@ class VerifyTelephonySignature
       $credential['model']->markUsed($request->ip());
     }
 
+    // Let the controller name the caller back to them. Kept as a request
+    // attribute rather than a container binding so it cannot leak between
+    // concurrent requests.
+    $request->attributes->set('telephony_credential_label', $credential['label'] ?? null);
+
     return $next($request);
   }
 
@@ -139,6 +144,7 @@ class VerifyTelephonySignature
           return [
             'secrets' => $model->acceptedSecrets(),
             'allowed_ips' => $model->allowlist(),
+            'label' => $model->label,
             'model' => $model,
           ];
         }
@@ -160,6 +166,8 @@ class VerifyTelephonySignature
     return [
       'secrets' => array_values(array_filter($cfg['secrets'] ?? [])),
       'allowed_ips' => $cfg['allowed_ips'] ?? [],
+      // The env fallback has no label; the controller falls back in turn.
+      'label' => null,
     ];
   }
 
