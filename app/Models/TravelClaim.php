@@ -9,6 +9,7 @@ class TravelClaim extends Model
     protected $fillable = [];
 
     protected $casts = [
+        'first_submitted_at' => 'datetime',
         'verified_at' => 'datetime',
         'paid_at' => 'datetime',
         'split_85_paid_on' => 'date',

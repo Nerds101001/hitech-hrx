@@ -56,6 +56,20 @@ class TravelClaimController extends Controller
         return (float) $value;
     }
 
+    /**
+     * Does this row actually claim travel on the vehicle?
+     *
+     * Distance and the conveyance amount worked out from it are the only two
+     * things meter readings feed, so a row claiming neither has no use for
+     * them. Both are checked because the per-km modes compute conveyance from
+     * the distance while the official vehicles have the amount typed in.
+     */
+    private static function claimsVehicleTravel(array $item): bool
+    {
+        return floatval($item['distance_km'] ?? 0) > 0
+            || floatval($item['conveyance_amount'] ?? 0) > 0;
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -184,17 +198,19 @@ class TravelClaimController extends Controller
             'items.*.auto_taxi_amount' => 'nullable|numeric',
         ]);
 
-        $latePenalty = false;
+        $deadline = null;
         try {
             // Anchor to day 1 — 'Y-m' alone overflows past short months on days 29-31.
             $claimMonthDate = \Carbon\Carbon::createFromFormat('Y-m-d', $request->claim_month . '-01');
             $deadline = $claimMonthDate->copy()->addMonth()->startOfMonth()->addDays(6)->endOfDay(); // 7th of next month
-            if (now()->gt($deadline)) {
-                $latePenalty = true;
-            }
         } catch (\Exception $e) {
-            // fallback
+            // An unparseable month gives us no deadline, so no penalty either.
         }
+        // Whether the 10% applies is decided further down, once we know when
+        // this claim was FIRST submitted. It deliberately is not decided here:
+        // deciding it from now() on every save is what made an on-time claim
+        // turn late the moment it was sent back and corrected.
+        $latePenalty = false;
 
         // Does the month contain at least one row on a metered vehicle? The
         // odometer rules below all hang off this: someone who only claimed
@@ -202,7 +218,7 @@ class TravelClaimController extends Controller
         // not be asked for one.
         $hasVehicleRow = false;
         foreach (($request->items ?? []) as $it) {
-            if (self::isMeteredMode($it['mode_of_travel'] ?? null)) {
+            if (self::isMeteredMode($it['mode_of_travel'] ?? null) && self::claimsVehicleTravel($it)) {
                 $hasVehicleRow = true;
                 break;
             }
@@ -254,7 +270,32 @@ class TravelClaimController extends Controller
                 $existingClaim->items()->delete();
             }
 
-            $targetStatus = $isDraft ? 'draft' : 'submitted';
+            /* Background autosave records what is being typed; it must not move
+               the claim. Forcing 'draft' here took a claim HR had sent back out
+               of the objection list the moment the employee opened it to
+               correct, so it silently disappeared from the objection view. */
+            $targetStatus = $isDraft
+                ? (($request->boolean('autosave') && $existingClaim && $existingClaim->status === 'objection')
+                    ? 'objection' : 'draft')
+                : 'submitted';
+
+            /* The 10% is fixed by the FIRST time this claim was submitted, and
+               never recomputed afterwards. A claim filed inside the deadline
+               that HR sends back for a correction is still a claim filed on
+               time — measuring against now() on every save meant the
+               resubmission (and even a background autosave) after the 7th
+               reclassified it as late and quietly took 10% off the payout.
+
+               A draft has not been submitted yet, so it previews against today
+               and stamps nothing; the stamp is written the moment it really is
+               submitted. */
+            $firstSubmittedAt = $existingClaim ? $existingClaim->first_submitted_at : null;
+            if ($targetStatus === 'submitted' && !$firstSubmittedAt) {
+                $firstSubmittedAt = now();
+            }
+            $latePenalty = $deadline
+                ? \Carbon\Carbon::parse($firstSubmittedAt ?: now())->gt($deadline)
+                : false;
 
             // Replacing a proof used to leave the previous file on disk for
             // ever; nothing referenced it again, so storage only ever grew.
@@ -291,6 +332,15 @@ class TravelClaimController extends Controller
 
                 foreach (($request->items ?? []) as $idx => $it) {
                     if (!self::isMeteredMode($it['mode_of_travel'] ?? null)) {
+                        continue;
+                    }
+                    // A metered row only needs readings when it actually claims
+                    // travel on the vehicle. Someone who stayed at the office,
+                    // left their usual mode selected out of habit and claimed
+                    // only the food allowance has nothing to read off an
+                    // odometer — and being asked for one left the whole month
+                    // unsubmittable with no legitimate way to satisfy it.
+                    if (!self::claimsVehicleTravel($it)) {
                         continue;
                     }
                     $start = self::decimalOrNull($it['start_meter'] ?? null);
@@ -387,6 +437,7 @@ class TravelClaimController extends Controller
                     'month_start_odometer_proof' => $monthStartProofPath,
                     'month_end_odometer_proof' => $monthEndProofPath,
                     'status' => $targetStatus,
+                    'first_submitted_at' => $firstSubmittedAt,
                     'late_penalty_applied' => $latePenalty,
                 ], $proofPaths))->save();
             } else {
@@ -404,6 +455,7 @@ class TravelClaimController extends Controller
                     'bank_account_no' => 'On File',
                     'bank_ifsc' => 'On File',
                     'status' => $targetStatus,
+                    'first_submitted_at' => $firstSubmittedAt,
                     'late_penalty_applied' => $latePenalty,
                 ], $proofPaths));
             }
