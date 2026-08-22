@@ -152,13 +152,17 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
 
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
-    // Role/user-account management -- admin only. HR and every other role
-    // must never reach these: they create or change what role a user (up to
-    // and including their own account) holds.
+    // Role/permission definitions and account deletion -- admin only.
     Route::middleware('role_or_permission:admin')->group(function () {
       Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
       Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
       Route::delete('account/deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('account.deleteUserAjax');
+    });
+
+    // Assigning a role to a user -- admin or HR. HR may only hand out
+    // non-admin-tier roles (enforced in the controller, which also hides
+    // admin/super_admin from the role list HR is shown at all).
+    Route::middleware('role_or_permission:admin|hr')->group(function () {
       Route::post('account/addOrUpdateUserAjax', [AccountController::class, 'addOrUpdateUserAjax'])->name('account.addOrUpdateUserAjax');
       Route::post('account/updateUserAjax/{id}', [AccountController::class, 'updateUserAjax'])->name('account.updateUserAjax');
     });

@@ -370,16 +370,45 @@ class AccountController extends Controller
   }
 
 
-  /** Roles that may manage other users' accounts and roles via this screen. */
-  private const USER_MANAGEMENT_ROLES = ['admin', 'Admin', 'super_admin', 'Super Admin'];
+  /** Admin-tier roles: unrestricted role management, never assignable (or visible) to HR. */
+  private const ADMIN_TIER_ROLES = ['admin', 'Admin', 'super_admin', 'Super Admin'];
+
+  /** May manage user accounts and hand out non-admin-tier roles, but never admin/super_admin. */
+  private const RESTRICTED_ROLE_MANAGERS = ['hr', 'HR'];
+
+  /**
+   * Is the current user allowed to manage user accounts/roles here at all,
+   * and -- when a specific role is being assigned -- are they allowed to
+   * assign THAT one? Admins may assign anything; HR may manage accounts but
+   * can never grant an admin-tier role, no matter what the request contains.
+   */
+  private static function authorizeUserManagement(?string $requestedRole): ?\Illuminate\Http\JsonResponse
+  {
+    $actor = auth()->user();
+    $isAdminTier = $actor && $actor->hasAnyRole(self::ADMIN_TIER_ROLES);
+    $isRestrictedManager = $actor && $actor->hasAnyRole(self::RESTRICTED_ROLE_MANAGERS);
+
+    if (!$isAdminTier && !$isRestrictedManager) {
+      return response()->json([
+        'message' => 'Unauthorized. Only administrators or HR can manage user accounts and roles.',
+        'code' => 403,
+      ], 403);
+    }
+
+    if (!$isAdminTier && $requestedRole && in_array($requestedRole, self::ADMIN_TIER_ROLES, true)) {
+      return response()->json([
+        'message' => 'HR cannot assign an admin role.',
+        'code' => 403,
+      ], 403);
+    }
+
+    return null;
+  }
 
   public function addOrUpdateUserAjax(Request $request)
   {
-    if (!auth()->user() || !auth()->user()->hasAnyRole(self::USER_MANAGEMENT_ROLES)) {
-      return response()->json([
-        'message' => 'Unauthorized. Only administrators can manage user accounts and roles.',
-        'code' => 403,
-      ], 403);
+    if ($unauthorized = self::authorizeUserManagement($request->role)) {
+      return $unauthorized;
     }
 
     $request->validate([
@@ -484,11 +513,8 @@ class AccountController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
-    if (!auth()->user() || !auth()->user()->hasAnyRole(self::USER_MANAGEMENT_ROLES)) {
-      return response()->json([
-        'message' => 'Unauthorized. Only administrators can manage user accounts and roles.',
-        'code' => 403,
-      ], 403);
+    if ($unauthorized = self::authorizeUserManagement($request->role)) {
+      return $unauthorized;
     }
 
     $request->validate([
@@ -534,6 +560,14 @@ class AccountController extends Controller
   public function getRolesAjax()
   {
     $roles = Role::get();
+
+    // HR sees this list to populate the role picker when editing a user --
+    // admin/super_admin must never appear as an option, or be assignable,
+    // to anyone below the admin tier.
+    $actor = auth()->user();
+    if (!$actor || !$actor->hasAnyRole(self::ADMIN_TIER_ROLES)) {
+      $roles = $roles->reject(fn($r) => in_array($r->name, self::ADMIN_TIER_ROLES, true))->values();
+    }
 
     return Success::response($roles);
   }
