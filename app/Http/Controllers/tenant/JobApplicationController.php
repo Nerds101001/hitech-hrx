@@ -484,7 +484,7 @@ class JobApplicationController extends Controller
         $designations     = Designation::where('created_by_id', Auth::user()->creatorId())->get();
         $employees        = User::where('created_by_id', Auth::user()->creatorId())->get();
 
-        $departments      = Department::where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get()->pluck('name', 'id');
+        $departments      = Department::cachedActive()->pluck('name', 'id');
 
         return view('tenant.jobApplication.convert', compact('jobOnBoard', 'employees', 'designations', 'documents', 'branches', 'company_settings', 'departments'));
     }

@@ -517,9 +517,9 @@ class UserDashboardController extends Controller
                 'upcomingAnniversaries' => $upcomingAnniversaries,
                 'payrollTrend' => $payrollTrend,
                 'latestNetSalary' => $latestNetSalary,
-                'departments' => \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
+                'departments' => \App\Models\Department::cachedActive(),
                 'roles' => \Spatie\Permission\Models\Role::all(),
-                'designations' => \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get(),
+                'designations' => \App\Models\Designation::cachedActive(),
                 'managers' => \App\Models\User::whereHas('roles', function($q) {
                     $q->whereIn('name', ['admin', 'hr', 'manager', 'accounts']);
                 })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()

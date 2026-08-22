@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCachedActiveList;
 use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Site extends Model implements AuditableContract
 {
-  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes;
+  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes, HasCachedActiveList;
 
   protected $table = 'sites';
 

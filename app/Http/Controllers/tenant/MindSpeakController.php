@@ -106,7 +106,7 @@ class MindSpeakController extends Controller
             }
 
             $submissions = $query->latest()->paginate(15);
-            $departments = Department::where('status', \App\Enums\Status::ACTIVE)->get();
+            $departments = Department::cachedActive();
 
             return view('tenant.mind-speak.admin-dashboard', compact(
                 'stats',

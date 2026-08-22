@@ -1388,8 +1388,7 @@ class DashboardController extends Controller
     // Same allowed-id set as the refresh now applies to both.
     $allowedIds = $this->monitoringAllowedIds(auth()->user());
 
-    $teamsList = Team::where('status', 'active')
-      ->get();
+    $teamsList = Team::cachedActive();
 
     $attendances = Attendance::whereDate('created_at', now())
       ->when($allowedIds !== null, fn($q) => $q->whereIn('user_id', $allowedIds))
@@ -1508,8 +1507,7 @@ class DashboardController extends Controller
   {
     $allowedIds = $this->monitoringAllowedIds(auth()->user());
 
-    $teamsList = Team::where('status', '=', 'active')
-      ->get();
+    $teamsList = Team::cachedActive();
 
 
     $attendances = Attendance::whereDate('created_at', '=', now())
@@ -2004,10 +2002,7 @@ class DashboardController extends Controller
         ->groupBy('users.department_id')
         ->pluck('present_count', 'department_id');
 
-    $departments = Department::where('status', Status::ACTIVE)
-        ->select('id', 'name', 'code')
-        ->orderBy('name')
-        ->get();
+    $departments = Department::cachedActive();
 
     $departmentPerformance = $departments->map(function ($dept) use ($totalByDept, $presentByDept) {
         $total   = $totalByDept->get($dept->id, 0);

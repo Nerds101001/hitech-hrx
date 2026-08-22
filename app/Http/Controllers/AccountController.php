@@ -270,8 +270,8 @@ class AccountController extends Controller
     // Variables needed by edit modals included in employee-self-profile
     $leavePolicyProfiles = \App\Models\LeavePolicyProfile::all();
     $roles = \Spatie\Permission\Models\Role::all();
-    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->get();
-    $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->get();
+    $departments = \App\Models\Department::cachedActive();
+    $designations = \App\Models\Designation::cachedActive();
     $allUsers = \App\Models\User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
         ->where('id', '!=', $id)
         ->select('id', 'first_name', 'last_name')

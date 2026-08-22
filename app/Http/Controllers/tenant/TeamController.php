@@ -16,8 +16,7 @@ class TeamController extends Controller
 
   public function getTeamListAjax()
   {
-    $teams = Team::where('status', Status::ACTIVE)
-      ->get(['id', 'name', 'code']);
+    $teams = Team::cachedActive();
     return Success::response($teams);
   }
 

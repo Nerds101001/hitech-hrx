@@ -18,8 +18,7 @@ class DesignationController extends Controller
 
   public function getDesignationListAjax()
   {
-    $designations = Designation::where('status', Status::ACTIVE)
-      ->get(['id', 'name', 'code']);
+    $designations = Designation::cachedActive();
 
     return Success::response($designations);
   }

@@ -232,7 +232,7 @@ class ExpenseTypeController extends Controller
 
     $expenseRules = ExpenseRule::where('expense_type_id', $id)->get();
 
-    $designations = Designation::where('status', Status::ACTIVE)->get();
+    $designations = Designation::cachedActive();
 
     $locations = Location::where('status', Status::ACTIVE)->get();
 

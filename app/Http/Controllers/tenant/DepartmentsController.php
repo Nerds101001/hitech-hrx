@@ -46,8 +46,7 @@ class DepartmentsController extends Controller
 
   public function getListAjax()
   {
-    $departments = Department::where('status', Status::ACTIVE)
-      ->get(['id', 'name', 'code']);
+    $departments = Department::cachedActive();
 
     return Success::response($departments);
   }

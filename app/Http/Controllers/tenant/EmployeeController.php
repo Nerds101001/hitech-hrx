@@ -312,13 +312,9 @@ class EmployeeController extends Controller
       ->select('id', 'name', 'code')
       ->get();
 
-    $teams = Team::where('status', Status::ACTIVE)
-      ->select('id', 'name', 'code')
-      ->get();
+    $teams = Team::cachedActive();
 
-    $designations = Designation::where('status', Status::ACTIVE)
-      ->select('id', 'name', 'code')
-      ->get();
+    $designations = Designation::cachedActive();
 
     $users = User::whereHas('roles', function($q) {
         $q->whereIn(DB::raw('LOWER(name)'), ['admin', 'hr', 'manager', 'accounts']);
@@ -1671,8 +1667,8 @@ class EmployeeController extends Controller
     // Optimization: These are only needed for the Edit Modals. 
     // In a future step, these will be moved to an AJAX-on-demand endpoint.
     $roles = \Spatie\Permission\Models\Role::select('id', 'name')->get();
-    $departments = \App\Models\Department::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->orderBy('name')->get();
-    $designations = \App\Models\Designation::where('status', \App\Enums\Status::ACTIVE)->select('id', 'name')->get();
+    $departments = \App\Models\Department::cachedActive();
+    $designations = \App\Models\Designation::cachedActive();
     $allUsers = User::where(function($query) use ($id, $user) {
         $query->whereHas('roles', function($q) {
           $q->whereIn(DB::raw('LOWER(name)'), ['admin', 'hr', 'manager', 'accounts']);
@@ -2045,9 +2041,7 @@ class EmployeeController extends Controller
 
   public function getSites()
   {
-    $sites = Site::where('status', '=', 'active')
-      ->select('id', 'name')
-      ->get();
+    $sites = Site::cachedActive();
 
     return response()->json($sites);
   }
@@ -2979,8 +2973,8 @@ class EmployeeController extends Controller
       ->get();
 
     $roles = Role::select('id', 'name')->get();
-    $teams = Team::where('status', Status::ACTIVE)->select('id', 'name')->get();
-    $designations = Designation::where('status', Status::ACTIVE)->select('id', 'name')->get();
+    $teams = Team::cachedActive();
+    $designations = Designation::cachedActive();
     $managers = User::where('status', UserAccountStatus::ACTIVE)
       ->select('id', 'first_name', 'last_name')
       ->orderBy('first_name')

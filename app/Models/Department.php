@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Status;
+use App\Models\Concerns\HasCachedActiveList;
 use App\Traits\TenantTrait;
 use OwenIt\Auditing\Auditable;
 use App\Traits\UserActionsTrait;
@@ -12,7 +13,7 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 class Department extends Model implements AuditableContract
 {
-  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes;
+  use Auditable, UserActionsTrait, TenantTrait, SoftDeletes, HasCachedActiveList;
 
   protected $table = 'departments';
 
