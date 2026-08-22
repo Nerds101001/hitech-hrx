@@ -1126,18 +1126,24 @@ Route::middleware([
       Route::get('', [AccountController::class, 'index'])->name('index');
       Route::get('activeInactiveUserAjax/{id}', [AccountController::class, 'activeInactiveUserAjax'])->name('activeInactiveUserAjax');
       Route::get('suspendUserAjax/{id}', [AccountController::class, 'suspendUserAjax'])->name('suspendUserAjax');
-      Route::get('deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('deleteUserAjaxTenant');
       Route::get('viewUser/{id}', [AccountController::class, 'viewUser'])->name('viewUser');
       Route::get('indexAjax', [AccountController::class, 'userListAjax'])->name('userListAjax');
       Route::get('getRolesAjax', [AccountController::class, 'getRolesAjax'])->name('getRolesAjax');
       Route::get('getUsersAjax', [AccountController::class, 'getUsersAjax'])->name('getUsersAjax');
       Route::get('getUsersByRoleAjax/{role}', [AccountController::class, 'getUsersByRoleAjax'])->name('getUsersByRoleAjax');
-      Route::post('addOrUpdateUserAjax', [AccountController::class, 'addOrUpdateUserAjax'])->name('addOrUpdateUserAjax');
       Route::get('editUserAjax/{id}', [AccountController::class, 'editUserAjax'])->name('editUserAjax');
-      Route::post('updateUserAjax/{id}', [AccountController::class, 'updateUserAjax'])->name('updateUserAjax');
-      Route::post('updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('updateUserStatusAjax');
       Route::post('changeUserStatusAjax/{id}', [AccountController::class, 'changeUserStatusAjax'])->name('changeUserStatusAjax');
       Route::post('changePassword', [AccountController::class, 'changePassword'])->name('changePassword');
+
+      // Role/user-account management -- admin only. HR and every other role
+      // must never reach these: they create or change what role a user (up
+      // to and including their own account) holds.
+      Route::middleware('role_or_permission:admin')->group(function () {
+        Route::get('deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('deleteUserAjaxTenant');
+        Route::post('addOrUpdateUserAjax', [AccountController::class, 'addOrUpdateUserAjax'])->name('addOrUpdateUserAjax');
+        Route::post('updateUserAjax/{id}', [AccountController::class, 'updateUserAjax'])->name('updateUserAjax');
+        Route::post('updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('updateUserStatusAjax');
+      });
     });
 
 

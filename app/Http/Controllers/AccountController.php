@@ -370,8 +370,18 @@ class AccountController extends Controller
   }
 
 
+  /** Roles that may manage other users' accounts and roles via this screen. */
+  private const USER_MANAGEMENT_ROLES = ['admin', 'Admin', 'super_admin', 'Super Admin'];
+
   public function addOrUpdateUserAjax(Request $request)
   {
+    if (!auth()->user() || !auth()->user()->hasAnyRole(self::USER_MANAGEMENT_ROLES)) {
+      return response()->json([
+        'message' => 'Unauthorized. Only administrators can manage user accounts and roles.',
+        'code' => 403,
+      ], 403);
+    }
+
     $request->validate([
       'firstName' => 'required',
       'lastName' => 'required',
@@ -393,7 +403,13 @@ class AccountController extends Controller
 
         $user->save();
 
-        $user->assignRole('super_admin');
+        // Was unconditionally `assignRole('super_admin')` regardless of what
+        // was picked in the form's role select -- meaning editing ANY user
+        // through this screen silently granted them super_admin. Respect
+        // the actually-selected role instead, same as the create branch below.
+        if ($request->filled('role')) {
+          $user->syncRoles([$request->role]);
+        }
 
         return response()->json([
           'message' => 'updated',
@@ -466,6 +482,13 @@ class AccountController extends Controller
 
     if (env('APP_DEMO')) {
       return Error::response('This feature is disabled in the demo.');
+    }
+
+    if (!auth()->user() || !auth()->user()->hasAnyRole(self::USER_MANAGEMENT_ROLES)) {
+      return response()->json([
+        'message' => 'Unauthorized. Only administrators can manage user accounts and roles.',
+        'code' => 403,
+      ], 403);
     }
 
     $request->validate([

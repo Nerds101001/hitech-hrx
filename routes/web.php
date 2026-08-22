@@ -152,8 +152,16 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
 
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
-    Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
-    Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
+    // Role/user-account management -- admin only. HR and every other role
+    // must never reach these: they create or change what role a user (up to
+    // and including their own account) holds.
+    Route::middleware('role_or_permission:admin')->group(function () {
+      Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+      Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
+      Route::delete('account/deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('account.deleteUserAjax');
+      Route::post('account/addOrUpdateUserAjax', [AccountController::class, 'addOrUpdateUserAjax'])->name('account.addOrUpdateUserAjax');
+      Route::post('account/updateUserAjax/{id}', [AccountController::class, 'updateUserAjax'])->name('account.updateUserAjax');
+    });
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('superAdmin.dashboard');
     Route::get('account', [AccountController::class, 'index'])->name('account.index');
@@ -163,13 +171,10 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::get('account/viewUser/{id}', [AccountController::class, 'viewUser'])->name('account.viewUser');
     Route::get('account/myProfile', [AccountController::class, 'myProfile'])->name('account.myProfile');
     Route::get('account/indexAjax', [AccountController::class, 'userListAjax'])->name('account.userListAjax');
-    Route::delete('account/deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('account.deleteUserAjax');
     Route::get('account/getRolesAjax', [AccountController::class, 'getRolesAjax'])->name('account.getRolesAjax');
     Route::get('account/getUsersAjax', [AccountController::class, 'getUsersAjax'])->name('account.getUsersAjax');
     Route::get('account/getUsersByRoleAjax/{role}', [AccountController::class, 'getUsersByRoleAjax'])->name('account.getUsersByRoleAjax');
-    Route::post('account/addOrUpdateUserAjax', [AccountController::class, 'addOrUpdateUserAjax'])->name('account.addOrUpdateUserAjax');
     Route::get('account/editUserAjax/{id}', [AccountController::class, 'editUserAjax'])->name('account.editUserAjax');
-    Route::post('account/updateUserAjax/{id}', [AccountController::class, 'updateUserAjax'])->name('account.updateUserAjax');
     // Route::post('account/updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('account.updateUserStatusAjax');
     Route::post('account/changeUserStatusAjax/{id}', [AccountController::class, 'changeUserStatusAjax'])->name('account.changeUserStatusAjax');
     Route::post('account/changePassword', [AccountController::class, 'changePassword'])->name('account.changePassword');
