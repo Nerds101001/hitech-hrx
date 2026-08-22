@@ -115,3 +115,11 @@ vite.config.js.timestamp-*
 
 # Holds the live database name, user and password as parameter defaults
 /deployment/hostinger/fetch_live_db.ps1
+
+# Runtime output under storage/app. These are employee uploads, generated
+# exports and pre-deploy backups of production files - none of them are
+# source, and they buried real changes under ~95 lines of git status noise.
+/storage/app/tce_*.xlsx
+/storage/app/mind_speaks/
+/storage/app/wfh_approvals/
+/storage/deploy-backups/
