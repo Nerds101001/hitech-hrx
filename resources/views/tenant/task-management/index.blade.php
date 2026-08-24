@@ -21,6 +21,46 @@
   @vite(['resources/assets/vendor/libs/select2/select2.js'])
 @endsection
 
+@section('page-style')
+<style>
+  /* A checkbox in front of each name/department, ticked once picked. select2
+     marks a chosen option aria-selected="true" on its own — this only draws
+     the box, it does not track state itself, so it can never drift out of
+     sync with what is actually selected. */
+  .select2-results__option {
+    position: relative;
+    padding-left: 2.25rem !important;
+  }
+  .select2-results__option::before {
+    content: '';
+    position: absolute;
+    left: .75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border: 1px solid #94a3b8;
+    border-radius: 4px;
+    background: #fff;
+  }
+  .select2-results__option[aria-selected="true"]::before {
+    background: #005a5a;
+    border-color: #005a5a;
+  }
+  .select2-results__option[aria-selected="true"]::after {
+    content: '\2713';
+    position: absolute;
+    left: .95rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #fff;
+    font-size: .7rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+</style>
+@endsection
+
 @section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
 
@@ -252,7 +292,12 @@ document.addEventListener('DOMContentLoaded', function () {
   // No theme option: this project styles select2's own default markup
   // (see select2.scss) rather than the separate "bootstrap-5" theme, which
   // isn't installed here — passing it left the dropdown completely unstyled.
-  $('.select2').select2({ width: '100%', dropdownParent: $('#assignTaskModal') });
+  $('.select2').select2({
+    width: '100%',
+    dropdownParent: $('#assignTaskModal'),
+    minimumResultsForSearch: 0, // always show the search box, however short the list
+    closeOnSelect: false,       // stay open so ticking several people/departments is one pass, not one re-open per pick
+  });
 
   const modalEl = document.getElementById('assignTaskModal');
   const modal = new bootstrap.Modal(modalEl);
