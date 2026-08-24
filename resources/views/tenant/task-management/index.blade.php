@@ -80,8 +80,8 @@
   </div>
 
   {{-- Stats bar --}}
-  <div class="row g-6 mb-6 mx-0 px-4">
-    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.05s">
+  <div class="row row-cols-2 row-cols-md-3 row-cols-xl-5 g-6 mb-6 mx-0 px-4">
+    <div class="col animate__animated animate__fadeInUp" style="animation-delay:.05s">
       <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-list-ul"></i></div>
@@ -89,7 +89,7 @@
         <div><h3 class="stat-value mb-0">{{ $stats['total'] }}</h3><span class="stat-label">Total tasks (your scope)</span></div>
       </div>
     </div>
-    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.1s">
+    <div class="col animate__animated animate__fadeInUp" style="animation-delay:.1s">
       <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-time-five"></i></div>
@@ -97,7 +97,15 @@
         <div><h3 class="stat-value mb-0">{{ $stats['pending'] }}</h3><span class="stat-label">Pending / in progress</span></div>
       </div>
     </div>
-    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.15s">
+    <div class="col animate__animated animate__fadeInUp" style="animation-delay:.13s">
+      <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+        <div class="stat-card-header mb-2">
+          <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-calendar-check"></i></div>
+        </div>
+        <div><h3 class="stat-value mb-0">{{ $stats['due_today'] }}</h3><span class="stat-label">Due today</span></div>
+      </div>
+    </div>
+    <div class="col animate__animated animate__fadeInUp" style="animation-delay:.15s">
       <div class="hitech-stat-card dashboard-variant card-red uniform-card">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-error-circle"></i></div>
@@ -105,7 +113,7 @@
         <div><h3 class="stat-value mb-0">{{ $stats['overdue'] }}</h3><span class="stat-label">Overdue</span></div>
       </div>
     </div>
-    <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.2s">
+    <div class="col animate__animated animate__fadeInUp" style="animation-delay:.2s">
       <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
         <div class="stat-card-header mb-2">
           <div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-check-circle"></i></div>
@@ -143,6 +151,7 @@
               <option value="">All statuses</option>
               <option value="new" {{ request('status') === 'new' ? 'selected' : '' }}>New</option>
               <option value="in_progress" {{ request('status') === 'in_progress' ? 'selected' : '' }}>In progress</option>
+              <option value="due_today" {{ request('status') === 'due_today' ? 'selected' : '' }}>Due today</option>
               <option value="overdue" {{ request('status') === 'overdue' ? 'selected' : '' }}>Overdue</option>
               <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>
             </select>
@@ -187,6 +196,8 @@
                   {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
                   @if($t->is_overdue)
                     <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
+                  @elseif($t->due_date && $t->due_date->isToday() && !$t->is_completed)
+                    <span class="badge-hitech badge-brand-soft d-block mt-1" style="width:fit-content;">Due today</span>
                   @endif
                 </td>
                 <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>

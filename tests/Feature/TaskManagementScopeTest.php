@@ -264,4 +264,52 @@ class TaskManagementScopeTest extends TestCase
         $this->assertContains($this->reportA->id, $ids);
         $this->assertNotContains($this->reportB->id, $ids);
     }
+
+    // ══ the list defaults to nearest-due-first, with a Due Today filter ════
+
+    /** Reported live: the table needs to lead with what actually needs doing next, not newest-first. */
+    public function test_the_list_sorts_by_nearest_due_date_with_undated_tasks_last(): void
+    {
+        Task::create([
+            'title' => 'Far out', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'due_date' => now()->addDays(10),
+        ]);
+        Task::create([
+            'title' => 'No due date', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+        Task::create([
+            'title' => 'Due soonest', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'due_date' => now()->addDay(),
+        ]);
+
+        Auth::login($this->managerA);
+        $response = $this->mgmt->index(Request::create('/task-management', 'GET'));
+        $titles = $response->getData()['tasks']->pluck('title')->all();
+
+        $this->assertEquals(['Due soonest', 'Far out', 'No due date'], $titles);
+    }
+
+    /** The discriminator: a task due tomorrow must NOT show under "Due today". */
+    public function test_due_today_filter_excludes_a_task_due_tomorrow(): void
+    {
+        Task::create([
+            'title' => 'Due today', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'due_date' => now(),
+        ]);
+        Task::create([
+            'title' => 'Due tomorrow', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'due_date' => now()->addDay(),
+        ]);
+
+        Auth::login($this->managerA);
+        $response = $this->mgmt->index(Request::create('/task-management', 'GET', ['status' => 'due_today']));
+        $titles = $response->getData()['tasks']->pluck('title')->all();
+
+        $this->assertEquals(['Due today'], $titles);
+    }
 }

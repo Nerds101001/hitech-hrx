@@ -36,7 +36,12 @@ class TaskManagementController extends Controller
         $user = auth()->user();
         $allowedIds = TaskAccess::allowedUserIds($user);
 
+        // Nearest deadline first — what actually needs attention next — with
+        // undated tasks pushed to the end rather than sorting first as NULL
+        // otherwise would, and newest-assigned as the tiebreaker.
         $query = Task::with(['user.department', 'assignedBy'])
+            ->orderByRaw('due_date IS NULL')
+            ->orderBy('due_date')
             ->orderByDesc('created_at');
 
         if ($allowedIds !== null) {
@@ -49,9 +54,11 @@ class TaskManagementController extends Controller
 
         if ($request->filled('status')) {
             match ($request->status) {
-                'overdue'   => $query->overdue(),
-                'completed' => $query->whereIn('status', Task::CLOSED_STATUSES),
-                default     => $query->where('status', $request->status)
+                'overdue'    => $query->overdue(),
+                'due_today'  => $query->whereDate('due_date', now()->toDateString())
+                    ->whereNotIn('status', Task::CLOSED_STATUSES),
+                'completed'  => $query->whereIn('status', Task::CLOSED_STATUSES),
+                default      => $query->where('status', $request->status)
                     ->whereNotIn('status', Task::CLOSED_STATUSES),
             };
         }
@@ -86,10 +93,12 @@ class TaskManagementController extends Controller
             ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'department_id']);
 
         $stats = [
-            'total'     => (clone $query)->count(),
-            'overdue'   => (clone $query)->overdue()->count(),
-            'completed' => (clone $query)->whereIn('status', Task::CLOSED_STATUSES)->count(),
-            'pending'   => (clone $query)->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
+            'total'      => (clone $query)->count(),
+            'overdue'    => (clone $query)->overdue()->count(),
+            'due_today'  => (clone $query)->whereDate('due_date', now()->toDateString())
+                ->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
+            'completed'  => (clone $query)->whereIn('status', Task::CLOSED_STATUSES)->count(),
+            'pending'    => (clone $query)->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
         ];
 
         return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts'));
@@ -163,24 +172,31 @@ class TaskManagementController extends Controller
             }
         });
 
-        $notified = 0;
-        foreach ($created as $task) {
-            try {
-                $task->user?->notify(new TaskAssigned($task));
-                $notified++;
-            } catch (\Throwable $e) {
-                // One broken address must not roll back tasks that were
-                // already committed for everyone else in the batch.
-                Log::warning("Task-assigned notify failed for task {$task->id}: " . $e->getMessage());
+        // Sent AFTER the response goes out, not before. This mailer's real
+        // SMTP host is slow (sometimes unreachable) from a dev box, and every
+        // notify() here used to block the whole request on it — the tasks
+        // were already committed, so "Assigning..." sat frozen on the button
+        // for as long as the mail attempt hung, even though nothing was
+        // actually still in progress.
+        $createdIds = array_map(fn ($t) => $t->id, $created);
+        dispatch(function () use ($createdIds) {
+            foreach (Task::whereIn('id', $createdIds)->with('user')->get() as $task) {
+                try {
+                    $task->user?->notify(new TaskAssigned($task));
+                } catch (\Throwable $e) {
+                    // One broken address must not stop the rest of the batch
+                    // from being notified.
+                    Log::warning("Task-assigned notify failed for task {$task->id}: " . $e->getMessage());
+                }
             }
-        }
+        })->afterResponse();
 
         $message = count($created) . ' task(s) assigned.';
         if ($dropped > 0) {
             $message .= " {$dropped} selected person(s) were outside your team and skipped.";
         }
 
-        return response()->json(['success' => true, 'message' => $message, 'batch_id' => $batchId, 'assigned' => count($created), 'notified' => $notified]);
+        return response()->json(['success' => true, 'message' => $message, 'batch_id' => $batchId, 'assigned' => count($created)]);
     }
 
     /** Everyone in one bulk-assignment batch and their own status. */

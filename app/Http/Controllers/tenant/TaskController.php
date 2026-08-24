@@ -53,11 +53,20 @@ class TaskController extends Controller
                 'tenant_id' => auth()->user()->tenant_id ?? null,
             ]);
 
-            try {
-                $task->user?->notify(new TaskAssigned($task));
-            } catch (\Throwable $e) {
-                Log::warning("Task-assigned notify failed for task {$task->id}: " . $e->getMessage());
-            }
+            // Deferred until after the response — see the same fix in
+            // TaskManagementController::store() for why: this mailer's real
+            // SMTP host is slow to unreachable from a dev box, and sending it
+            // inline used to freeze this request on a task that had already
+            // been created.
+            $taskId = $task->id;
+            dispatch(function () use ($taskId) {
+                $t = Task::with('user')->find($taskId);
+                try {
+                    $t?->user?->notify(new TaskAssigned($t));
+                } catch (\Throwable $e) {
+                    Log::warning("Task-assigned notify failed for task {$taskId}: " . $e->getMessage());
+                }
+            })->afterResponse();
 
             return response()->json(['success' => true, 'message' => 'Task assigned successfully.']);
         } catch (\Exception $e) {
