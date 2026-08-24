@@ -312,4 +312,28 @@ class TaskManagementScopeTest extends TestCase
 
         $this->assertEquals(['Due today'], $titles);
     }
+
+    // ══ the portal itself is admin/HR only — a manager keeps the single-
+    //    target "Add Task" modal, but not this bulk portal ═══════════════
+
+    public function test_a_manager_is_blocked_from_the_task_management_route(): void
+    {
+        $this->actingAs($this->managerA)->get('/task-management')->assertForbidden();
+    }
+
+    public function test_admin_and_hr_can_reach_the_task_management_route(): void
+    {
+        $this->actingAs($this->admin)->get('/task-management')->assertOk();
+
+        $hr = $this->makeUser('hr');
+        $this->actingAs($hr)->get('/task-management')->assertOk();
+    }
+
+    /** The legacy single-target endpoint is untouched — a manager still assigns via the profile modal. */
+    public function test_a_manager_can_still_reach_the_legacy_single_task_store_route(): void
+    {
+        $this->actingAs($this->managerA)->post('/tasks/store', [
+            'userId' => $this->reportA->id, 'title' => 'Via modal', 'type' => 'open',
+        ])->assertOk();
+    }
 }

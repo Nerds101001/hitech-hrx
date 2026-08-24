@@ -460,10 +460,13 @@ Route::middleware([
     });
 
     // Task Management portal — assign to one person, a hand-picked group, or
-    // whole departments at once. Same role gate as above; scoping to "my own
-    // team only" for manager/accounts happens inside the controller via
-    // TaskAccess, not here.
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|tasks.manage'])->prefix('task-management')->name('task-management.')->group(function () {
+    // whole departments at once. Admin/HR only, by request — a manager who
+    // needs to assign a single task still has the "Add Task" modal on an
+    // employee's profile (the /tasks/* routes above), which keeps its wider
+    // admin|hr|accounts|manager|tasks.manage gate unchanged. tasks.manage
+    // stays here too: it is a deliberate per-user grant, not a role, so it
+    // does not conflict with "admin/HR only" as the default.
+    Route::middleware(['role_or_permission:admin|hr|tasks.manage'])->prefix('task-management')->name('task-management.')->group(function () {
       Route::get('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'index'])->name('index');
       Route::post('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'store'])->name('store');
       Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
