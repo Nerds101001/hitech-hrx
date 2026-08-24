@@ -19,6 +19,8 @@ class Task extends Model implements AuditableContract
   /** Statuses that mean the task is no longer awaiting action. */
   public const CLOSED_STATUSES = ['completed', 'cancelled', 'resolved', 'closed'];
 
+  public const PRIORITIES = ['low', 'medium', 'high'];
+
   protected $fillable = [
     'batch_id',
     'title',
@@ -39,6 +41,7 @@ class Task extends Model implements AuditableContract
     'end_form_id',
     'is_geo_fence_enabled',
     'status',
+    'priority',
     'completed_at',
     'delay_notified_at',
     'created_by_id',

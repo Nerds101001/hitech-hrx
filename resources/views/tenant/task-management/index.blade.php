@@ -136,7 +136,7 @@
               <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
             </div>
           </div>
-          <div class="col-lg-3 col-md-6">
+          <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
             <select class="form-select" name="department_id" onchange="this.form.submit()">
               <option value="">All Departments</option>
@@ -145,7 +145,7 @@
               @endforeach
             </select>
           </div>
-          <div class="col-lg-3 col-md-6">
+          <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
             <select class="form-select" name="status" onchange="this.form.submit()">
               <option value="">All statuses</option>
@@ -154,6 +154,15 @@
               <option value="due_today" {{ request('status') === 'due_today' ? 'selected' : '' }}>Due today</option>
               <option value="overdue" {{ request('status') === 'overdue' ? 'selected' : '' }}>Overdue</option>
               <option value="completed" {{ request('status') === 'completed' ? 'selected' : '' }}>Completed</option>
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Priority</label>
+            <select class="form-select" name="priority" onchange="this.form.submit()">
+              <option value="">All priorities</option>
+              @foreach(\App\Models\Task::PRIORITIES as $p)
+                <option value="{{ $p }}" {{ request('priority') === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
+              @endforeach
             </select>
           </div>
           <div class="col-lg-2">
@@ -171,6 +180,7 @@
             <tr>
               <th style="min-width:200px">Task</th>
               <th style="min-width:180px">Assigned To</th>
+              <th>Priority</th>
               <th>Due</th>
               <th>Assigned By</th>
               <th>Status</th>
@@ -191,6 +201,9 @@
                 <td>
                   <div class="fw-medium">{{ optional($t->user)->getFullName() ?? '—' }}</div>
                   <small class="text-muted">{{ optional(optional($t->user)->department)->name ?? '—' }}</small>
+                </td>
+                <td>
+                  <span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span>
                 </td>
                 <td class="text-nowrap">
                   {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
@@ -217,7 +230,7 @@
                 </td>
               </tr>
             @empty
-              <tr><td colspan="6" class="text-center text-muted py-5">
+              <tr><td colspan="7" class="text-center text-muted py-5">
                 <i class="bx bx-task fs-3 d-block mb-2 text-success"></i>
                 No tasks match these filters.
               </td></tr>
@@ -250,7 +263,15 @@
               <label class="form-label">Description</label>
               <textarea id="at_description" class="form-control" rows="3" placeholder="Details, instructions, links..."></textarea>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
+              <label class="form-label">Priority</label>
+              <select id="at_priority" class="form-select">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="col-md-4">
               <label class="form-label">Interval</label>
               <select id="at_interval" class="form-select">
                 <option value="">One-time</option>
@@ -258,9 +279,9 @@
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
               </select>
-              <div class="form-text">Sets the due date for you — daily due tomorrow, weekly in 7 days, monthly in a month. Pick "One-time" to set it yourself.</div>
+              <div class="form-text">Sets the due date for you. Pick "One-time" to set it yourself.</div>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <label class="form-label">Due date</label>
               <input type="date" id="at_due_date" class="form-control" min="{{ now()->toDateString() }}">
             </div>
@@ -355,6 +376,7 @@ document.addEventListener('DOMContentLoaded', function () {
         title: document.getElementById('at_title').value,
         description: document.getElementById('at_description').value,
         due_date: document.getElementById('at_due_date').value || null,
+        priority: document.getElementById('at_priority').value,
         employee_ids: $('#at_employees').val() || [],
         department_ids: $('#at_departments').val() || [],
       }),

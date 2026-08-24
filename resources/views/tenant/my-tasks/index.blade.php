@@ -60,66 +60,94 @@
     {{-- ===================== Assigned Tasks ===================== --}}
     @php
       $anyAssignedTask = $taskOpenCount + $taskBuckets['completed']->count() > 0;
+      $priorityBadge = ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'];
     @endphp
     @if($anyAssignedTask)
-      <ul class="nav nav-pills hitech-tabs-sm mb-4" id="taskTabs">
-        <li class="nav-item">
-          <button class="nav-link {{ $taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskOverdue" type="button">
-            <i class="bx bx-error-circle"></i> Overdue <span class="badge badge-hitech-danger badge-hitech ms-1">{{ $taskBuckets['overdue']->count() }}</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link {{ !$taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskPending" type="button">
-            <i class="bx bx-time-five"></i> Due Today <span class="badge badge-brand-soft badge-hitech ms-1">{{ $taskBuckets['pending']->count() }}</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskUpcoming" type="button">
-            <i class="bx bx-calendar"></i> Upcoming <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['upcoming']->count() }}</span>
-          </button>
-        </li>
-        <li class="nav-item">
-          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskCompleted" type="button">
-            <i class="bx bx-check-circle"></i> Completed <span class="badge badge-hitech-success badge-hitech ms-1">{{ $taskBuckets['completed']->count() }}</span>
-          </button>
-        </li>
-      </ul>
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <ul class="nav nav-pills hitech-tabs-sm mb-0" id="taskTabs">
+          <li class="nav-item">
+            <button class="nav-link {{ $taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskOverdue" type="button">
+              <i class="bx bx-error-circle"></i> Overdue <span class="badge badge-hitech-danger badge-hitech ms-1">{{ $taskBuckets['overdue']->count() }}</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link {{ !$taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskPending" type="button">
+              <i class="bx bx-time-five"></i> Due Today <span class="badge badge-brand-soft badge-hitech ms-1">{{ $taskBuckets['pending']->count() }}</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskUpcoming" type="button">
+              <i class="bx bx-calendar"></i> Upcoming <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['upcoming']->count() }}</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskCompleted" type="button">
+              <i class="bx bx-check-circle"></i> Completed <span class="badge badge-hitech-success badge-hitech ms-1">{{ $taskBuckets['completed']->count() }}</span>
+            </button>
+          </li>
+        </ul>
+        <div style="min-width:180px">
+          <select class="form-select form-select-sm" id="taskPriorityFilter">
+            <option value="">All priorities</option>
+            @foreach(\App\Models\Task::PRIORITIES as $p)
+              <option value="{{ $p }}">{{ ucfirst($p) }} priority</option>
+            @endforeach
+          </select>
+        </div>
+      </div>
 
       <div class="tab-content p-0 border-0 mb-6">
         @foreach(['overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted'] as $bucketKey => $paneId)
           <div class="tab-pane fade {{ ($bucketKey === 'overdue' && $taskBuckets['overdue']->count()) || ($bucketKey === 'pending' && !$taskBuckets['overdue']->count()) ? 'show active' : '' }}" id="{{ $paneId }}">
-            @forelse($taskBuckets[$bucketKey] as $t)
-              <div class="mt-group" style="--c: {{ $bucketKey === 'overdue' ? '#dc2626' : ($bucketKey === 'completed' ? '#16a34a' : '#0d9488') }}">
-                <div class="mt-row">
-                  <span>
-                    <span class="mt-nm d-block">{{ $t->title }}</span>
-                    <span class="mt-mt">
-                      Assigned by {{ optional($t->assignedBy)->getFullName() ?? '—' }}
-                      @if($t->due_date) &middot; due {{ $t->due_date->format('d M Y') }} @endif
-                      @if($bucketKey === 'completed' && $t->completed_at) &middot; completed {{ $t->completed_at->format('d M Y') }} @endif
-                    </span>
-                    @if($t->description)
-                      <span class="mt-mt d-block mt-1">{{ \Illuminate\Support\Str::limit($t->description, 120) }}</span>
-                    @endif
-                    @if($bucketKey === 'completed' && optional($t->taskUpdates->first())->comment)
-                      <span class="mt-mt d-block mt-1 fst-italic">"{{ $t->taskUpdates->first()->comment }}"</span>
-                    @endif
-                  </span>
-                  @if($bucketKey !== 'completed')
-                    <button type="button" class="mt-go js-complete-task {{ $bucketKey === 'overdue' ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
-                      Mark Complete
-                    </button>
-                  @else
-                    <span class="mt-tag">Completed</span>
-                  @endif
+            @if($taskBuckets[$bucketKey]->isNotEmpty())
+              <div class="hitech-card">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th style="min-width:220px">Task</th>
+                        <th>Priority</th>
+                        <th>Due</th>
+                        <th style="min-width:150px">Assigned By</th>
+                        <th class="text-end" style="min-width:150px">{{ $bucketKey === 'completed' ? 'Completed' : 'Action' }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach($taskBuckets[$bucketKey] as $t)
+                        <tr data-priority="{{ $t->priority }}">
+                          <td>
+                            <div class="fw-medium">{{ $t->title }}</div>
+                            @if($t->description)
+                              <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
+                            @endif
+                            @if($bucketKey === 'completed' && optional($t->taskUpdates->first())->comment)
+                              <small class="text-muted d-block fst-italic">"{{ $t->taskUpdates->first()->comment }}"</small>
+                            @endif
+                          </td>
+                          <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
+                          <td class="text-nowrap">{{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}</td>
+                          <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
+                          <td class="text-end">
+                            @if($bucketKey !== 'completed')
+                              <button type="button" class="mt-go js-complete-task {{ $bucketKey === 'overdue' ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
+                                Mark Complete
+                              </button>
+                            @else
+                              <small class="text-muted">{{ $t->completed_at ? $t->completed_at->format('d M Y') : '—' }}</small>
+                            @endif
+                          </td>
+                        </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            @empty
+            @else
               <div class="mt-empty py-4">
                 <i class="bx bx-check-circle" style="font-size:2rem"></i>
                 <p class="mb-0">Nothing here.</p>
               </div>
-            @endforelse
+            @endif
           </div>
         @endforeach
       </div>
@@ -204,6 +232,16 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  const priorityFilter = document.getElementById('taskPriorityFilter');
+  if (priorityFilter) {
+    priorityFilter.addEventListener('change', function () {
+      const want = this.value;
+      document.querySelectorAll('.tab-content tr[data-priority]').forEach(function (row) {
+        row.style.display = (!want || row.dataset.priority === want) ? '' : 'none';
+      });
+    });
+  }
+
   const completeModalEl = document.getElementById('completeTaskModal');
   if (!completeModalEl) return;
   const completeModal = new bootstrap.Modal(completeModalEl);

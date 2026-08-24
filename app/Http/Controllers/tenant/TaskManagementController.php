@@ -63,6 +63,10 @@ class TaskManagementController extends Controller
             };
         }
 
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->priority);
+        }
+
         if ($request->filled('search')) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -112,6 +116,7 @@ class TaskManagementController extends Controller
             'title'          => 'required|string|max:255',
             'description'    => 'nullable|string',
             'due_date'       => 'nullable|date|after_or_equal:today',
+            'priority'       => 'nullable|in:' . implode(',', Task::PRIORITIES),
             'employee_ids'   => 'nullable|array',
             'employee_ids.*' => 'integer|exists:users,id',
             'department_ids'   => 'nullable|array',
@@ -166,6 +171,7 @@ class TaskManagementController extends Controller
                     'for_date'       => now(),
                     'due_date'       => $validated['due_date'] ?? null,
                     'status'         => 'new',
+                    'priority'       => $validated['priority'] ?? 'medium',
                     'created_by_id'  => $user->id,
                     'updated_by_id'  => $user->id,
                 ]);

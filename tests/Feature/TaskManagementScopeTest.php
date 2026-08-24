@@ -336,4 +336,45 @@ class TaskManagementScopeTest extends TestCase
             'userId' => $this->reportA->id, 'title' => 'Via modal', 'type' => 'open',
         ])->assertOk();
     }
+
+    // ══ priority ════════════════════════════════════════════════════════
+
+    public function test_a_chosen_priority_is_saved_on_the_created_task(): void
+    {
+        Auth::login($this->admin);
+        $this->mgmt->store($this->jsonReq([
+            'title' => 'QA Priority', 'priority' => 'high', 'employee_ids' => [$this->reportA->id],
+        ]));
+
+        $this->assertEquals('high', Task::where('title', 'QA Priority')->first()->priority);
+    }
+
+    /** No priority sent still saves something sane rather than a blank/invalid value. */
+    public function test_priority_defaults_to_medium_when_not_specified(): void
+    {
+        Auth::login($this->admin);
+        $this->mgmt->store($this->jsonReq([
+            'title' => 'QA No Priority', 'employee_ids' => [$this->reportA->id],
+        ]));
+
+        $this->assertEquals('medium', Task::where('title', 'QA No Priority')->first()->priority);
+    }
+
+    public function test_the_priority_filter_only_returns_matching_tasks(): void
+    {
+        Task::create([
+            'title' => 'Low one', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new', 'priority' => 'low',
+        ]);
+        Task::create([
+            'title' => 'High one', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new', 'priority' => 'high',
+        ]);
+
+        Auth::login($this->managerA);
+        $response = $this->mgmt->index(Request::create('/task-management', 'GET', ['priority' => 'high']));
+        $titles = $response->getData()['tasks']->pluck('title')->all();
+
+        $this->assertEquals(['High one'], $titles);
+    }
 }
