@@ -12,7 +12,13 @@
 @endsection
 
 @section('vendor-script')
-  @vite(['resources/assets/vendor/libs/select2/select2.full.min.js'])
+  {{-- select2.js, NOT select2.full.min.js — that build's UMD wrapper still
+       has an unresolved require("jquery") in its compiled chunk, so
+       .select2() never actually attaches to window.$ and every call to it
+       throws "$(...).select2 is not a function". select2.js explicitly
+       imports the shared jquery chunk instead — the Employee Directory page
+       uses this exact file and its select2 works correctly. --}}
+  @vite(['resources/assets/vendor/libs/select2/select2.js'])
 @endsection
 
 @section('content')
