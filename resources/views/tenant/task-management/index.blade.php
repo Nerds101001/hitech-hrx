@@ -200,6 +200,16 @@
               <textarea id="at_description" class="form-control" rows="3" placeholder="Details, instructions, links..."></textarea>
             </div>
             <div class="col-md-6">
+              <label class="form-label">Interval</label>
+              <select id="at_interval" class="form-select">
+                <option value="">One-time</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              <div class="form-text">Sets the due date for you — daily due tomorrow, weekly in 7 days, monthly in a month. Pick "One-time" to set it yourself.</div>
+            </div>
+            <div class="col-md-6">
               <label class="form-label">Due date</label>
               <input type="date" id="at_due_date" class="form-control" min="{{ now()->toDateString() }}">
             </div>
@@ -239,13 +249,34 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  $('.select2').select2({ theme: 'bootstrap-5', width: '100%' });
+  // No theme option: this project styles select2's own default markup
+  // (see select2.scss) rather than the separate "bootstrap-5" theme, which
+  // isn't installed here — passing it left the dropdown completely unstyled.
+  $('.select2').select2({ width: '100%', dropdownParent: $('#assignTaskModal') });
 
   const modalEl = document.getElementById('assignTaskModal');
   const modal = new bootstrap.Modal(modalEl);
 
+  // Due date follows the chosen interval so the admin does not have to work
+  // it out by hand — daily due tomorrow, weekly in a week, monthly a month
+  // out. Picking a date manually after that still wins: this only fills the
+  // box, it never locks it.
+  function dueDateFor(interval) {
+    const d = new Date();
+    if (interval === 'daily') d.setDate(d.getDate() + 1);
+    else if (interval === 'weekly') d.setDate(d.getDate() + 7);
+    else if (interval === 'monthly') d.setMonth(d.getMonth() + 1);
+    else return '';
+    return d.toISOString().slice(0, 10);
+  }
+
+  document.getElementById('at_interval').addEventListener('change', function () {
+    document.getElementById('at_due_date').value = dueDateFor(this.value);
+  });
+
   document.getElementById('btnAssignTask').addEventListener('click', function () {
     document.getElementById('assignTaskForm').reset();
+    document.getElementById('at_due_date').value = '';
     $('#at_employees, #at_departments').val(null).trigger('change');
     modal.show();
   });
