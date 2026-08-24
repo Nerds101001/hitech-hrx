@@ -66,12 +66,17 @@
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
         <ul class="nav nav-pills hitech-tabs-sm mb-0" id="taskTabs">
           <li class="nav-item">
-            <button class="nav-link {{ $taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskOverdue" type="button">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#taskAll" type="button">
+              <i class="bx bx-list-ul"></i> All <span class="badge badge-brand-soft badge-hitech ms-1">{{ $taskBuckets['all']->count() }}</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskOverdue" type="button">
               <i class="bx bx-error-circle"></i> Overdue <span class="badge badge-hitech-danger badge-hitech ms-1">{{ $taskBuckets['overdue']->count() }}</span>
             </button>
           </li>
           <li class="nav-item">
-            <button class="nav-link {{ !$taskBuckets['overdue']->count() ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#taskPending" type="button">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskPending" type="button">
               <i class="bx bx-time-five"></i> Due Today <span class="badge badge-brand-soft badge-hitech ms-1">{{ $taskBuckets['pending']->count() }}</span>
             </button>
           </li>
@@ -96,9 +101,13 @@
         </div>
       </div>
 
+      @php
+        $timingBadge = ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'];
+        $timingLabel = ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'];
+      @endphp
       <div class="tab-content p-0 border-0 mb-6">
-        @foreach(['overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted'] as $bucketKey => $paneId)
-          <div class="tab-pane fade {{ ($bucketKey === 'overdue' && $taskBuckets['overdue']->count()) || ($bucketKey === 'pending' && !$taskBuckets['overdue']->count()) ? 'show active' : '' }}" id="{{ $paneId }}">
+        @foreach(['all' => 'taskAll', 'overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted'] as $bucketKey => $paneId)
+          <div class="tab-pane fade {{ $bucketKey === 'all' ? 'show active' : '' }}" id="{{ $paneId }}">
             @if($taskBuckets[$bucketKey]->isNotEmpty())
               <div class="hitech-card">
                 <div class="table-responsive">
@@ -109,7 +118,7 @@
                         <th>Priority</th>
                         <th>Due</th>
                         <th style="min-width:150px">Assigned By</th>
-                        <th class="text-end" style="min-width:150px">{{ $bucketKey === 'completed' ? 'Completed' : 'Action' }}</th>
+                        <th class="text-end" style="min-width:190px">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -120,20 +129,28 @@
                             @if($t->description)
                               <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
                             @endif
-                            @if($bucketKey === 'completed' && optional($t->taskUpdates->first())->comment)
+                            @if($t->is_completed && optional($t->taskUpdates->first())->comment)
                               <small class="text-muted d-block fst-italic">"{{ $t->taskUpdates->first()->comment }}"</small>
                             @endif
                           </td>
                           <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
-                          <td class="text-nowrap">{{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}</td>
+                          <td class="text-nowrap">
+                            {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
+                            @if($t->is_overdue)
+                              <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
+                            @endif
+                          </td>
                           <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
                           <td class="text-end">
-                            @if($bucketKey !== 'completed')
-                              <button type="button" class="mt-go js-complete-task {{ $bucketKey === 'overdue' ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
+                            @if(!$t->is_completed)
+                              <button type="button" class="mt-go js-complete-task {{ $t->is_overdue ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
                                 Mark Complete
                               </button>
                             @else
-                              <small class="text-muted">{{ $t->completed_at ? $t->completed_at->format('d M Y') : '—' }}</small>
+                              <small class="text-muted d-block">{{ $t->completed_at ? $t->completed_at->format('d M Y') : '—' }}</small>
+                              @if($t->completion_timing)
+                                <span class="badge-hitech {{ $timingBadge[$t->completion_timing] }}">{{ $timingLabel[$t->completion_timing] }}</span>
+                              @endif
                             @endif
                           </td>
                         </tr>

@@ -377,4 +377,101 @@ class TaskManagementScopeTest extends TestCase
 
         $this->assertEquals(['High one'], $titles);
     }
+
+    // ══ completion timing (early / on time / late) ═════════════════════════
+
+    public function test_completing_on_the_due_date_is_on_time(): void
+    {
+        $task = Task::create([
+            'title' => 'On time', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+            'due_date' => '2026-08-20', 'completed_at' => '2026-08-20 23:50:00',
+        ]);
+
+        $this->assertEquals('on_time', $task->completion_timing);
+    }
+
+    public function test_completing_after_the_due_date_is_late(): void
+    {
+        $task = Task::create([
+            'title' => 'Late', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+            'due_date' => '2026-08-20', 'completed_at' => '2026-08-21 00:05:00',
+        ]);
+
+        $this->assertEquals('late', $task->completion_timing);
+    }
+
+    public function test_completing_before_the_due_date_is_early(): void
+    {
+        $task = Task::create([
+            'title' => 'Early', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+            'due_date' => '2026-08-20', 'completed_at' => '2026-08-18 10:00:00',
+        ]);
+
+        $this->assertEquals('early', $task->completion_timing);
+    }
+
+    /** No due date means there is nothing to judge the completion against. */
+    public function test_completion_timing_is_null_without_a_due_date(): void
+    {
+        $task = Task::create([
+            'title' => 'No due date', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        $this->assertNull($task->completion_timing);
+    }
+
+    /** A still-open task has no completion timing either — nothing happened yet to judge. */
+    public function test_completion_timing_is_null_when_not_yet_completed(): void
+    {
+        $task = Task::create([
+            'title' => 'Still open', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'due_date' => now()->addDay(),
+        ]);
+
+        $this->assertNull($task->completion_timing);
+    }
+
+    // ══ "All" bucket on My Tasks ═══════════════════════════════════════════
+
+    public function test_the_all_bucket_contains_every_task_regardless_of_status(): void
+    {
+        Task::create([
+            'title' => 'Open one', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+        Task::create([
+            'title' => 'Done one', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+        ]);
+
+        $buckets = MyTasksController::assignedTaskBuckets($this->reportA);
+
+        $this->assertCount(2, $buckets['all']);
+        $this->assertEqualsCanonicalizing(['Open one', 'Done one'], $buckets['all']->pluck('title')->all());
+    }
+
+    /** High priority leads, even over a nearer-but-lower-priority due date. */
+    public function test_the_all_bucket_sorts_high_priority_before_a_nearer_low_priority_task(): void
+    {
+        Task::create([
+            'title' => 'Low but sooner', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'priority' => 'low', 'due_date' => now()->addDay(),
+        ]);
+        Task::create([
+            'title' => 'High but later', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'priority' => 'high', 'due_date' => now()->addDays(5),
+        ]);
+
+        $buckets = MyTasksController::assignedTaskBuckets($this->reportA);
+
+        $this->assertEquals(['High but later', 'Low but sooner'], $buckets['all']->pluck('title')->all());
+    }
 }

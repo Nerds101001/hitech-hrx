@@ -281,7 +281,24 @@
               </select>
               <div class="form-text">Sets the due date for you. Pick "One-time" to set it yourself.</div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-4 d-none" id="at_weekday_wrap">
+              <label class="form-label">Which day of the week</label>
+              <select id="at_weekday" class="form-select">
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+                <option value="0">Sunday</option>
+              </select>
+            </div>
+            <div class="col-md-4 d-none" id="at_monthday_wrap">
+              <label class="form-label">Which date of the month</label>
+              <input type="number" id="at_monthday" class="form-control" min="1" max="31" value="1">
+              <div class="form-text">31 falls back to the last day in a shorter month.</div>
+            </div>
+            <div class="col-md-4" id="at_due_date_wrap">
               <label class="form-label">Due date</label>
               <input type="date" id="at_due_date" class="form-control" min="{{ now()->toDateString() }}">
             </div>
@@ -335,25 +352,63 @@ document.addEventListener('DOMContentLoaded', function () {
   const modal = new bootstrap.Modal(modalEl);
 
   // Due date follows the chosen interval so the admin does not have to work
-  // it out by hand — daily due tomorrow, weekly in a week, monthly a month
-  // out. Picking a date manually after that still wins: this only fills the
-  // box, it never locks it.
-  function dueDateFor(interval) {
-    const d = new Date();
-    if (interval === 'daily') d.setDate(d.getDate() + 1);
-    else if (interval === 'weekly') d.setDate(d.getDate() + 7);
-    else if (interval === 'monthly') d.setMonth(d.getMonth() + 1);
-    else return '';
-    return d.toISOString().slice(0, 10);
+  // it out by hand. Weekly and monthly ask WHICH day, since "in 7 days" and
+  // "every Monday" land on different dates most weeks. Picking a date
+  // manually after that still wins: this only fills the box, never locks it.
+  //
+  // Local date parts, not toISOString().slice(0,10) — that converts to UTC
+  // first, which quietly rolls the date back a day for anyone west of UTC
+  // past midnight local time (all of India, most of the work day).
+  function toISODate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  document.getElementById('at_interval').addEventListener('change', function () {
-    document.getElementById('at_due_date').value = dueDateFor(this.value);
-  });
+  // Next date (today counts) that falls on the given day-of-week, 0=Sunday.
+  function nextWeekday(dow) {
+    const d = new Date();
+    d.setDate(d.getDate() + (dow - d.getDay() + 7) % 7);
+    return d;
+  }
+
+  // This month's occurrence of dayOfMonth if it has not passed yet, else
+  // next month's — clamped to that month's real last day (31 in a 30-day
+  // month becomes the 30th, not an invalid rollover to the month after).
+  function nextMonthDay(dayOfMonth) {
+    const today = new Date();
+    const clamp = (y, m) => new Date(y, m, Math.min(dayOfMonth, new Date(y, m + 1, 0).getDate()));
+    let candidate = clamp(today.getFullYear(), today.getMonth());
+    if (candidate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+      candidate = clamp(today.getFullYear(), today.getMonth() + 1);
+    }
+    return candidate;
+  }
+
+  function dueDateFor(interval) {
+    if (interval === 'daily') {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      return toISODate(d);
+    }
+    if (interval === 'weekly') return toISODate(nextWeekday(parseInt(document.getElementById('at_weekday').value, 10)));
+    if (interval === 'monthly') return toISODate(nextMonthDay(parseInt(document.getElementById('at_monthday').value, 10) || 1));
+    return '';
+  }
+
+  function refreshInterval() {
+    const interval = document.getElementById('at_interval').value;
+    document.getElementById('at_weekday_wrap').classList.toggle('d-none', interval !== 'weekly');
+    document.getElementById('at_monthday_wrap').classList.toggle('d-none', interval !== 'monthly');
+    document.getElementById('at_due_date').value = dueDateFor(interval);
+  }
+
+  document.getElementById('at_interval').addEventListener('change', refreshInterval);
+  document.getElementById('at_weekday').addEventListener('change', refreshInterval);
+  document.getElementById('at_monthday').addEventListener('change', refreshInterval);
 
   document.getElementById('btnAssignTask').addEventListener('click', function () {
     document.getElementById('assignTaskForm').reset();
     document.getElementById('at_due_date').value = '';
+    refreshInterval();
     $('#at_employees, #at_departments').val(null).trigger('change');
     modal.show();
   });

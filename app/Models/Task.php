@@ -110,6 +110,29 @@ class Task extends Model implements AuditableContract
     return in_array($this->status, self::CLOSED_STATUSES, true);
   }
 
+  /**
+   * How completing this task landed against its deadline: 'early', 'on_time'
+   * or 'late' — comparing the DAY completed_at falls on against the day
+   * due_date falls on, not the exact timestamp, since a task finished at
+   * 11pm on the due date is still on time. Null when there is nothing to
+   * judge it against (not completed, or no due date was ever set).
+   */
+  public function getCompletionTimingAttribute(): ?string
+  {
+    if (!$this->is_completed || !$this->completed_at || !$this->due_date) {
+      return null;
+    }
+
+    $completedDay = $this->completed_at->copy()->startOfDay();
+    $dueDay = $this->due_date->copy()->startOfDay();
+
+    return match (true) {
+      $completedDay->lt($dueDay) => 'early',
+      $completedDay->eq($dueDay) => 'on_time',
+      default => 'late',
+    };
+  }
+
   protected $casts = [
     'is_geo_fence_enabled' => 'boolean',
     'latitude' => 'float',

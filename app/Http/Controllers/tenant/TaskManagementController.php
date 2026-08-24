@@ -36,10 +36,12 @@ class TaskManagementController extends Controller
         $user = auth()->user();
         $allowedIds = TaskAccess::allowedUserIds($user);
 
-        // Nearest deadline first — what actually needs attention next — with
-        // undated tasks pushed to the end rather than sorting first as NULL
-        // otherwise would, and newest-assigned as the tiebreaker.
+        // Highest priority first, then nearest deadline — what actually
+        // needs attention next — with undated tasks pushed to the end rather
+        // than sorting first as NULL otherwise would, and newest-assigned as
+        // the final tiebreaker. Same ordering My Tasks uses.
         $query = Task::with(['user.department', 'assignedBy'])
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderByDesc('created_at');

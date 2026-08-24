@@ -33,16 +33,24 @@ class MyTasksController extends Controller
      */
     public static function assignedTaskBuckets($user): array
     {
+        $empty = ['all' => collect(), 'upcoming' => collect(), 'pending' => collect(), 'completed' => collect(), 'overdue' => collect()];
         if (!$user) {
-            return ['upcoming' => collect(), 'pending' => collect(), 'completed' => collect(), 'overdue' => collect()];
+            return $empty;
         }
 
+        // Highest priority first, then nearest due date, undated tasks
+        // pushed to the end rather than sorting first as NULL otherwise
+        // would — same ordering Task Management uses, so the two pages never
+        // disagree about what "most urgent" means.
         $tasks = Task::forUser($user->id)
             ->with(['assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
+            ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->get();
 
         return [
+            'all'       => $tasks,
             'overdue'   => $tasks->filter(fn ($t) => $t->is_overdue)->values(),
             'completed' => $tasks->filter(fn ($t) => $t->is_completed)->values(),
             'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
