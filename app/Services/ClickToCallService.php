@@ -67,6 +67,13 @@ class ClickToCallService
         'not on mute'   => ['not_on_mute', 'That call is not muted.'],
     ];
 
+    /** What every non-dial action returns for a Convoque agent — see dialConvoque(). */
+    private const CONVOQUE_UNSUPPORTED = [
+        'result'  => 'unsupported',
+        'message' => 'This action is not available for your dialer.',
+        'raw'     => '',
+    ];
+
     /** The dialer identity for this login, or null if they may not dial. */
     public function agentFor(User $user): ?array
     {
@@ -77,6 +84,19 @@ class ClickToCallService
         $agents = array_change_key_case((array) config('access.click_to_call.agents', []), CASE_LOWER);
 
         return $agents[strtolower((string) $user->email)] ?? null;
+    }
+
+    /**
+     * This agent's config if — and only if — they are wired to Convoque
+     * rather than the shared CentroVision gateway. Every other method in
+     * this class checks this first and takes a completely separate path for
+     * a "yes"; nothing below this changes what happens for anyone else.
+     */
+    private function convoqueAgent(User $user): ?array
+    {
+        $agent = $this->agentFor($user);
+
+        return ($agent && ($agent['vendor'] ?? null) === 'convoque') ? $agent : null;
     }
 
     public function canCall(User $user): bool
@@ -113,6 +133,10 @@ class ClickToCallService
      */
     public function dial(User $user, string $phone, bool $autoFixMode = true): array
     {
+        if ($agent = $this->convoqueAgent($user)) {
+            return $this->dialConvoque($user, $agent, $phone);
+        }
+
         // The correlation id that ties this click to a CDR row hours later.
         // CentroVision does not echo it yet -- see centrovision-required-v1.yaml
         // -- but sending it costs nothing, and the ingest side already stores
@@ -179,11 +203,19 @@ class ClickToCallService
 
     public function hangup(User $user): array
     {
+        if ($this->convoqueAgent($user)) {
+            return self::CONVOQUE_UNSUPPORTED;
+        }
+
         return $this->send($user, 'HANGUP', ['line' => 0]);
     }
 
     public function dispose(User $user, string $disposition, ?string $subDisposition = null): array
     {
+        if ($this->convoqueAgent($user)) {
+            return self::CONVOQUE_UNSUPPORTED;
+        }
+
         $params = ['disposition' => $disposition];
 
         if ($subDisposition !== null && $subDisposition !== '') {
@@ -195,14 +227,28 @@ class ClickToCallService
 
     public function lineStatus(User $user): array
     {
+        if ($this->convoqueAgent($user)) {
+            return self::CONVOQUE_UNSUPPORTED;
+        }
+
         return $this->send($user, 'LINESTATUS', []);
     }
 
     // ------------------------------------------------------------------ lists
 
-    /** @return array<int|string,string> mode id => mode name */
+    /**
+     * @return array<int|string,string> mode id => mode name
+     *
+     * Convoque has no mode concept — returns empty, same as a campaign the
+     * dialer genuinely has no modes for, rather than an error the caller has
+     * to special-case.
+     */
     public function modeList(User $user): array
     {
+        if ($this->convoqueAgent($user)) {
+            return [];
+        }
+
         $raw = $this->send($user, 'LIST', ['list' => 'mode'])['raw'];
 
         $modes = [];
@@ -220,12 +266,20 @@ class ClickToCallService
     /** @return string[] */
     public function dispositions(User $user): array
     {
+        if ($this->convoqueAgent($user)) {
+            return [];
+        }
+
         return $this->splitList($this->send($user, 'LIST', ['list' => 'disposition'])['raw']);
     }
 
     /** @return string[] */
     public function subDispositions(User $user, string $disposition): array
     {
+        if ($this->convoqueAgent($user)) {
+            return [];
+        }
+
         return $this->splitList(
             $this->send($user, 'LIST', ['list' => 'sub_disposition', 'disposition' => $disposition])['raw']
         );
@@ -316,6 +370,79 @@ class ClickToCallService
     }
 
     // --------------------------------------------------------------- transport
+
+    /**
+     * Convoque's whole API surface, for the one agent wired to it: a GET that
+     * returns JSON {"status":"success"|..., "traceID":..., "message":...} —
+     * nothing like CentroVision's plain-text-body, query-action shape, so this
+     * does not reuse send() at all rather than force a second protocol through
+     * the same method.
+     */
+    private function dialConvoque(User $user, array $agent, string $phone): array
+    {
+        $refId = (string) Str::uuid();
+        $base  = rtrim((string) config('access.click_to_call.convoque.base_url'), '/');
+
+        // A plain array lookup, not config()'s dot notation — an email like
+        // newbiz@hitechgroup.in contains its own dots, which dot notation
+        // would read as nested config keys and never find.
+        $authCodes = (array) config('access.click_to_call.convoque.auth_codes', []);
+        $authCode  = $authCodes[strtolower($user->email)] ?? null;
+
+        if (!$authCode) {
+            Log::error("CLICK_TO_CALL_MISCONFIGURED (convoque): no auth code set for {$user->email}");
+
+            return [
+                'result'  => 'unreachable',
+                'message' => 'Your dialer is not fully configured yet. Contact IT.',
+                'raw'     => '',
+                'ref_id'  => $refId,
+            ];
+        }
+
+        Log::info("CLICK_TO_CALL DIAL (convoque): extension {$agent['extension']} -> {$phone} ref={$refId}");
+
+        try {
+            $response = Http::timeout((int) config('access.click_to_call.timeout', 10))
+                ->get($base . '/ConvoqueAPI/placeACall_cri.jsp', [
+                    'src'      => $agent['extension'],
+                    'dst'      => $phone,
+                    'authCode' => $authCode,
+                ]);
+        } catch (\Throwable $e) {
+            Log::error("CLICK_TO_CALL_UNREACHABLE (convoque): " . $e->getMessage());
+
+            return [
+                'result'  => 'unreachable',
+                'message' => 'Could not reach the dialer. It may be down or blocking this server.',
+                'raw'     => '',
+                'ref_id'  => $refId,
+            ];
+        }
+
+        $raw = $this->sanitiseBody($response->body());
+        Log::info("CLICK_TO_CALL_RESPONSE (convoque): {$raw}");
+
+        $json = json_decode($response->body(), true);
+
+        if (is_array($json) && ($json['status'] ?? null) === 'success') {
+            return [
+                'result'  => 'success',
+                'message' => 'Calling now — pick up your agent phone.',
+                'detail'  => $this->displayable($raw),
+                'raw'     => $raw,
+                'ref_id'  => $refId,
+            ];
+        }
+
+        return [
+            'result'  => 'error',
+            'message' => 'The dialer refused the request.',
+            'detail'  => $this->displayable($raw),
+            'raw'     => $raw,
+            'ref_id'  => $refId,
+        ];
+    }
 
     /**
      * @return array{result:string, message:string, raw:string}

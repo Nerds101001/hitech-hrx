@@ -50,11 +50,31 @@ return [
     // The dialer answers in ~50ms; anything slower means it is unwell.
     'timeout' => (int) env('CLICK_TO_CALL_TIMEOUT', 10),
 
+    // 'vendor' picks which dialer ClickToCallService actually talks to for
+    // this agent. Omitted (or 'centrovision') means the shared CentroVision
+    // gateway above — every agent before Meenu. 'convoque' means the
+    // per-agent Convoque box under 'convoque' below instead; only DIAL is
+    // wired for that vendor, see ClickToCallService::dialConvoque().
     'agents' => [
       'bhatiamehak52@gmail.com' => [
         'campaign'  => 'mehak',
         'agent'     => 'mehak',
         'client_id' => '8006',
+      ],
+      'newbiz@hitechgroup.in' => [
+        'vendor'    => 'convoque',
+        'extension' => '217',
+      ],
+    ],
+
+    // Convoque agents, keyed by the same email as above. Kept separate from
+    // 'agents' rather than folded in, since CentroVision and Convoque agents
+    // share almost no fields — a single merged shape would be mostly-null
+    // either way round.
+    'convoque' => [
+      'base_url'   => env('CONVOQUE_BASE_URL', 'http://103.100.218.170:8000'),
+      'auth_codes' => [
+        'newbiz@hitechgroup.in' => env('CONVOQUE_NEWBIZ_AUTH_CODE'),
       ],
     ],
   ],
