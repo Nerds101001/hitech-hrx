@@ -435,7 +435,13 @@ class KpiController extends Controller
 
         $departmentId = $request->input('department_id');
 
+        // "Delete" on this page deactivates rather than removes the row —
+        // kpi_checks under it hold real scores that must not vanish — but
+        // nothing filtered this list by is_active, so a "deleted" template
+        // stayed on screen looking exactly as it did before, indistinguishable
+        // from one still in use. Filtered here so delete actually reads as gone.
         $templates = KpiTemplate::with(['department', 'parent'])
+            ->where('is_active', true)
             ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
             ->orderBy('department_id')->orderBy('parent_template_id')->orderBy('category', 'desc')->orderBy('id')
             ->get();
@@ -446,7 +452,7 @@ class KpiController extends Controller
             ->groupBy('kpi_template_id')->get()->keyBy('kpi_template_id');
 
         $departments = Department::orderBy('name')->get(['id', 'name']);
-        $kras = KpiTemplate::where('category', 'KRA')->orderBy('title')->get(['id', 'title', 'department_id']);
+        $kras = KpiTemplate::where('category', 'KRA')->where('is_active', true)->orderBy('title')->get(['id', 'title', 'department_id']);
         $approvers = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
 
         // Built from the service rather than a second list in the view, so a new

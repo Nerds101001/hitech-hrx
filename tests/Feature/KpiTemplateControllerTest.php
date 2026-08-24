@@ -264,4 +264,40 @@ class KpiTemplateControllerTest extends TestCase
         $this->assertSame(0, KpiAssignment::where('kpi_template_id', $created->id)
             ->where('is_active', true)->count());
     }
+
+    /**
+     * THE REPORTED BUG. Retiring a template deactivates it correctly (the
+     * test above), but templates() never filtered by is_active, so a
+     * "deleted" template stayed on the list looking exactly like an active
+     * one — clicking Delete appeared to do nothing.
+     */
+    public function test_a_retired_template_no_longer_appears_on_the_templates_page(): void
+    {
+        Auth::login($this->userWithRole('admin'));
+
+        $created = KpiTemplate::find(json_decode(
+            $this->controller->storeTemplate($this->payload())->getContent(), true
+        )['id']);
+        $this->controller->destroyTemplate($created->id);
+
+        $response = $this->controller->templates(Request::create('/kpi/templates', 'GET'));
+        $titles = $response->getData()['templates']->pluck('id')->all();
+
+        $this->assertNotContains($created->id, $titles);
+    }
+
+    /** The discriminator: a template that was NOT retired still shows up as normal. */
+    public function test_an_active_template_still_appears_on_the_templates_page(): void
+    {
+        Auth::login($this->userWithRole('admin'));
+
+        $created = KpiTemplate::find(json_decode(
+            $this->controller->storeTemplate($this->payload())->getContent(), true
+        )['id']);
+
+        $response = $this->controller->templates(Request::create('/kpi/templates', 'GET'));
+        $ids = $response->getData()['templates']->pluck('id')->all();
+
+        $this->assertContains($created->id, $ids);
+    }
 }
