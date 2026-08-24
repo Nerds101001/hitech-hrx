@@ -172,6 +172,49 @@
       </div>
     </div>
 
+    {{-- Recurring Tasks --}}
+    @if($schedules->isNotEmpty())
+      <div class="hitech-card mb-6">
+        <div class="card-body p-4 pb-2">
+          <h6 class="fw-bold mb-0"><i class="bx bx-repeat"></i> Recurring Tasks</h6>
+          <p class="text-muted small mb-0">Fires automatically every time its day comes round — no need to reassign it yourself.</p>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:200px">Task</th>
+                <th>Repeats</th>
+                <th>Priority</th>
+                <th>People</th>
+                <th class="text-end" style="min-width:160px">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @foreach($schedules as $s)
+                <tr>
+                  <td>
+                    <div class="fw-medium">{{ $s->title }}</div>
+                    @if($s->description)<small class="text-muted">{{ \Illuminate\Support\Str::limit($s->description, 70) }}</small>@endif
+                  </td>
+                  <td><span class="badge-hitech badge-brand-soft"><i class="bx bx-repeat"></i> {{ $s->recurrenceLabel() }}</span></td>
+                  <td><span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$s->priority] ?? 'badge-muted' }}">{{ ucfirst($s->priority) }}</span></td>
+                  <td>{{ count($s->target_user_ids ?? []) }} {{ \Illuminate\Support\Str::plural('person', count($s->target_user_ids ?? [])) }}</td>
+                  <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
+                            data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
+                            data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
+                      Manage
+                    </button>
+                  </td>
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        </div>
+      </div>
+    @endif
+
     {{-- Task list --}}
     <div class="hitech-card">
       <div class="table-responsive">
@@ -301,6 +344,8 @@
             <div class="col-md-4" id="at_due_date_wrap">
               <label class="form-label">Due date</label>
               <input type="date" id="at_due_date" class="form-control" min="{{ now()->toDateString() }}">
+              <input type="text" id="at_recurrence_display" class="form-control d-none" readonly>
+              <div class="form-text d-none" id="at_recurrence_help">Repeats on its own — a task appears for each person every time this day comes round. Stop it any time from the Recurring Tasks list below.</div>
             </div>
 
             <div class="col-12"><hr class="my-1"></div>
@@ -333,6 +378,28 @@
     </div>
   </div>
 </div>
+
+{{-- Manage Recurring Task modal --}}
+<div class="modal fade" id="manageScheduleModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="msTitle">Manage Recurring Task</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3" id="msRecurrence"></p>
+        <ul class="list-group" id="msTargetList"></ul>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button" class="btn btn-outline-danger btn-sm" id="msStopBtn">
+          <i class="bx bx-stop-circle"></i> Stop This Recurring Task
+        </button>
+        <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 @endsection
 
 @section('page-script')
@@ -351,54 +418,36 @@ document.addEventListener('DOMContentLoaded', function () {
   const modalEl = document.getElementById('assignTaskModal');
   const modal = new bootstrap.Modal(modalEl);
 
-  // Due date follows the chosen interval so the admin does not have to work
-  // it out by hand. Weekly and monthly ask WHICH day, since "in 7 days" and
-  // "every Monday" land on different dates most weeks. Picking a date
-  // manually after that still wins: this only fills the box, never locks it.
-  //
-  // Local date parts, not toISOString().slice(0,10) — that converts to UTC
-  // first, which quietly rolls the date back a day for anyone west of UTC
-  // past midnight local time (all of India, most of the work day).
-  function toISODate(d) {
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  // Picking Weekly/Monthly turns this into a recurring schedule on the
+  // server (see storeSchedule() in the controller) rather than a single
+  // task with a computed due date — the due-date box swaps for a read-only
+  // recurrence label so it is obvious this is now "every Tuesday", not one
+  // specific date.
+  const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function ordinal(n) {
+    if (n % 100 >= 11 && n % 100 <= 13) return n + 'th';
+    return n + ({1: 'st', 2: 'nd', 3: 'rd'}[n % 10] || 'th');
   }
-
-  // Next date (today counts) that falls on the given day-of-week, 0=Sunday.
-  function nextWeekday(dow) {
-    const d = new Date();
-    d.setDate(d.getDate() + (dow - d.getDay() + 7) % 7);
-    return d;
-  }
-
-  // This month's occurrence of dayOfMonth if it has not passed yet, else
-  // next month's — clamped to that month's real last day (31 in a 30-day
-  // month becomes the 30th, not an invalid rollover to the month after).
-  function nextMonthDay(dayOfMonth) {
-    const today = new Date();
-    const clamp = (y, m) => new Date(y, m, Math.min(dayOfMonth, new Date(y, m + 1, 0).getDate()));
-    let candidate = clamp(today.getFullYear(), today.getMonth());
-    if (candidate < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
-      candidate = clamp(today.getFullYear(), today.getMonth() + 1);
-    }
-    return candidate;
-  }
-
-  function dueDateFor(interval) {
-    if (interval === 'daily') {
-      const d = new Date();
-      d.setDate(d.getDate() + 1);
-      return toISODate(d);
-    }
-    if (interval === 'weekly') return toISODate(nextWeekday(parseInt(document.getElementById('at_weekday').value, 10)));
-    if (interval === 'monthly') return toISODate(nextMonthDay(parseInt(document.getElementById('at_monthday').value, 10) || 1));
+  function recurrenceLabel(interval) {
+    if (interval === 'daily') return 'Every day';
+    if (interval === 'weekly') return 'Every ' + WEEKDAY_NAMES[parseInt(document.getElementById('at_weekday').value, 10)];
+    if (interval === 'monthly') return 'Every ' + ordinal(parseInt(document.getElementById('at_monthday').value, 10) || 1) + ' of the month';
     return '';
   }
 
   function refreshInterval() {
     const interval = document.getElementById('at_interval').value;
+    const isRecurring = interval !== '';
     document.getElementById('at_weekday_wrap').classList.toggle('d-none', interval !== 'weekly');
     document.getElementById('at_monthday_wrap').classList.toggle('d-none', interval !== 'monthly');
-    document.getElementById('at_due_date').value = dueDateFor(interval);
+    document.getElementById('at_due_date').classList.toggle('d-none', isRecurring);
+    document.getElementById('at_recurrence_display').classList.toggle('d-none', !isRecurring);
+    document.getElementById('at_recurrence_help').classList.toggle('d-none', !isRecurring);
+    if (isRecurring) {
+      document.getElementById('at_recurrence_display').value = recurrenceLabel(interval);
+    } else {
+      document.getElementById('at_due_date').value = '';
+    }
   }
 
   document.getElementById('at_interval').addEventListener('change', refreshInterval);
@@ -432,6 +481,9 @@ document.addEventListener('DOMContentLoaded', function () {
         description: document.getElementById('at_description').value,
         due_date: document.getElementById('at_due_date').value || null,
         priority: document.getElementById('at_priority').value,
+        interval: document.getElementById('at_interval').value || null,
+        weekday: document.getElementById('at_weekday').value,
+        day_of_month: document.getElementById('at_monthday').value,
         employee_ids: $('#at_employees').val() || [],
         department_ids: $('#at_departments').val() || [],
       }),
@@ -474,6 +526,80 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
   });
+
+  // ══ Recurring Tasks: manage (remove a person / stop entirely) ═══════════
+  const manageModalEl = document.getElementById('manageScheduleModal');
+  if (manageModalEl) {
+    const manageModal = new bootstrap.Modal(manageModalEl);
+    let currentScheduleId = null;
+
+    function renderTargetList(targets) {
+      const list = document.getElementById('msTargetList');
+      list.innerHTML = '';
+      if (!targets.length) {
+        list.innerHTML = '<li class="list-group-item text-muted">Nobody left on this recurring task.</li>';
+        return;
+      }
+      targets.forEach(function (t) {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex align-items-center justify-content-between';
+        li.innerHTML = '<span>' + t.name + '</span>';
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-sm btn-icon icon-sophisticated text-danger';
+        removeBtn.title = 'Remove from this recurring task';
+        removeBtn.innerHTML = '<i class="bx bx-x"></i>';
+        removeBtn.addEventListener('click', function () {
+          fetch('/task-management/schedules/' + currentScheduleId + '/remove-user', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRF-TOKEN': "{{ csrf_token() }}",
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ user_id: t.id }),
+          })
+            .then(r => r.json())
+            .then(data => {
+              if (data.success) { window.location.reload(); }
+              else { Swal.fire({ icon: 'error', title: 'Could not remove', text: data.message || '' }); }
+            });
+        });
+        li.appendChild(removeBtn);
+        list.appendChild(li);
+      });
+    }
+
+    document.querySelectorAll('.js-manage-schedule').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        currentScheduleId = btn.dataset.id;
+        document.getElementById('msTitle').textContent = btn.dataset.title;
+        document.getElementById('msRecurrence').innerHTML = '<i class="bx bx-repeat"></i> ' + btn.dataset.recurrence;
+        renderTargetList(JSON.parse(btn.dataset.targets || '[]'));
+        manageModal.show();
+      });
+    });
+
+    document.getElementById('msStopBtn').addEventListener('click', function () {
+      if (!currentScheduleId) return;
+      Swal.fire({
+        icon: 'warning', title: 'Stop this recurring task?',
+        text: 'No more tasks will be created from it. Anything already assigned stays as it is.',
+        showCancelButton: true, confirmButtonText: 'Stop It', confirmButtonColor: '#dc2626',
+      }).then((res) => {
+        if (!res.isConfirmed) return;
+        fetch('/task-management/schedules/' + currentScheduleId + '/stop', {
+          method: 'POST',
+          headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) { window.location.reload(); }
+            else { Swal.fire({ icon: 'error', title: 'Could not stop', text: data.message || '' }); }
+          });
+      });
+    });
+  }
 });
 </script>
 @endsection

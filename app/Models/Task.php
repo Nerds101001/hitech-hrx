@@ -23,6 +23,7 @@ class Task extends Model implements AuditableContract
 
   protected $fillable = [
     'batch_id',
+    'task_schedule_id',
     'title',
     'description',
     'type',
@@ -82,6 +83,11 @@ class Task extends Model implements AuditableContract
   public function taskUpdates()
   {
     return $this->hasMany(TaskUpdate::class);
+  }
+
+  public function schedule()
+  {
+    return $this->belongsTo(TaskSchedule::class, 'task_schedule_id');
   }
 
   /** Only this person's own tasks — the one place "for a user" is decided. */

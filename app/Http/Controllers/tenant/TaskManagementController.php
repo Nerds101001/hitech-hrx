@@ -6,8 +6,10 @@ use App\Enums\UserAccountStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Task;
+use App\Models\TaskSchedule;
 use App\Models\User;
 use App\Notifications\Task\TaskAssigned;
+use App\Services\TaskScheduleService;
 use App\Support\TaskAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -107,7 +109,17 @@ class TaskManagementController extends Controller
             'pending'    => (clone $query)->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
         ];
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts'));
+        $scheduleQuery = TaskSchedule::where('is_active', true)->with('assignedBy');
+        if ($allowedIds !== null) {
+            $scheduleQuery->where('assigned_by_id', $user->id);
+        }
+        $schedules = $scheduleQuery->orderByDesc('created_at')->get();
+        // Resolved once here rather than per-row in the view (N+1) — the id
+        // list is small (schedule targets), so one query per page is fine.
+        $allTargetIds = $schedules->flatMap(fn ($s) => $s->target_user_ids ?? [])->unique();
+        $targetNames = User::whereIn('id', $allTargetIds)->get(['id', 'first_name', 'last_name'])->keyBy('id');
+
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames'));
     }
 
     public function store(Request $request)
@@ -119,6 +131,11 @@ class TaskManagementController extends Controller
             'description'    => 'nullable|string',
             'due_date'       => 'nullable|date|after_or_equal:today',
             'priority'       => 'nullable|in:' . implode(',', Task::PRIORITIES),
+            // A recurring pick: creates a TaskSchedule instead of one-off
+            // tasks, and fires today's occurrence immediately if it matches.
+            'interval'       => 'nullable|in:daily,weekly,monthly',
+            'weekday'        => 'required_if:interval,weekly|nullable|integer|min:0|max:6',
+            'day_of_month'   => 'required_if:interval,monthly|nullable|integer|min:1|max:31',
             'employee_ids'   => 'nullable|array',
             'employee_ids.*' => 'integer|exists:users,id',
             'department_ids'   => 'nullable|array',
@@ -156,6 +173,10 @@ class TaskManagementController extends Controller
 
         if ($targetIds->isEmpty()) {
             return response()->json(['success' => false, 'message' => 'None of the selected people are in your team.'], 422);
+        }
+
+        if (!empty($validated['interval'])) {
+            return $this->storeSchedule($validated, $targetIds, $dropped, $user);
         }
 
         $batchId = (string) Str::uuid();
@@ -205,6 +226,71 @@ class TaskManagementController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => $message, 'batch_id' => $batchId, 'assigned' => count($created)]);
+    }
+
+    /**
+     * The recurring path: one TaskSchedule row, target_user_ids snapshotted
+     * once (already TaskAccess-scoped by the caller) rather than re-resolved
+     * on every future firing — see the migration for why. Fires today's
+     * occurrence right away if the chosen day matches, instead of making the
+     * assigner wait for tomorrow's cron run to see anything happen.
+     */
+    private function storeSchedule(array $validated, \Illuminate\Support\Collection $targetIds, int $dropped, $user)
+    {
+        $schedule = TaskSchedule::create([
+            'title'           => $validated['title'],
+            'description'     => $validated['description'] ?? null,
+            'priority'        => $validated['priority'] ?? 'medium',
+            'frequency'       => $validated['interval'],
+            'weekday'         => $validated['interval'] === 'weekly' ? $validated['weekday'] : null,
+            'day_of_month'    => $validated['interval'] === 'monthly' ? $validated['day_of_month'] : null,
+            'target_user_ids' => $targetIds->values()->all(),
+            'assigned_by_id'  => $user->id,
+            'is_active'       => true,
+            'created_by_id'   => $user->id,
+            'updated_by_id'   => $user->id,
+        ]);
+
+        $firstRun = TaskScheduleService::fireIfDue($schedule);
+
+        $message = 'Recurring task created — ' . $schedule->recurrenceLabel() . ', ' . $targetIds->count() . ' ' . \Illuminate\Support\Str::plural('person', $targetIds->count()) . '.';
+        if ($firstRun->isNotEmpty()) {
+            $message .= ' ' . $firstRun->count() . ' assigned today, since today matches.';
+        }
+        if ($dropped > 0) {
+            $message .= " {$dropped} selected person(s) were outside your team and skipped.";
+        }
+
+        return response()->json(['success' => true, 'message' => $message, 'schedule_id' => $schedule->id]);
+    }
+
+    /** Stop a recurring schedule for everyone — no more future occurrences. Already-created tasks are untouched. */
+    public function stopSchedule($id)
+    {
+        $schedule = TaskSchedule::findOrFail($id);
+        if (!TaskAccess::isUnrestricted(auth()->user()) && $schedule->assigned_by_id !== auth()->id()) {
+            abort(403, 'You cannot manage a recurring task you did not create.');
+        }
+
+        $schedule->update(['is_active' => false]);
+
+        return response()->json(['success' => true, 'message' => 'Recurring task stopped. Nothing more will be created from it.']);
+    }
+
+    /** Drop one person from an active schedule's future occurrences, without touching anyone else on it. */
+    public function removeFromSchedule(Request $request, $id)
+    {
+        $schedule = TaskSchedule::findOrFail($id);
+        if (!TaskAccess::isUnrestricted(auth()->user()) && $schedule->assigned_by_id !== auth()->id()) {
+            abort(403, 'You cannot manage a recurring task you did not create.');
+        }
+
+        $userId = (int) $request->input('user_id');
+        $schedule->update([
+            'target_user_ids' => array_values(array_diff($schedule->target_user_ids ?? [], [$userId])),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Removed from the recurring assignment.']);
     }
 
     /** Everyone in one bulk-assignment batch and their own status. */

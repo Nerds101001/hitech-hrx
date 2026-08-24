@@ -470,6 +470,8 @@ Route::middleware([
       Route::get('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'index'])->name('index');
       Route::post('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'store'])->name('store');
       Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
+      Route::post('schedules/{id}/stop', [\App\Http\Controllers\tenant\TaskManagementController::class, 'stopSchedule'])->name('schedules.stop');
+      Route::post('schedules/{id}/remove-user', [\App\Http\Controllers\tenant\TaskManagementController::class, 'removeFromSchedule'])->name('schedules.removeUser');
       Route::delete('{id}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'destroy'])->name('destroy');
     });
 
