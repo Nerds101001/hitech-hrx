@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable;
@@ -15,7 +16,11 @@ class Task extends Model implements AuditableContract
 
   protected $table = 'tasks';
 
+  /** Statuses that mean the task is no longer awaiting action. */
+  public const CLOSED_STATUSES = ['completed', 'cancelled', 'resolved', 'closed'];
+
   protected $fillable = [
+    'batch_id',
     'title',
     'description',
     'type',
@@ -33,6 +38,9 @@ class Task extends Model implements AuditableContract
     'start_form_id',
     'end_form_id',
     'is_geo_fence_enabled',
+    'status',
+    'completed_at',
+    'delay_notified_at',
     'created_by_id',
     'updated_by_id',
     'tenant_id',
@@ -73,6 +81,32 @@ class Task extends Model implements AuditableContract
     return $this->hasMany(TaskUpdate::class);
   }
 
+  /** Only this person's own tasks — the one place "for a user" is decided. */
+  public function scopeForUser(Builder $query, int $userId): Builder
+  {
+    return $query->where('user_id', $userId);
+  }
+
+  /** Same rows the daily overdue check targets, for the badge/list to agree with it. */
+  public function scopeOverdue(Builder $query): Builder
+  {
+    return $query->whereNotNull('due_date')
+      ->where('due_date', '<', now())
+      ->whereNotIn('status', self::CLOSED_STATUSES);
+  }
+
+  public function getIsOverdueAttribute(): bool
+  {
+    return $this->due_date !== null
+      && $this->due_date->isPast()
+      && !in_array($this->status, self::CLOSED_STATUSES, true);
+  }
+
+  public function getIsCompletedAttribute(): bool
+  {
+    return in_array($this->status, self::CLOSED_STATUSES, true);
+  }
+
   protected $casts = [
     'is_geo_fence_enabled' => 'boolean',
     'latitude' => 'float',
@@ -81,6 +115,8 @@ class Task extends Model implements AuditableContract
     'start_date_time' => 'datetime',
     'end_date_time' => 'datetime',
     'due_date' => 'datetime',
+    'completed_at' => 'datetime',
+    'delay_notified_at' => 'datetime',
   ];
 
 

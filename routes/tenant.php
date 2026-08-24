@@ -450,12 +450,24 @@ Route::middleware([
       Route::get('getByIdAjax/{id}', [LoanRequestController::class, 'getByIdAjax'])->name('getByIdAjax');
     });
 
-    // Task Management
+    // Task Management — original single-target endpoints (the "Add Task"
+    // modal on an employee's profile page still posts to these).
     Route::middleware(['role_or_permission:admin|hr|accounts|manager|tasks.manage'])->prefix('tasks')->name('tasks.')->group(function () {
       Route::post('store', [TaskController::class, 'store'])->name('store');
       Route::post('update/{id}', [TaskController::class, 'update'])->name('update');
       Route::post('updateStatus/{id}', [TaskController::class, 'updateStatus'])->name('updateStatus');
       Route::delete('delete/{id}', [TaskController::class, 'destroy'])->name('destroy');
+    });
+
+    // Task Management portal — assign to one person, a hand-picked group, or
+    // whole departments at once. Same role gate as above; scoping to "my own
+    // team only" for manager/accounts happens inside the controller via
+    // TaskAccess, not here.
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|tasks.manage'])->prefix('task-management')->name('task-management.')->group(function () {
+      Route::get('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'index'])->name('index');
+      Route::post('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'store'])->name('store');
+      Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
+      Route::delete('{id}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'destroy'])->name('destroy');
     });
 
 
@@ -565,6 +577,11 @@ Route::middleware([
     // "My Tasks" — every user's own outstanding work, whatever their role.
     Route::get('my-tasks', [\App\Http\Controllers\tenant\MyTasksController::class, 'index'])
         ->name('my-tasks.index');
+    // Ownership is checked inside the controller (task.user_id === auth()->id()),
+    // not by the route — this is deliberately open to any signed-in user so
+    // everyone can complete their OWN tasks, whatever their role.
+    Route::post('my-tasks/{task}/complete', [\App\Http\Controllers\tenant\MyTasksController::class, 'complete'])
+        ->name('my-tasks.complete');
 
     // Attendance setup queue: accounts records each new joiner's employee ID
     // and biometric ID. Drives the login popup and the dashboard task card.

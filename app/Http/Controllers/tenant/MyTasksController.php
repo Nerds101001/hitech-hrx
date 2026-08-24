@@ -5,6 +5,8 @@ namespace App\Http\Controllers\tenant;
 use App\Http\Controllers\Controller;
 use App\Models\EmployeeSetupTask;
 use App\Models\ExitClearance;
+use App\Models\Task;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -20,7 +22,62 @@ class MyTasksController extends Controller
         return view('tenant.my-tasks.index', [
             'pageConfigs' => ['contentLayout' => 'wide'],
             'groups'      => self::forUser(auth()->user()),
+            'taskBuckets' => self::assignedTaskBuckets(auth()->user()),
         ]);
+    }
+
+    /**
+     * Everything assigned to this person via Task Management, bucketed for
+     * the page. Task::forUser() is the only place that scopes by user_id —
+     * there is no path here that can return someone else's task.
+     */
+    public static function assignedTaskBuckets($user): array
+    {
+        if (!$user) {
+            return ['upcoming' => collect(), 'pending' => collect(), 'completed' => collect(), 'overdue' => collect()];
+        }
+
+        $tasks = Task::forUser($user->id)
+            ->with(['assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+            ->orderBy('due_date')
+            ->get();
+
+        return [
+            'overdue'   => $tasks->filter(fn ($t) => $t->is_overdue)->values(),
+            'completed' => $tasks->filter(fn ($t) => $t->is_completed)->values(),
+            'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
+            'upcoming'  => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && (!$t->due_date || $t->due_date->isFuture()))->values(),
+        ];
+    }
+
+    /**
+     * Mark one of MY OWN tasks complete, with an optional remark. The only
+     * ownership check that matters is right here: user_id must be this
+     * person, or the lookup 404s before anything is touched.
+     */
+    public function complete(Request $request, Task $task)
+    {
+        if ($task->user_id !== auth()->id()) {
+            abort(403, 'This is not your task.');
+        }
+
+        $validated = $request->validate([
+            'remarks' => 'nullable|string|max:2000',
+        ]);
+
+        $task->status = 'completed';
+        $task->completed_at = now();
+        $task->save();
+
+        $task->taskUpdates()->create([
+            'comment'        => $validated['remarks'] ?? null,
+            'update_type'    => 'complete',
+            'is_admin'       => false,
+            'created_by_id'  => auth()->id(),
+            'updated_by_id'  => auth()->id(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Task marked complete.']);
     }
 
     /**

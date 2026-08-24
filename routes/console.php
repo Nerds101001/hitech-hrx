@@ -52,5 +52,6 @@ Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');
 Schedule::command('leave:auto-reject-expired')->daily()->description('Auto-reject leave requests pending for more than 48 hours');
 Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce onboarding completion deadlines');
 Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
+Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify staff whose assigned task is overdue');
 
 Schedule::command('hrx:transfer-newbiz-ccare')->daily();

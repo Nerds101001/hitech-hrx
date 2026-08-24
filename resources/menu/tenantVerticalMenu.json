@@ -35,6 +35,18 @@
             ]
         },
         {
+            "url": "/task-management",
+            "name": "Task Management",
+            "icon": "menu-icon bx bx-list-check",
+            "slug": "task-management.index",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "accounts"
+            ]
+        },
+        {
             "url": "/announcements",
             "name": "Announcements",
             "icon": "menu-icon bx bx-broadcast",
