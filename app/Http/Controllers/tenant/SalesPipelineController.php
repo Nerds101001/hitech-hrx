@@ -995,7 +995,8 @@ class SalesPipelineController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'party_name' => 'required|string|max:255',
+            'party_name'             => 'required|string|max:255',
+            'crm_client_mapping_id'  => 'nullable|integer|exists:crm_client_mappings,id',
         ]);
 
         $user = auth()->user();
@@ -1045,8 +1046,19 @@ class SalesPipelineController extends Controller
         // what the Sales Report page lists. Pipeline rows pass is_locked = 0.
         $isLocked = filter_var($request->input('is_locked', true), FILTER_VALIDATE_BOOLEAN);
 
+        // Linking to an existing CRM.API customer at creation time is the
+        // preferred path over the reconciliation flow below (see
+        // syncCrmMapping/resolveCrmMapping) -- take the CRM's own spelling
+        // of the name so the two records agree from the start.
+        $partyName = $request->party_name;
+        $crmClientMappingId = $request->crm_client_mapping_id ?: null;
+        if ($crmClientMappingId && ($crmMapping = \App\Models\CrmClientMapping::find($crmClientMappingId))) {
+            $partyName = $crmMapping->crm_company_name;
+        }
+
         $pipeline = SalesPipeline::create([
-            'party_name'               => $request->party_name,
+            'party_name'               => $partyName,
+            'crm_client_mapping_id'    => $crmClientMappingId,
             'salesperson_id'           => $salespersonId,
             'ccare_id'                 => $ccareId,
             'new_biz_id'               => $newBizId,
@@ -1595,6 +1607,141 @@ class SalesPipelineController extends Controller
             'skipped' => $skipped,
             'missing' => $missing,
         ]);
+    }
+
+    /** Shared ownership check for the CRM-mapping reconciliation pair below — same rule as setuSyncContext(). */
+    private function crmMappingSyncContext(Request $request, $salespersonId): array
+    {
+        $user = auth()->user();
+        $isPrivileged = $user->hasRole(['admin', 'Admin', 'hr', 'HR', 'manager', 'Manager']) || $user->can('sales_report.manage');
+        if (!$isPrivileged && (int) $salespersonId !== $user->id) {
+            return ['response' => Error::response('You can only reconcile your own Sales Report.', 403)];
+        }
+
+        $target = User::find($salespersonId);
+        if (!$target) {
+            return ['response' => Error::response('That salesperson was not found.', 404)];
+        }
+
+        return ['response' => null, 'target' => $target];
+    }
+
+    /**
+     * Reconcile one salesperson's Sales Report book (sales_pipelines,
+     * is_locked=1) against the CRM.API-synced customer registry
+     * (CrmClientMapping) they're already tied to via any of its 5 roles —
+     * so the two customer lists (freehand party_name vs CRM-code-based)
+     * stop drifting apart. Mirrors syncSetu()'s preview/apply shape, but
+     * unlike Setu this never calls an external API: both sides already
+     * live in HRX's own DB.
+     *
+     * A normalised-name match at 100% is offered for auto-link (apply=1
+     * commits it); anything only similar is a review item — a human
+     * decides, exactly like Setu's reviewItems, since a wrong auto-link
+     * would misattribute a real account's history to the wrong company.
+     */
+    public function syncCrmMapping(Request $request, $salespersonId)
+    {
+        $ctx = $this->crmMappingSyncContext($request, $salespersonId);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        $target = $ctx['target'];
+        $apply = $request->boolean('apply');
+
+        $unlinked = SalesPipeline::where('salesperson_id', $target->id)
+            ->where('is_locked', true)
+            ->whereNull('crm_client_mapping_id')
+            ->get(['id', 'party_name']);
+
+        $candidates = \App\Models\CrmClientMapping::forUser($target->id)
+            ->get(['id', 'crm_company_name'])
+            ->map(fn($m) => ['label' => $m->crm_company_name, 'mapping_id' => $m->id, 'crm_company_name' => $m->crm_company_name])
+            ->all();
+
+        $autoLinked = [];
+        $reviewItems = [];
+
+        foreach ($unlinked as $pipeline) {
+            $matches = \App\Support\NameMatcher::bestMatches($pipeline->party_name, $candidates, 80.0, 5);
+            if (empty($matches)) {
+                continue; // no plausible CRM counterpart — genuinely not there yet, leave alone
+            }
+
+            if ($matches[0]['score'] >= 99.9) {
+                $autoLinked[] = [
+                    'pipeline_id' => $pipeline->id,
+                    'party_name' => $pipeline->party_name,
+                    'mapping_id' => $matches[0]['mapping_id'],
+                    'crm_company_name' => $matches[0]['crm_company_name'],
+                ];
+            } else {
+                $reviewItems[] = [
+                    'pipeline_id' => $pipeline->id,
+                    'party_name' => $pipeline->party_name,
+                    'candidates' => $matches,
+                ];
+            }
+        }
+
+        if ($apply && $autoLinked) {
+            foreach ($autoLinked as $row) {
+                SalesPipeline::where('id', $row['pipeline_id'])->update(['crm_client_mapping_id' => $row['mapping_id']]);
+            }
+        }
+
+        return Success::response([
+            'salesperson' => trim($target->first_name . ' ' . $target->last_name),
+            'salespersonId' => $target->id,
+            'applied' => $apply,
+            'autoLinked' => $autoLinked,
+            'reviewItems' => $reviewItems,
+            'counts' => [
+                'autoLinked' => count($autoLinked),
+                'reviewItems' => count($reviewItems),
+                'unlinkedTotal' => $unlinked->count(),
+            ],
+        ]);
+    }
+
+    /** Apply per-item human decisions from syncCrmMapping()'s reviewItems queue. */
+    public function resolveCrmMapping(Request $request, $salespersonId)
+    {
+        $ctx = $this->crmMappingSyncContext($request, $salespersonId);
+        if ($ctx['response']) {
+            return $ctx['response'];
+        }
+        $target = $ctx['target'];
+
+        $request->validate([
+            'resolutions' => ['required', 'array', 'min:1'],
+            'resolutions.*.pipeline_id' => ['required', 'integer'],
+            'resolutions.*.action' => ['required', 'in:link,skip'],
+            'resolutions.*.mapping_id' => ['nullable', 'integer', 'exists:crm_client_mappings,id'],
+        ]);
+
+        $linked = 0;
+        $skipped = 0;
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($request, $target, &$linked, &$skipped) {
+            foreach ($request->input('resolutions') as $r) {
+                if (($r['action'] ?? '') === 'skip' || empty($r['mapping_id'])) {
+                    $skipped++;
+                    continue;
+                }
+                // Re-scoped to this salesperson server-side — never trust a
+                // client-sent pipeline_id to belong to whoever it claims.
+                $pipeline = SalesPipeline::where('id', $r['pipeline_id'])->where('salesperson_id', $target->id)->first();
+                if (!$pipeline) {
+                    $skipped++;
+                    continue;
+                }
+                $pipeline->update(['crm_client_mapping_id' => $r['mapping_id']]);
+                $linked++;
+            }
+        });
+
+        return Success::response(['linked' => $linked, 'skipped' => $skipped]);
     }
 
     public function update(Request $request, $id)

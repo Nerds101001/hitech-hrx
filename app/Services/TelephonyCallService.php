@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Enums\CallEndedBy;
 use App\Enums\CallOrigin;
 use App\Enums\TelephonyCallStatus;
+use App\Models\CrmClientActivity;
 use App\Models\TelephonyCall;
 use App\Models\User;
+use App\Support\CrmPhoneMatcher;
 use Illuminate\Support\Str;
 
 /**
@@ -26,7 +28,7 @@ use Illuminate\Support\Str;
  */
 class TelephonyCallService
 {
-  public function initiate(User $agent, string $to, ?string $campaignId, ?string $idempotencyKey): TelephonyCall
+  public function initiate(User $agent, string $to, ?string $campaignId, ?string $idempotencyKey, ?int $crmClientMappingId = null): TelephonyCall
   {
     if ($idempotencyKey) {
       $existing = TelephonyCall::where('idempotency_key', $idempotencyKey)->first();
@@ -35,19 +37,24 @@ class TelephonyCallService
       }
     }
 
+    // If the agent didn't dial from a customer's page (the high-confidence
+    // path), fall back to a phone-number match -- best-effort, exact only.
+    $crmClientMappingId ??= CrmPhoneMatcher::resolve(null, $to);
+
     $call = TelephonyCall::create([
-      'call_uuid'       => (string) Str::uuid(),
-      'vendor'          => 'mock',
-      'origin'          => CallOrigin::HRX,
-      'agent_id'        => $agent->id,
-      'campaign_id'     => $campaignId,
-      'from_number'     => $agent->phone ?: 'agent-extension',
-      'to_number'       => $to,
-      'status'          => TelephonyCallStatus::RINGING,
-      'queued_at'       => now(),
-      'ringing_at'      => now(),
-      'idempotency_key' => $idempotencyKey,
-      'created_by_id'   => $agent->id,
+      'call_uuid'             => (string) Str::uuid(),
+      'vendor'                => 'mock',
+      'origin'                => CallOrigin::HRX,
+      'agent_id'              => $agent->id,
+      'campaign_id'           => $campaignId,
+      'from_number'           => $agent->phone ?: 'agent-extension',
+      'to_number'             => $to,
+      'crm_client_mapping_id' => $crmClientMappingId,
+      'status'                => TelephonyCallStatus::RINGING,
+      'queued_at'             => now(),
+      'ringing_at'            => now(),
+      'idempotency_key'       => $idempotencyKey,
+      'created_by_id'         => $agent->id,
     ]);
 
     $outcome = $this->mockOutcomeFor($to);
@@ -139,13 +146,36 @@ class TelephonyCallService
     return $this->hangup($call, CallEndedBy::CUSTOMER, 'simulated: customer disconnected');
   }
 
-  public function disposition(TelephonyCall $call, string $code, ?string $notes, User $agent): TelephonyCall
-  {
+  /**
+   * Wrap up a call: record the agent's outcome code/notes, and -- the
+   * telephony half of the Customer 360 feed -- post an activity entry to
+   * the linked customer, every dispositioned call, not just connected ones
+   * (a no-answer attempt is still useful history). If the call was never
+   * explicitly tied to a customer, make one last best-effort phone match
+   * now that disposition means "this call is really over".
+   */
+  public function disposition(
+    TelephonyCall $call,
+    string $code,
+    ?string $notes,
+    User $agent,
+    bool $needsFollowUp = false,
+    ?string $followUpDueAt = null
+  ): TelephonyCall {
     $call->update([
       'disposition_code'  => $code,
       'disposition_notes' => $notes,
       'updated_by_id'      => $agent->id,
     ]);
+
+    if (!$call->crm_client_mapping_id) {
+      $call->crm_client_mapping_id = CrmPhoneMatcher::resolve($call->from_number, $call->to_number);
+      if ($call->crm_client_mapping_id) {
+        $call->save();
+      }
+    }
+
+    CrmClientActivity::logForCall($call, $agent, $code, $notes, $needsFollowUp, $followUpDueAt);
 
     return $call->fresh();
   }

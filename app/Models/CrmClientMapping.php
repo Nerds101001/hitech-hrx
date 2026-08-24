@@ -40,6 +40,13 @@ class CrmClientMapping extends Model
         'crm_company_code' => 'integer',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn () => \App\Support\CrmPhoneMatcher::forget());
+        static::deleted(fn () => \App\Support\CrmPhoneMatcher::forget());
+        static::restored(fn () => \App\Support\CrmPhoneMatcher::forget());
+    }
+
     public function salesperson()
     {
         return $this->belongsTo(User::class, 'salesperson_id');
@@ -68,6 +75,20 @@ class CrmClientMapping extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    /** The customer's own people -- their purchase team, finance team, etc. */
+    public function contacts()
+    {
+        return $this->hasMany(CrmClientContact::class);
+    }
+
+    /** The comment/call activity feed, newest first. Callers must paginate --
+     *  this can accumulate one row per dispositioned call over an account's
+     *  lifetime and must never be fetched in full. */
+    public function activities()
+    {
+        return $this->hasMany(CrmClientActivity::class)->latest('id');
     }
 
     /**

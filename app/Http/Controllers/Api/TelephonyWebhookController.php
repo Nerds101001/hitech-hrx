@@ -6,8 +6,10 @@ use App\Enums\CallEndedBy;
 use App\Enums\CallOrigin;
 use App\Enums\TelephonyCallStatus;
 use App\Http\Controllers\Controller;
+use App\Models\CrmClientActivity;
 use App\Models\TelephonyCall;
 use App\Models\User;
+use App\Support\CrmPhoneMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -76,18 +78,20 @@ class TelephonyWebhookController extends Controller
     Log::info('Telephony webhook: no matching call, recording as external', ['vendor_ref' => $callId]);
 
     $fromNumber = $payload['from'] ?? null;
+    $toNumber = $payload['to'] ?? null;
     $agent = $fromNumber ? User::where('phone', $fromNumber)->first() : null;
 
     return TelephonyCall::create([
-      'call_uuid'   => (string) Str::uuid(),
-      'vendor_ref'  => $callId,
-      'vendor'      => $payload['vendor'] ?? 'unknown',
-      'origin'      => CallOrigin::EXTERNAL,
-      'agent_id'    => $agent?->id,
-      'from_number' => $fromNumber ?? 'unknown',
-      'to_number'   => $payload['to'] ?? 'unknown',
-      'status'      => TelephonyCallStatus::RINGING,
-      'queued_at'   => now(),
+      'call_uuid'             => (string) Str::uuid(),
+      'vendor_ref'            => $callId,
+      'vendor'                => $payload['vendor'] ?? 'unknown',
+      'origin'                => CallOrigin::EXTERNAL,
+      'agent_id'              => $agent?->id,
+      'from_number'           => $fromNumber ?? 'unknown',
+      'to_number'             => $toNumber ?? 'unknown',
+      'crm_client_mapping_id' => CrmPhoneMatcher::resolve($fromNumber, $toNumber),
+      'status'                => TelephonyCallStatus::RINGING,
+      'queued_at'             => now(),
     ]);
   }
 
@@ -141,6 +145,7 @@ class TelephonyWebhookController extends Controller
           'duration'           => $duration,
           'vendor_disposition' => $payload['vendor_disposition'] ?? $call->vendor_disposition,
         ]);
+        $this->logToCustomerFeed($call);
         break;
 
       case 'call.completed':
@@ -151,11 +156,31 @@ class TelephonyWebhookController extends Controller
           'vendor_disposition' => $payload['vendor_disposition'] ?? $call->vendor_disposition,
           'recording_url'      => $payload['recording_url'] ?? $call->recording_url,
         ]);
+        $this->logToCustomerFeed($call);
         break;
 
       default:
         Log::info('Telephony webhook: unrecognised event', ['event' => $event, 'call_id' => $call->call_uuid]);
     }
+  }
+
+  /**
+   * The telephony half of the Customer 360 feed for calls that never went
+   * through TelephonyCallController::disposition() at all -- there's no
+   * agent-in-HRX to wrap this call up, so it's logged with whatever the
+   * vendor itself reported. One last best-effort phone match first, in case
+   * 'to'/'from' weren't both known yet when the row was first created.
+   */
+  private function logToCustomerFeed(TelephonyCall $call): void
+  {
+    if (!$call->crm_client_mapping_id) {
+      $call->crm_client_mapping_id = CrmPhoneMatcher::resolve($call->from_number, $call->to_number);
+      if ($call->crm_client_mapping_id) {
+        $call->save();
+      }
+    }
+
+    CrmClientActivity::logForCall($call, $call->agent);
   }
 
   private function mapEndedBy(?string $raw): ?CallEndedBy

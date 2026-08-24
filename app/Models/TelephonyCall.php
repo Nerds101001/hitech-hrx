@@ -41,6 +41,7 @@ class TelephonyCall extends Model
     'redial_of_call_uuid',
     'idempotency_key',
     'raw_vendor_response',
+    'crm_client_mapping_id',
     'created_by_id',
     'updated_by_id',
     'tenant_id',
@@ -67,6 +68,11 @@ class TelephonyCall extends Model
   public function redialOf()
   {
     return $this->belongsTo(self::class, 'redial_of_call_uuid', 'call_uuid');
+  }
+
+  public function crmClientMapping()
+  {
+    return $this->belongsTo(CrmClientMapping::class);
   }
 
   /**

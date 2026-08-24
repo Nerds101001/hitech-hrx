@@ -819,6 +819,8 @@ Route::middleware([
             Route::get('/sales-report/targets/export', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'exportTargetAchievement'])->name('pipeline.targets.export');
             Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
+            Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
+            Route::post('/sales-report/resolve-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveCrmMapping'])->name('pipeline.resolve-crm-mapping');
 
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
@@ -889,6 +891,27 @@ Route::middleware([
                 Route::get('/search', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'searchCrm'])->name('search');
                 Route::get('/debug-crm', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'debugCrm'])->name('debug');
             });
+
+            // Customer 360 -- team/contacts/activity feed. Scoped INSIDE the
+            // controller (canViewMapping()) exactly like index()/employeeClients()
+            // above: the assigned salesperson/ccare/newbiz/billing/finance may
+            // manage their own account's contacts and post activity, without
+            // needing the admin-level reassign/delete permission above.
+            Route::prefix('{mapping}/contacts')->group(function () {
+                Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'storeContact'])->name('contacts.store');
+            });
+            Route::prefix('contacts/{id}')->group(function () {
+                Route::put('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'updateContact'])->name('contacts.update');
+                Route::delete('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'destroyContact'])->name('contacts.destroy');
+            });
+            Route::prefix('{mapping}/activities')->group(function () {
+                Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'storeActivity'])->name('activities.store');
+            });
+            Route::post('activities/{id}/complete-follow-up', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'completeFollowUp'])->name('activities.complete-follow-up');
+
+            // Kept last: a bare GET /{id} would otherwise shadow the specific
+            // single-segment routes above (/search, /sync-status, /debug-crm).
+            Route::get('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'show'])->name('show');
         });
 
 

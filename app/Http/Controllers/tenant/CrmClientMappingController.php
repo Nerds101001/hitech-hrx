@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers\tenant;
 
+use App\Enums\CrmActivityType;
 use App\Http\Controllers\Controller;
+use App\Models\CrmClientActivity;
+use App\Models\CrmClientContact;
 use App\Models\CrmClientMapping;
 use App\Models\User;
 use App\Services\CrmClientService;
@@ -542,5 +545,179 @@ class CrmClientMappingController extends Controller
             });
 
         return response()->json($mappings);
+    }
+
+    /**
+     * Same visibility rule as index(): canManageAll() sees anything, everyone
+     * else only accounts where they hold one of the 5 roles (their own
+     * allowed set, exactly as SalesScope::viewIds computes it for the list).
+     */
+    protected function canViewMapping(CrmClientMapping $mapping, Request $request): bool
+    {
+        if ($this->canManageAll()) {
+            return true;
+        }
+        $allowed = \App\Support\SalesScope::viewIds(Auth::user(), $request, 'salesperson_id');
+        if ($allowed === null) {
+            return true;
+        }
+        return in_array($mapping->salesperson_id, $allowed, true)
+            || in_array($mapping->ccare_id, $allowed, true)
+            || in_array($mapping->new_biz_id, $allowed, true)
+            || in_array($mapping->billing_id, $allowed, true)
+            || in_array($mapping->finance_id, $allowed, true);
+    }
+
+    /**
+     * Customer 360 — team, contacts, and the call-linked activity feed.
+     * Activities are paginated (20/page): a long-lived account can
+     * accumulate one row per dispositioned call and this must never become
+     * an unpaginated, ever-growing fetch.
+     */
+    public function show(Request $request, $id)
+    {
+        $mapping = CrmClientMapping::with(['salesperson', 'ccare', 'newBiz', 'billing', 'finance'])->findOrFail($id);
+
+        if (!$this->canViewMapping($mapping, $request)) {
+            abort(403);
+        }
+
+        $contacts = $mapping->contacts()->orderByDesc('is_primary')->orderBy('name')->get();
+
+        $activities = $mapping->activities()
+            ->with([
+                'createdBy:id,first_name,last_name',
+                'followUpAssignedTo:id,first_name,last_name',
+                'telephonyCall:id,from_number,to_number,duration,vendor_disposition',
+            ])
+            ->paginate(20)
+            ->withQueryString();
+
+        $openFollowUps = $mapping->activities()
+            ->where('needs_follow_up', true)
+            ->whereNull('follow_up_completed_at')
+            ->with('followUpAssignedTo:id,first_name,last_name')
+            ->orderBy('follow_up_due_at')
+            ->get();
+
+        return view('tenant.crm-clients.show', compact('mapping', 'contacts', 'activities', 'openFollowUps'));
+    }
+
+    /**
+     * Contact CRUD -- the customer's own purchase/finance/accounts/admin
+     * people. Same visibility gate as show(); the mapping is always reached
+     * through its own id, never the contact's, so a contact can't be edited
+     * without first proving access to the account it belongs to.
+     */
+    public function storeContact(Request $request, $mappingId)
+    {
+        $mapping = CrmClientMapping::findOrFail($mappingId);
+        if (!$this->canViewMapping($mapping, $request)) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:255'],
+            'role'        => ['required', 'in:purchase,finance,accounts,admin,other'],
+            'email'       => ['nullable', 'email', 'max:255'],
+            'phone'       => ['nullable', 'string', 'max:30'],
+            'is_primary'  => ['nullable', 'boolean'],
+            'notes'       => ['nullable', 'string'],
+        ]);
+
+        $contact = CrmClientContact::create($data + [
+            'crm_client_mapping_id' => $mapping->id,
+            'is_primary'            => $request->boolean('is_primary'),
+            'created_by_id'         => Auth::id(),
+            'updated_by_id'         => Auth::id(),
+            'tenant_id'             => $mapping->tenant_id,
+        ]);
+
+        return response()->json(['success' => true, 'contact' => $contact]);
+    }
+
+    public function updateContact(Request $request, $id)
+    {
+        $contact = CrmClientContact::with('crmClientMapping')->findOrFail($id);
+        if (!$this->canViewMapping($contact->crmClientMapping, $request)) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:255'],
+            'role'        => ['required', 'in:purchase,finance,accounts,admin,other'],
+            'email'       => ['nullable', 'email', 'max:255'],
+            'phone'       => ['nullable', 'string', 'max:30'],
+            'is_primary'  => ['nullable', 'boolean'],
+            'notes'       => ['nullable', 'string'],
+        ]);
+
+        $contact->update($data + [
+            'is_primary'    => $request->boolean('is_primary'),
+            'updated_by_id' => Auth::id(),
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    public function destroyContact(Request $request, $id)
+    {
+        $contact = CrmClientContact::with('crmClientMapping')->findOrFail($id);
+        if (!$this->canViewMapping($contact->crmClientMapping, $request)) {
+            abort(403);
+        }
+
+        $contact->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Manual comment on the activity feed (auto-logged calls are created by
+     * TelephonyCallService::disposition() / TelephonyWebhookController, not
+     * here).
+     */
+    public function storeActivity(Request $request, $mappingId)
+    {
+        $mapping = CrmClientMapping::findOrFail($mappingId);
+        if (!$this->canViewMapping($mapping, $request)) {
+            abort(403);
+        }
+
+        $request->validate([
+            'body'             => ['required', 'string'],
+            'needs_follow_up'  => ['nullable', 'boolean'],
+            'follow_up_due_at' => ['nullable', 'date'],
+        ]);
+
+        $needsFollowUp = $request->boolean('needs_follow_up');
+
+        $activity = CrmClientActivity::create([
+            'crm_client_mapping_id'    => $mapping->id,
+            'type'                     => CrmActivityType::COMMENT,
+            'body'                     => $request->body,
+            'needs_follow_up'          => $needsFollowUp,
+            'follow_up_due_at'         => $needsFollowUp ? $request->follow_up_due_at : null,
+            'follow_up_assigned_to_id' => $needsFollowUp ? Auth::id() : null,
+            'created_by_id'            => Auth::id(),
+            'tenant_id'                => $mapping->tenant_id,
+        ]);
+
+        return response()->json([
+            'success'  => true,
+            'activity' => $activity->load(['createdBy:id,first_name,last_name', 'followUpAssignedTo:id,first_name,last_name']),
+        ]);
+    }
+
+    public function completeFollowUp(Request $request, $id)
+    {
+        $activity = CrmClientActivity::with('crmClientMapping')->findOrFail($id);
+        if (!$this->canViewMapping($activity->crmClientMapping, $request)) {
+            abort(403);
+        }
+
+        $activity->update(['follow_up_completed_at' => now()]);
+
+        return response()->json(['success' => true]);
     }
 }

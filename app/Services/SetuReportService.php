@@ -292,7 +292,7 @@ class SetuReportService
      *
      * Setu (from Tally) is the source of truth for both values and names, so a
      * customer whose name is IDENTICAL after safe normalisation (see
-     * normalizePartyName — `&`↔`AND`, punctuation, case only; distinguishing
+     * App\Support\NameMatcher::normalize — `&`↔`AND`, punctuation, case only; distinguishing
      * tokens like Unit I/II, G-05, (N), SEZ survive) is treated as certainly
      * the same entity, and on `$overwrite` its blank months are filled, its
      * differing months are corrected to Setu's figure, and its stored name is
@@ -340,7 +340,7 @@ class SetuReportService
             ->where('is_locked', true)
             ->with('months')
             ->get();
-        $existingByNorm = $existingList->keyBy(fn($p) => self::normalizePartyName($p->party_name));
+        $existingByNorm = $existingList->keyBy(fn($p) => \App\Support\NameMatcher::normalize($p->party_name));
         $tenantId = optional($existingList->first())->tenant_id;
 
         $blankFills = []; $overwrites = []; $renames = []; $newCustomers = []; $reviewItems = [];
@@ -353,7 +353,7 @@ class SetuReportService
             if (!array_filter($months)) {
                 continue; // no non-zero Setu data in this period — nothing to reconcile
             }
-            $pipeline = $existingByNorm->get(self::normalizePartyName($customerName));
+            $pipeline = $existingByNorm->get(\App\Support\NameMatcher::normalize($customerName));
 
             if (!$pipeline) {
                 // No exact match. If a SIMILAR existing row exists, it needs a
@@ -500,42 +500,16 @@ class SetuReportService
      */
     private function fuzzyCandidates(string $setuName, $existingList): array
     {
-        $target = self::normalizePartyName($setuName);
-        if ($target === '') {
-            return [];
-        }
-        $scored = [];
-        foreach ($existingList as $p) {
-            $norm = self::normalizePartyName($p->party_name);
-            if ($norm === '') {
-                continue;
-            }
-            similar_text($target, $norm, $pct);
-            if ($pct >= self::FUZZY_FLOOR) {
-                $scored[] = [
-                    'pipeline_id' => $p->id,
-                    'party_name' => $p->party_name,
-                    'currentTotal' => round((float) $p->months->sum('sale_amount'), 3),
-                    'score' => round($pct, 1),
-                ];
-            }
-        }
-        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
-        return array_slice($scored, 0, 5);
-    }
+        $candidates = $existingList->map(fn($p) => [
+            'label' => $p->party_name,
+            'pipeline_id' => $p->id,
+            'party_name' => $p->party_name,
+            'currentTotal' => round((float) $p->months->sum('sale_amount'), 3),
+        ])->all();
 
-    private static function normalizePartyName(string $s): string
-    {
-        $s = mb_strtoupper($s);
-        // Unify "&" with the word "AND" BEFORE stripping non-alphanumerics.
-        // Without this, "NEXA WELD & FLUX" -> "&" deleted -> "NEXAWELDFLUX"
-        // but "Nexa Weld And Flux" -> "NEXAWELDANDFLUX" — the same customer
-        // failing to match purely on & vs AND. Deliberately narrow: this is
-        // the only "safe" spelling fix. It does NOT touch distinguishing
-        // tokens (Unit I/II, G-05, (N), SEZ, -Pune, Phalton, -Old), which
-        // survive as-is so genuinely different sub-entities never collapse.
-        $s = preg_replace('/&/', ' AND ', $s);
-        $s = preg_replace('/\b(PVT|PRIVATE|LTD|LIMITED|LMT|CO|COMPANY|CORPORATION|INDUSTRIES|IND|MFG|INDIA)\b/', ' ', $s);
-        return preg_replace('/[^A-Z0-9]/', '', $s);
+        $matches = \App\Support\NameMatcher::bestMatches($setuName, $candidates, self::FUZZY_FLOOR, 5);
+
+        // Drop the internal 'label' key -- callers only expect the shape above.
+        return array_map(fn($m) => array_diff_key($m, ['label' => null]), $matches);
     }
 }

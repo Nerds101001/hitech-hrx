@@ -239,7 +239,7 @@
 
                             {{-- Client Name --}}
                             <td class="ps-4 py-2">
-                                <div class="fw-semibold text-dark" style="font-size:0.88rem;">{{ $map->crm_company_name }}</div>
+                                <a href="{{ route('crm-clients.show', $map->id) }}" class="fw-semibold text-dark text-decoration-none" style="font-size:0.88rem;">{{ $map->crm_company_name }}</a>
                                 @if($map->crm_city)
                                 <small class="text-muted d-block mt-1" style="font-size:0.75rem;">
                                     <i class="bx bx-map-pin"></i> {{ $map->crm_city }}{{ $map->crm_state ? ', '.$map->crm_state : '' }}
@@ -319,6 +319,9 @@
                             {{-- Actions --}}
                             <td class="py-2 text-center pe-4">
                                 <div class="d-flex gap-1 justify-content-center">
+                                    <a href="{{ route('crm-clients.show', $map->id) }}" class="btn btn-sm btn-icon btn-outline-success rounded-circle" title="View 360">
+                                        <i class="bx bx-detail"></i>
+                                    </a>
                                     <button class="btn btn-sm btn-icon btn-outline-primary rounded-circle"
                                         title="Edit"
                                         onclick="openEditModal({{ $map->id }},{{ $map->crm_company_code }},'{{ addslashes($map->crm_company_name) }}','{{ addslashes($map->crm_city ?? '') }}','{{ addslashes($map->crm_state ?? '') }}','{{ addslashes($map->crm_stage ?? '') }}',{{ $map->salesperson_id ?? 'null' }},{{ $map->ccare_id ?? 'null' }},{{ $map->new_biz_id ?? 'null' }},{{ $map->billing_id ?? 'null' }},{{ $map->finance_id ?? 'null' }},'{{ addslashes($map->notes ?? '') }}')">

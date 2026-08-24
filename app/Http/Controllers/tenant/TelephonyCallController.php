@@ -96,11 +96,16 @@ class TelephonyCallController extends Controller
       return response()->json(['error' => 'invalid_to', 'message' => "'to' must be 10 to 15 digits."], 422);
     }
 
+    $request->validate([
+      'crm_client_mapping_id' => ['nullable', 'integer', 'exists:crm_client_mappings,id'],
+    ]);
+
     $call = $this->calls->initiate(
       $request->user(),
       $to,
       $request->input('campaign_id') ?: null,
-      $request->input('idempotency_key') ?: null
+      $request->input('idempotency_key') ?: null,
+      $request->input('crm_client_mapping_id') ?: null
     );
 
     return response()->json($call->toContract(), 201);
@@ -154,8 +159,20 @@ class TelephonyCallController extends Controller
       return response()->json(['error' => 'invalid_code', 'message' => "'code' is required."], 422);
     }
 
+    $request->validate([
+      'needs_follow_up' => ['nullable', 'boolean'],
+      'follow_up_due_at' => ['nullable', 'date'],
+    ]);
+
     return response()->json(
-      $this->calls->disposition($call, $code, $request->input('notes') ?: null, $request->user())->toContract()
+      $this->calls->disposition(
+        $call,
+        $code,
+        $request->input('notes') ?: null,
+        $request->user(),
+        $request->boolean('needs_follow_up'),
+        $request->input('follow_up_due_at') ?: null
+      )->toContract()
     );
   }
 

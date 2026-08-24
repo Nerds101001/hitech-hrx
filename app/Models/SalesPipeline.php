@@ -86,4 +86,11 @@ class SalesPipeline extends Model implements AuditableContract
     {
         return $this->hasMany(SalesPipelineExtraRep::class);
     }
+
+    // The CRM.API-synced customer this row was reconciled against, if any —
+    // see SalesPipelineController::syncCrmMapping()/resolveCrmMapping().
+    public function crmClientMapping()
+    {
+        return $this->belongsTo(CrmClientMapping::class);
+    }
 }
