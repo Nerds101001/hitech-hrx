@@ -29,7 +29,13 @@
         <div class="ctc-head">
           <div>
             <div class="ctc-title"><i class="bx bx-phone-call me-1"></i> Click to Call</div>
-            <div class="ctc-sub">Agent {{ $__ctcAgent['agent'] }} · campaign {{ $__ctcAgent['campaign'] }}</div>
+            <div class="ctc-sub">
+              @if(($__ctcAgent['vendor'] ?? null) === 'convoque')
+                Extension {{ $__ctcAgent['extension'] }}
+              @else
+                Agent {{ $__ctcAgent['agent'] }} · campaign {{ $__ctcAgent['campaign'] }}
+              @endif
+            </div>
           </div>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
