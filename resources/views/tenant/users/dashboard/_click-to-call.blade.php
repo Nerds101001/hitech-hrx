@@ -58,21 +58,31 @@
               <i class="bx bx-phone-off me-1"></i> Hang Up
             </button>
 
-            <hr class="my-3">
+            {{--
+              Convoque has no disposition concept at all — confirmed against
+              AKOM's own API doc, every endpoint checked, nothing like
+              CentroVision's DISPOSE action exists. Not "not wired up yet"
+              the way Hang Up currently is: this is permanent for this
+              vendor, so the section is hidden rather than shown empty with
+              a "Loading..." that never resolves to anything.
+            --}}
+            @if(($__ctcAgent['vendor'] ?? null) !== 'convoque')
+              <hr class="my-3">
 
-            <label class="form-label fw-bold small text-uppercase text-muted mb-1">Disposition</label>
-            <select id="ctcDisposition" class="form-select ctc-select">
-              <option value="">Loading...</option>
-            </select>
+              <label class="form-label fw-bold small text-uppercase text-muted mb-1">Disposition</label>
+              <select id="ctcDisposition" class="form-select ctc-select">
+                <option value="">Loading...</option>
+              </select>
 
-            <div id="ctcSubWrap" class="mt-2 d-none">
-              <label class="form-label fw-bold small text-uppercase text-muted mb-1">Sub-disposition</label>
-              <select id="ctcSubDisposition" class="form-select ctc-select"></select>
-            </div>
+              <div id="ctcSubWrap" class="mt-2 d-none">
+                <label class="form-label fw-bold small text-uppercase text-muted mb-1">Sub-disposition</label>
+                <select id="ctcSubDisposition" class="form-select ctc-select"></select>
+              </div>
 
-            <button type="button" id="ctcDispose" class="ctc-btn ctc-dispose">
-              <i class="bx bx-check-circle me-1"></i> Save Disposition
-            </button>
+              <button type="button" id="ctcDispose" class="ctc-btn ctc-dispose">
+                <i class="bx bx-check-circle me-1"></i> Save Disposition
+              </button>
+            @endif
           </div>
         </div>
       </div>
@@ -262,7 +272,7 @@
 
         if (res.data.result === 'success') {
           live.classList.remove('d-none');
-          loadDispositions();
+          if (dispSel) loadDispositions();
         }
       }
 
@@ -299,8 +309,12 @@
 
       dialBtn.addEventListener('click', dial);
       hangBtn.addEventListener('click', hangup);
-      dispBtn.addEventListener('click', dispose);
-      dispSel.addEventListener('change', function () { loadSubDispositions(this.value); });
+      // Absent entirely for a dialer with no disposition concept (Convoque) —
+      // the markup above is conditional on that. Everything past here must
+      // still run for that agent, so these two are null-checked rather than
+      // assumed present like the rest of the panel.
+      if (dispBtn) dispBtn.addEventListener('click', dispose);
+      if (dispSel) dispSel.addEventListener('change', function () { loadSubDispositions(this.value); });
       phone.addEventListener('keydown', function (e) { if (e.key === 'Enter') dial(); });
     })();
   </script>

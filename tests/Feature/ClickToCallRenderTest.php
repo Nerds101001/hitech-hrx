@@ -72,4 +72,48 @@ class ClickToCallRenderTest extends TestCase
         $this->assertStringContainsString('Extension 217', $html);
         $this->assertStringNotContainsString('Undefined array key', $html);
     }
+
+    /**
+     * Reported live: Convoque has no disposition concept at the API level at
+     * all (confirmed against the vendor's own doc), so the dropdown showed
+     * up permanently empty for Meenu — not broken, but looked it. Hidden for
+     * a Convoque agent entirely rather than shown with nothing in it; Hang Up
+     * stays, since that one is still pending, not permanently unsupported.
+     */
+    public function test_the_disposition_section_is_hidden_for_a_convoque_agent(): void
+    {
+        Mail::fake();
+        $meenu = User::where('email', 'newbiz@hitechgroup.in')->first();
+        if (!$meenu) {
+            $meenu = User::create([
+                'first_name' => 'Meenu', 'last_name' => 'QA',
+                'email'      => 'newbiz@hitechgroup.in',
+                'code'       => 'MEENUQA' . random_int(100000, 999999),
+                'password'   => \Illuminate\Support\Facades\Hash::make('secret-not-used'),
+                'status'     => 'active',
+            ]);
+        }
+        if (!$meenu->hasAnyRole(['employee', 'office_employee', 'manager', 'admin', 'hr'])) {
+            $meenu->assignRole('employee');
+        }
+
+        $html = $this->actingAs($meenu)->get('/user/dashboard')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('id="ctcDisposition"', $html);
+        $this->assertStringNotContainsString('id="ctcDispose"', $html);
+        $this->assertStringContainsString('id="ctcHangup"', $html, 'Hang Up should still show — it is pending, not permanently unsupported');
+        $this->assertStringContainsString('id="ctcDial"', $html);
+    }
+
+    /** The discriminator: Mehak's disposition section — genuinely supported by CentroVision — must still show. */
+    public function test_the_disposition_section_still_shows_for_the_centrovision_agent(): void
+    {
+        Mail::fake();
+        $agent = User::where('email', 'bhatiamehak52@gmail.com')->firstOrFail();
+
+        $html = $this->actingAs($agent)->get('/user/dashboard')->assertOk()->getContent();
+
+        $this->assertStringContainsString('id="ctcDisposition"', $html);
+        $this->assertStringContainsString('id="ctcDispose"', $html);
+    }
 }
