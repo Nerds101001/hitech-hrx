@@ -457,11 +457,16 @@ class UserDashboardController extends Controller
             $teamAtt7 = [];
             try {
                 $teamHeadcount = max(1, count($teamMemberIds));
+                // One grouped query instead of 7 identical-shaped per-day queries.
+                $teamAtt7RangeStart = now()->subDays(6)->startOfDay();
+                $teamAtt7ByDate = Attendance::whereIn('user_id', $teamMemberIds)
+                    ->where('check_in_time', '>=', $teamAtt7RangeStart)
+                    ->selectRaw('DATE(check_in_time) as d, COUNT(DISTINCT user_id) as c')
+                    ->groupBy('d')
+                    ->pluck('c', 'd');
                 for ($i = 6; $i >= 0; $i--) {
                     $d = now()->subDays($i);
-                    $present = Attendance::whereIn('user_id', $teamMemberIds)
-                        ->whereDate('check_in_time', $d->toDateString())
-                        ->distinct('user_id')->count('user_id');
+                    $present = (int) ($teamAtt7ByDate[$d->toDateString()] ?? 0);
                     $teamAtt7[] = ['label' => $d->format('D'),
                                    'pct' => (int) round($present / $teamHeadcount * 100)];
                 }

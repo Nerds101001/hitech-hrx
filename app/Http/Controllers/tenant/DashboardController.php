@@ -559,16 +559,23 @@ class DashboardController extends Controller
         $attPct = $active > 0 ? round($presentUsersCount / $active * 100, 1) : 0;
 
         // --- Attendance over the last 7 days (today alone is frequently empty) ---
+        // One grouped query instead of 7 identical-shaped per-day queries —
+        // was showing up 8x in the dashboard's own query log (7 here + the
+        // $presentUsersCount query above sharing the same shape).
         $att7 = []; $att7pctSum = 0;
         try {
+          $att7RangeStart = now()->subDays(6)->startOfDay();
+          // Same "present" definition as the KPI card above — previously the
+          // chart counted ANY attendance row while the card counted only
+          // status='present', so the two disagreed on the same screen.
+          $att7ByDate = Attendance::where('check_in_time', '>=', $att7RangeStart)
+            ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
+            ->selectRaw('DATE(check_in_time) as d, COUNT(DISTINCT user_id) as c')
+            ->groupBy('d')
+            ->pluck('c', 'd');
           for ($i = 6; $i >= 0; $i--) {
             $d = now()->subDays($i);
-            // Same "present" definition as the KPI card above — previously the
-            // chart counted ANY attendance row while the card counted only
-            // status='present', so the two disagreed on the same screen.
-            $present = Attendance::whereDate('check_in_time', $d->toDateString())
-              ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
-              ->distinct('user_id')->count('user_id');
+            $present = (int) ($att7ByDate[$d->toDateString()] ?? 0);
             $pct = $active > 0 ? (int) round($present / $active * 100) : 0;
             $att7[] = ['label' => $d->format('D'), 'pct' => $pct, 'present' => $present];
             $att7pctSum += $pct;
@@ -866,12 +873,19 @@ class DashboardController extends Controller
             return (object) ['user' => $m, 'deploy_status' => $status];
         });
 
-        // Team attendance over the last 7 days (present % of team per day)
+        // Team attendance over the last 7 days (present % of team per day) --
+        // one grouped query instead of 7 identical-shaped per-day queries.
         $teamAtt7 = [];
         try {
+            $teamAtt7RangeStart = now()->subDays(6)->startOfDay();
+            $teamAtt7ByDate = Attendance::whereIn('user_id', $teamMemberIds)
+                ->where('check_in_time', '>=', $teamAtt7RangeStart)
+                ->selectRaw('DATE(check_in_time) as d, COUNT(DISTINCT user_id) as c')
+                ->groupBy('d')
+                ->pluck('c', 'd');
             for ($i = 6; $i >= 0; $i--) {
                 $d = now()->subDays($i);
-                $p = Attendance::whereIn('user_id', $teamMemberIds)->whereDate('check_in_time', $d->toDateString())->distinct('user_id')->count('user_id');
+                $p = (int) ($teamAtt7ByDate[$d->toDateString()] ?? 0);
                 $teamAtt7[] = ['label' => $d->format('D'), 'pct' => $active > 0 ? (int) round($p / $active * 100) : 0];
             }
         } catch (\Throwable $e) {
