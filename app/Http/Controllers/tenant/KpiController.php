@@ -18,10 +18,33 @@ use Illuminate\Support\Facades\Log;
 
 class KpiController extends Controller
 {
-    /** Sales-department users are excluded from DWM-based KPI/KRA. */
+    /**
+     * Sales-floor users are excluded from DWM-based KPI/KRA -- they're
+     * scored through the department-template auto-sourced KPIs instead
+     * (templates(), which covers every department including these).
+     *
+     * Matches the same substring set already used elsewhere for "is this a
+     * sales-floor department" (SalesScope::isRep(), config/hr_notifications.
+     * php's biometric_exempt_departments) rather than a plain '%Sales%'
+     * LIKE, which missed "New Biz" outright -- confirmed live: a New Biz
+     * employee showed up in this screen's picker. Nobody had actually
+     * assigned them a DWM/KRA through it yet, but the gap was real.
+     */
     private function salesDepartmentIds(): array
     {
-        return Department::where('name', 'like', '%Sales%')->pluck('id')->all();
+        $patterns = ['sales', 'new biz', 'new business', 'customer care'];
+
+        return Department::all(['id', 'name'])
+            ->filter(function ($d) use ($patterns) {
+                $name = strtolower($d->name);
+                foreach ($patterns as $p) {
+                    if (str_contains($name, $p)) {
+                        return true;
+                    }
+                }
+                return false;
+            })
+            ->pluck('id')->all();
     }
 
     /**

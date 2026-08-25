@@ -223,12 +223,24 @@ class KpiAutoSourceService
     }
 
     /**
-     * Sale ÷ target for one Kingo/Bingo target column, as a %. Deliberately
-     * salesperson_id ONLY — not self::book()'s broader ccare/new_biz reach —
-     * because this must match SalesPipelineController@index's
-     * $targetAchieversByMonth (the actual Kingo/Bingo scorecard) exactly, or
-     * a KPI could say "achieved" while the scorecard everyone actually looks
-     * at says otherwise.
+     * Sale ÷ target for one Kingo/Bingo target column, as a %.
+     *
+     * Actual sales now use self::book()'s full reach (salesperson_id OR
+     * new_biz_id OR ccare_id), not salesperson_id alone. That used to be
+     * deliberate, to match SalesPipelineController@index's
+     * $targetAchieversByMonth (the real Kingo/Bingo scorecard popup)
+     * exactly — but that popup's own achievement query is ITSELF
+     * salesperson_id-only, and New Biz's whole "Kingo Achievement" KPI
+     * (their single largest, 30 of ~120 marks) depends on this method:
+     * salesperson_targets carries a real monthly target for New Biz staff
+     * too, but their sales are recorded under new_biz_id, not
+     * salesperson_id, so the narrower join scored every one of them a
+     * permanent, unconditional 0% regardless of real performance (confirmed
+     * live 2026-08-25 — 183 real deals, 12 months of real targets, 0.0
+     * every time). Broadening this doesn't create a case where the KPI and
+     * the popup disagree on two different non-zero numbers for the same
+     * person: the popup doesn't measure CCare/New Biz achievement at all
+     * today, so this only moves them from "wrong zero" to "real number".
      *
      * Null when no target is set for the period — scoring against a zero
      * target would read as "0% achieved" when really nothing was asked of
@@ -247,7 +259,11 @@ class KpiAutoSourceService
 
         $actual = (float) DB::table('sales_pipeline_months as m')
             ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
-            ->where('sp.salesperson_id', $userId)
+            ->where(function ($q) use ($userId) {
+                $q->where('sp.salesperson_id', $userId)
+                  ->orWhere('sp.new_biz_id', $userId)
+                  ->orWhere('sp.ccare_id', $userId);
+            })
             ->where('sp.is_locked', true)
             ->whereNull('sp.deleted_at')
             ->whereIn('m.month_year', self::monthKeys($start, $end))
