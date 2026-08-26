@@ -15,9 +15,17 @@ class AutoRejectLeavesCommand extends Command
     {
         $expiredTime = Carbon::now()->subHours(48);
         
+        /*
+         * No is_adjustment filter here. That flag is not a column on
+         * leave_requests and never has been - it is a presentation field on the
+         * in-memory rows LeaveHistoryService builds, marking a balance
+         * adjustment (sourced from the audits table) apart from a real request.
+         * Filtering on it threw 'Unknown column' and this command failed on
+         * every scheduled run, so no leave was ever auto-rejected. Every row in
+         * leave_requests is a real request, so no exclusion is needed.
+         */
         $expiredLeaves = LeaveRequest::where('status', 'pending')
             ->where('created_at', '<=', $expiredTime)
-            ->where('is_adjustment', false)
             ->get();
 
         $count = 0;
