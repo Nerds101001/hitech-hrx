@@ -430,7 +430,17 @@ function toggleYtLearnFields() {
     const sel = document.getElementById('ytVideoCategorySelect');
     const learnFields = document.getElementById('ytLearnFields');
     if (!sel || !learnFields) return;
-    const isLearn = sel.value === LEARN_CATEGORY;
+    // The category select's first option is Learn @ Hi Tech (lowest `order`
+    // in library_taxonomies), so it is the default value on every page load
+    // — including while the File Upload tab is the one showing. Gating only
+    // on the select's value made presenter_id/session_date required (and
+    // hidden, since they live inside the inactive video pane) for every
+    // plain file upload: the browser's native validation silently blocks
+    // the submit for a required-but-unfocusable field, with no error shown
+    // and no JS handler ever running. Must also check the video tab is the
+    // one actually active.
+    const youtubeTabActive = document.getElementById('youtubeTab')?.classList.contains('active');
+    const isLearn = sel.value === LEARN_CATEGORY && youtubeTabActive;
     learnFields.style.display = isLearn ? '' : 'none';
     learnFields.querySelectorAll('select, input').forEach(el => {
         if (isLearn) el.setAttribute('required', 'required');
@@ -443,6 +453,11 @@ document.addEventListener('DOMContentLoaded', function() {
     populateSelect(document.getElementById('ytVideoCategorySelect'), VIDEO_CATEGORIES);
     toggleBrandSection(); // set initial state
     toggleYtLearnFields();
+    // Re-check on every tab switch (manual click or openAddDocumentModal's
+    // programmatic .show()) so required doesn't stay stuck from whichever
+    // tab was active last.
+    document.querySelector('a[href="#fileTab"]')?.addEventListener('shown.bs.tab', toggleYtLearnFields);
+    document.querySelector('a[href="#youtubeTab"]')?.addEventListener('shown.bs.tab', toggleYtLearnFields);
 });
 
 function openAddModal(type, parentId = null) {
