@@ -49,7 +49,11 @@ Schedule::command('leave:grant-short-leave')->monthlyOn(1, '00:05');
 // resolving even before the recursion, since Artisan::command() defines
 // whatever name you give it rather than validating it against an existing
 // command.
-Schedule::command('leave:auto-reject-expired')->daily()->description('Auto-reject leave requests pending for more than 48 hours');
+// Disabled 2026-08-26 at the user's request: pending leave requests should
+// stay pending indefinitely for now rather than being auto-rejected after
+// 48 hours. The command class itself (AutoRejectLeavesCommand) is untouched
+// and can still be run manually via `artisan leave:auto-reject-expired`.
+// Schedule::command('leave:auto-reject-expired')->daily()->description('Auto-reject leave requests pending for more than 48 hours');
 Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce onboarding completion deadlines');
 Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
 Schedule::command('tasks:generate-recurring')->dailyAt('06:00')->description('Fire recurring task schedules due today');
