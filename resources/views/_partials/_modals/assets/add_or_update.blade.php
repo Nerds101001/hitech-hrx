@@ -18,10 +18,10 @@
           <input type="hidden" name="id" id="asset_id">
           <div class="row g-4">
             <div class="col-md-6 mb-2">
-              <label class="form-label form-label-hitech">Asset Name <span class="text-muted small">(optional)</span></label>
+              <label class="form-label form-label-hitech">Asset Name</label>
               <div class="input-group input-group-merge shadow-none">
                 <span class="input-group-text bg-transparent border-end-0"><i class="bx bx-package text-primary"></i></span>
-                <input type="text" id="asset_name" name="name" class="form-control form-control-hitech border-start-0 ps-0" placeholder="e.g. Dell Latitude 5420">
+                <input type="text" id="asset_name" name="name" class="form-control form-control-hitech border-start-0 ps-0" placeholder="e.g. Dell Latitude 5420" required>
               </div>
             </div>
             <div class="col-md-6 mb-2">

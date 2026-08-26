@@ -410,12 +410,23 @@
           processData: false,
           contentType: false,
           success: function(res) {
+            // A 422 validation failure still lands here (jQuery only routes
+            // to error() on network/4xx-thrown failures it recognises as
+            // such) - and the controller redirect fallback used to make
+            // even a hard failure resolve with a 200 HTML page. Check the
+            // payload instead of assuming any 2xx response means it saved.
+            if (!res || res.success === false) {
+              const msg = (res && res.message) || 'Failed to save asset';
+              Swal.fire({ icon: 'error', title: 'Error', text: msg });
+              return;
+            }
             $('#modalAddOrUpdateAsset').modal('hide');
-            Swal.fire({ icon: 'success', title: 'Success', text: 'Asset saved successfully' });
+            Swal.fire({ icon: 'success', title: 'Success', text: res.message || 'Asset saved successfully' });
             dt.draw();
           },
           error: function(err) {
-            Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to save asset' });
+            const msg = err.responseJSON?.message || 'Failed to save asset';
+            Swal.fire({ icon: 'error', title: 'Error', text: msg });
           }
         });
       });

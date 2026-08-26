@@ -99,6 +99,13 @@ class AssetController extends Controller
             ]);
 
             if ($validator->fails()) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $validator->errors()->first(),
+                        'errors' => $validator->errors(),
+                    ], 422);
+                }
                 return redirect()->back()
                     ->withErrors($validator)
                     ->withInput();
@@ -149,11 +156,25 @@ class AssetController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Asset created successfully!',
+                    'data' => $asset,
+                ]);
+            }
+
             return redirect()->route('assets.index')
                 ->with('success', 'Asset created successfully!');
 
         } catch (Exception $e) {
             Log::error('Asset creation failed: ' . $e->getMessage());
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to create asset. Please try again.',
+                ], 500);
+            }
             return redirect()->back()
                 ->with('error', 'Failed to create asset. Please try again.');
         }
@@ -215,6 +236,13 @@ class AssetController extends Controller
             ]);
 
             if ($validator->fails()) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $validator->errors()->first(),
+                        'errors' => $validator->errors(),
+                    ], 422);
+                }
                 return redirect()->back()
                     ->withErrors($validator)
                     ->withInput();
@@ -254,11 +282,25 @@ class AssetController extends Controller
                 'description' => $request->description,
             ]);
 
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Asset updated successfully!',
+                    'data' => $asset,
+                ]);
+            }
+
             return redirect()->route('assets.index')
                 ->with('success', 'Asset updated successfully!');
 
         } catch (Exception $e) {
             Log::error('Asset update failed: ' . $e->getMessage());
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update asset. Please try again.',
+                ], 500);
+            }
             return redirect()->back()
                 ->with('error', 'Failed to update asset. Please try again.');
         }
