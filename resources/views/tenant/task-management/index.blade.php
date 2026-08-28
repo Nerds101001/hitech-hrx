@@ -7,6 +7,7 @@
   @vite([
     'resources/assets/vendor/libs/select2/select2.scss',
     'resources/assets/vendor/libs/animate-css/animate.scss',
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
     'resources/assets/vendor/scss/pages/hitech-portal.scss',
   ])
 @endsection
@@ -18,7 +19,10 @@
        throws "$(...).select2 is not a function". select2.js explicitly
        imports the shared jquery chunk instead — the Employee Directory page
        uses this exact file and its select2 works correctly. --}}
-  @vite(['resources/assets/vendor/libs/select2/select2.js'])
+  @vite([
+    'resources/assets/vendor/libs/select2/select2.js',
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.js',
+  ])
 @endsection
 
 @section('page-style')
@@ -57,6 +61,42 @@
     font-size: .7rem;
     font-weight: 700;
     line-height: 1;
+  }
+
+  /* hitech-portal.scss puts `overflow: hidden !important` on every
+     .modal-content, which on a short mobile viewport can win the fight
+     against Bootstrap's own .modal-dialog-scrollable sizing for a form
+     this tall (title/description/priority/interval/due-date/two select2
+     pickers). Force the body's own scroll explicitly rather than relying
+     on that cascade. */
+  @media (max-width: 768px) {
+    #assignTaskModal .modal-dialog {
+      max-height: 100dvh;
+      margin: 0;
+    }
+    #assignTaskModal .modal-content {
+      max-height: 100dvh;
+    }
+    #assignTaskModal .modal-body {
+      overflow-y: auto !important;
+      max-height: calc(100dvh - 130px); /* header + footer are ~65px each */
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* .btn-hitech is forced to width:100% site-wide on mobile (see the
+       global @media block in hitech-portal.scss), which stacks Assign
+       above Cancel since Assign alone fills the row. Put both back on
+       one row here without touching that global rule. */
+    #assignTaskModal .modal-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .75rem;
+    }
+    #assignTaskModal .modal-footer .btn-hitech,
+    #assignTaskModal .modal-footer .btn-hitech-cancel {
+      width: 100%;
+      margin: 0;
+    }
   }
 </style>
 @endsection
