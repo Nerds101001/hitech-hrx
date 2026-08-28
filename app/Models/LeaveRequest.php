@@ -136,10 +136,40 @@ class LeaveRequest extends Model implements AuditableContract
                           }
                       }
                   } elseif ($leaveRequest->is_half_day) {
-                      // Same 0.5-day mechanics as any other half-day request —
-                      // only the attendance label differs, so WFH renders as
-                      // "WFH" everywhere instead of "Half Day" (owner spec).
-                      $attendanceStatus = (strtoupper($leaveTypeCode) === 'WFH') ? 'work_from_home' : 'half-Day';
+                      // Was missing the balance-deduction half of what the
+                      // short-leave and full-day branches on either side of
+                      // this one already do — a half-day leave picked its
+                      // attendance label and stopped there, never touching
+                      // $balance or $balanceChecked. So it never actually
+                      // deducted anything, and is_lwp (set below, only when
+                      // $balanceChecked) stayed frozen at whatever it was at
+                      // submission time forever, even for a leave type that
+                      // is genuinely paid. Same 0.5-day mechanics as any
+                      // other half-day request now — only the attendance
+                      // label differs, so WFH still renders as "WFH"
+                      // everywhere instead of "Half Day" (owner spec), and
+                      // never draws from a balance pool same as full-day WFH.
+                      if (strtoupper($leaveTypeCode) === 'WFH') {
+                          $attendanceStatus = 'work_from_home';
+                      } elseif ($isPaidType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
+                          $balanceChecked = true;
+                          $availableLegacy = $legacyBalance ? ((float)$legacyBalance->balance - (float)$legacyBalance->used) : 0.0;
+
+                          if ($availableBalance >= $decrement) {
+                              $balance->used += $decrement;
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'half-Day';
+                          } elseif ($legacyBalance && $availableLegacy >= $decrement) {
+                              $legacyBalance->used += $decrement;
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'half-Day';
+                          } else {
+                              $lwpDays += $decrement;
+                              $attendanceStatus = 'unpaid_leave';
+                          }
+                      } else {
+                          $attendanceStatus = 'half-Day';
+                      }
                   } else {
                       if ($isPaidType && !in_array($leaveTypeCode, $excludedPoolCodes)) {
                           $balanceChecked = true;

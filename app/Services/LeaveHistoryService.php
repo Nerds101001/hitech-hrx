@@ -120,7 +120,7 @@ class LeaveHistoryService
         // 3. Add Opening Balance Entries for Legacy Data
         foreach ($leaveBalances as $bal) {
             $currentBalance = (float)$bal->balance;
-            
+
             // Calculate sum of all recorded adjustments for this balance
             $recordedAdjustments = $adjustments->where('auditable_id', $bal->id)->sum(function($a) {
                 $old = (float)($a->old_values['balance'] ?? 0);
@@ -128,9 +128,24 @@ class LeaveHistoryService
                 return $new - $old;
             });
 
-            // Opening Balance = (Current + Used) - Sum(Recorded Adjustments)
-            // We must add 'used' because approved leave requests deduct from the balance without generating credit audits.
-            $openingBalance = ($currentBalance + (float)$bal->used) - $recordedAdjustments;
+            // A balance created on/after LEDGER_OPENS has its entire life inside
+            // the tracked period - every credit is a real audit row, and every
+            // debit is already its own separate Request-type entry from step 1
+            // above. Adding 'used' back in for one of those double-counts the
+            // exact same day: once as the correctly-tracked credit, again here
+            // as a phantom "opening balance" equal to whatever has since been
+            // used. Confirmed live - a Short Leave balance created 2026-08-01
+            // with one +1 credit audit and, weeks later, a genuine -1 deduction
+            // (its own Request line already in the ledger) manufactured a
+            // second, fake +1 "Earned for August 2026" line here on top of the
+            // real one. 'used' only belongs in this reconstruction for
+            // genuinely legacy balances that predate the tracked window, where
+            // it is the only way to recover leave already spent before audits
+            // existed to record it.
+            $isLegacyBalance = $bal->created_at && $bal->created_at->lt(Carbon::parse(self::LEDGER_OPENS));
+            $openingBalance = $isLegacyBalance
+                ? ($currentBalance + (float)$bal->used) - $recordedAdjustments
+                : $currentBalance - $recordedAdjustments;
 
             if (abs($openingBalance) > 0.001) {
                 $cfAmount = (float)($bal->carry_forward_last_year ?? 0);
@@ -159,7 +174,14 @@ class LeaveHistoryService
                     // Try to derive a month label from the balance creation date
                     $createdAt = $bal->created_at ?? Carbon::create(now()->year, 4, 1);
                     $monthLabel = $createdAt->format('F Y');
-                    $earnedNote = "Earned for {$monthLabel}";
+                    // Labelled as an actual opening balance, not "Earned" -
+                    // this is a reconstructed starting figure, not a real
+                    // accrual event, and showing it as "Earned for {month}"
+                    // is exactly what made it indistinguishable from a real
+                    // monthly credit for the same month.
+                    $earnedNote = $isLegacyBalance
+                        ? "Opening Balance as of {$monthLabel}"
+                        : "Earned for {$monthLabel}";
 
                     $history->push((object)[
                         'id'         => 'SYS-OPEN-' . $bal->id,

@@ -200,7 +200,17 @@
                                 }
                                 $amountDisplay = ($amt > 0 ? '+' : '') . number_format($amt, 1);
                                 $amountClass   = $amt > 0 ? 'text-success' : 'text-danger';
+                                // Every credit/adjustment row used to render as
+                                // plain, unlabelled "Earned for August 2026" -
+                                // indistinguishable from any other leave type's
+                                // credit for the same month, which is exactly
+                                // what made a genuine ALP accrual and an
+                                // erroneous Short Leave accrual on the same day
+                                // look like duplicate entries of each other.
                                 $reason = $notes ?: 'System Adjustment';
+                                if ($item->leave_type ?? null) {
+                                    $reason = $item->leave_type . ' — ' . $reason;
+                                }
                                 $isBackdated = false;
                             }
                             $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : ($item->status ?? 'Processed');
