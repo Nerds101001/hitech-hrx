@@ -56,9 +56,21 @@
             return $b->leaveType && $b->leaveType->is_paid && !in_array(strtoupper($b->leaveType->code), $excludedCodes);
         });
 
-        $totalAllocated = $poolableBalances->sum('balance') + $poolableBalances->sum('used');
+        // balance is a running total of everything ever credited; used is a
+        // running total of everything ever consumed - a deduction only ever
+        // increments used, it never decrements balance (see LeaveRequest's
+        // approval hook: $balance->used += $decrement, balance itself is
+        // untouched). So Allocated is balance alone, and Available is
+        // balance minus used - the same shape the Short Leave card below
+        // already gets right. This used to read Allocated as balance+used
+        // (double-counting whatever had been used) and Available as balance
+        // alone (ignoring used entirely) - invisible for as long as used
+        // stayed at 0, which is exactly what the half-day-never-deducts bug
+        // (fixed separately) made true for far more employees than it
+        // should have been.
+        $totalAllocated = $poolableBalances->sum('balance');
         $totalUsed      = $poolableBalances->sum('used');
-        $available      = $poolableBalances->sum('balance');
+        $available      = $totalAllocated - $totalUsed;
 
         // Keep these for the modal
         $remainingPL    = $available;
