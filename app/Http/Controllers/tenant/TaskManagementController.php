@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\TaskSchedule;
 use App\Models\User;
 use App\Notifications\Task\TaskAssigned;
+use App\Notifications\Task\TaskObjection;
 use App\Services\TaskScheduleService;
 use App\Support\TaskAccess;
 use Illuminate\Http\Request;
@@ -326,5 +327,112 @@ class TaskManagementController extends Controller
         $task->delete();
 
         return response()->json(['success' => true, 'message' => 'Task deleted successfully.']);
+    }
+
+    /** Delete every task in $request->ids this user is actually allowed to manage; silently skip the rest. */
+    public function bulkDestroy(Request $request)
+    {
+        $validated = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer',
+        ]);
+
+        $user = auth()->user();
+        $tasks = Task::whereIn('id', $validated['ids'])->get();
+
+        $deleted = 0;
+        $skipped = 0;
+        foreach ($tasks as $task) {
+            if (TaskAccess::canManage($user, $task)) {
+                $task->delete();
+                $deleted++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        $message = $deleted . ' task(s) deleted.';
+        if ($skipped > 0) {
+            $message .= " {$skipped} skipped (outside your team).";
+        }
+
+        return response()->json(['success' => $deleted > 0, 'message' => $message, 'deleted' => $deleted]);
+    }
+
+    /** Edit an existing task's own details — never who it belongs to (use reassignment for that, not this). */
+    public function update(Request $request, $id)
+    {
+        $task = Task::findOrFail($id);
+
+        if (!TaskAccess::canManage(auth()->user(), $task)) {
+            abort(403, 'You cannot manage a task outside your team.');
+        }
+
+        $validated = $request->validate([
+            'title'       => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'due_date'    => 'nullable|date',
+            'priority'    => 'nullable|in:' . implode(',', Task::PRIORITIES),
+        ]);
+
+        $task->update([
+            'title'         => $validated['title'],
+            'description'   => $validated['description'] ?? null,
+            'due_date'      => $validated['due_date'] ?? null,
+            'priority'      => $validated['priority'] ?? $task->priority,
+            'updated_by_id' => auth()->id(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Task updated successfully.']);
+    }
+
+    /**
+     * Admin/HR/manager sends a task back to whoever it is assigned to, with a
+     * reason - the same shape as Travel Claim's objection flow. Status moves
+     * to 'objection' so it is unmistakable from a plain rejection; the
+     * assignee resubmits via MyTasksController::resubmit(), which is the only
+     * path back out of this status.
+     */
+    public function objection(Request $request, $id)
+    {
+        $task = Task::findOrFail($id);
+        $user = auth()->user();
+
+        if (!TaskAccess::canManage($user, $task)) {
+            abort(403, 'You cannot manage a task outside your team.');
+        }
+
+        $validated = $request->validate([
+            'reason' => 'required|string|max:2000',
+        ]);
+
+        $task->update([
+            'status'          => 'objection',
+            'objection_notes' => $validated['reason'],
+            'objected_by_id'  => $user->id,
+            'objected_at'     => now(),
+            'updated_by_id'   => $user->id,
+        ]);
+
+        $task->taskUpdates()->create([
+            'comment'       => $validated['reason'],
+            'update_type'   => 'objection',
+            'is_admin'      => true,
+            'created_by_id' => $user->id,
+            'updated_by_id' => $user->id,
+        ]);
+
+        // Same afterResponse() pattern store() uses - a slow/unreachable mail
+        // host must not make the admin wait for their objection to save.
+        dispatch(function () use ($task) {
+            try {
+                $fresh = $task->fresh(['user', 'objectedBy']);
+                $fresh->user?->notify(new TaskObjection($fresh));
+            } catch (\Throwable $e) {
+                Log::warning("Task-objection notify failed for task {$task->id}: " . $e->getMessage());
+            }
+        })->afterResponse();
+
+        return response()->json(['success' => true, 'message' => 'Objection raised - sent back to ' . (optional($task->user)->getFullName() ?? 'the assignee') . '.']);
     }
 }

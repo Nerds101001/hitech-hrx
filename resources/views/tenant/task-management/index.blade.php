@@ -8,6 +8,7 @@
     'resources/assets/vendor/libs/select2/select2.scss',
     'resources/assets/vendor/libs/animate-css/animate.scss',
     'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
+    'resources/assets/vendor/libs/flatpickr/flatpickr.scss',
     'resources/assets/vendor/scss/pages/hitech-portal.scss',
   ])
 @endsection
@@ -22,6 +23,7 @@
   @vite([
     'resources/assets/vendor/libs/select2/select2.js',
     'resources/assets/vendor/libs/sweetalert2/sweetalert2.js',
+    'resources/assets/vendor/libs/flatpickr/flatpickr.js',
   ])
 @endsection
 
@@ -255,24 +257,34 @@
       </div>
     @endif
 
+    {{-- Bulk action bar - hidden until at least one row is checked --}}
+    <div class="hitech-card-white mb-3 p-3 d-none align-items-center justify-content-between" id="bulkActionBar">
+      <span class="fw-medium"><span id="bulkSelectedCount">0</span> selected</span>
+      <button type="button" class="btn btn-sm btn-hitech-danger" id="btnBulkDelete">
+        <i class="bx bx-trash"></i> Delete Selected
+      </button>
+    </div>
+
     {{-- Task list --}}
     <div class="hitech-card">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
+              <th style="width:40px"><input type="checkbox" class="form-check-input" id="checkAllTasks"></th>
               <th style="min-width:200px">Task</th>
               <th style="min-width:180px">Assigned To</th>
               <th>Priority</th>
               <th>Due</th>
               <th>Assigned By</th>
               <th>Status</th>
-              <th class="text-end" style="min-width:110px">Actions</th>
+              <th class="text-end" style="min-width:160px">Actions</th>
             </tr>
           </thead>
           <tbody>
             @forelse($tasks as $t)
               <tr>
+                <td><input type="checkbox" class="form-check-input js-task-check" value="{{ $t->id }}"></td>
                 <td>
                   <div class="fw-medium">{{ $t->title }}</div>
                   @if($t->batch_id && ($batchCounts[$t->batch_id] ?? 1) > 1)
@@ -289,7 +301,7 @@
                   <span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span>
                 </td>
                 <td class="text-nowrap">
-                  {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
+                  {{ $t->due_date ? $t->due_date->format('d/m/Y' . ($t->due_date->format('H:i') !== '00:00' ? ' h:i A' : '')) : '—' }}
                   @if($t->is_overdue)
                     <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
                   @elseif($t->due_date && $t->due_date->isToday() && !$t->is_completed)
@@ -298,7 +310,9 @@
                 </td>
                 <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
                 <td>
-                  @if($t->is_completed)
+                  @if($t->status === 'objection')
+                    <span class="badge-hitech badge-hitech-danger">Objection Raised</span>
+                  @elseif($t->is_completed)
                     <span class="badge-hitech badge-hitech-success">{{ ucfirst(str_replace('_',' ', $t->status)) }}</span>
                   @elseif($t->status === 'in_progress')
                     <span class="badge-hitech badge-brand-soft">In progress</span>
@@ -306,14 +320,38 @@
                     <span class="badge-hitech badge-muted">New</span>
                   @endif
                 </td>
-                <td class="text-end">
+                <td class="text-end text-nowrap">
+                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-view-task" title="View"
+                          data-task="{{ json_encode([
+                            'title' => $t->title,
+                            'description' => $t->description,
+                            'priority' => ucfirst($t->priority),
+                            'due' => $t->due_date ? $t->due_date->format('d/m/Y h:i A') : '—',
+                            'assignee' => optional($t->user)->getFullName() ?? '—',
+                            'assignedBy' => optional($t->assignedBy)->getFullName() ?? '—',
+                            'status' => ucfirst(str_replace('_', ' ', $t->status)),
+                            'objection' => $t->objection_notes,
+                          ]) }}">
+                    <i class="bx bx-show"></i>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-edit-task" title="Edit"
+                          data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
+                          data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}">
+                    <i class="bx bx-edit"></i>
+                  </button>
+                  @if(in_array($t->status, ['completed', 'resolved']))
+                    <button type="button" class="btn btn-sm btn-icon icon-sophisticated text-warning js-object-task" title="Raise Objection"
+                            data-id="{{ $t->id }}" data-title="{{ $t->title }}">
+                      <i class="bx bx-error"></i>
+                    </button>
+                  @endif
                   <button class="btn btn-sm btn-icon icon-sophisticated text-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
                     <i class="bx bx-trash"></i>
                   </button>
                 </td>
               </tr>
             @empty
-              <tr><td colspan="7" class="text-center text-muted py-5">
+              <tr><td colspan="8" class="text-center text-muted py-5">
                 <i class="bx bx-task fs-3 d-block mb-2 text-success"></i>
                 No tasks match these filters.
               </td></tr>
@@ -382,8 +420,8 @@
               <div class="form-text">31 falls back to the last day in a shorter month.</div>
             </div>
             <div class="col-md-4" id="at_due_date_wrap">
-              <label class="form-label">Due date</label>
-              <input type="date" id="at_due_date" class="form-control" min="{{ now()->toDateString() }}">
+              <label class="form-label">Due date &amp; time</label>
+              <input type="text" id="at_due_date" class="form-control" placeholder="dd/mm/yyyy --:-- --">
               <input type="text" id="at_recurrence_display" class="form-control d-none" readonly>
               <div class="form-text d-none" id="at_recurrence_help">Repeats on its own — a task appears for each person every time this day comes round. Stop it any time from the Recurring Tasks list below.</div>
             </div>
@@ -413,6 +451,100 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn-hitech">Assign</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{{-- Edit Task modal --}}
+<div class="modal fade" id="editTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="editTaskForm">
+        <input type="hidden" id="et_id">
+        <div class="modal-header">
+          <h5 class="modal-title">Edit Task</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label">Title <span class="text-danger">*</span></label>
+              <input type="text" id="et_title" class="form-control" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Description</label>
+              <textarea id="et_description" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Priority</label>
+              <select id="et_priority" class="form-select">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Due date &amp; time</label>
+              <input type="text" id="et_due_date" class="form-control" placeholder="dd/mm/yyyy --:-- --">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-hitech">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{{-- View Task modal (read-only) --}}
+<div class="modal fade" id="viewTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Task Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="row mb-0">
+          <dt class="col-4">Title</dt><dd class="col-8" id="vt_title"></dd>
+          <dt class="col-4">Description</dt><dd class="col-8" id="vt_description"></dd>
+          <dt class="col-4">Priority</dt><dd class="col-8" id="vt_priority"></dd>
+          <dt class="col-4">Due</dt><dd class="col-8" id="vt_due"></dd>
+          <dt class="col-4">Assigned To</dt><dd class="col-8" id="vt_assignee"></dd>
+          <dt class="col-4">Assigned By</dt><dd class="col-8" id="vt_assignedBy"></dd>
+          <dt class="col-4">Status</dt><dd class="col-8" id="vt_status"></dd>
+          <dt class="col-4 d-none" id="vt_objection_label">Objection</dt><dd class="col-8 d-none" id="vt_objection"></dd>
+        </dl>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Raise Objection modal --}}
+<div class="modal fade" id="objectTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="objectTaskForm">
+        <input type="hidden" id="ot_id">
+        <div class="modal-header">
+          <h5 class="modal-title">Raise Objection: <span id="ot_task_title"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Reason <span class="text-danger">*</span></label>
+          <textarea id="ot_reason" class="form-control" rows="4" required placeholder="What needs to be corrected before this can be accepted?"></textarea>
+          <div class="form-text">This sends the task back to the assignee as "Objection Raised" — they must fix it and resubmit.</div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-hitech-danger">Raise Objection</button>
         </div>
       </form>
     </div>
@@ -475,18 +607,33 @@ document.addEventListener('DOMContentLoaded', function () {
     return '';
   }
 
+  // altInput shows dd/mm/yyyy to the user; the original #at_due_date stays
+  // in the DOM as a hidden input holding the real Y-m-d H:i value the
+  // submit handler below reads and the server expects. Toggling a d-none
+  // class on #at_due_date itself no longer hides anything visible once
+  // flatpickr owns it — the altInput is the thing on screen — so
+  // refreshInterval() below reaches the altInput through the instance.
+  const atDueDatePicker = flatpickr('#at_due_date', {
+    enableTime: true,
+    time_24hr: false,
+    dateFormat: 'Y-m-d H:i',
+    altInput: true,
+    altFormat: 'd/m/Y h:i K',
+    minDate: 'today',
+  });
+
   function refreshInterval() {
     const interval = document.getElementById('at_interval').value;
     const isRecurring = interval !== '';
     document.getElementById('at_weekday_wrap').classList.toggle('d-none', interval !== 'weekly');
     document.getElementById('at_monthday_wrap').classList.toggle('d-none', interval !== 'monthly');
-    document.getElementById('at_due_date').classList.toggle('d-none', isRecurring);
+    if (atDueDatePicker.altInput) atDueDatePicker.altInput.classList.toggle('d-none', isRecurring);
     document.getElementById('at_recurrence_display').classList.toggle('d-none', !isRecurring);
     document.getElementById('at_recurrence_help').classList.toggle('d-none', !isRecurring);
     if (isRecurring) {
       document.getElementById('at_recurrence_display').value = recurrenceLabel(interval);
     } else {
-      document.getElementById('at_due_date').value = '';
+      atDueDatePicker.clear();
     }
   }
 
@@ -496,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById('btnAssignTask').addEventListener('click', function () {
     document.getElementById('assignTaskForm').reset();
-    document.getElementById('at_due_date').value = '';
+    atDueDatePicker.clear();
     refreshInterval();
     $('#at_employees, #at_departments').val(null).trigger('change');
     modal.show();
@@ -565,6 +712,184 @@ document.addEventListener('DOMContentLoaded', function () {
           });
       });
     });
+  });
+
+  // ══ Bulk select / bulk delete ═════════════════════════════════════════
+  const checkAll = document.getElementById('checkAllTasks');
+  const rowChecks = document.querySelectorAll('.js-task-check');
+  const bulkBar = document.getElementById('bulkActionBar');
+  const bulkCount = document.getElementById('bulkSelectedCount');
+
+  function refreshBulkBar() {
+    const checked = document.querySelectorAll('.js-task-check:checked');
+    bulkCount.textContent = checked.length;
+    bulkBar.classList.toggle('d-none', checked.length === 0);
+    bulkBar.classList.toggle('d-flex', checked.length > 0);
+    if (checkAll) checkAll.checked = checked.length > 0 && checked.length === rowChecks.length;
+  }
+
+  if (checkAll) {
+    checkAll.addEventListener('change', function () {
+      rowChecks.forEach(function (c) { c.checked = checkAll.checked; });
+      refreshBulkBar();
+    });
+  }
+  rowChecks.forEach(function (c) { c.addEventListener('change', refreshBulkBar); });
+
+  const bulkDeleteBtn = document.getElementById('btnBulkDelete');
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', function () {
+      const ids = Array.from(document.querySelectorAll('.js-task-check:checked')).map(c => c.value);
+      if (!ids.length) return;
+      Swal.fire({
+        icon: 'warning', title: 'Delete ' + ids.length + ' task(s)?', showCancelButton: true,
+        confirmButtonText: 'Delete', confirmButtonColor: '#dc2626',
+      }).then((res) => {
+        if (!res.isConfirmed) return;
+        fetch("{{ route('task-management.bulkDestroy') }}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': "{{ csrf_token() }}",
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ ids: ids }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) { window.location.reload(); }
+            else { Swal.fire({ icon: 'error', title: 'Nothing deleted', text: data.message || '' }); }
+          });
+      });
+    });
+  }
+
+  // ══ View Task (read-only, populated from the row's own data attribute) ═
+  const viewModalEl = document.getElementById('viewTaskModal');
+  const viewModal = new bootstrap.Modal(viewModalEl);
+  document.querySelectorAll('.js-view-task').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const t = JSON.parse(btn.dataset.task);
+      document.getElementById('vt_title').textContent = t.title;
+      document.getElementById('vt_description').textContent = t.description || '—';
+      document.getElementById('vt_priority').textContent = t.priority;
+      document.getElementById('vt_due').textContent = t.due;
+      document.getElementById('vt_assignee').textContent = t.assignee;
+      document.getElementById('vt_assignedBy').textContent = t.assignedBy;
+      document.getElementById('vt_status').textContent = t.status;
+      const hasObjection = !!t.objection;
+      document.getElementById('vt_objection_label').classList.toggle('d-none', !hasObjection);
+      document.getElementById('vt_objection').classList.toggle('d-none', !hasObjection);
+      document.getElementById('vt_objection').textContent = t.objection || '';
+      viewModal.show();
+    });
+  });
+
+  // ══ Edit Task ════════════════════════════════════════════════════════
+  const editModalEl = document.getElementById('editTaskModal');
+  const editModal = new bootstrap.Modal(editModalEl);
+  const etDueDatePicker = flatpickr('#et_due_date', {
+    enableTime: true,
+    time_24hr: false,
+    dateFormat: 'Y-m-d H:i',
+    altInput: true,
+    altFormat: 'd/m/Y h:i K',
+  });
+
+  document.querySelectorAll('.js-edit-task').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('et_id').value = btn.dataset.id;
+      document.getElementById('et_title').value = btn.dataset.title;
+      document.getElementById('et_description').value = btn.dataset.description || '';
+      document.getElementById('et_priority').value = btn.dataset.priority;
+      if (btn.dataset.due) { etDueDatePicker.setDate(btn.dataset.due, true); } else { etDueDatePicker.clear(); }
+      editModal.show();
+    });
+  });
+
+  document.getElementById('editTaskForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Saving...';
+
+    fetch('/task-management/' + document.getElementById('et_id').value, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': "{{ csrf_token() }}",
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        title: document.getElementById('et_title').value,
+        description: document.getElementById('et_description').value,
+        priority: document.getElementById('et_priority').value,
+        due_date: document.getElementById('et_due_date').value || null,
+      }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        if (ok && data.success) {
+          Swal.fire({ icon: 'success', title: 'Saved', text: data.message, timer: 1500, showConfirmButton: false })
+            .then(() => window.location.reload());
+        } else {
+          Swal.fire({ icon: 'error', title: 'Could not save', text: data.message || 'Something went wrong.' });
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+      });
+  });
+
+  // ══ Raise Objection ═════════════════════════════════════════════════
+  const objectModalEl = document.getElementById('objectTaskModal');
+  const objectModal = new bootstrap.Modal(objectModalEl);
+  document.querySelectorAll('.js-object-task').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('ot_id').value = btn.dataset.id;
+      document.getElementById('ot_task_title').textContent = btn.dataset.title;
+      document.getElementById('ot_reason').value = '';
+      objectModal.show();
+    });
+  });
+
+  document.getElementById('objectTaskForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type="submit"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Sending...';
+
+    fetch('/task-management/' + document.getElementById('ot_id').value + '/objection', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': "{{ csrf_token() }}",
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ reason: document.getElementById('ot_reason').value }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        if (ok && data.success) {
+          Swal.fire({ icon: 'success', title: 'Objection Raised', text: data.message, timer: 1800, showConfirmButton: false })
+            .then(() => window.location.reload());
+        } else {
+          Swal.fire({ icon: 'error', title: 'Could not raise objection', text: data.message || 'Something went wrong.' });
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = original;
+        Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+      });
   });
 
   // ══ Recurring Tasks: manage (remove a person / stop entirely) ═══════════

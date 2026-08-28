@@ -474,4 +474,209 @@ class TaskManagementScopeTest extends TestCase
 
         $this->assertEquals(['High but later', 'Low but sooner'], $buckets['all']->pluck('title')->all());
     }
+
+    // ══ Edit ═══════════════════════════════════════════════════════════
+
+    /** Same ownership rule update() already had - edit() must honour it too. */
+    public function test_a_manager_cannot_edit_a_task_belonging_to_another_managers_report(): void
+    {
+        $task = Task::create([
+            'title' => 'Original', 'type' => 'open', 'user_id' => $this->reportB->id,
+            'assigned_by_id' => $this->managerB->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+
+        Auth::login($this->managerA);
+        try {
+            $this->mgmt->update(Request::create('/task-management/' . $task->id, 'PUT', [
+                'title' => 'Hijacked',
+            ]), $task->id);
+            $this->fail('edited a task outside the managers team');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+        $this->assertEquals('Original', $task->fresh()->title);
+    }
+
+    public function test_editing_a_task_updates_title_due_date_and_priority(): void
+    {
+        $task = Task::create([
+            'title' => 'Before', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+            'priority' => 'low',
+        ]);
+
+        Auth::login($this->admin);
+        $due = now()->addDays(3)->format('Y-m-d H:i:s');
+        $response = $this->mgmt->update(Request::create('/task-management/' . $task->id, 'PUT', [
+            'title' => 'After', 'priority' => 'high', 'due_date' => $due,
+        ]), $task->id);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $fresh = $task->fresh();
+        $this->assertEquals('After', $fresh->title);
+        $this->assertEquals('high', $fresh->priority);
+        $this->assertEquals($due, $fresh->due_date->format('Y-m-d H:i:s'));
+    }
+
+    // ══ Objection / resubmit ═══════════════════════════════════════════
+
+    /** THE CORE OBJECTION FLOW: admin sends a completed task back with a reason. */
+    public function test_raising_an_objection_moves_the_task_to_objection_status_with_a_reason(): void
+    {
+        $task = Task::create([
+            'title' => 'Needs Rework', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'completed',
+            'completed_at' => now(),
+        ]);
+
+        Auth::login($this->admin);
+        $response = $this->mgmt->objection(Request::create('/task-management/' . $task->id . '/objection', 'POST', [
+            'reason' => 'The attached report is missing Q3 numbers.',
+        ]), $task->id);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $fresh = $task->fresh();
+        $this->assertEquals('objection', $fresh->status);
+        $this->assertEquals('The attached report is missing Q3 numbers.', $fresh->objection_notes);
+        $this->assertEquals($this->admin->id, $fresh->objected_by_id);
+        $this->assertNotNull($fresh->objected_at);
+        $this->assertEquals('objection', $fresh->taskUpdates()->latest()->first()->update_type);
+    }
+
+    /** A manager cannot raise an objection on another manager's report's task - same TaskAccess gate as everything else. */
+    public function test_a_manager_cannot_raise_an_objection_outside_their_team(): void
+    {
+        $task = Task::create([
+            'title' => 'Not Mine To Object To', 'type' => 'open', 'user_id' => $this->reportB->id,
+            'assigned_by_id' => $this->managerB->id, 'for_date' => now(), 'status' => 'completed',
+        ]);
+
+        Auth::login($this->managerA);
+        try {
+            $this->mgmt->objection(Request::create('/task-management/' . $task->id . '/objection', 'POST', [
+                'reason' => 'Trying to interfere.',
+            ]), $task->id);
+            $this->fail('raised an objection on a task outside the managers team');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+        $this->assertEquals('completed', $task->fresh()->status);
+    }
+
+    /** The only way out of 'objection' - the assignee resubmits, and it becomes actionable again. */
+    public function test_resubmitting_an_objected_task_moves_it_back_to_in_progress(): void
+    {
+        $task = Task::create([
+            'title' => 'Reworked', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'objection',
+            'objection_notes' => 'Fix the numbers.', 'objected_by_id' => $this->admin->id, 'objected_at' => now(),
+        ]);
+
+        Auth::login($this->reportA);
+        $request = Request::create('/my-tasks/' . $task->id . '/resubmit', 'POST', ['remarks' => 'Fixed, please recheck.']);
+        $request->setLaravelSession(app('session.store'));
+        $response = $this->myTasks->resubmit($request, $task);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $fresh = $task->fresh();
+        $this->assertEquals('in_progress', $fresh->status);
+        $this->assertEquals('resubmit', $fresh->taskUpdates()->latest()->first()->update_type);
+    }
+
+    /** Ownership check mirrors complete() - one person can never resubmit someone else's objected task. */
+    public function test_a_user_cannot_resubmit_someone_elses_objected_task(): void
+    {
+        $task = Task::create([
+            'title' => 'Not Yours Either', 'type' => 'open', 'user_id' => $this->reportB->id,
+            'assigned_by_id' => $this->managerB->id, 'for_date' => now(), 'status' => 'objection',
+            'objection_notes' => 'x',
+        ]);
+
+        Auth::login($this->reportA);
+        $request = Request::create('/my-tasks/' . $task->id . '/resubmit', 'POST', []);
+        $request->setLaravelSession(app('session.store'));
+
+        try {
+            $this->myTasks->resubmit($request, $task);
+            $this->fail('resubmitted a task that did not belong to the caller');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+        $this->assertEquals('objection', $task->fresh()->status);
+    }
+
+    /** resubmit() only means anything from 'objection' - guard against calling it on an ordinary task. */
+    public function test_resubmit_rejects_a_task_that_has_no_objection(): void
+    {
+        $task = Task::create([
+            'title' => 'Never Objected', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+
+        Auth::login($this->reportA);
+        $request = Request::create('/my-tasks/' . $task->id . '/resubmit', 'POST', []);
+        $request->setLaravelSession(app('session.store'));
+
+        try {
+            $this->myTasks->resubmit($request, $task);
+            $this->fail('resubmitted a task with no objection to resubmit against');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertEquals(422, $e->getStatusCode());
+        }
+        $this->assertEquals('new', $task->fresh()->status);
+    }
+
+    // ══ Bulk delete ════════════════════════════════════════════════════
+
+    /** Deletes only what the caller is allowed to manage, silently skipping the rest - same as single destroy(). */
+    public function test_bulk_destroy_only_deletes_tasks_the_caller_can_manage(): void
+    {
+        $mine = Task::create([
+            'title' => 'Mine To Delete', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+        $notMine = Task::create([
+            'title' => 'Not Mine To Delete', 'type' => 'open', 'user_id' => $this->reportB->id,
+            'assigned_by_id' => $this->managerB->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+
+        Auth::login($this->managerA);
+        $response = $this->mgmt->bulkDestroy($this->jsonReq2(['ids' => [$mine->id, $notMine->id]]));
+        $data = json_decode($response->getContent(), true);
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals(1, $data['deleted']);
+        $this->assertNull(Task::find($mine->id), 'the allowed task should have been deleted');
+        $this->assertNotNull(Task::find($notMine->id), 'a task outside the managers team was deleted');
+    }
+
+    public function test_admin_bulk_destroy_deletes_everything_selected(): void
+    {
+        $a = Task::create([
+            'title' => 'A', 'type' => 'open', 'user_id' => $this->reportA->id,
+            'assigned_by_id' => $this->managerA->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+        $b = Task::create([
+            'title' => 'B', 'type' => 'open', 'user_id' => $this->reportB->id,
+            'assigned_by_id' => $this->managerB->id, 'for_date' => now(), 'status' => 'new',
+        ]);
+
+        Auth::login($this->admin);
+        $response = $this->mgmt->bulkDestroy($this->jsonReq2(['ids' => [$a->id, $b->id]]));
+        $data = json_decode($response->getContent(), true);
+
+        $this->assertTrue($data['success']);
+        $this->assertEquals(2, $data['deleted']);
+        $this->assertNull(Task::find($a->id));
+        $this->assertNull(Task::find($b->id));
+    }
+
+    /** jsonReq() above hardcodes the '/task-management' POST path used by store()'s tests - bulk-destroy needs its own path, same JSON-body shape. */
+    private function jsonReq2(array $payload): Request
+    {
+        $r = Request::create('/task-management/bulk-destroy', 'POST', [], [], [], [], json_encode($payload));
+        $r->headers->set('Content-Type', 'application/json');
+        $r->setLaravelSession(app('session.store'));
+        return $r;
+    }
 }

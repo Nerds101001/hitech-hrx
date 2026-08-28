@@ -89,6 +89,41 @@ class MyTasksController extends Controller
     }
 
     /**
+     * The only way out of 'objection' - the assignee has fixed whatever the
+     * objection called out and is sending it back. Reopens it as in_progress
+     * rather than straight to completed, since raising it again still goes
+     * through TaskManagementController::objection() from there if it is not
+     * actually fixed.
+     */
+    public function resubmit(Request $request, Task $task)
+    {
+        if ($task->user_id !== auth()->id()) {
+            abort(403, 'This is not your task.');
+        }
+
+        if ($task->status !== 'objection') {
+            abort(422, 'This task has no objection to resubmit against.');
+        }
+
+        $validated = $request->validate([
+            'remarks' => 'nullable|string|max:2000',
+        ]);
+
+        $task->status = 'in_progress';
+        $task->save();
+
+        $task->taskUpdates()->create([
+            'comment'        => $validated['remarks'] ?? null,
+            'update_type'    => 'resubmit',
+            'is_admin'       => false,
+            'created_by_id'  => auth()->id(),
+            'updated_by_id'  => auth()->id(),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Resubmitted.']);
+    }
+
+    /**
      * Everything outstanding for a user, grouped by kind.
      *
      * Static so the sidebar badge and the dashboard card can ask the same

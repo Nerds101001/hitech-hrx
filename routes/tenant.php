@@ -472,6 +472,13 @@ Route::middleware([
       Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
       Route::post('schedules/{id}/stop', [\App\Http\Controllers\tenant\TaskManagementController::class, 'stopSchedule'])->name('schedules.stop');
       Route::post('schedules/{id}/remove-user', [\App\Http\Controllers\tenant\TaskManagementController::class, 'removeFromSchedule'])->name('schedules.removeUser');
+      // Static path before the {id} wildcards below, or "bulk-destroy" would
+      // never be reached — it would match {id} = "bulk-destroy" on DELETE
+      // instead, and PUT '{id}' would swallow this POST's path just the same
+      // if the methods ever collided.
+      Route::post('bulk-destroy', [\App\Http\Controllers\tenant\TaskManagementController::class, 'bulkDestroy'])->name('bulkDestroy');
+      Route::put('{id}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'update'])->name('update');
+      Route::post('{id}/objection', [\App\Http\Controllers\tenant\TaskManagementController::class, 'objection'])->name('objection');
       Route::delete('{id}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'destroy'])->name('destroy');
     });
 
@@ -587,6 +594,10 @@ Route::middleware([
     // everyone can complete their OWN tasks, whatever their role.
     Route::post('my-tasks/{task}/complete', [\App\Http\Controllers\tenant\MyTasksController::class, 'complete'])
         ->name('my-tasks.complete');
+    // Same open-to-anyone shape as complete() above — ownership is checked
+    // inside the controller, not the route.
+    Route::post('my-tasks/{task}/resubmit', [\App\Http\Controllers\tenant\MyTasksController::class, 'resubmit'])
+        ->name('my-tasks.resubmit');
 
     // Attendance setup queue: accounts records each new joiner's employee ID
     // and biometric ID. Drives the login popup and the dashboard task card.

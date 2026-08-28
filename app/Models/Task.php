@@ -44,6 +44,9 @@ class Task extends Model implements AuditableContract
     'status',
     'priority',
     'completed_at',
+    'objection_notes',
+    'objected_by_id',
+    'objected_at',
     'delay_notified_at',
     'created_by_id',
     'updated_by_id',
@@ -53,6 +56,11 @@ class Task extends Model implements AuditableContract
   public function assignedBy()
   {
     return $this->belongsTo(User::class, 'assigned_by_id');
+  }
+
+  public function objectedBy()
+  {
+    return $this->belongsTo(User::class, 'objected_by_id');
   }
 
   public function user()
@@ -148,6 +156,7 @@ class Task extends Model implements AuditableContract
     'end_date_time' => 'datetime',
     'due_date' => 'datetime',
     'completed_at' => 'datetime',
+    'objected_at' => 'datetime',
     'delay_notified_at' => 'datetime',
   ];
 

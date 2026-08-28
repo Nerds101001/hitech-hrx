@@ -1,6 +1,13 @@
 @php
   $notifications = auth()->user()->unreadNotifications;
   $isUnread = $notifications->count();
+  // Only these types pop up on load; every other notification type still
+  // shows in the dropdown below exactly as before, it just doesn't
+  // interrupt the page. Scoped narrowly on purpose so this doesn't turn
+  // into "every notification in the app now pops a toast" - that's a much
+  // bigger UX decision than what was actually asked for (task assignment).
+  $popupTypes = ['App\\Notifications\\Task\\TaskAssigned', 'App\\Notifications\\Task\\TaskObjection'];
+  $popupNotifications = $notifications->whereIn('type', $popupTypes)->values();
 @endphp
 <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-1">
   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown"
@@ -63,3 +70,54 @@
     </li>
   </ul>
 </li>
+
+@if($popupNotifications->isNotEmpty())
+  {{-- Pops once per notification, then marks it read so a later page load
+       (this one already loaded $notifications before any of these are
+       marked) never fires it again — the dropdown above still shows it,
+       same as any other notification, just no longer unread. Plain
+       Bootstrap Toast, not SweetAlert2: this partial is loaded on every
+       tenant page via the navbar, and SweetAlert2 is only opted into
+       per-page — the exact bug just fixed on Task Management (Swal called
+       without ever being loaded) is not one to risk repeating here. --}}
+  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1090;">
+    @foreach($popupNotifications as $n)
+      <div class="toast align-items-center border-0 text-white bg-primary js-task-popup" role="alert" aria-live="assertive" aria-atomic="true"
+           data-notification-id="{{ $n->id }}" data-action-url="{{ $n->data['action_url'] ?? '' }}">
+        <div class="d-flex">
+          <div class="toast-body">
+            <strong>{{ $n->data['title'] ?? 'Notification' }}</strong><br>
+            {{ $n->data['message'] ?? '' }}
+          </div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      </div>
+    @endforeach
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.js-task-popup').forEach(function (el) {
+        const toast = new bootstrap.Toast(el, { delay: 8000 });
+        toast.show();
+
+        if (el.dataset.actionUrl) {
+          el.querySelector('.toast-body').style.cursor = 'pointer';
+          el.querySelector('.toast-body').addEventListener('click', function () {
+            window.location.href = el.dataset.actionUrl;
+          });
+        }
+
+        // Fire-and-forget: this is a "don't show it again" marker, not
+        // something the user needs to wait on or be told about either way.
+        fetch("{{ url('/notifications/markAsRead') }}/" + el.dataset.notificationId, {
+          method: 'POST',
+          headers: {
+            'X-CSRF-TOKEN': "{{ csrf_token() }}",
+            'Accept': 'application/json',
+          },
+        }).catch(function () {});
+      });
+    });
+  </script>
+@endif
