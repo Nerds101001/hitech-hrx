@@ -1450,7 +1450,11 @@ class UserDashboardController extends Controller
                         }
                         $dayData['status'] = 'Present' . $leaveDetail . ' (Paid)';
                         $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = 'bg-teal text-white border-0';
+                        // Was plain bg-teal - indistinguishable at a glance
+                        // from an ordinary full day present, even though
+                        // this is genuinely a different thing: half worked,
+                        // half covered by paid leave.
+                        $dayData['class'] = 'bg-indigo-gradient text-white border-0';
                         break;
                     case 'absent':
                         $dayData['status'] = 'Absent';

@@ -923,6 +923,12 @@ div.dtr-modal div.dtr-modal-content {
 .bg-teal-gradient { background: linear-gradient(135deg, #00b894 0%, #00cec9 100%) !important; }
 .bg-orange-gradient { background: linear-gradient(135deg, #fd9644 0%, #fa8231 100%) !important; }
 .bg-red-gradient { background: linear-gradient(135deg, #fc5c65 0%, #eb3b5a 100%) !important; }
+/* A worked-half-day-plus-paid-leave day is not the same thing as a plain
+   full day present (bg-teal) or a plain full day off on paid leave
+   (bg-indigo-vibrant, solid) - it is genuinely both at once. Same indigo
+   family as Paid Leave so the "paid" concept still reads at a glance, but
+   the gradient keeps it from looking like an exact copy of either. */
+.bg-indigo-gradient { background: linear-gradient(135deg, #3867d6 0%, #4b7bec 100%) !important; }
 
 .modal-glass {
     backdrop-filter: blur(8px);
