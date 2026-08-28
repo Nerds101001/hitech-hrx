@@ -5,8 +5,18 @@
 @section('vendor-style')
   @vite([
     'resources/assets/vendor/libs/animate-css/animate.scss',
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
     'resources/assets/vendor/scss/pages/hitech-portal.scss'
   ])
+@endsection
+
+@section('vendor-script')
+  {{-- Swal.fire() is called on this page's error paths (complete/resubmit)
+       but the library was never actually loaded here - the same class of
+       bug just fixed on Task Management (Swal called without ever being
+       included), just not yet noticed here since a fetch() failure on this
+       page is rarer. --}}
+  @vite(['resources/assets/vendor/libs/sweetalert2/sweetalert2.js'])
 @endsection
 
 @section('page-style')
@@ -132,6 +142,9 @@
                             @if($t->is_completed && optional($t->taskUpdates->first())->comment)
                               <small class="text-muted d-block fst-italic">"{{ $t->taskUpdates->first()->comment }}"</small>
                             @endif
+                            @if($t->status === 'objection' && $t->objection_notes)
+                              <small class="text-danger d-block mt-1"><i class="bx bx-error"></i> Sent back: {{ $t->objection_notes }}</small>
+                            @endif
                           </td>
                           <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
                           <td class="text-nowrap">
@@ -142,7 +155,11 @@
                           </td>
                           <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
                           <td class="text-end">
-                            @if(!$t->is_completed)
+                            @if($t->status === 'objection')
+                              <button type="button" class="mt-go mt-go-danger js-resubmit-task" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
+                                Fix &amp; Resubmit
+                              </button>
+                            @elseif(!$t->is_completed)
                               <button type="button" class="mt-go js-complete-task {{ $t->is_overdue ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
                                 Mark Complete
                               </button>
@@ -243,6 +260,29 @@
   </div>
 </div>
 
+{{-- Fix & Resubmit modal - the only way out of an 'objection' status --}}
+<div class="modal fade" id="resubmitTaskModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="resubmitTaskForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Resubmit</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="fw-medium mb-3" id="resubmitTaskTitle"></p>
+          <label class="form-label">What did you fix? (optional)</label>
+          <textarea id="resubmitTaskRemarks" class="form-control" rows="3" placeholder="What changed since the objection was raised..."></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-hitech">Resubmit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 @include('tenant.employees._setup-modal')
 @endsection
 
@@ -306,6 +346,55 @@ document.addEventListener('DOMContentLoaded', function () {
         Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
       });
   });
+
+  const resubmitModalEl = document.getElementById('resubmitTaskModal');
+  if (resubmitModalEl) {
+    const resubmitModal = new bootstrap.Modal(resubmitModalEl);
+    let resubmitTaskId = null;
+
+    document.querySelectorAll('.js-resubmit-task').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        resubmitTaskId = btn.dataset.id;
+        document.getElementById('resubmitTaskTitle').textContent = btn.dataset.title;
+        document.getElementById('resubmitTaskRemarks').value = '';
+        resubmitModal.show();
+      });
+    });
+
+    document.getElementById('resubmitTaskForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!resubmitTaskId) return;
+      const btn = e.target.querySelector('button[type="submit"]');
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = 'Sending...';
+
+      fetch('/my-tasks/' + resubmitTaskId + '/resubmit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': "{{ csrf_token() }}",
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ remarks: document.getElementById('resubmitTaskRemarks').value }),
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          btn.disabled = false;
+          btn.innerHTML = original;
+          if (ok && data.success) {
+            window.location.reload();
+          } else {
+            Swal.fire({ icon: 'error', title: 'Could not resubmit', text: data.message || 'Something went wrong.' });
+          }
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerHTML = original;
+          Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+        });
+    });
+  }
 });
 </script>
 @endsection
