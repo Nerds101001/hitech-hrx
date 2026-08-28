@@ -563,8 +563,8 @@ class TaskManagementScopeTest extends TestCase
         $this->assertEquals('completed', $task->fresh()->status);
     }
 
-    /** The only way out of 'objection' - the assignee resubmits, and it becomes actionable again. */
-    public function test_resubmitting_an_objected_task_moves_it_back_to_in_progress(): void
+    /** The only way out of 'objection' - resubmitting goes straight back to completed, no separate Mark Complete needed. */
+    public function test_resubmitting_an_objected_task_marks_it_completed_again(): void
     {
         $task = Task::create([
             'title' => 'Reworked', 'type' => 'open', 'user_id' => $this->reportA->id,
@@ -579,7 +579,8 @@ class TaskManagementScopeTest extends TestCase
 
         $this->assertEquals(200, $response->getStatusCode());
         $fresh = $task->fresh();
-        $this->assertEquals('in_progress', $fresh->status);
+        $this->assertEquals('completed', $fresh->status);
+        $this->assertNotNull($fresh->completed_at);
         $this->assertEquals('resubmit', $fresh->taskUpdates()->latest()->first()->update_type);
     }
 

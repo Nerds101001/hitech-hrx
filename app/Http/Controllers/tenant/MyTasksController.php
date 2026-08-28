@@ -90,10 +90,14 @@ class MyTasksController extends Controller
 
     /**
      * The only way out of 'objection' - the assignee has fixed whatever the
-     * objection called out and is sending it back. Reopens it as in_progress
-     * rather than straight to completed, since raising it again still goes
-     * through TaskManagementController::objection() from there if it is not
-     * actually fixed.
+     * objection called out and is resubmitting it. Goes straight back to
+     * completed, not in_progress: an objection is only ever raised on a task
+     * that was already completed (see TaskManagementController::objection()'s
+     * status gate), so the fix itself IS the resubmission - a second, separate
+     * Mark Complete step would just be re-doing the same click for no reason.
+     * If the objection turns out not to actually be fixed, raising it again
+     * goes through TaskManagementController::objection() from there same as
+     * any other completed task.
      */
     public function resubmit(Request $request, Task $task)
     {
@@ -109,7 +113,8 @@ class MyTasksController extends Controller
             'remarks' => 'nullable|string|max:2000',
         ]);
 
-        $task->status = 'in_progress';
+        $task->status = 'completed';
+        $task->completed_at = now();
         $task->save();
 
         $task->taskUpdates()->create([

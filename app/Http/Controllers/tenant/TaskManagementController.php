@@ -81,7 +81,14 @@ class TaskManagementController extends Controller
             });
         }
 
-        $tasks = $query->paginate(20)->withQueryString();
+        // 'all' is not literally unpaginated - LengthAwarePaginator with a
+        // huge per-page still works fine (no meaningful page links, which is
+        // exactly what "show everything" should look like) without needing
+        // a second code path for the view to render.
+        $perPageOptions = ['10' => 10, '20' => 20, '50' => 50, '1000' => 1000, 'all' => 1000000];
+        $perPage = $perPageOptions[(string) $request->input('per_page', '20')] ?? 20;
+
+        $tasks = $query->paginate($perPage)->withQueryString();
 
         // One row per batch for the summary list, counted from the same
         // scoped query so a manager never sees a batch's true size if it

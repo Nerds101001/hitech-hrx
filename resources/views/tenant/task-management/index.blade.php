@@ -100,6 +100,47 @@
       margin: 0;
     }
   }
+
+  /* The filter card's .card-body padding comes from a global, !important
+     rule (.hitech-card-white .card-body) meant for wide showcase cards -
+     appropriate elsewhere, too generous for a plain filter row. Overridden
+     here by id, not by editing that shared rule. */
+  #taskFilterCard .card-body {
+    padding: 1.25rem 1.5rem !important;
+  }
+
+  #taskTable td, #taskTable th {
+    padding: 0.65rem 0.85rem !important;
+  }
+
+  /* "New" needs its own theme-based tint, distinct from badge-brand-soft
+     (already In Progress) and badge-muted (this app's "past/inactive"
+     grey, wrong connotation for a task that just landed) - reuses the same
+     view-icon blue as everywhere else "new/informational" appears. */
+  .badge-status-new {
+    background: rgba(77, 108, 240, 0.08);
+    color: var(--hitech-icon-view, #4d6cf0);
+    border: 1px solid rgba(77, 108, 240, 0.18);
+  }
+
+  /* Same shape as this theme's .icon-sophisticated everywhere else (slate
+     at rest, lifting to its own colour on hover) rather than the flat grey
+     Bootstrap default these action buttons were rendering as. */
+  .tm-act {
+    --tm-act-accent: var(--hitech-primary, #008080);
+    background: var(--hitech-bg-soft, #f8fafc);
+    color: #64748b;
+    border: 1px solid var(--hitech-border, #dee2e6);
+  }
+  .tm-act:hover {
+    background: #fff;
+    color: var(--tm-act-accent);
+    border-color: var(--tm-act-accent);
+  }
+  .tm-act-view    { --tm-act-accent: var(--hitech-icon-view, #4d6cf0); }
+  .tm-act-edit    { --tm-act-accent: var(--hitech-icon-edit, #f5a623); }
+  .tm-act-warning { --tm-act-accent: #f59e0b; }
+  .tm-act-danger  { --tm-act-accent: var(--hitech-icon-deactivate, #ef4444); }
 </style>
 @endsection
 
@@ -167,11 +208,10 @@
 
   {{-- Filters --}}
   <div class="px-4">
-    <div class="hitech-card-white mb-6 overflow-hidden">
+    <div class="hitech-card-white mb-6 overflow-hidden" id="taskFilterCard">
       <div class="card-body p-sm-5 p-4">
         <form method="GET" class="row align-items-end g-4">
-          <div class="col-lg-4">
-            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Search</label>
+          <div class="col-lg-3 col-md-6">
             <div class="search-wrapper-hitech mw-100">
               <i class="bx bx-search text-muted ms-3"></i>
               <input type="text" name="search" class="form-control" placeholder="Search title or person..." value="{{ request('search') }}">
@@ -180,7 +220,7 @@
           </div>
           <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
-            <select class="form-select" name="department_id" onchange="this.form.submit()">
+            <select class="form-select form-select-hitech" name="department_id" onchange="this.form.submit()">
               <option value="">All Departments</option>
               @foreach($departments as $d)
                 <option value="{{ $d->id }}" {{ (string) request('department_id') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
@@ -189,7 +229,7 @@
           </div>
           <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
-            <select class="form-select" name="status" onchange="this.form.submit()">
+            <select class="form-select form-select-hitech" name="status" onchange="this.form.submit()">
               <option value="">All statuses</option>
               <option value="new" {{ request('status') === 'new' ? 'selected' : '' }}>New</option>
               <option value="in_progress" {{ request('status') === 'in_progress' ? 'selected' : '' }}>In progress</option>
@@ -200,14 +240,22 @@
           </div>
           <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Priority</label>
-            <select class="form-select" name="priority" onchange="this.form.submit()">
+            <select class="form-select form-select-hitech" name="priority" onchange="this.form.submit()">
               <option value="">All priorities</option>
               @foreach(\App\Models\Task::PRIORITIES as $p)
                 <option value="{{ $p }}" {{ request('priority') === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
               @endforeach
             </select>
           </div>
-          <div class="col-lg-2">
+          <div class="col-lg-2 col-md-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Per Page</label>
+            <select class="form-select form-select-hitech" name="per_page" onchange="this.form.submit()">
+              @foreach(['10' => '10 per page', '20' => '20 per page', '50' => '50 per page', '1000' => '1000 per page', 'all' => 'All'] as $val => $label)
+                <option value="{{ $val }}" {{ (string) request('per_page', '20') === $val ? 'selected' : '' }}>{{ $label }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="col-lg-1 col-md-6">
             <a href="{{ route('task-management.index') }}" class="btn btn-hitech-cancel w-100">Clear</a>
           </div>
         </form>
@@ -268,7 +316,7 @@
     {{-- Task list --}}
     <div class="hitech-card">
       <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
+        <table class="table table-hover align-middle mb-0" id="taskTable">
           <thead class="table-light">
             <tr>
               <th style="width:40px"><input type="checkbox" class="form-check-input" id="checkAllTasks"></th>
@@ -317,11 +365,11 @@
                   @elseif($t->status === 'in_progress')
                     <span class="badge-hitech badge-brand-soft">In progress</span>
                   @else
-                    <span class="badge-hitech badge-muted">New</span>
+                    <span class="badge-hitech badge-status-new">New</span>
                   @endif
                 </td>
                 <td class="text-end text-nowrap">
-                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-view-task" title="View"
+                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-view js-view-task" title="View"
                           data-task="{{ json_encode([
                             'title' => $t->title,
                             'description' => $t->description,
@@ -334,18 +382,18 @@
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
-                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-edit-task" title="Edit"
+                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-edit js-edit-task" title="Edit"
                           data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
                           data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}">
                     <i class="bx bx-edit"></i>
                   </button>
                   @if(in_array($t->status, ['completed', 'resolved']))
-                    <button type="button" class="btn btn-sm btn-icon icon-sophisticated text-warning js-object-task" title="Raise Objection"
+                    <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-warning js-object-task" title="Raise Objection"
                             data-id="{{ $t->id }}" data-title="{{ $t->title }}">
                       <i class="bx bx-error"></i>
                     </button>
                   @endif
-                  <button class="btn btn-sm btn-icon icon-sophisticated text-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
+                  <button class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
                     <i class="bx bx-trash"></i>
                   </button>
                 </td>
