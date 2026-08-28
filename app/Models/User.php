@@ -235,6 +235,12 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
   protected $hidden = [
     'password',
     'remember_token',
+    // SECURITY (QA fix): keep 2FA codes and government IDs out of serialized output.
+    'otp_code',
+    'otp_expires_at',
+    'aadhaar_no',
+    'pan_no',
+    'passport_no',
   ];
 
   public function getUserForProfile()

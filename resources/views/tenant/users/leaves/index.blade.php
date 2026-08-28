@@ -182,15 +182,17 @@
                                     }
                                 }
 
-                                if ($req && $req->is_half_day) {
-                                    $days = 0.5;
-                                    $amountDisplay = '-' . number_format($days, 1);
-                                } elseif ($isShortReq) {
-                                    $days = 0.0;
+                                if ($isShortReq) {
                                     $amountDisplay = '-1.0 count';
                                 } else {
-                                    $days = $from->diffInDays($to) + 1;
-                                    $amountDisplay = '-' . number_format($days, 1);
+                                    // Show what actually left the balance (paid_days,
+                                    // already correctly split from lwp_days by the
+                                    // service), not the full requested span — a
+                                    // half-day or multi-day request that ended up
+                                    // partly or fully unpaid was always shown here
+                                    // as if the whole thing had been deducted,
+                                    // regardless of is_lwp/lwp_days.
+                                    $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
                                 }
                                 $amountClass   = 'text-danger';
                                 $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ') - ' . $leaveTypeDetail;

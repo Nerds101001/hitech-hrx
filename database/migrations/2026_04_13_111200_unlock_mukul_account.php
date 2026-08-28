@@ -14,17 +14,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $email = 'mukul@rustx.com';
-        $user = User::where('email', $email)->first();
-
-        if ($user) {
-            $user->update([
-                'password' => 'DIplo@6589#',
-                'status' => UserAccountStatus::ACTIVE,
-                'locked_until' => null,
-                'login_attempts' => 0
-            ]);
-        }
+        // SECURITY (QA fix): this migration hardcoded a plaintext password for
+        // mukul@rustx.com and re-applied it (with an account unlock) on every
+        // fresh deploy. Neutralized to a no-op.
+        // ACTION REQUIRED: rotate that account's password out-of-band; the old
+        // value was committed to version control and must be considered leaked.
     }
 
     /**

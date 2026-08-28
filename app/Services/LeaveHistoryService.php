@@ -21,6 +21,18 @@ class LeaveHistoryService
      */
     public const LEDGER_OPENS = '2026-07-31';
 
+    /**
+     * Types tracked outside the main ALP/PL pool the "Total Allocated" /
+     * "Available Balance" cards summarize — Maternity, Paternity, Short
+     * Leave (own card, hours-based) and WFH (never pooled, always paid
+     * directly). Mirrors LeaveRequest::processApproval()'s own pooling
+     * exclusion list. Mixing these into the same flat ledger made a
+     * Short Leave "Earned for August" credit look like part of the ALP/PL
+     * balance it was never counted in, so the ledger's own credit/debit
+     * sum silently diverged from the cards above it.
+     */
+    private const EXCLUDED_FROM_LEDGER = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
+
     public static function getUnifiedHistory($userOrId)
     {
         $history = collect();
@@ -43,6 +55,11 @@ class LeaveHistoryService
             // Anything before the ledger opened is already inside the opening
             // balance — see LEDGER_OPENS.
             if ($leave->from_date && Carbon::parse($leave->from_date)->lt(Carbon::parse(self::LEDGER_OPENS))) {
+                continue;
+            }
+
+            // Not part of the pool the summary cards total — see EXCLUDED_FROM_LEDGER.
+            if (in_array(strtoupper($leave->leaveType->code ?? ''), self::EXCLUDED_FROM_LEDGER, true)) {
                 continue;
             }
 
@@ -79,7 +96,8 @@ class LeaveHistoryService
         }
 
         // 2. Fetch Balance Audits via relationship
-        $leaveBalances = $user->leaveBalances()->with('leaveType')->get();
+        $leaveBalances = $user->leaveBalances()->with('leaveType')->get()
+            ->reject(fn($b) => in_array(strtoupper($b->leaveType->code ?? ''), self::EXCLUDED_FROM_LEDGER, true));
         $balanceIds = $leaveBalances->pluck('id');
 
         // SPECIAL CASE: For User 248, we ignore automated audits for balance changes 

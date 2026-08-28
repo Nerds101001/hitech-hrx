@@ -15,7 +15,9 @@ use Modules\AiChat\Http\Controllers\AiChatController;
 */
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
-    Route::post('aichat/query', [AiChatController::class, 'handleQuery'])->name('aichat.query');
-    Route::get('aichat/test', [AiChatController::class, 'test'])->name('aichat.test');
-    Route::get('aichat/schema', [AiChatController::class, 'getSchema'])->name('aichat.schema');
+    // SECURITY (QA fix): disabled — executed GPT-generated SQL against the whole
+    // database and dumped users/schema to any authenticated user. See QA Report 6.
+    // Route::post('aichat/query', [AiChatController::class, 'handleQuery'])->name('aichat.query');
+    // Route::get('aichat/test', [AiChatController::class, 'test'])->name('aichat.test');
+    // Route::get('aichat/schema', [AiChatController::class, 'getSchema'])->name('aichat.schema');
 });

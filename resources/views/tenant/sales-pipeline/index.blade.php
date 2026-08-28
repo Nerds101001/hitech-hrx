@@ -34,7 +34,8 @@
 @section('page-script')
     @vite([
       'resources/assets/js/app/setu-period-picker.js',
-      'resources/assets/js/app/setu-review-common.js'
+      'resources/assets/js/app/setu-review-common.js',
+      'resources/assets/js/app/crm-mapping-review-common.js'
     ])
 @endsection
 
@@ -122,6 +123,15 @@
                                 </span>
                             </li>
                         @endif
+                    @endif
+
+                    @if($syncTargetId)
+                        <li>
+                            <button type="button" id="btnSyncCrmMapping" data-target-id="{{ $syncTargetId }}"
+                                    class="dropdown-item d-flex align-items-center gap-2">
+                                <i class="bx bx-link text-primary"></i> Link {{ $syncTargetLabel }} customers to CRM
+                            </button>
+                        </li>
                     @endif
 
                     {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
@@ -927,6 +937,12 @@
     @include('tenant.partials.setu-review-modal')
 @endif
 
+{{-- CRM mapping preview + review modals — link Sales Report customers to their CRM.API account. --}}
+@if($syncTargetId)
+    @include('tenant.partials.crm-mapping-preview-modal')
+    @include('tenant.partials.crm-mapping-review-modal')
+@endif
+
 @if(\App\Support\SalesScope::canClaimCustomer($user))
     @include('tenant.partials.customer-claim-modal')
 @endif
@@ -1393,6 +1409,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(function (e) {
                 btn.disabled = false; btn.innerHTML = original;
                 window.showErrorSwal((e && e.message) || 'Could not sync with Setu.');
+            });
+        });
+    }
+
+    const btnSyncCrmMapping = document.getElementById('btnSyncCrmMapping');
+    if (btnSyncCrmMapping) {
+        btnSyncCrmMapping.addEventListener('click', function () {
+            const btn = this;
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bx bx-loader-alt bx-spin me-1"></i> Checking…';
+            window.CrmMappingSync.run(btn.dataset.targetId, {
+                onDone: function () { setTimeout(() => location.reload(), 1600); }
+            }).then(function (d) {
+                btn.disabled = false; btn.innerHTML = original;
+                const c = d.counts;
+                if (!c.autoLinked && !c.reviewItems) {
+                    window.showSuccessSwal(`${d.salesperson}'s Sales Report is already linked to the CRM where a match exists.`);
+                }
+            }).catch(function (e) {
+                btn.disabled = false; btn.innerHTML = original;
+                window.showErrorSwal((e && e.message) || 'Could not check the CRM mapping.');
             });
         });
     }

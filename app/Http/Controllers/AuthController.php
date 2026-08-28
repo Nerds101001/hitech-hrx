@@ -72,8 +72,9 @@ class AuthController extends Controller
         }
 
         // 3. Check password
-        $isLocalMasterPass = app()->isLocal() && $request->password === 'password';
-        if ($isLocalMasterPass || Hash::check($request->password, $user->password)) {
+        // SECURITY (QA fix): removed the local master-password bypass
+        // ($request->password === 'password') that granted login to any account.
+        if (Hash::check($request->password, $user->password)) {
           // Reset attempts on success
           try {
             $user->update(['login_attempts' => 0, 'locked_until' => null]);
@@ -213,10 +214,8 @@ class AuthController extends Controller
             return redirect()->route('login')->with('error', 'Your account is locked. Please request an unlock.');
         }
 
-        // On localhost only: allow bypass OTP with 123456 for development ease
-        $isLocalBypass = app()->isLocal() && $request->otp == '123456';
-
-        if (($isLocalBypass || ($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at)))) {
+        // SECURITY (QA fix): removed the local OTP bypass ($request->otp == '123456').
+        if (($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at))) {
             // Success
             $user->otp_code = null;
             $user->otp_expires_at = null;

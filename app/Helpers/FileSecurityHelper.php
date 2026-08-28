@@ -37,6 +37,14 @@ class FileSecurityHelper
     public static function decryptAndGet(string $path, string $disk = 'local'): ?string
     {
         try {
+            // SECURITY (QA fix): reject path traversal / absolute paths so a
+            // caller-supplied path cannot escape the disk root (e.g. read ../../.env
+            // or another user's files). Legitimate stored paths are always relative.
+            if (!self::isPathSafe($path)) {
+                Log::warning('File Retrieval blocked: unsafe path rejected.', ['path' => $path]);
+                return null;
+            }
+
             if (!Storage::disk($disk)->exists($path)) {
                 return null;
             }
@@ -58,7 +66,41 @@ class FileSecurityHelper
     }
 
     /**
+     * SECURITY (QA fix): validate a storage-relative path.
+     * Rejects traversal (`..`), absolute paths, Windows drive prefixes, backslashes,
+     * URL-encoded traversal and null bytes. Returns true only for a safe relative path.
+     */
+    public static function isPathSafe(string $path): bool
+    {
+        if ($path === '' || strlen($path) > 1024) {
+            return false;
+        }
+        // Null byte
+        if (strpos($path, "\0") !== false) {
+            return false;
+        }
+        // Decode once to catch %2e%2e / %2f style encodings, then check.
+        $decoded = rawurldecode($path);
+        foreach ([$path, $decoded] as $candidate) {
+            $normalized = str_replace('\\', '/', $candidate);
+            if (str_contains($normalized, '../') || str_contains($normalized, '/..') || $normalized === '..') {
+                return false;
+            }
+            // Absolute path (unix) or Windows drive letter (e.g. C:\)
+            if (str_starts_with($normalized, '/') || preg_match('/^[a-zA-Z]:/', $normalized)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Generate a secure URL for the document.
+     *
+     * NOTE (QA follow-up): the `path` param is still base64 (not signed). The
+     * traversal guard above prevents arbitrary file reads, but object-level
+     * ownership must be enforced in AuthController::serveDocument, and this URL
+     * should be migrated to URL::signedRoute() or an opaque document id.
      */
     public static function generateSecureUrl(string $path): string
     {

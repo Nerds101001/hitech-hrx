@@ -93,4 +93,33 @@ class LeaveHistoryServiceTest extends TestCase
         $this->assertEquals(2.0, $opening->amount, 'legacy reconstruction must still add used back in - there is nothing else to explain it');
         $this->assertStringContainsString('Opening Balance', $opening->notes, 'a reconstructed legacy figure should read as an opening balance, not as if it were freshly earned');
     }
+
+    /**
+     * The ledger mixed every leave type's transactions into one flat list,
+     * while the /user/leaves summary cards only total the poolable ALP/PL
+     * types (excluding ML/MAT/PL_PAT/PAT/SHL/WFH - see the leaves blade).
+     * A Short Leave "Earned for {month}" credit then showed up in the
+     * ledger with nothing on the card side to match it, so the ledger's
+     * own credit/debit sum silently diverged from Available Balance even
+     * though neither number was individually wrong.
+     */
+    public function test_short_leave_and_other_non_poolable_types_are_excluded_from_the_ledger(): void
+    {
+        $user = $this->makeUser();
+        $shl = LeaveType::where('code', 'SHL')->firstOrFail();
+
+        $balance = LeaveBalance::create([
+            'user_id' => $user->id, 'leave_type_id' => $shl->id,
+            'balance' => 0, 'used' => 0,
+        ]);
+        LeaveBalance::$auditReason = 'Earned for Test Month';
+        $balance->update(['balance' => 1.0]);
+
+        $history = LeaveHistoryService::getUnifiedHistory($user->id);
+
+        $this->assertTrue(
+            $history->every(fn($h) => $h->leave_type !== $shl->name),
+            'a Short Leave transaction has no place in the ledger the poolable-only Available Balance card reconciles against'
+        );
+    }
 }

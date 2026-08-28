@@ -39,10 +39,8 @@ Route::middleware('web')->group(function () {
           \App\Http\Middleware\SecurityHardenMiddleware::class
       ])
       ->name('auth.document.serve');
-  // Only available on local development — disabled on production
-  if (app()->isLocal()) {
-      Route::get('db-patch', [AuthController::class, 'runDbPatch'])->middleware('auth')->name('auth.db_patch');
-  }
+  // SECURITY (QA fix): browser-accessible 'db-patch' migration route removed.
+  // Run migrations via CLI (`php artisan migrate --force`) during deployment.
 
   Route::get('/auth/register', [AuthController::class, 'register'])->name('auth.register');
   Route::post('/auth/register', [AuthController::class, 'registerPost'])->name('auth.registerPost');
