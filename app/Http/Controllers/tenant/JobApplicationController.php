@@ -87,6 +87,9 @@ class JobApplicationController extends Controller
                     'name' => 'required',
                     'email' => 'required',
                     'phone' => 'required',
+                    // SECURITY (C-1): enforce a server-side type allow-list on uploads.
+                    'resume' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+                    'profile' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
                 ]
             );
 
@@ -120,9 +123,12 @@ class JobApplicationController extends Controller
                 $image_size = $request->file('profile')->getSize();
                 $result = Utility::updateStorageLimit(Auth::user()->creatorId(), $image_size);
                 if ($result == 1) {
-                    $filenameWithExt = $request->file('profile')->getClientOriginalName();
-                    $filename        = pathinfo($filenameWithExt, PATHINFO_FILENAME);
-                    $extension       = $request->file('profile')->getClientOriginalExtension();
+                    $filename        = \Illuminate\Support\Str::random(20);
+                    // SECURITY (C-1): store a random name with a restricted extension.
+                    $extension       = strtolower($request->file('profile')->getClientOriginalExtension());
+                    if (!in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+                        return redirect()->back()->with('error', __('Invalid profile image type.'));
+                    }
                     $fileNameToStore = $filename . '_' . time() . '.' . $extension;
 
                     $dir        = 'job/profile';
@@ -144,9 +150,12 @@ class JobApplicationController extends Controller
                 $result = Utility::updateStorageLimit(Auth::user()->creatorId(), $image_size);
 
                 if ($result == 1) {
-                    $filenameWithExt1 = $request->file('resume')->getClientOriginalName();
-                    $filename1        = pathinfo($filenameWithExt1, PATHINFO_FILENAME);
-                    $extension1       = $request->file('resume')->getClientOriginalExtension();
+                    $filename1        = \Illuminate\Support\Str::random(20);
+                    // SECURITY (C-1): store a random name with a restricted extension.
+                    $extension1       = strtolower($request->file('resume')->getClientOriginalExtension());
+                    if (!in_array($extension1, ['pdf', 'doc', 'docx'], true)) {
+                        return redirect()->back()->with('error', __('Invalid resume file type.'));
+                    }
                     $fileNameToStore1 = $filename1 . '_' . time() . '.' . $extension1;
 
                     $dir        = 'job/resume';
