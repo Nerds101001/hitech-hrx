@@ -50,7 +50,10 @@ class ChatController extends Controller
     $message = ChatMessage::create([
       'chat_id' => $chat->id,
       'user_id' => $user->id,
-      'content' => $request->message,
+      // SECURITY (H-2/S5): chat is plain text and is rendered client-side via
+      // innerHTML. Strip any HTML at the source so a message like
+      // <img src=x onerror=...> cannot execute in a recipient's browser.
+      'content' => strip_tags((string) $request->message),
       'message_type' => $request->messageType,
     ]);
 

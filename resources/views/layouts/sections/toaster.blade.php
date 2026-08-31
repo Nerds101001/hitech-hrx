@@ -123,7 +123,15 @@
 
   @if ($errors->any())
   (function() {
-    var errorMessages = `{!! implode('<br>', $errors->all()) !!}`;
+    // SECURITY (H-2/R1): a validation message may contain user-supplied text, and
+    // it used to be interpolated raw into this JS template literal (script-context
+    // breakout) and then rendered as HTML. Pass the messages as an escaped JSON
+    // array and HTML-escape each one before joining with <br>.
+    var errorMessages = @json($errors->all()).map(function (m) {
+      var d = document.createElement('div');
+      d.textContent = m;
+      return d.innerHTML;
+    }).join('<br>');
     if (typeof window.showErrorSwalHtml === 'function') {
       window.showErrorSwalHtml(errorMessages);
     }

@@ -136,9 +136,11 @@ class PayrollController extends Controller
                 $user = $item->user;
                 $code = $item->user->code ?? $item->user->biometric_id ?? 'N/A';
                 
+                // SECURITY (H-2/S4): escape user-controlled name/code before
+                // embedding in a rawColumns HTML string (stored XSS otherwise).
                 return '<div class="d-flex flex-column">' .
-                       '<span class="fw-bold text-heading" style="font-size: 0.85rem;">' . $user->getFullName() . '</span>' .
-                       '<small class="text-muted" style="font-size: 0.7rem;">Code: ' . $code . '</small>' .
+                       '<span class="fw-bold text-heading" style="font-size: 0.85rem;">' . e($user->getFullName()) . '</span>' .
+                       '<small class="text-muted" style="font-size: 0.7rem;">Code: ' . e($code) . '</small>' .
                        '</div>';
             })
             ->addColumn('actions', function ($item) {

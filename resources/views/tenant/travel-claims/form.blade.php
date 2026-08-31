@@ -356,7 +356,9 @@
     // In edit mode, store existing items so we can prefill the grid
     let existingItemsData = {};
     @if(isset($claim) && $claim->items->count() > 0)
-        let itemsArr = {!! json_encode($claim->items) !!};
+        {{-- SECURITY (H-2/S8): @json applies JSON_HEX_* so a claim-item string
+             containing </script> or a backtick cannot break out of this block. --}}
+        let itemsArr = @json($claim->items);
         itemsArr.forEach(item => {
             if (!item || !item.date) return;
             let dateStr = item.date;
