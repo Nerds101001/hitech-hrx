@@ -480,7 +480,9 @@ class AuthController extends Controller
       'gender' => 'required|string',
       'phone' => 'required|string',
       'email' => 'required|email|unique:users,email',
-      'password' => 'required|min:6'
+      // SECURITY (L-1): match the strong policy used by password reset/change
+      // (>=8 chars, mixed case, a number and a symbol) instead of min:6.
+      'password' => ['required', \Illuminate\Validation\Rules\Password::min(8)->mixedCase()->numbers()->symbols()],
     ];
 
     $request->validate($rules);
@@ -630,24 +632,8 @@ class AuthController extends Controller
     return redirect('/')->with('success', 'Email verified, welcome to the platform!');
   }
 
-  /**
-   * Securely execute database migrations from the browser (For shared hosting)
-   */
-  private function disabledRunDbPatch()
-  {
-      if (Auth::check() && Auth::user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
-          try {
-              Log::info('Initiating DB Patch (Migrate) from Admin UI');
-              \Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
-              $output = \Illuminate\Support\Facades\Artisan::output();
-              return response()->json(['success' => true, 'message' => 'DB Migrations executed successfully.', 'output' => $output]);
-          } catch (\Exception $e) {
-              Log::error('DB Patch Failed: ' . $e->getMessage());
-              return response()->json(['success' => false, 'message' => 'Failed to run migrations.', 'error' => $e->getMessage()]);
-          }
-      }
-      abort(403, 'Unauthorized.');
-  }
+  // SECURITY (L-6): removed dead disabledRunDbPatch() — it ran `migrate --force`
+  // from a controller action. Migrations are run via CLI during deployment.
 
   /**
    * Centralized redirection after login
