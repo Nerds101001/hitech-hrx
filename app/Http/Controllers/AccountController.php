@@ -605,6 +605,33 @@ class AccountController extends Controller
     return Success::response($roles);
   }
 
+  /**
+   * SECURITY (C-4): sensitive User columns that must never appear in the
+   * "Manage Users" directory JSON (salary/statutory IDs, home/family/contact
+   * details and account-security internals). Applied with makeHidden() so the
+   * rest of the model shape the front-end relies on is preserved. Names not
+   * present on the model are harmless no-ops.
+   */
+  private const SENSITIVE_USER_FIELDS = [
+    'base_salary', 'ctc_offered', 'salary_policy_id',
+    'custom_basic', 'custom_hra', 'custom_ca', 'custom_medical', 'custom_edu',
+    'custom_special_allowance', 'custom_pt', 'custom_epf', 'custom_esic',
+    'pf_no', 'esi_no', 'uan_no',
+    'personal_email', 'dob', 'home_phone', 'alternate_number',
+    'father_name', 'mother_name', 'spouse_name', 'marital_status', 'no_of_children', 'children_details',
+    'blood_group', 'citizenship', 'birth_country',
+    'perm_street', 'perm_building', 'perm_zip', 'perm_city', 'perm_state', 'perm_country',
+    'temp_street', 'temp_building', 'temp_zip', 'temp_city', 'temp_state', 'temp_country',
+    'emergency_contact_name', 'emergency_contact_relation', 'emergency_contact_phone',
+    'passport_issue_date', 'passport_expiry_date',
+    'visa_type', 'visa_issue_date', 'visa_expiry_date',
+    'frro_registration', 'frro_issue_date', 'frro_expiry_date',
+    'highest_qualification', 'matric_marksheet_no', 'matric_university',
+    'inter_marksheet_no', 'inter_university', 'bachelor_marksheet_no', 'bachelor_university',
+    'master_marksheet_no', 'master_university', 'experience_certificate_no',
+    'biometric_id', 'locked_until', 'login_attempts', 'otp_attempts',
+  ];
+
   public function getUsersByRoleAjax($role)
   {
     if (!$role) {
@@ -612,20 +639,23 @@ class AccountController extends Controller
     }
 
     if ($role == 'all') {
-      $users = User::get();
+      $users = User::get()->makeHidden(self::SENSITIVE_USER_FIELDS);
       return Success::response($users);
     }
 
     $role = Role::find($role);
+    if (!$role) {
+      return Error::response('Role not found');
+    }
 
-    $users = $role->users;
+    $users = $role->users->makeHidden(self::SENSITIVE_USER_FIELDS);
 
     return Success::response($users);
   }
 
   public function getUsersAjax()
   {
-    $users = User::where('id', '!=', auth()->user()->id)->get();
+    $users = User::where('id', '!=', auth()->user()->id)->get()->makeHidden(self::SENSITIVE_USER_FIELDS);
 
     return Success::response($users);
   }
