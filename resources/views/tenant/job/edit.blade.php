@@ -137,7 +137,7 @@
                 const descEditor = document.querySelector('#description-editor');
                 if (descEditor) {
                     const quillDescription = new Quill(descEditor, quillConfig);
-                    quillDescription.root.innerHTML = `{!! $job->description !!}`;
+                    quillDescription.root.innerHTML = @json($job->description); {{-- SECURITY (S2): @json is JS-escaped; no template-literal breakout --}}
                     quillDescription.on('text-change', function() {
                         document.getElementById('description').value = quillDescription.root.innerHTML;
                     });
@@ -146,7 +146,7 @@
                 const reqEditor = document.querySelector('#requirement-editor');
                 if (reqEditor) {
                     const quillRequirement = new Quill(reqEditor, quillConfig);
-                    quillRequirement.root.innerHTML = `{!! $job->requirement !!}`;
+                    quillRequirement.root.innerHTML = @json($job->requirement);
                     quillRequirement.on('text-change', function() {
                         document.getElementById('requirement').value = quillRequirement.root.innerHTML;
                     });
@@ -155,7 +155,7 @@
                 const termsEditor = document.querySelector('#terms-editor');
                 if (termsEditor) {
                     const quillTerms = new Quill(termsEditor, quillConfig);
-                    quillTerms.root.innerHTML = `{!! $job->terms_and_conditions !!}`;
+                    quillTerms.root.innerHTML = @json($job->terms_and_conditions);
                     quillTerms.on('text-change', function() {
                         document.getElementById('terms_and_conditions').value = quillTerms.root.innerHTML;
                     });

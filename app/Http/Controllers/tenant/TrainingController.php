@@ -513,6 +513,17 @@ class TrainingController extends Controller
         unset($data['pdf_file']);
         $data['show_all_at_once'] = $request->has('show_all_at_once');
 
+        // SECURITY (S6/S7): content_body is rendered as raw HTML in the training
+        // reader ({!! !!}) and injected via innerHTML in the course player. Sanitize
+        // it on save (broad allow-list so legitimate rich content -- images, tables,
+        // code -- survives, while scripts/handlers/javascript: URLs are stripped).
+        if (! empty($data['content_body'])) {
+            $data['content_body'] = \App\Helpers\HtmlSanitizer::clean(
+                $data['content_body'],
+                'p,br,b,strong,i,em,u,s,a[href|title|target],ul,ol,li,h1,h2,h3,h4,h5,h6,span,blockquote,pre,code,hr,img[src|alt|width|height],table,thead,tbody,tr,td,th,div,figure,figcaption'
+            );
+        }
+
         if ($request->filled('video_chapters')) {
             $decoded = json_decode($request->video_chapters, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
