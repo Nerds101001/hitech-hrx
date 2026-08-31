@@ -24,6 +24,22 @@ class AdminRoleGuard
     private const ADMIN_ROLES = ['admin', 'hr', 'accounts', 'manager'];
 
     /**
+     * Permissions that, by themselves, grant admin.guard passage. Public so
+     * RoleController can forbid a non-admin from ASSIGNING them (privilege-
+     * escalation guard, H-1) — otherwise a manager / roles.manage delegate
+     * could self-grant one of these and unlock the entire admin route tree.
+     * Keep this list and the check in hasAdminPermissionOverride() in sync.
+     */
+    public const ELEVATED_PERMISSIONS = [
+        'lifecycle.manage',
+        'approvals.manage',
+        'expense.approve',
+        'loans.view_all',
+        'loans.approve',
+        'onboarding.manage',
+    ];
+
+    /**
      * Routes that employees are allowed to access even inside the admin route group.
      * These are self-service endpoints (own profile, own profile update, logout).
      */
@@ -102,17 +118,8 @@ class AdminRoleGuard
      */
     private function hasAdminPermissionOverride($user): bool
     {
-        $elevatedPermissions = [
-            'lifecycle.manage',
-            'approvals.manage',
-            'expense.approve',
-            'loans.view_all',
-            'loans.approve',
-            'onboarding.manage',
-        ];
-
         foreach ($user->getAllPermissions() as $permission) {
-            if (in_array($permission->name, $elevatedPermissions, true)) {
+            if (in_array($permission->name, self::ELEVATED_PERMISSIONS, true)) {
                 return true;
             }
         }

@@ -59,6 +59,15 @@ class RoleController extends Controller
       'is_location_activity_tracking_enabled' => $request->has('locationActivityTracking') && $request->locationActivityTracking == 'on',
     ];
 
+    // SECURITY (H-1): validate the requested permission set BEFORE any write, so
+    // a non-admin cannot attach an admin-tier permission to a role (which they
+    // could then have assigned to themselves).
+    $requestedPermissions = $request->permissions ?? [];
+    $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
+    if ($guard = $this->guardPrivilegeEscalation($existingPermissions)) {
+      return $guard;
+    }
+
     // Check if updating or creating
     if ($request->id) {
       // Update Existing Role
@@ -96,6 +105,29 @@ class RoleController extends Controller
     return Success::response($user->permissions);
   }
 
+  /**
+   * SECURITY (H-1): a non-admin actor may not assign an admin-tier permission
+   * (one that grants admin.guard passage) to anyone, nor edit their OWN
+   * permission set. This preserves legitimate roles.manage delegation for
+   * ordinary permissions while blocking self-escalation to admin. Admins are
+   * unrestricted. Returns an Error response to abort, or null to proceed.
+   */
+  private function guardPrivilegeEscalation(array $requestedPermissionNames, $targetUserId = null): ?\Illuminate\Http\JsonResponse
+  {
+    $actor = auth()->user();
+    if ($actor && $actor->hasRole('admin')) {
+      return null;
+    }
+    if ($targetUserId !== null && $actor && (int) $actor->id === (int) $targetUserId) {
+      return Error::response('You cannot modify your own permissions.');
+    }
+    $elevated = array_values(array_intersect($requestedPermissionNames, \App\Http\Middleware\AdminRoleGuard::ELEVATED_PERMISSIONS));
+    if (!empty($elevated)) {
+      return Error::response('You are not allowed to assign administrative permissions: ' . implode(', ', $elevated));
+    }
+    return null;
+  }
+
   public function syncUserPermissionsAjax(Request $request)
   {
     $userId = $request->user_id;
@@ -104,13 +136,15 @@ class RoleController extends Controller
         return Error::response('User not found');
     }
 
-    if ($request->has('permissions')) {
-        $requestedPermissions = $request->permissions;
-        $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
-        $user->syncPermissions($existingPermissions);
-    } else {
-        $user->syncPermissions([]); // Revoke all direct permissions
+    $requestedPermissions = $request->has('permissions') ? ($request->permissions ?? []) : [];
+    $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
+
+    // SECURITY (H-1): block self-escalation / assigning admin-tier permissions.
+    if ($guard = $this->guardPrivilegeEscalation($existingPermissions, $userId)) {
+        return $guard;
     }
+
+    $user->syncPermissions($existingPermissions);
 
     return Success::response('User-specific permissions updated successfully');
   }
