@@ -17,6 +17,13 @@ class AppServiceProvider extends ServiceProvider
   {
     if ($this->app->environment('production')) {
       URL::forceScheme('https');
+      // SECURITY (H-3): pin the root URL to APP_URL so generated absolute links
+      // (notably the password-reset URL, which is built with url()) cannot be
+      // poisoned via the Host header. No TrustHosts is configured, so url()
+      // would otherwise take the host from an attacker-supplied Host header,
+      // letting a reset email point at an attacker's domain (token capture ->
+      // account takeover). Production-only, so local dev is unaffected.
+      URL::forceRootUrl(config('app.url'));
     }
   }
 
