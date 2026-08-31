@@ -186,14 +186,21 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
     });
 
     //utilities Route
-    Route::get('utilities', [UtilitiesController::class, 'index'])->name('utilities.index');
-    Route::post('utilities/createBackup', [UtilitiesController::class, 'createBackup'])->name('utilities.createBackup');
-    Route::get('utilities/downloadBackup/{fileName}', [UtilitiesController::class, 'downloadBackup'])->name('utilities.downloadBackup');
-    Route::get('utilities/getBackupList', [UtilitiesController::class, 'getBackupListAjax'])->name('utilities.getBackupList');
-    Route::delete('utilities/deleteBackup/{file}', [UtilitiesController::class, 'deleteBackup'])->name('utilities.deleteBackup');
-    Route::post('utilities/restoreBackup/{fileName}', [UtilitiesController::class, 'restoreBackup'])->name('utilities.restoreBackup');
-    Route::post('utilities/clearCache', [UtilitiesController::class, 'clearCache'])->name('utilities.clearCache');
-    Route::post('utilities/clearLog', [UtilitiesController::class, 'clearLog'])->name('utilities.clearLog');
+    // SECURITY (C-2): these are landlord-only maintenance actions (full DB backup
+    // download/restore/delete, cache/log clear). They were previously reachable by
+    // ANY authenticated user because MenuPermissionMiddleware only hides menus and
+    // AdminRoleGuard is not on this group. Gate the whole block to admin, and
+    // constrain the filename params to a backup .zip so they can't traverse.
+    Route::middleware('role:admin')->group(function () {
+      Route::get('utilities', [UtilitiesController::class, 'index'])->name('utilities.index');
+      Route::post('utilities/createBackup', [UtilitiesController::class, 'createBackup'])->name('utilities.createBackup');
+      Route::get('utilities/downloadBackup/{fileName}', [UtilitiesController::class, 'downloadBackup'])->name('utilities.downloadBackup')->where('fileName', '[A-Za-z0-9 ._-]+\.zip');
+      Route::get('utilities/getBackupList', [UtilitiesController::class, 'getBackupListAjax'])->name('utilities.getBackupList');
+      Route::delete('utilities/deleteBackup/{file}', [UtilitiesController::class, 'deleteBackup'])->name('utilities.deleteBackup')->where('file', '[A-Za-z0-9 ._-]+\.zip');
+      Route::post('utilities/restoreBackup/{fileName}', [UtilitiesController::class, 'restoreBackup'])->name('utilities.restoreBackup')->where('fileName', '[A-Za-z0-9 ._-]+\.zip');
+      Route::post('utilities/clearCache', [UtilitiesController::class, 'clearCache'])->name('utilities.clearCache');
+      Route::post('utilities/clearLog', [UtilitiesController::class, 'clearLog'])->name('utilities.clearLog');
+    });
   });
 });
 

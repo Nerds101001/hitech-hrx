@@ -5,14 +5,24 @@ namespace App\Http\Controllers;
 use App\ApiClasses\Error;
 use App\ApiClasses\Success;
 use Carbon\Carbon;
+use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Helpers\Format;
 use Symfony\Component\Console\Output\BufferedOutput;
 
-class UtilitiesController extends Controller
+class UtilitiesController extends Controller implements HasMiddleware
 {
+  /**
+   * SECURITY (C-2): defense in depth. These maintenance actions expose the full
+   * database (backup download/restore/delete) and log clearing, so require the
+   * admin role at the controller level too — not only on the route group.
+   */
+  public static function middleware(): array
+  {
+    return ['role:admin'];
+  }
 
   public function index()
   {
@@ -43,6 +53,7 @@ class UtilitiesController extends Controller
 
   public function downloadBackup($fileName)
   {
+    $fileName = basename($fileName); // SECURITY (C-2): strip any path component
     $file = config('backup.backup.name') . '/' . $fileName;
     $disk = Storage::disk(config('backup.backup.destination.disks')[0]);
 
@@ -78,6 +89,7 @@ class UtilitiesController extends Controller
   {
     $output = new BufferedOutput();
     try {
+      $fileName = basename($fileName); // SECURITY (C-2): strip any path component
       // Assuming the backup file contains a database dump
       $filePath = config('backup.backup.name') . '/' . $fileName;
       $disk = Storage::disk(config('backup.backup.destination.disks')[0]);
