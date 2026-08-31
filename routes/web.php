@@ -123,13 +123,17 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
   Route::get('/getSearchDataAjax', [BaseController::class, 'getSearchDataAjax'])->name('search.Ajax');
 
   //Addon Routes
+  // SECURITY (H-6): module upload/activate/uninstall installs and runs arbitrary
+  // code (a module's ServiceProvider is autoloaded). This must be admin-only.
   if (config('custom.custom.displayAddon')) {
-    Route::get('/addons', [AddonController::class, 'index'])->name('addons.index');
-    Route::post('/addons/activate', [AddonController::class, 'activate'])->name('module.activate');
-    Route::post('/addons/deactivate', [AddonController::class, 'deactivate'])->name('module.deactivate');
-    Route::post('/addons/upload', [AddonController::class, 'upload'])->name('module.upload');
-    Route::post('/addons/update', [AddonController::class, 'update'])->name('module.update');
-    Route::delete('/addons/uninstall', [AddonController::class, 'uninstall'])->name('module.uninstall');
+    Route::middleware('role:admin')->group(function () {
+      Route::get('/addons', [AddonController::class, 'index'])->name('addons.index');
+      Route::post('/addons/activate', [AddonController::class, 'activate'])->name('module.activate');
+      Route::post('/addons/deactivate', [AddonController::class, 'deactivate'])->name('module.deactivate');
+      Route::post('/addons/upload', [AddonController::class, 'upload'])->name('module.upload');
+      Route::post('/addons/update', [AddonController::class, 'update'])->name('module.update');
+      Route::delete('/addons/uninstall', [AddonController::class, 'uninstall'])->name('module.uninstall');
+    });
   }
 
   Route::get('/lang/{locale}', [LanguageController::class, 'swap']);

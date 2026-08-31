@@ -4,13 +4,22 @@ namespace App\Http\Controllers;
 
 use ZipArchive;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Facades\Log;
 use Nwidart\Modules\Facades\Module;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Artisan;
 
-class AddonController extends Controller
+class AddonController extends Controller implements HasMiddleware
 {
+  /**
+   * SECURITY (H-6): installing/activating an addon runs its code. Require admin
+   * at the controller level too, not only on the route group.
+   */
+  public static function middleware(): array
+  {
+    return ['role:admin'];
+  }
 
   public function index()
   {
@@ -66,13 +75,26 @@ class AddonController extends Controller
 
     // Store the uploaded file temporarily
     $file = $request->file('module');
-    $fileName = $file->getClientOriginalName();
+    // SECURITY (H-6): never trust the client filename as a path component.
+    $fileName = basename($file->getClientOriginalName());
     $tempPath = storage_path('modules/' . $fileName);
     $file->move(storage_path('modules'), $fileName);
 
     // Extract the zip file to a temporary location
     $zip = new ZipArchive();
     if ($zip->open($tempPath) === TRUE) {
+      // SECURITY (H-6): reject Zip Slip — an entry whose path escapes the target
+      // directory (e.g. ../../public/shell.php) would otherwise be written
+      // anywhere on disk and executed. Validate every entry before extracting.
+      for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entryName = str_replace('\\', '/', (string) $zip->getNameIndex($i));
+        if (str_contains($entryName, '../') || str_starts_with($entryName, '/') || preg_match('/^[A-Za-z]:/', $entryName)) {
+          $zip->close();
+          File::delete($tempPath);
+          return redirect()->back()->with('error', 'Invalid addon archive: unsafe file path detected.');
+        }
+      }
+
       // Get the base filename without any extension or extra path
       $moduleFolderName = pathinfo($fileName, PATHINFO_FILENAME);
 
@@ -123,7 +145,13 @@ class AddonController extends Controller
       return redirect()->back()->with('error', 'This feature is disabled in the demo.');
     }
 
-    $moduleName = $request->input('module');
+    // SECURITY (H-6): the module name reaches File::deleteDirectory(); a value
+    // like '../../public' would delete an arbitrary directory. Strip any path
+    // component and only act on a real, installed module.
+    $moduleName = basename((string) $request->input('module'));
+    if ($moduleName === '' || !Module::find($moduleName)) {
+      return redirect()->back()->with('error', 'Unknown module.');
+    }
 
     // Disable the module before uninstalling
     Artisan::call('module:disable', ['module' => $moduleName]);
