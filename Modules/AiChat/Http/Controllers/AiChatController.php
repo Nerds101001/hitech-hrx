@@ -3,23 +3,16 @@
 namespace Modules\AiChat\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Modules\AiChat\Services\GptService;
-use Modules\AiChat\Services\SchemaService;
+
+// SECURITY (H-8): the GptService/SchemaService text-to-SQL services -- which ran
+// GPT-generated SQL directly against the whole database (cross-tenant read/write)
+// -- have been DELETED, not just disabled, so they cannot be revived by
+// uncommenting a route. This controller no longer depends on them; the remaining
+// actions are hard-disabled below.
 
 class AiChatController extends Controller
 {
-  protected GptService $gptService;
-  protected SchemaService $schemaService;
-
-  public function __construct(GptService $gptService, SchemaService $schemaService)
-  {
-    $this->gptService = $gptService;
-    $this->schemaService = $schemaService;
-  }
-
   public function index()
   {
     return view('aichat::index');
