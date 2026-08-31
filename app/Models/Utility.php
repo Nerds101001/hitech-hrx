@@ -70,6 +70,34 @@ class Utility extends Model
         try {
             if ($request->hasFile($key_name)) {
                 $file = $request->file($key_name);
+
+                // SECURITY (M-5): this helper previously IGNORED $custom_validation
+                // and stored the file to the web-served public disk with no type
+                // check. Always block executable/script extensions (checked on both
+                // the client extension and the caller-supplied stored name), and
+                // enforce $custom_validation when a caller provides it.
+                $dangerous = [
+                    'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phps', 'pht', 'phtml', 'phar',
+                    'shtml', 'asp', 'aspx', 'jsp', 'jspx', 'cgi', 'pl', 'py', 'rb', 'sh', 'bash',
+                    'bat', 'cmd', 'com', 'exe', 'msi', 'htaccess', 'htpasswd',
+                    'svg', 'svgz', 'html', 'htm', 'xhtml', 'js', 'mjs',
+                ];
+                $clientExt = strtolower($file->getClientOriginalExtension());
+                $storedExt = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                if (in_array($clientExt, $dangerous, true) || in_array($storedExt, $dangerous, true)) {
+                    return ['flag' => 0, 'msg' => 'This file type is not allowed.'];
+                }
+
+                if (! empty($custom_validation)) {
+                    $validator = \Illuminate\Support\Facades\Validator::make(
+                        [$key_name => $file],
+                        [$key_name => $custom_validation]
+                    );
+                    if ($validator->fails()) {
+                        return ['flag' => 0, 'msg' => $validator->errors()->first()];
+                    }
+                }
+
                 $file->storeAs($path, $name, 'public');
 
                 return [
