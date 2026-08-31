@@ -40,6 +40,17 @@ class AppServiceProvider extends ServiceProvider
       return \Illuminate\Cache\RateLimiting\Limit::perMinute(600)->by($request->ip());
     });
 
+    /* SECURITY (H-4): cap password guessing per account. This complements the
+       3-attempt account lockout so that even if the lockout is lifted (e.g. via
+       the self-service unlock link) an attacker still cannot retry rapidly.
+       Keyed by EMAIL, not IP, so it is safe behind the shared CDN/proxy IP and
+       does not throttle a whole office logging in from one NAT address. */
+    \Illuminate\Support\Facades\RateLimiter::for('login', function ($request) {
+      $email = strtolower(trim((string) $request->input('email')));
+      $key = $email !== '' ? 'login:' . $email : 'login-ip:' . $request->ip();
+      return \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by($key);
+    });
+
     // Never mail an address that cannot be delivered to. Registered explicitly
     // rather than left to event discovery so it cannot quietly stop applying.
     \Illuminate\Support\Facades\Event::listen(

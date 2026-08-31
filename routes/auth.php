@@ -18,7 +18,9 @@ Route::middleware('web')->group(function () {
   Route::post('/activation', [BaseController::class, 'activate'])->name('activation.activate');
 
   Route::get('/auth/login', [AuthController::class, 'login'])->name('login');
-  Route::post('/auth/login', [AuthController::class, 'loginPost'])->name('auth.loginPost');
+  // SECURITY (H-4): throttle password guessing per account (see the 'login'
+  // limiter in AppServiceProvider). Keyed by email so shared-IP offices are fine.
+  Route::post('/auth/login', [AuthController::class, 'loginPost'])->middleware('throttle:login')->name('auth.loginPost');
   
   Route::get('two-factor', [AuthController::class, 'showOtpForm'])->name('auth.otp.form');
   Route::post('two-factor/verify', [AuthController::class, 'verifyOtp'])->name('auth.otp.verify');
