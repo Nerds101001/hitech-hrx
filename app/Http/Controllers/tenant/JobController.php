@@ -110,9 +110,9 @@ class JobController extends Controller
             $job->status               = $request->status;
             $job->start_date           = $request->start_date;
             $job->end_date             = $request->end_date;
-            $job->description          = strip_tags($request->description, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>');
-            $job->requirement          = strip_tags($request->requirement, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>');
-            $job->terms_and_conditions = !empty($request->terms_and_conditions) ? strip_tags($request->terms_and_conditions, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>') : '';
+            $job->description          = \App\Helpers\HtmlSanitizer::clean($request->description);
+            $job->requirement          = \App\Helpers\HtmlSanitizer::clean($request->requirement);
+            $job->terms_and_conditions = \App\Helpers\HtmlSanitizer::clean($request->terms_and_conditions);
             $job->code                 = uniqid();
             $job->applicant            = !empty($request->applicant) ? implode(',', $request->applicant) : '';
             $job->visibility           = !empty($request->visibility) ? implode(',', $request->visibility) : '';
@@ -201,9 +201,9 @@ class JobController extends Controller
             $job->status          = $request->status;
             $job->start_date      = $request->start_date;
             $job->end_date        = $request->end_date;
-            $job->description     = strip_tags($request->description, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>');
-            $job->requirement     = strip_tags($request->requirement, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>');
-            $job->terms_and_conditions = !empty($request->terms_and_conditions) ? strip_tags($request->terms_and_conditions, '<b><i><u><a><p><br><ul><li><ol><h1><h2><h3><h4><h5><h6>') : '';
+            $job->description     = \App\Helpers\HtmlSanitizer::clean($request->description);
+            $job->requirement     = \App\Helpers\HtmlSanitizer::clean($request->requirement);
+            $job->terms_and_conditions = \App\Helpers\HtmlSanitizer::clean($request->terms_and_conditions);
             $job->applicant       = !empty($request->applicant) ? implode(',', $request->applicant) : '';
             $job->visibility      = !empty($request->visibility) ? implode(',', $request->visibility) : '';
             $job->custom_question = !empty($request->custom_question) ? implode(',', $request->custom_question) : '';
