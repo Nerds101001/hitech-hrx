@@ -106,7 +106,7 @@ class AuthController extends Controller
           // ----------------------------
 
           // Generate OTP
-          $otp = rand(100000, 999999);
+          $otp = random_int(100000, 999999); // SECURITY (M-1): CSPRNG, not predictable rand()
           $user->otp_code = $otp;
           $user->otp_expires_at = now()->addMinutes(10);
           $user->save();
@@ -298,7 +298,7 @@ class AuthController extends Controller
         return redirect()->back()->with('error', 'Please wait 1 minute before requesting a new code.');
       }
 
-      $otp = rand(100000, 999999);
+      $otp = random_int(100000, 999999); // SECURITY (M-1): CSPRNG, not predictable rand()
       $user->otp_code = $otp;
       $user->otp_expires_at = now()->addMinutes(10);
       $user->save();

@@ -512,7 +512,16 @@ USER REQUEST:
         $file = LibraryFile::findOrFail($id);
 
         if ($file->youtube_url) {
-            return redirect()->away($file->youtube_url);
+            // SECURITY (M-16): youtube_url is uploader-controlled, so redirecting to
+            // it blindly is an open redirect (and a javascript:/data: URL slips
+            // through). Only follow genuine YouTube hosts (exact match, so
+            // youtube.com.evil.com is rejected).
+            $host = strtolower((string) parse_url($file->youtube_url, PHP_URL_HOST));
+            $allowedHosts = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com'];
+            if (in_array($host, $allowedHosts, true)) {
+                return redirect()->away($file->youtube_url);
+            }
+            abort(404, 'Invalid video URL.');
         }
 
         // SECURITY FIX: Use signed temporary URLs for private R2 storage
