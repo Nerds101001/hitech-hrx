@@ -387,16 +387,26 @@ class AuthController extends Controller
       // 1. Profile pictures are visible to all authenticated employees (we bypass DB query to save connections)
       $isProfilePicture = str_contains($path, \App\Constants\Constants::BaseFolderEmployeeProfile);
       
-      // Also treat images in onboarding folder as profile pictures for visibility
+      // SECURITY (M-3): onboarding images used to be served like public profile
+      // pictures (no auth at all), exposing personal onboarding documents to the
+      // anonymous internet. Keep them viewable in-app but require the caller to be
+      // authenticated. (Ownership is still not enforced for these images so display
+      // does not break where the file isn't tracked in the request tables.)
+      $isOnboardingImage = false;
       if (!$isProfilePicture && str_contains($path, \App\Constants\Constants::BaseFolderOnboardingDocuments)) {
           $extension = pathinfo($path, PATHINFO_EXTENSION);
           if (in_array(strtolower($extension), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
-              $isProfilePicture = true;
+              $isOnboardingImage = true;
           }
       }
 
-      // If it is NOT a profile picture, we must boot the auth session and hit the database
-      if (!$isProfilePicture) {
+      if ($isOnboardingImage && !Auth::check()) {
+          abort(403, 'Unauthorized access to secure document.');
+      }
+
+      // If it is NOT a profile picture or an onboarding image, boot the auth
+      // session and hit the database for the full ownership check.
+      if (!$isProfilePicture && !$isOnboardingImage) {
           if (!Auth::check()) {
               abort(403, 'Unauthorized access to secure document.');
           }
@@ -449,6 +459,9 @@ class AuthController extends Controller
       
       return response($decryptedContent)
           ->header('Content-Type', $mimeType)
+          // SECURITY (M-3): this route strips SecurityHardenMiddleware, so set the
+          // anti-MIME-sniffing header here (content is served inline).
+          ->header('X-Content-Type-Options', 'nosniff')
           ->header('Cache-Control', 'private, max-age=604800')
           ->header('Content-Disposition', 'inline; filename="' . basename($path) . '"');
   }
