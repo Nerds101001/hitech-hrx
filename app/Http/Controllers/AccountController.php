@@ -199,7 +199,18 @@ class AccountController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
+    // SECURITY (C-3): defense in depth on top of the role:admin|hr route gate.
+    if ($unauthorized = self::authorizeUserManagement(null)) {
+      return $unauthorized;
+    }
+    if ($id == auth()->id()) {
+      return Error::response('You cannot change your own account status here.');
+    }
+
     $user = User::find($id);
+    if (!$user) {
+      return Error::response('User not found');
+    }
 
     if ($user->status == UserAccountStatus::ACTIVE) {
       $user->status = UserAccountStatus::INACTIVE;
@@ -214,7 +225,18 @@ class AccountController extends Controller
 
   public function suspendUserAjax($id)
   {
+    // SECURITY (C-3): defense in depth on top of the role:admin|hr route gate.
+    if ($unauthorized = self::authorizeUserManagement(null)) {
+      return $unauthorized;
+    }
+    if ($id == auth()->id()) {
+      return Error::response('You cannot change your own account status here.');
+    }
+
     $user = User::find($id);
+    if (!$user) {
+      return Error::response('User not found');
+    }
 
     $user->status = UserAccountStatus::RETIRED;
 
@@ -541,7 +563,18 @@ class AccountController extends Controller
 
   public function changeUserStatusAjax($id)
   {
+    // SECURITY (C-3): defense in depth on top of the role:admin|hr route gate.
+    if ($unauthorized = self::authorizeUserManagement(null)) {
+      return $unauthorized;
+    }
+    if ($id == auth()->id()) {
+      return Error::response('You cannot change your own account status here.');
+    }
+
     $user = User::find($id);
+    if (!$user) {
+      return Error::response('User not found');
+    }
 
     if ($user->status == 'active') {
       $user->status = 'inactive';

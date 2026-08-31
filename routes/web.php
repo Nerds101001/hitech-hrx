@@ -154,20 +154,31 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
     });
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('superAdmin.dashboard');
-    Route::get('account', [AccountController::class, 'index'])->name('account.index');
-    Route::get('account/activeInactiveUserAjax/{id}', [AccountController::class, 'activeInactiveUserAjax'])->name('account.activeInactiveUserAjax');
-    Route::get('account/suspendUserAjax/{id}', [AccountController::class, 'suspendUserAjax'])->name('account.suspendUserAjax');
-    // Route::get('account/deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('account.deleteUserAjax');
-    Route::get('account/viewUser/{id}', [AccountController::class, 'viewUser'])->name('account.viewUser');
+
+    // Self-service: any authenticated user may view their OWN profile and change
+    // their OWN password. These stay outside the admin/HR gate below.
     Route::get('account/myProfile', [AccountController::class, 'myProfile'])->name('account.myProfile');
-    Route::get('account/indexAjax', [AccountController::class, 'userListAjax'])->name('account.userListAjax');
-    Route::get('account/getRolesAjax', [AccountController::class, 'getRolesAjax'])->name('account.getRolesAjax');
-    Route::get('account/getUsersAjax', [AccountController::class, 'getUsersAjax'])->name('account.getUsersAjax');
-    Route::get('account/getUsersByRoleAjax/{role}', [AccountController::class, 'getUsersByRoleAjax'])->name('account.getUsersByRoleAjax');
-    Route::get('account/editUserAjax/{id}', [AccountController::class, 'editUserAjax'])->name('account.editUserAjax');
-    // Route::post('account/updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('account.updateUserStatusAjax');
-    Route::post('account/changeUserStatusAjax/{id}', [AccountController::class, 'changeUserStatusAjax'])->name('account.changeUserStatusAjax');
     Route::post('account/changePassword', [AccountController::class, 'changePassword'])->name('account.changePassword');
+
+    // SECURITY (C-3/C-4): the legacy "Manage Users" screen both MUTATES other
+    // users' accounts (status changes that can retire/lock out an admin) and LISTS
+    // full user models (salary/bank/PII). It was reachable by ANY authenticated
+    // user. Gate the entire management surface to admin/HR. (Controller-level
+    // guards and field projection are added in the C-3/C-4 controller commits.)
+    Route::middleware('role:admin|hr')->group(function () {
+      Route::get('account', [AccountController::class, 'index'])->name('account.index');
+      Route::get('account/activeInactiveUserAjax/{id}', [AccountController::class, 'activeInactiveUserAjax'])->name('account.activeInactiveUserAjax');
+      Route::get('account/suspendUserAjax/{id}', [AccountController::class, 'suspendUserAjax'])->name('account.suspendUserAjax');
+      // Route::get('account/deleteUserAjax/{id}', [AccountController::class, 'deleteUserAjax'])->name('account.deleteUserAjax');
+      Route::get('account/viewUser/{id}', [AccountController::class, 'viewUser'])->name('account.viewUser');
+      Route::get('account/indexAjax', [AccountController::class, 'userListAjax'])->name('account.userListAjax');
+      Route::get('account/getRolesAjax', [AccountController::class, 'getRolesAjax'])->name('account.getRolesAjax');
+      Route::get('account/getUsersAjax', [AccountController::class, 'getUsersAjax'])->name('account.getUsersAjax');
+      Route::get('account/getUsersByRoleAjax/{role}', [AccountController::class, 'getUsersByRoleAjax'])->name('account.getUsersByRoleAjax');
+      Route::get('account/editUserAjax/{id}', [AccountController::class, 'editUserAjax'])->name('account.editUserAjax');
+      // Route::post('account/updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('account.updateUserStatusAjax');
+      Route::post('account/changeUserStatusAjax/{id}', [AccountController::class, 'changeUserStatusAjax'])->name('account.changeUserStatusAjax');
+    });
     //Account Customer
     Route::get('account/customerIndex', [AccountController::class, 'customerIndex'])->name('account.customerIndex');
     Route::get('account/customerIndexAjax', [AccountController::class, 'customerIndexAjax'])->name('account.customerIndexAjax');
