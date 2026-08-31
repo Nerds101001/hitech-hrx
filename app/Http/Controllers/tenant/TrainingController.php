@@ -457,6 +457,11 @@ class TrainingController extends Controller
      */
     public function storePhase(Request $request)
     {
+        // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'id' => 'nullable|exists:training_phases,id',
             'title' => 'required|string|max:255',
@@ -481,6 +486,11 @@ class TrainingController extends Controller
      */
     public function storeModule(Request $request)
     {
+        // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'id' => 'nullable|exists:training_modules,id',
             'phase_id' => 'required|exists:training_phases,id',
@@ -541,6 +551,11 @@ class TrainingController extends Controller
      */
     public function storeQuestion(Request $request)
     {
+        // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+
         $validated = $request->validate([
             'id' => 'nullable|exists:training_questions,id',
             'module_id' => 'required|exists:training_modules,id',
@@ -563,6 +578,11 @@ class TrainingController extends Controller
      */
     public function destroyQuestion($id)
     {
+        // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+
         $question = TrainingQuestion::findOrFail($id);
         $question->delete();
         return redirect()->back()->with('success', 'Question removed from assessment.');
@@ -573,6 +593,11 @@ class TrainingController extends Controller
      */
     public function generateAIQuestions($id)
     {
+        // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+
         $module = TrainingModule::findOrFail($id);
         $content = $module->content_body;
 
