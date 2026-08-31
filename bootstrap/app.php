@@ -66,13 +66,13 @@ return Application::configure(basePath: dirname(__DIR__))
     $middleware->appendToGroup('api', [
       TransformApiResponse::class,
     ]);
-    // HRX's canonical call-control contract (see routes/user.php) is meant to
-    // be exercised directly via Postman/curl during local testing, not only
-    // through the app's own JS — session auth ('web'+'auth') still applies,
-    // this only skips the CSRF double-submit check for this one path.
-    $middleware->validateCsrfTokens(except: [
-      'user/api/v1/calls/*',
-    ]);
+    // SECURITY (M-2): the telephony call-control API (user/api/v1/calls/*) is
+    // session-authenticated and state-changing (initiate/hangup/disposition/
+    // redial). It previously skipped CSRF, so a cross-site page could drive it
+    // with the victim's session cookie (place calls, change dispositions). The
+    // dashboard's fetch() calls now send X-CSRF-TOKEN, so the exemption is
+    // removed and default CSRF protection applies to every path. (Postman/curl
+    // testing must now include the CSRF token + cookie.)
     $middleware->alias([
       'role' => RoleMiddleware::class,
       'permission' => PermissionMiddleware::class,

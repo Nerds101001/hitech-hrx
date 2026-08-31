@@ -270,7 +270,7 @@
     var btn = this;
     fetch('/user/api/v1/calls', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
       body: JSON.stringify({ to: to }),
     })
       .then(function (r) { return r.json(); })
@@ -285,13 +285,13 @@
 
   el('dialerHangupBtn').addEventListener('click', function () {
     if (!currentCallId) return;
-    fetch('/user/api/v1/calls/' + currentCallId + '/hangup', { method: 'POST' })
+    fetch('/user/api/v1/calls/' + currentCallId + '/hangup', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
       .then(function (r) { return r.json(); }).then(render);
   });
 
   el('dialerSimulateBtn').addEventListener('click', function () {
     if (!currentCallId) return;
-    fetch('/user/api/v1/calls/' + currentCallId + '/simulate-customer-hangup', { method: 'POST' })
+    fetch('/user/api/v1/calls/' + currentCallId + '/simulate-customer-hangup', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
       .then(function (r) { return r.json(); }).then(render);
   });
 
@@ -301,7 +301,7 @@
     if (!code) return;
     fetch('/user/api/v1/calls/' + currentCallId + '/disposition', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
       body: JSON.stringify({ code: code }),
     })
       .then(function (r) { return r.json(); })
