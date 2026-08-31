@@ -14,7 +14,10 @@ class Announcement extends Model
         'created_by_id',
         'title',
         'content',
-        'is_html',
+        // SECURITY (M-15): 'is_html' intentionally NOT mass-assignable — it gates
+        // raw {!! !!} rendering of announcement content. It is set explicitly in the
+        // server-side welcome path (HrNotificationService) only, never from a
+        // request payload, so a create($request->all()) can never turn it on.
         'type',
         'priority',
         'start_date',

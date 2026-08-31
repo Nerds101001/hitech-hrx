@@ -162,7 +162,11 @@ class SettingsController extends Controller
     ]);
 
     $settings = Settings::first();
-    $settings->fill($request->except('company_logo'));
+    // SECURITY (M-15): fill only the validated company fields, not every request key.
+    $settings->fill($request->only([
+      'company_name', 'company_address', 'company_phone', 'company_email', 'company_website',
+      'company_country', 'company_city', 'company_zipcode', 'company_state',
+    ]));
 
     if ($request->hasFile('company_logo')) {
 

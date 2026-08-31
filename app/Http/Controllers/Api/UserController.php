@@ -122,6 +122,13 @@ class UserController extends Controller
       return Error::response('User not found', 404);
     }
 
+    // SECURITY (M-15): do not expose terminated/inactive accounts (contact details,
+    // role) through this id lookup.
+    $statusVal = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
+    if ($statusVal !== \App\Enums\UserAccountStatus::ACTIVE->value) {
+      return Error::response('User not found', 404);
+    }
+
     $response = [
       'id' => $user->id,
       'firstName' => $user->first_name,

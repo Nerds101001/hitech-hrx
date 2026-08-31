@@ -113,7 +113,8 @@ class DigitalLibraryController extends Controller
         ]);
 
         try {
-            $taxonomy = \App\Models\LibraryTaxonomy::create($request->all());
+            // SECURITY (M-15): mass-assign only the validated fields, not $request->all().
+            $taxonomy = \App\Models\LibraryTaxonomy::create($request->only(['type', 'name', 'parent_id', 'color', 'description']));
             return response()->json(['message' => 'Archive structure updated.', 'data' => $taxonomy]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to add: ' . $e->getMessage()], 500);
