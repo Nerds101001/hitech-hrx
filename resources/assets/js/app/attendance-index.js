@@ -332,7 +332,7 @@ function renderRegistry() {
                 const dayName = moment().year(resp.year).month(resp.month-1).date(i).format('ddd');
                 html += '<th class="text-center" style="min-width:45px;"><small class="d-block text-muted text-uppercase fw-bold" style="font-size:0.55rem;">' + dayName + '</small><small class="d-block text-muted text-uppercase" style="font-size:0.6rem;">' + i + ' ' + moment().month(resp.month-1).format('MMM') + '</small></th>';
             }
-            html += '<th class="text-center bg-light" title="Present">P</th><th class="text-center bg-light" title="Absent">A</th><th class="text-center bg-light" title="OFF / Holiday">OFF</th><th class="text-center bg-light" title="Late">L</th><th class="text-center bg-light" title="Non-Paid Leave">NPL</th><th class="text-center bg-light" title="Total Payable Days (Present + OFF + Paid Leave)">PAYABLE</th></tr></thead><tbody>';
+            html += '<th class="text-center bg-light" title="Present">P</th><th class="text-center bg-light" title="Absent">A</th><th class="text-center bg-light" title="OFF / Holiday">OFF</th><th class="text-center bg-light" title="Late Arrivals">LATE</th><th class="text-center bg-light" title="Paid Leave Days">LEAVE</th><th class="text-center bg-light" title="Non-Paid Leave">NPL</th><th class="text-center bg-light" title="Total Payable Days (Present + OFF + Paid Leave)">PAYABLE</th></tr></thead><tbody>';
 
             rows.forEach((row, rowIndex) => {
                 const safeName = row.employee.replace(/'/g, "\\'");
@@ -383,6 +383,7 @@ function renderRegistry() {
                 html += '<td class="text-center text-danger fw-bold">' + row.absents + '</td>';
                 html += '<td class="text-center text-secondary fw-bold">' + (row.offs || 0) + '</td>';
                 html += '<td class="text-center text-warning fw-bold">' + row.lates + '</td>';
+                html += '<td class="text-center text-info fw-bold">' + (row.leaves || 0) + '</td>';
                 html += '<td class="text-center text-dark fw-bold">' + (row.npl || 0) + '</td>';
                 html += '<td class="text-center text-primary fw-bold">' + (row.payable || 0) + '</td>';
                 html += '</tr>';
