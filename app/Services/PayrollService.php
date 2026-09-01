@@ -322,105 +322,113 @@ class PayrollService
     }
 
     /**
-     * Every status the system uses for a leave day. 'on_leave' matched none of
-     * the old branches, so those days counted as neither worked nor absent and
-     * were only swept up by the unrecorded-days backfill by accident.
-     */
-    private function isLeaveStatus(string $status): bool
-    {
-        // 'work_from_home'/'wfh': WFH is functionally Half Day Leave with a
-        // different label (owner spec, 2026-08-13) — routing it through this
-        // same branch reuses the existing is_half_day + is_paid + is_lwp math
-        // below exactly as HDL gets it, rather than a bespoke calculation.
-        return in_array($status, ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'work_from_home', 'wfh'], true)
-            || str_contains($status, '_leave');
-    }
-
-    /**
      * Calculate attendance stats for a user in a date range.
      */
     private function calculateAttendanceStats($user, $startDate, $endDate)
     {
         $attendances = Attendance::where('user_id', $user->id)
             ->whereBetween('check_in_time', [$startDate, $endDate])
-            ->with('leaveRequest')
+            ->with('leaveRequest.leaveType')
             ->get();
 
         $hasAttendance = $attendances->count() > 0;
         $workedDays    = 0.0;
         $absents       = 0.0;
 
+        // Day-status classification now goes through the same
+        // AttendanceDayStatus resolver the Monthly Registry, Attendance Logs,
+        // and My Attendance pages already share, instead of this method's own
+        // flat 465-minute check. That flat check had no idea a worked
+        // designated off-Saturday (or Sunday, or holiday) only needs 240
+        // minutes to earn full credit - a partial shift on one of those days
+        // was silently docked half a day's pay, the same day the attendance
+        // pages already correctly showed as fully credited (SP/HP). It also
+        // had no holiday-concession awareness (a part-day concession lowers
+        // the bar below 465 too), and no idea what a miss-punch even was: a
+        // real check-in with no check-out and no admin correction was paid
+        // as a full present day, though every attendance page already treats
+        // it as absent until HR corrects it. Below applies this service's own
+        // pay-consequence rules on top of the resolver's classification,
+        // rather than re-deriving the classification itself.
+        $holidayMapsByMonth = [];
         foreach ($attendances as $att) {
-            $status = strtolower($att->status ?? '');
-            
-            // Normalize status based on working hours if it's check_in/check_out/empty
-            if (empty($att->admin_reason) && $att->check_in_time && $att->check_out_time) {
-                $mins = Carbon::parse($att->check_in_time)->diffInMinutes(Carbon::parse($att->check_out_time));
-                $requiredMins = 465;
-                if ($att->leaveRequest && $att->leaveRequest->is_short_leave) {
-                    $requiredMins -= ($att->leaveRequest->duration_hours * 60);
-                }
-                if ($mins >= $requiredMins) {
-                    $status = 'present';
-                } elseif ($mins < $requiredMins && in_array($status, ['present', 'late', 'checked_out', 'checked_in', ''])) {
-                    $status = 'half-day';
-                }
-            } elseif ($status === 'checked_out' && $att->check_in_time && $att->check_out_time) {
-                $status = 'present';
+            if (!$att->check_in_time) {
+                continue;
             }
-            
-            if ($status === 'present') {
-                if ($att->leaveRequest && $att->leaveRequest->is_half_day) {
-                    $workedDays += 0.5;
-                    if (!$att->leaveRequest->is_lwp) {
-                        $workedDays += 0.5;
-                    } else {
-                        $absents += 0.5;
-                    }
-                } else {
-                    $workedDays += 1.0;
-                }
-            } elseif ($status === 'half-day') {
-                $workedDays += 0.5;
-                $absents += 0.5;
-            } elseif ($this->isLeaveStatus($status)) {
-                // Whether a leave is paid comes from the leave record, never from
-                // the status text. str_contains($status, 'paid') used to decide
-                // this, and "unpaid_leave" contains "paid" - so every unpaid leave
-                // was paid as a full worked day, and the unpaid branch below it
-                // could never be reached. A bare 'leave' status was likewise paid
-                // regardless of the leave type or the is_lwp flag.
-                $leave    = $att->leaveRequest;
-                $isPaid   = $leave
-                    ? ((bool) optional($leave->leaveType)->is_paid && !$leave->is_lwp)
-                    : ($status === 'paid_leave');   // no linked request: trust an explicit paid status only
-                $isHalf   = $leave && $leave->is_half_day;
-                // Ordinary half-day leave is fully paid whenever the leave
-                // balance covers it, dropping to half-pay only once the
-                // balance runs out (is_lwp). WFH is deliberately different:
-                // it always pays exactly half a day, with no balance
-                // condition at all (owner confirmed 2026-08-13) — so it
-                // cannot share the $isPaid branch below despite sharing
-                // every other mechanic (application, approval, attendance).
-                $isWfh    = $leave && strtoupper(optional($leave->leaveType)->code ?? '') === 'WFH';
+            $date = $att->check_in_time->copy();
+            $monthKey = $date->year . '-' . $date->month;
+            if (!isset($holidayMapsByMonth[$monthKey])) {
+                $holidayMapsByMonth[$monthKey] = AttendanceDayStatus::holidayMapsForMonth($date->month, $date->year);
+            }
+            $holiday = AttendanceDayStatus::holidayForUserOnDate($holidayMapsByMonth[$monthKey], $user, $user->site_id, $date->toDateString());
+            $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
 
-                if ($isWfh) {
+            switch ($r['code']) {
+                case 'sp':
+                case 'hp':
+                    // A worked day off, credited in full - never a pay
+                    // deduction, whether or not it cleared the ordinary
+                    // full-day bar. Not part of expectedWorkingDays below
+                    // either way, so this only affects worked-days reporting.
+                    $workedDays += 1.0;
+                    break;
+                case 'present':
+                case 'short-leave-present':
+                case 'checked_out': // manual admin_reason passthrough, preserving the old fallback for this one raw status
+                    $workedDays += 1.0;
+                    break;
+                case 'half-day-paid':
+                    // Half worked, half covered by a paid leave the balance
+                    // could cover - a full paid day.
+                    $workedDays += 1.0;
+                    break;
+                case 'half-day':
                     $workedDays += 0.5;
                     $absents += 0.5;
-                } elseif ($isHalf) {
-                    // Half the day was worked either way; the other half is paid or not.
+                    break;
+                case 'work_from_home':
+                case 'wfh':
+                    // WFH always pays exactly half a day, with no leave-
+                    // balance condition at all (owner confirmed 2026-08-13).
                     $workedDays += 0.5;
-                    $isPaid ? $workedDays += 0.5 : $absents += 0.5;
-                } else {
-                    $isPaid ? $workedDays += 1.0 : $absents += 1.0;
-                }
-            } elseif ($status === 'absent') {
-                // No leave applied for this day: it costs 1.5 days of salary,
-                // not one. Apply a back-dated leave and get it approved before
-                // payroll runs for the month and the approval links this day to
-                // a leave record, so the branch above scores it instead and the
-                // penalty never applies. Half days are untouched — no penalty.
-                $absents += $att->leaveRequest ? 1.0 : 1.5;
+                    $absents += 0.5;
+                    break;
+                case 'paid_leave':
+                    $workedDays += 1.0;
+                    break;
+                case 'unpaid_leave':
+                    $absents += 1.0;
+                    break;
+                case 'miss-punch':
+                    // Counted absent until HR corrects the punch with
+                    // remarks - the same rule the attendance pages already
+                    // enforce. The resolver only reaches this code when no
+                    // leave is linked at all (any linked leave routes
+                    // through its own branch instead), so this always takes
+                    // the unexplained-absence rate below, same as 'absent'.
+                case 'absent':
+                    // No leave applied for this day: it costs 1.5 days of
+                    // salary, not one. Apply a back-dated leave and get it
+                    // approved before payroll runs for the month, and the
+                    // approval links this day to a leave record so the
+                    // resolver scores it under paid_leave/unpaid_leave
+                    // instead - the penalty only applies with no leave at all.
+                    $absents += $r['leaveRequest'] ? 1.0 : 1.5;
+                    break;
+                case 'weekly_off':
+                case 'holiday':
+                case 'scheduled':
+                case 'today':
+                    // An ordinary non-working day (or one that hasn't
+                    // happened yet) - already excluded from
+                    // expectedWorkingDays below, so no consequence here.
+                    break;
+                default:
+                    // A manually-set raw status this resolver doesn't
+                    // recognise - leave both counters untouched, same as
+                    // before: it falls into unrecorded_days, reporting-only
+                    // and never deducted.
+                    break;
             }
         }
 
