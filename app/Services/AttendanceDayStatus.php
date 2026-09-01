@@ -187,11 +187,14 @@ class AttendanceDayStatus
 
     /**
      * Batch-resolve every holiday for a month, split into full-day and
-     * part-day maps keyed by site (plus a 'global' bucket for site_id NULL)
-     * and date string. Built once per request/month by a per-user-per-day
-     * loop, instead of querying per user per day.
+     * part-day lists keyed by date string only (site/department matching
+     * happens per-user in holidayForUserOnDate() - a holiday can be scoped
+     * by either, independently, so pre-splitting by site alone would either
+     * drop a department-scoped holiday or apply it too broadly). Built once
+     * per request/month by a per-user-per-day loop, instead of querying per
+     * user per day.
      *
-     * Returns ['full' => [siteKey => [dateStr => Holiday]], 'part' => [siteKey => [dateStr => Holiday[]]]].
+     * Returns ['full' => [dateStr => Holiday[]], 'part' => [dateStr => Holiday[]]].
      */
     public static function holidayMapsForMonth(int $month, int $year): array
     {
@@ -201,16 +204,23 @@ class AttendanceDayStatus
         $full = [];
         $part = [];
         foreach ($rows as $holiday) {
-            $key = $holiday->site_id ?: 'global';
             $dateStr = Carbon::parse($holiday->date)->toDateString();
             if ($holiday->isFullDay()) {
-                $full[$key][$dateStr] = $holiday;
+                $full[$dateStr][] = $holiday;
             } else {
-                $part[$key][$dateStr][] = $holiday;
+                $part[$dateStr][] = $holiday;
             }
         }
 
         return ['full' => $full, 'part' => $part];
+    }
+
+    /** Site/department match only - mirrors Holiday::scopeForUser() (NULL on either column means "not restricted by that"). Gender is checked separately via appliesToUser(), since it depends on the user record rather than the query. */
+    private static function holidayReachesUser(Holiday $holiday, User $user, ?int $siteId): bool
+    {
+        $siteOk = !$holiday->site_id || $holiday->site_id === $siteId;
+        $deptOk = !$holiday->department_id || $holiday->department_id === $user->department_id;
+        return $siteOk && $deptOk;
     }
 
     /**
@@ -222,19 +232,15 @@ class AttendanceDayStatus
      */
     public static function holidayForUserOnDate(array $maps, User $user, ?int $siteId, string $dateStr): ?Holiday
     {
-        $full = $maps['full']['global'][$dateStr] ?? ($siteId ? ($maps['full'][$siteId][$dateStr] ?? null) : null);
-        if ($full) {
-            return $full;
+        foreach ($maps['full'][$dateStr] ?? [] as $candidate) {
+            if (self::holidayReachesUser($candidate, $user, $siteId)) {
+                return $candidate;
+            }
         }
 
-        $candidates = array_merge(
-            $maps['part']['global'][$dateStr] ?? [],
-            $siteId ? ($maps['part'][$siteId][$dateStr] ?? []) : []
-        );
-
         $best = null;
-        foreach ($candidates as $candidate) {
-            if (!$candidate->appliesToUser($user)) {
+        foreach ($maps['part'][$dateStr] ?? [] as $candidate) {
+            if (!self::holidayReachesUser($candidate, $user, $siteId) || !$candidate->appliesToUser($user)) {
                 continue;
             }
             if (!$best || $candidate->concessionMinutes() > $best->concessionMinutes()) {

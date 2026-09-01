@@ -411,6 +411,32 @@ class AttendanceDayStatusTest extends TestCase
         $this->assertTrue($picked->isFullDay());
     }
 
+    /**
+     * A department-scoped holiday must reach only that department, matching
+     * Holiday::scopeForUser() - the batched lookup used to group only by
+     * site, silently ignoring department_id, while the single-row lookup
+     * (holidayForUserOnDateSingle, used by indexAjax) already respected it -
+     * a department holiday would have applied everywhere except the admin
+     * Attendance Logs page.
+     */
+    public function test_holiday_maps_respect_department_scoping(): void
+    {
+        $dept = \App\Models\Department::create(['name' => 'QA Dept ' . uniqid(), 'code' => 'QAD' . random_int(1, 999999), 'status' => 'active']);
+        $inDept = $this->makeUser();
+        $inDept->update(['department_id' => $dept->id]);
+        $outsideDept = $this->makeUser();
+
+        Holiday::create([
+            'name' => 'QA Dept Holiday', 'code' => 'QADH' . random_int(1, 999999), 'date' => '2026-06-15',
+            'status' => 'active', 'holiday_type' => 'full', 'department_id' => $dept->id,
+        ]);
+
+        $maps = AttendanceDayStatus::holidayMapsForMonth(6, 2026);
+
+        $this->assertNotNull(AttendanceDayStatus::holidayForUserOnDate($maps, $inDept, $inDept->site_id, '2026-06-15'), 'a user in the target department must see the holiday');
+        $this->assertNull(AttendanceDayStatus::holidayForUserOnDate($maps, $outsideDept, $outsideDept->site_id, '2026-06-15'), 'a user outside the target department must not see the holiday');
+    }
+
     // --- Single-row (non-batched) holiday lookup, used by indexAjax -----
 
     public function test_single_lookup_finds_a_full_day_holiday(): void
