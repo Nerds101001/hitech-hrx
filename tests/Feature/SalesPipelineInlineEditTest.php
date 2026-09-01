@@ -138,6 +138,24 @@ class SalesPipelineInlineEditTest extends TestCase
         $this->assertEquals(0, $row->fresh()->is_locked);
     }
 
+    /**
+     * REGRESSION — clearing the potential/YoY fields and saving crashed with
+     * a 500: these columns are NOT NULL, and store() already defaulted a
+     * blank value to 0 but update() sent it straight through. Reported
+     * live: an existing row's Total Business Potential inline-edit failed
+     * silently after the field was cleared.
+     */
+    public function test_clearing_a_numeric_field_saves_as_zero_instead_of_crashing(): void
+    {
+        $row = $this->row(['total_business_potential' => 500]);
+
+        $this->actingAs($this->admin)
+            ->putJson('/sales-visits/sales-report/' . $row->id, ['total_business_potential' => ''])
+            ->assertOk();
+
+        $this->assertEquals(0, $row->fresh()->total_business_potential);
+    }
+
     /** A guest must not be able to edit the sales book. */
     public function test_a_guest_cannot_edit_a_row(): void
     {

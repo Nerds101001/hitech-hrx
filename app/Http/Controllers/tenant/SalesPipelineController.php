@@ -1786,6 +1786,18 @@ class SalesPipelineController extends Controller
             'order_interval'
         ]);
 
+        // These 5 columns are NOT NULL (with a DB default of 0 for inserts
+        // only - an explicit null still violates the constraint on update).
+        // An inline-edit save with the field cleared sent an empty string
+        // straight through to $pipeline->update($data), which crashed with
+        // a 500 and no visible message. store() already defaults these the
+        // same way; update() did not.
+        foreach (['total_business_potential', 'yoy_22_23', 'yoy_23_24', 'yoy_24_25', 'yoy_25_26'] as $numericField) {
+            if (array_key_exists($numericField, $data) && ($data[$numericField] === '' || $data[$numericField] === null)) {
+                $data[$numericField] = 0;
+            }
+        }
+
         if (isset($data['status_stage']) && in_array($data['status_stage'], ['Order', 'Repeat Order'])) {
             $data['is_locked'] = true;
         }
