@@ -931,15 +931,6 @@ class UserDashboardController extends Controller
             ->with('leaveType')
             ->get();
 
-        // Fetch Holidays
-        $holidaysDb = Holiday::where('status', 1)
-            ->whereBetween('date', [$periodStart, $periodEnd])
-            ->where(function($q) use ($user) {
-                $q->whereNull('site_id')
-                  ->orWhere('site_id', $user->site_id);
-            })
-            ->get();
-
         $presentDays = 0;
         $lateDays = 0;
         $absentDays = 0;
@@ -948,9 +939,20 @@ class UserDashboardController extends Controller
 
         $dailyLogs = [];
 
+        // Holidays, batched once per distinct month the range touches (a
+        // custom/weekly range can span a month boundary) instead of queried
+        // per day.
+        $holidayMapsByMonth = [];
+        $holidayMapsFor = function ($m, $y) use (&$holidayMapsByMonth) {
+            $key = "$y-$m";
+            if (!isset($holidayMapsByMonth[$key])) {
+                $holidayMapsByMonth[$key] = \App\Services\AttendanceDayStatus::holidayMapsForMonth($m, $y);
+            }
+            return $holidayMapsByMonth[$key];
+        };
+
         for ($date = $periodStart->copy(); $date->lte($periodEnd); $date->addDay()) {
             $dateStr = $date->toDateString();
-            $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $date);
 
             $dayData = [
                 'created_at' => $date->copy(),
@@ -962,13 +964,10 @@ class UserDashboardController extends Controller
                 'holiday_name' => null
             ];
 
-            // 1. Check Holiday — only a FULL-day holiday suppresses normal
-            // attendance handling; a part-day concession is still a working
-            // day and must fall through to the ordinary present/absent/leave
-            // logic below, with a lower required-minutes bar for "present".
-            $holiday = $holidaysDb->first(function($h) use ($dateStr, $user) {
-                return Carbon::parse($h->date)->toDateString() === $dateStr && $h->appliesToUser($user);
-            });
+            // 1. Check Holiday
+            $holiday = \App\Services\AttendanceDayStatus::holidayForUserOnDate(
+                $holidayMapsFor($date->month, $date->year), $user, $user->site_id, $dateStr
+            );
 
             // 2. Check Attendance (prioritize real punches over dummy 00:00 leave logs)
             $attendance = $attendancesDb->filter(function($a) use ($dateStr) {
@@ -986,204 +985,103 @@ class UserDashboardController extends Controller
             });
 
             $isSunday = $date->isSunday();
-            $isHoliday = $holiday ? $holiday->isFullDay() : false;
-            $reqMins = ($holiday && $holiday->isPartDay())
-                ? max(\App\Models\Holiday::MIN_PRESENCE_MINUTES, \App\Models\Holiday::FULL_DAY_MINUTES - $holiday->concessionMinutes())
-                : \App\Models\Holiday::FULL_DAY_MINUTES;
+            // A dummy 00:00 "Absent" placeholder with no real punch is treated
+            // as if there were no attendance row at all, letting the
+            // no-record branch below (which prioritises an approved leave
+            // over a coinciding holiday) run instead.
+            $attendanceForResolve = ($attendance && (strtolower($attendance->status) !== 'absent' || ($attendance->check_in_time && $attendance->check_out_time)))
+                ? $attendance : null;
 
-            $hasRealPunch = $attendance && $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
-            $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
+            $r = \App\Services\AttendanceDayStatus::resolve($user, $date, $attendanceForResolve, $leave, $holiday);
+            $isPaid = $r['isPaid'];
 
-            $isShort = $attendance && $attendance->leaveRequest && ($attendance->leaveRequest->is_short_leave || $attendance->leaveRequest->leaveType?->is_short_leave);
-            if (!$isShort && $leave) {
-                if ($leave->is_short_leave || $leave->leaveType?->is_short_leave) {
-                    $isShort = true;
-                }
-            }
-
-            $isHalfDay = $attendance && $attendance->leaveRequest && ($attendance->leaveRequest->is_half_day || $attendance->leaveRequest->leaveType?->is_half_day);
-            if (!$isHalfDay && $leave) {
-                if ($leave->is_half_day || $leave->leaveType?->is_half_day) {
-                    $isHalfDay = true;
-                }
-            }
-
-            $isFullDayLeave = ($attendance && $attendance->leaveRequest && !$isShort && !$isHalfDay) || ($leave && !$isShort && !$isHalfDay);
-            $leaveReq = ($attendance && $attendance->leaveRequest) ? $attendance->leaveRequest : ($leave ?? null);
-            $isPaid = $leaveReq && $leaveReq->leaveType?->is_paid && !$leaveReq->is_lwp;
-
-            if ($attendance && (strtolower($attendance->status) !== 'absent' || ($attendance->check_in_time && $attendance->check_out_time))) {
+            if ($attendanceForResolve) {
                 $dayData['check_in_time'] = $attendance->check_in_time;
                 $dayData['check_out_time'] = $attendance->check_out_time;
                 $dayData['admin_reason'] = $attendance->admin_reason;
+            }
 
-                $s = strtolower($attendance->status ?: 'present');
+            $dayData['dynamic_status'] = $r['code'];
 
-                if ($isSunday) {
-                    if ($workMins >= 240) {
-                        $s = 'sp';
-                    } else {
-                        $s = 'weekly_off';
-                    }
-                } elseif ($isHoliday) {
-                    if ($workMins >= 240) {
-                        $s = 'hp';
-                    } else {
-                        $s = 'holiday';
-                    }
-                } elseif (empty($attendance->admin_reason)) {
-                    // WFH: no attendance is ever expected (that is the whole
-                    // point), so unlike ordinary half-day leave this is never
-                    // gated on worked minutes — it is always "work_from_home",
-                    // checked before every other branch below.
-                    $isWfh = $leaveReq && strtoupper(optional($leaveReq->leaveType)->code ?? '') === 'WFH';
-
-                    if ($isWfh) {
-                        $s = 'work_from_home';
-                    } elseif ($isShort) {
-                        if ($workMins >= 360) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = 'half-day';
-                        } else {
-                            $s = 'absent';
-                        }
-                    } elseif ($isHalfDay) {
-                        if ($workMins >= 240) {
-                            $s = $isPaid ? 'half-day-paid' : 'half-day';
-                        } else {
-                            $s = $isPaid ? 'paid_leave' : 'absent';
-                        }
-                    } elseif ($isFullDayLeave) {
-                        if ($workMins >= $reqMins) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = $isPaid ? 'half-day-paid' : 'half-day';
-                        } else {
-                            $s = $isPaid ? 'paid_leave' : 'absent';
-                        }
-                    } else {
-                        if ($workMins >= $reqMins) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = 'half-day';
-                        } else {
-                            $s = 'absent';
-                        }
-
-                        // A real punch-in with no punch-out on a past day is a
-                        // missed punch, not Absent (workMins is 0 without both
-                        // punches, so this must override the <4h bucket)
-                        if ($attendance->check_in_time && !$attendance->check_out_time
-                            && $attendance->check_in_time->format('H:i') !== '00:00'
-                            && $date->isPast() && !$date->isToday()) {
-                            $s = 'miss-punch';
-                        }
-                    }
-                }
-
-                $dayData['dynamic_status'] = $s;
-
-                if ($s === 'miss-punch') {
+            switch ($r['code']) {
+                case 'miss-punch':
                     $dayData['status'] = 'Miss Punch';
                     $dayData['holiday_name'] = 'HR/Admin remark required';
                     $absentDays++; // counted absent until HR corrects the punch with remarks
-                } elseif ($s === 'absent') {
+                    break;
+                case 'absent':
                     $dayData['status'] = 'Absent';
                     $absentDays++;
-                } elseif ($s === 'sp') {
+                    break;
+                case 'sp':
                     $dayData['status'] = 'Weekly Off Worked (SP)';
                     $presentDays++;
-                } elseif ($s === 'hp') {
+                    break;
+                case 'hp':
                     $dayData['status'] = 'Holiday Worked (HP)';
                     $presentDays++;
-                } elseif ($s === 'weekly_off') {
+                    break;
+                case 'weekly_off':
                     $dayData['status'] = 'Weekly Off';
-                } elseif ($s === 'holiday') {
+                    break;
+                case 'holiday':
                     $dayData['status'] = 'Holiday';
-                    $dayData['holiday_name'] = $holiday->name;
-                } elseif ($s === 'late') {
+                    $dayData['holiday_name'] = $r['holidayName'];
+                    break;
+                case 'late':
                     $dayData['status'] = 'Late';
                     $lateDays++;
                     $presentDays++;
-                } elseif ($s === 'work_from_home' || $s === 'wfh') {
+                    break;
+                case 'work_from_home':
+                case 'wfh':
                     $dayData['status'] = 'WFH';
                     $presentDays += 1;
-                } elseif ($s === 'half-day-paid') {
+                    break;
+                case 'half-day-paid':
                     $dayData['status'] = 'Half Day (HD-PL)';
                     $presentDays += 1;
-                } elseif ($s === 'half-day' || $s === 'half-Day') {
+                    break;
+                case 'half-day':
                     $dayData['status'] = 'Half Day';
                     $presentDays += 0.5;
                     $absentDays += 0.5;
-                } elseif (in_array($s, ['work_from_home', 'wfh'])) {
-                    $dayData['status'] = 'WFH';
-                    $presentDays++;
-                } elseif (in_array($s, ['leave', 'paid_leave', 'unpaid_leave'])) {
+                    break;
+                case 'leave':
+                case 'paid_leave':
+                case 'unpaid_leave':
                     $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
+                    if (!$attendanceForResolve) {
+                        $dayData['holiday_name'] = $r['leaveRequest']?->leaveType?->name ?? 'Approved Leave';
+                    }
                     if ($isPaid) {
                         $presentDays++;
                     } else {
                         $absentDays++;
                     }
-                } else {
-                    $dayData['status'] = 'Present';
-                    $presentDays++;
-                }
-
-                if ($attendance->check_in_time && $attendance->check_out_time) {
-                    $totalHours += $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
-                    $workCount++;
-                }
-
-            } elseif ($leave) {
-                if ($isShort) {
-                    $dayData['status'] = 'Absent';
-                    $dayData['dynamic_status'] = 'absent';
-                    $absentDays++;
-                } elseif ($isHalfDay) {
-                    if ($isPaid) {
-                        $dayData['status'] = 'Paid Leave';
-                        $dayData['dynamic_status'] = 'paid_leave';
-                        $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
-                        $presentDays++;
-                    } else {
+                    break;
+                case 'scheduled':
+                    $dayData['status'] = 'Scheduled';
+                    break;
+                case 'today':
+                    $dayData['status'] = 'Today';
+                    // A dummy 00:00 "Absent" row already recorded for today
+                    // overrides the placeholder "Today" card.
+                    if ($attendance && strtolower($attendance->status) === 'absent') {
                         $dayData['status'] = 'Absent';
                         $dayData['dynamic_status'] = 'absent';
                         $absentDays++;
                     }
-                } else {
-                    $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
-                    $dayData['dynamic_status'] = $isPaid ? 'paid_leave' : 'unpaid_leave';
-                    $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
-                    if ($isPaid) {
-                        $presentDays++;
-                    } else {
-                        $absentDays++;
-                    }
-                }
-            } elseif ($isHoliday) {
-                $dayData['status'] = 'Holiday';
-                $dayData['dynamic_status'] = 'holiday';
-                $dayData['holiday_name'] = $holiday->name;
-            } elseif (!$isWorkingDay) {
-                $dayData['status'] = 'Weekly Off';
-                $dayData['dynamic_status'] = 'weekly_off';
-            } elseif ($date->isPast() && !$date->isToday()) {
-                $dayData['status'] = 'Absent';
-                $dayData['dynamic_status'] = 'absent';
-                $absentDays++;
-            } elseif ($date->isToday()) {
-                $dayData['status'] = 'Today';
-                $dayData['dynamic_status'] = 'today';
-                if ($attendance && strtolower($attendance->status) === 'absent') {
-                    $dayData['status'] = 'Absent';
-                    $dayData['dynamic_status'] = 'absent';
-                    $absentDays++;
-                }
-            } else {
-                $dayData['status'] = 'Scheduled';
-                $dayData['dynamic_status'] = 'scheduled';
+                    break;
+                default:
+                    $dayData['status'] = 'Present';
+                    $presentDays++;
+                    break;
+            }
+
+            if ($attendanceForResolve && $attendance->check_in_time && $attendance->check_out_time) {
+                $totalHours += $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
+                $workCount++;
             }
 
             // We push to the top so the list shows newest dates first
@@ -1256,15 +1154,8 @@ class UserDashboardController extends Controller
             ->with('leaveType')
             ->get();
             
-        // Fetch Holidays for the month
-        $holidays = Holiday::where('status', 1)
-            ->whereMonth('date', $month)
-            ->whereYear('date', $year)
-            ->where(function($q) use ($user) {
-                $q->whereNull('site_id')
-                  ->orWhere('site_id', $user->site_id);
-            })
-            ->get();
+        // Holidays for the month, batched once (not queried per day).
+        $holidayMaps = \App\Services\AttendanceDayStatus::holidayMapsForMonth($month, $year);
 
         $calendarData = [];
         for ($day = 1; $day <= $daysInMonth; $day++) {
@@ -1284,20 +1175,8 @@ class UserDashboardController extends Controller
                 'holiday_name' => null
             ];
             
-            // Check for Holiday — only a FULL-day holiday suppresses normal
-            // attendance handling. A part-day concession (e.g. a 90-minute
-            // morning-off) is still a working day: it must fall through to
-            // the ordinary present/absent/leave logic below, just with a
-            // lower required-minutes bar for the day to count as present.
-            $holiday = $holidays->first(function($h) use ($dateStr, $user) {
-                return Carbon::parse($h->date)->toDateString() === $dateStr && $h->appliesToUser($user);
-            });
-            $holidayName = $holiday ? $holiday->name : null;
-            $isHoliday = $holiday ? $holiday->isFullDay() : false;
-            $reqMins = ($holiday && $holiday->isPartDay())
-                ? max(\App\Models\Holiday::MIN_PRESENCE_MINUTES, \App\Models\Holiday::FULL_DAY_MINUTES - $holiday->concessionMinutes())
-                : \App\Models\Holiday::FULL_DAY_MINUTES;
-            
+            $holiday = \App\Services\AttendanceDayStatus::holidayForUserOnDate($holidayMaps, $user, $user->site_id, $dateStr);
+
             // Check for Attendance
             $attendance = $attendances->first(function($a) use ($dateStr) {
                 return $a->check_in_time->toDateString() === $dateStr;
@@ -1310,253 +1189,132 @@ class UserDashboardController extends Controller
                        Carbon::parse($l->to_date)->toDateString() >= $dateStr;
             });
 
+            $r = \App\Services\AttendanceDayStatus::resolve($user, $dateObj, $attendance, $dayLeave, $holiday);
+            $leaveReq = $r['leaveRequest'];
+            $isPaid = $r['isPaid'];
+
             if ($attendance) {
                 $dayData['in'] = $attendance->check_in_time->format('h:i A');
                 $dayData['out'] = $attendance->check_out_time ? $attendance->check_out_time->format('h:i A') : '--:--';
-                
+
                 if ($attendance->check_in_time && $attendance->check_out_time) {
                     $diff = $attendance->check_in_time->diff($attendance->check_out_time);
                     $dayData['duration'] = sprintf('%d:%02dh', $diff->h, $diff->i);
                 }
+            }
 
-                $isSunday = $dateObj->isSunday();
-                $s = strtolower($attendance->status ?: 'present');
-
-                $hasRealPunch = $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
-                $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
-
-                $isShort = ($attendance->leaveRequest
-                        && ($attendance->leaveRequest->is_short_leave || ($attendance->leaveRequest->leaveType->is_short_leave ?? false)))
-                    || ($dayLeave
-                        && ($dayLeave->is_short_leave || ($dayLeave->leaveType->is_short_leave ?? false)));
-
-                $isHalfDay = ($attendance->leaveRequest
-                        && ($attendance->leaveRequest->is_half_day || ($attendance->leaveRequest->leaveType->is_half_day ?? false)))
-                    || ($dayLeave
-                        && ($dayLeave->is_half_day || ($dayLeave->leaveType->is_half_day ?? false)));
-
-                $isFullDayLeave = ($attendance->leaveRequest && !$isShort && !$isHalfDay)
-                    || ($dayLeave && !$isShort && !$isHalfDay);
-
-                $leaveReq = $attendance->leaveRequest ?: ($dayLeave ?? null);
-                $isPaid = $leaveReq && $leaveReq->leaveType?->is_paid && !$leaveReq->is_lwp;
-
-                if ($isSunday) {
-                    if ($workMins >= 240) {
-                        $s = 'sp';
-                    } else {
-                        $s = 'weekly_off';
-                    }
-                } elseif ($isHoliday) {
-                    if ($workMins >= 240) {
-                        $s = 'hp';
-                    } else {
-                        $s = 'holiday';
-                    }
-                } elseif (empty($attendance->admin_reason)) {
-                    // WFH: no attendance is ever expected, so unlike ordinary
-                    // half-day leave this is never gated on worked minutes.
-                    $isWfh = $leaveReq && strtoupper(optional($leaveReq->leaveType)->code ?? '') === 'WFH';
-
-                    if ($isWfh) {
-                        $s = 'work_from_home';
-                    } elseif ($isShort) {
-                        if ($workMins >= 360) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = 'half-day';
-                        } else {
-                            $s = 'absent';
-                        }
-                    } elseif ($isHalfDay) {
-                        if ($workMins >= 240) {
-                            $s = $isPaid ? 'half-day-paid' : 'half-day';
-                        } else {
-                            $s = $isPaid ? 'paid_leave' : 'absent';
-                        }
-                    } elseif ($isFullDayLeave) {
-                        if ($workMins >= $reqMins) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = $isPaid ? 'half-day-paid' : 'half-day';
-                        } else {
-                            $s = $isPaid ? 'paid_leave' : 'absent';
-                        }
-                    } else {
-                        if ($workMins >= $reqMins) {
-                            $s = 'present';
-                        } elseif ($workMins >= 240) {
-                            $s = 'half-day';
-                        } else {
-                            $s = 'absent';
-                        }
-
-                        // A real punch-in with no punch-out on a past day is a
-                        // missed punch, not Absent (workMins is 0 without both
-                        // punches, so this must override the <4h bucket)
-                        if ($attendance->check_in_time && !$attendance->check_out_time
-                            && $attendance->check_in_time->format('H:i') !== '00:00'
-                            && $dateObj->isPast() && !$dateObj->isToday()) {
-                            $s = 'miss-punch';
-                        }
-                    }
-                }
-
-                switch($s) {
-                    case 'present':
-                        $dayData['status'] = $isShort ? 'Present (Short Leave)' : 'Present';
-                        $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = ($isShort ? 'bg-short-leave' : 'bg-teal') . ' text-white border-0';
-                        break;
-                    case 'miss-punch':
-                        $dayData['status'] = 'Miss Punch';
-                        $dayData['icon'] = 'bx-error-circle';
-                        $dayData['class'] = 'bg-miss-punch text-white border-0';
-                        break;
-                    case 'sp':
-                        $dayData['status'] = 'SP';
-                        $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = 'bg-success text-white border-0';
-                        break;
-                    case 'hp':
-                        $dayData['status'] = 'HP';
-                        $dayData['icon'] = 'bx-check-circle';
-                        $dayData['class'] = 'bg-success text-white border-0';
-                        break;
-                    case 'weekly_off':
-                        $dayData['status'] = 'Weekly Off';
-                        $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
-                        $dayData['icon'] = 'bx-calendar-minus';
-                        break;
-                    case 'holiday':
-                        $dayData['status'] = 'Holiday';
-                        $dayData['icon'] = 'bx-star';
-                        $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
-                        $dayData['holiday_name'] = $holidayName;
-                        break;
-                    case 'late':
-                        $dayData['status'] = 'Late';
-                        $dayData['icon'] = 'bx-time-five';
-                        $dayData['class'] = 'bg-orange text-white border-0';
-                        break;
-                    case 'half-day':
-                        $leaveDetail = '';
-                        if ($leaveReq) {
-                            if ($leaveReq->is_short_leave) {
-                                $leaveDetail = ' (Short Leave)';
-                            } elseif ($leaveReq->is_half_day) {
-                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
-                                $leaveDetail = ' (Half Day - ' . $session . ')';
-                            }
-                        }
-                        $dayData['status'] = 'Half Day' . $leaveDetail;
-                        $dayData['icon'] = 'bx-time';
-                        $dayData['class'] = 'bg-orange text-white border-0';
-                        break;
-                    case 'half-day-paid':
-                        $leaveDetail = '';
-                        if ($leaveReq) {
-                            if ($leaveReq->is_half_day) {
-                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
-                                $leaveDetail = ' (Half Day - ' . $session . ')';
-                            }
-                        }
-                        $dayData['status'] = 'Present' . $leaveDetail . ' (Paid)';
-                        $dayData['icon'] = 'bx-check-circle';
-                        // Was plain bg-teal - indistinguishable at a glance
-                        // from an ordinary full day present, even though
-                        // this is genuinely a different thing: half worked,
-                        // half covered by paid leave.
-                        $dayData['class'] = 'bg-indigo-gradient text-white border-0';
-                        break;
-                    case 'absent':
-                        $dayData['status'] = 'Absent';
-                        $dayData['icon'] = 'bx-x-circle';
-                        $dayData['class'] = 'bg-red text-white border-0';
-                        break;
-                    case 'work_from_home':
-                    case 'wfh':
-                        $dayData['status'] = 'WFH';
-                        $dayData['icon'] = 'bx-home';
-                        $dayData['class'] = 'bg-indigo-vibrant text-white border-0';
-                        break;
-                    case 'leave':
-                    case 'paid_leave':
-                    case 'unpaid_leave':
-                        $isPaid = $leaveReq && $leaveReq->leaveType && $leaveReq->leaveType->is_paid && !$leaveReq->is_lwp;
-                        $leaveDetail = '';
-                        if ($leaveReq) {
-                            if ($leaveReq->is_short_leave) {
-                                $leaveDetail = ' (Short Leave)';
-                            } elseif ($leaveReq->is_half_day) {
-                                $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
-                                $leaveDetail = ' (Half Day - ' . $session . ')';
-                            }
-                        }
-                        $dayData['status'] = ($isPaid ? 'Paid Leave' : 'Unpaid Leave') . $leaveDetail;
-                        $dayData['icon'] = 'bx-calendar';
-                        $dayData['class'] = ($isPaid ? 'bg-indigo-vibrant' : 'bg-purple-vibrant') . ' text-white border-0';
-                        break;
-                }
-            } else {
-                // Check for Leaves
-                $leave = $dayLeave;
-
-                if ($leave) {
-                    $isShortLeave = $leave->leaveType?->is_short_leave ?? false;
-                    $isHalfDay = $leave->is_half_day || ($leave->leaveType?->is_half_day ?? false);
-                    $isPaid = $leave->leaveType?->is_paid && !$leave->is_lwp;
-                    
-                    if ($isShortLeave) {
-                        $dayData['status'] = 'Absent';
-                        $dayData['icon'] = 'bx-x-circle';
-                        $dayData['class'] = 'bg-red text-white border-0';
-                        $dayData['holiday_name'] = 'No Log Found';
-                    } elseif ($isHalfDay) {
-                        if ($isPaid) {
-                            $dayData['status'] = 'Paid Leave';
-                            $dayData['icon'] = 'bx-calendar';
-                            $dayData['class'] = 'bg-indigo-vibrant text-white border-0';
-                            $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
-                        } else {
-                            $dayData['status'] = 'Absent';
-                            $dayData['icon'] = 'bx-x-circle';
-                            $dayData['class'] = 'bg-red text-white border-0';
-                            $dayData['holiday_name'] = 'No Log Found';
-                        }
-                    } else {
-                        $dayData['status'] = $isPaid ? 'Paid Leave' : 'Unpaid Leave';
-                        $dayData['icon'] = 'bx-calendar';
-                        $dayData['class'] = ($isPaid ? 'bg-indigo-vibrant' : 'bg-purple-vibrant') . ' text-white border-0';
-                        $dayData['holiday_name'] = $leave->leaveType->name ?? 'Approved Leave';
-                    }
-                } elseif ($isHoliday) {
-                    $dayData['status'] = 'Holiday';
-                    $dayData['holiday_name'] = $holidayName;
-                    $dayData['icon'] = 'bx-star';
-                    $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
-                } elseif (!$dayData['is_working_day']) {
+            switch ($r['code']) {
+                case 'present':
+                    $dayData['status'] = 'Present';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-teal text-white border-0';
+                    break;
+                case 'short-leave-present':
+                    $dayData['status'] = 'Present (Short Leave)';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-short-leave text-white border-0';
+                    break;
+                case 'miss-punch':
+                    $dayData['status'] = 'Miss Punch';
+                    $dayData['icon'] = 'bx-error-circle';
+                    $dayData['class'] = 'bg-miss-punch text-white border-0';
+                    break;
+                case 'sp':
+                    $dayData['status'] = 'SP';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-success text-white border-0';
+                    break;
+                case 'hp':
+                    $dayData['status'] = 'HP';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-success text-white border-0';
+                    break;
+                case 'weekly_off':
                     $dayData['status'] = 'Weekly Off';
                     $dayData['class'] = 'bg-secondary bg-opacity-10 text-muted';
                     $dayData['icon'] = 'bx-calendar-minus';
-                } elseif ($dateObj->isFuture() && !$dateObj->isToday()) {
+                    break;
+                case 'holiday':
+                    $dayData['status'] = 'Holiday';
+                    $dayData['icon'] = 'bx-star';
+                    $dayData['class'] = 'bg-info bg-opacity-25 text-info border-info border-opacity-50';
+                    $dayData['holiday_name'] = $r['holidayName'];
+                    break;
+                case 'late':
+                    $dayData['status'] = 'Late';
+                    $dayData['icon'] = 'bx-time-five';
+                    $dayData['class'] = 'bg-orange text-white border-0';
+                    break;
+                case 'half-day':
+                    $leaveDetail = '';
+                    if ($leaveReq) {
+                        if ($leaveReq->is_short_leave) {
+                            $leaveDetail = ' (Short Leave)';
+                        } elseif ($leaveReq->is_half_day) {
+                            $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                            $leaveDetail = ' (Half Day - ' . $session . ')';
+                        }
+                    }
+                    $dayData['status'] = 'Half Day' . $leaveDetail;
+                    $dayData['icon'] = 'bx-time';
+                    $dayData['class'] = 'bg-orange text-white border-0';
+                    break;
+                case 'half-day-paid':
+                    $leaveDetail = '';
+                    if ($leaveReq && $leaveReq->is_half_day) {
+                        $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                        $leaveDetail = ' (Half Day - ' . $session . ')';
+                    }
+                    $dayData['status'] = 'Present' . $leaveDetail . ' (Paid)';
+                    $dayData['icon'] = 'bx-check-circle';
+                    $dayData['class'] = 'bg-indigo-gradient text-white border-0';
+                    break;
+                case 'absent':
+                    $dayData['status'] = 'Absent';
+                    $dayData['icon'] = 'bx-x-circle';
+                    $dayData['class'] = 'bg-red text-white border-0';
+                    if (!$attendance) {
+                        $dayData['holiday_name'] = 'No Log Found';
+                    }
+                    break;
+                case 'work_from_home':
+                case 'wfh':
+                    $dayData['status'] = 'WFH';
+                    $dayData['icon'] = 'bx-home';
+                    $dayData['class'] = 'bg-indigo-vibrant text-white border-0';
+                    break;
+                case 'leave':
+                case 'paid_leave':
+                case 'unpaid_leave':
+                    $leaveDetail = '';
+                    if ($leaveReq) {
+                        if ($leaveReq->is_short_leave) {
+                            $leaveDetail = ' (Short Leave)';
+                        } elseif ($leaveReq->is_half_day) {
+                            $session = $leaveReq->half_day_session === 'second_half' ? '2nd Half' : '1st Half';
+                            $leaveDetail = ' (Half Day - ' . $session . ')';
+                        }
+                    }
+                    $dayData['status'] = ($isPaid ? 'Paid Leave' : 'Unpaid Leave') . $leaveDetail;
+                    $dayData['icon'] = 'bx-calendar';
+                    $dayData['class'] = ($isPaid ? 'bg-indigo-vibrant' : 'bg-purple-vibrant') . ' text-white border-0';
+                    if (!$attendance) {
+                        $dayData['holiday_name'] = $leaveReq?->leaveType?->name ?? 'Approved Leave';
+                    }
+                    break;
+                case 'scheduled':
                     $dayData['status'] = 'Scheduled';
                     $dayData['icon'] = 'bx-calendar-event';
                     $dayData['class'] = 'bg-white border text-muted opacity-50';
                     $dayData['holiday_name'] = 'Upcoming';
-                } elseif ($dateObj->isPast() && !$dateObj->isToday()) {
-                    $dayData['status'] = 'Absent';
-                    $dayData['icon'] = 'bx-x-circle';
-                    $dayData['class'] = 'bg-red text-white border-0';
-                    $dayData['holiday_name'] = 'No Log Found';
-                } else {
-                    // Today, no log yet
+                    break;
+                case 'today':
                     $dayData['status'] = 'Today';
                     $dayData['icon'] = 'bx-time';
                     $dayData['class'] = 'bg-white border-primary border-dashed text-primary';
-                }
+                    break;
             }
-            
+
             $calendarData[$day] = $dayData;
         }
 

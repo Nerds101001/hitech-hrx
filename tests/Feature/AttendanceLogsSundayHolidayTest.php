@@ -42,7 +42,7 @@ class AttendanceLogsSundayHolidayTest extends TestCase
         return $u;
     }
 
-    private function statusHtmlFor(int $userId, string $date): string
+    private function indexAjaxResponse(int $userId, string $date): array
     {
         $admin = $this->makeUser('admin');
         Auth::login($admin);
@@ -51,7 +51,12 @@ class AttendanceLogsSundayHolidayTest extends TestCase
                 'draw' => 1, 'start' => 0, 'length' => 10,
                 'userId' => $userId, 'date' => $date,
             ]));
-        $data = json_decode($response->getContent(), true);
+        return json_decode($response->getContent(), true);
+    }
+
+    private function statusHtmlFor(int $userId, string $date): string
+    {
+        $data = $this->indexAjaxResponse($userId, $date);
         return $data['data'][0]['status'] ?? '';
     }
 
@@ -149,5 +154,41 @@ class AttendanceLogsSundayHolidayTest extends TestCase
         $html = $this->statusHtmlFor($employee->id, '2026-06-06');
 
         $this->assertStringNotContainsString('bg-success', $html, 'the 1st Saturday is not one of this profile\'s off-Saturdays - it is an ordinary working day');
+    }
+
+    /**
+     * The header "24 Present / 1 Absent / ... " summary cards used to be
+     * tallied by a separate raw-SQL query with a flat 465-minute cutoff and
+     * no idea a part-day holiday concession lowers that bar - so a day
+     * genuinely worked in full (once the concession is accounted for, as
+     * the row beneath it already correctly shows "Present") fell into the
+     * SQL's crude "half day" bucket and counted toward the Late card
+     * instead of Present, disagreeing with the very row it was summarising.
+     * Both now go through the same resolver. A Sunday/holiday-credited row
+     * would not expose this: Attendance's own crediting hook stamps
+     * admin_reason on those, which the old SQL's admin_reason IS NOT NULL
+     * clause happened to also count as present by coincidence - this uses
+     * an ordinary working day with a concession instead, where no crediting
+     * hook is involved and admin_reason stays empty.
+     */
+    public function test_stats_header_counts_a_part_day_holiday_present_not_late(): void
+    {
+        $employee = $this->makeUser();
+        Holiday::create([
+            'name' => 'QA Concession', 'code' => 'QACS' . random_int(100000, 999999), 'date' => '2026-06-17',
+            'holiday_type' => 'hours', 'hours_off' => 1.5, 'status' => 'active',
+        ]);
+        Attendance::create([
+            'user_id' => $employee->id,
+            'check_in_time' => '2026-06-17 09:00:00',
+            'check_out_time' => '2026-06-17 15:30:00', // 390 min: clears the 375-min concession bar, under the old flat 465
+            'status' => 'Present',
+        ]);
+
+        $data = $this->indexAjaxResponse($employee->id, '2026-06-17');
+
+        $this->assertStringContainsString('Present', $data['data'][0]['status']);
+        $this->assertEquals(1, $data['stats']['present'], 'the header card must agree with the Present badge shown in the row');
+        $this->assertEquals(0, $data['stats']['late']);
     }
 }

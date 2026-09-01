@@ -1,0 +1,457 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Attendance;
+use App\Models\Holiday;
+use App\Models\LeavePolicyProfile;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
+use App\Models\User;
+use App\Services\AttendanceDayStatus;
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+/**
+ * AttendanceDayStatus::resolve() is the single source of truth consolidating
+ * what used to be four independently-drifted copies of the same decision
+ * tree (admin Monthly Registry, admin Attendance Logs, employee My
+ * Attendance calendar, employee My Attendance list). Every branch of the
+ * original four is exercised here directly against the resolver, isolated
+ * from any controller/view wiring.
+ *
+ * Weekday reference dates avoid Sundays/holidays already in this database.
+ * 2026-06-15 is a Monday, 2026-06-13 is a Saturday (2nd Saturday of June).
+ */
+class AttendanceDayStatusTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private function makeUser(): User
+    {
+        return User::create([
+            'first_name' => 'QA', 'last_name' => 'Resolver',
+            'email'      => 'qaresolver' . uniqid() . '@example.test',
+            'code'       => 'QARS' . random_int(100000, 999999),
+            'password'   => Hash::make('secret-not-used'),
+            'status'     => 'active',
+        ]);
+    }
+
+    private function attendance(User $user, string $date, ?string $inTime, ?string $outTime, ?LeaveRequest $leave = null): Attendance
+    {
+        $a = Attendance::create([
+            'user_id' => $user->id,
+            'check_in_time' => $inTime ? "$date $inTime" : "$date 00:00:00",
+            'check_out_time' => $outTime ? "$date $outTime" : null,
+            'status' => 'Present',
+            'leave_request_id' => $leave?->id,
+        ]);
+        return $a->fresh(['leaveRequest.leaveType']);
+    }
+
+    private function partDayHoliday(string $date, float $hoursOff = 1.5): Holiday
+    {
+        return Holiday::create([
+            'name' => 'QA Concession', 'code' => 'QAC' . random_int(100000, 999999), 'date' => $date,
+            'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => $hoursOff,
+        ]);
+    }
+
+    private function fullHoliday(string $date): Holiday
+    {
+        return Holiday::create([
+            'name' => 'QA Full Holiday', 'code' => 'QAF' . random_int(100000, 999999), 'date' => $date,
+            'status' => 'active', 'holiday_type' => 'full',
+        ]);
+    }
+
+    private function leave(User $user, string $date, string $typeCode, array $overrides = []): LeaveRequest
+    {
+        $type = LeaveType::where('code', $typeCode)->firstOrFail();
+        $lr = LeaveRequest::create(array_merge([
+            'user_id' => $user->id, 'leave_type_id' => $type->id,
+            'from_date' => $date, 'to_date' => $date,
+            'status' => 'pending', 'user_notes' => 'resolver test',
+        ], $overrides));
+        $lr->updateQuietly(array_merge(['status' => 'approved'], $overrides['quiet'] ?? []));
+        return $lr->fresh('leaveType');
+    }
+
+    // --- With an attendance record ------------------------------------
+
+    public function test_worked_sunday_above_credit_bar_is_sp(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-14'); // Sunday
+        $att = $this->attendance($user, '2026-06-14', '09:00:00', '14:00:00'); // 5h
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('sp', $r['code']);
+    }
+
+    public function test_worked_sunday_below_credit_bar_is_weekly_off(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-14');
+        $att = $this->attendance($user, '2026-06-14', '09:00:00', '10:00:00'); // 1h
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('weekly_off', $r['code']);
+    }
+
+    public function test_worked_designated_off_saturday_is_sp(): void
+    {
+        $profile = LeavePolicyProfile::create(['name' => 'QA Sat Off ' . uniqid(), 'saturday_off_config' => ['2', '4'], 'status' => 'active']);
+        $user = $this->makeUser();
+        $user->update(['leave_policy_profile_id' => $profile->id]);
+        $date = Carbon::parse('2026-06-13'); // 2nd Saturday
+        $att = $this->attendance($user, '2026-06-13', '09:00:00', '14:00:00');
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('sp', $r['code']);
+    }
+
+    public function test_worked_full_holiday_above_credit_bar_is_hp(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->fullHoliday('2026-06-15');
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '14:00:00');
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
+        $this->assertEquals('hp', $r['code']);
+    }
+
+    public function test_unworked_full_holiday_with_attendance_row_is_holiday(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->fullHoliday('2026-06-15');
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', null, null); // dummy row, no real punch
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
+        $this->assertEquals('holiday', $r['code']);
+    }
+
+    public function test_part_day_holiday_worked_enough_to_clear_the_reduced_bar_is_present(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->partDayHoliday('2026-06-15', 1.5); // reqMins = 465-90 = 375
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '15:30:00'); // 390 min
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
+        $this->assertEquals('present', $r['code']);
+        $this->assertEquals(375, $r['reqMins']);
+    }
+
+    public function test_part_day_holiday_with_no_punch_is_absent_not_holiday(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->partDayHoliday('2026-06-15');
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', null, null);
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, $holiday);
+        $this->assertEquals('absent', $r['code']);
+    }
+
+    public function test_wfh_leave_is_work_from_home_regardless_of_minutes(): void
+    {
+        $user = $this->makeUser();
+        $leave = $this->leave($user, '2026-06-15', 'WFH');
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', null, null, $leave);
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('work_from_home', $r['code']);
+    }
+
+    public function test_short_leave_worked_350_or_more_is_short_leave_present(): void
+    {
+        $user = $this->makeUser();
+        $shl = LeaveType::where('code', 'SHL')->first() ?? LeaveType::where('is_short_leave', true)->firstOrFail();
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $shl->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'is_short_leave' => true, 'status' => 'pending', 'user_notes' => 'resolver short leave test',
+        ]);
+        $leave->updateQuietly(['status' => 'approved']);
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '15:00:00', $leave->fresh('leaveType')); // 360 min
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('short-leave-present', $r['code']);
+    }
+
+    public function test_half_day_leave_paid_worked_enough_is_half_day_paid(): void
+    {
+        $user = $this->makeUser();
+        $alp = LeaveType::where('code', 'ALP')->firstOrFail();
+        \App\Models\LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $alp->id, 'balance' => 2, 'used' => 0]);
+        $hdl = LeaveType::where('code', 'HDL')->firstOrFail();
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $hdl->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'is_half_day' => true, 'half_day_session' => 'first_half',
+            'status' => 'pending', 'user_notes' => 'resolver half day test',
+        ]);
+        $leave->update(['status' => 'approved']);
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '14:00:00', '18:00:00', $leave->fresh('leaveType')); // 240 min
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('half-day-paid', $r['code']);
+        $this->assertTrue($r['isPaid']);
+    }
+
+    public function test_full_day_paid_leave_with_a_dummy_attendance_row_is_paid_leave(): void
+    {
+        $user = $this->makeUser();
+        $alp = LeaveType::where('code', 'ALP')->firstOrFail();
+        \App\Models\LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $alp->id, 'balance' => 2, 'used' => 0]);
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $alp->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'status' => 'pending', 'user_notes' => 'resolver full day paid leave test',
+        ]);
+        $leave->update(['status' => 'approved']); // processApproval creates the Attendance row itself
+        $date = Carbon::parse('2026-06-15');
+        $att = Attendance::where('user_id', $user->id)->whereDate('check_in_time', '2026-06-15')->firstOrFail()
+            ->load('leaveRequest.leaveType');
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('paid_leave', $r['code']);
+    }
+
+    public function test_ordinary_day_worked_full_is_present(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-15');
+        $att = $this->attendance($user, '2026-06-15', '09:00:00', '18:00:00'); // 540 min
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('present', $r['code']);
+    }
+
+    public function test_ordinary_day_with_no_checkout_on_a_past_day_is_miss_punch(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2020-06-15'); // definitely in the past
+        $att = $this->attendance($user, '2020-06-15', '09:00:00', null);
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('miss-punch', $r['code']);
+    }
+
+    public function test_manual_admin_adjustment_passes_through_the_stored_status(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-15');
+        $att = Attendance::create([
+            'user_id' => $user->id,
+            'check_in_time' => '2026-06-15 09:00:00',
+            'check_out_time' => '2026-06-15 10:00:00', // would otherwise be 'absent'
+            'status' => 'Late',
+            'admin_reason' => 'HR corrected punch',
+        ])->fresh(['leaveRequest.leaveType']);
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('late', $r['code']);
+    }
+
+    public function test_admin_adjustment_does_not_override_sunday_credit_precedence(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-14'); // Sunday
+        $att = Attendance::create([
+            'user_id' => $user->id,
+            'check_in_time' => '2026-06-14 09:00:00',
+            'check_out_time' => '2026-06-14 14:00:00', // 5h, clears the 240-min SP bar
+            'status' => 'Present',
+            'admin_reason' => 'HR corrected punch',
+        ])->fresh(['leaveRequest.leaveType']);
+
+        $r = AttendanceDayStatus::resolve($user, $date, $att, null, null);
+        $this->assertEquals('sp', $r['code'], 'Sunday/holiday credit precedence must win even over a manual admin adjustment');
+    }
+
+    // --- No attendance record at all ------------------------------------
+
+    public function test_no_attendance_short_leave_is_absent(): void
+    {
+        $user = $this->makeUser();
+        $shl = LeaveType::where('is_short_leave', true)->firstOrFail();
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $shl->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'is_short_leave' => true, 'status' => 'pending', 'user_notes' => 'resolver no-attendance short leave test',
+        ]);
+        $leave->updateQuietly(['status' => 'approved']);
+        $date = Carbon::parse('2026-06-15');
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, $leave->fresh('leaveType'), null);
+        $this->assertEquals('absent', $r['code']);
+    }
+
+    public function test_no_attendance_full_day_unpaid_leave_is_unpaid_leave(): void
+    {
+        $user = $this->makeUser();
+        $alp = LeaveType::where('code', 'ALP')->firstOrFail();
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $alp->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'status' => 'pending', 'user_notes' => 'resolver no-attendance unpaid leave test',
+        ]);
+        $leave->updateQuietly(['status' => 'approved', 'is_lwp' => true, 'lwp_days' => 1]);
+        $date = Carbon::parse('2026-06-15');
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, $leave->fresh('leaveType'), null);
+        $this->assertEquals('unpaid_leave', $r['code']);
+    }
+
+    public function test_no_attendance_leave_takes_priority_over_a_coinciding_full_holiday(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->fullHoliday('2026-06-15');
+        $alp = LeaveType::where('code', 'ALP')->firstOrFail();
+        \App\Models\LeaveBalance::create(['user_id' => $user->id, 'leave_type_id' => $alp->id, 'balance' => 2, 'used' => 0]);
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $alp->id,
+            'from_date' => '2026-06-15', 'to_date' => '2026-06-15',
+            'status' => 'pending', 'user_notes' => 'resolver leave-vs-holiday precedence test',
+        ]);
+        $leave->updateQuietly(['status' => 'approved']); // quiet: no auto-created Attendance row, so this exercises the true no-attendance branch
+        $date = Carbon::parse('2026-06-15');
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, $leave->fresh('leaveType'), $holiday);
+        $this->assertEquals('paid_leave', $r['code'], 'an approved leave is more specific than a coinciding holiday and must win');
+    }
+
+    public function test_no_attendance_no_leave_full_holiday_is_holiday(): void
+    {
+        $user = $this->makeUser();
+        $holiday = $this->fullHoliday('2026-06-15');
+        $date = Carbon::parse('2026-06-15');
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, null, $holiday);
+        $this->assertEquals('holiday', $r['code']);
+    }
+
+    public function test_no_attendance_no_leave_sunday_is_weekly_off(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2026-06-14');
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, null, null);
+        $this->assertEquals('weekly_off', $r['code']);
+    }
+
+    public function test_no_attendance_no_leave_future_working_day_is_scheduled(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::now()->addDays(10)->startOfDay();
+        if ($date->isSunday()) { $date->addDay(); }
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, null, null);
+        $this->assertEquals('scheduled', $r['code']);
+    }
+
+    public function test_no_attendance_no_leave_past_working_day_is_absent(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::parse('2020-06-15'); // Monday, definitely past
+        $this->assertFalse($date->isSunday());
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, null, null);
+        $this->assertEquals('absent', $r['code']);
+    }
+
+    public function test_no_attendance_no_leave_today_is_today(): void
+    {
+        $user = $this->makeUser();
+        $date = Carbon::now()->startOfDay();
+        if ($date->isSunday()) {
+            $this->markTestSkipped('today happens to be a Sunday in this run');
+        }
+
+        $r = AttendanceDayStatus::resolve($user, $date, null, null, null);
+        $this->assertEquals('today', $r['code']);
+    }
+
+    // --- Batch holiday map helper ---------------------------------------
+
+    public function test_holiday_maps_pick_the_most_generous_applicable_part_day_concession(): void
+    {
+        $user = $this->makeUser();
+        Holiday::create(['name' => 'Small concession', 'code' => 'QAS' . random_int(1, 999999), 'date' => '2026-06-15', 'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => 1]);
+        $bigger = Holiday::create(['name' => 'Bigger concession', 'code' => 'QAB' . random_int(1, 999999), 'date' => '2026-06-15', 'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => 2]);
+
+        $maps = AttendanceDayStatus::holidayMapsForMonth(6, 2026);
+        $picked = AttendanceDayStatus::holidayForUserOnDate($maps, $user, $user->site_id, '2026-06-15');
+
+        $this->assertNotNull($picked);
+        $this->assertEquals($bigger->id, $picked->id);
+    }
+
+    public function test_holiday_maps_prefer_a_full_day_holiday_over_any_part_day_concession(): void
+    {
+        $user = $this->makeUser();
+        Holiday::create(['name' => 'Concession', 'code' => 'QAC' . random_int(1, 999999), 'date' => '2026-06-16', 'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => 2]);
+        $full = Holiday::create(['name' => 'Full', 'code' => 'QAFU' . random_int(1, 999999), 'date' => '2026-06-16', 'status' => 'active', 'holiday_type' => 'full']);
+
+        $maps = AttendanceDayStatus::holidayMapsForMonth(6, 2026);
+        $picked = AttendanceDayStatus::holidayForUserOnDate($maps, $user, $user->site_id, '2026-06-16');
+
+        $this->assertNotNull($picked);
+        $this->assertEquals($full->id, $picked->id);
+        $this->assertTrue($picked->isFullDay());
+    }
+
+    // --- Single-row (non-batched) holiday lookup, used by indexAjax -----
+
+    public function test_single_lookup_finds_a_full_day_holiday(): void
+    {
+        $user = $this->makeUser();
+        $full = $this->fullHoliday('2026-06-15');
+
+        $picked = AttendanceDayStatus::holidayForUserOnDateSingle($user, '2026-06-15');
+
+        $this->assertNotNull($picked);
+        $this->assertEquals($full->id, $picked->id);
+    }
+
+    public function test_single_lookup_finds_the_most_generous_part_day_concession(): void
+    {
+        $user = $this->makeUser();
+        Holiday::create(['name' => 'Small', 'code' => 'QASM' . random_int(1, 999999), 'date' => '2026-06-15', 'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => 1]);
+        $bigger = Holiday::create(['name' => 'Bigger', 'code' => 'QABG' . random_int(1, 999999), 'date' => '2026-06-15', 'status' => 'active', 'holiday_type' => 'hours', 'hours_off' => 2]);
+
+        $picked = AttendanceDayStatus::holidayForUserOnDateSingle($user, '2026-06-15');
+
+        $this->assertNotNull($picked);
+        $this->assertEquals($bigger->id, $picked->id);
+    }
+
+    public function test_single_lookup_returns_null_when_no_holiday_applies(): void
+    {
+        $user = $this->makeUser();
+
+        $picked = AttendanceDayStatus::holidayForUserOnDateSingle($user, '2026-06-15');
+
+        $this->assertNull($picked);
+    }
+
+    public function test_single_lookup_ignores_an_inactive_holiday(): void
+    {
+        $user = $this->makeUser();
+        Holiday::create(['name' => 'Cancelled', 'code' => 'QACX' . random_int(1, 999999), 'date' => '2026-06-15', 'status' => 'inactive', 'holiday_type' => 'full']);
+
+        $picked = AttendanceDayStatus::holidayForUserOnDateSingle($user, '2026-06-15');
+
+        $this->assertNull($picked);
+    }
+}
