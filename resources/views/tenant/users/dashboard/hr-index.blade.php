@@ -284,7 +284,7 @@
 
       {{-- Pending Approvals --}}
       <div class="adc-card mb-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Pending Approvals</h6><span class="adc-card-sub"><b data-approval-count>{{ $approvalsTotal }}</b> awaiting action</span></div><a href="{{ url('/leaveRequests') }}" class="adc-link">All</a></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Pending Approvals</h6><span class="adc-card-sub"><b data-approval-count>{{ $approvalsTotal }}</b> awaiting action</span></div><a href="{{ $pendingApprovalsUrl ?? url('/leaveRequests') }}" class="adc-link">All</a></div>
         @if(collect($pendingApprovals ?? [])->isEmpty())
           <div class="adc-empty adc-empty-sm"><i class="bx bx-check-circle text-success"></i><span>All caught up!</span></div>
         @else

@@ -342,6 +342,21 @@ class DashboardController extends Controller
           return $list->sortByDesc('raw_date');
       });
 
+      // The "Pending Approvals" card's header "All" link used to be
+      // hardcoded to the Leave Approval page regardless of what the list
+      // actually contained - so a card full of Document requests still sent
+      // the click to Leave. Routes to whichever type has the most pending
+      // items instead, since one link can't correctly represent four
+      // different approval types at once.
+      $approvalTypeUrls = [
+          'Leave'    => url('/leaveRequests'),
+          'Expense'  => url('/expenseRequests'),
+          'Document' => url('/documentmanagement'),
+          'Loan'     => url('/loan'),
+      ];
+      $dominantApprovalType = $pendingApprovals->countBy('type')->sortDesc()->keys()->first();
+      $pendingApprovalsUrl = $approvalTypeUrls[$dominantApprovalType] ?? $approvalTypeUrls['Leave'];
+
       // Improved Trends Calculation
       $yesterday = now()->subDay()->toDateString();
       $yesterdayPresent = Attendance::whereDate('check_in_time', $yesterday)->count();
@@ -803,6 +818,7 @@ class DashboardController extends Controller
           'eventsToday'           => $eventsToday,
           'upcomingHolidays'      => $upcomingHolidays,
           'pendingApprovals'      => $pendingApprovals->sortByDesc('raw_date'),
+          'pendingApprovalsUrl'   => $pendingApprovalsUrl,
           'recentFeed'            => $recentFeed,
           'moduleTiles'           => $moduleTiles,
           // celebrations
@@ -1032,6 +1048,7 @@ class DashboardController extends Controller
         'newApplicantsToday' => $newApplicantsToday,
         'activeJobsCount' => $activeJobsCount,
         'pendingApprovals' => $pendingApprovals->sortByDesc('raw_date'),
+        'pendingApprovalsUrl' => $pendingApprovalsUrl,
         'trends' => $trends,
         'upcomingProbationEnds' => $upcomingProbationEnds,
         'probationOverdueCount' => $probationOverdueCount,
