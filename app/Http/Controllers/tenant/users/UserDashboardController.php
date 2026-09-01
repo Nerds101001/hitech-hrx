@@ -962,9 +962,12 @@ class UserDashboardController extends Controller
                 'holiday_name' => null
             ];
 
-            // 1. Check Holiday
-            $holiday = $holidaysDb->first(function($h) use ($dateStr) {
-                return Carbon::parse($h->date)->toDateString() === $dateStr;
+            // 1. Check Holiday — only a FULL-day holiday suppresses normal
+            // attendance handling; a part-day concession is still a working
+            // day and must fall through to the ordinary present/absent/leave
+            // logic below, with a lower required-minutes bar for "present".
+            $holiday = $holidaysDb->first(function($h) use ($dateStr, $user) {
+                return Carbon::parse($h->date)->toDateString() === $dateStr && $h->appliesToUser($user);
             });
 
             // 2. Check Attendance (prioritize real punches over dummy 00:00 leave logs)
@@ -983,7 +986,10 @@ class UserDashboardController extends Controller
             });
 
             $isSunday = $date->isSunday();
-            $isHoliday = !empty($holiday);
+            $isHoliday = $holiday ? $holiday->isFullDay() : false;
+            $reqMins = ($holiday && $holiday->isPartDay())
+                ? max(\App\Models\Holiday::MIN_PRESENCE_MINUTES, \App\Models\Holiday::FULL_DAY_MINUTES - $holiday->concessionMinutes())
+                : \App\Models\Holiday::FULL_DAY_MINUTES;
 
             $hasRealPunch = $attendance && $attendance->check_in_time && $attendance->check_out_time && $attendance->check_in_time->format('H:i') !== '00:00';
             $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
@@ -1049,7 +1055,7 @@ class UserDashboardController extends Controller
                             $s = $isPaid ? 'paid_leave' : 'absent';
                         }
                     } elseif ($isFullDayLeave) {
-                        if ($workMins >= 465) {
+                        if ($workMins >= $reqMins) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {
                             $s = $isPaid ? 'half-day-paid' : 'half-day';
@@ -1057,7 +1063,7 @@ class UserDashboardController extends Controller
                             $s = $isPaid ? 'paid_leave' : 'absent';
                         }
                     } else {
-                        if ($workMins >= 465) {
+                        if ($workMins >= $reqMins) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {
                             $s = 'half-day';
@@ -1278,12 +1284,19 @@ class UserDashboardController extends Controller
                 'holiday_name' => null
             ];
             
-            // Check for Holiday
-            $holiday = $holidays->first(function($h) use ($dateStr) {
-                return Carbon::parse($h->date)->toDateString() === $dateStr;
+            // Check for Holiday — only a FULL-day holiday suppresses normal
+            // attendance handling. A part-day concession (e.g. a 90-minute
+            // morning-off) is still a working day: it must fall through to
+            // the ordinary present/absent/leave logic below, just with a
+            // lower required-minutes bar for the day to count as present.
+            $holiday = $holidays->first(function($h) use ($dateStr, $user) {
+                return Carbon::parse($h->date)->toDateString() === $dateStr && $h->appliesToUser($user);
             });
             $holidayName = $holiday ? $holiday->name : null;
-            $isHoliday = !empty($holidayName);
+            $isHoliday = $holiday ? $holiday->isFullDay() : false;
+            $reqMins = ($holiday && $holiday->isPartDay())
+                ? max(\App\Models\Holiday::MIN_PRESENCE_MINUTES, \App\Models\Holiday::FULL_DAY_MINUTES - $holiday->concessionMinutes())
+                : \App\Models\Holiday::FULL_DAY_MINUTES;
             
             // Check for Attendance
             $attendance = $attendances->first(function($a) use ($dateStr) {
@@ -1362,7 +1375,7 @@ class UserDashboardController extends Controller
                             $s = $isPaid ? 'paid_leave' : 'absent';
                         }
                     } elseif ($isFullDayLeave) {
-                        if ($workMins >= 465) {
+                        if ($workMins >= $reqMins) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {
                             $s = $isPaid ? 'half-day-paid' : 'half-day';
@@ -1370,7 +1383,7 @@ class UserDashboardController extends Controller
                             $s = $isPaid ? 'paid_leave' : 'absent';
                         }
                     } else {
-                        if ($workMins >= 465) {
+                        if ($workMins >= $reqMins) {
                             $s = 'present';
                         } elseif ($workMins >= 240) {
                             $s = 'half-day';
