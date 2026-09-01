@@ -326,8 +326,8 @@
                 @foreach($deploy as $m)
                   @php
                     $st = $m->deploy_status ?? 'absent';
-                    $stTone = $st==='present' ? 'success' : ($st==='leave' ? 'warning' : 'danger');
-                    $stLabel = $st==='present' ? 'Present' : ($st==='leave' ? 'On Leave' : 'Absent');
+                    $stTone = $st==='present' ? 'success' : ($st==='leave' ? 'warning' : ($st==='off' ? 'info' : 'danger'));
+                    $stLabel = $st==='present' ? 'Present' : ($st==='leave' ? 'On Leave' : ($st==='off' ? 'Day Off' : 'Absent'));
                     $u = $m->user;
                   @endphp
                   <li>

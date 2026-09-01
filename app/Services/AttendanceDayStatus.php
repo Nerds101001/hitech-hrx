@@ -48,6 +48,39 @@ class AttendanceDayStatus
     /** Minutes of real work a Short Leave day needs to still count as a full Present. */
     public const SHORT_LEAVE_PRESENT_MINUTES = 350;
 
+    /**
+     * Resolver codes that mean "genuinely at work in some form" for a coarse
+     * dashboard count - the "N Present today" cards and trend charts across
+     * the admin and manager dashboards, which only ever needed a yes/no, not
+     * the full status. These used to count any Attendance row whose raw
+     * status text happened to say 'present'/'late'/'work_from_home' - so an
+     * uncorrected miss-punch (a real check-in with no check-out, raw status
+     * still 'Present' by default) inflated the Present card exactly the same
+     * way it inflated payroll, and a worked designated off-Saturday/holiday
+     * never counted at all, because its raw status never said 'present'.
+     */
+    public const PRESENT_LIKE_CODES = [
+        'present', 'short-leave-present', 'sp', 'hp',
+        'half-day-paid', 'half-day', 'work_from_home', 'wfh', 'late',
+    ];
+
+    /**
+     * Whether a single Attendance row represents the employee genuinely
+     * being at work in some form today, for a coarse dashboard count. Pass
+     * the specific Holiday already resolved for this user/date (or null) -
+     * see holidayForUserOnDateSingle() for a one-off lookup, or batch via
+     * holidayMapsForMonth()/holidayForUserOnDate() when checking many rows
+     * across a date range.
+     */
+    public static function isPresentLikeRow(Attendance $attendance, ?Holiday $holiday): bool
+    {
+        if (!$attendance->user || !$attendance->check_in_time) {
+            return false;
+        }
+        $r = self::resolve($attendance->user, $attendance->check_in_time->copy(), $attendance, null, $holiday);
+        return in_array($r['code'], self::PRESENT_LIKE_CODES, true);
+    }
+
     public static function resolve(
         User $user,
         Carbon $date,

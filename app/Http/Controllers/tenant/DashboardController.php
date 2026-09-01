@@ -74,10 +74,13 @@ class DashboardController extends Controller
       $totalUser = User::notTerminated()->count();
       $active = User::where('status', UserAccountStatus::ACTIVE)->count();
 
-      $presentUsersCount = Attendance::whereDate('check_in_time', now())
-        ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
-        ->distinct('user_id')
-        ->count('user_id');
+      // Tallied through the same AttendanceDayStatus resolver as every other
+      // attendance surface, instead of matching raw status text - that raw
+      // match counted an uncorrected miss-punch as present (its raw status
+      // defaults to 'Present' with no check-out recorded) and never
+      // recognised a worked designated off-Saturday/holiday as present at
+      // all, since its raw status never says 'present'.
+      $presentUsersCount = $this->countPresentToday(null);
 
       $onLeaveUsersCount = LeaveRequest::whereDate('from_date', '<=', now())
         ->whereDate('to_date', '>=', now())
@@ -565,14 +568,10 @@ class DashboardController extends Controller
         $att7 = []; $att7pctSum = 0;
         try {
           $att7RangeStart = now()->subDays(6)->startOfDay();
-          // Same "present" definition as the KPI card above — previously the
-          // chart counted ANY attendance row while the card counted only
-          // status='present', so the two disagreed on the same screen.
-          $att7ByDate = Attendance::where('check_in_time', '>=', $att7RangeStart)
-            ->whereIn(DB::raw('LOWER(status)'), ['present', 'late', 'work_from_home'])
-            ->selectRaw('DATE(check_in_time) as d, COUNT(DISTINCT user_id) as c')
-            ->groupBy('d')
-            ->pluck('c', 'd');
+          // Same "present" definition as the KPI card above — now the same
+          // AttendanceDayStatus resolver every attendance page shares,
+          // instead of matching raw status text.
+          $att7ByDate = $this->presentCountsByDate($att7RangeStart, now()->endOfDay(), null);
           for ($i = 6; $i >= 0; $i--) {
             $d = now()->subDays($i);
             $present = (int) ($att7ByDate[$d->toDateString()] ?? 0);
@@ -862,14 +861,35 @@ class DashboardController extends Controller
             ->with('designation')
             ->get();
         $deployMemberIds = $deployMembers->pluck('id');
-        $presentTeamIds = Attendance::whereIn('user_id', $deployMemberIds)
-            ->whereDate('check_in_time', now())->pluck('user_id')->unique();
+        // Present: resolved through the same AttendanceDayStatus resolver
+        // every attendance page shares, not "has any Attendance row today at
+        // all" - that used to count a dummy leave-linked row (no real punch)
+        // as present, and never checked whether a real punch actually
+        // cleared enough minutes to mean anything.
+        $todayAttendanceByUser = Attendance::whereIn('user_id', $deployMemberIds)
+            ->whereDate('check_in_time', now())
+            ->with(['user', 'leaveRequest.leaveType'])
+            ->get()->groupBy('user_id');
+        $presentTeamIds = $todayAttendanceByUser->filter(function ($rows) {
+            $best = $rows->sortByDesc(fn($a) => ($a->check_in_time && $a->check_in_time->format('H:i') !== '00:00') ? 1 : 0)->first();
+            $holiday = $best->check_in_time ? \App\Services\AttendanceDayStatus::holidayForUserOnDateSingle($best->user, $best->check_in_time->toDateString()) : null;
+            return \App\Services\AttendanceDayStatus::isPresentLikeRow($best, $holiday);
+        })->keys();
         $onLeaveTeamIds = LeaveRequest::whereIn('user_id', $deployMemberIds)
             ->whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())
             ->where('status', LeaveRequestStatus::APPROVED)->pluck('user_id')->unique();
         $teamDeployment = $deployMembers->map(function ($m) use ($presentTeamIds, $onLeaveTeamIds) {
-            $status = $presentTeamIds->contains($m->id) ? 'present'
-                    : ($onLeaveTeamIds->contains($m->id) ? 'leave' : 'absent');
+            if ($presentTeamIds->contains($m->id)) {
+                $status = 'present';
+            } elseif ($onLeaveTeamIds->contains($m->id)) {
+                $status = 'leave';
+            } elseif (!\App\Services\LeavePolicyService::isWorkingDay($m, now())) {
+                // A Sunday, off-Saturday, or holiday - not a real absence,
+                // and previously indistinguishable from one on this widget.
+                $status = 'off';
+            } else {
+                $status = 'absent';
+            }
             return (object) ['user' => $m, 'deploy_status' => $status];
         });
 
@@ -878,11 +898,10 @@ class DashboardController extends Controller
         $teamAtt7 = [];
         try {
             $teamAtt7RangeStart = now()->subDays(6)->startOfDay();
-            $teamAtt7ByDate = Attendance::whereIn('user_id', $teamMemberIds)
-                ->where('check_in_time', '>=', $teamAtt7RangeStart)
-                ->selectRaw('DATE(check_in_time) as d, COUNT(DISTINCT user_id) as c')
-                ->groupBy('d')
-                ->pluck('c', 'd');
+            // Same resolver-based "present" as every other attendance
+            // surface - this used to count ANY Attendance row for the day,
+            // including a dummy leave-linked row with no real punch.
+            $teamAtt7ByDate = $this->presentCountsByDate($teamAtt7RangeStart, now()->endOfDay(), $teamMemberIds);
             for ($i = 6; $i >= 0; $i--) {
                 $d = now()->subDays($i);
                 $p = (int) ($teamAtt7ByDate[$d->toDateString()] ?? 0);
@@ -1053,14 +1072,14 @@ class DashboardController extends Controller
     if ($isManager) {
       $ids = User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id)->all();
       $active   = User::whereIn('id', $ids)->where('status', UserAccountStatus::ACTIVE)->count();
-      $present  = Attendance::whereIn('user_id', $ids)->whereDate('check_in_time', now())->distinct('user_id')->count('user_id');
+      $present  = $this->countPresentToday($ids);
       $onLeave  = LeaveRequest::whereIn('user_id', $ids)->whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
       $approvals = LeaveRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
         + DocumentRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
         + LoanRequest::whereIn('user_id', $ids)->where('status', 'pending')->count();
     } else {
       $active   = User::where('status', UserAccountStatus::ACTIVE)->count();
-      $present  = Attendance::whereDate('check_in_time', now())->where('status', 'present')->count();
+      $present  = $this->countPresentToday(null);
       $onLeave  = LeaveRequest::whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
       $approvals = LeaveRequest::where('status', 'pending')->count()
         + ExpenseRequest::where('status', 'pending')->count()
@@ -1330,6 +1349,67 @@ class DashboardController extends Controller
   {
     $allowed = $this->monitoringAllowedIds($user);
     return $allowed === null || in_array((int) $targetUserId, $allowed, true);
+  }
+
+  /**
+   * Count of distinct users genuinely at work today - present, late, WFH, a
+   * credited worked day off, or a partial day - via the same
+   * AttendanceDayStatus resolver every attendance page shares, instead of
+   * matching today's Attendance rows against raw status text. $userIds
+   * scopes to a specific set of users (e.g. a manager's team); null means
+   * everyone.
+   */
+  private function countPresentToday(?array $userIds): int
+  {
+    $query = Attendance::whereDate('check_in_time', now())->with(['user', 'leaveRequest.leaveType']);
+    if ($userIds !== null) {
+      $query->whereIn('user_id', $userIds);
+    }
+
+    $count = 0;
+    foreach ($query->get()->groupBy('user_id') as $userRows) {
+      $best = $userRows->sortByDesc(fn($a) => ($a->check_in_time && $a->check_in_time->format('H:i') !== '00:00') ? 1 : 0)->first();
+      $holiday = $best->check_in_time ? \App\Services\AttendanceDayStatus::holidayForUserOnDateSingle($best->user, $best->check_in_time->toDateString()) : null;
+      if (\App\Services\AttendanceDayStatus::isPresentLikeRow($best, $holiday)) {
+        $count++;
+      }
+    }
+
+    return $count;
+  }
+
+  /**
+   * Distinct present-like users per date across a range, keyed 'Y-m-d' - the
+   * range version of countPresentToday(), for the 7-day trend charts. Same
+   * resolver, batched by month to avoid a holiday lookup per row.
+   */
+  private function presentCountsByDate($startDate, $endDate, ?array $userIds): \Illuminate\Support\Collection
+  {
+    $query = Attendance::whereBetween('check_in_time', [$startDate, $endDate])->with(['user', 'leaveRequest.leaveType']);
+    if ($userIds !== null) {
+      $query->whereIn('user_id', $userIds);
+    }
+
+    $holidayMapsByMonth = [];
+    $counts = [];
+    foreach ($query->get()->groupBy(fn($a) => $a->check_in_time->toDateString()) as $dateStr => $dayRows) {
+      $count = 0;
+      foreach ($dayRows->groupBy('user_id') as $userRows) {
+        $best = $userRows->sortByDesc(fn($a) => ($a->check_in_time && $a->check_in_time->format('H:i') !== '00:00') ? 1 : 0)->first();
+        $d = $best->check_in_time;
+        $monthKey = $d->year . '-' . $d->month;
+        if (!isset($holidayMapsByMonth[$monthKey])) {
+          $holidayMapsByMonth[$monthKey] = \App\Services\AttendanceDayStatus::holidayMapsForMonth($d->month, $d->year);
+        }
+        $holiday = \App\Services\AttendanceDayStatus::holidayForUserOnDate($holidayMapsByMonth[$monthKey], $best->user, $best->user->site_id, $dateStr);
+        if (\App\Services\AttendanceDayStatus::isPresentLikeRow($best, $holiday)) {
+          $count++;
+        }
+      }
+      $counts[$dateStr] = $count;
+    }
+
+    return collect($counts);
   }
 
   public function liveLocationView()

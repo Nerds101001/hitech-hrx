@@ -1373,12 +1373,29 @@ class UserDashboardController extends Controller
         }
 
         // --- This week's presence (Mon..today) ----------------------------
+        // Resolved through the same AttendanceDayStatus resolver every
+        // attendance page shares - this used to count any date with a
+        // non-null check_in_time, including a dummy 00:00 leave-linked row
+        // with no real punch at all.
         $weekStart = $today->copy()->startOfWeek();
+        $weekHolidayMapsByMonth = [];
         $presentThisWeek = Attendance::where('user_id', $user->id)
             ->whereBetween('check_in_time', [$weekStart, $today->copy()->endOfDay()])
             ->whereNotNull('check_in_time')
-            ->distinct()
-            ->count(\Illuminate\Support\Facades\DB::raw('DATE(check_in_time)'));
+            ->with('leaveRequest.leaveType')
+            ->get()
+            ->groupBy(fn($a) => $a->check_in_time->toDateString())
+            ->filter(function ($dayRows) use ($user, &$weekHolidayMapsByMonth) {
+                $best = $dayRows->sortByDesc(fn($a) => $a->check_in_time->format('H:i') !== '00:00' ? 1 : 0)->first();
+                $d = $best->check_in_time;
+                $monthKey = $d->year . '-' . $d->month;
+                if (!isset($weekHolidayMapsByMonth[$monthKey])) {
+                    $weekHolidayMapsByMonth[$monthKey] = \App\Services\AttendanceDayStatus::holidayMapsForMonth($d->month, $d->year);
+                }
+                $holiday = \App\Services\AttendanceDayStatus::holidayForUserOnDate($weekHolidayMapsByMonth[$monthKey], $user, $user->site_id, $d->toDateString());
+                return \App\Services\AttendanceDayStatus::isPresentLikeRow($best, $holiday);
+            })
+            ->count();
 
         $weekWorkingDays = 0;
         for ($d = $weekStart->copy(); $d->lte($today); $d->addDay()) {
