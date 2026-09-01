@@ -38,6 +38,13 @@ bash deployment/hostinger/deploy.sh app/Http/Controllers/tenant/FooController.ph
 Named files are tarred, copied up, extracted in place, and the view/route
 caches cleared. Pass `--migrate` to run `artisan migrate --force` afterwards.
 
+Before uploading, it also checks every `*.blade.php` tracked in git against
+what actually exists on the server, and warns (without blocking the deploy)
+about any that are missing - a view can be committed and referenced by an
+already-live page without ever having been pushed, staying invisible until
+some later deploy's `view:clear` exposes it as a live 500. Pass
+`--skip-view-check` to skip that check.
+
 ### PowerShell equivalent
 
 `deployment/hostinger/deploy.ps1` does a full build-and-deploy including

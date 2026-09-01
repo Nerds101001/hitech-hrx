@@ -2,7 +2,14 @@
 #
 # Deploy named files to the HRX production server.
 #
-#   bash deployment/hostinger/deploy.sh <file> [<file> ...] [--migrate]
+#   bash deployment/hostinger/deploy.sh <file> [<file> ...] [--migrate] [--skip-view-check]
+#
+# Before uploading, checks every *.blade.php tracked in git against what
+# actually exists on the server and warns (non-blocking) about any gap - a
+# view can be committed and referenced by an already-live page without ever
+# being pushed, staying invisible until some later deploy's view:clear
+# exposes it as a live 500. Pass --skip-view-check to skip that check (e.g.
+# deploying in a tight loop right after it already ran clean).
 #
 # Credentials come from deployment/.env.deploy (gitignored) or the environment;
 # they are never read from this file. See deployment/README.md.
@@ -33,13 +40,18 @@ if [ -z "${HRX_SSH_PASSWORD:-}" ]; then
 fi
 
 MIGRATE=false
+SKIP_VIEW_CHECK=false
 FILES=()
 for arg in "$@"; do
-  if [ "$arg" = "--migrate" ]; then MIGRATE=true; else FILES+=("$arg"); fi
+  case "$arg" in
+    --migrate) MIGRATE=true ;;
+    --skip-view-check) SKIP_VIEW_CHECK=true ;;
+    *) FILES+=("$arg") ;;
+  esac
 done
 
 if [ ${#FILES[@]} -eq 0 ]; then
-  echo "Usage: bash deployment/hostinger/deploy.sh <file> [<file> ...] [--migrate]" >&2
+  echo "Usage: bash deployment/hostinger/deploy.sh <file> [<file> ...] [--migrate] [--skip-view-check]" >&2
   exit 1
 fi
 
@@ -49,7 +61,36 @@ done
 
 STAGE="$(mktemp -d -t hrx-deploy-stage-XXXXXX)"
 BUNDLE="$(mktemp -t hrx-deploy-XXXXXX).tgz"
-trap 'rm -f "$BUNDLE"; rm -rf "$STAGE"' EXIT
+BLADE_LIST="$(mktemp -t hrx-blade-list-XXXXXX)"
+trap 'rm -f "$BUNDLE" "$BLADE_LIST"; rm -rf "$STAGE"' EXIT
+
+# Pre-deploy drift check: a blade view can be committed to git and referenced
+# by an already-live page without ever actually being pushed to production -
+# it stays invisible while the compiled view cache serves an older version,
+# then 500s the moment any deploy's own `artisan view:clear` forces a fresh
+# compile. Caught live this way twice (a dashboard widget, then two
+# unconditional includes on the Sales Pipeline page breaking it outright) -
+# checked here, before every deploy, instead of after a user hits it.
+if [ "$SKIP_VIEW_CHECK" = true ]; then
+  echo "Skipping pre-deploy view check (--skip-view-check)."
+else
+  echo "Checking for blade views tracked in git but missing on production…"
+  git ls-files "resources/views/**/*.blade.php" > "$BLADE_LIST"
+  MISSING="$("$PLINK" -ssh -batch -P "$HRX_SSH_PORT" -l "$HRX_SSH_USER" -pw "$HRX_SSH_PASSWORD" \
+    "$HRX_SSH_HOST" "cd '$HRX_APP_ROOT' && while IFS= read -r f; do [ -f \"\$f\" ] || echo \"\$f\"; done" \
+    < "$BLADE_LIST" || true)"
+
+  if [ -n "$MISSING" ]; then
+    echo "⚠  WARNING: blade view(s) tracked in git but missing on production:" >&2
+    echo "$MISSING" | sed 's/^/    /' >&2
+    echo "   A page that includes one of these can look fine right up until the next" >&2
+    echo "   view:clear (e.g. this very deploy) forces a recompile and it 500s instead." >&2
+    echo "   Consider adding the file(s) above to this deploy. Proceeding with the" >&2
+    echo "   requested files only; pass --skip-view-check to silence this check." >&2
+  else
+    echo "OK - no missing blade views."
+  fi
+fi
 
 # Obfuscate whatever remote_deploy.sh's full-tree pass (step 2.5/8, via
 # deployment/hostinger/obfuscate.php) would also obfuscate: anything under
