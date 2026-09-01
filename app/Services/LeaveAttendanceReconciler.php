@@ -106,6 +106,19 @@ class LeaveAttendanceReconciler
             // never spent.
             $isWfh = strtoupper($type->code) === 'WFH';
 
+            // Mirror LeaveRequest::processApproval()'s own pooling rule: most
+            // paid types deduct from the shared ALP pool, but Short Leave (and
+            // Maternity/Paternity, already skipped above) keep their own
+            // separate balance. This used to always refund ALP regardless of
+            // where the day actually came from, so a Short Leave conflict
+            // cancelled the request but left the Short Leave balance drained
+            // while crediting a day the employee never lost from ALP in the
+            // first place.
+            $excludedPoolCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
+            $poolTypeId = ($alp && !in_array($type->code, $excludedPoolCodes, true))
+                ? $alp->id
+                : $leave->leave_type_id;
+
             $perDay   = $leave->is_half_day ? 0.5 : 1.0;
             $refundCap = self::paidDaysOf($leave);
             $refunded  = 0.0;
@@ -165,7 +178,7 @@ class LeaveAttendanceReconciler
                         ];
 
                         if (!$dry) {
-                            self::credit($leave, $alp->id, $perDay, $date);
+                            self::credit($leave, $poolTypeId, $perDay, $date);
                             $att->admin_reason = trim(($att->admin_reason ? $att->admin_reason . ' | ' : '')
                                 . self::MARK);
                             $att->save();
@@ -244,12 +257,12 @@ class LeaveAttendanceReconciler
         return compact('scanned', 'conflicts', 'credited', 'cancelled', 'rows');
     }
 
-    /** Return one day to the pooled All Purpose Leave balance, with a ledger line. */
-    private static function credit(LeaveRequest $leave, int $alpTypeId, float $days, string $date): void
+    /** Return one day to whichever balance the leave actually drew from, with a ledger line. */
+    private static function credit(LeaveRequest $leave, int $poolTypeId, float $days, string $date): void
     {
-        DB::transaction(function () use ($leave, $alpTypeId, $days, $date) {
+        DB::transaction(function () use ($leave, $poolTypeId, $days, $date) {
             $balance = LeaveBalance::firstOrCreate(
-                ['user_id' => $leave->user_id, 'leave_type_id' => $alpTypeId],
+                ['user_id' => $leave->user_id, 'leave_type_id' => $poolTypeId],
                 ['tenant_id' => $leave->tenant_id, 'balance' => 0, 'used' => 0, 'accrued_this_year' => 0]
             );
 
