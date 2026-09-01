@@ -330,8 +330,17 @@ class LeavePolicyService
             // in_array() compared those against a 'Y-m-d' string — Carbon
             // stringifies to 'Y-m-d H:i:s', so the check NEVER matched and every
             // holiday was treated as a working day. Normalise to date strings.
+            //
+            // Only FULL-DAY holidays suppress the day. A part-day concession
+            // (e.g. a 90-minute morning grace period) is still a working day -
+            // Holiday::appliesTo() and registryAjax's own $holidaysBySite split
+            // already know this, but this cache didn't, so a part-day record
+            // made the whole day register as OFF here: anyone who genuinely
+            // didn't show up (no approved leave, no punch) silently stopped
+            // counting as Absent for the day instead.
             self::$holidayCache[$siteKey] = \App\Models\Holiday::query()
                 ->forUser($user)
+                ->where('holiday_type', 'full')
                 ->pluck('date')
                 ->map(fn ($d) => Carbon::parse($d)->toDateString())
                 ->all();
