@@ -1143,6 +1143,24 @@ class SalesPipelineController extends Controller
             } else {
                 $salespersonId = $user->id;
             }
+        } elseif (!$salespersonId && !$ccareId && !$newBizId) {
+            // A manager can ALSO personally be a working field salesperson
+            // (e.g. an Export Department manager who carries their own
+            // book) -- the branch above only auto-assigns a plain
+            // salesperson, so this exact person leaving the picker blank on
+            // their own "add new" got a row with every rep column null:
+            // saved successfully, but invisible from their own Sales
+            // Report, since nothing there is scoped to them. Only fires
+            // when nobody was explicitly picked, so a manager entering
+            // someone else's prospect is unaffected.
+            $dept = strtolower(optional($user->department)->name ?? '');
+            if ($isCcareUser) {
+                $ccareId = $user->id;
+            } elseif ($isNewBizUser) {
+                $newBizId = $user->id;
+            } elseif (str_contains($dept, 'sales') || str_contains($dept, 'export')) {
+                $salespersonId = $user->id;
+            }
         }
 
         // A customer belongs to ONE category at a time — CCare or New Biz, never
