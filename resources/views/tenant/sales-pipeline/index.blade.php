@@ -803,6 +803,19 @@
                     @endforeach
                 </select>
 
+                {{-- Department filter — client-side only, same instant-switch
+                     design as the month picker; every category is already
+                     rendered, this just shows/hides rows. --}}
+                <select id="tgtDeptPicker" class="form-select form-select-sm fw-bold border-0"
+                        style="width:auto; background-color:rgba(255,255,255,.92); color:#0f766e;">
+                    <option value="">All Departments</option>
+                    <option value="Salesperson">Salesperson</option>
+                    <option value="Export">Export</option>
+                    <option value="CCare">CCare</option>
+                    <option value="New Biz">New Biz</option>
+                    <option value="CCare & New Biz">CCare &amp; New Biz</option>
+                </select>
+
                 <a id="tgtExportBtn" class="btn btn-sm btn-light fw-bold d-flex align-items-center"
                    href="{{ route('sales-visits.pipeline.targets.export', ['month' => $currentMonthKey, 'fy' => $selectedFy]) }}">
                     <i class="bx bx-download me-1"></i> Excel
@@ -841,7 +854,7 @@
                         @php $rowsForMonth = ($targetAchieversByMonth[$mk] ?? ($mk === $currentMonthKey ? ($targetAchievers ?? []) : [])); @endphp
                         <tbody class="tgt-month-body" data-month="{{ $mk }}" @if($mk !== $currentMonthKey) style="display:none;" @endif>
                             @forelse($rowsForMonth as $r)
-                                <tr>
+                                <tr class="tgt-row" data-category="{{ $r['category'] ?? 'Salesperson' }}">
                                     <td class="fw-semibold">{{ $r['name'] }}</td>
                                     <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
                                     <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
@@ -1493,6 +1506,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const picker = document.getElementById('tgtMonthPicker');
     if (!picker) return;
     const exportBtn = document.getElementById('tgtExportBtn');
+    const deptPicker = document.getElementById('tgtDeptPicker');
+
+    function applyRowFilter() {
+        const dept = deptPicker ? deptPicker.value : '';
+        document.querySelectorAll('#targetAchieveModal .tgt-month-body:not([style*="display: none"]) .tgt-row')
+            .forEach(function (row) {
+                row.style.display = (!dept || row.dataset.category === dept) ? '' : 'none';
+            });
+    }
 
     picker.addEventListener('change', function () {
         const month = this.value;
@@ -1504,7 +1526,12 @@ document.addEventListener('DOMContentLoaded', function () {
             u.searchParams.set('month', month);
             exportBtn.href = u.toString();
         }
+        applyRowFilter();
     });
+
+    if (deptPicker) {
+        deptPicker.addEventListener('change', applyRowFilter);
+    }
 });
 
 function showAddNewRow() {

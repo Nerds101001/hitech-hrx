@@ -662,6 +662,30 @@ class SalesPipelineController extends Controller
             $nameMap = User::whereIn('id', $targetHolderIds)
                 ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
 
+            // Category for the popup's department filter — a person's actual
+            // cc_salesperson_map capacity wins over department name (that is
+            // what "combined" really means: one row per capacity, same
+            // department), department name is the fallback for anyone not
+            // mapped at all yet.
+            $deptNameMap = User::whereIn('id', $targetHolderIds)
+                ->with('department')->get()
+                ->mapWithKeys(fn($u) => [$u->id => strtolower(optional($u->department)->name ?? '')]);
+            $roleMap = CcSalespersonMap::whereIn('cc_user_id', $targetHolderIds)
+                ->get(['cc_user_id', 'role'])
+                ->groupBy('cc_user_id')
+                ->map(fn($rows) => $rows->pluck('role')->unique()->all());
+            $categoryOf = function ($spId) use ($roleMap, $deptNameMap) {
+                $roles = $roleMap[$spId] ?? [];
+                $hasCcare = in_array('ccare', $roles, true);
+                $hasNewBiz = in_array('newbiz', $roles, true);
+                $dept = $deptNameMap[$spId] ?? '';
+                if ($hasCcare && $hasNewBiz) return 'CCare & New Biz';
+                if ($hasCcare || str_contains($dept, 'customer care') || $dept === 'ccare') return 'CCare';
+                if ($hasNewBiz || str_contains($dept, 'new biz') || str_contains($dept, 'new business')) return 'New Biz';
+                if (str_contains($dept, 'export')) return 'Export';
+                return 'Salesperson';
+            };
+
             foreach ($achieveMonthKeys as $mk) {
                 $list = [];
                 foreach ($allTargets->where('month_year', $mk) as $t) {
@@ -675,12 +699,13 @@ class SalesPipelineController extends Controller
                         $pending += (float) ($row->pending ?? 0);
                     }
                     $list[] = [
-                        'name'    => $nameMap[$spId] ?? ('#' . $spId),
-                        'actual'  => $actual,
-                        'pending' => $pending,
-                        'bingo'   => (float) $t->bingo_target,
-                        'kingo'   => (float) $t->kingo_target,
-                        'super'   => (float) $t->super_kingo_target,
+                        'name'     => $nameMap[$spId] ?? ('#' . $spId),
+                        'category' => $categoryOf($spId),
+                        'actual'   => $actual,
+                        'pending'  => $pending,
+                        'bingo'    => (float) $t->bingo_target,
+                        'kingo'    => (float) $t->kingo_target,
+                        'super'    => (float) $t->super_kingo_target,
                     ];
                 }
                 usort($list, fn($a, $b) => $b['actual'] <=> $a['actual']);
