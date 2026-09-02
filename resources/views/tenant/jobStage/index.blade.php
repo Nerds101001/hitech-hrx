@@ -4,7 +4,6 @@
 
 @section('vendor-style')
   @vite([
-    'resources/assets/vendor/libs/sortablejs/sortablejs.scss',
     'resources/assets/vendor/scss/pages/hitech-portal.scss'
   ])
   <style>
@@ -55,7 +54,7 @@
 
 @section('vendor-script')
   @vite([
-    'resources/assets/vendor/libs/sortablejs/sortablejs.js'
+    'resources/assets/vendor/libs/sortablejs/sortable.js'
   ])
 @endsection
 

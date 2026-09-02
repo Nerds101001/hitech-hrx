@@ -9,7 +9,7 @@
 
 @section('vendor-style')
   @vite([
-    'resources/assets/vendor/libs/animate-css/animate-css.scss',
+    'resources/assets/vendor/libs/animate-css/animate.scss',
     'resources/assets/vendor/libs/flatpickr/flatpickr.scss',
     'resources/assets/vendor/scss/pages/hitech-portal.scss'
   ])

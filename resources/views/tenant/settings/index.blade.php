@@ -28,7 +28,6 @@
 
 @section('page-script')
   @vite(['resources/js/main-helper.js'])
-  @vite(['resources/assets/js/app/settings-index.js'])
 @endsection
 
 @section('content')
