@@ -596,11 +596,19 @@ class SalesPipelineController extends Controller
             $allTargets = $allTargets->whereIn('salesperson_id', $allowedSpIds);
         }
 
-        // Every CCare/New Biz coordinator (anyone with a cc_salesperson_map
-        // row) belongs in this popup, even for a month nobody set a Bingo/
-        // Kingo target for — otherwise they simply never appear, rather than
-        // showing up with a real actual sale against a blank target.
-        $allCoordinatorIds = CcSalespersonMap::distinct()->pluck('cc_user_id');
+        // Everyone in Sales/Export/CCare/New Biz belongs in this popup, even
+        // for a month nobody set a Bingo/Kingo target for, and even before
+        // they have been mapped to a salesperson at all — otherwise they
+        // simply never appear, rather than showing up with a real actual
+        // sale (or a legitimate 0) against a blank target. Reuses the same
+        // $salespersons/$newBizUsers/$ccareUsers pools the rest of this page
+        // already uses, so "who counts as CCare/New Biz" stays one
+        // definition instead of forking a second, narrower one here.
+        $allCoordinatorIds = $salespersons->pluck('id')
+            ->merge($newBizUsers->pluck('id'))
+            ->merge($ccareUsers->pluck('id'))
+            ->merge(CcSalespersonMap::distinct()->pluck('cc_user_id'))
+            ->unique()->values();
         if ($allowedSpIds !== null) {
             $allCoordinatorIds = $allCoordinatorIds->intersect($allowedSpIds);
         }
