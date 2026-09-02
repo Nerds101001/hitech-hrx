@@ -22,7 +22,7 @@ class ApprovalController extends Controller
         $documentQuery = DocumentRequest::where('status', 'pending')->with(['user', 'documentType']);
 
         if ($isManager) {
-            $managedSubordinateIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+            $managedSubordinateIds = User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id')->toArray();
             $profileQuery->whereIn('user_id', $managedSubordinateIds);
             $documentQuery->whereIn('user_id', $managedSubordinateIds);
         }

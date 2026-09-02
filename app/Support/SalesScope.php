@@ -140,7 +140,7 @@ class SalesScope
         // they are personally tagged on. viewIds() below already had this
         // behaviour — personalIds() simply never got it.
         if ($user->hasRole(['manager', 'Manager'])) {
-            $team = User::where('reporting_to_id', $user->id)->pluck('id');
+            $team = User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id');
 
             if ($request && $request->filled($memberParam)) {
                 // One teammate in focus — but only if they really report to me.

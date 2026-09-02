@@ -49,7 +49,7 @@ class LeaveController extends Controller
       $odQuery = OutdoorDuty::query()->with(['user', 'user.department', 'approvedBy']);
 
       if ($isManager) {
-          $managedSubordinateIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
+          $managedSubordinateIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->notTerminated()->pluck('id')->toArray();
           $scopedUserIds = array_merge($managedSubordinateIds, [$user->id]);
           $leaveQuery->whereIn('user_id', $scopedUserIds);
           $odQuery->whereIn('user_id', $scopedUserIds);
@@ -549,7 +549,7 @@ class LeaveController extends Controller
       if ($selfOnly) {
         $query->where('user_id', $user->id);
       } elseif ($isManager) {
-        $subIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id')->toArray();
+        $subIds = User::whereIn('reporting_to_id', $user->managerIdentityIds())->notTerminated()->pluck('id')->toArray();
         $query->whereIn('user_id', array_merge($subIds, [$user->id]));
       } elseif (!$isAdmin) {
         $query->where('user_id', $user->id);

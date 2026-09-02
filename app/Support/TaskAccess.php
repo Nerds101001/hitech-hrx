@@ -46,7 +46,7 @@ class TaskAccess
 
         if ($user->hasRole(['manager', 'Manager', 'accounts', 'Accounts'])) {
             return User::whereIn('reporting_to_id', $user->managerIdentityIds())
-                ->pluck('id')->all();
+                ->notTerminated()->pluck('id')->all();
         }
 
         return [];

@@ -238,7 +238,7 @@ class UserDashboardController extends Controller
         // rest of the manager dashboard uses.
         if ($isManager) {
             $teamOutTodayQuery->whereIn('user_id',
-                User::whereIn('reporting_to_id', $user->managerIdentityIds())->pluck('id'));
+                User::whereIn('reporting_to_id', $user->managerIdentityIds())->notTerminated()->pluck('id'));
         }
         $teamOutToday = $teamOutTodayQuery->get();
 

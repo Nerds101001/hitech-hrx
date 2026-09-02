@@ -841,7 +841,7 @@ class DashboardController extends Controller
 
       // MANAGER SPECIFIC SCOPING FOR REVAMP
       if ($isManager) {
-        $teamMemberIds = User::where('reporting_to_id', $user->id)->pluck('id')->toArray();
+        $teamMemberIds = User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id')->toArray();
         $teamMemberIds[] = $user->id; // Include self
 
         $totalUser = count($teamMemberIds);
@@ -1356,7 +1356,7 @@ class DashboardController extends Controller
       return null; // unrestricted
     }
     if ($user->hasRole(['manager', 'Manager'])) {
-      return User::where('reporting_to_id', $user->id)->pluck('id')->push($user->id)->unique()->values()->all();
+      return User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id')->push($user->id)->unique()->values()->all();
     }
     return [$user->id];
   }

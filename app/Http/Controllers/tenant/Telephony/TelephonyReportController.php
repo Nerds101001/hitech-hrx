@@ -312,12 +312,12 @@ class TelephonyReportController extends Controller
   private function visibleUserIds($user): array
   {
     if ($user->hasAnyRole(['admin', 'hr'])) {
-      return User::pluck('id')->all();
+      return User::notTerminated()->pluck('id')->all();
     }
 
     if ($user->hasRole('manager')) {
       return User::whereIn('reporting_to_id', $user->managerIdentityIds())
-        ->pluck('id')->push($user->id)->unique()->all();
+        ->notTerminated()->pluck('id')->push($user->id)->unique()->all();
     }
 
     return [$user->id];
