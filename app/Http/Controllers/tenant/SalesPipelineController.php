@@ -663,7 +663,13 @@ class SalesPipelineController extends Controller
             $targetHolderIds = $allTargets->pluck('salesperson_id')->unique()->all();
             $actualByKey = [];
             foreach ($targetHolderIds as $spId) {
-                $pipelines = SalesPipeline::with(['months' => function ($q) use ($achieveMonthKeys) {
+                // Named distinctly from the page's own $pipelines (the main
+                // customer table's paginator, set far above in this same
+                // method) -- PHP has no block scope, so reusing that name
+                // here silently overwrote the paginator with this plain
+                // Collection, and every visit to this page fatal-errored the
+                // instant the view called $pipelines->firstItem().
+                $achieverPipelines = SalesPipeline::with(['months' => function ($q) use ($achieveMonthKeys) {
                         $q->whereIn('month_year', $achieveMonthKeys);
                     }])
                     ->where('is_locked', true)
@@ -683,7 +689,7 @@ class SalesPipelineController extends Controller
                 foreach ($achieveMonthKeys as $mk) {
                     $actual = 0.0;
                     $pending = 0.0;
-                    foreach ($pipelines as $p) {
+                    foreach ($achieverPipelines as $p) {
                         $m = $p->months->firstWhere('month_year', $mk);
                         if ($m) {
                             $actual  += (float) $m->sale_amount;
