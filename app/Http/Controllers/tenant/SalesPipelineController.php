@@ -1931,6 +1931,18 @@ class SalesPipelineController extends Controller
             'order_interval'
         ]);
 
+        // party_name is NOT NULL and has no sensible default (unlike the
+        // numeric fields below) -- a customer row can't have a blank name.
+        // ConvertEmptyStringsToNull turns a cleared inline-edit field into
+        // an explicit null before it ever reaches here, so this was
+        // reaching $pipeline->update($data) and crashing with a raw 500
+        // instead of a real validation message.
+        if (array_key_exists('party_name', $data) && trim((string) $data['party_name']) === '') {
+            $message = 'Party name cannot be blank.';
+            if ($wantsJson) return response()->json(['success' => false, 'message' => $message], 422);
+            return redirect()->back()->with('error', $message);
+        }
+
         // These 5 columns are NOT NULL (with a DB default of 0 for inserts
         // only - an explicit null still violates the constraint on update).
         // An inline-edit save with the field cleared sent an empty string
