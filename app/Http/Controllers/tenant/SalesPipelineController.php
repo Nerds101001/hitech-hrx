@@ -591,7 +591,21 @@ class SalesPipelineController extends Controller
             fn ($k) => $k <= $currentMonthKey
         ));
         $targetAchieversByMonth = [];
-        $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys);
+
+        // A terminated employee must never appear here, even if a target row
+        // was set for them before they left and nobody cleaned it up.
+        // $salespersons/$newBizUsers/$ccareUsers already exclude terminated
+        // staff (they end in ->notTerminated()); this covers everyone else
+        // (anyone whose target predates their departure, or whose
+        // cc_salesperson_map row was never removed).
+        $activeIds = $salespersons->pluck('id')
+            ->merge($newBizUsers->pluck('id'))
+            ->merge($ccareUsers->pluck('id'))
+            ->merge(User::notTerminated()->pluck('id'))
+            ->unique();
+
+        $allTargets = $salespersonTargets->whereIn('month_year', $achieveMonthKeys)
+            ->whereIn('salesperson_id', $activeIds);
         if ($allowedSpIds !== null) {
             $allTargets = $allTargets->whereIn('salesperson_id', $allowedSpIds);
         }
@@ -607,7 +621,10 @@ class SalesPipelineController extends Controller
         $allCoordinatorIds = $salespersons->pluck('id')
             ->merge($newBizUsers->pluck('id'))
             ->merge($ccareUsers->pluck('id'))
-            ->merge(CcSalespersonMap::distinct()->pluck('cc_user_id'))
+            ->merge(
+                User::whereIn('id', CcSalespersonMap::distinct()->pluck('cc_user_id'))
+                    ->notTerminated()->pluck('id')
+            )
             ->unique()->values();
         if ($allowedSpIds !== null) {
             $allCoordinatorIds = $allCoordinatorIds->intersect($allowedSpIds);

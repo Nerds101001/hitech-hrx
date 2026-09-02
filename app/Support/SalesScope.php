@@ -40,10 +40,12 @@ class SalesScope
 
         $ids = collect([$user->id]);
 
-        // Sales manager: their whole team (direct reports).
+        // Sales manager: their whole team (direct reports). A terminated
+        // employee whose reporting_to_id was never cleared must not still
+        // count as a live teammate.
         if ($user->hasRole(['manager', 'Manager'])) {
             $ids = $ids->merge(
-                User::where('reporting_to_id', $user->id)->pluck('id')
+                User::where('reporting_to_id', $user->id)->notTerminated()->pluck('id')
             );
         }
 
@@ -57,11 +59,13 @@ class SalesScope
             // A combined "Customer Care + New Biz" agent also holds role='newbiz'
             // rows (row-level access, added by applyScope) — those must NOT open
             // the whole book, or she is treated as CCare for salespeople she only
-            // does New Biz for.
+            // does New Biz for. Same termination check as above: a mapping row
+            // that outlived the salesperson's employment must not resurrect them.
+            $mappedIds = CcSalespersonMap::where('cc_user_id', $user->id)
+                ->where('role', 'ccare')
+                ->pluck('sales_user_id');
             $ids = $ids->merge(
-                CcSalespersonMap::where('cc_user_id', $user->id)
-                    ->where('role', 'ccare')
-                    ->pluck('sales_user_id')
+                User::whereIn('id', $mappedIds)->notTerminated()->pluck('id')
             );
         }
 
