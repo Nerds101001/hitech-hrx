@@ -1,4 +1,4 @@
-@extends('layouts/contentLayoutMaster')
+@extends('layouts/layoutMaster')
 
 @section('title', 'Scorecard Details')
 
@@ -136,10 +136,10 @@
                     </tbody>
                 </table>
                 
-                @if(Auth::user()->hasRole(['admin', 'hr', 'manager']))
+                @if(\Illuminate\Support\Facades\Auth::user()->hasRole(['admin', 'hr', 'manager']))
                 <div class="mt-4">
                     <h5>Manager Review Input (Only visible to managers)</h5>
-                    <form action="{{ route('tenant.scorecards.update-review', $scorecard->id) }}" method="POST">
+                    <form action="{{ route('performance.scorecards.update-review', $scorecard->id) }}" method="POST">
                         @csrf
                         <div class="row">
                             <div class="col-md-4 mb-3">

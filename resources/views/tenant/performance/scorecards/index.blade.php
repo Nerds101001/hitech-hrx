@@ -1,4 +1,4 @@
-@extends('layouts/contentLayoutMaster')
+@extends('layouts/layoutMaster')
 
 @section('title', 'Performance Scorecards')
 
@@ -8,7 +8,7 @@
         <div class="card">
             <div class="card-header border-bottom d-flex justify-content-between align-items-center">
                 <h4 class="card-title">Automated Sales Appraisals</h4>
-                @if(Auth::user()->hasRole(['admin', 'hr', 'manager']))
+                @if(\Illuminate\Support\Facades\Auth::user()->hasRole(['admin', 'hr', 'manager']))
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateScorecardModal">Generate Scorecard</button>
                 @endif
             </div>
@@ -44,7 +44,7 @@
     </div>
 </div>
 
-@if(Auth::user()->hasRole(['admin', 'hr', 'manager']))
+@if(\Illuminate\Support\Facades\Auth::user()->hasRole(['admin', 'hr', 'manager']))
 <!-- Generate Modal -->
 <div class="modal fade" id="generateScorecardModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -64,7 +64,7 @@
                             <label for="user_id" class="form-label">Employee</label>
                             <select id="user_id" name="user_id" class="form-select" required>
                                 <option value="">Select Employee</option>
-                                @foreach(\App\Models\User::where('tenant_id', Auth::user()->tenant_id)->get() as $u)
+                                @foreach(\App\Models\User::where('tenant_id', \Illuminate\Support\Facades\Auth::user()->tenant_id)->get() as $u)
                                     <option value="{{ $u->id }}">{{ $u->first_name }} {{ $u->last_name }}</option>
                                 @endforeach
                             </select>

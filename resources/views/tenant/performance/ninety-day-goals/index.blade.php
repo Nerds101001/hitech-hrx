@@ -1,4 +1,4 @@
-@extends('layouts/contentLayoutMaster')
+@extends('layouts/layoutMaster')
 
 @section('title', '90-Day Goals Tracker')
 
