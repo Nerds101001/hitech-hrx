@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\CcSalespersonMap;
 use App\Models\SalesPipeline;
 use App\Models\SalesPipelineMonth;
 use App\Models\SetuSalespersonMapping;
@@ -594,13 +595,55 @@ class SalesPipelineController extends Controller
         if ($allowedSpIds !== null) {
             $allTargets = $allTargets->whereIn('salesperson_id', $allowedSpIds);
         }
+
+        // Every CCare/New Biz coordinator (anyone with a cc_salesperson_map
+        // row) belongs in this popup, even for a month nobody set a Bingo/
+        // Kingo target for — otherwise they simply never appear, rather than
+        // showing up with a real actual sale against a blank target.
+        $allCoordinatorIds = CcSalespersonMap::distinct()->pluck('cc_user_id');
+        if ($allowedSpIds !== null) {
+            $allCoordinatorIds = $allCoordinatorIds->intersect($allowedSpIds);
+        }
+        $existingTargetKeys = $allTargets->map(fn ($t) => $t->month_year . '|' . $t->salesperson_id)->flip();
+        foreach ($achieveMonthKeys as $mk) {
+            foreach ($allCoordinatorIds as $cid) {
+                if (!isset($existingTargetKeys[$mk . '|' . $cid])) {
+                    $allTargets->push(new \App\Models\SalespersonTarget([
+                        'salesperson_id'     => $cid,
+                        'month_year'         => $mk,
+                        'bingo_target'       => 0,
+                        'kingo_target'       => 0,
+                        'super_kingo_target' => 0,
+                    ]));
+                }
+            }
+        }
+
         if ($allTargets->isNotEmpty() && $achieveMonthKeys) {
+            // A CCare/New Biz agent never owns sales_pipelines rows under their
+            // own id — they coordinate one or more field salespeople via
+            // cc_salesperson_map, and THAT is whose actual sale counts toward
+            // their target. Without this, every coordinator's "actual" (and
+            // "pending") in the popup always computed to 0, since the lookup
+            // below was keyed on the target row's own salesperson_id.
+            $targetHolderIds = $allTargets->pluck('salesperson_id')->unique()->all();
+            $creditIds = CcSalespersonMap::whereIn('cc_user_id', $targetHolderIds)
+                ->get(['cc_user_id', 'sales_user_id'])
+                ->groupBy('cc_user_id')
+                ->map(fn($rows) => $rows->pluck('sales_user_id')->unique()->all());
+
+            $fetchIds = collect($targetHolderIds);
+            foreach ($creditIds as $mapped) {
+                $fetchIds = $fetchIds->merge($mapped);
+            }
+            $fetchIds = $fetchIds->unique()->values()->all();
+
             $actualRows = SalesPipelineMonth::query()
                 ->join('sales_pipelines', 'sales_pipelines.id', '=', 'sales_pipeline_months.sales_pipeline_id')
                 ->whereIn('sales_pipeline_months.month_year', $achieveMonthKeys)
                 ->where('sales_pipelines.is_locked', true)
                 ->whereNull('sales_pipelines.deleted_at')
-                ->when($allowedSpIds !== null, fn($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
+                ->whereIn('sales_pipelines.salesperson_id', $fetchIds)
                 ->groupBy('sales_pipelines.salesperson_id', 'sales_pipeline_months.month_year')
                 ->selectRaw('sales_pipelines.salesperson_id AS sp, sales_pipeline_months.month_year AS mk, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
                 ->get();
@@ -608,18 +651,25 @@ class SalesPipelineController extends Controller
             foreach ($actualRows as $a) {
                 $actualByKey[$a->mk . '|' . $a->sp] = $a;
             }
-            $nameMap = User::whereIn('id', $allTargets->pluck('salesperson_id')->unique()->all())
+            $nameMap = User::whereIn('id', $targetHolderIds)
                 ->get()->mapWithKeys(fn($u) => [$u->id => $u->name]);
 
             foreach ($achieveMonthKeys as $mk) {
                 $list = [];
                 foreach ($allTargets->where('month_year', $mk) as $t) {
                     $spId = $t->salesperson_id;
-                    $row  = $actualByKey[$mk . '|' . $spId] ?? null;
+                    $creditFor = $creditIds->has($spId) ? array_merge([$spId], $creditIds[$spId]) : [$spId];
+                    $actual = 0.0;
+                    $pending = 0.0;
+                    foreach ($creditFor as $cid) {
+                        $row = $actualByKey[$mk . '|' . $cid] ?? null;
+                        $actual  += (float) ($row->actual ?? 0);
+                        $pending += (float) ($row->pending ?? 0);
+                    }
                     $list[] = [
                         'name'    => $nameMap[$spId] ?? ('#' . $spId),
-                        'actual'  => (float) ($row->actual ?? 0),
-                        'pending' => (float) ($row->pending ?? 0),
+                        'actual'  => $actual,
+                        'pending' => $pending,
                         'bingo'   => (float) $t->bingo_target,
                         'kingo'   => (float) $t->kingo_target,
                         'super'   => (float) $t->super_kingo_target,
@@ -1372,26 +1422,50 @@ class SalesPipelineController extends Controller
             ->when($allowedSpIds !== null, fn ($q) => $q->whereIn('salesperson_id', $allowedSpIds))
             ->get(['salesperson_id', 'kingo_target', 'bingo_target', 'super_kingo_target']);
 
+        // See the same fix in index(): a CCare/New Biz agent never owns
+        // sales_pipelines rows under their own id, so their actual/pending
+        // must be credited via their cc_salesperson_map mappings, not a
+        // direct lookup on their own salesperson_id.
+        $targetHolderIds = $targets->pluck('salesperson_id')->unique()->all();
+        $creditIds = CcSalespersonMap::whereIn('cc_user_id', $targetHolderIds)
+            ->get(['cc_user_id', 'sales_user_id'])
+            ->groupBy('cc_user_id')
+            ->map(fn ($rows) => $rows->pluck('sales_user_id')->unique()->all());
+
+        $fetchIds = collect($targetHolderIds);
+        foreach ($creditIds as $mapped) {
+            $fetchIds = $fetchIds->merge($mapped);
+        }
+        $fetchIds = $fetchIds->unique()->values()->all();
+
         $actuals = SalesPipelineMonth::query()
             ->join('sales_pipelines', 'sales_pipelines.id', '=', 'sales_pipeline_months.sales_pipeline_id')
             ->where('sales_pipeline_months.month_year', $month)
             ->where('sales_pipelines.is_locked', true)
             ->whereNull('sales_pipelines.deleted_at')
-            ->when($allowedSpIds !== null, fn ($q) => $q->whereIn('sales_pipelines.salesperson_id', $allowedSpIds))
+            ->whereIn('sales_pipelines.salesperson_id', $fetchIds)
             ->groupBy('sales_pipelines.salesperson_id')
             ->selectRaw('sales_pipelines.salesperson_id AS sp, SUM(sales_pipeline_months.sale_amount) AS actual, SUM(sales_pipeline_months.pending_amount) AS pending')
             ->get()->keyBy('sp');
 
-        $names = User::whereIn('id', $targets->pluck('salesperson_id')->unique()->all())
+        $names = User::whereIn('id', $targetHolderIds)
             ->get()->mapWithKeys(fn ($u) => [$u->id => $u->name]);
 
         $rows = [];
         foreach ($targets as $t) {
-            $a = $actuals[$t->salesperson_id] ?? null;
+            $spId = $t->salesperson_id;
+            $creditFor = $creditIds->has($spId) ? array_merge([$spId], $creditIds[$spId]) : [$spId];
+            $actual = 0.0;
+            $pending = 0.0;
+            foreach ($creditFor as $cid) {
+                $a = $actuals[$cid] ?? null;
+                $actual  += (float) ($a->actual ?? 0);
+                $pending += (float) ($a->pending ?? 0);
+            }
             $rows[] = [
-                'name'    => $names[$t->salesperson_id] ?? ('#' . $t->salesperson_id),
-                'actual'  => (float) ($a->actual ?? 0),
-                'pending' => (float) ($a->pending ?? 0),
+                'name'    => $names[$spId] ?? ('#' . $spId),
+                'actual'  => $actual,
+                'pending' => $pending,
                 'bingo'   => (float) $t->bingo_target,
                 'kingo'   => (float) $t->kingo_target,
                 'super'   => (float) $t->super_kingo_target,
