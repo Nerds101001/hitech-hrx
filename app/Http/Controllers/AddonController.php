@@ -4,23 +4,13 @@ namespace App\Http\Controllers;
 
 use ZipArchive;
 use Illuminate\Http\Request;
-use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Facades\Log;
 use Nwidart\Modules\Facades\Module;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Artisan;
 
-class AddonController extends Controller implements HasMiddleware
+class AddonController extends Controller
 {
-  /**
-   * SECURITY (H-6): installing/activating an addon runs its code. Require admin
-   * at the controller level too, not only on the route group.
-   */
-  public static function middleware(): array
-  {
-    return ['role:admin'];
-  }
-
   public function index()
   {
     // Get all available modules

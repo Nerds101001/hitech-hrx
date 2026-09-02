@@ -5,25 +5,14 @@ namespace App\Http\Controllers;
 use App\ApiClasses\Error;
 use App\ApiClasses\Success;
 use Carbon\Carbon;
-use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Helpers\Format;
 use Symfony\Component\Console\Output\BufferedOutput;
 
-class UtilitiesController extends Controller implements HasMiddleware
+class UtilitiesController extends Controller
 {
-  /**
-   * SECURITY (C-2): defense in depth. These maintenance actions expose the full
-   * database (backup download/restore/delete) and log clearing, so require the
-   * admin role at the controller level too — not only on the route group.
-   */
-  public static function middleware(): array
-  {
-    return ['role:admin'];
-  }
-
   public function index()
   {
     return view('utilities.index');
