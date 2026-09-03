@@ -33,11 +33,13 @@ class TaskObjection extends Notification
   {
     return (new MailMessage)
       ->subject('Task Sent Back: ' . $this->task->title)
-      ->line((optional($this->task->objectedBy)->getFullName() ?? 'An admin') . ' raised an objection on this task and sent it back to you.')
-      ->line('**' . $this->task->title . '**')
-      ->line('Reason: ' . $this->task->objection_notes)
-      ->action('View My Tasks', url('/my-tasks'))
-      ->line('Please correct it and resubmit.');
+      ->view('emails.task_objection', [
+        'notifiable'      => $notifiable,
+        'taskTitle'       => $this->task->title,
+        'objectionNotes'  => $this->task->objection_notes,
+        'objectedByName'  => optional($this->task->objectedBy)->getFullName() ?? 'An admin',
+        'actionUrl'       => url('/my-tasks'),
+      ]);
   }
 
   public function toArray(object $notifiable): array

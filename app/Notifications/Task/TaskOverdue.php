@@ -35,17 +35,15 @@ class TaskOverdue extends Notification
 
   public function toMail(object $notifiable): MailMessage
   {
-    $mail = (new MailMessage)
+    return (new MailMessage)
       ->subject('Overdue: ' . $this->task->title)
-      ->line('This task was due on **' . $this->task->due_date->format('d M Y') . '** and has not been marked complete.')
-      ->line('**' . $this->task->title . '**');
-
-    if ($this->task->description) {
-      $mail->line($this->task->description);
-    }
-
-    return $mail->action('Mark It Complete', url('/my-tasks'))
-      ->line('If it is already done, mark it complete with a remark so this does not keep showing as pending.');
+      ->view('emails.task_overdue', [
+        'notifiable'  => $notifiable,
+        'taskTitle'   => $this->task->title,
+        'description' => $this->task->description,
+        'dueDate'     => $this->task->due_date->format('d M Y'),
+        'actionUrl'   => url('/my-tasks'),
+      ]);
   }
 
   public function toArray(object $notifiable): array

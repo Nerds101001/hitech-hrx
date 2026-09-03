@@ -30,21 +30,17 @@ class TaskAssigned extends Notification
 
   public function toMail(object $notifiable): MailMessage
   {
-    $mail = (new MailMessage)
+    return (new MailMessage)
       ->subject('New Task: ' . $this->task->title)
-      ->line('You have been assigned a new task by ' . (optional($this->task->assignedBy)->getFullName() ?? 'your organisation') . '.')
-      ->line('**' . $this->task->title . '**');
-
-    if ($this->task->description) {
-      $mail->line($this->task->description);
-    }
-
-    if ($this->task->due_date) {
-      $mail->line('Due: ' . $this->task->due_date->format('d M Y'));
-    }
-
-    return $mail->action('View My Tasks', url('/my-tasks'))
-      ->line('You can mark it complete and leave a remark once it is done.');
+      ->view('emails.task_assigned', [
+        'notifiable'      => $notifiable,
+        'taskTitle'       => $this->task->title,
+        'description'     => $this->task->description,
+        'dueDate'         => $this->task->due_date?->format('d M Y'),
+        'priority'        => $this->task->priority,
+        'assignedByName'  => optional($this->task->assignedBy)->getFullName() ?? 'your organisation',
+        'actionUrl'       => url('/my-tasks'),
+      ]);
   }
 
   public function toArray(object $notifiable): array
