@@ -321,8 +321,14 @@ class KpiController extends Controller
         $manualAssignments = $assignments->filter(fn ($a) => KpiEntryService::isManual($a))->values();
         // Each KPI reports over its own window — monthly ones once a month,
         // weekly ones per week — so the current entry is looked up per row.
+        // Monthly-frequency ones also get last month's entry alongside this
+        // month's: the period picker on the page lets someone switch between
+        // exactly those two, and switching is pure client-side (no round
+        // trip) using whichever of these two was already fetched.
         $entryPeriod = [];
         $weekEntries = collect();
+        $lastMonthEntries = collect();
+        $lastMonthKey = null;
         foreach ($manualAssignments as $a) {
             [$ps, $pe] = KpiEntryService::periodFor($a);
             $entryPeriod[$a->id] = KpiEntryService::periodLabel($a);
@@ -330,6 +336,16 @@ class KpiController extends Controller
                 ->whereDate('period_start', $ps->toDateString())->first();
             if ($row) {
                 $weekEntries[$a->id] = $row;
+            }
+            if ($a->frequency === 'monthly') {
+                $lastMonthDay = \Carbon\Carbon::today()->subMonthNoOverflow();
+                [$lps, $lpe] = KpiEntryService::periodFor($a, $lastMonthDay);
+                $lastMonthKey = $lps->toDateString();
+                $lastRow = \App\Models\KpiEntry::where('kpi_assignment_id', $a->id)
+                    ->whereDate('period_start', $lps->toDateString())->first();
+                if ($lastRow) {
+                    $lastMonthEntries[$a->id] = $lastRow;
+                }
             }
         }
         [$weekStart, $weekEnd] = KpiEntryService::weekOf();
@@ -342,7 +358,7 @@ class KpiController extends Controller
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
             'pendingCount', 'completedCount',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
-            'targetNote', 'entryPeriod'
+            'targetNote', 'entryPeriod', 'lastMonthEntries', 'lastMonthKey'
         ));
     }
 
@@ -380,17 +396,29 @@ class KpiController extends Controller
 
         $data = $request->validate([
             'value' => 'required|numeric|min:0',
-            'note'  => 'nullable|string|max:255',
+            'note'  => 'required|string|max:255',
             'week'  => 'nullable|date',
         ]);
 
         $day = !empty($data['week']) ? \Carbon\Carbon::parse($data['week']) : null;
-        // Only the current or a past week — nobody reports a week that has not happened.
-        if ($day && $day->gt(\Carbon\Carbon::today())) {
-            return response()->json(['status' => 'error', 'message' => 'That week has not started yet.'], 422);
+        if ($day) {
+            // Only the current or a past week/month — nobody reports one that
+            // has not happened. Monthly KPIs are further limited to the
+            // current month or last month: the period picker on the page only
+            // ever offers those two, and this is the real enforcement of that,
+            // not just the dropdown's own options.
+            if ($day->gt(\Carbon\Carbon::today())) {
+                return response()->json(['status' => 'error', 'message' => 'That period has not started yet.'], 422);
+            }
+            if ($assignment->frequency === 'monthly') {
+                $earliest = \Carbon\Carbon::today()->startOfMonth()->subMonthNoOverflow();
+                if ($day->lt($earliest)) {
+                    return response()->json(['status' => 'error', 'message' => 'You can only submit for the current month or last month.'], 422);
+                }
+            }
         }
 
-        $entry = KpiEntryService::submit($assignment, (float) $data['value'], $data['note'] ?? null, $day);
+        $entry = KpiEntryService::submit($assignment, (float) $data['value'], $data['note'], $day);
 
         return response()->json([
             'status'  => 'success',
@@ -425,7 +453,19 @@ class KpiController extends Controller
         ]);
     }
 
-    /** The review queue: everything staff have submitted and nobody has judged. */
+    /** Which query-string tab values are real, and what status each reads. */
+    public const APPROVAL_TABS = [
+        'pending'  => \App\Models\KpiEntry::SUBMITTED,
+        'approved' => \App\Models\KpiEntry::APPROVED,
+        'rejected' => \App\Models\KpiEntry::REJECTED,
+    ];
+
+    /**
+     * The review screen: Pending / Approved / Rejected on one page, tab-
+     * switched like Leave Approvals. The four stat cards up top always read
+     * the Pending queue specifically -- "days oldest has waited" means
+     * nothing on the Approved or Rejected tab.
+     */
     public function approvals(Request $request)
     {
         $user = Auth::user();
@@ -433,10 +473,34 @@ class KpiController extends Controller
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
         $departmentId = $request->input('department_id');
-        $entries = KpiEntryService::queue($departmentId);
+        $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
+
+        $entries = KpiEntryService::queue($departmentId, self::APPROVAL_TABS[$tab]);
+        $pendingEntries = $tab === 'pending' ? $entries : KpiEntryService::queue($departmentId, \App\Models\KpiEntry::SUBMITTED);
+
+        $tabCounts = \App\Models\KpiEntry::query()
+            ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))
+            ->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
+
         $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
 
-        return view('tenant.kpi.approvals', compact('entries', 'departments', 'departmentId'));
+        return view('tenant.kpi.approvals', compact('entries', 'pendingEntries', 'departments', 'departmentId', 'tab', 'tabCounts'));
+    }
+
+    /** Excel export of one tab's entries — same filters as the screen. */
+    public function exportApprovals(Request $request)
+    {
+        $user = Auth::user();
+        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
+        }
+        $departmentId = $request->input('department_id');
+        $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\KpiApprovalsExport(self::APPROVAL_TABS[$tab], $departmentId),
+            'kpi-' . $tab . '-' . now()->format('Ymd_His') . '.xlsx'
+        );
     }
 
     // ── Department templates ──────────────────────────────────────────────

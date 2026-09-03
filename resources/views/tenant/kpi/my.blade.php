@@ -84,14 +84,20 @@
                 <div>
                   <h6 class="fw-bold mb-0">What did you do?</h6>
                   <small class="text-muted">
-                    Report each one over its own period — the period is shown on every row.
+                    Report each one over its own period. Number and customers are both required —
+                    monthly ones can be reported for this month or last month.
                   </small>
                 </div>
-                @if($sentBack->isNotEmpty())
-                  <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
-                    {{ $sentBack->count() }} sent back — please correct
-                  </span>
-                @endif
+                <div class="d-flex align-items-center gap-2">
+                  @if($sentBack->isNotEmpty())
+                    <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
+                      {{ $sentBack->count() }} sent back — please correct
+                    </span>
+                  @endif
+                  <button type="button" class="btn btn-hitech-primary btn-sm" id="wkSubmitAll">
+                    <i class="bx bx-send me-1"></i>Submit all
+                  </button>
+                </div>
               </div>
 
               <div class="table-responsive">
@@ -99,10 +105,10 @@
                   <thead class="table-light">
                     <tr>
                       <th style="min-width:200px">KPI</th>
-                      <th>Period</th>
+                      <th style="min-width:150px">Period</th>
                       <th class="text-center">Approval</th>
                       <th style="width:150px">Your number</th>
-                      <th style="min-width:170px">Note (optional)</th>
+                      <th style="min-width:200px">Customers</th>
                       <th class="text-end" style="width:150px">Status</th>
                     </tr>
                   </thead>
@@ -110,10 +116,31 @@
                     @foreach($manualAssignments as $a)
                       @php
                         $entry = $weekEntries[$a->id] ?? null;
+                        $lastEntry = $lastMonthEntries[$a->id] ?? null;
+                        $isMonthly = $a->frequency === 'monthly';
                         $needsAppr = $a->data_source === 'approval';
                         [$tc, $tl] = $entry ? ($stateTone[$entry->status] ?? ['#78716c', ucfirst($entry->status)]) : ['#94a3b8', 'Not sent'];
+                        $thisPeriodDate = \Carbon\Carbon::today()->startOfMonth()->toDateString();
+                        $lastPeriodDate = $lastMonthKey ?? \Carbon\Carbon::today()->startOfMonth()->subMonthNoOverflow()->toDateString();
+                        $thisPeriodJson = json_encode([
+                            'date' => $thisPeriodDate,
+                            'value' => $entry ? (float) $entry->value : null,
+                            'note' => $entry->note ?? null,
+                            'status' => $entry->status ?? null,
+                            'review_note' => $entry->review_note ?? null,
+                        ]);
+                        $lastPeriodJson = json_encode([
+                            'date' => $lastPeriodDate,
+                            'value' => $lastEntry ? (float) $lastEntry->value : null,
+                            'note' => $lastEntry->note ?? null,
+                            'status' => $lastEntry->status ?? null,
+                            'review_note' => $lastEntry->review_note ?? null,
+                        ]);
                       @endphp
-                      <tr class="wk-row" data-id="{{ $a->id }}">
+                      <tr class="wk-row" data-id="{{ $a->id }}" data-monthly="{{ $isMonthly ? '1' : '0' }}"
+                          data-period="{{ $isMonthly ? $thisPeriodDate : '' }}"
+                          data-this="{{ $thisPeriodJson }}"
+                          data-last="{{ $lastPeriodJson }}">
                         <td>
                           <div class="fw-medium">{{ $a->title }}</div>
                           <small class="text-muted">
@@ -122,8 +149,15 @@
                           </small>
                         </td>
                         <td class="text-nowrap">
-                          <span class="small">{{ $entryPeriod[$a->id] ?? '' }}</span>
-                          <small class="text-muted d-block text-capitalize" style="font-size:.68rem">{{ $a->frequency }}</small>
+                          @if($isMonthly)
+                            <select class="form-select form-select-sm wk-period">
+                              <option value="{{ $thisPeriodDate }}" selected>{{ \Carbon\Carbon::today()->format('F Y') }} (current)</option>
+                              <option value="{{ $lastPeriodDate }}">{{ \Carbon\Carbon::parse($lastPeriodDate)->format('F Y') }}</option>
+                            </select>
+                          @else
+                            <span class="small">{{ $entryPeriod[$a->id] ?? '' }}</span>
+                            <small class="text-muted d-block text-capitalize" style="font-size:.68rem">{{ $a->frequency }}</small>
+                          @endif
                         </td>
                         <td class="text-center">
                           @if($needsAppr)
@@ -133,13 +167,13 @@
                           @endif
                         </td>
                         <td>
-                          <input type="number" step="0.01" min="0" class="form-control form-control-sm wk-val"
+                          <input type="number" step="0.01" min="0" class="form-control form-control-sm wk-val" required
                                  value="{{ $entry ? rtrim(rtrim(number_format((float) $entry->value, 2, '.', ''), '0'), '.') : '' }}"
                                  placeholder="0">
                         </td>
                         <td>
-                          <input type="text" maxlength="255" class="form-control form-control-sm wk-note"
-                                 value="{{ $entry->note ?? '' }}" placeholder="anything worth saying">
+                          <input type="text" maxlength="255" class="form-control form-control-sm wk-note" required
+                                 value="{{ $entry->note ?? '' }}" placeholder="Customer names, comma separated">
                         </td>
                         <td class="text-end text-nowrap">
                           <span class="wk-state fw-semibold small" style="color:{{ $tc }}">{{ $tl }}</span>
@@ -147,7 +181,7 @@
                             <i class="bx bx-send"></i>
                           </button>
                           @if($entry && $entry->status === 'rejected' && $entry->review_note)
-                            <small class="d-block text-danger mt-1">HR: {{ $entry->review_note }}</small>
+                            <small class="d-block text-danger mt-1 wk-review-note">HR: {{ $entry->review_note }}</small>
                           @endif
                         </td>
                       </tr>
@@ -159,32 +193,29 @@
           </div>
         @endif
 
-        {{-- Filter panel, matching the Employee Directory. --}}
+        {{-- Filter panel — same inline-row shell as Leave Approvals' filter
+             row (search-wrapper-hitech + compact-select + filter-item-hitech),
+             not the boxed labels-above-inputs layout this used to have. --}}
         <div class="px-4">
-        <div class="hitech-card-white mb-6 overflow-hidden">
-          <div class="card-body p-sm-5 p-4">
-            <div class="row align-items-end g-4">
-              <div class="col-lg-5">
-                <label class="form-label fw-bold small text-muted text-uppercase mb-2">Search</label>
-                <div class="search-wrapper-hitech mw-100">
-                  <i class="bx bx-search text-muted ms-3"></i>
-                  <input type="text" id="kpiSearch" class="form-control" placeholder="Search KPI or KRA...">
-                  <button class="btn-search shadow-sm" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
-                </div>
+        <div class="hitech-card mb-6 overflow-hidden">
+          <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div class="search-wrapper-hitech" style="width: 360px;">
+                <i class="bx bx-search text-muted ms-3 fs-5"></i>
+                <input type="text" id="kpiSearch" class="form-control" placeholder="Search KPI or KRA...">
+                <button class="btn-search shadow-sm" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
               </div>
-              <div class="col-lg-2 col-md-6">
-                <label class="form-label fw-bold small text-muted text-uppercase mb-2">KRA</label>
-                <select id="kraFilter" class="form-select">
-                    <option value="">All KRAs</option>
+              <div class="compact-select" style="min-width: 160px;">
+                <select id="kraFilter" class="form-select filter-item-hitech">
+                    <option value="">KRA: All</option>
                     @foreach($rows->pluck('kra_group')->filter()->unique()->sort() as $kra)
                         <option value="{{ $kra }}">{{ $kra }}</option>
                     @endforeach
                 </select>
               </div>
-              <div class="col-lg-2 col-md-6">
-                <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
-                <select id="statusFilter" class="form-select">
-                    <option value="">All statuses</option>
+              <div class="compact-select" style="min-width: 160px;">
+                <select id="statusFilter" class="form-select filter-item-hitech">
+                    <option value="">Status: All</option>
                     <option value="completed_on_time">Completed</option>
                     <option value="pending">Pending</option>
                     <option value="completed_late">Completed late</option>
@@ -306,38 +337,121 @@
 @section('page-script')
 <script>
 const CSRF = '{{ csrf_token() }}';
-document.querySelectorAll('.wk-send').forEach(function (btn) {
-    btn.addEventListener('click', async function () {
-        const row = btn.closest('.wk-row');
-        const val = row.querySelector('.wk-val').value;
-        if (val === '' || isNaN(parseFloat(val))) { alert('Enter a number first.'); return; }
+
+// ── Period picker (monthly rows only) — switching it swaps in whatever was
+// already fetched for that month (data-this / data-last), no round trip,
+// and sets data-period so a send/submit-all knows which month to target.
+document.querySelectorAll('.wk-period').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+        const row = sel.closest('.wk-row');
+        const isThis = sel.value === JSON.parse(row.dataset.this).date;
+        const picked = JSON.parse(row.dataset[isThis ? 'this' : 'last']);
+        row.dataset.period = picked.date;
+
+        row.querySelector('.wk-val').value = picked.value === null ? '' : picked.value;
+        row.querySelector('.wk-note').value = picked.note || '';
+
         const state = row.querySelector('.wk-state');
-        btn.disabled = true;
-        const before = state.textContent;
-        state.textContent = 'Sending...';
-        try {
-            const res = await fetch('/kpi/' + row.dataset.id + '/entry', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
-                credentials: 'same-origin',
-                body: JSON.stringify({ value: parseFloat(val), note: row.querySelector('.wk-note').value || null })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data.status === 'success') {
-                const approved = data.entry_status === 'approved';
-                state.textContent = approved ? 'Approved' : 'Waiting for HR';
-                state.style.color = approved ? '#059669' : '#d97706';
-            } else {
-                state.textContent = before;
-                alert(data.message || 'Could not send that.');
+        const tone = { submitted: ['#d97706', 'Waiting for HR'], approved: ['#059669', 'Approved'], rejected: ['#e11d48', 'Sent back'] };
+        const [color, label] = picked.status ? (tone[picked.status] || ['#78716c', picked.status]) : ['#94a3b8', 'Not sent'];
+        state.textContent = label;
+        state.style.color = color;
+
+        let noteEl = row.querySelector('.wk-review-note');
+        if (picked.status === 'rejected' && picked.review_note) {
+            if (!noteEl) {
+                noteEl = document.createElement('small');
+                noteEl.className = 'd-block text-danger mt-1 wk-review-note';
+                state.closest('td').appendChild(noteEl);
             }
-        } catch (err) {
-            state.textContent = before;
-            alert('Could not send that: ' + err.message);
+            noteEl.textContent = 'HR: ' + picked.review_note;
+        } else if (noteEl) {
+            noteEl.remove();
         }
-        btn.disabled = false;
     });
 });
+
+/** Validate one row has both a number and customer names. Returns an error string, or null if fine. */
+function wkRowError(row) {
+    const val = row.querySelector('.wk-val').value;
+    const note = row.querySelector('.wk-note').value.trim();
+    if (val === '' || isNaN(parseFloat(val))) return 'Enter a number.';
+    if (!note) return 'Enter the customer names.';
+    return null;
+}
+
+async function wkSubmitRow(row) {
+    const btn = row.querySelector('.wk-send');
+    const state = row.querySelector('.wk-state');
+    const before = state.textContent;
+    btn.disabled = true;
+    state.textContent = 'Sending...';
+    try {
+        const body = {
+            value: parseFloat(row.querySelector('.wk-val').value),
+            note: row.querySelector('.wk-note').value.trim(),
+        };
+        if (row.dataset.monthly === '1' && row.dataset.period) {
+            body.week = row.dataset.period;
+        }
+        const res = await fetch('/kpi/' + row.dataset.id + '/entry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            credentials: 'same-origin',
+            body: JSON.stringify(body)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.status === 'success') {
+            const approved = data.entry_status === 'approved';
+            state.textContent = approved ? 'Approved' : 'Waiting for HR';
+            state.style.color = approved ? '#059669' : '#d97706';
+            btn.disabled = false;
+            return true;
+        }
+        state.textContent = before;
+        btn.disabled = false;
+        alert((row.querySelector('td .fw-medium')?.textContent || 'That row') + ': ' + (data.message || 'Could not send that.'));
+        return false;
+    } catch (err) {
+        state.textContent = before;
+        btn.disabled = false;
+        alert('Could not send that: ' + err.message);
+        return false;
+    }
+}
+
+document.querySelectorAll('.wk-send').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        const row = btn.closest('.wk-row');
+        const err = wkRowError(row);
+        if (err) { alert(err); return; }
+        wkSubmitRow(row);
+    });
+});
+
+const wkSubmitAllBtn = document.getElementById('wkSubmitAll');
+if (wkSubmitAllBtn) {
+    wkSubmitAllBtn.addEventListener('click', async function () {
+        const rows = Array.from(document.querySelectorAll('.wk-row'));
+        const errors = [];
+        rows.forEach(function (row) {
+            const err = wkRowError(row);
+            if (err) errors.push((row.querySelector('td .fw-medium')?.textContent || 'A row') + ': ' + err);
+        });
+        if (errors.length) { alert('Fix these before submitting all:\n\n' + errors.join('\n')); return; }
+
+        wkSubmitAllBtn.disabled = true;
+        const original = wkSubmitAllBtn.innerHTML;
+        wkSubmitAllBtn.innerHTML = '<i class="bx bx-loader-alt bx-spin me-1"></i>Submitting...';
+        let okCount = 0;
+        for (const row of rows) {
+            if (await wkSubmitRow(row)) okCount++;
+        }
+        wkSubmitAllBtn.disabled = false;
+        wkSubmitAllBtn.innerHTML = original;
+        alert(okCount + ' of ' + rows.length + ' submitted.');
+    });
+}
 
 document.querySelectorAll('.complete-kpi').forEach(b => b.addEventListener('click', function() {
     const id = this.dataset.id;

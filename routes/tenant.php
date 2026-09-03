@@ -1078,6 +1078,7 @@ Route::middleware([
             // admin|hr group below: a reporting manager reviews their own team,
             // and KpiController re-checks the role on every one of these.
             Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
+            Route::get('/approvals/export', [\App\Http\Controllers\tenant\KpiController::class, 'exportApprovals'])->name('approvals.export');
             Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
         });
 

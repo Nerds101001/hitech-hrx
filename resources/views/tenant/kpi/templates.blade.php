@@ -411,8 +411,7 @@
               <label class="form-label">How it is measured</label>
               <select id="tpl_data_source" class="form-select">
                 <optgroup label="Someone types it in">
-                  <option value="manual">Manual entry</option>
-                  <option value="approval">Manual, needs approval</option>
+                  <option value="approval">Manual entry (needs HR approval)</option>
                 </optgroup>
                 <optgroup label="Worked out from live data">
                   @foreach($autoSources as $key => $label)
@@ -481,8 +480,7 @@
     const v = $('tpl_data_source').value;
     const el = $('tpl_source_help');
     if (!el) return;
-    el.textContent = v === 'manual' ? 'The person enters this themselves; it counts as soon as they send it.'
-      : v === 'approval' ? 'The person enters it, then HR approves before it scores.'
+    el.textContent = v === 'approval' ? 'The person enters it, then HR approves before it scores.'
       : (SOURCE_HELP[v] || '');
   }
   $('tpl_data_source').addEventListener('change', sourceHelp);
@@ -560,7 +558,7 @@
     set('tpl_late_percent', t?.late_percent);
     set('tpl_grace_days', t?.grace_days, 0);
     set('tpl_per_day_penalty', t?.per_day_penalty);
-    $('tpl_data_source').value        = t?.data_source ?? 'manual';
+    $('tpl_data_source').value        = t?.data_source ?? 'approval';
     set('tpl_approver_id', t?.approver_id);
 
     let bands = t?.bands;

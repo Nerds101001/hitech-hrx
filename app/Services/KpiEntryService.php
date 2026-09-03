@@ -178,11 +178,16 @@ class KpiEntryService
         return $check;
     }
 
-    /** Everything a reviewer still has to act on, newest week first. */
-    public static function queue(?int $departmentId = null)
+    /**
+     * Entries in one status (default: awaiting review), newest week first.
+     * The Approvals page's three tabs (pending/approved/rejected) and its
+     * Excel export all read through this one query.
+     */
+    public static function queue(?int $departmentId = null, string $status = KpiEntry::SUBMITTED)
     {
-        return KpiEntry::awaitingReview()
-            ->with(['assignment', 'user.department'])
+        return KpiEntry::query()
+            ->where('status', $status)
+            ->with(['assignment', 'user.department', 'reviewer'])
             ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))
             ->orderByDesc('period_start')
             ->get();
