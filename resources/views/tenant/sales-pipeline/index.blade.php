@@ -589,11 +589,20 @@
                                         $isThisMonth = ($m['key'] === $currentMonthKey);
                                         $prevMonthKey = \Carbon\Carbon::createFromFormat('Y-m-d', $currentMonthKey.'-01')->subMonth()->format('Y-m');
                                         $showPend    = $isThisMonth || ($m['key'] === $prevMonthKey);
-                                        // Past months are editable too — users need to correct
-                                        // imported / historical figures. Read-only roles (plain
-                                        // salespeople) get the attribute on every month cell, so
-                                        // the figures cannot be typed into even with JS disabled.
-                                        $roAttr      = $canEditBook ? '' : 'readonly';
+                                        // A month is open to non-Admin/HR roles only while it is
+                                        // the current month, or last month through the 5th of this
+                                        // one (grace period for month-end reconciliation). Once it
+                                        // closes, only Admin/HR can still edit it — mirrors
+                                        // isMonthLockedForUser() server-side.
+                                        $monthLocked = !$isAdminOrHr && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
+                                        // Sale / Pending / Remarks stay the book editors' job
+                                        // (CCare / New Biz / manager / admin).
+                                        $roAttr      = ($canEditBook && !$monthLocked) ? '' : 'readonly';
+                                        // A plain salesperson (canEditOwnRow but not canEditBook)
+                                        // may fill in ONLY the Forecast figure, and only on their
+                                        // own still-open row — see canEditOwnPipelineRow().
+                                        $isMyOpenRow = $canEditOwnRow && !$canEditBook && !$row->is_locked && (int) $row->salesperson_id === (int) auth()->id();
+                                        $fcstRoAttr  = (($canEditBook || $isMyOpenRow) && !$monthLocked) ? '' : 'readonly';
                                     @endphp
                                     @if($showPend)
                                         <td class="p-0 bg-forecast-light" style="max-width:52px;">
@@ -601,7 +610,7 @@
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
                                                    value="{{ $mData && $mData->forecast_amount ? $mData->forecast_amount : '' }}"
-                                                   {!! $roAttr !!}>
+                                                   {!! $fcstRoAttr !!}>
                                         </td>
                                     @endif
                                     <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
@@ -1169,10 +1178,64 @@ function makeTableColumnsResizable(tableId) {
 document.addEventListener('DOMContentLoaded', function() {
     makeTableColumnsResizable('pipelineTable');
 
-    {{-- Inline editing is attached only for roles that may change the book.
-         Plain salespeople get a read-only grid: no click-to-edit cells, no
-         field saves, no rep/tag changes. The write endpoints enforce the same
-         rule server-side, so this is presentation, not the security boundary. --}}
+    // A negative sale is a credit note: red, and named on hover. Applied on
+    // load and after each inline edit so a freshly typed -1.5 turns red at once.
+    // Always defined (not gated on canEditBook) -- it's read-only styling,
+    // and the month-field listener below (also always attached) calls it.
+    function markCreditNotes(scope) {
+        (scope || document).querySelectorAll('.month-field[data-field="sale_amount"]').forEach(el => {
+            const isCredit = parseFloat(el.value) < 0;
+            el.classList.toggle('is-credit-note', isCredit);
+            if (isCredit) el.setAttribute('title', 'Credit Note'); else el.removeAttribute('title');
+        });
+        document.querySelectorAll('[id^="mtotal-"]').forEach(td => {
+            const isCredit = parseFloat(String(td.textContent).replace(/,/g, '')) < 0;
+            td.classList.toggle('is-credit-note', isCredit);
+            if (isCredit) td.setAttribute('title', 'Credit Note');
+        });
+    }
+    document.addEventListener('DOMContentLoaded', () => markCreditNotes());
+
+    {{-- Inline editing on month cells (Sale / Fcst / Pending / Remarks) is
+         attached for everyone -- the `readonly` attribute rendered per cell
+         above (canEditBook, or a plain salesperson's own open-row Forecast
+         cell, and never a closed month) is the real gate, re-checked by
+         monthUpdate() server-side. Row-field / rep / salesperson / extra-rep
+         editing below stays canEditBook-only: those change who owns the
+         book, not just a figure on it. --}}
+    // ── Inline edit: month-field ──────────────────────────────────────
+    document.querySelectorAll('.month-field').forEach(field => {
+        field.addEventListener('change', function() {
+            if (this.hasAttribute('readonly')) {
+                alert('This field cannot be edited — either the month is closed or this figure is not yours to update.');
+                return;
+            }
+            const tr       = this.closest('tr');
+            const id       = tr.dataset.id;
+            const month    = this.dataset.month;
+            const fieldKey = this.dataset.field;
+            const val      = this.value;
+            markCreditNotes(tr);
+
+            fetch(`{{ route('sales-visits.pipeline.month.update') }}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({ sales_pipeline_id: id, month_year: month, field: fieldKey, value: val })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    this.style.backgroundColor = '#e8f5e9';
+                    setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
+                } else if (data.message) {
+                    alert(data.message);
+                }
+            });
+        });
+    });
+
+    {{-- Everything below changes who owns the book (row type/category, rep
+         assignment, extra reps) or needs the spreadsheet-nav helper — still
+         canEditBook-only. Plain salespeople stop at the Forecast cell above. --}}
     @if($canEditBook)
     // ── Inline edit: row-field (type, etc.) ───────────────────────────
     document.querySelectorAll('.row-field').forEach(field => {
@@ -1208,23 +1271,6 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
     });
-
-
-    // A negative sale is a credit note: red, and named on hover. Applied on
-    // load and after each inline edit so a freshly typed -1.5 turns red at once.
-    function markCreditNotes(scope) {
-        (scope || document).querySelectorAll('.month-field[data-field="sale_amount"]').forEach(el => {
-            const isCredit = parseFloat(el.value) < 0;
-            el.classList.toggle('is-credit-note', isCredit);
-            if (isCredit) el.setAttribute('title', 'Credit Note'); else el.removeAttribute('title');
-        });
-        document.querySelectorAll('[id^="mtotal-"]').forEach(td => {
-            const isCredit = parseFloat(String(td.textContent).replace(/,/g, '')) < 0;
-            td.classList.toggle('is-credit-note', isCredit);
-            if (isCredit) td.setAttribute('title', 'Credit Note');
-        });
-    }
-    document.addEventListener('DOMContentLoaded', () => markCreditNotes());
 
     // ── Grid keyboard nav ─────────────────────────────────────────────
     // On a number input the arrow keys SPIN THE VALUE. The spinner buttons
@@ -1273,33 +1319,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { passive: true });
     })();
 
-    // ── Inline edit: month-field ──────────────────────────────────────
-    document.querySelectorAll('.month-field').forEach(field => {
-        field.addEventListener('change', function() {
-            if (this.hasAttribute('readonly')) {
-                alert('Past entries cannot be edited.');
-                return;
-            }
-            const tr       = this.closest('tr');
-            const id       = tr.dataset.id;
-            const month    = this.dataset.month;
-            const fieldKey = this.dataset.field;
-            const val      = this.value;
-            markCreditNotes(tr);
-
-            fetch(`{{ route('sales-visits.pipeline.month.update') }}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
-                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                body: JSON.stringify({ sales_pipeline_id: id, month_year: month, field: fieldKey, value: val })
-            }).then(res => res.json()).then(data => {
-                if (data.success) {
-                    this.style.backgroundColor = '#e8f5e9';
-                    setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
-                }
-            });
-        });
-    });
     // ── Click-to-edit: Representative & Salesperson cells (shared templates,
     //    so the page doesn't carry a dropdown per row) ──────────────────────
     function swapEdit(cell, tplId, currentVal, onChange) {

@@ -151,6 +151,32 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * A closed month's Sale / Pending / Forecast / Remarks figures are
+     * locked to everyone except Admin/HR. "Closed" means: not the current
+     * month, and not last month before the 5th of this month either (e.g.
+     * August stays open through Sept 5 so month-end reconciliation has a
+     * few days' grace, then only Admin/HR can touch it).
+     */
+    private static function isMonthLockedForUser($user, string $monthYear): bool
+    {
+        if ($user && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+            return false;
+        }
+
+        $now = \Carbon\Carbon::now();
+        if ($monthYear === $now->format('Y-m')) {
+            return false;
+        }
+
+        $prevMonthKey = $now->copy()->subMonth()->format('Y-m');
+        if ($monthYear === $prevMonthKey && $now->day <= 5) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * The real product brands and the spellings they appear under in the
      * free-text `product` column, used by the Brand filter.
      */
@@ -760,6 +786,15 @@ class SalesPipelineController extends Controller
         // The view uses it to render read-only; the write endpoints enforce it.
         $canEditBook = self::canEditBook($user);
 
+        // A plain salesperson (broad sales user, not canEditBook) may still
+        // fill in the Forecast figure on their own open row -- mirrors
+        // canEditOwnPipelineRow()'s carve-out so the view can unlock just
+        // that one cell instead of the whole grid.
+        $canEditOwnRow = $canEditBook || \App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user);
+
+        // Only Admin/HR may correct a closed month -- see isMonthLockedForUser().
+        $isAdminOrHr = $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR']);
+
         // The trash icon raises a delete REQUEST, it does not delete anything
         // directly — approval is a separate admin/HR step and every delete is
         // audited. CCare / New Biz may raise one so reps can clear their own
@@ -798,7 +833,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -2100,6 +2135,20 @@ class SalesPipelineController extends Controller
         // same carve-out as update() above for a salesperson's own open row.
         if (!self::canEditOwnPipelineRow($user, $pipeline)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        // A plain salesperson (canEditOwnPipelineRow() passed only via the
+        // broad-sales-user carve-out, not canEditBook()) may fill in ONLY
+        // their own Forecast figure -- Sale / Pending / Remarks stay the
+        // book editors' (CCare / New Biz / manager / admin) job.
+        if (!self::canEditBook($user) && $request->field !== 'forecast_amount') {
+            return response()->json(['success' => false, 'message' => 'You can only update the Forecast figure here.'], 403);
+        }
+
+        // Closed months are locked to everyone except Admin/HR, regardless
+        // of role -- see isMonthLockedForUser().
+        if (self::isMonthLockedForUser($user, $request->month_year)) {
+            return response()->json(['success' => false, 'message' => 'This month is closed for editing. Only Admin/HR can update it now.'], 403);
         }
 
         $monthData = SalesPipelineMonth::firstOrCreate(
