@@ -32,7 +32,7 @@
         'approved' => \App\Models\KpiEntry::APPROVED,
         'rejected' => \App\Models\KpiEntry::REJECTED,
     ];
-    $qsBase = array_filter(['department_id' => $departmentId]);
+    $qsBase = array_filter(['department_id' => $departmentId, 'employee_id' => $employeeId]);
   @endphp
 
   <div class="row g-6 mb-6 mx-0 px-4">
@@ -110,17 +110,25 @@
               <input type="text" class="form-control" placeholder="Search person, department or KPI..." id="apSearch">
               <button class="btn-search shadow-sm" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
             </div>
-            <div class="compact-select" style="min-width: 200px;">
-              <form method="GET" id="apDeptForm">
-                <input type="hidden" name="tab" value="{{ $tab }}">
-                <select class="form-select filter-item-hitech" name="department_id" onchange="document.getElementById('apDeptForm').submit()">
+            <form method="GET" id="apFilterForm" class="d-flex flex-wrap gap-3">
+              <input type="hidden" name="tab" value="{{ $tab }}">
+              <div class="compact-select" style="min-width: 200px;">
+                <select class="form-select filter-item-hitech ap-pill-select" name="employee_id" onchange="document.getElementById('apFilterForm').submit()">
+                  <option value="">Name: All</option>
+                  @foreach($employees as $emp)
+                    <option value="{{ $emp->id }}" {{ (string)$employeeId === (string)$emp->id ? 'selected' : '' }}>{{ $emp->first_name }} {{ $emp->last_name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 200px;">
+                <select class="form-select filter-item-hitech ap-pill-select" name="department_id" onchange="document.getElementById('apFilterForm').submit()">
                   <option value="">Department: All</option>
                   @foreach($departments as $d)
                     <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
                   @endforeach
                 </select>
-              </form>
-            </div>
+              </div>
+            </form>
           </div>
         </div>
 
@@ -197,6 +205,19 @@
     </div>
   </div>
 </div>
+@endsection
+
+@section('page-style')
+<style>
+  /* .filter-item-hitech's own radius (10px) reads as a different shape than
+     the pill-rounded search box sitting right next to it. Scoped to this
+     page's two filter selects rather than the shared class, which other
+     pages (Leave, Attendance, ...) also use as-is. */
+  .ap-pill-select {
+    border-radius: 50px !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+</style>
 @endsection
 
 @section('page-script')

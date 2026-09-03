@@ -13,16 +13,18 @@ class KpiApprovalsExport implements FromCollection, WithHeadings, WithMapping, S
 {
     protected string $status;
     protected ?int $departmentId;
+    protected ?int $userId;
 
-    public function __construct(string $status, ?int $departmentId = null)
+    public function __construct(string $status, ?int $departmentId = null, ?int $userId = null)
     {
         $this->status = $status;
         $this->departmentId = $departmentId;
+        $this->userId = $userId;
     }
 
     public function collection()
     {
-        return KpiEntryService::queue($this->departmentId, $this->status);
+        return KpiEntryService::queue($this->departmentId, $this->status, $this->userId);
     }
 
     public function headings(): array

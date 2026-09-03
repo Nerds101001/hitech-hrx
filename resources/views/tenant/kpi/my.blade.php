@@ -85,15 +85,21 @@
                 <div>
                   <h6 class="fw-bold mb-0">What did you do?</h6>
                   <small class="text-muted">
-                    Report each one over its own period. Number and customers are both required —
-                    monthly ones can be reported for this month or last month.
+                    Report each one over its own period. Number and customers are both required.
                   </small>
                 </div>
-                @if($sentBack->isNotEmpty())
-                  <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
-                    {{ $sentBack->count() }} sent back — please correct
-                  </span>
-                @endif
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  @if($sentBack->isNotEmpty())
+                    <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
+                      {{ $sentBack->count() }} sent back — please correct
+                    </span>
+                  @endif
+                  <label for="wkGlobalPeriod" class="small text-muted fw-semibold mb-0">Reporting for</label>
+                  <select id="wkGlobalPeriod" class="form-select form-select-sm filter-item-hitech" style="width:auto;min-width:170px;">
+                    <option value="this" selected>{{ \Carbon\Carbon::today()->format('F Y') }} (current)</option>
+                    <option value="last">{{ \Carbon\Carbon::today()->startOfMonth()->subMonthNoOverflow()->format('F Y') }}</option>
+                  </select>
+                </div>
               </div>
 
               <div class="table-responsive">
@@ -124,6 +130,7 @@
                             'note' => $entry->note ?? null,
                             'status' => $entry->status ?? null,
                             'review_note' => $entry->review_note ?? null,
+                            'label' => \Carbon\Carbon::today()->format('F Y') . ' (current)',
                         ]);
                         $lastPeriodJson = json_encode([
                             'date' => $lastPeriodDate,
@@ -131,6 +138,7 @@
                             'note' => $lastEntry->note ?? null,
                             'status' => $lastEntry->status ?? null,
                             'review_note' => $lastEntry->review_note ?? null,
+                            'label' => \Carbon\Carbon::parse($lastPeriodDate)->format('F Y'),
                         ]);
                       @endphp
                       <tr class="wk-row" data-id="{{ $a->id }}" data-monthly="{{ $isMonthly ? '1' : '0' }}"
@@ -146,10 +154,7 @@
                         </td>
                         <td class="text-nowrap">
                           @if($isMonthly)
-                            <select class="form-select form-select-sm filter-item-hitech wk-period" style="min-width:150px;">
-                              <option value="{{ $thisPeriodDate }}" selected>{{ \Carbon\Carbon::today()->format('F Y') }} (current)</option>
-                              <option value="{{ $lastPeriodDate }}">{{ \Carbon\Carbon::parse($lastPeriodDate)->format('F Y') }}</option>
-                            </select>
+                            <span class="small wk-period-label">{{ \Carbon\Carbon::today()->format('F Y') }} (current)</span>
                           @else
                             <span class="small">{{ $entryPeriod[$a->id] ?? '' }}</span>
                             <small class="text-muted d-block text-capitalize" style="font-size:.68rem">{{ $a->frequency }}</small>
@@ -346,38 +351,50 @@
 <script>
 const CSRF = '{{ csrf_token() }}';
 
-// ── Period picker (monthly rows only) — switching it swaps in whatever was
-// already fetched for that month (data-this / data-last), no round trip,
-// and sets data-period so a send/submit-all knows which month to target.
-document.querySelectorAll('.wk-period').forEach(function (sel) {
-    sel.addEventListener('change', function () {
-        const row = sel.closest('.wk-row');
-        const isThis = sel.value === JSON.parse(row.dataset.this).date;
-        const picked = JSON.parse(row.dataset[isThis ? 'this' : 'last']);
-        row.dataset.period = picked.date;
+// ── Global period picker — one control for every monthly row at once
+// (was per-row, which meant picking the month five separate times for one
+// reporting cycle). Switching it swaps in whatever was already fetched for
+// that month (data-this / data-last), no round trip, and sets data-period
+// on each row so a send/submit-all knows which month to target. Non-monthly
+// rows (data-monthly="0") are untouched -- they always report their own
+// current window.
+function wkApplyPeriod(row, which) {
+    const picked = JSON.parse(row.dataset[which]);
+    row.dataset.period = picked.date;
 
-        row.querySelector('.wk-val').value = picked.value === null ? '' : picked.value;
-        row.querySelector('.wk-note').value = picked.note || '';
+    row.querySelector('.wk-val').value = picked.value === null ? '' : picked.value;
+    row.querySelector('.wk-note').value = picked.note || '';
 
-        const state = row.querySelector('.wk-state');
-        const tone = { submitted: ['#d97706', 'Waiting for HR'], approved: ['#059669', 'Approved'], rejected: ['#e11d48', 'Sent back'] };
-        const [color, label] = picked.status ? (tone[picked.status] || ['#78716c', picked.status]) : ['#94a3b8', 'Not sent'];
-        state.textContent = label;
-        state.style.color = color;
+    const periodLabel = row.querySelector('.wk-period-label');
+    if (periodLabel) periodLabel.textContent = picked.label;
 
-        let noteEl = row.querySelector('.wk-review-note');
-        if (picked.status === 'rejected' && picked.review_note) {
-            if (!noteEl) {
-                noteEl = document.createElement('small');
-                noteEl.className = 'd-block text-danger mt-1 wk-review-note';
-                state.closest('td').appendChild(noteEl);
-            }
-            noteEl.textContent = 'HR: ' + picked.review_note;
-        } else if (noteEl) {
-            noteEl.remove();
+    const state = row.querySelector('.wk-state');
+    const tone = { submitted: ['#d97706', 'Waiting for HR'], approved: ['#059669', 'Approved'], rejected: ['#e11d48', 'Sent back'] };
+    const [color, label] = picked.status ? (tone[picked.status] || ['#78716c', picked.status]) : ['#94a3b8', 'Not sent'];
+    state.textContent = label;
+    state.style.color = color;
+
+    let noteEl = row.querySelector('.wk-review-note');
+    if (picked.status === 'rejected' && picked.review_note) {
+        if (!noteEl) {
+            noteEl = document.createElement('small');
+            noteEl.className = 'd-block text-danger mt-1 wk-review-note';
+            state.closest('td').appendChild(noteEl);
         }
+        noteEl.textContent = 'HR: ' + picked.review_note;
+    } else if (noteEl) {
+        noteEl.remove();
+    }
+}
+
+const wkGlobalPeriod = document.getElementById('wkGlobalPeriod');
+if (wkGlobalPeriod) {
+    wkGlobalPeriod.addEventListener('change', function () {
+        document.querySelectorAll('.wk-row[data-monthly="1"]').forEach(function (row) {
+            wkApplyPeriod(row, wkGlobalPeriod.value);
+        });
     });
-});
+}
 
 /** Validate one row has both a number and customer names. Returns an error string, or null if fine. */
 function wkRowError(row) {

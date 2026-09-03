@@ -473,18 +473,21 @@ class KpiController extends Controller
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
         $departmentId = $request->input('department_id');
+        $employeeId = $request->input('employee_id');
         $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
 
-        $entries = KpiEntryService::queue($departmentId, self::APPROVAL_TABS[$tab]);
-        $pendingEntries = $tab === 'pending' ? $entries : KpiEntryService::queue($departmentId, \App\Models\KpiEntry::SUBMITTED);
+        $entries = KpiEntryService::queue($departmentId, self::APPROVAL_TABS[$tab], $employeeId);
+        $pendingEntries = $tab === 'pending' ? $entries : KpiEntryService::queue($departmentId, \App\Models\KpiEntry::SUBMITTED, $employeeId);
 
         $tabCounts = \App\Models\KpiEntry::query()
             ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))
+            ->when($employeeId, fn ($q) => $q->where('user_id', $employeeId))
             ->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
 
         $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
+        $employees = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
 
-        return view('tenant.kpi.approvals', compact('entries', 'pendingEntries', 'departments', 'departmentId', 'tab', 'tabCounts'));
+        return view('tenant.kpi.approvals', compact('entries', 'pendingEntries', 'departments', 'employees', 'departmentId', 'employeeId', 'tab', 'tabCounts'));
     }
 
     /** Excel export of one tab's entries — same filters as the screen. */
@@ -495,10 +498,11 @@ class KpiController extends Controller
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
         $departmentId = $request->input('department_id');
+        $employeeId = $request->input('employee_id');
         $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KpiApprovalsExport(self::APPROVAL_TABS[$tab], $departmentId),
+            new \App\Exports\KpiApprovalsExport(self::APPROVAL_TABS[$tab], $departmentId, $employeeId),
             'kpi-' . $tab . '-' . now()->format('Ymd_His') . '.xlsx'
         );
     }

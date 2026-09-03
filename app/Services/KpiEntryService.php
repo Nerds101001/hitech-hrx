@@ -183,12 +183,13 @@ class KpiEntryService
      * The Approvals page's three tabs (pending/approved/rejected) and its
      * Excel export all read through this one query.
      */
-    public static function queue(?int $departmentId = null, string $status = KpiEntry::SUBMITTED)
+    public static function queue(?int $departmentId = null, string $status = KpiEntry::SUBMITTED, ?int $userId = null)
     {
         return KpiEntry::query()
             ->where('status', $status)
             ->with(['assignment', 'user.department', 'reviewer'])
             ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))
+            ->when($userId, fn ($q) => $q->where('user_id', $userId))
             ->orderByDesc('period_start')
             ->get();
     }
