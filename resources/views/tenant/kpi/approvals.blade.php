@@ -113,18 +113,18 @@
             <form method="GET" id="apFilterForm" class="d-flex flex-wrap gap-3">
               <input type="hidden" name="tab" value="{{ $tab }}">
               <div class="compact-select" style="min-width: 200px;">
-                <select class="form-select filter-item-hitech ap-pill-select" name="employee_id" onchange="document.getElementById('apFilterForm').submit()">
-                  <option value="">Name: All</option>
-                  @foreach($employees as $emp)
-                    <option value="{{ $emp->id }}" {{ (string)$employeeId === (string)$emp->id ? 'selected' : '' }}>{{ $emp->first_name }} {{ $emp->last_name }}</option>
-                  @endforeach
-                </select>
-              </div>
-              <div class="compact-select" style="min-width: 200px;">
                 <select class="form-select filter-item-hitech ap-pill-select" name="department_id" onchange="document.getElementById('apFilterForm').submit()">
                   <option value="">Department: All</option>
                   @foreach($departments as $d)
                     <option value="{{ $d->id }}" {{ (string)$departmentId === (string)$d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 200px;">
+                <select class="form-select filter-item-hitech ap-pill-select" name="employee_id" onchange="document.getElementById('apFilterForm').submit()">
+                  <option value="">Name: All</option>
+                  @foreach($employees as $emp)
+                    <option value="{{ $emp->id }}" {{ (string)$employeeId === (string)$emp->id ? 'selected' : '' }}>{{ $emp->first_name }} {{ $emp->last_name }}</option>
                   @endforeach
                 </select>
               </div>
