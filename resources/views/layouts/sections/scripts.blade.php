@@ -28,6 +28,15 @@
 
 @auth
 <script src="{{ asset('assets/js/webpush-subscribe.js') }}"></script>
+@if(config('webpush.public_key'))
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.HrxWebPush) {
+      window.HrxWebPush.autoInit('{{ config('webpush.public_key') }}', '{{ csrf_token() }}');
+    }
+  });
+</script>
+@endif
 @endauth
 
 <!-- BEGIN: Page JS-->

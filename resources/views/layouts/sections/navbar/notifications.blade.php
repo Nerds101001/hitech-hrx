@@ -79,19 +79,24 @@
     var btn = document.getElementById('hrxPushEnableBtn');
     if (!prompt || !btn || !window.HrxWebPush || !window.HrxWebPush.isSupported()) return;
 
+    // A manual fallback next to the bell for anyone who dismissed the
+    // auto-popup (see webpush-subscribe.js autoInit/showBanner) and wants
+    // it back later. Shown regardless of current permission state -- a
+    // 'granted' permission with no saved subscription (a previous save
+    // that failed) needs this to still be reachable, not hidden forever.
     window.HrxWebPush.permissionState().then(function (state) {
-      if (state === 'default') prompt.style.display = '';
+      if (state !== 'denied') prompt.style.display = '';
     });
 
     btn.addEventListener('click', function () {
       btn.textContent = 'Enabling...';
       window.HrxWebPush.subscribe('{{ config('webpush.public_key') }}', '{{ csrf_token() }}')
         .then(function () {
-          prompt.style.display = 'none';
+          btn.innerHTML = '<i class="bx bx-bell-check me-1"></i>Notifications enabled';
         })
         .catch(function (err) {
           btn.innerHTML = '<i class="bx bx-bell-plus me-1"></i>Enable browser notifications';
-          console.warn('Push subscribe failed:', err);
+          alert('Could not enable notifications: ' + err.message);
         });
     });
   });
