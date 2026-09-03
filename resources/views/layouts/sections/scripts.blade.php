@@ -26,6 +26,10 @@
 <script type="module" src="{{asset('assets/js/firebase-messaging-sw.js')}}"></script>
 <!-- END: Firebase JS-->--}}
 
+@auth
+<script src="{{ asset('assets/js/webpush-subscribe.js') }}"></script>
+@endauth
+
 <!-- BEGIN: Page JS-->
 @yield('page-script')
 {{-- Pages that use @push('scripts') instead of @section('page-script').

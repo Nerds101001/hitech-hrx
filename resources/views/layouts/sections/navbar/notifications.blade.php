@@ -20,6 +20,14 @@
           <span class="badge bg-label-primary px-3 rounded-pill">{{$isUnread}} New</span>
         @endif
       </div>
+      {{-- Browser push opt-in (standard Web Push, not Firebase) — hidden
+           entirely on an unsupported browser, once granted, or once denied
+           (nagging after a "Block" click just gets the whole site muted). --}}
+      <div id="hrxPushPrompt" class="small mt-2" style="display:none;">
+        <a href="javascript:void(0);" id="hrxPushEnableBtn" class="text-primary fw-semibold">
+          <i class="bx bx-bell-plus me-1"></i>Enable browser notifications
+        </a>
+      </div>
     </li>
     <li class="dropdown-notifications-list scrollable-container">
       <ul class="list-group list-group-flush">
@@ -63,3 +71,29 @@
     </li>
   </ul>
 </li>
+
+@if(config('webpush.public_key'))
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var prompt = document.getElementById('hrxPushPrompt');
+    var btn = document.getElementById('hrxPushEnableBtn');
+    if (!prompt || !btn || !window.HrxWebPush || !window.HrxWebPush.isSupported()) return;
+
+    window.HrxWebPush.permissionState().then(function (state) {
+      if (state === 'default') prompt.style.display = '';
+    });
+
+    btn.addEventListener('click', function () {
+      btn.textContent = 'Enabling...';
+      window.HrxWebPush.subscribe('{{ config('webpush.public_key') }}', '{{ csrf_token() }}')
+        .then(function () {
+          prompt.style.display = 'none';
+        })
+        .catch(function (err) {
+          btn.innerHTML = '<i class="bx bx-bell-plus me-1"></i>Enable browser notifications';
+          console.warn('Push subscribe failed:', err);
+        });
+    });
+  });
+</script>
+@endif

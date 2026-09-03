@@ -3,6 +3,7 @@
 namespace App\Notifications\Task;
 
 use App\Channels\FirebaseChannel;
+use App\Channels\WebPushChannel;
 use App\Models\Task;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -25,7 +26,7 @@ class TaskAssigned extends Notification
 
   public function via(object $notifiable): array
   {
-    return ['database', 'mail', FirebaseChannel::class];
+    return ['database', 'mail', FirebaseChannel::class, WebPushChannel::class];
   }
 
   public function toMail(object $notifiable): MailMessage

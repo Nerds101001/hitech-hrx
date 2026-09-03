@@ -98,6 +98,13 @@ Route::middleware(['web'])->group(function () {
       Route::post('onboarding/upload-file', [\App\Http\Controllers\tenant\OnboardingController::class, 'uploadFile'])->name('onboarding.uploadFile');
   });
 
+  // Browser push (standard Web Push / VAPID) -- every authenticated user
+  // manages only their own subscriptions.
+  Route::middleware(['auth'])->prefix('push')->name('push.')->group(function () {
+      Route::post('subscribe', [\App\Http\Controllers\tenant\PushSubscriptionController::class, 'subscribe'])->name('subscribe');
+      Route::post('unsubscribe', [\App\Http\Controllers\tenant\PushSubscriptionController::class, 'unsubscribe'])->name('unsubscribe');
+  });
+
   // --- TRAINING PORTAL ROUTES ---
   Route::middleware(['auth'])->prefix('training')->name('training.')->group(function () {
       Route::get('/', [\App\Http\Controllers\tenant\TrainingController::class, 'index'])->name('portal');
