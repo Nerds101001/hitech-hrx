@@ -78,8 +78,9 @@
               'rejected'  => ['#e11d48', 'Sent back'],
             ];
           @endphp
-          <div class="hitech-card mb-4">
-            <div class="card-body">
+          <div class="px-4">
+          <div class="hitech-card mb-6">
+            <div class="card-body p-4">
               <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
                 <div>
                   <h6 class="fw-bold mb-0">What did you do?</h6>
@@ -88,16 +89,11 @@
                     monthly ones can be reported for this month or last month.
                   </small>
                 </div>
-                <div class="d-flex align-items-center gap-2">
-                  @if($sentBack->isNotEmpty())
-                    <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
-                      {{ $sentBack->count() }} sent back — please correct
-                    </span>
-                  @endif
-                  <button type="button" class="btn btn-hitech-primary btn-sm" id="wkSubmitAll">
-                    <i class="bx bx-send me-1"></i>Submit all
-                  </button>
-                </div>
+                @if($sentBack->isNotEmpty())
+                  <span class="badge badge-hitech" style="background:#fee2e2;color:#b91c1c;">
+                    {{ $sentBack->count() }} sent back — please correct
+                  </span>
+                @endif
               </div>
 
               <div class="table-responsive">
@@ -150,7 +146,7 @@
                         </td>
                         <td class="text-nowrap">
                           @if($isMonthly)
-                            <select class="form-select form-select-sm wk-period">
+                            <select class="form-select form-select-sm filter-item-hitech wk-period" style="min-width:150px;">
                               <option value="{{ $thisPeriodDate }}" selected>{{ \Carbon\Carbon::today()->format('F Y') }} (current)</option>
                               <option value="{{ $lastPeriodDate }}">{{ \Carbon\Carbon::parse($lastPeriodDate)->format('F Y') }}</option>
                             </select>
@@ -189,7 +185,14 @@
                   </tbody>
                 </table>
               </div>
+
+              <div class="d-flex justify-content-end mt-3">
+                <button type="button" class="btn btn-hitech-primary" id="wkSubmitAll">
+                  <i class="bx bx-send me-1"></i>Submit all
+                </button>
+              </div>
             </div>
+          </div>
           </div>
         @endif
 
@@ -227,8 +230,10 @@
         </div>
         </div>
 
-        <div class="table-responsive" style="border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);max-height:calc(100vh - 320px);">
-            <table class="table table-bordered table-sm align-middle m-0" id="kpiTable" style="white-space:nowrap;font-size:0.85rem;">
+        <div class="px-4">
+        <div class="hitech-card mb-6">
+        <div class="table-responsive" style="max-height:calc(100vh - 320px);overflow-y:auto;">
+            <table class="table table-bordered align-middle mb-0" id="kpiTable" style="white-space:nowrap;font-size:0.9rem;">
                 <thead class="position-sticky top-0" style="z-index:10;">
                     <tr class="kpi-head-main">
                         <th rowspan="2" class="align-middle">KRA</th>
@@ -305,6 +310,8 @@
                 </tfoot>
             </table>
         </div>
+        </div>
+        </div>
     @endif
 </div>
 @endsection
@@ -331,6 +338,7 @@
     color: #fff !important;
     border-color: #0d9488 !important;
   }
+  #kpiTable th, #kpiTable td { padding: 0.65rem 0.85rem; }
 </style>
 @endsection
 

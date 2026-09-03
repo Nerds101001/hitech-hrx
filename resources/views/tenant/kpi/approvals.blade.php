@@ -81,10 +81,11 @@
            separately-rounded cards stacked on top of each other is exactly
            what read as "too much radius" here before. --}}
       <div class="hitech-card animate__animated animate__fadeInUp" style="animation-delay: 0.1s">
-        <div class="p-4 pb-0">
-          {{-- Pending / Approved / Rejected. Full page reload per tab (this
-               screen is server-rendered, no DataTables/ajax layer), so each
-               tab is a plain link carrying tab= and the current department_id. --}}
+        <div class="hitech-card-header border-bottom">
+          {{-- Pending / Approved / Rejected + Export, one row. Full page
+               reload per tab (this screen is server-rendered, no
+               DataTables/ajax layer), so each tab is a plain link carrying
+               tab= and the current department_id. --}}
           <div class="hitech-segmented-control bg-light-soft rounded-pill p-1 d-flex" style="border: 1px solid rgba(0, 90, 90, 0.1); width: fit-content;">
             @foreach($tabLabels as $key => $label)
               <a href="{{ route('tenant.kpi.approvals', $qsBase + ['tab' => $key]) }}"
@@ -96,15 +97,9 @@
               </a>
             @endforeach
           </div>
-        </div>
-
-        <div class="hitech-card-header border-bottom">
-          <div class="d-flex align-items-center justify-content-between w-100">
-            <span class="text-muted fw-semibold small" id="apShowing"></span>
-            <a href="{{ route('tenant.kpi.approvals.export', $qsBase + ['tab' => $tab]) }}" class="btn btn-sm btn-hitech">
-              <i class="bx bx-download me-1"></i>Export {{ $tabLabels[$tab] }} to Excel
-            </a>
-          </div>
+          <a href="{{ route('tenant.kpi.approvals.export', $qsBase + ['tab' => $tab]) }}" class="btn btn-sm btn-icon icon-sophisticated" title="Export {{ $tabLabels[$tab] }} to Excel">
+            <i class="bx bx-download fs-5"></i>
+          </a>
         </div>
 
         {{-- Integrated filter row --}}
