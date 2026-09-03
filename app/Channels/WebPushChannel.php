@@ -39,22 +39,28 @@ class WebPushChannel
             return;
         }
 
-        $webPush = new WebPush([
-            'VAPID' => [
-                'subject' => config('webpush.subject'),
-                'publicKey' => $publicKey,
-                'privateKey' => $privateKey,
-            ],
-        ]);
-
         $body = json_encode([
             'title' => $payload['title'],
             'body' => $payload['body'],
             'url' => $payload['action_url'] ?? url('/'),
         ]);
 
+        // One WebPush instance + flush() per subscription rather than one
+        // batched flush() for all of them: an undeliverable/malformed
+        // subscription throws synchronously out of flush() (not just a
+        // failure report), and batching would let one bad device -- a stale
+        // key, a corrupted row -- take down delivery to the same user's
+        // other, perfectly good devices.
         foreach ($subscriptions as $sub) {
             try {
+                $webPush = new WebPush([
+                    'VAPID' => [
+                        'subject' => config('webpush.subject'),
+                        'publicKey' => $publicKey,
+                        'privateKey' => $privateKey,
+                    ],
+                ]);
+
                 $webPush->queueNotification(
                     Subscription::create([
                         'endpoint' => $sub->endpoint,
@@ -63,23 +69,24 @@ class WebPushChannel
                     ]),
                     $body
                 );
-            } catch (Exception $e) {
-                Log::error("Failed to queue web push for subscription {$sub->id}: " . $e->getMessage());
-            }
-        }
 
-        foreach ($webPush->flush() as $report) {
-            if ($report->isSuccess()) {
-                continue;
-            }
-            // A permanently gone subscription (browser unsubscribed, cleared
-            // site data, etc.) returns 404/410 -- the endpoint is dead, so
-            // stop trying it instead of failing on it forever.
-            $statusCode = $report->getResponse()?->getStatusCode();
-            if (in_array($statusCode, [404, 410], true)) {
-                PushSubscription::where('endpoint', $report->getRequest()->getUri())->delete();
-            } else {
-                Log::warning("Web push delivery failed: " . $report->getReason());
+                foreach ($webPush->flush() as $report) {
+                    if ($report->isSuccess()) {
+                        continue;
+                    }
+                    // A permanently gone subscription (browser unsubscribed,
+                    // cleared site data, etc.) returns 404/410 -- the
+                    // endpoint is dead, so stop trying it instead of failing
+                    // on it forever.
+                    $statusCode = $report->getResponse()?->getStatusCode();
+                    if (in_array($statusCode, [404, 410], true)) {
+                        PushSubscription::where('id', $sub->id)->delete();
+                    } else {
+                        Log::warning("Web push delivery failed for subscription {$sub->id}: " . $report->getReason());
+                    }
+                }
+            } catch (Exception $e) {
+                Log::error("Web push failed for subscription {$sub->id}: " . $e->getMessage());
             }
         }
     }
