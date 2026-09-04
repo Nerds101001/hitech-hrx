@@ -82,15 +82,6 @@ class TaskManagementController extends Controller
             });
         }
 
-        // 'all' is not literally unpaginated - LengthAwarePaginator with a
-        // huge per-page still works fine (no meaningful page links, which is
-        // exactly what "show everything" should look like) without needing
-        // a second code path for the view to render.
-        $perPageOptions = ['10' => 10, '20' => 20, '50' => 50, '1000' => 1000, 'all' => 1000000];
-        $perPage = $perPageOptions[(string) $request->input('per_page', '20')] ?? 20;
-
-        $tasks = $query->paginate($perPage)->withQueryString();
-
         // One row per batch for the summary list, counted from the same
         // scoped query so a manager never sees a batch's true size if it
         // reaches beyond their own team.
@@ -103,6 +94,47 @@ class TaskManagementController extends Controller
             ->select('batch_id', DB::raw('count(*) as total'), DB::raw("sum(case when status in ('completed','cancelled','resolved','closed') then 1 else 0 end) as done"))
             ->groupBy('batch_id')
             ->get()->keyBy('batch_id');
+
+        // 'all' is not literally unpaginated - LengthAwarePaginator with a
+        // huge per-page still works fine (no meaningful page links, which is
+        // exactly what "show everything" should look like) without needing
+        // a second code path for the view to render.
+        $perPageOptions = ['10' => 10, '20' => 20, '50' => 50, '1000' => 1000, 'all' => 1000000];
+        $perPage = $perPageOptions[(string) $request->input('per_page', '20')] ?? 20;
+        $page = max(1, (int) $request->input('page', 1));
+
+        // Paginating $query directly counted every task row, but a batch
+        // collapses to ONE row in the view - a single 101-person batch used
+        // to fill an entire 20-per-page page on its own, so it rendered as
+        // one lonely row while "Showing 1 to 20 of 119" and six page links
+        // sat underneath it. Paginate the same list the view actually shows
+        // instead: one id per batch (its first/representative task) plus one
+        // id per unbatched task, in the exact order $query already sorts by.
+        // toBase() skips Eloquent's eager-loading for this id-only pass -
+        // ~100-200 rows city-wide, cheap either way, but no reason to
+        // hydrate 'user'/'assignedBy'/'taskUpdates' for rows about to be
+        // discarded.
+        $seenBatches = [];
+        $displayIds = [];
+        foreach ((clone $query)->toBase()->get(['tasks.id', 'tasks.batch_id']) as $row) {
+            if ($row->batch_id && ($batchCounts[$row->batch_id]->total ?? 1) > 1) {
+                if (isset($seenBatches[$row->batch_id])) {
+                    continue;
+                }
+                $seenBatches[$row->batch_id] = true;
+            }
+            $displayIds[] = $row->id;
+        }
+
+        $total = count($displayIds);
+        $pageIds = array_slice($displayIds, ($page - 1) * $perPage, $perPage);
+        $pageTasksById = (clone $query)->whereIn('tasks.id', $pageIds)->get()->keyBy('id');
+        $pageTasks = collect($pageIds)->map(fn ($id) => $pageTasksById->get($id))->filter()->values();
+
+        $tasks = (new \Illuminate\Pagination\LengthAwarePaginator($pageTasks, $total, $perPage, $page, [
+            'path'  => $request->url(),
+            'query' => $request->query(),
+        ]));
 
         $departments = $allowedIds === null
             ? Department::cachedActive()
