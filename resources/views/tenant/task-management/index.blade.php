@@ -207,27 +207,21 @@
   </div>
 
   <div class="px-4">
-    <ul class="nav nav-tabs mb-6" id="tmTabs">
-      <li class="nav-item">
-        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tmOneTime" type="button">
-          <i class="bx bx-task"></i> One-Time Tasks
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tmRecurring" type="button">
-          <i class="bx bx-repeat"></i> Recurring Tasks
-          @if($schedules->isNotEmpty())<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->count() }}</span>@endif
-        </button>
-      </li>
-      <li class="nav-item">
-        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tmPendency" type="button">
-          <i class="bx bx-bar-chart-alt-2"></i> Pendency
-          @if($pendency['totalPending'] > 0)<span class="badge-hitech badge-hitech-danger ms-1">{{ $pendency['totalPending'] }}</span>@endif
-        </button>
-      </li>
-    </ul>
+    <div class="hitech-segmented-control mb-6" id="tmTabs">
+      <button class="btn btn-sm status-toggle-btn active js-tm-tab" data-tm-target="#tmOneTime" type="button">
+        <i class="bx bx-task me-1"></i>One-Time Tasks
+      </button>
+      <button class="btn btn-sm status-toggle-btn js-tm-tab" data-tm-target="#tmRecurring" type="button">
+        <i class="bx bx-repeat me-1"></i>Recurring Tasks
+        @if($schedules->isNotEmpty())<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->count() }}</span>@endif
+      </button>
+      <button class="btn btn-sm status-toggle-btn js-tm-tab" data-tm-target="#tmPendency" type="button">
+        <i class="bx bx-bar-chart-alt-2 me-1"></i>Pendency
+        @if($pendency['totalPending'] > 0)<span class="badge-hitech badge-hitech-danger ms-1">{{ $pendency['totalPending'] }}</span>@endif
+      </button>
+    </div>
 
-    <div class="tab-content">
+    <div class="tab-content" id="tmTabsContent">
     <div class="tab-pane fade show active" id="tmOneTime">
 
     {{-- Filters --}}
@@ -905,12 +899,27 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // ══ Tabs — same segmented-pill toggle as Leave, driven by plain JS
+  // rather than Bootstrap's tab component (this page's buttons don't sit in
+  // a .nav, and swapping to Bootstrap's own tab markup is exactly the
+  // "doesn't match the rest of the app" look this replaced). ═════════════
+  document.querySelectorAll('.js-tm-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.js-tm-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('#tmTabsContent > .tab-pane').forEach(function (pane) {
+        pane.classList.remove('show', 'active');
+      });
+      document.querySelector(btn.dataset.tmTarget).classList.add('show', 'active');
+    });
+  });
+
   // Pendency's department/sort links reload the page (GET params drive the
   // query) rather than fetching in place, which would otherwise dump
   // whoever clicked one back on the One-Time tab instead of where they were.
   if (window.location.hash === '#tmPendency') {
-    const trigger = document.querySelector('[data-bs-target="#tmPendency"]');
-    if (trigger) new bootstrap.Tab(trigger).show();
+    const trigger = document.querySelector('.js-tm-tab[data-tm-target="#tmPendency"]');
+    if (trigger) trigger.click();
   }
 
   // No theme option: this project styles select2's own default markup
