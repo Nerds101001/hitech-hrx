@@ -135,15 +135,32 @@
                       @foreach($taskBuckets[$bucketKey] as $t)
                         <tr data-priority="{{ $t->priority }}">
                           <td>
-                            <div class="fw-medium">{{ $t->title }}</div>
+                            <div class="fw-medium">
+                              {{ $t->title }}
+                              @if($t->attachment_path)
+                                <a href="{{ route('tasks.attachment', $t->id) }}" target="_blank" class="ms-1 text-muted" title="View attached reference image">
+                                  <i class="bx bx-image"></i>
+                                </a>
+                              @endif
+                            </div>
                             @if($t->description)
                               <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
                             @endif
                             @if($t->is_completed && optional($t->taskUpdates->first())->comment)
                               <small class="text-muted d-block fst-italic">"{{ $t->taskUpdates->first()->comment }}"</small>
                             @endif
+                            @if($t->is_completed && optional($t->taskUpdates->first())->file_url)
+                              <a href="{{ route('task-updates.attachment', $t->taskUpdates->first()->id) }}" target="_blank" class="small text-decoration-none d-block">
+                                <i class="bx bx-image"></i> View completion photo
+                              </a>
+                            @endif
                             @if($t->status === 'objection' && $t->objection_notes)
                               <small class="text-danger d-block mt-1"><i class="bx bx-error"></i> Sent back: {{ $t->objection_notes }}</small>
+                              @if(optional($t->taskUpdates->first())->file_url)
+                                <a href="{{ route('task-updates.attachment', $t->taskUpdates->first()->id) }}" target="_blank" class="small text-decoration-none d-block">
+                                  <i class="bx bx-image"></i> View objection photo
+                                </a>
+                              @endif
                             @endif
                           </td>
                           <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
@@ -249,7 +266,9 @@
         <div class="modal-body">
           <p class="fw-medium mb-3" id="completeTaskTitle"></p>
           <label class="form-label">Remarks (optional)</label>
-          <textarea id="completeTaskRemarks" class="form-control" rows="3" placeholder="Anything worth noting about how this was completed..."></textarea>
+          <textarea id="completeTaskRemarks" class="form-control mb-3" rows="3" placeholder="Anything worth noting about how this was completed..."></textarea>
+          <label class="form-label">Attach a photo (optional)</label>
+          <input type="file" id="completeTaskAttachment" class="form-control" accept="image/png,image/jpeg,image/webp">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
@@ -272,7 +291,9 @@
         <div class="modal-body">
           <p class="fw-medium mb-3" id="resubmitTaskTitle"></p>
           <label class="form-label">What did you fix? (optional)</label>
-          <textarea id="resubmitTaskRemarks" class="form-control" rows="3" placeholder="What changed since the objection was raised..."></textarea>
+          <textarea id="resubmitTaskRemarks" class="form-control mb-3" rows="3" placeholder="What changed since the objection was raised..."></textarea>
+          <label class="form-label">Attach a photo (optional)</label>
+          <input type="file" id="resubmitTaskAttachment" class="form-control" accept="image/png,image/jpeg,image/webp">
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
@@ -309,6 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
       currentTaskId = btn.dataset.id;
       document.getElementById('completeTaskTitle').textContent = btn.dataset.title;
       document.getElementById('completeTaskRemarks').value = '';
+      document.getElementById('completeTaskAttachment').value = '';
       completeModal.show();
     });
   });
@@ -321,14 +343,18 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = 'Saving...';
 
+    const completeFd = new FormData();
+    completeFd.append('remarks', document.getElementById('completeTaskRemarks').value);
+    const completeFile = document.getElementById('completeTaskAttachment').files[0];
+    if (completeFile) completeFd.append('attachment', completeFile);
+
     fetch('/my-tasks/' + currentTaskId + '/complete', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ remarks: document.getElementById('completeTaskRemarks').value }),
+      body: completeFd,
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
@@ -357,6 +383,7 @@ document.addEventListener('DOMContentLoaded', function () {
         resubmitTaskId = btn.dataset.id;
         document.getElementById('resubmitTaskTitle').textContent = btn.dataset.title;
         document.getElementById('resubmitTaskRemarks').value = '';
+        document.getElementById('resubmitTaskAttachment').value = '';
         resubmitModal.show();
       });
     });
@@ -369,14 +396,18 @@ document.addEventListener('DOMContentLoaded', function () {
       btn.disabled = true;
       btn.innerHTML = 'Sending...';
 
+      const resubmitFd = new FormData();
+      resubmitFd.append('remarks', document.getElementById('resubmitTaskRemarks').value);
+      const resubmitFile = document.getElementById('resubmitTaskAttachment').files[0];
+      if (resubmitFile) resubmitFd.append('attachment', resubmitFile);
+
       fetch('/my-tasks/' + resubmitTaskId + '/resubmit', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'X-CSRF-TOKEN': "{{ csrf_token() }}",
           'Accept': 'application/json',
         },
-        body: JSON.stringify({ remarks: document.getElementById('resubmitTaskRemarks').value }),
+        body: resubmitFd,
       })
         .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {

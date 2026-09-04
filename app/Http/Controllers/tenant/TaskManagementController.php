@@ -12,6 +12,7 @@ use App\Notifications\Task\TaskAssigned;
 use App\Notifications\Task\TaskObjection;
 use App\Services\TaskScheduleService;
 use App\Support\TaskAccess;
+use App\Support\TaskAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -43,7 +44,7 @@ class TaskManagementController extends Controller
         // needs attention next — with undated tasks pushed to the end rather
         // than sorting first as NULL otherwise would, and newest-assigned as
         // the final tiebreaker. Same ordering My Tasks uses.
-        $query = Task::with(['user.department', 'assignedBy'])
+        $query = Task::with(['user.department', 'assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
@@ -96,10 +97,12 @@ class TaskManagementController extends Controller
         // reorder() first: the base query's ORDER BY created_at is not one of
         // the GROUP BY columns below, which MySQL's only_full_group_by mode
         // (the default here) rejects outright rather than just ignoring.
+        // keyBy (not pluck) - the view needs both total and done to show a
+        // "3/101 done" progress badge on the collapsed summary row.
         $batchCounts = (clone $query)->reorder()->whereNotNull('batch_id')
             ->select('batch_id', DB::raw('count(*) as total'), DB::raw("sum(case when status in ('completed','cancelled','resolved','closed') then 1 else 0 end) as done"))
             ->groupBy('batch_id')
-            ->pluck('total', 'batch_id');
+            ->get()->keyBy('batch_id');
 
         $departments = $allowedIds === null
             ? Department::cachedActive()
@@ -148,6 +151,7 @@ class TaskManagementController extends Controller
             'employee_ids.*' => 'integer|exists:users,id',
             'department_ids'   => 'nullable|array',
             'department_ids.*' => 'integer|exists:departments,id',
+            'attachment'     => TaskAttachment::RULES,
         ]);
 
         if (empty($validated['employee_ids']) && empty($validated['department_ids'])) {
@@ -190,7 +194,14 @@ class TaskManagementController extends Controller
         $batchId = (string) Str::uuid();
         $created = [];
 
-        DB::transaction(function () use ($targetIds, $validated, $user, $batchId, &$created) {
+        // One reference image, shared by every task this batch creates -
+        // storing it once and re-pointing every row at the same path avoids
+        // saving up to hundreds of identical copies of the same upload.
+        $attachmentPath = $request->hasFile('attachment')
+            ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
+            : null;
+
+        DB::transaction(function () use ($targetIds, $validated, $user, $batchId, $attachmentPath, &$created) {
             foreach ($targetIds as $uid) {
                 $created[] = Task::create([
                     'batch_id'       => $batchId,
@@ -203,6 +214,7 @@ class TaskManagementController extends Controller
                     'due_date'       => $validated['due_date'] ?? null,
                     'status'         => 'new',
                     'priority'       => $validated['priority'] ?? 'medium',
+                    'attachment_path' => $attachmentPath,
                     'created_by_id'  => $user->id,
                     'updated_by_id'  => $user->id,
                 ]);
@@ -328,6 +340,17 @@ class TaskManagementController extends Controller
             abort(404);
         }
 
+        // The Task Management list collapses every batch into one summary
+        // row with an inline expand toggle (rather than the old behaviour of
+        // navigating away to this same query's full-page view) - it asks for
+        // this same data as JSON so the rows can be injected in place.
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'html' => view('tenant.task-management._batch_children', ['tasks' => $tasks])->render(),
+            ]);
+        }
+
         return view('tenant.task-management.batch', ['batchId' => $batchId, 'tasks' => $tasks]);
     }
 
@@ -418,7 +441,8 @@ class TaskManagementController extends Controller
         }
 
         $validated = $request->validate([
-            'reason' => 'required|string|max:2000',
+            'reason'     => 'required|string|max:2000',
+            'attachment' => TaskAttachment::RULES,
         ]);
 
         $task->update([
@@ -431,6 +455,9 @@ class TaskManagementController extends Controller
 
         $task->taskUpdates()->create([
             'comment'       => $validated['reason'],
+            'file_url'      => $request->hasFile('attachment')
+                ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
+                : null,
             'update_type'   => 'objection',
             'is_admin'      => true,
             'created_by_id' => $user->id,

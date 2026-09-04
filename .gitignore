@@ -122,4 +122,5 @@ vite.config.js.timestamp-*
 /storage/app/tce_*.xlsx
 /storage/app/mind_speaks/
 /storage/app/wfh_approvals/
+/storage/app/public/task-attachments/
 /storage/deploy-backups/

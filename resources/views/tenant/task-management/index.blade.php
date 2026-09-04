@@ -330,20 +330,51 @@
             </tr>
           </thead>
           <tbody>
+            @php $seenBatches = []; @endphp
             @forelse($tasks as $t)
-              <tr>
+              @php
+                $isBatched = $t->batch_id && ($batchCounts[$t->batch_id]->total ?? 1) > 1;
+                // Only the first task of a batch renders a row at all - the
+                // other N-1 are reachable by expanding it, not as separate
+                // rows repeating the same title down the whole page (which is
+                // what this list looked like before: the same bulk-assigned
+                // task, once per person, for as many people as it was sent to).
+                if ($isBatched) {
+                    if (in_array($t->batch_id, $seenBatches, true)) {
+                        continue;
+                    }
+                    $seenBatches[] = $t->batch_id;
+                }
+              @endphp
+              <tr @if($isBatched) data-batch-summary="{{ $t->batch_id }}" @endif>
                 <td><input type="checkbox" class="form-check-input js-task-check" value="{{ $t->id }}"></td>
                 <td>
-                  <div class="fw-medium">{{ $t->title }}</div>
-                  @if($t->batch_id && ($batchCounts[$t->batch_id] ?? 1) > 1)
-                    <a href="{{ route('task-management.batch', $t->batch_id) }}" class="small text-decoration-none">
-                      <i class="bx bx-group"></i> part of a {{ $batchCounts[$t->batch_id] }}-person batch
-                    </a>
-                  @endif
+                  <div class="d-flex align-items-start gap-2">
+                    @if($isBatched)
+                      <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-batch-toggle flex-shrink-0"
+                              data-batch-id="{{ $t->batch_id }}" title="Show all {{ $batchCounts[$t->batch_id]->total }} people">
+                        <i class="bx bx-chevron-right"></i>
+                      </button>
+                    @endif
+                    <div>
+                      <div class="fw-medium">{{ $t->title }}</div>
+                      @if($isBatched)
+                        <small class="text-muted">
+                          <i class="bx bx-group"></i> {{ $batchCounts[$t->batch_id]->total }} people
+                          &middot; {{ (int) $batchCounts[$t->batch_id]->done }}/{{ $batchCounts[$t->batch_id]->total }} done
+                        </small>
+                      @endif
+                    </div>
+                  </div>
                 </td>
                 <td>
-                  <div class="fw-medium">{{ optional($t->user)->getFullName() ?? '—' }}</div>
-                  <small class="text-muted">{{ optional(optional($t->user)->department)->name ?? '—' }}</small>
+                  @if($isBatched)
+                    <div class="fw-medium">{{ $batchCounts[$t->batch_id]->total }} people</div>
+                    <small class="text-muted">click <i class="bx bx-chevron-right"></i> to see everyone</small>
+                  @else
+                    <div class="fw-medium">{{ optional($t->user)->getFullName() ?? '—' }}</div>
+                    <small class="text-muted">{{ optional(optional($t->user)->department)->name ?? '—' }}</small>
+                  @endif
                 </td>
                 <td>
                   <span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span>
@@ -358,7 +389,11 @@
                 </td>
                 <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
                 <td>
-                  @if($t->status === 'objection')
+                  @if($isBatched)
+                    <span class="badge-hitech {{ $batchCounts[$t->batch_id]->done == $batchCounts[$t->batch_id]->total ? 'badge-hitech-success' : 'badge-brand-soft' }}">
+                      {{ (int) $batchCounts[$t->batch_id]->done }}/{{ $batchCounts[$t->batch_id]->total }} done
+                    </span>
+                  @elseif($t->status === 'objection')
                     <span class="badge-hitech badge-hitech-danger">Objection Raised</span>
                   @elseif($t->is_completed)
                     <span class="badge-hitech badge-hitech-success">{{ ucfirst(str_replace('_',' ', $t->status)) }}</span>
@@ -379,6 +414,8 @@
                             'assignedBy' => optional($t->assignedBy)->getFullName() ?? '—',
                             'status' => ucfirst(str_replace('_', ' ', $t->status)),
                             'objection' => $t->objection_notes,
+                            'attachment' => $t->attachment_path ? route('tasks.attachment', $t->id) : null,
+                            'updateAttachment' => optional($t->taskUpdates->first())->file_url ? route('task-updates.attachment', $t->taskUpdates->first()->id) : null,
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
@@ -398,6 +435,31 @@
                   </button>
                 </td>
               </tr>
+              @if($isBatched)
+                <tr class="d-none batch-children-row" data-batch-children="{{ $t->batch_id }}">
+                  <td></td>
+                  <td colspan="7" class="p-0">
+                    <div class="bg-light p-3">
+                      <table class="table table-sm table-hover align-middle mb-0 bg-white">
+                        <thead>
+                          <tr>
+                            <th style="min-width:200px">Person</th>
+                            <th>Status</th>
+                            <th>Completed</th>
+                            <th style="min-width:220px">Latest remark</th>
+                          </tr>
+                        </thead>
+                        <tbody class="js-batch-children-body">
+                          {{-- filled by AJAX on first expand --}}
+                        </tbody>
+                      </table>
+                      <a href="{{ route('task-management.batch', $t->batch_id) }}" class="small text-decoration-none d-inline-block mt-2">
+                        <i class="bx bx-link-external"></i> Open full batch page
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              @endif
             @empty
               <tr><td colspan="8" class="text-center text-muted py-5">
                 <i class="bx bx-task fs-3 d-block mb-2 text-success"></i>
@@ -494,6 +556,12 @@
               </select>
               <div class="form-text">Every active person in the picked department(s) gets their own copy of this task.</div>
             </div>
+
+            <div class="col-12">
+              <label class="form-label">Attach an image (optional)</label>
+              <input type="file" id="at_attachment" class="form-control" accept="image/png,image/jpeg,image/webp">
+              <div class="form-text">Reference photo for what's expected — shown to everyone this task is assigned to. JPG/PNG/WEBP, up to 5MB.</div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -567,6 +635,14 @@
           <dt class="col-4">Status</dt><dd class="col-8" id="vt_status"></dd>
           <dt class="col-4 d-none" id="vt_objection_label">Objection</dt><dd class="col-8 d-none" id="vt_objection"></dd>
         </dl>
+        <div class="d-none mt-3" id="vt_attachment_wrap">
+          <div class="fw-medium small text-muted mb-1">Attachment</div>
+          <a id="vt_attachment_link" href="#" target="_blank"><img id="vt_attachment_img" src="" alt="Attachment" class="rounded" style="max-width:100%;max-height:220px;border:1px solid #e2e8f0;"></a>
+        </div>
+        <div class="d-none mt-3" id="vt_update_attachment_wrap">
+          <div class="fw-medium small text-muted mb-1">Completion / objection photo</div>
+          <a id="vt_update_attachment_link" href="#" target="_blank"><img id="vt_update_attachment_img" src="" alt="Attachment" class="rounded" style="max-width:100%;max-height:220px;border:1px solid #e2e8f0;"></a>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Close</button>
@@ -588,7 +664,10 @@
         <div class="modal-body">
           <label class="form-label">Reason <span class="text-danger">*</span></label>
           <textarea id="ot_reason" class="form-control" rows="4" required placeholder="What needs to be corrected before this can be accepted?"></textarea>
-          <div class="form-text">This sends the task back to the assignee as "Objection Raised" — they must fix it and resubmit.</div>
+          <div class="form-text mb-3">This sends the task back to the assignee as "Objection Raised" — they must fix it and resubmit.</div>
+          <label class="form-label">Attach an image (optional)</label>
+          <input type="file" id="ot_attachment" class="form-control" accept="image/png,image/jpeg,image/webp">
+          <div class="form-text">e.g. a photo of what's wrong. JPG/PNG/WEBP, up to 5MB.</div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
@@ -704,24 +783,26 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = 'Assigning...';
 
+    const fd = new FormData();
+    fd.append('title', document.getElementById('at_title').value);
+    fd.append('description', document.getElementById('at_description').value);
+    if (document.getElementById('at_due_date').value) fd.append('due_date', document.getElementById('at_due_date').value);
+    fd.append('priority', document.getElementById('at_priority').value);
+    if (document.getElementById('at_interval').value) fd.append('interval', document.getElementById('at_interval').value);
+    fd.append('weekday', document.getElementById('at_weekday').value);
+    fd.append('day_of_month', document.getElementById('at_monthday').value);
+    (($('#at_employees').val()) || []).forEach(id => fd.append('employee_ids[]', id));
+    (($('#at_departments').val()) || []).forEach(id => fd.append('department_ids[]', id));
+    const atFile = document.getElementById('at_attachment').files[0];
+    if (atFile) fd.append('attachment', atFile);
+
     fetch("{{ route('task-management.store') }}", {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
         'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        title: document.getElementById('at_title').value,
-        description: document.getElementById('at_description').value,
-        due_date: document.getElementById('at_due_date').value || null,
-        priority: document.getElementById('at_priority').value,
-        interval: document.getElementById('at_interval').value || null,
-        weekday: document.getElementById('at_weekday').value,
-        day_of_month: document.getElementById('at_monthday').value,
-        employee_ids: $('#at_employees').val() || [],
-        department_ids: $('#at_departments').val() || [],
-      }),
+      body: fd,
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
@@ -759,6 +840,44 @@ document.addEventListener('DOMContentLoaded', function () {
             else { Swal.fire({ icon: 'error', title: 'Could not delete', text: data.message || '' }); }
           });
       });
+    });
+  });
+
+  // ══ Batch rows: expand a collapsed "N people" row in place ═══════════
+  document.querySelectorAll('.js-batch-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const batchId = btn.dataset.batchId;
+      const childRow = document.querySelector('.batch-children-row[data-batch-children="' + batchId + '"]');
+      if (!childRow) return;
+      const icon = btn.querySelector('i');
+      const nowHidden = !childRow.classList.contains('d-none');
+
+      if (nowHidden) {
+        childRow.classList.add('d-none');
+        icon.classList.remove('bx-chevron-down');
+        icon.classList.add('bx-chevron-right');
+        return;
+      }
+
+      childRow.classList.remove('d-none');
+      icon.classList.remove('bx-chevron-right');
+      icon.classList.add('bx-chevron-down');
+
+      const body = childRow.querySelector('.js-batch-children-body');
+      if (body.dataset.loaded) return;
+
+      body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Loading...</td></tr>';
+      fetch('/task-management/batch/' + batchId, {
+        headers: { 'Accept': 'application/json' },
+      })
+        .then(r => r.json())
+        .then(data => {
+          body.innerHTML = data.html || '';
+          body.dataset.loaded = '1';
+        })
+        .catch(() => {
+          body.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
+        });
     });
   });
 
@@ -829,6 +948,18 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('vt_objection_label').classList.toggle('d-none', !hasObjection);
       document.getElementById('vt_objection').classList.toggle('d-none', !hasObjection);
       document.getElementById('vt_objection').textContent = t.objection || '';
+
+      document.getElementById('vt_attachment_wrap').classList.toggle('d-none', !t.attachment);
+      if (t.attachment) {
+        document.getElementById('vt_attachment_link').href = t.attachment;
+        document.getElementById('vt_attachment_img').src = t.attachment;
+      }
+      document.getElementById('vt_update_attachment_wrap').classList.toggle('d-none', !t.updateAttachment);
+      if (t.updateAttachment) {
+        document.getElementById('vt_update_attachment_link').href = t.updateAttachment;
+        document.getElementById('vt_update_attachment_img').src = t.updateAttachment;
+      }
+
       viewModal.show();
     });
   });
@@ -902,6 +1033,7 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('ot_id').value = btn.dataset.id;
       document.getElementById('ot_task_title').textContent = btn.dataset.title;
       document.getElementById('ot_reason').value = '';
+      document.getElementById('ot_attachment').value = '';
       objectModal.show();
     });
   });
@@ -913,14 +1045,18 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = 'Sending...';
 
+    const otFd = new FormData();
+    otFd.append('reason', document.getElementById('ot_reason').value);
+    const otFile = document.getElementById('ot_attachment').files[0];
+    if (otFile) otFd.append('attachment', otFile);
+
     fetch('/task-management/' + document.getElementById('ot_id').value + '/objection', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
         'Accept': 'application/json',
       },
-      body: JSON.stringify({ reason: document.getElementById('ot_reason').value }),
+      body: otFd,
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {

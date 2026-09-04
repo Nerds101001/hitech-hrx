@@ -4,10 +4,12 @@ namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Task;
+use App\Models\TaskUpdate;
 use App\Notifications\Task\TaskAssigned;
 use App\Support\TaskAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * The original single-target task/KRA endpoints, still used by the "Add
@@ -153,5 +155,59 @@ class TaskController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to delete task.'], 500);
         }
+    }
+
+    /**
+     * The reference image attached at creation time. Not route-gated to
+     * admin/hr/tasks.manage like the rest of this controller - the assignee
+     * needs to see their own task's attachment on My Tasks too, so the check
+     * happens here instead: either it's your own task, or you're someone who
+     * could manage it on the Task Management portal.
+     */
+    public function attachment($id)
+    {
+        $task = Task::findOrFail($id);
+
+        if ($task->user_id !== auth()->id() && !TaskAccess::canManage(auth()->user(), $task)) {
+            abort(403, 'You cannot view this attachment.');
+        }
+
+        if (!$task->attachment_path) {
+            abort(404);
+        }
+
+        return $this->streamAttachment($task->attachment_path);
+    }
+
+    /** Same idea, for the photo attached when a task was completed/objected to. */
+    public function updateAttachment($id)
+    {
+        $update = TaskUpdate::with('task')->findOrFail($id);
+        $task = $update->task;
+
+        if (!$task || ($task->user_id !== auth()->id() && !TaskAccess::canManage(auth()->user(), $task))) {
+            abort(403, 'You cannot view this attachment.');
+        }
+
+        if (!$update->file_url) {
+            abort(404);
+        }
+
+        return $this->streamAttachment($update->file_url);
+    }
+
+    private function streamAttachment(string $path)
+    {
+        if (!Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        $mimeType = Storage::disk('public')->mimeType($path) ?: 'application/octet-stream';
+
+        return response(Storage::disk('public')->get($path))
+            ->header('Content-Type', $mimeType)
+            ->header('X-Content-Type-Options', 'nosniff')
+            ->header('Cache-Control', 'private, max-age=604800')
+            ->header('Content-Disposition', 'inline; filename="' . basename($path) . '"');
     }
 }

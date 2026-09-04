@@ -45,6 +45,7 @@ class Task extends Model implements AuditableContract
     'priority',
     'completed_at',
     'objection_notes',
+    'attachment_path',
     'objected_by_id',
     'objected_at',
     'delay_notified_at',

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EmployeeSetupTask;
 use App\Models\ExitClearance;
 use App\Models\Task;
+use App\Support\TaskAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
@@ -70,7 +71,8 @@ class MyTasksController extends Controller
         }
 
         $validated = $request->validate([
-            'remarks' => 'nullable|string|max:2000',
+            'remarks'    => 'nullable|string|max:2000',
+            'attachment' => TaskAttachment::RULES,
         ]);
 
         $task->status = 'completed';
@@ -79,6 +81,9 @@ class MyTasksController extends Controller
 
         $task->taskUpdates()->create([
             'comment'        => $validated['remarks'] ?? null,
+            'file_url'       => $request->hasFile('attachment')
+                ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
+                : null,
             'update_type'    => 'complete',
             'is_admin'       => false,
             'created_by_id'  => auth()->id(),
@@ -110,7 +115,8 @@ class MyTasksController extends Controller
         }
 
         $validated = $request->validate([
-            'remarks' => 'nullable|string|max:2000',
+            'remarks'    => 'nullable|string|max:2000',
+            'attachment' => TaskAttachment::RULES,
         ]);
 
         $task->status = 'completed';
@@ -119,6 +125,9 @@ class MyTasksController extends Controller
 
         $task->taskUpdates()->create([
             'comment'        => $validated['remarks'] ?? null,
+            'file_url'       => $request->hasFile('attachment')
+                ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
+                : null,
             'update_type'    => 'resubmit',
             'is_admin'       => false,
             'created_by_id'  => auth()->id(),

@@ -593,6 +593,14 @@ Route::middleware([
       });
     });
 
+    // Task/task-update attachment images — deliberately outside the
+    // admin|hr|tasks.manage gate above: an assignee needs to see their own
+    // task's attachment on My Tasks too. Ownership is checked inside
+    // TaskController::attachment()/updateAttachment(), the same shape as
+    // my-tasks/* below.
+    Route::get('tasks/{id}/attachment', [TaskController::class, 'attachment'])->name('tasks.attachment');
+    Route::get('task-updates/{id}/attachment', [TaskController::class, 'updateAttachment'])->name('task-updates.attachment');
+
     // "My Tasks" — every user's own outstanding work, whatever their role.
     Route::get('my-tasks', [\App\Http\Controllers\tenant\MyTasksController::class, 'index'])
         ->name('my-tasks.index');
