@@ -215,8 +215,16 @@ class TaskManagementController extends Controller
         // were already committed, so "Assigning..." sat frozen on the button
         // for as long as the mail attempt hung, even though nothing was
         // actually still in progress.
+        //
+        // app()->terminating() rather than dispatch(...)->afterResponse():
+        // the latter routes through the queue Dispatcher, which serializes
+        // the closure via reflection on its *source file* -- obfuscated on
+        // prod, so file_get_contents() can't find it and every notify() here
+        // silently never ran (confirmed from real prod error emails: user
+        // 178 at /task-management, five times in one day). terminating()
+        // just holds the closure in memory and calls it directly.
         $createdIds = array_map(fn ($t) => $t->id, $created);
-        dispatch(function () use ($createdIds) {
+        app()->terminating(function () use ($createdIds) {
             foreach (Task::whereIn('id', $createdIds)->with('user')->get() as $task) {
                 try {
                     $task->user?->notify(new TaskAssigned($task));
@@ -226,7 +234,7 @@ class TaskManagementController extends Controller
                     Log::warning("Task-assigned notify failed for task {$task->id}: " . $e->getMessage());
                 }
             }
-        })->afterResponse();
+        });
 
         $message = count($created) . ' task(s) assigned.';
         if ($dropped > 0) {
@@ -429,16 +437,19 @@ class TaskManagementController extends Controller
             'updated_by_id' => $user->id,
         ]);
 
-        // Same afterResponse() pattern store() uses - a slow/unreachable mail
-        // host must not make the admin wait for their objection to save.
-        dispatch(function () use ($task) {
+        // Same pattern store() uses - a slow/unreachable mail host must not
+        // make the admin wait for their objection to save. app()->terminating()
+        // rather than dispatch(...)->afterResponse() -- see store() above for
+        // why: the latter's closure serialization breaks on prod's obfuscated
+        // source.
+        app()->terminating(function () use ($task) {
             try {
                 $fresh = $task->fresh(['user', 'objectedBy']);
                 $fresh->user?->notify(new TaskObjection($fresh));
             } catch (\Throwable $e) {
                 Log::warning("Task-objection notify failed for task {$task->id}: " . $e->getMessage());
             }
-        })->afterResponse();
+        });
 
         return response()->json(['success' => true, 'message' => 'Objection raised - sent back to ' . (optional($task->user)->getFullName() ?? 'the assignee') . '.']);
     }

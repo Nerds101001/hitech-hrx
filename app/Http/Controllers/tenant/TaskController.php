@@ -58,15 +58,26 @@ class TaskController extends Controller
             // SMTP host is slow to unreachable from a dev box, and sending it
             // inline used to freeze this request on a task that had already
             // been created.
+            //
+            // app()->terminating() rather than dispatch(...)->afterResponse():
+            // the latter still routes through the queue Dispatcher, which
+            // serializes the closure via reflection on its *source file* --
+            // and on prod this file is obfuscated, so that file doesn't
+            // exist on disk as far as file_get_contents() is concerned. Every
+            // single task assigned through this endpoint on prod hit that
+            // failure and never sent its notification, silently (confirmed
+            // from the real error emails: user 178 at /task-management, five
+            // times in one day). terminating() just holds the closure in
+            // memory and calls it directly -- no serialization at all.
             $taskId = $task->id;
-            dispatch(function () use ($taskId) {
+            app()->terminating(function () use ($taskId) {
                 $t = Task::with('user')->find($taskId);
                 try {
                     $t?->user?->notify(new TaskAssigned($t));
                 } catch (\Throwable $e) {
                     Log::warning("Task-assigned notify failed for task {$taskId}: " . $e->getMessage());
                 }
-            })->afterResponse();
+            });
 
             return response()->json(['success' => true, 'message' => 'Task assigned successfully.']);
         } catch (\Exception $e) {
