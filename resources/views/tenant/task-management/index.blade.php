@@ -219,6 +219,12 @@
           @if($schedules->isNotEmpty())<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->count() }}</span>@endif
         </button>
       </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tmPendency" type="button">
+          <i class="bx bx-bar-chart-alt-2"></i> Pendency
+          @if($pendency['totalPending'] > 0)<span class="badge-hitech badge-hitech-danger ms-1">{{ $pendency['totalPending'] }}</span>@endif
+        </button>
+      </li>
     </ul>
 
     <div class="tab-content">
@@ -537,6 +543,126 @@
       </div>
     </div>{{-- /#tmRecurring --}}
 
+    <div class="tab-pane fade" id="tmPendency">
+      <div class="row row-cols-2 row-cols-md-4 g-6 mb-6">
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-time-five"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $pendency['totalPending'] }}</h3><span class="stat-label">Total pending</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-error-circle"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $pendency['totalOverdue'] }}</h3><span class="stat-label">Overdue</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-buildings"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $pendency['departmentsAffected'] }}</h3><span class="stat-label">Departments with backlog</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-group"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $pendency['peopleAffected'] }}</h3><span class="stat-label">People with backlog</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hitech-card mb-6">
+        <div class="card-body p-4 pb-2">
+          <h6 class="fw-bold mb-0">Pending by Department</h6>
+          <p class="text-muted small mb-0">Click a department to filter the table below to just that team.</p>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr><th style="min-width:200px">Department</th><th>Pending</th><th>Overdue</th><th class="text-end">Filter</th></tr>
+            </thead>
+            <tbody>
+              @forelse($pendency['byDepartment'] as $d)
+                <tr class="{{ (string) request('pendency_department_id') === (string) $d->department_id ? 'table-active' : '' }}">
+                  <td class="fw-medium">{{ $d->department_name }}</td>
+                  <td><span class="badge-hitech badge-brand-soft">{{ $d->pending }}</span></td>
+                  <td>
+                    @if($d->overdue > 0)
+                      <span class="badge-hitech badge-hitech-danger">{{ (int) $d->overdue }}</span>
+                    @else
+                      <span class="text-muted">—</span>
+                    @endif
+                  </td>
+                  <td class="text-end">
+                    <a href="{{ request()->fullUrlWithQuery(['pendency_department_id' => $d->department_id]) }}#tmPendency" class="small js-pendency-tab-link">View team</a>
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="4" class="text-center text-muted py-4">No backlog anywhere — clean slate.</td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="hitech-card">
+        <div class="card-body p-4 pb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h6 class="fw-bold mb-0">Pending by Person</h6>
+            @if(request()->filled('pendency_department_id'))
+              <p class="text-muted small mb-0">
+                Filtered to one department -
+                <a href="{{ request()->fullUrlWithQuery(['pendency_department_id' => null]) }}#tmPendency" class="js-pendency-tab-link">show everyone</a>
+              </p>
+            @else
+              <p class="text-muted small mb-0">Every person with at least one pending task, worst first.</p>
+            @endif
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                @php
+                  $pendSortLink = fn($col) => request()->fullUrlWithQuery([
+                    'pendency_sort' => $col,
+                    'pendency_dir' => ($pendency['sort'] === $col && $pendency['dir'] === 'desc') ? 'asc' : 'desc',
+                  ]) . '#tmPendency';
+                  $sortIcon = fn($col) => $pendency['sort'] !== $col ? '' : ($pendency['dir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
+                @endphp
+                <th style="min-width:180px"><a href="{{ $pendSortLink('name') }}" class="text-dark text-decoration-none js-pendency-tab-link">Person{!! $sortIcon('name') !!}</a></th>
+                <th>Department</th>
+                <th><a href="{{ $pendSortLink('pending') }}" class="text-dark text-decoration-none js-pendency-tab-link">Pending{!! $sortIcon('pending') !!}</a></th>
+                <th><a href="{{ $pendSortLink('overdue') }}" class="text-dark text-decoration-none js-pendency-tab-link">Overdue{!! $sortIcon('overdue') !!}</a></th>
+                <th class="text-end">View</th>
+              </tr>
+            </thead>
+            <tbody>
+              @forelse($pendency['byPerson'] as $p)
+                <tr>
+                  <td class="fw-medium">{{ trim($p->first_name . ' ' . $p->last_name) }}</td>
+                  <td><small class="text-muted">{{ $p->department_name }}</small></td>
+                  <td><span class="badge-hitech badge-brand-soft">{{ $p->pending }}</span></td>
+                  <td>
+                    @if($p->overdue > 0)
+                      <span class="badge-hitech badge-hitech-danger">{{ (int) $p->overdue }}</span>
+                    @else
+                      <span class="text-muted">—</span>
+                    @endif
+                  </td>
+                  <td class="text-end">
+                    <a href="{{ route('task-management.index', ['search' => $p->first_name]) }}" class="small text-decoration-none js-pendency-tab-link">View tasks</a>
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="5" class="text-center text-muted py-4">No one has a pending task right now — clean slate.</td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>{{-- /#tmPendency --}}
+
     </div>{{-- /.tab-content --}}
   </div>
 </div>
@@ -779,6 +905,14 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // Pendency's department/sort links reload the page (GET params drive the
+  // query) rather than fetching in place, which would otherwise dump
+  // whoever clicked one back on the One-Time tab instead of where they were.
+  if (window.location.hash === '#tmPendency') {
+    const trigger = document.querySelector('[data-bs-target="#tmPendency"]');
+    if (trigger) new bootstrap.Tab(trigger).show();
+  }
+
   // No theme option: this project styles select2's own default markup
   // (see select2.scss) rather than the separate "bootstrap-5" theme, which
   // isn't installed here — passing it left the dropdown completely unstyled.

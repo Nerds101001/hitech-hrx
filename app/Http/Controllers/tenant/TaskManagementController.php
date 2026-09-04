@@ -178,7 +178,75 @@ class TaskManagementController extends Controller
             ->groupBy('task_schedule_id')
             ->map(fn ($rows) => $rows->first()); // most recent fire_date per schedule
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats'));
+        $pendency = $this->buildPendency($request, $allowedIds);
+
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats', 'pendency'));
+    }
+
+    /**
+     * Org-wide (or, for a scoped manager, team-wide) backlog: who and which
+     * department it's actually sitting with, not just "how many tasks" -
+     * the same TaskAccess scope as the rest of this controller, so a
+     * manager's Pendency tab never reveals another team's numbers.
+     */
+    private function buildPendency(Request $request, ?array $allowedIds): array
+    {
+        $base = Task::whereNotIn('status', Task::CLOSED_STATUSES);
+        if ($allowedIds !== null) {
+            $base->whereIn('user_id', $allowedIds);
+        }
+
+        $overdueCase = "sum(case when tasks.due_date is not null and tasks.due_date < NOW() then 1 else 0 end) as overdue";
+
+        $byDepartment = (clone $base)
+            ->join('users', 'users.id', '=', 'tasks.user_id')
+            ->leftJoin('departments', 'departments.id', '=', 'users.department_id')
+            ->select(
+                'departments.id as department_id',
+                DB::raw("COALESCE(departments.name, 'No Department') as department_name"),
+                DB::raw('count(*) as pending'),
+                DB::raw($overdueCase)
+            )
+            ->groupBy('departments.id', 'departments.name')
+            ->orderByDesc('pending')
+            ->get();
+
+        $sort = in_array($request->input('pendency_sort'), ['pending', 'overdue', 'name'], true)
+            ? $request->input('pendency_sort') : 'pending';
+        $dir = $request->input('pendency_dir') === 'asc' ? 'asc' : 'desc';
+
+        $personQuery = (clone $base)
+            ->join('users', 'users.id', '=', 'tasks.user_id')
+            ->leftJoin('departments', 'departments.id', '=', 'users.department_id')
+            ->select(
+                'users.id as user_id', 'users.first_name', 'users.last_name',
+                DB::raw("COALESCE(departments.name, 'No Department') as department_name"),
+                DB::raw('count(*) as pending'),
+                DB::raw($overdueCase)
+            )
+            ->groupBy('users.id', 'users.first_name', 'users.last_name', 'departments.name');
+
+        if ($request->filled('pendency_department_id')) {
+            $personQuery->where('users.department_id', $request->pendency_department_id);
+        }
+
+        $orderColumn = match ($sort) {
+            'overdue' => 'overdue',
+            'name'    => 'users.first_name',
+            default   => 'pending',
+        };
+        $byPerson = $personQuery->orderBy($orderColumn, $dir)->get();
+
+        return [
+            'totalPending'        => (clone $base)->count(),
+            'totalOverdue'        => (clone $base)->whereNotNull('due_date')->where('due_date', '<', now())->count(),
+            'departmentsAffected' => $byDepartment->count(),
+            'peopleAffected'      => $byPerson->count(),
+            'byDepartment'        => $byDepartment,
+            'byPerson'            => $byPerson,
+            'sort'                => $sort,
+            'dir'                 => $dir,
+        ];
     }
 
     public function store(Request $request)
