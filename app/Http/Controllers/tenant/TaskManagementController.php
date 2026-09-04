@@ -397,12 +397,13 @@ class TaskManagementController extends Controller
         return response()->json(['success' => $deleted > 0, 'message' => $message, 'deleted' => $deleted]);
     }
 
-    /** Edit an existing task's own details — never who it belongs to (use reassignment for that, not this). */
+    /** Edit an existing task's own details, and optionally who it's assigned to. */
     public function update(Request $request, $id)
     {
         $task = Task::findOrFail($id);
+        $user = auth()->user();
 
-        if (!TaskAccess::canManage(auth()->user(), $task)) {
+        if (!TaskAccess::canManage($user, $task)) {
             abort(403, 'You cannot manage a task outside your team.');
         }
 
@@ -411,15 +412,29 @@ class TaskManagementController extends Controller
             'description' => 'nullable|string',
             'due_date'    => 'nullable|date',
             'priority'    => 'nullable|in:' . implode(',', Task::PRIORITIES),
+            'user_id'     => 'nullable|integer|exists:users,id',
         ]);
 
-        $task->update([
+        $updates = [
             'title'         => $validated['title'],
             'description'   => $validated['description'] ?? null,
             'due_date'      => $validated['due_date'] ?? null,
             'priority'      => $validated['priority'] ?? $task->priority,
-            'updated_by_id' => auth()->id(),
-        ]);
+            'updated_by_id' => $user->id,
+        ];
+
+        // Reassignment: the new person must be someone this user could have
+        // assigned the task to in the first place (store()'s own check),
+        // never trusted just because they could manage the task as it stood.
+        if (!empty($validated['user_id']) && (int) $validated['user_id'] !== $task->user_id) {
+            $allowedIds = TaskAccess::allowedUserIds($user);
+            if ($allowedIds !== null && !in_array((int) $validated['user_id'], $allowedIds, true)) {
+                return response()->json(['success' => false, 'message' => 'You can only reassign to someone on your own team.'], 403);
+            }
+            $updates['user_id'] = (int) $validated['user_id'];
+        }
+
+        $task->update($updates);
 
         return response()->json(['success' => true, 'message' => 'Task updated successfully.']);
     }

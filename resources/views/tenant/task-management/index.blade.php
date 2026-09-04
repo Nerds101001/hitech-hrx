@@ -421,7 +421,8 @@
                   </button>
                   <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-edit js-edit-task" title="Edit"
                           data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
-                          data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}">
+                          data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
+                          data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}">
                     <i class="bx bx-edit"></i>
                   </button>
                   @if(in_array($t->status, ['completed', 'resolved']))
@@ -605,6 +606,15 @@
               <label class="form-label">Due date &amp; time</label>
               <input type="text" id="et_due_date" class="form-control" placeholder="dd/mm/yyyy --:-- --">
             </div>
+            <div class="col-12">
+              <label class="form-label">Assigned to</label>
+              <select id="et_assignee" class="form-select select2-single">
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                @endforeach
+              </select>
+              <div class="form-text">Reassigns this one task — only to someone on your own team.</div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -712,6 +722,15 @@ document.addEventListener('DOMContentLoaded', function () {
     dropdownParent: $('#assignTaskModal'),
     minimumResultsForSearch: 0, // always show the search box, however short the list
     closeOnSelect: false,       // stay open so ticking several people/departments is one pass, not one re-open per pick
+  });
+
+  // Edit Task's "Assigned to" — a plain single-select living in a different
+  // modal, so it needs its own dropdownParent (the shared .select2 init
+  // above is hardcoded to assignTaskModal) and normal close-on-select.
+  $('.select2-single').select2({
+    width: '100%',
+    dropdownParent: $('#editTaskModal'),
+    minimumResultsForSearch: 0,
   });
 
   const modalEl = document.getElementById('assignTaskModal');
@@ -975,6 +994,7 @@ document.addEventListener('DOMContentLoaded', function () {
     altFormat: 'd/m/Y h:i K',
   });
 
+  let etOriginalUserId = null;
   document.querySelectorAll('.js-edit-task').forEach(function (btn) {
     btn.addEventListener('click', function () {
       document.getElementById('et_id').value = btn.dataset.id;
@@ -982,6 +1002,28 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('et_description').value = btn.dataset.description || '';
       document.getElementById('et_priority').value = btn.dataset.priority;
       if (btn.dataset.due) { etDueDatePicker.setDate(btn.dataset.due, true); } else { etDueDatePicker.clear(); }
+
+      etOriginalUserId = btn.dataset.userId;
+      const assigneeSelect = document.getElementById('et_assignee');
+      // Drop whatever was injected for the last task this modal was opened
+      // for, or repeated edits of different out-of-scope assignees would
+      // just keep piling up extra options underneath each other.
+      assigneeSelect.querySelectorAll('option.js-et-outside-option').forEach(o => o.remove());
+      // The current assignee might be outside this admin/manager's own team
+      // (assigned before a reporting-line change, say) and so missing from
+      // this list entirely -- without this, select2 would silently fall back
+      // to whichever option happens to be first, which would reassign the
+      // task to the wrong person the moment "Save" is clicked without anyone
+      // touching the field.
+      if (!assigneeSelect.querySelector('option[value="' + etOriginalUserId + '"]')) {
+        const opt = document.createElement('option');
+        opt.value = etOriginalUserId;
+        opt.textContent = btn.dataset.userName + ' (outside your team)';
+        opt.className = 'js-et-outside-option';
+        assigneeSelect.prepend(opt);
+      }
+      $('#et_assignee').val(etOriginalUserId).trigger('change');
+
       editModal.show();
     });
   });
@@ -1005,6 +1047,12 @@ document.addEventListener('DOMContentLoaded', function () {
         description: document.getElementById('et_description').value,
         priority: document.getElementById('et_priority').value,
         due_date: document.getElementById('et_due_date').value || null,
+        // Only sent when actually changed from what the row was opened
+        // with -- never let a select2 quirk reassign a task nobody touched.
+        user_id: (function () {
+          const v = $('#et_assignee').val();
+          return (v && v !== etOriginalUserId) ? v : null;
+        })(),
       }),
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
