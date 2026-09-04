@@ -123,28 +123,6 @@
     border: 1px solid rgba(77, 108, 240, 0.18);
   }
 
-  /* Plain icons, no button chrome - no background, no border, no box.
-     Half the width of the boxed style this replaced (16px vs 32px). */
-  .tm-act {
-    --tm-act-accent: var(--hitech-primary, #008080);
-    width: 16px !important;
-    height: 16px !important;
-    margin: 0 4px !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    color: #94a3b8 !important;
-    font-size: 0.85rem !important;
-  }
-  .tm-act:hover {
-    background: transparent !important;
-    border: none !important;
-    color: var(--tm-act-accent) !important;
-  }
-  .tm-act-view    { --tm-act-accent: var(--hitech-icon-view, #4d6cf0); }
-  .tm-act-edit    { --tm-act-accent: var(--hitech-icon-edit, #f5a623); }
-  .tm-act-warning { --tm-act-accent: #f59e0b; }
-  .tm-act-danger  { --tm-act-accent: var(--hitech-icon-deactivate, #ef4444); }
 </style>
 @endsection
 
@@ -228,9 +206,11 @@
     <div class="tab-content" id="tmTabsContent">
     <div class="tab-pane fade show active" id="tmOneTime">
 
-    {{-- Filters --}}
-    <div class="hitech-card-white mb-6 overflow-hidden" id="taskFilterCard">
-      <div class="card-body p-sm-5 p-4">
+    {{-- Filters + task list, one card (same shell KPI Approvals uses) rather
+         than a separately-rounded filter card sitting above a separately-
+         rounded table card. --}}
+    <div class="hitech-card mb-6" id="taskFilterCard">
+      <div class="card-body p-4 border-bottom">
         <form method="GET" class="row align-items-end g-4">
           <div class="col-lg-3 col-md-6">
             <div class="search-wrapper-hitech mw-100">
@@ -281,18 +261,15 @@
           </div>
         </form>
       </div>
-    </div>
 
-    {{-- Bulk action bar - hidden until at least one row is checked --}}
-    <div class="hitech-card-white mb-3 p-3 d-none align-items-center justify-content-between" id="bulkActionBar">
-      <span class="fw-medium"><span id="bulkSelectedCount">0</span> selected</span>
-      <button type="button" class="btn btn-sm btn-hitech-danger" id="btnBulkDelete">
-        <i class="bx bx-trash"></i> Delete Selected
-      </button>
-    </div>
+      {{-- Bulk action bar - hidden until at least one row is checked --}}
+      <div class="p-3 border-bottom d-none align-items-center justify-content-between" id="bulkActionBar">
+        <span class="fw-medium"><span id="bulkSelectedCount">0</span> selected</span>
+        <button type="button" class="btn btn-sm btn-hitech-danger" id="btnBulkDelete">
+          <i class="bx bx-trash"></i> Delete Selected
+        </button>
+      </div>
 
-    {{-- Task list --}}
-    <div class="hitech-card">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="taskTable">
           <thead class="table-light">
@@ -382,7 +359,7 @@
                   @endif
                 </td>
                 <td class="text-end text-nowrap">
-                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-view js-view-task" title="View"
+                  <button type="button" class="icon-sophisticated js-view-task" title="View"
                           data-task="{{ json_encode([
                             'title' => $t->title,
                             'description' => $t->description,
@@ -397,19 +374,19 @@
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
-                  <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-edit js-edit-task" title="Edit"
+                  <button type="button" class="icon-sophisticated js-edit-task" title="Edit"
                           data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
                           data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
                           data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}">
                     <i class="bx bx-edit"></i>
                   </button>
                   @if(in_array($t->status, ['completed', 'resolved']))
-                    <button type="button" class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-warning js-object-task" title="Raise Objection"
+                    <button type="button" class="icon-sophisticated text-warning js-object-task" title="Raise Objection"
                             data-id="{{ $t->id }}" data-title="{{ $t->title }}">
                       <i class="bx bx-error"></i>
                     </button>
                   @endif
-                  <button class="btn btn-sm btn-icon icon-sophisticated tm-act tm-act-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
+                  <button class="icon-sophisticated text-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
                     <i class="bx bx-trash"></i>
                   </button>
                 </td>
