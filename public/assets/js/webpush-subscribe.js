@@ -20,7 +20,10 @@
   }
 
   async function subscribe(vapidPublicKey, csrfToken) {
-    const registration = await navigator.serviceWorker.register('/push-sw.js');
+    // updateViaCache: 'none' -- without it, browsers are allowed to serve
+    // the service worker script itself from HTTP cache, so a change here
+    // can silently never reach an already-cached browser at all.
+    const registration = await navigator.serviceWorker.register('/push-sw.js', { updateViaCache: 'none' });
     await navigator.serviceWorker.ready;
 
     let subscription = await registration.pushManager.getSubscription();

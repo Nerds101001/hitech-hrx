@@ -27,7 +27,12 @@
 <!-- END: Firebase JS-->--}}
 
 @auth
-<script src="{{ asset('assets/js/webpush-subscribe.js') }}"></script>
+{{-- Versioned by file mtime -- the static-asset Cache-Control on this file
+     is a long 7 days with no query string, so a plain asset() URL could
+     leave an already-cached browser running old code (including missing an
+     entire feature added later) indefinitely. This changes the URL itself
+     whenever the file changes, which busts the cache unconditionally. --}}
+<script src="{{ asset('assets/js/webpush-subscribe.js') }}?v={{ @filemtime(public_path('assets/js/webpush-subscribe.js')) ?: '1' }}"></script>
 @if(config('webpush.public_key'))
 <script>
   document.addEventListener('DOMContentLoaded', function () {
