@@ -109,6 +109,16 @@
     padding: 1.25rem 1.5rem !important;
   }
 
+  /* Bootstrap's .tab-content carries its own 24px side padding (theme
+     default, meant for tabbed content that isn't already inside a padded
+     wrapper elsewhere). This page's tabs sit inside a .px-4 wrapper that
+     already provides that gutter, so the theme's padding stacked an extra
+     24px on both sides on top of it - every card inside these tabs was
+     narrower than the header/stats above them by 48px total. */
+  #tmTabsContent {
+    padding: 0 !important;
+  }
+
   #taskTable td, #taskTable th {
     padding: 0.65rem 0.85rem !important;
   }
