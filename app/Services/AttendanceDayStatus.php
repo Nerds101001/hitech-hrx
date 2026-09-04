@@ -147,11 +147,22 @@ class AttendanceDayStatus
                     } else {
                         $result['code'] = 'absent';
                     }
+                    
+                    // A real punch-in with no punch-out on a past day is a missed punch, not an
+                    // absence - the same rule the ordinary-day branch below already applies.
+                    if ($attendance->check_in_time && !$attendance->check_out_time && !$isDummyPunch && $date->isPast() && !$date->isToday()) {
+                        $result['code'] = 'miss-punch';
+                    }
+                    // Approving a short leave creates a dummy row (00:00, no punches) marked
+                    // present. There are no times to compute from, so trust that status.
+                    if ($isDummyPunch && strtolower((string) $attendance->status) === 'present') {
+                        $result['code'] = 'short-leave-present';
+                    }
                 } elseif ($isHalfDay) {
                     if ($workMins >= self::CREDIT_MINUTES) {
                         $result['code'] = $isPaid ? 'half-day-paid' : 'half-day';
                     } else {
-                        $result['code'] = $isPaid ? 'paid_leave' : 'absent';
+                        $result['code'] = $isPaid ? 'paid_leave' : 'half-day';
                     }
                 } elseif ($isFullDayLeave) {
                     if ($workMins >= $reqMins) {
@@ -159,7 +170,7 @@ class AttendanceDayStatus
                     } elseif ($workMins >= self::CREDIT_MINUTES) {
                         $result['code'] = $isPaid ? 'half-day-paid' : 'half-day';
                     } else {
-                        $result['code'] = $isPaid ? 'paid_leave' : 'absent';
+                        $result['code'] = $isPaid ? 'paid_leave' : 'unpaid_leave';
                     }
                 } else {
                     if ($workMins >= $reqMins) {
@@ -186,6 +197,13 @@ class AttendanceDayStatus
                 $result['code'] = strtolower($attendance->status ?: 'present');
             }
 
+            // Worked minutes are 0 until the second punch lands, so anyone still at work
+            // resolved as absent for the whole day. The miss-punch rule above covers only
+            // PAST days - a day still running is not a missed punch, it is unfinished.
+            if ($attendance->check_in_time && !$attendance->check_out_time && !$isDummyPunch && $date->isToday() && $result['code'] === 'absent') {
+                $result['code'] = 'present';
+            }
+
             return $result;
         }
 
@@ -198,7 +216,7 @@ class AttendanceDayStatus
             if ($isShortLeave) {
                 $result['code'] = 'absent';
             } elseif ($isHalfDayLeave) {
-                $result['code'] = $isPaidLeave ? 'paid_leave' : 'absent';
+                $result['code'] = $isPaidLeave ? 'paid_leave' : 'half-day';
             } else {
                 $result['code'] = $isPaidLeave ? 'paid_leave' : 'unpaid_leave';
             }
