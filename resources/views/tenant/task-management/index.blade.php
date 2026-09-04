@@ -123,19 +123,23 @@
     border: 1px solid rgba(77, 108, 240, 0.18);
   }
 
-  /* Same shape as this theme's .icon-sophisticated everywhere else (slate
-     at rest, lifting to its own colour on hover) rather than the flat grey
-     Bootstrap default these action buttons were rendering as. */
+  /* Plain icons, no button chrome - no background, no border, no box.
+     Half the width of the boxed style this replaced (16px vs 32px). */
   .tm-act {
     --tm-act-accent: var(--hitech-primary, #008080);
-    background: var(--hitech-bg-soft, #f8fafc);
-    color: #64748b;
-    border: 1px solid var(--hitech-border, #dee2e6);
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 4px !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    color: #94a3b8 !important;
+    font-size: 0.85rem !important;
   }
   .tm-act:hover {
-    background: #fff;
-    color: var(--tm-act-accent);
-    border-color: var(--tm-act-accent);
+    background: transparent !important;
+    border: none !important;
+    color: var(--tm-act-accent) !important;
   }
   .tm-act-view    { --tm-act-accent: var(--hitech-icon-view, #4d6cf0); }
   .tm-act-edit    { --tm-act-accent: var(--hitech-icon-edit, #f5a623); }
