@@ -78,7 +78,9 @@
   }
 
   function showBanner(vapidPublicKey, csrfToken) {
-    if (localStorage.getItem('hrxPushDismissed') === '1') return;
+    // Deliberately no "remember dismissal" -- this asks again on every page
+    // load/login as long as permission is still undecided, rather than
+    // requiring the bell icon to be found and clicked after one dismissal.
     if (document.getElementById('hrxPushBanner')) return;
 
     const banner = document.createElement('div');
@@ -109,7 +111,6 @@
     document.body.appendChild(banner);
 
     document.getElementById('hrxPushBannerDismiss').addEventListener('click', function () {
-      localStorage.setItem('hrxPushDismissed', '1');
       banner.remove();
     });
     document.getElementById('hrxPushBannerEnable').addEventListener('click', function () {
