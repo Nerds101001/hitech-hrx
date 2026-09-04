@@ -656,18 +656,6 @@ div.dtr-modal div.dtr-modal-content {
     }
 }
 
-/* Ensure Action Icons have proper breathing room */
-.icon-sophisticated {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 38px !important;
-    height: 38px !important;
-    padding: 0 !important;
-    margin: 0 6px !important; /* Added horizontal margin between icons */
-    transition: all 0.3s ease !important;
-}
-
 /* Fix for heading alignment in cards */
 .hitech-card-white .card-body {
     padding: 2.25rem 2.5rem !important;
@@ -1638,13 +1626,23 @@ div.dtr-modal div.dtr-modal-content {
     padding-bottom: 1.5rem !important;
 }
 
-/* Unified Action Icon Styling (Slate to Primary Teal) */
+/* Unified Action Icon Styling (Slate to Primary Teal).
+   This used to be three separate, conflicting .icon-sophisticated rules
+   scattered through this file (one with !important width/height/margin that
+   silently won over this block's own sizing, one nearly-duplicate further
+   down) - every action-icon row in the app rendered bigger and more spaced
+   out than this block actually specifies. Consolidated into one definition;
+   the small margin below is what that stray rule was actually trying to add
+   (icons need *some* breathing room), just without blowing the box up to
+   38px and a 12px gap in the process. */
 .icon-sophisticated {
-    width: 32px;
-    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin: 0 2px;
     border-radius: 8px;
     background: #f8fafc;
     color: #64748b !important;
@@ -1891,15 +1889,6 @@ div.dtr-modal div.dtr-modal-content {
     letter-spacing: 0.5px !important;
     margin-bottom: 0.5rem !important;
     display: block;
-}
-
-/* Sophisticated Action Icons - Base Layout */
-.icon-sophisticated {
-    font-size: 1.15rem;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .datatables-users {
