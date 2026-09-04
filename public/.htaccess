@@ -1,3 +1,11 @@
+# Block direct access to dotfiles (.env, .git*, .DS_Store, etc.) — none of
+# these should ever be served, but nothing below explicitly denied them.
+# (Live on prod since the routes/web.php security pass; brought into git
+# here so it stops drifting out of the tracked file.)
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
 # The service worker must always be revalidated -- the host's default
 # static-asset caching (7 days, no query-string busting possible for a file
 # a browser fetches by a fixed path) can otherwise leave an already-visited
