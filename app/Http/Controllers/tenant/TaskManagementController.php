@@ -191,9 +191,13 @@ class TaskManagementController extends Controller
      */
     private function buildPendency(Request $request, ?array $allowedIds): array
     {
-        $base = Task::whereNotIn('status', Task::CLOSED_STATUSES);
+        // Table-qualified throughout - departments/users both carry a
+        // 'status' column of their own once joined below, and an
+        // unqualified 'status' here is ambiguous rather than defaulting to
+        // tasks.status the way it would with no join in play.
+        $base = Task::whereNotIn('tasks.status', Task::CLOSED_STATUSES);
         if ($allowedIds !== null) {
-            $base->whereIn('user_id', $allowedIds);
+            $base->whereIn('tasks.user_id', $allowedIds);
         }
 
         $overdueCase = "sum(case when tasks.due_date is not null and tasks.due_date < NOW() then 1 else 0 end) as overdue";
