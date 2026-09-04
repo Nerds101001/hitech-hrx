@@ -479,6 +479,7 @@ Route::middleware([
       Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
       Route::post('schedules/{id}/stop', [\App\Http\Controllers\tenant\TaskManagementController::class, 'stopSchedule'])->name('schedules.stop');
       Route::post('schedules/{id}/remove-user', [\App\Http\Controllers\tenant\TaskManagementController::class, 'removeFromSchedule'])->name('schedules.removeUser');
+      Route::get('schedules/{id}/history', [\App\Http\Controllers\tenant\TaskManagementController::class, 'scheduleHistory'])->name('schedules.history');
       // Static path before the {id} wildcards below, or "bulk-destroy" would
       // never be reached — it would match {id} = "bulk-destroy" on DELETE
       // instead, and PUT '{id}' would swallow this POST's path just the same

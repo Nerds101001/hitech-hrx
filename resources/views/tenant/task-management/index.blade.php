@@ -206,8 +206,25 @@
     </div>
   </div>
 
-  {{-- Filters --}}
   <div class="px-4">
+    <ul class="nav nav-tabs mb-6" id="tmTabs">
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tmOneTime" type="button">
+          <i class="bx bx-task"></i> One-Time Tasks
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tmRecurring" type="button">
+          <i class="bx bx-repeat"></i> Recurring Tasks
+          @if($schedules->isNotEmpty())<span class="badge-hitech badge-brand-soft ms-1">{{ $schedules->count() }}</span>@endif
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+    <div class="tab-pane fade show active" id="tmOneTime">
+
+    {{-- Filters --}}
     <div class="hitech-card-white mb-6 overflow-hidden" id="taskFilterCard">
       <div class="card-body p-sm-5 p-4">
         <form method="GET" class="row align-items-end g-4">
@@ -261,49 +278,6 @@
         </form>
       </div>
     </div>
-
-    {{-- Recurring Tasks --}}
-    @if($schedules->isNotEmpty())
-      <div class="hitech-card mb-6">
-        <div class="card-body p-4 pb-2">
-          <h6 class="fw-bold mb-0"><i class="bx bx-repeat"></i> Recurring Tasks</h6>
-          <p class="text-muted small mb-0">Fires automatically every time its day comes round — no need to reassign it yourself.</p>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th style="min-width:200px">Task</th>
-                <th>Repeats</th>
-                <th>Priority</th>
-                <th>People</th>
-                <th class="text-end" style="min-width:160px">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach($schedules as $s)
-                <tr>
-                  <td>
-                    <div class="fw-medium">{{ $s->title }}</div>
-                    @if($s->description)<small class="text-muted">{{ \Illuminate\Support\Str::limit($s->description, 70) }}</small>@endif
-                  </td>
-                  <td><span class="badge-hitech badge-brand-soft"><i class="bx bx-repeat"></i> {{ $s->recurrenceLabel() }}</span></td>
-                  <td><span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$s->priority] ?? 'badge-muted' }}">{{ ucfirst($s->priority) }}</span></td>
-                  <td>{{ count($s->target_user_ids ?? []) }} {{ \Illuminate\Support\Str::plural('person', count($s->target_user_ids ?? [])) }}</td>
-                  <td class="text-end">
-                    <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
-                            data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
-                            data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
-                      Manage
-                    </button>
-                  </td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      </div>
-    @endif
 
     {{-- Bulk action bar - hidden until at least one row is checked --}}
     <div class="hitech-card-white mb-3 p-3 d-none align-items-center justify-content-between" id="bulkActionBar">
@@ -473,6 +447,97 @@
     </div>
 
     <div class="mt-4">{{ $tasks->links() }}</div>
+
+    </div>{{-- /#tmOneTime --}}
+
+    <div class="tab-pane fade" id="tmRecurring">
+      <div class="hitech-card">
+        <div class="card-body p-4 pb-2">
+          <p class="text-muted small mb-0">Fires automatically every time its day comes round — no need to reassign it yourself. Expand a row to see every day it has actually fired.</p>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="min-width:200px">Task</th>
+                <th>Repeats</th>
+                <th>Priority</th>
+                <th>Assigned By</th>
+                <th>People</th>
+                <th style="min-width:170px">Last Fired</th>
+                <th class="text-end" style="min-width:160px">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              @forelse($schedules as $s)
+                @php $lastFire = $lastFireStats->get($s->id); @endphp
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-start gap-2">
+                      <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-schedule-toggle flex-shrink-0"
+                              data-schedule-id="{{ $s->id }}" title="Show firing history">
+                        <i class="bx bx-chevron-right"></i>
+                      </button>
+                      <div>
+                        <div class="fw-medium">{{ $s->title }}</div>
+                        @if($s->description)<small class="text-muted">{{ \Illuminate\Support\Str::limit($s->description, 70) }}</small>@endif
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="badge-hitech badge-brand-soft"><i class="bx bx-repeat"></i> {{ $s->recurrenceLabel() }}</span></td>
+                  <td><span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$s->priority] ?? 'badge-muted' }}">{{ ucfirst($s->priority) }}</span></td>
+                  <td><small class="text-muted">{{ optional($s->assignedBy)->getFullName() ?? '—' }}</small></td>
+                  <td>{{ count($s->target_user_ids ?? []) }} {{ \Illuminate\Support\Str::plural('person', count($s->target_user_ids ?? [])) }}</td>
+                  <td>
+                    @if($lastFire)
+                      <div class="small">{{ \Carbon\Carbon::parse($lastFire->fire_date)->format('d M Y') }}</div>
+                      <span class="badge-hitech {{ $lastFire->done == $lastFire->total ? 'badge-hitech-success' : 'badge-brand-soft' }}">
+                        {{ (int) $lastFire->done }}/{{ $lastFire->total }} done
+                      </span>
+                    @else
+                      <span class="badge-hitech badge-muted">Not yet fired</span>
+                    @endif
+                  </td>
+                  <td class="text-end">
+                    <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
+                            data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
+                            data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
+                      Manage
+                    </button>
+                  </td>
+                </tr>
+                <tr class="d-none schedule-history-row" data-schedule-history="{{ $s->id }}">
+                  <td></td>
+                  <td colspan="6" class="p-0">
+                    <div class="bg-light p-3">
+                      <table class="table table-sm table-hover align-middle mb-0 bg-white">
+                        <thead>
+                          <tr>
+                            <th>Date</th>
+                            <th>Outcome</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody class="js-schedule-history-body">
+                          {{-- filled by AJAX on first expand --}}
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="7" class="text-center text-muted py-5">
+                  <i class="bx bx-repeat fs-3 d-block mb-2 text-success"></i>
+                  No recurring tasks set up.
+                </td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>{{-- /#tmRecurring --}}
+
+    </div>{{-- /.tab-content --}}
   </div>
 </div>
 
@@ -896,6 +961,44 @@ document.addEventListener('DOMContentLoaded', function () {
         })
         .catch(() => {
           body.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
+        });
+    });
+  });
+
+  // ══ Recurring rows: expand to see every day it has actually fired ════
+  document.querySelectorAll('.js-schedule-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const scheduleId = btn.dataset.scheduleId;
+      const childRow = document.querySelector('.schedule-history-row[data-schedule-history="' + scheduleId + '"]');
+      if (!childRow) return;
+      const icon = btn.querySelector('i');
+      const nowHidden = !childRow.classList.contains('d-none');
+
+      if (nowHidden) {
+        childRow.classList.add('d-none');
+        icon.classList.remove('bx-chevron-down');
+        icon.classList.add('bx-chevron-right');
+        return;
+      }
+
+      childRow.classList.remove('d-none');
+      icon.classList.remove('bx-chevron-right');
+      icon.classList.add('bx-chevron-down');
+
+      const body = childRow.querySelector('.js-schedule-history-body');
+      if (body.dataset.loaded) return;
+
+      body.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">Loading...</td></tr>';
+      fetch('/task-management/schedules/' + scheduleId + '/history', {
+        headers: { 'Accept': 'application/json' },
+      })
+        .then(r => r.json())
+        .then(data => {
+          body.innerHTML = data.html || '';
+          body.dataset.loaded = '1';
+        })
+        .catch(() => {
+          body.innerHTML = '<tr><td colspan="3" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
         });
     });
   });

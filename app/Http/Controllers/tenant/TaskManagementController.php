@@ -130,7 +130,23 @@ class TaskManagementController extends Controller
         $allTargetIds = $schedules->flatMap(fn ($s) => $s->target_user_ids ?? [])->unique();
         $targetNames = User::whereIn('id', $allTargetIds)->get(['id', 'first_name', 'last_name'])->keyBy('id');
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames'));
+        // "Was this actually firing?" was the whole reason the recurring
+        // table needed redoing — last_run_on alone doesn't say whether that
+        // run reached everyone. One grouped query for every schedule's most
+        // recent day's outcome, keyed by schedule id so the view does no
+        // querying of its own.
+        $scheduleIds = $schedules->pluck('id');
+        $lastFireStats = $scheduleIds->isEmpty() ? collect() : Task::whereIn('task_schedule_id', $scheduleIds)
+            ->select('task_schedule_id', DB::raw('DATE(for_date) as fire_date'),
+                DB::raw('count(*) as total'),
+                DB::raw("sum(case when status in ('completed','cancelled','resolved','closed') then 1 else 0 end) as done"))
+            ->groupBy('task_schedule_id', DB::raw('DATE(for_date)'))
+            ->orderByDesc('fire_date')
+            ->get()
+            ->groupBy('task_schedule_id')
+            ->map(fn ($rows) => $rows->first()); // most recent fire_date per schedule
+
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats'));
     }
 
     public function store(Request $request)
@@ -319,6 +335,33 @@ class TaskManagementController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Removed from the recurring assignment.']);
+    }
+
+    /**
+     * Every day this schedule has actually fired, newest first, with how
+     * many of that day's tasks got done - the traceability the flat
+     * "Repeats" row never showed (a schedule can look identical whether it
+     * has fired 40 times or never once).
+     */
+    public function scheduleHistory($id)
+    {
+        $schedule = TaskSchedule::findOrFail($id);
+        if (!TaskAccess::isUnrestricted(auth()->user()) && $schedule->assigned_by_id !== auth()->id()) {
+            abort(403, 'You cannot view a recurring task you did not create.');
+        }
+
+        $rows = Task::where('task_schedule_id', $schedule->id)
+            ->select('batch_id', DB::raw('DATE(for_date) as fire_date'),
+                DB::raw('count(*) as total'),
+                DB::raw("sum(case when status in ('completed','cancelled','resolved','closed') then 1 else 0 end) as done"))
+            ->groupBy('batch_id', DB::raw('DATE(for_date)'))
+            ->orderByDesc('fire_date')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'html' => view('tenant.task-management._schedule_history', ['rows' => $rows])->render(),
+        ]);
     }
 
     /** Everyone in one bulk-assignment batch and their own status. */
