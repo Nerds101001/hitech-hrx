@@ -20,13 +20,17 @@
           <span class="badge bg-label-primary px-3 rounded-pill">{{$isUnread}} New</span>
         @endif
       </div>
-      {{-- Browser push opt-in (standard Web Push, not Firebase) — hidden
-           entirely on an unsupported browser, once granted, or once denied
-           (nagging after a "Block" click just gets the whole site muted). --}}
+      {{-- Browser push opt-in (standard Web Push, not Firebase). --}}
       <div id="hrxPushPrompt" class="small mt-2" style="display:none;">
         <a href="javascript:void(0);" id="hrxPushEnableBtn" class="text-primary fw-semibold">
           <i class="bx bx-bell-plus me-1"></i>Enable browser notifications
         </a>
+      </div>
+      {{-- Browser-level "Block" can't be undone from JS at all -- this at
+           least says so instead of showing nothing and looking broken. --}}
+      <div id="hrxPushBlocked" class="small mt-2 text-danger" style="display:none;">
+        <i class="bx bx-bell-off me-1"></i>Notifications are blocked for this site in your browser.
+        <a href="javascript:void(0);" id="hrxPushBlockedHelp" class="fw-semibold">How to unblock</a>
       </div>
     </li>
     <li class="dropdown-notifications-list scrollable-container">
@@ -77,6 +81,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     var prompt = document.getElementById('hrxPushPrompt');
     var btn = document.getElementById('hrxPushEnableBtn');
+    var blocked = document.getElementById('hrxPushBlocked');
+    var blockedHelp = document.getElementById('hrxPushBlockedHelp');
     if (!prompt || !btn || !window.HrxWebPush || !window.HrxWebPush.isSupported()) return;
 
     // A manual fallback next to the bell for anyone who dismissed the
@@ -84,9 +90,28 @@
     // it back later. Shown regardless of current permission state -- a
     // 'granted' permission with no saved subscription (a previous save
     // that failed) needs this to still be reachable, not hidden forever.
+    // 'denied' can't be fixed from JS at all -- that gets its own message
+    // instead of showing nothing, which just looked broken.
     window.HrxWebPush.permissionState().then(function (state) {
-      if (state !== 'denied') prompt.style.display = '';
+      if (state === 'denied') {
+        if (blocked) blocked.style.display = '';
+      } else {
+        prompt.style.display = '';
+      }
     });
+
+    if (blockedHelp) {
+      blockedHelp.addEventListener('click', function () {
+        alert(
+          'Your browser is blocking notifications for this site.\n\n' +
+          'Chrome/Edge/Brave: click the icon just left of the address bar ' +
+          '(lock or "i" icon) -> Site settings / Permissions -> set ' +
+          'Notifications to "Allow" -> reload this page.\n\n' +
+          'Safari (Mac): Safari menu -> Settings for This Website -> ' +
+          'Notifications -> Allow.'
+        );
+      });
+    }
 
     btn.addEventListener('click', function () {
       btn.textContent = 'Enabling...';
