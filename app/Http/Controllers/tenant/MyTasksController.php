@@ -69,6 +69,13 @@ class MyTasksController extends Controller
      * preview like this has no real Task row behind it (no id, no
      * complete/resubmit action), so it must never be mixed into a bucket
      * whose rows drive those buttons.
+     *
+     * Filtered in PHP rather than whereJsonContains(): existing schedules
+     * have target_user_ids stored as strings (e.g. ["266","9","246"]) while
+     * $user->id is an int, and JSON_CONTAINS is type-strict — it silently
+     * matches nothing for every schedule when the types don't line up.
+     * in_array()'s default loose comparison handles both without caring
+     * which one a given schedule happens to have.
      */
     public static function upcomingSchedulePreviews($user): \Illuminate\Support\Collection
     {
@@ -77,8 +84,8 @@ class MyTasksController extends Controller
         }
 
         return \App\Models\TaskSchedule::where('is_active', true)
-            ->whereJsonContains('target_user_ids', $user->id)
             ->get()
+            ->filter(fn ($s) => in_array($user->id, $s->target_user_ids ?? []))
             ->map(fn ($s) => ($next = $s->nextOccurrence()) ? (object) [
                 'title' => $s->title,
                 'due_date' => $next,
