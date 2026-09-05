@@ -134,7 +134,7 @@ class HrNotificationService
 
             if ($itContact && $itContact->id !== $user->id) {
                 $contacts[] = [
-                    'name' => $itContact->getFullName(), 'role' => 'IT Services',
+                    'name' => $itContact->getFullName(), 'role' => 'AI & IT Services',
                     'phone' => $itContact->phone ?? null,
                     'email' => $itContact->email, 'bg' => 'f59e0b',
                     'photo' => $itContact->getProfilePicture() ?: null,
