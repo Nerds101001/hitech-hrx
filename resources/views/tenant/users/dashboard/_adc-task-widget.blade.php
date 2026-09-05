@@ -10,12 +10,22 @@
   $twPriorityBadge = ['high' => 'badge-hitech-danger', 'medium' => 'badge-brand-soft', 'low' => 'badge-muted'];
 @endphp
 <style>
-  #dashTaskWidget .dash-task-pane{max-height:280px;overflow-y:auto;}
-  #dashTaskWidget .dash-task-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 4px;border-bottom:1px solid rgba(0,0,0,.05);}
+  #dashTaskWidget{max-width:50%;min-width:320px;}
+  #dashTaskWidget .adc-card-title{font-size:.85rem;}
+  /* Scoped override — .hitech-segmented-control/.status-toggle-btn are the
+     shared theme classes used on Task Management/Leave/KPI too; sized down
+     here only, by id, rather than touching that shared rule. */
+  #dashTaskWidget #dashTaskTabs{padding:2px;gap:1px;}
+  #dashTaskWidget #dashTaskTabs .status-toggle-btn{font-size:.68rem;padding:.3rem .65rem;}
+  #dashTaskWidget .dash-task-pane{max-height:220px;overflow-y:auto;}
+  #dashTaskWidget .dash-task-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid rgba(0,0,0,.05);}
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}
-  #dashTaskWidget .dash-task-title{font-weight:600;font-size:.85rem;color:#1e293b;}
-  #dashTaskWidget .dash-task-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;}
-  #dashTaskWidget .dash-task-empty{text-align:center;color:#94a3b8;font-size:.85rem;padding:28px 0;}
+  #dashTaskWidget .dash-task-title{font-weight:600;font-size:.78rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #dashTaskWidget .dash-task-meta{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:2px;}
+  #dashTaskWidget .dash-task-meta .badge-hitech{font-size:.62rem;padding:.15rem .4rem;}
+  #dashTaskWidget .dash-task-meta small{font-size:.68rem;}
+  #dashTaskWidget .js-dash-task-complete{font-size:.68rem;padding:.25rem .55rem;flex-shrink:0;}
+  #dashTaskWidget .dash-task-empty{text-align:center;color:#94a3b8;font-size:.78rem;padding:20px 0;}
 </style>
 <div class="adc-card mt-1" id="dashTaskWidget">
   <div class="adc-card-head">
