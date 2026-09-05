@@ -153,20 +153,14 @@
         </div>
       </div>
 
-      {{-- Sales Pipeline Overview — full width of its own row now that it no
-           longer shares Row A with Sales Target. --}}
-      <div class="row g-4 mt-1">
-        <div class="col-12">
-          <div class="adc-card">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Overview</h6><span class="adc-card-sub">Business potential by stage · hover for detail</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">View</a></div>
-            <div id="adcFunnel"></div>
-          </div>
-        </div>
-      </div>
-
-      {{-- Row B: Module tiles --}}
+      {{-- Sales Pipeline Overview + HRX Modules — merged into one card
+           (was two separate cards with a dead gap between them) with a
+           divider between the two sections instead. --}}
       <div class="adc-card mt-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">HRX Modules</h6><span class="adc-card-sub">Live snapshot across the platform</span></div></div>
+        <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Overview</h6><span class="adc-card-sub">Business potential by stage · hover for detail</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">View</a></div>
+        <div id="adcFunnel"></div>
+
+        <div class="adc-card-head mt-4 pt-4 border-top"><div><h6 class="adc-card-title">HRX Modules</h6><span class="adc-card-sub">Live snapshot across the platform</span></div></div>
         <div class="row g-3">
           @foreach($moduleTiles as $m)
             <div class="col-6 col-md-4 col-xl-3">
