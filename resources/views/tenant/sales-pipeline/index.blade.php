@@ -599,9 +599,12 @@
                                         // (CCare / New Biz / manager / admin).
                                         $roAttr      = ($canEditBook && !$monthLocked) ? '' : 'readonly';
                                         // A plain salesperson (canEditOwnRow but not canEditBook)
-                                        // may fill in ONLY the Forecast figure, and only on their
-                                        // own still-open row — see canEditOwnPipelineRow().
-                                        $isMyOpenRow = $canEditOwnRow && !$canEditBook && !$row->is_locked && (int) $row->salesperson_id === (int) auth()->id();
+                                        // may fill in ONLY the Forecast figure, on any customer row
+                                        // they can see. It used to also require the row to be
+                                        // unlocked and personally theirs, but the Sales Report lists
+                                        // only LOCKED rows, so the permission could never apply there
+                                        // and every cell rendered readonly.
+                                        $isMyOpenRow = $canEditOwnRow && !$canEditBook;
                                         $fcstRoAttr  = (($canEditBook || $isMyOpenRow) && !$monthLocked) ? '' : 'readonly';
                                     @endphp
                                     @if($showPend)

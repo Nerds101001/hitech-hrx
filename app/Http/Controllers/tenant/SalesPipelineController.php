@@ -2131,9 +2131,13 @@ class SalesPipelineController extends Controller
 
         $pipeline = SalesPipeline::findOrFail($request->sales_pipeline_id);
         $user = auth()->user();
-        // Monthly forecast/sale/pending figures are pipeline data too --
-        // same carve-out as update() above for a salesperson's own open row.
-        if (!self::canEditOwnPipelineRow($user, $pipeline)) {
+        // Forecast is open to any sales user on any row they can see; every
+        // other field still needs the row to be theirs and unlocked. The
+        // Sales Report lists only LOCKED rows, so the old rule meant the
+        // forecast permission could never actually apply there.
+        $isForecast  = $request->field === 'forecast_amount';
+        $mayForecast = self::canEditBook($user) || \App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user);
+        if ($isForecast ? !$mayForecast : !self::canEditOwnPipelineRow($user, $pipeline)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -2141,7 +2145,7 @@ class SalesPipelineController extends Controller
         // broad-sales-user carve-out, not canEditBook()) may fill in ONLY
         // their own Forecast figure -- Sale / Pending / Remarks stay the
         // book editors' (CCare / New Biz / manager / admin) job.
-        if (!self::canEditBook($user) && $request->field !== 'forecast_amount') {
+        if (!self::canEditBook($user) && !$isForecast) {
             return response()->json(['success' => false, 'message' => 'You can only update the Forecast figure here.'], 403);
         }
 
