@@ -404,6 +404,11 @@
                             'objection' => $t->objection_notes,
                             'attachment' => $t->attachment_path ? route('tasks.attachment', $t->id) : null,
                             'updateAttachment' => optional($t->taskUpdates->first())->file_url ? route('task-updates.attachment', $t->taskUpdates->first()->id) : null,
+                            'assignedOn' => $t->created_at?->format('d/m/Y h:i A') ?? '—',
+                            'expectedCompletion' => $t->due_date ? $t->due_date->format('d/m/Y h:i A') : '—',
+                            'actualCompletion' => $t->completed_at ? $t->completed_at->format('d/m/Y h:i A') : '—',
+                            'timingLabel' => ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'][$t->completion_timing] ?? null,
+                            'timingClass' => ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'][$t->completion_timing] ?? null,
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
@@ -435,6 +440,7 @@
                             <th style="min-width:200px">Person</th>
                             <th>Status</th>
                             <th>Completed</th>
+                            <th>Timing</th>
                             <th style="min-width:220px">Latest remark</th>
                           </tr>
                         </thead>
@@ -838,11 +844,18 @@
           <dt class="col-4">Title</dt><dd class="col-8" id="vt_title"></dd>
           <dt class="col-4">Description</dt><dd class="col-8" id="vt_description"></dd>
           <dt class="col-4">Priority</dt><dd class="col-8" id="vt_priority"></dd>
-          <dt class="col-4">Due</dt><dd class="col-8" id="vt_due"></dd>
           <dt class="col-4">Assigned To</dt><dd class="col-8" id="vt_assignee"></dd>
           <dt class="col-4">Assigned By</dt><dd class="col-8" id="vt_assignedBy"></dd>
           <dt class="col-4">Status</dt><dd class="col-8" id="vt_status"></dd>
           <dt class="col-4 d-none" id="vt_objection_label">Objection</dt><dd class="col-8 d-none" id="vt_objection"></dd>
+        </dl>
+        <hr class="my-3">
+        <dl class="row mb-0">
+          <dt class="col-4">Assigned On</dt><dd class="col-8" id="vt_assignedOn"></dd>
+          <dt class="col-4">Expected Completion</dt><dd class="col-8" id="vt_due"></dd>
+          <dt class="col-4">Actual Completion</dt><dd class="col-8" id="vt_actualCompletion"></dd>
+          <dt class="col-4 d-none" id="vt_timing_label">Timing</dt>
+          <dd class="col-8 d-none" id="vt_timing_wrap"><span class="badge-hitech" id="vt_timing"></span></dd>
         </dl>
         <div class="d-none mt-3" id="vt_attachment_wrap">
           <div class="fw-medium small text-muted mb-1">Attachment</div>
@@ -1107,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const body = childRow.querySelector('.js-batch-children-body');
       if (body.dataset.loaded) return;
 
-      body.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Loading...</td></tr>';
+      body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Loading...</td></tr>';
       fetch('/task-management/batch/' + batchId, {
         headers: { 'Accept': 'application/json' },
       })
@@ -1117,7 +1130,7 @@ document.addEventListener('DOMContentLoaded', function () {
           body.dataset.loaded = '1';
         })
         .catch(() => {
-          body.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
+          body.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
         });
     });
   });
@@ -1237,6 +1250,17 @@ document.addEventListener('DOMContentLoaded', function () {
       if (t.updateAttachment) {
         document.getElementById('vt_update_attachment_link').href = t.updateAttachment;
         document.getElementById('vt_update_attachment_img').src = t.updateAttachment;
+      }
+
+      document.getElementById('vt_assignedOn').textContent = t.assignedOn;
+      document.getElementById('vt_actualCompletion').textContent = t.actualCompletion;
+      const hasTiming = !!t.timingLabel;
+      document.getElementById('vt_timing_label').classList.toggle('d-none', !hasTiming);
+      document.getElementById('vt_timing_wrap').classList.toggle('d-none', !hasTiming);
+      if (hasTiming) {
+        const badge = document.getElementById('vt_timing');
+        badge.textContent = t.timingLabel;
+        badge.className = 'badge-hitech ' + t.timingClass;
       }
 
       viewModal.show();

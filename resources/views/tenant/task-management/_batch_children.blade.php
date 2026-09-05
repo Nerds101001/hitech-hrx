@@ -22,6 +22,17 @@
       @endif
     </td>
     <td><small class="text-muted">{{ $t->completed_at ? $t->completed_at->format('d M Y, h:i A') : '—' }}</small></td>
+    <td>
+      @php
+        $timingBadge = ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'];
+        $timingLabel = ['early' => 'Early', 'on_time' => 'On time', 'late' => 'Delayed'];
+      @endphp
+      @if($t->completion_timing)
+        <span class="badge-hitech {{ $timingBadge[$t->completion_timing] }}">{{ $timingLabel[$t->completion_timing] }}</span>
+      @else
+        <span class="text-muted">—</span>
+      @endif
+    </td>
     <td><small class="text-muted">{{ optional($t->taskUpdates->first())->comment ?: '—' }}</small></td>
   </tr>
 @endforeach
