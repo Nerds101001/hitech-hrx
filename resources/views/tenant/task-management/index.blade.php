@@ -123,6 +123,29 @@
     padding: 0.65rem 0.85rem !important;
   }
 
+  /* The expand-row chevron (batch/schedule toggle) is not an action - it
+     was wearing the same 32px .icon-sophisticated box as View/Edit/Delete,
+     which forced every batched row taller than a plain one just to fit that
+     box. A bare small arrow, no background, no border, sized to the text
+     line next to it. */
+  .tm-row-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 1.2em;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+  .tm-row-toggle:hover {
+    color: var(--hitech-primary, #008080);
+  }
+
   /* "New" needs its own theme-based tint, distinct from badge-brand-soft
      (already In Progress) and badge-muted (this app's "past/inactive"
      grey, wrong connotation for a task that just landed) - reuses the same
@@ -316,7 +339,7 @@
                 <td>
                   <div class="d-flex align-items-start gap-2">
                     @if($isBatched)
-                      <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-batch-toggle flex-shrink-0"
+                      <button type="button" class="tm-row-toggle js-batch-toggle flex-shrink-0"
                               data-batch-id="{{ $t->batch_id }}" title="Show all {{ $batchCounts[$t->batch_id]->total }} people">
                         <i class="bx bx-chevron-right"></i>
                       </button>
@@ -465,7 +488,7 @@
                 <tr>
                   <td>
                     <div class="d-flex align-items-start gap-2">
-                      <button type="button" class="btn btn-sm btn-icon icon-sophisticated js-schedule-toggle flex-shrink-0"
+                      <button type="button" class="tm-row-toggle js-schedule-toggle flex-shrink-0"
                               data-schedule-id="{{ $s->id }}" title="Show firing history">
                         <i class="bx bx-chevron-right"></i>
                       </button>
