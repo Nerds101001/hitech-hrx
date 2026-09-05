@@ -1151,10 +1151,10 @@ class SalesPipelineController extends Controller
         ]);
 
         $user = auth()->user();
-        // Adding a customer is book editing, but a brand-new row is always
-        // an open Sales Pipeline prospect (never locked/booked yet), so
-        // plain salespeople may create one -- see canEditOwnPipelineRow().
-        if (!self::canEditOwnPipelineRow($user)) {
+        // Adding a customer is book editing. Sales staff fill in their own
+        // Forecast figure and nothing else, so creating a row is no longer
+        // theirs to do -- see monthUpdate() for the one write they keep.
+        if (!self::canEditBook($user)) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
@@ -1281,7 +1281,7 @@ class SalesPipelineController extends Controller
         // else, so a read-only salesperson still cannot edit another person in.
         $isSelfClaim = (int) $request->input('user_id') === (int) $user->id
             && \App\Support\SalesScope::canClaimCustomer($user);
-        if (!self::canEditBook($user) && !$isSelfClaim) {
+        if (!self::canEditBook($user)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
         $request->validate([
@@ -1961,7 +1961,7 @@ class SalesPipelineController extends Controller
         // canEditOwnPipelineRow() only extends past canEditBook() when
         // $pipeline is still open (not_locked) and they are its own
         // salesperson, i.e. only ever a Sales Pipeline row.
-        if (!self::canEditOwnPipelineRow($user, $pipeline)) {
+        if (!self::canEditBook($user)) {
             if ($wantsJson) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
