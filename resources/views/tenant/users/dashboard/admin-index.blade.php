@@ -647,7 +647,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (funnel && funnel.length) {
       mk('#adcFunnel', {
         series:[{ name:'Pipeline', data: funnel.map(f=>+(f.value/100).toFixed(2)) }],
-        chart:{type:'area',height:430,fontFamily:'Public Sans',
+        chart:{type:'area',height:320,fontFamily:'Public Sans',
           toolbar:{show:true,tools:{download:true,zoom:true,zoomin:true,zoomout:true,pan:true,reset:true}},
           zoom:{enabled:true}, animations:{enabled:true,easing:'easeinout',speed:800}},
         colors:['#0d9488'],
