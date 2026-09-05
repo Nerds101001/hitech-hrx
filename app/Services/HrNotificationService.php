@@ -116,11 +116,14 @@ class HrNotificationService
         }
 
         // IT Services — resolved by department, not a hardcoded person, so it
-        // stays correct as the team changes. "IT" is an exact match: this
-        // tenant also has an unrelated "IT Department" (id 4) that would
-        // false-match a fuzzy "like %IT%" lookup. Prefers whoever holds a
-        // Manager/Head designation in it, falling back to any active member.
-        $itDept = \App\Models\Department::where('name', 'IT')->first();
+        // stays correct as the team changes. This tenant's department is
+        // actually named "AI & IT" (not "IT" - an exact match on "IT" never
+        // matched anything, so this contact never appeared for anyone).
+        // Exact match rather than a fuzzy "like %IT%": this tenant also has
+        // "Quality Department", which contains the substring "IT" (qualITy)
+        // and would false-match. Prefers whoever holds a Manager/Head
+        // designation in it, falling back to any active member.
+        $itDept = \App\Models\Department::where('name', 'AI & IT')->first();
         if ($itDept) {
             $itContact = User::where('department_id', $itDept->id)
                 ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
