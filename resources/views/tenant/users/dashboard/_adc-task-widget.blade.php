@@ -9,12 +9,18 @@
      tab treatment (solid dark active pill) is a different look from that
      shared component, and reusing it led to a real !important fight last
      time (that shared rule has padding !important baked in). Building it
-     bespoke here avoids that entirely. --}}
+     bespoke here avoids that entirely.
+
+     Width is NOT set here - the including dashboard wraps this in its own
+     Bootstrap column (col-xl-6, paired with a real neighboring card) so the
+     grid handles half/full width. A hardcoded max-width here previously
+     left the paired column empty because nothing else was placed beside
+     it - don't reintroduce that. --}}
 @php
   $twBuckets = \App\Http\Controllers\tenant\MyTasksController::assignedTaskBuckets(auth()->user());
 @endphp
 <style>
-  #dashTaskWidget{max-width:50%;min-width:340px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;}
+  #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;}
   #dashTaskWidget .dtw-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
   #dashTaskWidget .dtw-head-left{display:flex;align-items:flex-start;gap:10px;}
   #dashTaskWidget .dtw-icon{width:34px;height:34px;border-radius:9px;background:rgba(0,128,128,0.1);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;}

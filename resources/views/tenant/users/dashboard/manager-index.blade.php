@@ -102,8 +102,6 @@
   <div class="row g-4 mt-0">
     <div class="col-xxl-9 col-lg-8">
 
-  @include('tenant.users.dashboard._adc-task-widget')
-
   @php $mgrVariant = $mgrVariant ?? 'ccare'; @endphp
   @if($mgrVariant === 'sales')
   {{-- ===== SCORECARD ROW — Sales-department managers only. =====
@@ -190,9 +188,13 @@
   </div>
   @endif
 
-  {{-- ===== SALES COMMAND ROW ===== --}}
+  {{-- ===== MY TASKS + SALES PIPELINE SUMMARY — paired so neither half of
+       the row sits empty. ===== --}}
   <div class="row g-4 mt-0">
-    <div class="col-xl-5">
+    <div class="col-xl-6">
+      @include('tenant.users.dashboard._adc-task-widget')
+    </div>
+    <div class="col-xl-6">
       <div class="adc-card h-100">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Summary</h6><span class="adc-card-sub">Active deals · your team</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">Open</a></div>
         <div class="adc-kpi-value" style="font-size:1.7rem;line-height:1.1">{{ $fmtL($sm['pipelineValueL'] ?? 0) }}</div>
@@ -200,7 +202,11 @@
         <div id="adcFunnel"></div>
       </div>
     </div>
-    <div class="col-xl-4">
+  </div>
+
+  {{-- ===== SALES COMMAND ROW ===== --}}
+  <div class="row g-4 mt-1">
+    <div class="col-xl-6">
       <div class="adc-card h-100">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Top Performers</h6><span class="adc-card-sub">This FY · by sales</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">All</a></div>
         @if(empty($sm['topPerformers']))
@@ -218,7 +224,7 @@
         @endif
       </div>
     </div>
-    <div class="col-xl-3">
+    <div class="col-xl-6">
       <div class="adc-card h-100">
         <div class="adc-card-head"><div><h6 class="adc-card-title">Forecast Summary</h6><span class="adc-card-sub">Reps vs forecast</span></div></div>
         <div id="adcTargetDonut"></div>

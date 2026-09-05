@@ -63,25 +63,31 @@
         </div>
       </div>
 
-      {{-- Quick Actions — moved up from the sidebar so the shortcuts sit
-           with the content rather than below the fold. --}}
-      <div class="adc-card mt-1">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
-        <div class="emp-qa">
-          <a href="{{ url('/user/leaves') }}" class="adc-qa-btn"><i class="bx bx-calendar-plus"></i><span>Apply Leave</span></a>
-          <a href="{{ url('/user/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Mark Attendance</span></a>
-          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expense Claim</span></a>
-          <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-trip"></i><span>Request Travel</span></a>
-          <a href="{{ url('/user/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>My Payroll</span></a>
-          <a href="{{ url('/training') }}" class="adc-qa-btn"><i class="bx bx-book"></i><span>Training</span></a>
-          <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
-          <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
-          <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
-          <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Mind Speak</span></a>
+      {{-- My Tasks + Quick Actions, side by side so neither half of the row
+           sits empty. Quick Actions moved up from the sidebar so the
+           shortcuts sit with the content rather than below the fold. --}}
+      <div class="row g-4 mt-1">
+        <div class="col-xl-6">
+          @include('tenant.users.dashboard._adc-task-widget')
+        </div>
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Quick Actions</h6></div></div>
+            <div class="emp-qa">
+              <a href="{{ url('/user/leaves') }}" class="adc-qa-btn"><i class="bx bx-calendar-plus"></i><span>Apply Leave</span></a>
+              <a href="{{ url('/user/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Mark Attendance</span></a>
+              <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-receipt"></i><span>Expense Claim</span></a>
+              <a href="{{ url('/travel-claims/create') }}" class="adc-qa-btn"><i class="bx bx-trip"></i><span>Request Travel</span></a>
+              <a href="{{ url('/user/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>My Payroll</span></a>
+              <a href="{{ url('/training') }}" class="adc-qa-btn"><i class="bx bx-book"></i><span>Training</span></a>
+              <a href="{{ url('/my-assets') }}" class="adc-qa-btn"><i class="bx bx-archive"></i><span>Asset Request</span></a>
+              <a href="{{ url('/my-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
+              <a href="{{ url('/holidays') }}" class="adc-qa-btn"><i class="bx bx-calendar-event"></i><span>Holidays</span></a>
+              <a href="{{ url('/mind-speak') }}" class="adc-qa-btn"><i class="bx bx-bulb"></i><span>Mind Speak</span></a>
+            </div>
+          </div>
         </div>
       </div>
-
-      @include('tenant.users.dashboard._adc-task-widget')
 
       {{-- KPI cards --}}
       <div class="row g-3 mt-1">

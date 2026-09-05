@@ -115,13 +115,15 @@
   <!-- Middle Row: Charts & Pending -->
   <div class="col-xl-8">
     <div class="row g-6">
-      <div class="col-12">
+      {{-- My Tasks + Productivity Overview, paired so neither half of the
+           row sits empty. --}}
+      <div class="col-xl-6">
         @include('tenant.users.dashboard._adc-task-widget')
       </div>
 
       <!-- Time Spending/Weekly Report -->
       <!-- Time Spending/Weekly Report -->
-      <div class="col-12">
+      <div class="col-xl-6">
         <div class="hitech-card h-100">
           <div class="hitech-card-header">
              <h5 class="title mb-0">Productivity Overview</h5>

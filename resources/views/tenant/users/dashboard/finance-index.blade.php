@@ -78,7 +78,19 @@
     {{-- MAIN --}}
     <div class="col-xxl-9 col-lg-8">
 
-      @include('tenant.users.dashboard._adc-task-widget')
+      {{-- My Tasks + Claim Pipeline, paired so neither half of the row sits
+           empty. --}}
+      <div class="row g-4">
+        <div class="col-xl-6">
+          @include('tenant.users.dashboard._adc-task-widget')
+        </div>
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Claim Pipeline</h6><span class="adc-card-sub">Travel claims by stage</span></div>@if($mayOpen(url('/travel-claims/admin/dashboard')))<a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a>@endif</div>
+            <div id="finClaimPipeline"></div>
+          </div>
+        </div>
+      </div>
 
       {{-- Cash-out queue --}}
       <div class="adc-card">
@@ -104,16 +116,10 @@
       </div>
 
       <div class="row g-4 mt-1">
-        <div class="col-xl-8">
-          <div class="adc-card h-100">
+        <div class="col-12">
+          <div class="adc-card">
             <div class="adc-card-head"><div><h6 class="adc-card-title">Payroll Cost Trend</h6><span class="adc-card-sub">Net salary paid · last 12 months</span></div><a href="{{ url('/payroll') }}" class="adc-link">Payroll</a></div>
             <div id="finPayrollTrend"></div>
-          </div>
-        </div>
-        <div class="col-xl-4">
-          <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Claim Pipeline</h6><span class="adc-card-sub">Travel claims by stage</span></div>@if($mayOpen(url('/travel-claims/admin/dashboard')))<a href="{{ url('/travel-claims/admin/dashboard') }}" class="adc-link">All</a>@endif</div>
-            <div id="finClaimPipeline"></div>
           </div>
         </div>
       </div>

@@ -78,19 +78,25 @@
     {{-- MAIN --}}
     <div class="col-xxl-9 col-lg-8">
 
-      @include('tenant.users.dashboard._adc-task-widget')
-
+      {{-- My Tasks + Today's Workforce, paired so neither half of the row
+           sits empty. --}}
       <div class="row g-4">
-        <div class="col-xl-8">
-          <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Workforce Overview</h6><span class="adc-card-sub">New joins vs exits · last 12 months</span></div><a href="{{ url('/employees') }}" class="adc-link">View</a></div>
-            <div id="adcWorkforce"></div>
-          </div>
+        <div class="col-xl-6">
+          @include('tenant.users.dashboard._adc-task-widget')
         </div>
-        <div class="col-xl-4">
+        <div class="col-xl-6">
           <div class="adc-card h-100">
             <div class="adc-card-head"><div><h6 class="adc-card-title">Today's Workforce</h6><span class="adc-card-sub">Present · leave · absent</span></div><a href="{{ url('/attendance') }}" class="adc-link">View</a></div>
             <div id="adcWfStatus"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4 mt-1">
+        <div class="col-12">
+          <div class="adc-card">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Workforce Overview</h6><span class="adc-card-sub">New joins vs exits · last 12 months</span></div><a href="{{ url('/employees') }}" class="adc-link">View</a></div>
+            <div id="adcWorkforce"></div>
           </div>
         </div>
       </div>

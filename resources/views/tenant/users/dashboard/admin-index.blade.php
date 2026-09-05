@@ -95,11 +95,13 @@
     {{-- ========== MAIN COLUMN ========== --}}
     <div class="col-xxl-9 col-lg-8">
 
-      @include('tenant.users.dashboard._adc-task-widget')
-
-      {{-- Row A: Sales Target vs Achievement + Sales Pipeline by Stage --}}
+      {{-- Row A: My Tasks + Sales Target vs Achievement, side by side so
+           neither leaves the other half of the row empty. --}}
       <div class="row g-4">
-        <div class="col-xl-7">
+        <div class="col-xl-6">
+          @include('tenant.users.dashboard._adc-task-widget')
+        </div>
+        <div class="col-xl-6">
           <div class="adc-card h-100">
             <div class="adc-card-head">
               <div><h6 class="adc-card-title">Sales Target vs Achievement</h6><span class="adc-card-sub">{{ now()->format('F Y') }} · company-wide</span></div>
@@ -149,8 +151,13 @@
             </div>
           </div>
         </div>
-        <div class="col-xl-5">
-          <div class="adc-card h-100">
+      </div>
+
+      {{-- Sales Pipeline Overview — full width of its own row now that it no
+           longer shares Row A with Sales Target. --}}
+      <div class="row g-4 mt-1">
+        <div class="col-12">
+          <div class="adc-card">
             <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Overview</h6><span class="adc-card-sub">Business potential by stage · hover for detail</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">View</a></div>
             <div id="adcFunnel"></div>
           </div>
