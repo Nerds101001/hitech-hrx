@@ -81,6 +81,8 @@
         </div>
       </div>
 
+      @include('tenant.users.dashboard._adc-task-widget')
+
       {{-- KPI cards --}}
       <div class="row g-3 mt-1">
         @php

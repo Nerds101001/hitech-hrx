@@ -115,6 +115,10 @@
   <!-- Middle Row: Charts & Pending -->
   <div class="col-xl-8">
     <div class="row g-6">
+      <div class="col-12">
+        @include('tenant.users.dashboard._adc-task-widget')
+      </div>
+
       <!-- Time Spending/Weekly Report -->
       <!-- Time Spending/Weekly Report -->
       <div class="col-12">

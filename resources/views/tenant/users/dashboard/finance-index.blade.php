@@ -78,6 +78,8 @@
     {{-- MAIN --}}
     <div class="col-xxl-9 col-lg-8">
 
+      @include('tenant.users.dashboard._adc-task-widget')
+
       {{-- Cash-out queue --}}
       <div class="adc-card">
         <div class="adc-card-head">

@@ -95,6 +95,8 @@
     {{-- ========== MAIN COLUMN ========== --}}
     <div class="col-xxl-9 col-lg-8">
 
+      @include('tenant.users.dashboard._adc-task-widget')
+
       {{-- Row A: Sales Target vs Achievement + Sales Pipeline by Stage --}}
       <div class="row g-4">
         <div class="col-xl-7">

@@ -102,6 +102,8 @@
   <div class="row g-4 mt-0">
     <div class="col-xxl-9 col-lg-8">
 
+  @include('tenant.users.dashboard._adc-task-widget')
+
   @php $mgrVariant = $mgrVariant ?? 'ccare'; @endphp
   @if($mgrVariant === 'sales')
   {{-- ===== SCORECARD ROW — Sales-department managers only. =====

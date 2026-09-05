@@ -78,6 +78,8 @@
     {{-- MAIN --}}
     <div class="col-xxl-9 col-lg-8">
 
+      @include('tenant.users.dashboard._adc-task-widget')
+
       <div class="row g-4">
         <div class="col-xl-8">
           <div class="adc-card h-100">
