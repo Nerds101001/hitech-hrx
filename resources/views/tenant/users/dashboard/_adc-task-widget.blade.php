@@ -10,13 +10,21 @@
   $twPriorityBadge = ['high' => 'badge-hitech-danger', 'medium' => 'badge-brand-soft', 'low' => 'badge-muted'];
 @endphp
 <style>
-  #dashTaskWidget{max-width:50%;min-width:320px;}
+  {{-- No max-width here: a half-width card with nothing set up to share its
+       row just left a dead gap next to it (the row structure differs on
+       every dashboard, so there's no one thing to safely pull up beside
+       it). Full width, but the tabs and rows below are genuinely compact
+       now - !important because the shared .status-toggle-btn rule this
+       reuses has 0.5rem 1.4rem !important baked in, which silently beat
+       the last attempt at shrinking it (that's why "Due Today" wrapped to
+       two lines instead of actually getting smaller). --}}
   #dashTaskWidget .adc-card-title{font-size:.85rem;}
-  /* Scoped override — .hitech-segmented-control/.status-toggle-btn are the
-     shared theme classes used on Task Management/Leave/KPI too; sized down
-     here only, by id, rather than touching that shared rule. */
-  #dashTaskWidget #dashTaskTabs{padding:2px;gap:1px;}
-  #dashTaskWidget #dashTaskTabs .status-toggle-btn{font-size:.68rem;padding:.3rem .65rem;}
+  #dashTaskWidget #dashTaskTabs{padding:2px !important;gap:1px !important;}
+  #dashTaskWidget #dashTaskTabs .status-toggle-btn{
+    font-size:.68rem !important;
+    padding:.25rem .6rem !important;
+    white-space:nowrap !important;
+  }
   #dashTaskWidget .dash-task-pane{max-height:220px;overflow-y:auto;}
   #dashTaskWidget .dash-task-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px solid rgba(0,0,0,.05);}
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}
