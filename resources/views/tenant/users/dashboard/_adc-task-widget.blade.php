@@ -10,14 +10,14 @@
   $twPriorityBadge = ['high' => 'badge-hitech-danger', 'medium' => 'badge-brand-soft', 'low' => 'badge-muted'];
 @endphp
 <style>
-  {{-- No max-width here: a half-width card with nothing set up to share its
-       row just left a dead gap next to it (the row structure differs on
-       every dashboard, so there's no one thing to safely pull up beside
-       it). Full width, but the tabs and rows below are genuinely compact
-       now - !important because the shared .status-toggle-btn rule this
-       reuses has 0.5rem 1.4rem !important baked in, which silently beat
-       the last attempt at shrinking it (that's why "Due Today" wrapped to
-       two lines instead of actually getting smaller). --}}
+  {{-- Half width as asked. The space beside it isn't a rendered empty box -
+       it's the rail column (Approvals/AI Insights/Today's Events) running
+       at its own height, which is why it looked uneven once this card got
+       shorter. !important below because the shared .status-toggle-btn rule
+       this reuses has 0.5rem 1.4rem !important baked in, which silently beat
+       the previous attempt at shrinking it (that's why "Due Today" wrapped
+       to two lines instead of actually getting smaller). --}}
+  #dashTaskWidget{max-width:50%;min-width:340px;}
   #dashTaskWidget .adc-card-title{font-size:.85rem;}
   #dashTaskWidget #dashTaskTabs{padding:2px !important;gap:1px !important;}
   #dashTaskWidget #dashTaskTabs .status-toggle-btn{
