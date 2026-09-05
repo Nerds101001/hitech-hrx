@@ -20,7 +20,7 @@
   $twBuckets = \App\Http\Controllers\tenant\MyTasksController::assignedTaskBuckets(auth()->user());
 @endphp
 <style>
-  #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;}
+  #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;}
   #dashTaskWidget .dtw-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;flex-wrap:nowrap;}
   #dashTaskWidget .dtw-head-left{display:flex;align-items:center;gap:8px;min-width:0;}
   #dashTaskWidget .dtw-icon{width:28px;height:28px;border-radius:8px;background:rgba(0,128,128,0.1);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
@@ -29,7 +29,7 @@
   #dashTaskWidget .dtw-tab{border:none;background:transparent;color:#64748b;font-size:.66rem;font-weight:600;padding:.32rem .55rem;border-radius:50px;cursor:pointer;white-space:nowrap;transition:all .15s;}
   #dashTaskWidget .dtw-tab.active{background:#0d5c56;color:#fff;}
   #dashTaskWidget .dtw-tab:hover:not(.active){color:#0d5c56;}
-  #dashTaskWidget .dash-task-pane{max-height:280px;overflow-y:auto;}
+  #dashTaskWidget .dash-task-pane{flex:1 1 auto;max-height:280px;overflow-y:auto;}
   #dashTaskWidget .dash-task-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid #f1f5f9;}
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}
   #dashTaskWidget .dtw-check{width:18px;height:18px;border:1.5px solid #cbd5e1;border-radius:5px;flex-shrink:0;cursor:pointer;accent-color:#0d5c56;}
@@ -40,8 +40,8 @@
   #dashTaskWidget .dtw-complete-btn{border:1px solid #0d5c56;background:#fff;color:#0d5c56;font-size:.72rem;font-weight:600;padding:.3rem .8rem;border-radius:8px;flex-shrink:0;white-space:nowrap;transition:all .15s;}
   #dashTaskWidget .dtw-complete-btn:hover{background:#0d5c56;color:#fff;}
   #dashTaskWidget .dtw-complete-btn:disabled{opacity:.6;}
-  #dashTaskWidget .dash-task-empty{text-align:center;color:#94a3b8;font-size:.8rem;padding:24px 0;}
-  #dashTaskWidget .dtw-viewall{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;font-weight:600;color:#0d5c56;text-decoration:none;margin-top:12px;}
+  #dashTaskWidget .dash-task-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#94a3b8;font-size:.8rem;}
+  #dashTaskWidget .dtw-viewall{display:inline-flex;align-items:center;gap:4px;font-size:.8rem;font-weight:600;color:#0d5c56;text-decoration:none;margin-top:auto;padding-top:12px;}
   #dashTaskWidget .dtw-viewall:hover{text-decoration:underline;}
 </style>
 <div id="dashTaskWidget">
