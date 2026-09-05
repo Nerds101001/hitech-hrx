@@ -22,6 +22,7 @@ class TravelClaimAttachment extends Model
         'conveyance_petrol_proof' => 'travel_claims_conveyance',
         'toll_parking_proof'      => 'travel_claims_tolls',
         'customer_courier_proof'  => 'travel_claims_customer',
+        'hotel_bill_proof'        => 'travel_claims_hotel',
     ];
 
     /** Most a single category will accept for one claim. */

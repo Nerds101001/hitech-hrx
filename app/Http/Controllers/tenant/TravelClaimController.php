@@ -26,7 +26,11 @@ class TravelClaimController extends Controller
         'Bike'          => 4.00,
         'Personal Car'  => 9.50,
         'Car'           => 9.50,
+        'Electric Car'  => 3.00,
     ];
+
+    /** Currencies a day's expenses can be recorded in - INR unless picked otherwise. */
+    public const CURRENCIES = ['INR', 'USD', 'EUR', 'AED'];
 
     /**
      * Modes that carry an odometer: the personal vehicles above plus the
@@ -35,7 +39,7 @@ class TravelClaimController extends Controller
      * mandatory.
      */
     public const METERED_MODES = [
-        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car',
+        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car', 'Electric Car',
     ];
 
     private static function isMeteredMode(?string $mode): bool
@@ -400,19 +404,21 @@ class TravelClaimController extends Controller
             // Block submission when a claimed category has no consolidated bill.
             // A category is "claimed" when its month total is above zero.
             if (!$isDraft) {
-                $sum = ['food' => 0, 'conveyance' => 0, 'toll' => 0, 'custcourier' => 0];
+                $sum = ['food' => 0, 'conveyance' => 0, 'toll' => 0, 'custcourier' => 0, 'lodging' => 0];
                 foreach (($request->items ?? []) as $it) {
                     $foodVal = (isset($it['is_outstation']) && $it['is_outstation']) ? 300 : floatval($it['food_allowance'] ?? 0);
                     $sum['food']        += $foodVal;
                     $sum['conveyance']  += floatval($it['conveyance_amount'] ?? 0);
                     $sum['toll']        += floatval($it['toll_amount'] ?? 0);
                     $sum['custcourier'] += floatval($it['special_approval_amount'] ?? 0) + floatval($it['courier_amount'] ?? 0);
+                    $sum['lodging']     += floatval($it['lodging_amount'] ?? 0);
                 }
                 $required = [
                     'food'        => ['food_bill_proof',         'Food'],
                     'conveyance'  => ['conveyance_petrol_proof', 'Conveyance / Petrol'],
                     'toll'        => ['toll_parking_proof',      'Toll / Parking'],
                     'custcourier' => ['customer_courier_proof',  'Customer Expense / Courier'],
+                    'lodging'     => ['hotel_bill_proof',        'Hotel'],
                 ];
                 $missing = [];
                 foreach ($required as $key => [$field, $label]) {
@@ -529,7 +535,8 @@ class TravelClaimController extends Controller
                     $other = floatval($item['other_amount'] ?? 0);
                     $toll_amount = floatval($item['toll_amount'] ?? 0);
                     $special_approval_amount = floatval($item['special_approval_amount'] ?? 0);
-                    
+                    $currency = in_array($item['currency'] ?? 'INR', self::CURRENCIES, true) ? $item['currency'] : 'INR';
+
                     // Columns removed from UI, hardcode to 0 for DB backward compatibility
                     $add_food_amount = 0;
                     $transport_amount = 0;
@@ -557,6 +564,7 @@ class TravelClaimController extends Controller
                         'to_location' => $item['to_location'] ?? null,
                         'party_visited' => $item['party_visited'] ?? null,
                         'mode_of_travel' => $mode,
+                        'currency' => $currency,
                         'start_meter' => self::decimalOrNull($item['start_meter'] ?? null),
                         'end_meter' => self::decimalOrNull($item['end_meter'] ?? null),
                         'distance_km' => $distance,
@@ -1076,6 +1084,7 @@ public function update(Request $request, $id)
             'conveyance_petrol_proof' => 'Conveyance_Petrol_Bills',
             'toll_parking_proof'      => 'Toll_Parking_Bills',
             'customer_courier_proof'  => 'Customer_Expense_Courier_Bills',
+            'hotel_bill_proof'        => 'Hotel_Bills',
         ];
         foreach ($categoryLabels as $field => $folderName) {
             if ($claim->$field && Storage::disk('public')->exists($claim->$field)) {

@@ -9,6 +9,7 @@ use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -24,6 +25,13 @@ use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
  *
  * Amounts are written as numbers, not "₹1,234.00" strings, so the verifier can
  * sum and sort them. Currency formatting is applied by the sheet.
+ *
+ * Columns come from one ordered list (columnDefs()) instead of being typed
+ * out separately in the headings, the row loop, the totals row and the
+ * currency-format list - that duplication is exactly how this sheet ended up
+ * exporting Auto/Taxi, Transport, Bills and Freight columns years after the
+ * entry form stopped collecting them (they were hardcoded to 0 server-side,
+ * but nobody removed their export columns). Add or remove a field once, here.
  */
 class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEvents, WithColumnFormatting
 {
@@ -39,38 +47,71 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
         return 'Claim ' . $this->claim->id;
     }
 
-    /** Column headings, in the same order as the on-screen table. */
-    private function columns(): array
+    /**
+     * One entry per exported column, in on-screen order. 'sum' rolls the
+     * column into the TOTAL row; 'money' additionally applies currency
+     * formatting and folds into Row Total. 'bool' renders the value as
+     * Yes/No. 'value' is null only for the one column (Row Total) computed
+     * from the others rather than read straight off the item.
+     */
+    private function columnDefs(): array
     {
         return [
-            'Date', 'From', 'To', 'Party Visited', 'Mode of Travel',
-            'Start Meter', 'End Meter', 'KMs',
-            'Odometer Photo', 'Petrol Slip', 'Conveyance',
-            'Auto/Taxi', 'Auto/Taxi Proof',
-            'Food', 'Lodging',
-            'Courier', 'Courier Proof',
-            'Transport', 'Transport Proof',
-            'Bills', 'Bills Proof',
-            'Freight', 'Freight Proof',
-            'Toll', 'Toll Proof',
-            'Additional Food', 'Additional Food Proof',
-            'Special Approval', 'Special Approval Proof',
-            'Other',
-            'Row Total', 'Penalty Applied', 'Flagged', 'Remarks',
+            ['label' => 'Date',                    'value' => fn ($i) => $i->date ? \Carbon\Carbon::parse($i->date)->format('d M Y') : ''],
+            ['label' => 'From',                     'value' => fn ($i) => $i->from_location],
+            ['label' => 'To',                       'value' => fn ($i) => $i->to_location],
+            ['label' => 'Party Visited',             'value' => fn ($i) => $i->party_visited],
+            ['label' => 'Mode of Travel',            'value' => fn ($i) => $i->mode_of_travel],
+            ['label' => 'Currency',                  'value' => fn ($i) => $i->currency ?: 'INR'],
+            ['label' => 'Start Meter',               'value' => fn ($i) => $i->start_meter],
+            ['label' => 'End Meter',                 'value' => fn ($i) => $i->end_meter],
+            ['label' => 'KMs',                       'value' => fn ($i) => (float) $i->distance_km, 'sum' => true],
+            ['label' => 'Conveyance',                'value' => fn ($i) => (float) $i->conveyance_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Food',                      'value' => fn ($i) => (float) $i->food_allowance, 'sum' => true, 'money' => true],
+            ['label' => 'Lodging',                   'value' => fn ($i) => (float) $i->lodging_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Courier',                   'value' => fn ($i) => (float) $i->courier_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Courier Proof',              'value' => fn ($i) => $i->courier_proof, 'bool' => true],
+            ['label' => 'Toll',                      'value' => fn ($i) => (float) $i->toll_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Toll Proof',                 'value' => fn ($i) => $i->toll_proof, 'bool' => true],
+            ['label' => 'Special Approval',          'value' => fn ($i) => (float) $i->special_approval_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Special Approval Proof',     'value' => fn ($i) => $i->special_approval_proof, 'bool' => true],
+            ['label' => 'Other',                     'value' => fn ($i) => (float) $i->other_amount, 'sum' => true, 'money' => true],
+            ['label' => 'Row Total',                 'value' => null, 'sum' => true, 'money' => true],
+            ['label' => 'Penalty Applied',            'value' => fn ($i) => $i->penalty_applied, 'bool' => true],
+            ['label' => 'Flagged',                   'value' => fn ($i) => $i->is_flagged, 'bool' => true],
+            ['label' => 'Remarks',                   'value' => fn ($i) => $i->remarks],
         ];
     }
 
-    /** Money columns, for currency formatting and the totals row. */
+    /** Spreadsheet column letters (A, B, ... AA, AB...) for every 'money' column. */
     private function amountColumns(): array
     {
-        return ['K', 'L', 'N', 'O', 'P', 'R', 'T', 'V', 'X', 'Z', 'AB', 'AD', 'AE'];
+        return $this->columnLettersWhere(fn ($d) => !empty($d['money']));
+    }
+
+    /** Same idea for every column rolled into the TOTAL row - KMs included, which isn't money. */
+    private function sumColumns(): array
+    {
+        return $this->columnLettersWhere(fn ($d) => !empty($d['sum']));
+    }
+
+    private function columnLettersWhere(callable $predicate): array
+    {
+        $letters = [];
+        foreach ($this->columnDefs() as $idx => $def) {
+            if ($predicate($def)) {
+                $letters[] = Coordinate::stringFromColumnIndex($idx + 1);
+            }
+        }
+        return $letters;
     }
 
     public function array(): array
     {
         $c = $this->claim;
-        $yn = fn($v) => $v ? 'Yes' : 'No';
-        $n  = fn($v) => (float) ($v ?? 0);
+        $yn = fn ($v) => $v ? 'Yes' : 'No';
+        $n  = fn ($v) => (float) ($v ?? 0);
+        $defs = $this->columnDefs();
 
         $rows = [
             ['TRAVEL & EXPENSE CLAIM #' . $c->id],
@@ -80,75 +121,37 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
             ['Gross Total', $n($c->total_amount),        '', 'Advances',    $n($c->total_advances)],
             ['Net Payable', $n($c->net_payable),         '', 'Submitted',   optional($c->created_at)->format('d M Y H:i')],
             [''],
-            $this->columns(),
+            array_map(fn ($d) => $d['label'], $defs),
         ];
 
-        foreach ($c->items as $item) {
-            $rowTotal = $n($item->conveyance_amount) + $n($item->auto_taxi_amount)
-                + $n($item->food_allowance) + $n($item->lodging_amount)
-                + $n($item->courier_amount) + $n($item->transport_amount)
-                + $n($item->bills_amount) + $n($item->freight_amount)
-                + $n($item->toll_amount) + $n($item->additional_food_amount)
-                + $n($item->special_approval_amount) + $n($item->other_amount);
+        // Row Total mirrors what the controller actually sums when it saves
+        // an item - the fields that still take a live amount, nothing else.
+        $rowTotal = fn ($i) => $n($i->conveyance_amount) + $n($i->food_allowance) + $n($i->lodging_amount)
+            + $n($i->courier_amount) + $n($i->toll_amount) + $n($i->special_approval_amount) + $n($i->other_amount);
 
-            $rows[] = [
-                $item->date ? \Carbon\Carbon::parse($item->date)->format('d M Y') : '',
-                $item->from_location,
-                $item->to_location,
-                $item->party_visited,
-                $item->mode_of_travel,
-                $item->start_meter,
-                $item->end_meter,
-                $n($item->distance_km),
-                $yn($item->photo_path),
-                $yn($item->petrol_slip_proof),
-                $n($item->conveyance_amount),
-                $n($item->auto_taxi_amount),
-                $yn($item->auto_taxi_proof),
-                $n($item->food_allowance),
-                $n($item->lodging_amount),
-                $n($item->courier_amount),
-                $yn($item->courier_proof),
-                $n($item->transport_amount),
-                $yn($item->transport_proof),
-                $n($item->bills_amount),
-                $yn($item->bills_proof),
-                $n($item->freight_amount),
-                $yn($item->freight_proof),
-                $n($item->toll_amount),
-                $yn($item->toll_proof),
-                $n($item->additional_food_amount),
-                $yn($item->additional_food_proof),
-                $n($item->special_approval_amount),
-                $yn($item->special_approval_proof),
-                $n($item->other_amount),
-                $rowTotal,
-                $yn($item->penalty_applied),
-                $yn($item->is_flagged),
-                $item->remarks,
-            ];
+        foreach ($c->items as $item) {
+            $rows[] = array_map(function ($d) use ($item, $rowTotal, $yn) {
+                if ($d['label'] === 'Row Total') {
+                    return $rowTotal($item);
+                }
+                $value = ($d['value'])($item);
+                return !empty($d['bool']) ? $yn($value) : $value;
+            }, $defs);
         }
 
         // A totals row the verifier can check against Gross Total above. If the
         // two disagree, something is wrong with the claim, and that is exactly
         // what this export exists to surface.
-        $sum = fn(callable $f) => $c->items->sum($f);
-        $totals = array_fill(0, count($this->columns()), null);
-        $totals[0]  = 'TOTAL';
-        $totals[7]  = $sum(fn($i) => (float) $i->distance_km);
-        $totals[10] = $sum(fn($i) => (float) $i->conveyance_amount);
-        $totals[11] = $sum(fn($i) => (float) $i->auto_taxi_amount);
-        $totals[13] = $sum(fn($i) => (float) $i->food_allowance);
-        $totals[14] = $sum(fn($i) => (float) $i->lodging_amount);
-        $totals[15] = $sum(fn($i) => (float) $i->courier_amount);
-        $totals[17] = $sum(fn($i) => (float) $i->transport_amount);
-        $totals[19] = $sum(fn($i) => (float) $i->bills_amount);
-        $totals[21] = $sum(fn($i) => (float) $i->freight_amount);
-        $totals[23] = $sum(fn($i) => (float) $i->toll_amount);
-        $totals[25] = $sum(fn($i) => (float) $i->additional_food_amount);
-        $totals[27] = $sum(fn($i) => (float) $i->special_approval_amount);
-        $totals[29] = $sum(fn($i) => (float) $i->other_amount);
-        $totals[30] = array_sum(array_map(fn($k) => (float) ($totals[$k] ?? 0), [10,11,13,14,15,17,19,21,23,25,27,29]));
+        $totals = array_fill(0, count($defs), null);
+        $totals[0] = 'TOTAL';
+        foreach ($defs as $idx => $d) {
+            if (empty($d['sum']) || $d['label'] === 'Row Total') {
+                continue;
+            }
+            $totals[$idx] = $c->items->sum($d['value']);
+        }
+        $rowTotalIdx = array_search('Row Total', array_column($defs, 'label'), true);
+        $totals[$rowTotalIdx] = $c->items->sum($rowTotal);
         $rows[] = [''];
         $rows[] = $totals;
 
@@ -171,10 +174,7 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
 
     public function columnFormats(): array
     {
-        return array_fill_keys(
-            array_map(fn($col) => $col, $this->amountColumns()),
-            '#,##0.00'
-        );
+        return array_fill_keys($this->amountColumns(), '#,##0.00');
     }
 
     public function registerEvents(): array
@@ -223,7 +223,7 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
                 // verification sheet reads as "no figure given" rather than
                 // "nil" — and leaves gaps in any SUM or filter the verifier
                 // applies. Put the zeros back explicitly.
-                foreach (array_merge(['H'], $this->amountColumns()) as $col) {
+                foreach ($this->sumColumns() as $col) {
                     for ($row = $firstRow; $row <= $lastRow; $row++) {
                         if ($sheet->getCell("A{$row}")->getValue() === '') {
                             continue;                       // spacer row

@@ -213,6 +213,7 @@
                     <tr class="text-center align-middle" style="line-height: 1.2;">
                         <th style="min-width: 75px;">Date</th>
                         <th style="min-width: 110px;">Mode</th>
+                        <th style="min-width: 80px;">Currency</th>
                         <th style="min-width: 140px;">Customer Name</th>
                         <th style="min-width: 140px;">From Address<br><small class="fw-normal text-muted">(Source)</small></th>
                         <th style="min-width: 140px;">To Address<br><small class="fw-normal text-muted">(Destination)</small></th>
@@ -250,6 +251,7 @@
                             ['name' => 'conveyance_petrol_proof', 'label' => 'Conveyance / Petrol',     'hint' => 'All petrol slips & conveyance bills'],
                             ['name' => 'toll_parking_proof',      'label' => 'Toll / Parking',          'hint' => 'All toll & parking receipts'],
                             ['name' => 'customer_courier_proof',  'label' => 'Customer Expense / Courier', 'hint' => 'Customer expense & courier/transport bills'],
+                            ['name' => 'hotel_bill_proof',        'label' => 'Hotel Bills',             'hint' => 'All hotel/accommodation bills for the month'],
                         ];
                     @endphp
                     @foreach($consolidated as $c)
@@ -420,12 +422,21 @@
                         <option value="">--</option>
                         <option value="Personal Bike" ${(ex.mode_of_travel == 'Personal Bike' || ex.mode_of_travel == 'Bike') ? 'selected' : ''}>Personal Bike</option>
                         <option value="Personal Car" ${(ex.mode_of_travel == 'Personal Car' || ex.mode_of_travel == 'Car') ? 'selected' : ''}>Personal Car</option>
+                        <option value="Electric Car" ${ex.mode_of_travel == 'Electric Car' ? 'selected' : ''}>Electric Car</option>
                         <option value="Official Bike" ${ex.mode_of_travel == 'Official Bike' ? 'selected' : ''}>Official Bike</option>
                         <option value="Official Car" ${ex.mode_of_travel == 'Official Car' ? 'selected' : ''}>Official Car</option>
                         <option value="Cab / Taxi" ${ex.mode_of_travel == 'Cab / Taxi' ? 'selected' : ''}>Cab / Taxi</option>
                         <option value="Bus" ${ex.mode_of_travel == 'Bus' ? 'selected' : ''}>Bus</option>
                         <option value="Train" ${ex.mode_of_travel == 'Train' ? 'selected' : ''}>Train</option>
                         <option value="Flight" ${ex.mode_of_travel == 'Flight' ? 'selected' : ''}>Flight</option>
+                    </select>
+                </td>
+                <td class="p-1">
+                    <select name="items[${d}][currency]" class="form-select form-select-sm p-1" style="font-size: 0.8rem;">
+                        <option value="INR" ${(!ex.currency || ex.currency == 'INR') ? 'selected' : ''}>INR</option>
+                        <option value="USD" ${ex.currency == 'USD' ? 'selected' : ''}>USD</option>
+                        <option value="EUR" ${ex.currency == 'EUR' ? 'selected' : ''}>EUR</option>
+                        <option value="AED" ${ex.currency == 'AED' ? 'selected' : ''}>AED</option>
                     </select>
                 </td>
                 <td class="p-1"><input type="text" name="items[${d}][party_visited]" class="form-control form-control-sm p-1 customer-name" style="font-size: 0.8rem;" placeholder="Customer..." value="${ex.party_visited || ''}"></td>
@@ -461,10 +472,11 @@
     // the server recalculates on save and the two have to agree.
     const PER_KM_RATES = {
         'Personal Bike': 4.00, 'Bike': 4.00,
-        'Personal Car':  9.50, 'Car':  9.50
+        'Personal Car':  9.50, 'Car':  9.50,
+        'Electric Car':  3.00
     };
     const METERED_MODES = [
-        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car'
+        'Personal Bike', 'Bike', 'Personal Car', 'Car', 'Official Bike', 'Official Car', 'Electric Car'
     ];
     function isMeteredMode(mode) { return METERED_MODES.includes(mode); }
 

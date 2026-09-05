@@ -453,6 +453,7 @@
                             'conveyance_petrol_proof' => 'Conveyance / Petrol',
                             'toll_parking_proof'      => 'Toll / Parking',
                             'customer_courier_proof'  => 'Customer Expense / Courier',
+                            'hotel_bill_proof'        => 'Hotel Bills',
                         ];
                         $grouped = $claim->attachments->groupBy('category');
                     @endphp
