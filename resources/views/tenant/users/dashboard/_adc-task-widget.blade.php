@@ -18,6 +18,24 @@
      it - don't reintroduce that. --}}
 @php
   $twBuckets = \App\Http\Controllers\tenant\MyTasksController::assignedTaskBuckets(auth()->user());
+
+  // Recurring schedules never generate a Task row until the day they're
+  // actually due (see TaskScheduleService::fireIfDue), so a schedule due
+  // next Tuesday is otherwise invisible here until Tuesday itself. Preview
+  // it in the Upcoming tab using its next computed occurrence instead of a
+  // real Task row - these have no id/checkbox/complete button since
+  // nothing exists yet to mark complete.
+  $twUpcomingSchedules = \App\Models\TaskSchedule::where('is_active', true)
+    ->whereJsonContains('target_user_ids', auth()->id())
+    ->get()
+    ->map(fn ($s) => ($next = $s->nextOccurrence()) ? (object) [
+      'title' => $s->title,
+      'due_date' => $next,
+      'recurrence_label' => $s->recurrenceLabel(),
+    ] : null)
+    ->filter()
+    ->sortBy('due_date')
+    ->values();
 @endphp
 <style>
   #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;}
@@ -34,6 +52,7 @@
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}
   #dashTaskWidget .dtw-check{width:18px;height:18px;border:1.5px solid #cbd5e1;border-radius:5px;flex-shrink:0;cursor:pointer;accent-color:#0d5c56;}
   #dashTaskWidget .dash-task-title{font-weight:600;font-size:.82rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #dashTaskWidget .dtw-recurring-tag{display:inline-flex;align-items:center;gap:2px;font-size:.62rem;font-weight:600;color:#7c3aed;background:rgba(124,58,237,0.1);padding:.05rem .4rem;border-radius:6px;margin-left:4px;vertical-align:middle;}
   #dashTaskWidget .dash-task-sub{font-size:.72rem;color:#94a3b8;margin-top:1px;}
   #dashTaskWidget .dtw-due{font-size:.75rem;font-weight:600;color:#dc2626;white-space:nowrap;flex-shrink:0;}
   #dashTaskWidget .dtw-due.is-upcoming{color:#64748b;font-weight:500;}
@@ -100,8 +119,20 @@
         <div class="dtw-due is-upcoming">{{ $t->due_date ? $t->due_date->format('d M Y') : 'No due date' }}</div>
       </div>
     @empty
-      <div class="dash-task-empty"><i class="bx bx-calendar fs-3 d-block mb-1"></i>Nothing upcoming.</div>
+      @if($twUpcomingSchedules->isEmpty())
+        <div class="dash-task-empty"><i class="bx bx-calendar fs-3 d-block mb-1"></i>Nothing upcoming.</div>
+      @endif
     @endforelse
+    @foreach($twUpcomingSchedules as $s)
+      <div class="dash-task-row">
+        <span class="dtw-check" style="visibility:hidden;"></span>
+        <div class="flex-grow-1" style="min-width:0;">
+          <div class="dash-task-title">{{ $s->title }} <span class="dtw-recurring-tag"><i class="bx bx-repeat"></i> Recurring</span></div>
+          <div class="dash-task-sub">{{ $s->recurrence_label }} · not yet assigned</div>
+        </div>
+        <div class="dtw-due is-upcoming">{{ $s->due_date->format('d M Y') }}</div>
+      </div>
+    @endforeach
   </div>
 
   <a href="{{ url('/my-tasks') }}" class="dtw-viewall">View All Tasks <i class="bx bx-right-arrow-alt"></i></a>

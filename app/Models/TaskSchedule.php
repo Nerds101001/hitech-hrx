@@ -96,4 +96,31 @@ class TaskSchedule extends Model implements AuditableContract
       default   => false,
     };
   }
+
+  /**
+   * The next date this schedule will fire, starting today. Today counts
+   * only if it matches and hasn't already fired (last_run_on isn't today) -
+   * this is what lets a dashboard preview a recurring assignment before its
+   * Task row exists, since fireIfDue() only ever creates that row on the
+   * day it's actually due, never in advance. 62 days covers the longest
+   * possible monthly gap.
+   */
+  public function nextOccurrence(?\Carbon\Carbon $from = null): ?\Carbon\Carbon
+  {
+    if (!$this->is_active) {
+      return null;
+    }
+    $from = $from ? $from->copy() : \Carbon\Carbon::today();
+    for ($i = 0; $i <= 62; $i++) {
+      $day = $from->copy()->addDays($i);
+      if (!$this->matchesToday($day)) {
+        continue;
+      }
+      if ($i === 0 && $this->last_run_on && $this->last_run_on->isSameDay($day)) {
+        continue;
+      }
+      return $day;
+    }
+    return null;
+  }
 }
