@@ -21,13 +21,12 @@
 @endphp
 <style>
   #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;}
-  #dashTaskWidget .dtw-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
-  #dashTaskWidget .dtw-head-left{display:flex;align-items:flex-start;gap:10px;}
-  #dashTaskWidget .dtw-icon{width:34px;height:34px;border-radius:9px;background:rgba(0,128,128,0.1);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;}
-  #dashTaskWidget .dtw-title{font-weight:700;font-size:.95rem;color:#1e293b;margin:0;}
-  #dashTaskWidget .dtw-sub{font-size:.75rem;color:#94a3b8;margin:2px 0 0;}
-  #dashTaskWidget .dtw-tabs{display:inline-flex;background:#f1f5f9;border-radius:50px;padding:3px;gap:2px;}
-  #dashTaskWidget .dtw-tab{border:none;background:transparent;color:#64748b;font-size:.72rem;font-weight:600;padding:.4rem .85rem;border-radius:50px;cursor:pointer;white-space:nowrap;transition:all .15s;}
+  #dashTaskWidget .dtw-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:16px;flex-wrap:nowrap;}
+  #dashTaskWidget .dtw-head-left{display:flex;align-items:center;gap:8px;min-width:0;}
+  #dashTaskWidget .dtw-icon{width:28px;height:28px;border-radius:8px;background:rgba(0,128,128,0.1);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+  #dashTaskWidget .dtw-title{font-weight:700;font-size:.9rem;color:#1e293b;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0;}
+  #dashTaskWidget .dtw-tabs{display:inline-flex;background:#f1f5f9;border-radius:50px;padding:2px;gap:1px;flex-shrink:0;}
+  #dashTaskWidget .dtw-tab{border:none;background:transparent;color:#64748b;font-size:.66rem;font-weight:600;padding:.32rem .55rem;border-radius:50px;cursor:pointer;white-space:nowrap;transition:all .15s;}
   #dashTaskWidget .dtw-tab.active{background:#0d5c56;color:#fff;}
   #dashTaskWidget .dtw-tab:hover:not(.active){color:#0d5c56;}
   #dashTaskWidget .dash-task-pane{max-height:280px;overflow-y:auto;}
@@ -49,10 +48,7 @@
   <div class="dtw-head">
     <div class="dtw-head-left">
       <div class="dtw-icon"><i class="bx bx-task"></i></div>
-      <div>
-        <p class="dtw-title">My Tasks</p>
-        <p class="dtw-sub">Keep track of your important tasks</p>
-      </div>
+      <p class="dtw-title">My Tasks</p>
     </div>
     <div class="dtw-tabs" id="dashTaskTabs">
       <button type="button" class="dtw-tab active js-dash-task-tab" data-target="#dtDueToday">Due Today</button>
