@@ -69,7 +69,7 @@
 
     {{-- ===================== Assigned Tasks ===================== --}}
     @php
-      $anyAssignedTask = $taskOpenCount + $taskBuckets['completed']->count() > 0;
+      $anyAssignedTask = $taskOpenCount + $taskBuckets['completed']->count() + $upcomingSchedules->count() > 0;
       $priorityBadge = ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'];
     @endphp
     @if($anyAssignedTask)
@@ -193,10 +193,41 @@
                   </table>
                 </div>
               </div>
-            @else
+            @elseif($bucketKey !== 'upcoming' || $upcomingSchedules->isEmpty())
               <div class="mt-empty py-4">
                 <i class="bx bx-check-circle" style="font-size:2rem"></i>
                 <p class="mb-0">Nothing here.</p>
+              </div>
+            @endif
+
+            @if($bucketKey === 'upcoming' && $upcomingSchedules->isNotEmpty())
+              {{-- Recurring schedules only ever create their Task row on the
+                   day they're actually due, never in advance - these rows
+                   preview that a schedule will fire, they are not real
+                   assigned tasks (no id, no Mark Complete action). --}}
+              <div class="hitech-card mt-3">
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                      <tr>
+                        <th style="min-width:220px">Recurring Task</th>
+                        <th>Cadence</th>
+                        <th>Next Due</th>
+                        <th class="text-end" style="min-width:190px">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach($upcomingSchedules as $s)
+                        <tr>
+                          <td><div class="fw-medium">{{ $s->title }}</div></td>
+                          <td><small class="text-muted">{{ $s->recurrence_label }}</small></td>
+                          <td class="text-nowrap">{{ $s->due_date->format('d M Y') }}</td>
+                          <td class="text-end"><span class="badge-hitech badge-muted">Not yet assigned</span></td>
+                        </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
+                </div>
               </div>
             @endif
           </div>

@@ -24,6 +24,7 @@ class MyTasksController extends Controller
             'pageConfigs' => ['contentLayout' => 'wide'],
             'groups'      => self::forUser(auth()->user()),
             'taskBuckets' => self::assignedTaskBuckets(auth()->user()),
+            'upcomingSchedules' => self::upcomingSchedulePreviews(auth()->user()),
         ]);
     }
 
@@ -57,6 +58,35 @@ class MyTasksController extends Controller
             'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
             'upcoming'  => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && (!$t->due_date || $t->due_date->isFuture()))->values(),
         ];
+    }
+
+    /**
+     * Active recurring schedules assigned to this person that haven't fired
+     * yet - a TaskSchedule only ever creates its Task row on the day it's
+     * actually due (see TaskScheduleService::fireIfDue), never in advance,
+     * so without this a schedule due next Tuesday is invisible until
+     * Tuesday itself. Deliberately separate from assignedTaskBuckets(): a
+     * preview like this has no real Task row behind it (no id, no
+     * complete/resubmit action), so it must never be mixed into a bucket
+     * whose rows drive those buttons.
+     */
+    public static function upcomingSchedulePreviews($user): \Illuminate\Support\Collection
+    {
+        if (!$user) {
+            return collect();
+        }
+
+        return \App\Models\TaskSchedule::where('is_active', true)
+            ->whereJsonContains('target_user_ids', $user->id)
+            ->get()
+            ->map(fn ($s) => ($next = $s->nextOccurrence()) ? (object) [
+                'title' => $s->title,
+                'due_date' => $next,
+                'recurrence_label' => $s->recurrenceLabel(),
+            ] : null)
+            ->filter()
+            ->sortBy('due_date')
+            ->values();
     }
 
     /**

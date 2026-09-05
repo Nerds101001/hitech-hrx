@@ -22,20 +22,10 @@
   // Recurring schedules never generate a Task row until the day they're
   // actually due (see TaskScheduleService::fireIfDue), so a schedule due
   // next Tuesday is otherwise invisible here until Tuesday itself. Preview
-  // it in the Upcoming tab using its next computed occurrence instead of a
-  // real Task row - these have no id/checkbox/complete button since
-  // nothing exists yet to mark complete.
-  $twUpcomingSchedules = \App\Models\TaskSchedule::where('is_active', true)
-    ->whereJsonContains('target_user_ids', auth()->id())
-    ->get()
-    ->map(fn ($s) => ($next = $s->nextOccurrence()) ? (object) [
-      'title' => $s->title,
-      'due_date' => $next,
-      'recurrence_label' => $s->recurrenceLabel(),
-    ] : null)
-    ->filter()
-    ->sortBy('due_date')
-    ->values();
+  // it in the Upcoming tab instead - these have no id/checkbox/complete
+  // button since nothing exists yet to mark complete. Same source the My
+  // Tasks page itself uses, so the two never disagree here either.
+  $twUpcomingSchedules = \App\Http\Controllers\tenant\MyTasksController::upcomingSchedulePreviews(auth()->user());
 @endphp
 <style>
   #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;}
