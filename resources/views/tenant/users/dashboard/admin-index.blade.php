@@ -153,27 +153,33 @@
         </div>
       </div>
 
-      {{-- Sales Pipeline Overview + HRX Modules — merged into one card
-           (was two separate cards with a dead gap between them) with a
-           divider between the two sections instead. --}}
-      <div class="adc-card mt-4">
-        <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Overview</h6><span class="adc-card-sub">Business potential by stage · hover for detail</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">View</a></div>
-        <div id="adcFunnel"></div>
-
-        <div class="adc-card-head mt-4 pt-4 border-top"><div><h6 class="adc-card-title">HRX Modules</h6><span class="adc-card-sub">Live snapshot across the platform</span></div></div>
-        <div class="row g-3">
-          @foreach($moduleTiles as $m)
-            <div class="col-6 col-md-4 col-xl-3">
-              <a href="{{ $m['url'] }}" class="adc-tile adc-tone-{{ $m['tone'] }}">
-                <span class="adc-tile-icon"><i class="bx {{ $m['icon'] }}"></i></span>
-                <div class="adc-tile-body">
-                  <div class="adc-tile-value">{{ $m['value'] }}</div>
-                  <div class="adc-tile-name">{{ $m['name'] }}</div>
-                  <div class="adc-tile-sub">{{ $m['sub'] }}</div>
+      {{-- Sales Pipeline Overview + HRX Modules — side by side in two
+           columns instead of stacked full-width. --}}
+      <div class="row g-4 mt-1">
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Sales Pipeline Overview</h6><span class="adc-card-sub">Business potential by stage · hover for detail</span></div><a href="{{ url('/sales-visits/sales-pipeline') }}" class="adc-link">View</a></div>
+            <div id="adcFunnel"></div>
+          </div>
+        </div>
+        <div class="col-xl-6">
+          <div class="adc-card h-100">
+            <div class="adc-card-head"><div><h6 class="adc-card-title">HRX Modules</h6><span class="adc-card-sub">Live snapshot across the platform</span></div></div>
+            <div class="row g-3">
+              @foreach($moduleTiles as $m)
+                <div class="col-6 col-xl-4">
+                  <a href="{{ $m['url'] }}" class="adc-tile adc-tone-{{ $m['tone'] }}">
+                    <span class="adc-tile-icon"><i class="bx {{ $m['icon'] }}"></i></span>
+                    <div class="adc-tile-body">
+                      <div class="adc-tile-value">{{ $m['value'] }}</div>
+                      <div class="adc-tile-name">{{ $m['name'] }}</div>
+                      <div class="adc-tile-sub">{{ $m['sub'] }}</div>
+                    </div>
+                  </a>
                 </div>
-              </a>
+              @endforeach
             </div>
-          @endforeach
+          </div>
         </div>
       </div>
 
