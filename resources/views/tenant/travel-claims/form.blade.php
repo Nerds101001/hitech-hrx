@@ -597,9 +597,9 @@
             let year = parseInt(parts[0]);
             let month = parseInt(parts[1]); // 1-12
             let deadline = new Date(year, month, 7, 23, 59, 59);
-            let now = new Date();
-            
-            if (now > deadline && net > 0) {
+            let effectiveSubmitTime = FIRST_SUBMITTED_AT ? new Date(FIRST_SUBMITTED_AT) : new Date();
+
+            if (effectiveSubmitTime > deadline && net > 0) {
                 net = net * 0.90; // 10% penalty
                 $('#latePenaltyWarning').show();
             } else {
@@ -621,6 +621,15 @@
     const ATTACH_UPLOAD_URL = "{{ route('travel-claims.attachments.store') }}";
     const ATTACH_DELETE_URL = "{{ route('travel-claims.attachments.destroy', ['id' => '__ID__']) }}";
     const ATTACH_CLAIM_ID   = @json($claim->id ?? null);
+
+    // Mirrors TravelClaimController::store()'s own rule: the 10% is fixed by
+    // the FIRST time this claim was actually submitted, never by now(). This
+    // page used to preview against now() unconditionally, so reopening an
+    // on-time claim to fix an objection after the 7th showed the penalty
+    // warning and a discounted Net Payable on screen for a save that would
+    // not actually be penalised - null here means "not submitted yet",
+    // which previews against today exactly like a brand-new claim should.
+    const FIRST_SUBMITTED_AT = @json(isset($claim) && $claim->first_submitted_at ? $claim->first_submitted_at->toIso8601String() : null);
 
     function attachCsrf() {
         return $('input[name="_token"]').first().val() || '';
