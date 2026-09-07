@@ -105,22 +105,24 @@ class Task extends Model implements AuditableContract
     return $query->where('user_id', $userId);
   }
 
+  /**
+   * A task due "today" stays due until 6pm IST, not midnight - after that
+   * it's overdue the same day, it doesn't wait for tomorrow.
+   */
+  private const DUE_CUTOFF_HOUR = 18;
+
   /** Same rows the daily overdue check targets, for the badge/list to agree with it. */
   public function scopeOverdue(Builder $query): Builder
   {
-    // Compared against the START of today, not the exact current time: a
-    // task due_date is stored at midnight of its due day, so comparing
-    // against now() made every same-day task "overdue" the instant the
-    // clock passed 00:00 - it never got a chance to be "due today" at all.
     return $query->whereNotNull('due_date')
-      ->where('due_date', '<', now()->startOfDay())
+      ->whereRaw('due_date + INTERVAL ' . self::DUE_CUTOFF_HOUR . ' HOUR < ?', [now()])
       ->whereNotIn('status', self::CLOSED_STATUSES);
   }
 
   public function getIsOverdueAttribute(): bool
   {
     return $this->due_date !== null
-      && $this->due_date->lt(now()->startOfDay())
+      && now()->gt($this->due_date->copy()->addHours(self::DUE_CUTOFF_HOUR))
       && !in_array($this->status, self::CLOSED_STATUSES, true);
   }
 
