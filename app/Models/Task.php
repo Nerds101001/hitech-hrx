@@ -108,15 +108,19 @@ class Task extends Model implements AuditableContract
   /** Same rows the daily overdue check targets, for the badge/list to agree with it. */
   public function scopeOverdue(Builder $query): Builder
   {
+    // Compared against the START of today, not the exact current time: a
+    // task due_date is stored at midnight of its due day, so comparing
+    // against now() made every same-day task "overdue" the instant the
+    // clock passed 00:00 - it never got a chance to be "due today" at all.
     return $query->whereNotNull('due_date')
-      ->where('due_date', '<', now())
+      ->where('due_date', '<', now()->startOfDay())
       ->whereNotIn('status', self::CLOSED_STATUSES);
   }
 
   public function getIsOverdueAttribute(): bool
   {
     return $this->due_date !== null
-      && $this->due_date->isPast()
+      && $this->due_date->lt(now()->startOfDay())
       && !in_array($this->status, self::CLOSED_STATUSES, true);
   }
 
