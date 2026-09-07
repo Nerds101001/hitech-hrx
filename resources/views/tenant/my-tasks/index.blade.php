@@ -101,8 +101,8 @@
             </button>
           </li>
           <li class="nav-item">
-            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskWatching" type="button">
-              <i class="bx bx-show"></i> Watching <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['watching']->count() }}</span>
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskWatching" type="button" title="Tasks you assigned to someone else, or are CC'd on">
+              <i class="bx bx-show"></i> Assigned <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['watching']->count() }}</span>
             </button>
           </li>
         </ul>
@@ -174,7 +174,7 @@
               @else
                 <div class="mt-empty py-4">
                   <i class="bx bx-check-circle" style="font-size:2rem"></i>
-                  <p class="mb-0">Nothing you're watching.</p>
+                  <p class="mb-0">Nothing assigned by you, and nothing you're CC'd on.</p>
                 </div>
               @endif
             @elseif($taskBuckets[$bucketKey]->isNotEmpty())
