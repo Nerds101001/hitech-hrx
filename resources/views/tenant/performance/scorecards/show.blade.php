@@ -1,184 +1,237 @@
 @php $configData = Helper::appClasses(); @endphp
 @extends('layouts/layoutMaster')
 
-@section('title', 'Scorecard Details')
+@section('title', 'Scorecard - ' . $employee->first_name . ' ' . $employee->last_name)
 
 @section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
-
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
-    <div>
-      <a href="{{ route('performance.scorecards.index') }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2">
-        <i class="bx bx-chevron-left"></i> Back to Scorecards
-      </a>
-      <h3 class="fw-extrabold mb-1 text-dark">{{ $scorecard->user->first_name ?? '' }} {{ $scorecard->user->last_name ?? '' }}</h3>
-      <p class="text-muted mb-0 small">
-        Annual Performance Review &middot; {{ $scorecard->cycle->name ?? 'N/A' }} &middot; Individual Appraisal Report
-      </p>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
+        <div>
+            <a href="{{ route('performance.scorecards.index') }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2">
+                <i class="bx bx-chevron-left"></i> Back to Scorecards
+            </a>
+            <h3 class="fw-extrabold mb-1 text-dark">{{ $employee->first_name }} {{ $employee->last_name }}</h3>
+            <p class="text-muted mb-0 small">
+                {{ $employee->department?->name ?? 'No department' }} &middot; Same KPIs/KRAs, reporting, and scoring as their own My Scorecard.
+            </p>
+        </div>
     </div>
-  </div>
 
-  <div class="px-4">
-
-    {{-- Summary strip: the "header" - employee/cycle context plus the
-         two headline figures, kept as plain readable stat tiles rather
-         than restyled away, matching what the request called out as
-         already fine. --}}
-    <div class="row row-cols-2 row-cols-md-4 g-6 mb-6 mx-0">
-      <div class="col animate__animated animate__fadeInUp" style="animation-delay:.05s">
-        <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
-          <div class="stat-card-header mb-2">
-            <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-id-card"></i></div>
-          </div>
-          <div><h3 class="stat-value mb-0" style="font-size:1.1rem;">{{ $scorecard->user->code ?? 'N/A' }}</h3><span class="stat-label">Employee Code</span></div>
-        </div>
-      </div>
-      <div class="col animate__animated animate__fadeInUp" style="animation-delay:.1s">
-        <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
-          <div class="stat-card-header mb-2">
-            <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-calendar"></i></div>
-          </div>
-          <div><h3 class="stat-value mb-0" style="font-size:1.1rem;">{{ $scorecard->cycle->name ?? 'N/A' }}</h3><span class="stat-label">Cycle</span></div>
-        </div>
-      </div>
-      <div class="col animate__animated animate__fadeInUp" style="animation-delay:.15s">
-        <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
-          <div class="stat-card-header mb-2">
-            <div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-trophy"></i></div>
-          </div>
-          <div><h3 class="stat-value mb-0">{{ $scorecard->total_score }} / 100</h3><span class="stat-label">Total Score</span></div>
-        </div>
-      </div>
-      <div class="col animate__animated animate__fadeInUp" style="animation-delay:.2s">
+    @if($assignments->isEmpty())
+        <div class="px-4"><div class="alert alert-info">No KPI/KRA has been assigned to this employee yet.</div></div>
+    @else
         @php
-          $gradeLetter = strtoupper(substr($scorecard->grade ?? '', 0, 1));
-          $gradeVariant = ['A' => 'card-teal', 'B' => 'card-blue', 'C' => 'card-amber', 'D' => 'card-red'][$gradeLetter] ?? 'card-blue';
-          $gradeIcon = ['A' => 'icon-teal', 'B' => 'icon-blue', 'C' => 'icon-amber', 'D' => 'icon-red'][$gradeLetter] ?? 'icon-blue';
+            $tone = ['completed_on_time' => '#059669', 'completed_late' => '#d97706', 'missed' => '#e11d48', 'pending' => '#94a3b8'];
+            $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format($v,2),'0'),'.');
+            $rows = $assignments->sortBy([['kra_group','asc'],['title','asc']])->values();
+            $overallPct = $possible > 0 ? round(($earned / $possible) * 100) : 0;
+
+            $monthScoreTotals = [];
+            foreach ($months as $m) { $monthScoreTotals[$m['key']] = 0.0; }
         @endphp
-        <div class="hitech-stat-card dashboard-variant {{ $gradeVariant }} uniform-card">
-          <div class="stat-card-header mb-2">
-            <div class="stat-icon-wrap {{ $gradeIcon }}" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-medal"></i></div>
-          </div>
-          <div><h3 class="stat-value mb-0" style="font-size:1rem;">{{ $scorecard->grade }}</h3><span class="stat-label">Grade</span></div>
-        </div>
-      </div>
-    </div>
 
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex align-items-center gap-2">
-        <div class="hitech-icon-wrap" style="background: rgba(15, 118, 110, 0.1); color: #0f766e; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-          <i class="bx bx-bar-chart-alt-2 fs-5"></i>
+        {{-- Stat cards, identical to My Scorecard's. --}}
+        <div class="row g-6 mb-6 mx-0 px-4">
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.05s">
+                <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-medal"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $fmt($earned) }}</h3><span class="stat-label">Marks earned</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.1s">
+                <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-target-lock"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $overallPct }}%</h3><span class="stat-label">Of {{ $fmt($possible) }} possible</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.15s">
+                <div class="hitech-stat-card dashboard-variant card-amber uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-amber" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-time-five"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $pendingCount }}</h3><span class="stat-label">Pending</span></div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.2s">
+                <div class="hitech-stat-card dashboard-variant card-red uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-check-circle"></i></div>
+                    </div>
+                    <div><h3 class="stat-value mb-0">{{ $completedCount }}</h3><span class="stat-label">Completed</span></div>
+                </div>
+            </div>
         </div>
-        <h6 class="mb-0 fw-bold">Performance Scorecard</h6>
-      </div>
-      <div class="table-responsive rounded-3">
-        <table class="table table-hover align-middle mb-0" id="scorecardParamsTable">
-          <thead>
-            <tr>
-              <th style="width:40px">#</th>
-              <th>Parameter</th>
-              <th>Value Achieved</th>
-              <th class="text-end" style="min-width:120px">Points Earned</th>
-            </tr>
-          </thead>
-          <tbody>
-            @php
-              $rows = [
-                ['Revenue Performance (Bingo)', number_format($scorecard->revenue_achieved) . ' / ' . number_format($scorecard->revenue_target), $scorecard->revenue_score],
-                ['Pipeline Strength', number_format($scorecard->pipeline_value), $scorecard->pipeline_score],
-                ['YoY Revenue Growth', $scorecard->yoy_growth_percentage . '%', $scorecard->yoy_growth_score],
-                ['Trial Activity / Demos', $scorecard->demos_conducted . ' conducted', $scorecard->demos_score],
-                ['New Customer Wins (%)', $scorecard->new_customer_revenue_percentage . '%', $scorecard->new_customer_score],
-                ['90-Day Goals', $scorecard->ninety_day_goal_achievement . '% success on 12-week grid', $scorecard->ninety_day_goal_score],
-                ['Sales Pitch Score', $scorecard->sales_pitch_score_raw . ' / 20', $scorecard->sales_pitch_score],
-                ['Learn@HiTech', $scorecard->learn_hitech_programs . ' programs', $scorecard->learn_hitech_score],
-                ['Seminars / Presentations', $scorecard->seminars_conducted . ' seminars', $scorecard->seminars_score],
-                ['Competitor Insights', $scorecard->competitor_insights_count . ' insights', $scorecard->competitor_insights_score],
-                ['New Product Ideas', $scorecard->product_ideas_count . ' ideas', $scorecard->product_ideas_score],
-                ['Cost of Selling (COS%)', $scorecard->cost_of_selling_percentage . '%', $scorecard->cost_of_selling_score],
-                ['Cross-Sell / Basket Mix', $scorecard->cross_sell_dominant_percentage . '% dominant product', $scorecard->cross_sell_score],
-                ['Market Share %', $scorecard->market_share_percentage . '%', $scorecard->market_share_score],
-              ];
-            @endphp
-            @foreach($rows as $i => $row)
-              <tr>
-                <td class="text-muted">{{ $i + 1 }}</td>
-                <td class="fw-medium">{{ $row[0] }}</td>
-                <td class="text-muted">{{ $row[1] }}</td>
-                <td class="text-end">
-                  <span class="badge-hitech {{ $row[2] > 0 ? 'badge-hitech-success' : 'badge-muted' }}">{{ $row[2] }}</span>
-                </td>
-              </tr>
-            @endforeach
-            <tr>
-              <td class="text-muted">-</td>
-              <td class="fw-medium text-danger">Attrition Penalty</td>
-              <td class="text-muted">{{ $scorecard->attrition_rate }}%</td>
-              <td class="text-end">
-                <span class="badge-hitech badge-hitech-danger">{{ $scorecard->attrition_penalty }}</span>
-              </td>
-            </tr>
-          </tbody>
-          <tfoot>
-            <tr class="fw-bold" style="background: rgba(15, 118, 110, 0.06);">
-              <td colspan="3" class="text-end">TOTAL SCORE</td>
-              <td class="text-end">{{ $scorecard->total_score }} / 100</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
 
-    @if(auth()->user()->hasRole(['admin', 'hr', 'manager']))
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex align-items-center gap-2">
-        <div class="hitech-icon-wrap" style="background: rgba(15, 118, 110, 0.1); color: #0f766e; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
-          <i class="bx bx-message-square-edit fs-5"></i>
+        {{-- Filter panel - same shell as My Scorecard's, plus a Month filter
+             (toggles which month column-pairs are visible - client-side,
+             matching how search/KRA/status already work here). --}}
+        <div class="px-4">
+        <div class="hitech-card mb-6 overflow-hidden">
+          <div class="card-body p-4">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div class="search-wrapper-hitech" style="width: 320px;">
+                <i class="bx bx-search text-muted ms-3 fs-5"></i>
+                <input type="text" id="kpiSearch" class="form-control" placeholder="Search KPI or KRA...">
+                <button class="btn-search shadow-sm" type="button"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+              </div>
+              <div class="compact-select" style="min-width: 160px;">
+                <select id="kraFilter" class="form-select filter-item-hitech">
+                    <option value="">KRA: All</option>
+                    @foreach($rows->pluck('kra_group')->filter()->unique()->sort() as $kra)
+                        <option value="{{ $kra }}">{{ $kra }}</option>
+                    @endforeach
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 160px;">
+                <select id="statusFilter" class="form-select filter-item-hitech">
+                    <option value="">Status: All</option>
+                    <option value="completed_on_time">Completed</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed_late">Completed late</option>
+                    <option value="missed">Missed</option>
+                </select>
+              </div>
+              <div class="compact-select" style="min-width: 160px;">
+                <select id="monthFilter" class="form-select filter-item-hitech">
+                    <option value="">Month: All</option>
+                    @foreach($months as $m)
+                        <option value="{{ $m['key'] }}">{{ $m['label'] }}</option>
+                    @endforeach
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-        <h6 class="mb-0 fw-bold">Manager Review <span class="text-muted fw-normal small">(only visible to managers)</span></h6>
-      </div>
-      <div class="card-body p-4">
-        <form action="{{ route('performance.scorecards.update-review', $scorecard->id) }}" method="POST" class="row g-4">
-          @csrf
-          <div class="col-md-4">
-            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Manager Comments</label>
-            <textarea name="manager_comments" class="form-control" rows="3">{{ $scorecard->manager_comments }}</textarea>
-          </div>
-          <div class="col-md-4">
-            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Sales Pitch Score (out of 20)</label>
-            <input type="number" name="sales_pitch_score_raw" class="form-control" value="{{ $scorecard->sales_pitch_score_raw }}" max="20" min="0">
-          </div>
-          <div class="col-md-4">
-            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Market Share Percentage (%)</label>
-            <input type="number" name="market_share_percentage" class="form-control" value="{{ $scorecard->market_share_percentage }}" max="100" min="0" step="0.1">
-          </div>
-          <div class="col-12">
-            <button type="submit" class="btn-hitech shadow-sm rounded-pill px-5"><i class="bx bx-save me-1"></i>Save Review</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        </div>
+
+        <div class="px-4">
+        <div class="hitech-card mb-6">
+        <div class="table-responsive" style="max-height:calc(100vh - 320px);overflow-y:auto;">
+            <table class="table table-bordered align-middle mb-0" id="kpiTable" style="white-space:nowrap;font-size:0.9rem;">
+                <thead class="position-sticky top-0" style="z-index:10;">
+                    <tr class="kpi-head-main">
+                        <th rowspan="2" class="align-middle">KRA</th>
+                        <th rowspan="2" class="align-middle">KPI</th>
+                        <th rowspan="2" class="text-end align-middle">Target</th>
+                        <th rowspan="2" class="text-end align-middle">Max Marks</th>
+                        @foreach($months as $m)
+                            <th colspan="2" class="text-center align-middle kpi-head-sub border-bottom border-white" data-month="{{ $m['key'] }}">{{ $m['label'] }}</th>
+                        @endforeach
+                        <th rowspan="2" class="text-end align-middle">Total Score</th>
+                    </tr>
+                    <tr class="kpi-head-sub">
+                        @foreach($months as $m)
+                            <th class="text-end align-middle" style="min-width:70px;" data-month="{{ $m['key'] }}">Achieved</th>
+                            <th class="text-end align-middle" style="min-width:60px;" data-month="{{ $m['key'] }}">Score</th>
+                        @endforeach
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach($rows as $a)
+                    @php
+                        $rowTotal = 0.0;
+                        $rowStatus = optional($a->currentCheck)->status ?? 'pending';
+                    @endphp
+                    <tr data-kra="{{ $a->kra_group }}" data-title="{{ strtolower($a->title) }}" data-status="{{ $rowStatus }}">
+                        <td class="text-muted">{{ $a->kra_group ?? '—' }}</td>
+                        <td>
+                            {{ $a->title }}
+                            <div class="small text-muted text-capitalize">{{ $a->scoring_type }}@if($a->scoring_type === 'threshold') ≥ {{ $fmt($a->threshold_percent) }}% @endif</div>
+                        </td>
+                        <td class="text-end">
+                            {{ $fmt($a->target_value) }}@if(str_starts_with((string) $a->data_source, 'auto:') && (float) $a->target_value == 100.0)<span class="text-muted">%</span>@endif
+                            <div class="small text-muted" style="font-size:.68rem;white-space:nowrap">{{ $targetNote[$a->id] ?? '' }}</div>
+                        </td>
+                        <td class="text-end">{{ $fmt($a->max_marks) }}</td>
+                        @foreach($months as $m)
+                            @php
+                                $check = $grid[$a->id][$m['key']] ?? null;
+                                if ($check && $check->score !== null) { $rowTotal += (float) $check->score; $monthScoreTotals[$m['key']] += (float) $check->score; }
+                            @endphp
+                            <td class="text-end" data-month="{{ $m['key'] }}">
+                                @if($check)
+                                    <span style="color:{{ $tone[$check->status] ?? '#78716c' }};">{{ $fmt($check->achieved_value) }}</span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td class="text-end" data-month="{{ $m['key'] }}">
+                                @if($check)
+                                    <span style="color:{{ $tone[$check->status] ?? '#78716c' }};font-weight:600;">{{ $fmt($check->score) }}</span>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                        @endforeach
+                        <td class="text-end fw-bold">{{ $fmt($rowTotal) }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+                <tfoot>
+                    <tr class="fw-semibold" style="background:#d1fae5;">
+                        <td colspan="4">Total</td>
+                        @foreach($months as $m)
+                            <td colspan="2" class="text-end" data-month="{{ $m['key'] }}">{{ $fmt($monthScoreTotals[$m['key']]) }}</td>
+                        @endforeach
+                        <td class="text-end">{{ $fmt(array_sum($monthScoreTotals)) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        </div>
+        </div>
     @endif
-
-  </div>
 </div>
 
 <style>
-  #scorecardParamsTable thead th {
-    background: #0f766e;
-    color: #fff;
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .03em;
-    border: none;
-    padding: .85rem 1rem;
+  #kpiTable thead tr.kpi-head-main th {
+    background-color: #0f766e !important;
+    color: #fff !important;
+    border-color: #0f766e !important;
   }
-  #scorecardParamsTable tbody td {
-    padding: .75rem 1rem;
+  #kpiTable thead th.kpi-head-sub,
+  #kpiTable thead tr.kpi-head-sub th {
+    background-color: #0d9488 !important;
+    color: #fff !important;
+    border-color: #0d9488 !important;
   }
-  #scorecardParamsTable tbody tr:nth-child(odd) {
-    background: rgba(15, 118, 110, 0.02);
-  }
+  #kpiTable th, #kpiTable td { padding: 0.65rem 0.85rem; }
 </style>
+
+<script>
+(function () {
+    const search = document.getElementById('kpiSearch');
+    const kraFilter = document.getElementById('kraFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const monthFilter = document.getElementById('monthFilter');
+    const rows = document.querySelectorAll('#kpiTable tbody tr');
+    const monthCells = document.querySelectorAll('#kpiTable [data-month]');
+
+    function applyRows() {
+        const q = search.value.trim().toLowerCase();
+        const kra = kraFilter.value;
+        const status = statusFilter.value;
+        rows.forEach(r => {
+            const matchesSearch = !q || r.dataset.title.includes(q) || (r.dataset.kra || '').toLowerCase().includes(q);
+            const matchesKra = !kra || r.dataset.kra === kra;
+            const matchesStatus = !status || r.dataset.status === status;
+            r.style.display = (matchesSearch && matchesKra && matchesStatus) ? '' : 'none';
+        });
+    }
+
+    function applyMonth() {
+        const month = monthFilter.value;
+        monthCells.forEach(c => {
+            c.style.display = (!month || c.dataset.month === month) ? '' : 'none';
+        });
+    }
+
+    [search, kraFilter, statusFilter].forEach(el => el.addEventListener('input', applyRows));
+    monthFilter.addEventListener('input', applyMonth);
+})();
+</script>
 @endsection

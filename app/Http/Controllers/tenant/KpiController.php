@@ -242,11 +242,23 @@ class KpiController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Achievement recorded.', 'score' => $check->score]);
     }
 
-    /** Employee's own KPI/KRA dashboard: one row per KPI, one column per month. */
-    public function my(Request $request)
+    /**
+     * The read-only KPI/KRA matrix data for one user - one row per KPI, one
+     * column-pair per fiscal-year-to-date month. Shared by the employee's own
+     * "My Scorecard" (my(), which syncs the CURRENT user and adds the
+     * editable weekly-reporting section on top) and the admin's read-only
+     * report for an arbitrary employee (SalesAssessmentController::show()),
+     * so the two pages can never drift apart on how a cell is computed.
+     *
+     * $sync controls whether this call is allowed to create/update this
+     * user's current-period KpiCheck rows (KpiPeriodService::syncUser()) -
+     * true for the user's own live dashboard, false for an admin browsing
+     * many employees' listing rows where N syncs per page load would be
+     * needless write traffic for numbers nobody is about to act on.
+     */
+    public static function matrixData($user, bool $sync = true): array
     {
-        $user = Auth::user();
-        $assignments = KpiPeriodService::syncUser($user->id);
+        $assignments = $sync ? KpiPeriodService::syncUser($user->id) : KpiAssignment::where('user_id', $user->id)->get();
 
         // Fiscal year to date (Apr -> current month), newest first — same
         // window convention the Sales Report month columns use.
@@ -315,6 +327,22 @@ class KpiController extends Controller
                     ? 'set for you' : 'department default';
             }
         }
+
+        return compact(
+            'assignments', 'months', 'grid', 'history', 'earned', 'possible',
+            'pendingCount', 'completedCount', 'targetNote'
+        );
+    }
+
+    /** Employee's own KPI/KRA dashboard: one row per KPI, one column per month. */
+    public function my(Request $request)
+    {
+        $user = Auth::user();
+        [
+            'assignments' => $assignments, 'months' => $months, 'grid' => $grid, 'history' => $history,
+            'earned' => $earned, 'possible' => $possible, 'pendingCount' => $pendingCount,
+            'completedCount' => $completedCount, 'targetNote' => $targetNote,
+        ] = self::matrixData($user);
 
         // This week's self-reported figures, so the page can show one row per
         // manually measured KPI with whatever was already sent.

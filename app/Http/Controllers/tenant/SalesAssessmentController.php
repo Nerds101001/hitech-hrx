@@ -21,42 +21,70 @@ class SalesAssessmentController extends Controller
         'D - Needs Improvement',
     ];
 
+    /**
+     * Lists every employee (not "every scorecard someone happened to
+     * generate") with their live, continuously-tracked KPI/KRA score - the
+     * same figures KpiController::matrixData() computes for "My Scorecard".
+     * There is no manual generation step here: unlike the old
+     * AppraisalScorecard flow (generate()/updateReview(), still intact but
+     * no longer linked from this page), a KPI score simply exists the moment
+     * someone has assignments and checks, so a department filter shows
+     * everyone in it rather than only the handful someone had previously
+     * clicked "Generate" for.
+     */
     public function index(Request $request)
     {
-        $cycleId = $request->get('cycle_id');
-        $query = AppraisalScorecard::with(['user', 'cycle']);   // tenant filter removed: NULL = NULL matched no rows
-
-        if ($cycleId) {
-            $query->where('appraisal_cycle_id', $cycleId);
-        }
+        $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)->with('department');
 
         if ($request->filled('department_id')) {
-            $query->whereHas('user', fn ($q) => $q->where('department_id', $request->department_id));
+            $query->where('department_id', $request->department_id);
         }
 
         if ($request->filled('search')) {
             $term = $request->search;
-            $query->whereHas('user', fn ($u) => $u->where('first_name', 'like', "%{$term}%")
+            $query->where(fn ($q) => $q->where('first_name', 'like', "%{$term}%")
                 ->orWhere('last_name', 'like', "%{$term}%"));
         }
 
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+            $query->where('id', Auth::id());
         }
+
+        $employees = $query->orderBy('first_name')->get();
+
+        // Unsynced read (no KpiPeriodService::syncUser() per row) - this is
+        // a listing of many people, not the one live dashboard my() renders,
+        // so it reads whatever checks already exist rather than writing N
+        // employees' worth of current-period rows on every page load.
+        $scorecards = $employees->map(function ($user) {
+            $data = KpiController::matrixData($user, sync: false);
+            $possible = (float) $data['possible'];
+            $pct = $possible > 0 ? round(((float) $data['earned'] / $possible) * 100) : null;
+            $grade = match (true) {
+                $pct === null => null,
+                $pct >= 80 => 'A - Outstanding',
+                $pct >= 70 => 'B - Exceeds Expectation',
+                $pct >= 60 => 'C - Meets Expectation',
+                default => 'D - Needs Improvement',
+            };
+
+            return (object) [
+                'user' => $user,
+                'earned' => $data['earned'],
+                'possible' => $possible,
+                'pct' => $pct,
+                'grade' => $grade,
+                'has_assignments' => $data['assignments']->isNotEmpty(),
+            ];
+        });
 
         if ($request->filled('grade')) {
-            $query->where('grade', $request->grade);
+            $scorecards = $scorecards->where('grade', $request->grade)->values();
         }
 
-        if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
-            $query->where('user_id', Auth::id());
-        }
-
-        $scorecards = $query->latest()->get();
-        $cycles = AppraisalCycle::get();   // tenant filter removed: NULL = NULL matched no rows
         $departments = Department::cachedActive();
 
-        return view('tenant.performance.scorecards.index', compact('scorecards', 'cycles', 'departments'));
+        return view('tenant.performance.scorecards.index', compact('scorecards', 'departments'));
     }
 
     public function generate(Request $request)
@@ -374,15 +402,23 @@ class SalesAssessmentController extends Controller
             ->with('success', 'Scorecard generated successfully.');
     }
 
+    /**
+     * The employee's KPI/KRA matrix - identical table to "My Scorecard"
+     * (KpiController::my()), read-only, for an arbitrary employee. $id here
+     * is a user id, not an AppraisalScorecard id - see index()'s docblock
+     * for why this page moved off that model.
+     */
     public function show($id)
     {
-        $scorecard = AppraisalScorecard::with(['user', 'cycle'])->findOrFail($id);
-        
-        if ($scorecard->user_id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+        $user = User::with('department')->findOrFail($id);
+
+        if ((int) $user->id !== Auth::id() && !Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
             abort(403);
         }
 
-        return view('tenant.performance.scorecards.show', compact('scorecard'));
+        $data = KpiController::matrixData($user);
+
+        return view('tenant.performance.scorecards.show', array_merge($data, ['employee' => $user]));
     }
 
     public function updateReview(Request $request, $id)
