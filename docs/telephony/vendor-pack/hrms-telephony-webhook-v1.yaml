@@ -427,11 +427,23 @@ paths:
         Sent once the recording is written and fetchable. Target: within 5
         minutes of `call.completed`.
 
-        **Never send a playable URL here.** Send only `recording_uid`. When a
-        permitted HRX user presses play, HRX asks your `/recordings/{uid}/signed-url`
-        endpoint for a short-lived link and streams the bytes itself, so the
-        audio never leaves your gateway unauthenticated and every playback is
+        There are two ways to give HRX the audio, and either is accepted.
+
+        **A. Signed URL (preferred).** Send only `recording_uid` and expose
+        `GET /recordings/{uid}/signed-url`. HRX asks for a short-lived link
+        when a permitted user presses play. Nothing durable is stored, so a
+        leaked link is worth very little.
+
+        **B. Push the link.** If your gateway cannot serve signed URLs, send
+        `recording_url` (or `url`) and optionally `url_expires_at`. HRX stores
+        it and replaces it whenever a newer one arrives.
+
+        Either way HRX streams the bytes itself rather than redirecting the
+        browser, so the link never leaves our server and every playback stays
         permission-checked and logged.
+
+        You may also send this whole block as `recording` inside
+        `call.completed`, so the CDR and the audio arrive in one request.
 
         Stereo is strongly preferred — agent and customer on separate channels
         makes talk-over analysis possible later. Mono is accepted.
@@ -977,8 +989,21 @@ components:
         recording_uid:
           type: string
           description: |
-            The handle HRX will later exchange for a signed URL. **Not a
-            playable URL** — see the endpoint description.
+            Your identifier for this recording. Required whichever option you
+            use — it is what HRX stores the row against and what it would
+            exchange for a signed URL under option A.
+        recording_url:
+          type: string
+          description: |
+            Option B only. Where HRX can fetch the audio. `url` is accepted as
+            an alias. Omit entirely under option A.
+        url_expires_at:
+          type: string
+          format: date-time
+          description: |
+            Option B only. When the link above stops working. Once past, HRX
+            falls back to asking for a signed URL rather than serving a link it
+            knows is dead.
         recording_type:
           type: string
           enum: [call, transfer_leg, conference, voicemail]

@@ -50,7 +50,22 @@ class TelephonyRecordingController extends Controller
       abort(410, 'This recording is past its retention period and no longer exists.');
     }
 
-    $signed = $this->vendor->recordingSignedUrl($recordingUid);
+    // Two ways to reach the audio. A URL the vendor pushed is used first when
+    // one is present and unexpired, because a vendor that pushes URLs is
+    // precisely a vendor with no signed-url endpoint to ask -- and
+    // recordingSignedUrl() throws on failure, so asking first would mean an
+    // exception, a logged error and a wasted round trip on every single play.
+    //
+    // Gateways that do serve signed URLs push nothing, fall through, and keep
+    // the original behaviour: a link that expires in minutes and is therefore
+    // worth little if it ever leaks.
+    //
+    // Either route streams the bytes below rather than redirecting the
+    // browser, so the URL never leaves this server and playback stays
+    // permission-checked and logged whichever one produced it.
+    $signed = $recording->hasUsableUrl()
+      ? ['url' => $recording->recording_url]
+      : $this->vendor->recordingSignedUrl($recordingUid);
 
     if (empty($signed['url'])) {
       abort(502, 'The gateway did not return a playable link for this recording.');

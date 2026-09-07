@@ -63,12 +63,15 @@ class TelephonyIngestTest extends TelephonyTestCase
       $t->timestamps();
     });
 
-    foreach (array_merge(
-      // array_merge, NOT `+`: the union operator keys on index, so the
-      // second array's element 0 would be silently discarded.
-      glob(database_path('migrations/2026_08_19_10*.php')),
-      glob(database_path('migrations/2026_08_2*_1*.php'))
-    ) as $file) {
+    // Matched by name rather than by date range. The previous patterns were
+    // date windows that happened to contain the telephony migrations, so they
+    // also ran the KPI, CRM and travel-claim ones for no reason -- and a new
+    // telephony migration landing outside the window was simply missed, which
+    // fails as a confusing "no such column" rather than anything obvious.
+    //
+    // glob() returns sorted, and the timestamp prefix sorts chronologically,
+    // so a table is always created before a later migration alters it.
+    foreach (glob(database_path('migrations/*telephony*.php')) as $file) {
       (require $file)->up();
     }
   }
@@ -711,6 +714,115 @@ class TelephonyIngestTest extends TelephonyTestCase
     $this->assertTrue(
       (bool) TelephonyCall::where('call_uid', $payload['call_uid'])->value('has_recording')
     );
+  }
+
+  public function test_recording_ready_stores_a_pushed_audio_url(): void
+  {
+    // Vendors that cannot expose a signed-url endpoint push the location
+    // instead. Before this was supported the request still answered 202 and
+    // the URL was silently dropped, which is the worst of both: the vendor
+    // sees success and no audio ever plays.
+    $payload = $this->completedCallPayload();
+    unset($payload['recording']);
+    app(CallEventNormalizer::class)->handle($payload);
+
+    $this->signed('POST', '/api/telephony/v1/recordings/ready', [
+      'event' => 'recording.ready',
+      'event_id' => (string) Str::uuid(),
+      'occurred_at' => '2026-08-19T15:02:10+05:30',
+      'call_uid' => $payload['call_uid'],
+      'recording_uid' => 'REC-URL-0001',
+      'recording_url' => 'https://gw.example.com/rec/REC-URL-0001.wav?token=abc',
+      'url_expires_at' => '2026-08-19T16:02:10+05:30',
+      'format' => 'wav',
+    ])->assertStatus(202);
+
+    $rec = TelephonyRecording::where('recording_uid', 'REC-URL-0001')->firstOrFail();
+    $this->assertSame('https://gw.example.com/rec/REC-URL-0001.wav?token=abc', $rec->recording_url);
+    $this->assertNotNull($rec->url_expires_at);
+  }
+
+  public function test_a_bare_url_key_is_accepted_too(): void
+  {
+    // Most gateways call the field `url`. Losing a vendor's audio over the
+    // name of a key is not a hill worth dying on.
+    $payload = $this->completedCallPayload();
+    unset($payload['recording']);
+    app(CallEventNormalizer::class)->handle($payload);
+
+    $this->signed('POST', '/api/telephony/v1/recordings/ready', [
+      'event' => 'recording.ready',
+      'event_id' => (string) Str::uuid(),
+      'occurred_at' => '2026-08-19T15:02:10+05:30',
+      'call_uid' => $payload['call_uid'],
+      'recording_uid' => 'REC-URL-0002',
+      'url' => 'https://gw.example.com/rec/REC-URL-0002.wav',
+    ])->assertStatus(202);
+
+    $this->assertSame(
+      'https://gw.example.com/rec/REC-URL-0002.wav',
+      TelephonyRecording::where('recording_uid', 'REC-URL-0002')->value('recording_url')
+    );
+  }
+
+  public function test_a_later_event_does_not_blank_out_earlier_metadata(): void
+  {
+    $payload = $this->completedCallPayload();
+    unset($payload['recording']);
+    app(CallEventNormalizer::class)->handle($payload);
+
+    $base = [
+      'event' => 'recording.ready',
+      'occurred_at' => '2026-08-19T15:02:10+05:30',
+      'call_uid' => $payload['call_uid'],
+      'recording_uid' => 'REC-URL-0003',
+    ];
+
+    $this->signed('POST', '/api/telephony/v1/recordings/ready', $base + [
+      'event_id' => (string) Str::uuid(),
+      'duration_seconds' => 198,
+      'channels' => 'stereo',
+    ])->assertStatus(202);
+
+    // A refreshed link arrives later carrying nothing else. The duration and
+    // channel count established by the first event must survive it.
+    $this->signed('POST', '/api/telephony/v1/recordings/ready', $base + [
+      'event_id' => (string) Str::uuid(),
+      'recording_url' => 'https://gw.example.com/rec/refreshed.wav',
+    ])->assertStatus(202);
+
+    $rec = TelephonyRecording::where('recording_uid', 'REC-URL-0003')->firstOrFail();
+    $this->assertSame('https://gw.example.com/rec/refreshed.wav', $rec->recording_url);
+    $this->assertSame(198, $rec->duration_seconds, 'the later event blanked the duration');
+    $this->assertSame('stereo', $rec->channels, 'the later event blanked the channel count');
+  }
+
+  public function test_the_cdr_and_the_audio_link_can_arrive_in_one_event(): void
+  {
+    // A gateway that already knows the recording location at hangup should not
+    // have to make a second request to say so. Every event a vendor is asked
+    // to send separately is an event that arrives late or not at all.
+    $payload = $this->completedCallPayload();
+    $payload['recording'] = [
+      'available' => true,
+      'recording_uid' => 'REC-INLINE-0001',
+      'recording_url' => 'https://gw.example.com/rec/REC-INLINE-0001.wav',
+      'duration_seconds' => 198,
+      'format' => 'wav',
+    ];
+
+    $this->signed('POST', '/api/telephony/v1/events', $payload)->assertStatus(202);
+
+    $rec = TelephonyRecording::where('recording_uid', 'REC-INLINE-0001')->firstOrFail();
+    $this->assertSame('https://gw.example.com/rec/REC-INLINE-0001.wav', $rec->recording_url);
+    $this->assertSame(198, $rec->duration_seconds);
+    $this->assertSame($payload['call_uid'], $rec->call_uid);
+
+    // And the CDR itself landed in the same request.
+    $call = TelephonyCall::where('call_uid', $payload['call_uid'])->firstOrFail();
+    $this->assertTrue((bool) $call->has_recording);
+    $this->assertTrue((bool) $call->is_complete);
+    $this->assertSame(198, $call->talk_seconds);
   }
 
   // ─────────────────────────────────────────────────────────── agent sessions

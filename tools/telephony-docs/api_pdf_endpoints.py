@@ -275,12 +275,23 @@ S.append(p('Always inspect results. A 207 does not mean everything was '
 
 # --- recordings
 S.append(p('3.5  POST /recordings/ready', H2))
-S.append(p('Sent once the recording is written and fetchable. Send only a '
-           'recording_uid - never a playable URL. When a permitted HRX user '
-           'presses play, HRX requests a short-lived signed URL from '
-           'your platform and streams the bytes itself, so audio never leaves '
-           'the gateway unauthenticated and every playback is permission '
-           'checked and logged. A URL in a webhook is a URL in a log file.', BODY))
+S.append(p('Sent once the recording is written and fetchable. There are two '
+           'ways to give HRX the audio, and either is accepted.', BODY))
+S.append(p('<b>A. Signed URL (preferred).</b> Send only recording_uid and expose '
+           'GET /recordings/{uid}/signed-url. HRX asks for a short-lived link when '
+           'a permitted user presses play. Nothing durable is stored, so a leaked '
+           'link is worth very little - and a URL in a webhook is a URL in a log '
+           'file.', BODY))
+S.append(p('<b>B. Push the link.</b> If your gateway cannot serve signed URLs, send '
+           'recording_url (url is accepted as an alias) and optionally '
+           'url_expires_at. HRX stores it and replaces it whenever a newer one '
+           'arrives; once the expiry passes it falls back to asking for a signed '
+           'URL rather than serving a link it knows is dead.', BODY))
+S.append(p('Either way HRX streams the bytes itself rather than redirecting the '
+           'browser, so the link never leaves our server and every playback stays '
+           'permission checked and logged.', BODY))
+S.append(p('This whole block may also be sent as `recording` inside call.completed, '
+           'so the CDR and the audio arrive in a single request.', NOTE))
 S.append(code("""
 {
   "event": "recording.ready",

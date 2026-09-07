@@ -249,6 +249,29 @@ class CallEventNormalizer
 
     $call->via_reconciliation = (bool) ($p['via_reconciliation'] ?? false);
     $call->is_complete = true;
+
+    // The CDR and the audio in one event.
+    //
+    // recording.ready as a separate call is still the documented route and
+    // still works, but a gateway that already knows the recording location at
+    // hangup should not have to make a second request to say so -- and every
+    // event a vendor is asked to send separately is an event that arrives late
+    // or not at all. If the completion carries a recording_uid, treat the
+    // block as a recording.ready and store it.
+    if (!empty($rec['recording_uid'])) {
+      $this->recordingReady($rec + [
+        'call_uid' => $call->call_uid,
+        'occurred_at' => $rec['occurred_at'] ?? ($t['ended_at'] ?? null),
+      ]);
+
+      // recordingReady() sets has_recording on its own instance of this call,
+      // which the caller's save() would then overwrite with whatever
+      // `recording.available` happened to say. A recording_uid arriving here
+      // is itself the proof, so set it on the instance being saved.
+      if (($rec['recording_type'] ?? 'call') === 'call') {
+        $call->has_recording = true;
+      }
+    }
   }
 
   /**
@@ -326,19 +349,33 @@ class CallEventNormalizer
     $call = TelephonyCall::where('call_uid', $p['call_uid'])->first();
     $tenantId = $call?->tenant_id ?? config('telephony.inbound.default_tenant_id');
 
+    // A vendor that cannot expose a signed-URL endpoint pushes the location
+    // here instead. Accept either spelling: url is what most gateways call it,
+    // recording_url is what our own documentation asks for, and a vendor that
+    // sends the wrong one should not silently lose their audio.
+    $url = $p['recording_url'] ?? $p['url'] ?? null;
+
+    // Optional fields are dropped when absent rather than written as null, so
+    // a later partial event -- a refreshed URL, say -- cannot blank out
+    // metadata the first one already established.
+    $optional = array_filter([
+      'recording_url' => $url,
+      'url_expires_at' => $this->time($p['url_expires_at'] ?? null),
+      'duration_seconds' => $p['duration_seconds'] ?? null,
+      'format' => $p['format'] ?? null,
+      'size_bytes' => $p['size_bytes'] ?? null,
+      'channels' => $p['channels'] ?? null,
+      'checksum_sha256' => $p['checksum_sha256'] ?? null,
+      'retention_until' => $p['retention_until'] ?? null,
+      'ready_at' => $this->time($p['occurred_at'] ?? null),
+    ], fn ($v) => $v !== null);
+
     TelephonyRecording::updateOrCreate(
       ['tenant_id' => $tenantId, 'recording_uid' => $p['recording_uid']],
-      [
+      array_merge($optional, [
         'call_uid' => $p['call_uid'],
         'recording_type' => $p['recording_type'] ?? 'call',
-        'duration_seconds' => $p['duration_seconds'] ?? null,
-        'format' => $p['format'] ?? null,
-        'size_bytes' => $p['size_bytes'] ?? null,
-        'channels' => $p['channels'] ?? null,
-        'checksum_sha256' => $p['checksum_sha256'] ?? null,
-        'retention_until' => $p['retention_until'] ?? null,
-        'ready_at' => $this->time($p['occurred_at'] ?? null),
-      ]
+      ])
     );
 
     // Only the main call recording flips the flag; a transfer-leg or conference

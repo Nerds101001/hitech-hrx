@@ -35,17 +35,17 @@ CODE_BG = colors.HexColor('#F4F7F9')
 BAND = colors.HexColor('#EDF3F6')
 WARN = colors.HexColor('#B32020')
 
-BODY = ParagraphStyle('body', fontName='Helvetica', fontSize=8.6, leading=11.4,
+BODY = ParagraphStyle('body', fontName='Helvetica', fontSize=8.1, leading=10.3,
                       textColor=INK, spaceAfter=0)
-H2 = ParagraphStyle('h2', fontName='Helvetica-Bold', fontSize=9.6, leading=12,
-                    textColor=TEAL, spaceBefore=4.5, spaceAfter=2.6)
-CELL = ParagraphStyle('cell', fontName='Helvetica', fontSize=8.2, leading=10.2,
+H2 = ParagraphStyle('h2', fontName='Helvetica-Bold', fontSize=9.2, leading=11,
+                    textColor=TEAL, spaceBefore=3.4, spaceAfter=2.2)
+CELL = ParagraphStyle('cell', fontName='Helvetica', fontSize=7.8, leading=9.4,
                       textColor=INK)
-MONO = ParagraphStyle('mono', fontName='Courier-Bold', fontSize=8.2,
-                      leading=10.2, textColor=INK)
-NOTE = ParagraphStyle('note', fontName='Helvetica', fontSize=8.2, leading=10.4,
+MONO = ParagraphStyle('mono', fontName='Courier-Bold', fontSize=7.8,
+                      leading=9.4, textColor=INK)
+NOTE = ParagraphStyle('note', fontName='Helvetica', fontSize=7.8, leading=9.6,
                       textColor=WARN)
-CODE = ParagraphStyle('code', fontName='Courier', fontSize=8.0, leading=10.2,
+CODE = ParagraphStyle('code', fontName='Courier', fontSize=7.6, leading=9.4,
                       textColor=INK, backColor=CODE_BG,
                       borderPadding=(5, 5, 5, 5), spaceBefore=2, spaceAfter=2)
 
@@ -81,8 +81,8 @@ def tbl(rows, widths, head=True):
     t = Table(rows, colWidths=widths, hAlign='LEFT')
     style = [
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 2.4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2.4),
+        ('TOPPADDING', (0, 0), (-1, -1), 1.9),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1.9),
         ('LEFTPADDING', (0, 0), (-1, -1), 5),
         ('RIGHTPADDING', (0, 0), (-1, -1), 5),
         ('LINEBELOW', (0, 0), (-1, -2), 0.4, RULE),
@@ -91,7 +91,7 @@ def tbl(rows, widths, head=True):
     if head:
         style += [
             ('BACKGROUND', (0, 0), (-1, 0), BAND),
-            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 8.2),
+            ('FONT', (0, 0), (-1, 0), 'Helvetica-Bold', 7.8),
             ('TEXTCOLOR', (0, 0), (-1, 0), TEAL),
         ]
     t.setStyle(TableStyle(style))
@@ -128,9 +128,8 @@ S.append(tbl([
     [p('Shared secret', CELL), m('&nbsp;')],
 ], [32 * mm, 142 * mm], head=False))
 S.append(Spacer(1, 1.5))
-S.append(p('Sent to you separately from this document. The shared secret is never '
-           'transmitted - it only computes the signature below, which we verify at '
-           'our end.', BODY))
+S.append(p('Sent separately from this document. The shared secret is never transmitted '
+           '- it only computes the signature below, which we verify at our end.', BODY))
 
 # ---- 3. authentication
 S.append(p('3. Authentication - four headers on every request', H2))
@@ -144,32 +143,41 @@ S.append(tbl([
 S.append(Preformatted(
     'signable  = timestamp + "." + nonce + "." + raw_body\n'
     'signature = "sha256=" + hex(HMAC_SHA256(shared_secret, signable))', CODE))
-S.append(p('Sign the exact bytes you are about to send. Do not parse the JSON and '
-           're-serialise it before signing - key order and whitespace will differ '
-           'and every signature will fail. This is the most common cause of a 401.',
-           NOTE))
+S.append(p('Sign the exact bytes you send. Re-serialising the JSON first changes key '
+           'order and whitespace, and every signature then fails - the most common '
+           'cause of a 401 here.', NOTE))
 
 # ---- 4. recordings
-S.append(p('4. Recordings', H2))
-S.append(p('Send <font face="Courier">recording_uid</font> only - <b>not a playable URL</b>. '
-           'When a permitted HRX user presses play, HRX asks your '
-           '<font face="Courier">GET /recordings/{uid}/signed-url</font> endpoint for a '
-           'short-lived link and streams the audio itself, so recordings never leave your '
-           'gateway unauthenticated. A URL sent to us is discarded - there is no field for it.',
-           BODY))
+S.append(p('4. Recordings - two ways, either is fine', H2))
+S.append(tbl([
+    ['Option', 'What you send', 'Why'],
+    [p('<b>A. Signed URL</b><br/><font size="7.4">preferred</font>', CELL),
+     p('<font face="Courier">recording_uid</font> only, plus expose '
+       '<font face="Courier">GET /recordings/{uid}/signed-url</font>', CELL),
+     p('We ask for a short-lived link at play time. Nothing durable is stored, '
+       'so a leak is worth little.', CELL)],
+    [p('<b>B. Push the link</b>', CELL),
+     p('<font face="Courier">recording_url</font> (or <font face="Courier">url</font>), '
+       'optionally <font face="Courier">url_expires_at</font>', CELL),
+     p('Nothing to build at your end. We store the link and refresh it whenever '
+       'you send a newer one.', CELL)],
+], [30 * mm, 62 * mm, 82 * mm]))
+S.append(Spacer(1, 1.5))
+S.append(p('Either way HRX streams the audio itself rather than handing the link to the '
+           'browser, so every playback is permission-checked and logged. You may also send '
+           'the recording block inside <font face="Courier">call.completed</font> - the CDR '
+           'and the audio then arrive in a single request.', BODY))
 
 # ---- 5. what we need
 S.append(p('5. Two things we need confirmed in writing', H2))
 S.append(tbl([
     [p('<b>1</b>', CELL),
      p('<b>Every call must be reported, including calls dialled manually on the '
-       'handset</b> - not only calls placed through an API request. Inbound, IVR, '
-       'predictive, callback and forwarded too. A large share of our calls are '
-       'dialled manually, so this is a go/no-go point for us.', CELL)],
+       'handset</b> - not only API-placed calls. Inbound, IVR, predictive, callback '
+       'and forwarded too. Much of our floor dials manually, so this is go/no-go.', CELL)],
     [p('<b>2</b>', CELL),
-     p('<b>Which IP address will your webhooks originate from?</b> We will allowlist '
-       'it. It is often not the same host as your agent API, so please confirm '
-       'rather than assume.', CELL)],
+     p('<b>Which IP will your webhooks originate from?</b> We will allowlist it. It is '
+       'often not the same host as your agent API, so please confirm.', CELL)],
 ], [7 * mm, 167 * mm], head=False))
 
 # ---- 6. responses
@@ -186,18 +194,16 @@ S.append(tbl([
      m('422'), p('<font face="Courier">validation_failed</font> - field missing or malformed', CELL)],
 ], [12 * mm, 75 * mm, 12 * mm, 75 * mm]))
 S.append(Spacer(1, 1.5))
-S.append(p('Every rejection carries a <font face="Courier">request_id</font>. Quote it and we '
-           'can tell you exactly what was refused and why. Send <font face="Courier">event_id</font> '
-           'as a UUID and reuse it on retries - that is what makes a retry safe.', BODY))
+S.append(p('Every rejection carries a <font face="Courier">request_id</font> - quote it and we '
+           'can say exactly what was refused. Send <font face="Courier">event_id</font> as a UUID '
+           'and reuse it on retries; that is what makes a retry safe.', BODY))
 
 # ---- 7. first step
 S.append(p('7. First step', H2))
-S.append(p('Run <font face="Courier">GET /health</font>. A <b>200</b> confirms your API key, '
-           'your shared secret, your server clock and your source IP in a single call. '
-           'Please do not begin sending call data until it passes. The attached '
-           '<font face="Courier">curl-recording-ready.sh</font> is a runnable, already-signed '
-           'example; the attached pack has the full field list, the OpenAPI file and a '
-           'Postman collection.', BODY))
+S.append(p('Run <font face="Courier">GET /health</font>. A <b>200</b> confirms your key, secret, '
+           'clock and source IP at once - please do not send call data until it passes. '
+           'The attached <font face="Courier">curl-recording-ready.sh</font> is a runnable signed '
+           'example; the pack has the full field list, OpenAPI file and Postman collection.', BODY))
 
 S.append(Spacer(1, 5))
 S.append(p('Questions: Nagender Kumar, Hi Tech Group', BODY))
