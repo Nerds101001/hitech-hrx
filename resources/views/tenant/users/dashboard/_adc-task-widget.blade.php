@@ -34,9 +34,11 @@
   #dashTaskWidget .dtw-icon{width:28px;height:28px;border-radius:8px;background:rgba(0,128,128,0.1);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
   #dashTaskWidget .dtw-title{font-weight:700;font-size:.9rem;color:#1e293b;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0;}
   #dashTaskWidget .dtw-tabs{display:inline-flex;background:#f1f5f9;border-radius:50px;padding:2px;gap:1px;flex-shrink:0;}
-  #dashTaskWidget .dtw-tab{border:none;background:transparent;color:#64748b;font-size:.66rem;font-weight:600;padding:.32rem .55rem;border-radius:50px;cursor:pointer;white-space:nowrap;transition:all .15s;}
+  #dashTaskWidget .dtw-tab{border:none;background:transparent;color:#64748b;font-size:.64rem;font-weight:600;padding:.32rem .5rem;border-radius:50px;cursor:pointer;white-space:nowrap;transition:all .15s;display:inline-flex;align-items:center;gap:4px;}
   #dashTaskWidget .dtw-tab.active{background:#0d5c56;color:#fff;}
   #dashTaskWidget .dtw-tab:hover:not(.active){color:#0d5c56;}
+  #dashTaskWidget .dtw-tab-count{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 3px;border-radius:999px;font-size:.6rem;font-weight:700;background:rgba(100,116,139,.15);color:#475569;}
+  #dashTaskWidget .dtw-tab.active .dtw-tab-count{background:rgba(255,255,255,.28);color:#fff;}
   #dashTaskWidget .dash-task-pane{flex:1 1 auto;max-height:280px;overflow-y:auto;}
   #dashTaskWidget .dash-task-row{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid #f1f5f9;}
   #dashTaskWidget .dash-task-row:last-child{border-bottom:none;}
@@ -60,9 +62,9 @@
       <p class="dtw-title">My Tasks</p>
     </div>
     <div class="dtw-tabs" id="dashTaskTabs">
-      <button type="button" class="dtw-tab active js-dash-task-tab" data-target="#dtDueToday">Due Today</button>
-      <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtOverdue">Overdue</button>
-      <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtUpcoming">Upcoming</button>
+      <button type="button" class="dtw-tab active js-dash-task-tab" data-target="#dtDueToday">Due Today<span class="dtw-tab-count">{{ $twBuckets['pending']->count() }}</span></button>
+      <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtOverdue">Overdue<span class="dtw-tab-count">{{ $twBuckets['overdue']->count() }}</span></button>
+      <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtUpcoming">Upcoming<span class="dtw-tab-count">{{ $twBuckets['upcoming']->count() + $twUpcomingSchedules->count() }}</span></button>
     </div>
   </div>
 
