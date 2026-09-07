@@ -11,6 +11,7 @@ use App\Models\AssetCategory;
 use App\Models\User;
 use Exception;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Yajra\DataTables\Facades\DataTables;
@@ -379,13 +380,20 @@ class AssetController extends Controller
 
             return DataTables::of($query)
                 ->addColumn('action', function ($asset) {
-                    $editBtn   = '';
-                    $deleteBtn = '';
+                    $editBtn     = '';
+                    $deleteBtn   = '';
+                    $transferBtn = '';
                     if (auth()->user()->hasRole(['admin', 'hr'])) {
                         $editBtn   = '<button class="btn btn-sm btn-icon edit-record" data-id="' . $asset->id . '"><i class="bx bx-pencil text-primary"></i></button>';
                         $deleteBtn = '<button class="btn btn-sm btn-icon delete-record" data-id="' . $asset->id . '"><i class="bx bx-trash text-danger"></i></button>';
+                        if ($asset->status === 'assigned') {
+                            $currentUser = $asset->assignedUser
+                                ? e($asset->assignedUser->first_name . ' ' . $asset->assignedUser->last_name)
+                                : 'Unassigned';
+                            $transferBtn = '<button class="btn btn-sm btn-icon transfer-record" data-id="' . $asset->id . '" data-current-user="' . $currentUser . '" title="Transfer to another user"><i class="bx bx-transfer-alt text-info"></i></button>';
+                        }
                     }
-                    return '<div class="d-flex align-items-center justify-content-center gap-2">' . $editBtn . $deleteBtn . '</div>';
+                    return '<div class="d-flex align-items-center justify-content-center gap-2">' . $editBtn . $transferBtn . $deleteBtn . '</div>';
                 })
                 ->addColumn('status_badge', function ($asset) use ($statusBadgeMap) {
                     $cls = $statusBadgeMap[$asset->status] ?? 'bg-label-secondary';
@@ -457,6 +465,63 @@ class AssetController extends Controller
         } catch (Exception $e) {
             Log::error('Asset unassignment failed: ' . $e->getMessage());
             return response()->json(['success' => false, 'message' => 'Failed to unassign asset.'], 500);
+        }
+    }
+
+    public function transferAsset(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'user_id' => 'required|exists:users,id',
+                'notes' => 'nullable|string|max:1000',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $validator->errors()->first(),
+                ], 422);
+            }
+
+            $asset = \App\Models\Asset::findOrFail($id);
+            $fromUser = $asset->assignedUser;
+
+            if ((int) $asset->assigned_to === (int) $request->user_id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Asset is already assigned to this user.',
+                ], 422);
+            }
+
+            DB::transaction(function () use ($asset, $request, $fromUser) {
+                // Close whatever assignment is currently open before opening the new one,
+                // otherwise history shows two overlapping "active" holders for the asset.
+                \App\Models\AssetAssignment::where('asset_id', $asset->id)
+                    ->whereNull('returned_at')
+                    ->update([
+                        'returned_at' => now(),
+                        'notes' => 'Transferred to ' . optional(\App\Models\User::find($request->user_id))->first_name,
+                    ]);
+
+                $asset->update([
+                    'assigned_to' => $request->user_id,
+                    'status' => 'assigned',
+                ]);
+
+                \App\Models\AssetAssignment::create([
+                    'asset_id' => $asset->id,
+                    'user_id' => $request->user_id,
+                    'assigned_by' => auth()->id(),
+                    'assigned_at' => now(),
+                    'notes' => $request->notes ?: ('Transferred from ' . ($fromUser?->first_name ?? 'Unassigned')),
+                ]);
+            });
+
+            return response()->json(['success' => true, 'message' => 'Asset transferred successfully!']);
+
+        } catch (Exception $e) {
+            Log::error('Asset transfer failed: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to transfer asset.'], 500);
         }
     }
 

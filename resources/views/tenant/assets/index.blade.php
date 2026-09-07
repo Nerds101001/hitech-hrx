@@ -229,6 +229,7 @@
   </div>
 </div>
 @include('_partials._modals.assets.add_or_update')
+@include('_partials._modals.assets.transfer')
 @endsection
 
 @section('page-script')
@@ -236,6 +237,7 @@
     document.addEventListener('DOMContentLoaded', function () {
       // Move modal to body to fix z-index overlay stacking issues
       document.body.appendChild(document.getElementById('assetForm'));
+      document.body.appendChild(document.getElementById('modalTransferAsset'));
 
       // Select2 initialization for modal
       const initSelect2 = () => {
@@ -427,6 +429,57 @@
           error: function(err) {
             const msg = err.responseJSON?.message || 'Failed to save asset';
             Swal.fire({ icon: 'error', title: 'Error', text: msg });
+          }
+        });
+      });
+
+      // Handle Transfer Asset
+      $(document).on('click', '.transfer-record', function() {
+        const id = $(this).data('id');
+        const currentUser = $(this).data('current-user') || 'Unassigned';
+
+        $('#transfer_asset_id').val(id);
+        $('#transfer_current_user').text(currentUser);
+        $('#transfer_user_id').val('');
+        $('#transfer_notes').val('');
+
+        $('#transfer_user_id').select2({
+          dropdownParent: $('#modalTransferAsset'),
+          placeholder: 'Select an option',
+          allowClear: true
+        });
+
+        $('#modalTransferAsset').modal('show');
+      });
+
+      $('#confirmTransferBtn').on('click', function() {
+        const id = $('#transfer_asset_id').val();
+        const userId = $('#transfer_user_id').val();
+
+        if (!userId) {
+          Swal.fire({ icon: 'warning', title: 'Select a user', text: 'Please choose who to transfer this asset to.' });
+          return;
+        }
+
+        $.ajax({
+          url: `${baseUrl}asset-management/transfer/${id}`,
+          method: 'POST',
+          data: {
+            _token: $('meta[name="csrf-token"]').attr('content'),
+            user_id: userId,
+            notes: $('#transfer_notes').val()
+          },
+          success: function(res) {
+            if (!res || res.success === false) {
+              Swal.fire({ icon: 'error', title: 'Error', text: (res && res.message) || 'Failed to transfer asset' });
+              return;
+            }
+            $('#modalTransferAsset').modal('hide');
+            Swal.fire({ icon: 'success', title: 'Transferred', text: res.message || 'Asset transferred successfully' });
+            dt.draw();
+          },
+          error: function(err) {
+            Swal.fire({ icon: 'error', title: 'Error', text: err.responseJSON?.message || 'Failed to transfer asset' });
           }
         });
       });
