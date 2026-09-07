@@ -66,23 +66,34 @@
   }
 
   /* hitech-portal.scss puts `overflow: hidden !important` on every
-     .modal-content, which on a short mobile viewport can win the fight
-     against Bootstrap's own .modal-dialog-scrollable sizing for a form
-     this tall (title/description/priority/interval/due-date/two select2
-     pickers). Force the body's own scroll explicitly rather than relying
-     on that cascade. */
+     .modal-content, which wins the fight against Bootstrap's own
+     .modal-dialog-scrollable sizing for a form this tall (title/
+     description/priority/interval/due-date/two select2 pickers, or the
+     view modal's full reply thread) - not just on narrow phones, but on
+     any short browser window, desktop included, where the modal is
+     taller than the viewport. Force the body's own scroll explicitly
+     rather than relying on that cascade, at every width. */
+  #assignTaskModal .modal-dialog,
+  #editTaskModal .modal-dialog,
+  #viewTaskModal .modal-dialog {
+    max-height: 100dvh;
+  }
+  #assignTaskModal .modal-content,
+  #editTaskModal .modal-content,
+  #viewTaskModal .modal-content {
+    max-height: 100dvh;
+  }
+  #assignTaskModal .modal-body,
+  #editTaskModal .modal-body,
+  #viewTaskModal .modal-body {
+    overflow-y: auto !important;
+    max-height: calc(100dvh - 130px); /* header + footer are ~65px each */
+    -webkit-overflow-scrolling: touch;
+  }
+
   @media (max-width: 768px) {
     #assignTaskModal .modal-dialog {
-      max-height: 100dvh;
       margin: 0;
-    }
-    #assignTaskModal .modal-content {
-      max-height: 100dvh;
-    }
-    #assignTaskModal .modal-body {
-      overflow-y: auto !important;
-      max-height: calc(100dvh - 130px); /* header + footer are ~65px each */
-      -webkit-overflow-scrolling: touch;
     }
 
     /* .btn-hitech is forced to width:100% site-wide on mobile (see the
@@ -831,7 +842,7 @@
 
 {{-- Edit Task modal --}}
 <div class="modal fade" id="editTaskModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <form id="editTaskForm">
         <input type="hidden" id="et_id">
@@ -892,7 +903,7 @@
 
 {{-- View Task modal (read-only) --}}
 <div class="modal fade" id="viewTaskModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title">Task Details</h5>
