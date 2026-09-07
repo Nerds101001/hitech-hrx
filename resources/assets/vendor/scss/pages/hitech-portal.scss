@@ -4724,20 +4724,27 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
 
 /* Small-laptop scale-down (e.g. 1366x768 11-13" screens): reported as
    "everything's too big, I have to zoom the browser to 80% myself to see
-   a normal amount on screen". This theme mixes rem-based sizing with a
-   LOT of hardcoded px (icon boxes, radii, gaps - see the many `width:
-   38px` / `border-radius: 24px` style rules throughout this file), so a
-   root font-size change alone would shrink text/rem-spacing but leave
-   every fixed-px box exactly as big as before, drifting the layout out
-   of proportion instead of matching what a real browser zoom-out looks
-   like. `zoom` scales the whole rendered page uniformly regardless of
-   unit - literally the same effect as the browser's own zoom control,
-   which is exactly what was being reproduced manually before this. Not
-   applied below ~1024px width: that range is the theme's own tablet/
-   mobile layout switch, which already has its own separate handling and
+   a normal amount on screen".
+
+   First attempt used `zoom: 0.8` on <html>, which broke the sidebar
+   layout in production: this theme's own responsive menu system
+   (resources/assets/vendor/js/menu.js, resources/assets/js/main.js)
+   decides horizontal-vs-vertical layout by comparing window.innerWidth
+   against a fixed LAYOUT_BREAKPOINT (1200px) - but some of its checks
+   use window.innerWidth (which `zoom` changes, since zooming out reports
+   a LARGER logical viewport) while others use window.screen.width
+   (which zoom never touches). That mismatch desynced the menu's layout
+   state, detaching the fixed sidebar from the content column. A plain
+   font-size change never reaches JS at all here, so it can't trigger
+   that class of bug - the tradeoff is that this theme mixes rem-based
+   sizing with a lot of hardcoded px (icon boxes, radii, gaps), so this
+   shrinks text and rem-based spacing but leaves fixed-px boxes at their
+   original size, rather than a pixel-perfect uniform shrink. Not applied
+   below ~1024px width: that range is the theme's own tablet/mobile
+   layout switch, which already has its own separate handling and
    should not additionally be shrunk on top of that. */
 @media (max-width: 1400px) and (max-height: 800px) and (min-width: 1025px) {
     html {
-        zoom: 0.8;
+        font-size: 80%;
     }
 }
