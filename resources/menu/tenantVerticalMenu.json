@@ -46,8 +46,7 @@
                 "employee",
                 "accounts",
                 "office_employee"
-            ],
-            "permission": "tasks.manage"
+            ]
         },
         {
             "url": "/announcements",
