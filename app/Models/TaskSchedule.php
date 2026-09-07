@@ -100,6 +100,18 @@ class TaskSchedule extends Model implements AuditableContract
   }
 
   /**
+   * Sunday or a company holiday — no task ever fires on either, whatever
+   * the schedule's own frequency says. Shared by TaskScheduleService (the
+   * actual fire/skip decision) and nextOccurrence() below (so a dashboard
+   * preview never shows a date that was never actually going to fire).
+   */
+  public static function isNonWorkingDay(\Carbon\Carbon $day): bool
+  {
+    return $day->isSunday()
+      || \App\Models\Holiday::where('date', $day->toDateString())->where('status', 1)->exists();
+  }
+
+  /**
    * The next date this schedule will fire, starting today. Today counts
    * only if it matches and hasn't already fired (last_run_on isn't today) -
    * this is what lets a dashboard preview a recurring assignment before its
@@ -116,6 +128,9 @@ class TaskSchedule extends Model implements AuditableContract
     for ($i = 0; $i <= 62; $i++) {
       $day = $from->copy()->addDays($i);
       if (!$this->matchesToday($day)) {
+        continue;
+      }
+      if (self::isNonWorkingDay($day)) {
         continue;
       }
       if ($i === 0 && $this->last_run_on && $this->last_run_on->isSameDay($day)) {

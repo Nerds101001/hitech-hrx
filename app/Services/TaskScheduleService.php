@@ -34,6 +34,15 @@ class TaskScheduleService
             return collect();
         }
 
+        // Sunday or a company holiday - no recurring task fires on either,
+        // whatever the schedule's own frequency says. last_run_on is
+        // deliberately left untouched here, same as the checks above: the
+        // schedule just fires on its next actual matching working day
+        // instead, it doesn't lose today's occurrence forever.
+        if (TaskSchedule::isNonWorkingDay($day)) {
+            return collect();
+        }
+
         if ($schedule->last_run_on && $schedule->last_run_on->isSameDay($day)) {
             return collect();
         }
