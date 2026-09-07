@@ -1007,6 +1007,24 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // A stale session (token expired, logged in elsewhere, long-idle tab)
+  // makes every one of this page's fetch() calls 419 - previously that
+  // surfaced as a raw "CSRF token mismatch." inside the normal error
+  // dialog, which reads like a real save failure rather than what it is.
+  // Reloading the current page while unauthenticated bounces through the
+  // auth middleware straight to login, same as the app's other session-
+  // expiry handling (main.js's global $.ajaxError for jQuery requests) -
+  // this just covers the fetch()-based calls that handler never sees.
+  function fetchJson(url, opts) {
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 419) {
+        window.location.reload();
+        return new Promise(function () {}); // page is navigating away
+      }
+      return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+    });
+  }
+
   // ══ Tabs — same segmented-pill toggle as Leave, driven by plain JS
   // rather than Bootstrap's tab component (this page's buttons don't sit in
   // a .nav, and swapping to Bootstrap's own tab markup is exactly the
@@ -1132,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const atFile = document.getElementById('at_attachment').files[0];
     if (atFile) fd.append('attachment', atFile);
 
-    fetch("{{ route('task-management.store') }}", {
+    fetchJson("{{ route('task-management.store') }}", {
       method: 'POST',
       headers: {
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
@@ -1140,7 +1158,6 @@ document.addEventListener('DOMContentLoaded', function () {
       },
       body: fd,
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         btn.innerHTML = original;
@@ -1166,12 +1183,11 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmButtonText: 'Delete', confirmButtonColor: '#dc2626',
       }).then((res) => {
         if (!res.isConfirmed) return;
-        fetch('/task-management/' + id, {
+        fetchJson('/task-management/' + id, {
           method: 'DELETE',
           headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
         })
-          .then(r => r.json())
-          .then(data => {
+          .then(({ data }) => {
             if (data.success) { window.location.reload(); }
             else { Swal.fire({ icon: 'error', title: 'Could not delete', text: data.message || '' }); }
           });
@@ -1287,7 +1303,7 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmButtonText: 'Delete', confirmButtonColor: '#dc2626',
       }).then((res) => {
         if (!res.isConfirmed) return;
-        fetch("{{ route('task-management.bulkDestroy') }}", {
+        fetchJson("{{ route('task-management.bulkDestroy') }}", {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1296,8 +1312,7 @@ document.addEventListener('DOMContentLoaded', function () {
           },
           body: JSON.stringify({ ids: ids }),
         })
-          .then(r => r.json())
-          .then(data => {
+          .then(({ data }) => {
             if (data.success) { window.location.reload(); }
             else { Swal.fire({ icon: 'error', title: 'Nothing deleted', text: data.message || '' }); }
           });
@@ -1414,7 +1429,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btn = this;
     btn.disabled = true;
 
-    fetch(replyUrl, {
+    fetchJson(replyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1423,7 +1438,6 @@ document.addEventListener('DOMContentLoaded', function () {
       },
       body: JSON.stringify({ comment: comment }),
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         if (ok && data.success) {
@@ -1494,7 +1508,7 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = 'Saving...';
 
-    fetch('/task-management/' + document.getElementById('et_id').value, {
+    fetchJson('/task-management/' + document.getElementById('et_id').value, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -1515,7 +1529,6 @@ document.addEventListener('DOMContentLoaded', function () {
         cc_user_ids: $('#et_cc').val() || [],
       }),
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         btn.innerHTML = original;
@@ -1558,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const otFile = document.getElementById('ot_attachment').files[0];
     if (otFile) otFd.append('attachment', otFile);
 
-    fetch('/task-management/' + document.getElementById('ot_id').value + '/objection', {
+    fetchJson('/task-management/' + document.getElementById('ot_id').value + '/objection', {
       method: 'POST',
       headers: {
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
@@ -1566,7 +1579,6 @@ document.addEventListener('DOMContentLoaded', function () {
       },
       body: otFd,
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         btn.innerHTML = original;
@@ -1607,7 +1619,7 @@ document.addEventListener('DOMContentLoaded', function () {
         removeBtn.title = 'Remove from this recurring task';
         removeBtn.innerHTML = '<i class="bx bx-x"></i>';
         removeBtn.addEventListener('click', function () {
-          fetch('/task-management/schedules/' + currentScheduleId + '/remove-user', {
+          fetchJson('/task-management/schedules/' + currentScheduleId + '/remove-user', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1616,8 +1628,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({ user_id: t.id }),
           })
-            .then(r => r.json())
-            .then(data => {
+            .then(({ data }) => {
               if (data.success) { window.location.reload(); }
               else { Swal.fire({ icon: 'error', title: 'Could not remove', text: data.message || '' }); }
             });
@@ -1645,12 +1656,11 @@ document.addEventListener('DOMContentLoaded', function () {
         showCancelButton: true, confirmButtonText: 'Stop It', confirmButtonColor: '#dc2626',
       }).then((res) => {
         if (!res.isConfirmed) return;
-        fetch('/task-management/schedules/' + currentScheduleId + '/stop', {
+        fetchJson('/task-management/schedules/' + currentScheduleId + '/stop', {
           method: 'POST',
           headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
         })
-          .then(r => r.json())
-          .then(data => {
+          .then(({ data }) => {
             if (data.success) { window.location.reload(); }
             else { Swal.fire({ icon: 'error', title: 'Could not stop', text: data.message || '' }); }
           });

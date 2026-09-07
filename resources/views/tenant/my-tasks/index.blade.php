@@ -450,6 +450,24 @@
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  // A stale session (token expired, logged in elsewhere, long-idle tab)
+  // makes every one of this page's fetch() calls 419 - previously that
+  // surfaced as a raw "CSRF token mismatch." inside the normal error
+  // dialog, which reads like a real save failure rather than what it is.
+  // Reloading the current page while unauthenticated bounces through the
+  // auth middleware straight to login, same as the app's other session-
+  // expiry handling (main.js's global $.ajaxError for jQuery requests) -
+  // this just covers the fetch()-based calls that handler never sees.
+  function fetchJson(url, opts) {
+    return fetch(url, opts).then(function (r) {
+      if (r.status === 419) {
+        window.location.reload();
+        return new Promise(function () {}); // page is navigating away
+      }
+      return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+    });
+  }
+
   const priorityFilter = document.getElementById('taskPriorityFilter');
   if (priorityFilter) {
     priorityFilter.addEventListener('change', function () {
@@ -505,12 +523,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const file = document.getElementById('statusTaskAttachment').files[0];
       if (file) fd.append('attachment', file);
 
-      fetch('/my-tasks/' + currentTaskId + '/complete', {
+      fetchJson('/my-tasks/' + currentTaskId + '/complete', {
         method: 'POST',
         headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
         body: fd,
       })
-        .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           btn.disabled = false; btn.innerHTML = original;
           if (ok && data.success) { window.location.reload(); }
@@ -523,7 +540,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
 
-    fetch('/my-tasks/' + currentTaskId + '/status', {
+    fetchJson('/my-tasks/' + currentTaskId + '/status', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -536,7 +553,6 @@ document.addEventListener('DOMContentLoaded', function () {
         remarks: document.getElementById('statusTaskRemarks').value || null,
       }),
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         btn.innerHTML = original;
@@ -627,7 +643,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const btn = this;
     btn.disabled = true;
 
-    fetch(replyUrl, {
+    fetchJson(replyUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -636,7 +652,6 @@ document.addEventListener('DOMContentLoaded', function () {
       },
       body: JSON.stringify({ comment: comment }),
     })
-      .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         btn.disabled = false;
         if (ok && data.success) {
@@ -680,7 +695,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const resubmitFile = document.getElementById('resubmitTaskAttachment').files[0];
       if (resubmitFile) resubmitFd.append('attachment', resubmitFile);
 
-      fetch('/my-tasks/' + resubmitTaskId + '/resubmit', {
+      fetchJson('/my-tasks/' + resubmitTaskId + '/resubmit', {
         method: 'POST',
         headers: {
           'X-CSRF-TOKEN': "{{ csrf_token() }}",
@@ -688,7 +703,6 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         body: resubmitFd,
       })
-        .then(r => r.json().then(data => ({ ok: r.ok, data })))
         .then(({ ok, data }) => {
           btn.disabled = false;
           btn.innerHTML = original;
