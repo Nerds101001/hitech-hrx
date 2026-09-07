@@ -41,7 +41,11 @@
             "slug": "task-management.index",
             "roles": [
                 "admin",
-                "hr"
+                "hr",
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
             ],
             "permission": "tasks.manage"
         },
@@ -1093,11 +1097,11 @@
                 "user.telephony.reports.calls",
                 "user.telephony.reports.productivity",
                 "user.telephony.reports.analytics",
-                "user.telephony.admin.connection",
                 "user.telephony.admin.webhook-log",
                 "user.telephony.admin.agent-map",
                 "user.telephony.admin.exceptions",
-                "user.telephony.admin.reconciliation"
+                "user.telephony.admin.reconciliation",
+                "user.telephony.admin.connection"
             ],
             "submenu": [
                 {
@@ -1116,6 +1120,54 @@
                     "slug": "user.telephony.reports.analytics"
                 },
                 {
+                    "url": "/user/telephony/admin/webhook-log",
+                    "name": "Webhook Log",
+                    "slug": "user.telephony.admin.webhook-log",
+                    "permission": [
+                        "telephony.admin"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/user/telephony/admin/agent-map",
+                    "name": "Agent Mapping",
+                    "slug": "user.telephony.admin.agent-map",
+                    "permission": [
+                        "telephony.admin"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/user/telephony/admin/exceptions",
+                    "name": "Exceptions",
+                    "slug": "user.telephony.admin.exceptions",
+                    "permission": [
+                        "telephony.admin"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/user/telephony/admin/reconciliation",
+                    "name": "Reconciliation",
+                    "slug": "user.telephony.admin.reconciliation",
+                    "permission": [
+                        "telephony.admin"
+                    ],
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
                     "url": "/user/telephony/admin/connection",
                     "name": "Connection",
                     "slug": "user.telephony.admin.connection",
@@ -1126,34 +1178,6 @@
                         "admin",
                         "hr"
                     ]
-                },
-                {
-                    "url": "/user/telephony/admin/webhook-log",
-                    "name": "Webhook Log",
-                    "slug": "user.telephony.admin.webhook-log",
-                    "permission": ["telephony.admin"],
-                    "roles": ["admin", "hr"]
-                },
-                {
-                    "url": "/user/telephony/admin/agent-map",
-                    "name": "Agent Mapping",
-                    "slug": "user.telephony.admin.agent-map",
-                    "permission": ["telephony.admin"],
-                    "roles": ["admin", "hr"]
-                },
-                {
-                    "url": "/user/telephony/admin/exceptions",
-                    "name": "Exceptions",
-                    "slug": "user.telephony.admin.exceptions",
-                    "permission": ["telephony.admin"],
-                    "roles": ["admin", "hr"]
-                },
-                {
-                    "url": "/user/telephony/admin/reconciliation",
-                    "name": "Reconciliation",
-                    "slug": "user.telephony.admin.reconciliation",
-                    "permission": ["telephony.admin"],
-                    "roles": ["admin", "hr"]
                 }
             ]
         },

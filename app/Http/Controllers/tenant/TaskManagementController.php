@@ -19,26 +19,41 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * Task Management - where HR/admin/manager assign work to one person, a
- * hand-picked group, or whole departments at once.
+ * Task Management - open to every signed-in user. Anyone can assign work to
+ * anyone (one person, a hand-picked group, or whole departments at once) -
+ * there is no reach restriction on who a task can be assigned TO.
+ *
+ * What differs by role is VISIBILITY: admin/hr/tasks.manage
+ * (TaskAccess::isUnrestricted()) see every task in the system, assigned to
+ * or by anyone. Everyone else sees only tasks that touch them directly -
+ * assigned to them, or assigned by them - never a task between two other
+ * people. scopeVisible() below is the one place that rule is applied, so
+ * the listing, the stats tiles, and the Pendency tab can never disagree
+ * about what counts as "mine."
  *
  * One Task row is created PER PERSON even for a department-wide assignment,
  * grouped by batch_id so this page can still show it as a single entry. That
  * is deliberate: it is what lets each person's own status, remarks and
  * overdue notification exist independently of everyone else's - the same
  * assignment finished by five people and still open with two others.
- *
- * Visibility is governed entirely by TaskAccess: admin/hr/tasks.manage see
- * and can target anyone; a manager or accounts only their own reports. This
- * controller never trusts a user_id/department_id from the request without
- * checking it against that scope first.
  */
 class TaskManagementController extends Controller
 {
+    /** Everything but the direct task_id lookups, plus who can edit/delete, still goes through TaskAccess::canManage() for those single-task actions. */
+    private function scopeVisible(\Illuminate\Database\Eloquent\Builder $query, $user): \Illuminate\Database\Eloquent\Builder
+    {
+        if (TaskAccess::isUnrestricted($user)) {
+            return $query;
+        }
+        return $query->where(function ($q) use ($user) {
+            $q->where('tasks.user_id', $user->id)->orWhere('tasks.assigned_by_id', $user->id);
+        });
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
-        $allowedIds = TaskAccess::allowedUserIds($user);
+        $canSeeAll = TaskAccess::isUnrestricted($user);
 
         // Highest priority first, then nearest deadline — what actually
         // needs attention next — with undated tasks pushed to the end rather
@@ -50,8 +65,17 @@ class TaskManagementController extends Controller
             ->orderBy('due_date')
             ->orderByDesc('created_at');
 
-        if ($allowedIds !== null) {
-            $query->whereIn('user_id', $allowedIds);
+        $query = $this->scopeVisible($query, $user);
+
+        // "Assigned by me" answers the exact question asked for: which
+        // tasks did I hand to someone else, and what's their status - as
+        // distinct from "assigned to me", my own work. Available to
+        // everyone, including admin/hr, to narrow their otherwise-unscoped
+        // view down to just their own activity.
+        if ($request->input('mine') === 'to') {
+            $query->where('tasks.user_id', $user->id);
+        } elseif ($request->input('mine') === 'by') {
+            $query->where('tasks.assigned_by_id', $user->id);
         }
 
         if ($request->filled('department_id')) {
@@ -136,11 +160,12 @@ class TaskManagementController extends Controller
             'query' => $request->query(),
         ]));
 
-        $departments = $allowedIds === null
-            ? Department::cachedActive()
-            : Department::whereIn('id', TaskAccess::allowedDepartmentIds($user) ?? [])->orderBy('name')->get();
+        // Every department and every active employee, for everyone - nobody
+        // is restricted in who they can assign a task TO, only in whose
+        // existing tasks they can see (scopeVisible() above).
+        $departments = Department::cachedActive();
 
-        $employees = ($allowedIds === null ? User::where('status', UserAccountStatus::ACTIVE) : User::whereIn('id', $allowedIds ?? []))
+        $employees = User::where('status', UserAccountStatus::ACTIVE)
             ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'department_id']);
 
         $stats = [
@@ -153,10 +178,21 @@ class TaskManagementController extends Controller
         ];
 
         $scheduleQuery = TaskSchedule::where('is_active', true)->with('assignedBy');
-        if ($allowedIds !== null) {
+        if (!$canSeeAll) {
             $scheduleQuery->where('assigned_by_id', $user->id);
         }
         $schedules = $scheduleQuery->orderByDesc('created_at')->get();
+        // A schedule where I'm only a target (not the assigner) still
+        // belongs to "my" tasks under the same assigned-to-me-or-by-me rule
+        // the rest of this page uses - the where() above only caught the
+        // assigner side.
+        if (!$canSeeAll) {
+            $mineAsTarget = TaskSchedule::where('is_active', true)->with('assignedBy')
+                ->where('assigned_by_id', '!=', $user->id)
+                ->get()
+                ->filter(fn ($s) => in_array($user->id, $s->target_user_ids ?? []));
+            $schedules = $schedules->concat($mineAsTarget)->sortByDesc('created_at')->values();
+        }
         // Resolved once here rather than per-row in the view (N+1) — the id
         // list is small (schedule targets), so one query per page is fine.
         $allTargetIds = $schedules->flatMap(fn ($s) => $s->target_user_ids ?? [])->unique();
@@ -178,27 +214,25 @@ class TaskManagementController extends Controller
             ->groupBy('task_schedule_id')
             ->map(fn ($rows) => $rows->first()); // most recent fire_date per schedule
 
-        $pendency = $this->buildPendency($request, $allowedIds);
+        $pendency = $this->buildPendency($request, $user);
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats', 'pendency'));
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats', 'pendency', 'canSeeAll'));
     }
 
     /**
-     * Org-wide (or, for a scoped manager, team-wide) backlog: who and which
+     * Org-wide (or, for a regular user, only-mine) backlog: who and which
      * department it's actually sitting with, not just "how many tasks" -
-     * the same TaskAccess scope as the rest of this controller, so a
-     * manager's Pendency tab never reveals another team's numbers.
+     * the same scopeVisible() rule as the rest of this controller, so a
+     * regular user's Pendency tab never reveals anyone else's numbers.
      */
-    private function buildPendency(Request $request, ?array $allowedIds): array
+    private function buildPendency(Request $request, $user): array
     {
         // Table-qualified throughout - departments/users both carry a
         // 'status' column of their own once joined below, and an
         // unqualified 'status' here is ambiguous rather than defaulting to
         // tasks.status the way it would with no join in play.
         $base = Task::whereNotIn('tasks.status', Task::CLOSED_STATUSES);
-        if ($allowedIds !== null) {
-            $base->whereIn('tasks.user_id', $allowedIds);
-        }
+        $base = $this->scopeVisible($base, $user);
 
         $overdueCase = "sum(case when tasks.due_date is not null and tasks.due_date < NOW() then 1 else 0 end) as overdue";
 
@@ -293,20 +327,11 @@ class TaskManagementController extends Controller
                     ->pluck('id')
             );
         }
+        // No reach restriction - anyone can assign a task to anyone, so
+        // nothing gets silently dropped here the way it used to when this
+        // page was manager-scoped.
         $targetIds = $targetIds->unique()->values();
-
-        // A manager/accounts assigner is confined to their own reports -
-        // even if they hand-picked a user_id or a whole department outside
-        // that, silently drop anyone not in scope rather than 403 the whole
-        // batch, since a department pick legitimately mixes people they can
-        // and cannot reach.
-        $allowedIds = TaskAccess::allowedUserIds($user);
         $dropped = 0;
-        if ($allowedIds !== null) {
-            $before = $targetIds->count();
-            $targetIds = $targetIds->intersect($allowedIds)->values();
-            $dropped = $before - $targetIds->count();
-        }
 
         if ($targetIds->isEmpty()) {
             return response()->json(['success' => false, 'message' => 'None of the selected people are in your team.'], 422);
@@ -490,14 +515,10 @@ class TaskManagementController extends Controller
     public function showBatch(Request $request, string $batchId)
     {
         $user = auth()->user();
-        $allowedIds = TaskAccess::allowedUserIds($user);
 
         $query = Task::with(['user.department', 'assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
             ->where('batch_id', $batchId);
-
-        if ($allowedIds !== null) {
-            $query->whereIn('user_id', $allowedIds);
-        }
+        $query = $this->scopeVisible($query, $user);
 
         $tasks = $query->orderBy('id')->get();
 
@@ -590,14 +611,10 @@ class TaskManagementController extends Controller
             'updated_by_id' => $user->id,
         ];
 
-        // Reassignment: the new person must be someone this user could have
-        // assigned the task to in the first place (store()'s own check),
-        // never trusted just because they could manage the task as it stood.
+        // Reassignment: no reach restriction, same as assigning in the first
+        // place - the editor just needs to be allowed to manage this task at
+        // all (checked above), not have the new person in any particular scope.
         if (!empty($validated['user_id']) && (int) $validated['user_id'] !== $task->user_id) {
-            $allowedIds = TaskAccess::allowedUserIds($user);
-            if ($allowedIds !== null && !in_array((int) $validated['user_id'], $allowedIds, true)) {
-                return response()->json(['success' => false, 'message' => 'You can only reassign to someone on your own team.'], 403);
-            }
             $updates['user_id'] = (int) $validated['user_id'];
         }
 

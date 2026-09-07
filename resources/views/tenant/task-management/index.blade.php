@@ -167,7 +167,11 @@
       <h3 class="fw-extrabold mb-1 text-dark">Task Management</h3>
       <p class="text-muted mb-0 small">
         Assign work to a person, a hand-picked group, or a whole department at once.
-        Each person only ever sees and completes their own task.
+        @if($canSeeAll)
+          You can see every task in the system, assigned to or by anyone.
+        @else
+          You'll only see tasks assigned to you or assigned by you — not everyone else's.
+        @endif
       </p>
     </div>
     <div class="d-flex gap-3 flex-wrap">
@@ -253,6 +257,14 @@
             </div>
           </div>
           <div class="col-lg-2 col-md-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">View</label>
+            <select class="form-select form-select-hitech" name="mine" onchange="this.form.submit()">
+              <option value="">{{ $canSeeAll ? 'Everyone' : 'All my tasks' }}</option>
+              <option value="to" {{ request('mine') === 'to' ? 'selected' : '' }}>Assigned to me</option>
+              <option value="by" {{ request('mine') === 'by' ? 'selected' : '' }}>Assigned by me</option>
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-6">
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
             <select class="form-select form-select-hitech" name="department_id" onchange="this.form.submit()">
               <option value="">All Departments</option>
@@ -333,9 +345,19 @@
                     }
                     $seenBatches[] = $t->batch_id;
                 }
+                // Now that this page is open to everyone, a row can be here
+                // because it's assigned TO this person, not BY them - View
+                // still makes sense, but Edit/Objection/Delete (and bulk
+                // delete's checkbox) would just 403 on click, same gate the
+                // backend already enforces.
+                $canManageThis = \App\Support\TaskAccess::canManage(auth()->user(), $t);
               @endphp
               <tr @if($isBatched) data-batch-summary="{{ $t->batch_id }}" @endif>
-                <td><input type="checkbox" class="form-check-input js-task-check" value="{{ $t->id }}"></td>
+                <td>
+                  @if($canManageThis)
+                    <input type="checkbox" class="form-check-input js-task-check" value="{{ $t->id }}">
+                  @endif
+                </td>
                 <td>
                   <div class="d-flex align-items-start gap-2">
                     @if($isBatched)
@@ -414,22 +436,24 @@
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
-                  <button type="button" class="icon-sophisticated js-edit-task" title="Edit"
-                          data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
-                          data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
-                          data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}"
-                          data-cc-ids="{{ $t->ccUsers->pluck('id')->implode(',') }}">
-                    <i class="bx bx-edit"></i>
-                  </button>
-                  @if(in_array($t->status, ['completed', 'resolved']))
-                    <button type="button" class="icon-sophisticated text-warning js-object-task" title="Raise Objection"
-                            data-id="{{ $t->id }}" data-title="{{ $t->title }}">
-                      <i class="bx bx-error"></i>
+                  @if($canManageThis)
+                    <button type="button" class="icon-sophisticated js-edit-task" title="Edit"
+                            data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
+                            data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
+                            data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}"
+                            data-cc-ids="{{ $t->ccUsers->pluck('id')->implode(',') }}">
+                      <i class="bx bx-edit"></i>
+                    </button>
+                    @if(in_array($t->status, ['completed', 'resolved']))
+                      <button type="button" class="icon-sophisticated text-warning js-object-task" title="Raise Objection"
+                              data-id="{{ $t->id }}" data-title="{{ $t->title }}">
+                        <i class="bx bx-error"></i>
+                      </button>
+                    @endif
+                    <button class="icon-sophisticated text-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
+                      <i class="bx bx-trash"></i>
                     </button>
                   @endif
-                  <button class="icon-sophisticated text-danger js-delete-task" data-id="{{ $t->id }}" title="Delete">
-                    <i class="bx bx-trash"></i>
-                  </button>
                 </td>
               </tr>
               @if($isBatched)
@@ -493,14 +517,25 @@
             </thead>
             <tbody>
               @forelse($schedules as $s)
-                @php $lastFire = $lastFireStats->get($s->id); @endphp
+                @php
+                  $lastFire = $lastFireStats->get($s->id);
+                  // The Manage action (stop it / remove one person) and the
+                  // firing-history expand both hit endpoints the backend
+                  // already restricts to the schedule's own creator or
+                  // admin/hr - a target-only viewer sees the row (it's their
+                  // own recurring assignment too) but not those controls,
+                  // same treatment as a one-time task assigned to them.
+                  $canManageSchedule = \App\Support\TaskAccess::isUnrestricted(auth()->user()) || (int) $s->assigned_by_id === auth()->id();
+                @endphp
                 <tr>
                   <td>
                     <div class="d-flex align-items-start gap-2">
-                      <button type="button" class="tm-row-toggle js-schedule-toggle flex-shrink-0"
-                              data-schedule-id="{{ $s->id }}" title="Show firing history">
-                        <i class="bx bx-chevron-right"></i>
-                      </button>
+                      @if($canManageSchedule)
+                        <button type="button" class="tm-row-toggle js-schedule-toggle flex-shrink-0"
+                                data-schedule-id="{{ $s->id }}" title="Show firing history">
+                          <i class="bx bx-chevron-right"></i>
+                        </button>
+                      @endif
                       <div>
                         <div class="fw-medium">{{ $s->title }}</div>
                         @if($s->description)<small class="text-muted">{{ \Illuminate\Support\Str::limit($s->description, 70) }}</small>@endif
@@ -522,11 +557,13 @@
                     @endif
                   </td>
                   <td class="text-end">
-                    <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
-                            data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
-                            data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
-                      Manage
-                    </button>
+                    @if($canManageSchedule)
+                      <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
+                              data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
+                              data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
+                        Manage
+                      </button>
+                    @endif
                   </td>
                 </tr>
                 <tr class="d-none schedule-history-row" data-schedule-history="{{ $s->id }}">
