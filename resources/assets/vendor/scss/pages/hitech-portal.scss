@@ -4726,25 +4726,44 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
    "everything's too big, I have to zoom the browser to 80% myself to see
    a normal amount on screen".
 
-   First attempt used `zoom: 0.8` on <html>, which broke the sidebar
-   layout in production: this theme's own responsive menu system
+   Attempt 1 used `zoom: 0.8` on <html>, which broke the sidebar layout
+   in production: this theme's own responsive menu system
    (resources/assets/vendor/js/menu.js, resources/assets/js/main.js)
    decides horizontal-vs-vertical layout by comparing window.innerWidth
    against a fixed LAYOUT_BREAKPOINT (1200px) - but some of its checks
    use window.innerWidth (which `zoom` changes, since zooming out reports
    a LARGER logical viewport) while others use window.screen.width
    (which zoom never touches). That mismatch desynced the menu's layout
-   state, detaching the fixed sidebar from the content column. A plain
-   font-size change never reaches JS at all here, so it can't trigger
-   that class of bug - the tradeoff is that this theme mixes rem-based
-   sizing with a lot of hardcoded px (icon boxes, radii, gaps), so this
-   shrinks text and rem-based spacing but leaves fixed-px boxes at their
-   original size, rather than a pixel-perfect uniform shrink. Not applied
-   below ~1024px width: that range is the theme's own tablet/mobile
-   layout switch, which already has its own separate handling and
-   should not additionally be shrunk on top of that. */
+   state, detaching the fixed sidebar from the content column.
+
+   Attempt 2 used a plain `font-size: 80%`, which is safe (never reaches
+   JS - nothing here reads computed font-size to make a layout decision)
+   but visually did almost nothing: this theme mixes rem-based sizing
+   with a LOT of hardcoded px (icon boxes, radii, gaps, big stat-card
+   numbers), so only the small rem-based slice actually shrank - reported
+   back as "too big and weird" (weird from the inconsistent partial
+   shrink specifically).
+
+   This uses `transform: scale()` instead, compensating the box size so
+   the shrunk render still fills the viewport exactly (1 / 0.8 = 125%).
+   Transform is a pure paint-time effect - like zoom it scales literally
+   everything regardless of unit, but UNLIKE zoom it never changes what
+   window.innerWidth/window.screen.width report to JS (confirmed by
+   dispatching a real resize event against this exact rule with the
+   site's own menu.js loaded: innerWidth and the sidebar's menu-vertical
+   class were both unchanged), so it cannot desync the same layout state
+   machine that broke under zoom. It also doesn't change any element's
+   clientHeight/scrollHeight (only the paint layer), so PerfectScrollbar
+   and other height-measuring code keep seeing the same numbers they
+   always did. Not applied below ~1024px width: that range is the
+   theme's own tablet/mobile layout switch, which already has its own
+   separate handling and should not additionally be shrunk on top of
+   that. */
 @media (max-width: 1400px) and (max-height: 800px) and (min-width: 1025px) {
     html {
-        font-size: 80%;
+        transform: scale(0.8);
+        transform-origin: top left;
+        width: 125%;
+        height: 125%;
     }
 }
