@@ -124,8 +124,9 @@
         @foreach(['all' => 'taskAll', 'overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted', 'watching' => 'taskWatching'] as $bucketKey => $paneId)
           <div class="tab-pane fade {{ $bucketKey === 'all' ? 'show active' : '' }}" id="{{ $paneId }}">
             @if($bucketKey === 'watching')
-              {{-- Someone else's task, CC'd to this person - watch status
-                   and reply, no Complete action, it isn't theirs to finish. --}}
+              {{-- Someone else's work this person is tracking - CC'd on it,
+                   or they're the one who assigned it - watch status and
+                   reply, no Complete action, it isn't theirs to finish. --}}
               @if($taskBuckets['watching']->isNotEmpty())
                 <div class="hitech-card">
                   <div class="table-responsive">
@@ -173,7 +174,7 @@
               @else
                 <div class="mt-empty py-4">
                   <i class="bx bx-check-circle" style="font-size:2rem"></i>
-                  <p class="mb-0">Nothing you're CC'd on.</p>
+                  <p class="mb-0">Nothing you're watching.</p>
                 </div>
               @endif
             @elseif($taskBuckets[$bucketKey]->isNotEmpty())

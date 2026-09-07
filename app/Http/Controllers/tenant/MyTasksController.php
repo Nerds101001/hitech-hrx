@@ -51,15 +51,25 @@ class MyTasksController extends Controller
             ->orderBy('due_date')
             ->get();
 
-        // Tasks this person is CC'd on - watching someone else's work, not
-        // their own. Kept out of every other bucket above: mixing a watched
-        // row into "pending"/"overdue" would make it look like this
+        // Someone else's work this person is tracking, not their own to
+        // complete: either CC'd on it, or they're the one who assigned it
+        // to someone else. Kept out of every other bucket above: mixing a
+        // watched row into "pending"/"overdue" would make it look like this
         // person's own task is late, when it's actually someone else's.
         $watching = Task::ccTo($user->id)
             ->with(['assignedBy', 'user', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
-            ->orderByRaw('due_date IS NULL')
-            ->orderBy('due_date')
-            ->get();
+            ->get()
+            ->concat(
+                Task::where('assigned_by_id', $user->id)->where('user_id', '!=', $user->id)
+                    ->with(['assignedBy', 'user', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+                    ->get()
+            )
+            // Undated tasks pushed to the end, matching every other bucket's
+            // ordering here - Collection::sortBy alone would put a null
+            // due_date first, the opposite of what orderByRaw('due_date IS
+            // NULL') does at the SQL level for a single query.
+            ->sortBy(fn ($t) => [$t->due_date === null ? 1 : 0, $t->due_date])
+            ->values();
 
         return [
             'all'       => $tasks,
