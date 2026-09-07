@@ -176,8 +176,10 @@ S.append(tbl([
        'handset</b> - not only API-placed calls. Inbound, IVR, predictive, callback '
        'and forwarded too. Much of our floor dials manually, so this is go/no-go.', CELL)],
     [p('<b>2</b>', CELL),
-     p('<b>Which IP will your webhooks originate from?</b> We will allowlist it. It is '
-       'often not the same host as your agent API, so please confirm.', CELL)],
+     p('<b>Which IP will your webhooks originate from?</b> An allowlist is already '
+       'enforced, so anything from an address we have not been told about is refused '
+       'with <font face="Courier">403 ip_not_allowed</font>. It is often not the same '
+       'host as your agent API - please confirm rather than assume.', CELL)],
 ], [7 * mm, 167 * mm], head=False))
 
 # ---- 6. responses
