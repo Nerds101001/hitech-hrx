@@ -5,6 +5,7 @@ namespace App\Http\Controllers\tenant;
 use App\Http\Controllers\Controller;
 use App\Models\AppraisalScorecard;
 use App\Models\AppraisalCycle;
+use App\Models\Department;
 use App\Models\NinetyDayGoal;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -12,6 +13,14 @@ use Illuminate\Support\Facades\Auth;
 
 class SalesAssessmentController extends Controller
 {
+    /** Fixed grade labels a scorecard's total_score is bucketed into - see generate()/updateReview(). */
+    public const GRADES = [
+        'A - Outstanding',
+        'B - Exceeds Expectation',
+        'C - Meets Expectation',
+        'D - Needs Improvement',
+    ];
+
     public function index(Request $request)
     {
         $cycleId = $request->get('cycle_id');
@@ -21,14 +30,33 @@ class SalesAssessmentController extends Controller
             $query->where('appraisal_cycle_id', $cycleId);
         }
 
+        if ($request->filled('department_id')) {
+            $query->whereHas('user', fn ($q) => $q->where('department_id', $request->department_id));
+        }
+
+        if ($request->filled('search')) {
+            $term = $request->search;
+            $query->whereHas('user', fn ($u) => $u->where('first_name', 'like', "%{$term}%")
+                ->orWhere('last_name', 'like', "%{$term}%"));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('grade')) {
+            $query->where('grade', $request->grade);
+        }
+
         if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
             $query->where('user_id', Auth::id());
         }
 
         $scorecards = $query->latest()->get();
         $cycles = AppraisalCycle::get();   // tenant filter removed: NULL = NULL matched no rows
+        $departments = Department::cachedActive();
 
-        return view('tenant.performance.scorecards.index', compact('scorecards', 'cycles'));
+        return view('tenant.performance.scorecards.index', compact('scorecards', 'cycles', 'departments'));
     }
 
     public function generate(Request $request)
