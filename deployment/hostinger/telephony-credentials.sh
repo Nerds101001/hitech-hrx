@@ -84,18 +84,61 @@ if [[ "$ACTION" == "rotate" ]]; then
   exit 0
 fi
 
+if [[ "$ACTION" == "add" ]]; then
+  LABEL="${2:?usage: add \"<label>\" [\"1.2.3.4,5.6.7.8\"]}"
+  IPS="${3:-}"
+
+  # Deliberately NOT rotate. Every vendor gets their own credential: the label
+  # is what /health echoes and what the Connection screen attributes each push
+  # to, so a shared key makes it impossible to tell whose traffic is whose --
+  # or to cut one vendor off without cutting off the other. rotate() retires
+  # every active credential, which is exactly wrong when adding a second vendor.
+  remote "cd $HRX_APP_ROOT && $HRX_PHP artisan tinker --execute='
+    if (\App\Models\Telephony\TelephonyCredential::where(\"label\", \"$LABEL\")->where(\"is_active\", true)->exists()) {
+      echo \"An active credential labelled \\\"$LABEL\\\" already exists. Refusing to mint a second.\", PHP_EOL;
+      exit(1);
+    }
+
+    \$key = \App\Models\Telephony\TelephonyCredential::newApiKey();
+    \$secret = \App\Models\Telephony\TelephonyCredential::newSecret();
+
+    \$new = \App\Models\Telephony\TelephonyCredential::create([
+      \"tenant_id\" => config(\"telephony.inbound.default_tenant_id\"),
+      \"label\" => \"$LABEL\",
+      \"api_key\" => \$key,
+      \"secret\" => \$secret,
+      \"allowed_ips\" => trim(\"$IPS\") === \"\" ? null : trim(\"$IPS\"),
+      \"is_active\" => true,
+    ]);
+
+    echo PHP_EOL, \"NEW CREDENTIAL (id \", \$new->id, \")\", PHP_EOL;
+    echo \"  label   : \", \$new->label, PHP_EOL;
+    echo \"  api_key : \", \$key, PHP_EOL;
+    echo \"  secret  : \", \$secret, PHP_EOL;
+    echo \"  allowed : \", json_encode(\$new->allowlist() ?? \"ANY - no allowlist set\"), PHP_EOL;
+  '" 2>/dev/null | grep -v '^$'
+  exit 0
+fi
+
 if [[ "$ACTION" == "allowlist" ]]; then
-  IPS="${2:?usage: allowlist \"1.2.3.4,5.6.7.8\"  (or \"\" to clear)}"
-  echo "Setting the source allowlist on every active credential to: ${IPS:-<none>}"
+  # Per vendor, not global. Each vendor pushes from their own gateway, so one
+  # shared list would either lock a vendor out or widen everyone else's access
+  # to whatever the newest vendor happens to use.
+  LABEL="${2:?usage: allowlist \"<label>\" \"1.2.3.4,5.6.7.8\"  (ips \"\" to clear)}"
+  IPS="${3?usage: allowlist \"<label>\" \"1.2.3.4,5.6.7.8\"  (ips \"\" to clear)}"
+  echo "Setting the source allowlist for '$LABEL' to: ${IPS:-<none - any address>}"
   echo
   # Worth saying out loud: once set, ONLY these addresses can push. Requests
   # from anywhere else -- including from here -- are refused with 403, which is
   # the allowlist working rather than a fault.
   remote "cd $HRX_APP_ROOT && $HRX_PHP artisan tinker --execute='
-    foreach (\App\Models\Telephony\TelephonyCredential::where(\"is_active\", true)->get() as \$c) {
+    \$rows = \App\Models\Telephony\TelephonyCredential::where(\"is_active\", true)
+      ->where(\"label\", \"$LABEL\")->get();
+    if (\$rows->isEmpty()) { echo \"no active credential labelled \\\"$LABEL\\\"\", PHP_EOL; exit(1); }
+    foreach (\$rows as \$c) {
       \$c->allowed_ips = trim(\"$IPS\") === \"\" ? null : trim(\"$IPS\");
       \$c->save();
-      echo \$c->label, \" -> \", json_encode(\$c->allowlist() ?? \"any\"), PHP_EOL;
+      echo \$c->label, \" -> \", json_encode(\$c->allowlist() ?? \"ANY\"), PHP_EOL;
     }
   '" 2>/dev/null | grep -v '^$'
 
