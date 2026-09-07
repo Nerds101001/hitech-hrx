@@ -244,4 +244,31 @@
     .adc-qa-btn{font-size:.68rem;padding:11px 4px;}
     .adc-qa-btn i{font-size:1.2rem;}
   }
+
+  /* Short laptop windows (e.g. 1291x671, 1366x768-class): wide enough to
+     be classed "desktop" by every rule above (>=992px), so none of the
+     width-based compacting ever kicks in - but a window this short still
+     only shows a sliver of the page. Reuses this file's own already-
+     proven mobile/tablet figures (the 767.98px block above) rather than
+     inventing new ones, just triggered by height instead of width. */
+  @media (max-height: 800px) and (min-width: 992px){
+    .adc-hero-title{font-size:1.2rem;}
+    .adc-card{padding:16px 15px 14px;}
+    .adc-card-head{margin-bottom:10px;}
+    .adc-card-title{font-size:.92rem;}
+    .adc-kpi{padding:12px 11px;border-radius:13px;}
+    .adc-kpi-value{font-size:1.3rem;}
+    .adc-kpi-icon{width:32px;height:32px;font-size:1rem;border-radius:9px;}
+    .adc-kpi-label{font-size:.76rem;}
+    .adc-tile{padding:11px;gap:9px;}
+    .adc-tile-icon{width:36px;height:36px;font-size:1.1rem;}
+    .adc-asset-cell{min-height:92px;padding:13px;}
+    .adc-asset-num{font-size:1.5rem;}
+    .adc-tgt-row{padding:8px 6px;}
+    .adc-tgt-row b{font-size:.92rem;}
+    .adc-staff-scroll,.adc-rail-scroll{max-height:38vh;-webkit-overflow-scrolling:touch;}
+    .adc .row.g-4{--bs-gutter-y:.85rem;}
+    .adc .row.g-3{--bs-gutter-y:.7rem;}
+    .adc .mt-4{margin-top:.85rem !important;}
+  }
 </style>

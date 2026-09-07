@@ -4722,48 +4722,40 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
 /* the six lifecycle stat cards were spilling past the card edge */
 .layout-full-width .row.g-6 > [class*="col-"] { min-width: 0; }
 
-/* Small-laptop scale-down (e.g. 1366x768 11-13" screens): reported as
-   "everything's too big, I have to zoom the browser to 80% myself to see
-   a normal amount on screen".
+/* "Everything's too big on my 11-13" laptop, I have to zoom the browser
+   to 80% myself" went through three failed page-wide hacks before
+   finding the real cause, kept here so nobody re-tries them:
+     1. `zoom: 0.8` on <html> - broke the sidebar layout in production.
+        This theme's own responsive menu (resources/assets/vendor/js/
+        menu.js, resources/assets/js/main.js) compares window.innerWidth
+        against LAYOUT_BREAKPOINT (1200px) in several places, and zoom
+        changes what innerWidth reports (zooming out reports a LARGER
+        logical viewport) - suspected, not confirmed, to desync from the
+        few checks that instead read window.screen.width elsewhere in
+        that file, though those are horizontal-menu-only and this app is
+        always vertical, so the real mechanism was never pinned down.
+     2. `font-size: 80%` - safe (nothing here reads computed font-size
+        to make a layout decision) but did almost nothing visually: this
+        theme mixes rem-based sizing with a LOT of hardcoded px (icon
+        boxes, radii, big stat-card numbers), so only the small rem
+        slice actually shrank.
+     3. `transform: scale(0.8)` with compensating 125% width/height -
+        confirmed safe (doesn't touch window.innerWidth/screen.width or
+        any element's clientHeight/scrollHeight - verified against the
+        site's real menu.js with a dispatched resize event) but still
+        visually underwhelming: percentage/rem-sized children got the
+        enlarged 125% box to lay out into, but anything sized in vh/vw
+        (common in this theme for full-height panels) resolves against
+        the REAL, un-enlarged viewport regardless of the transform, so
+        it didn't reflow to fit more.
 
-   Attempt 1 used `zoom: 0.8` on <html>, which broke the sidebar layout
-   in production: this theme's own responsive menu system
-   (resources/assets/vendor/js/menu.js, resources/assets/js/main.js)
-   decides horizontal-vs-vertical layout by comparing window.innerWidth
-   against a fixed LAYOUT_BREAKPOINT (1200px) - but some of its checks
-   use window.innerWidth (which `zoom` changes, since zooming out reports
-   a LARGER logical viewport) while others use window.screen.width
-   (which zoom never touches). That mismatch desynced the menu's layout
-   state, detaching the fixed sidebar from the content column.
-
-   Attempt 2 used a plain `font-size: 80%`, which is safe (never reaches
-   JS - nothing here reads computed font-size to make a layout decision)
-   but visually did almost nothing: this theme mixes rem-based sizing
-   with a LOT of hardcoded px (icon boxes, radii, gaps, big stat-card
-   numbers), so only the small rem-based slice actually shrank - reported
-   back as "too big and weird" (weird from the inconsistent partial
-   shrink specifically).
-
-   This uses `transform: scale()` instead, compensating the box size so
-   the shrunk render still fills the viewport exactly (1 / 0.8 = 125%).
-   Transform is a pure paint-time effect - like zoom it scales literally
-   everything regardless of unit, but UNLIKE zoom it never changes what
-   window.innerWidth/window.screen.width report to JS (confirmed by
-   dispatching a real resize event against this exact rule with the
-   site's own menu.js loaded: innerWidth and the sidebar's menu-vertical
-   class were both unchanged), so it cannot desync the same layout state
-   machine that broke under zoom. It also doesn't change any element's
-   clientHeight/scrollHeight (only the paint layer), so PerfectScrollbar
-   and other height-measuring code keep seeing the same numbers they
-   always did. Not applied below ~1024px width: that range is the
-   theme's own tablet/mobile layout switch, which already has its own
-   separate handling and should not additionally be shrunk on top of
-   that. */
-@media (max-width: 1400px) and (max-height: 800px) and (min-width: 1025px) {
-    html {
-        transform: scale(0.8);
-        transform-origin: top left;
-        width: 125%;
-        height: 125%;
-    }
-}
+   The actual fix needed no screen-size media query at all: the theme
+   already HAS a proper compact density mode - see the .layout-full-width
+   block below (originally built for the Probation Dashboard at a 720px
+   window, now used by ~21 list/dashboard pages) - and the pages that
+   still looked oversized on a small screen were simply the ones whose
+   Blade view never opted into that wrapper class. Fixed at the source:
+   added `layout-full-width` to resources/views/tenant/dashboard/
+   index.blade.php, which had none. Real CSS density, applies at every
+   screen size (matching what the already-compact pages already do),
+   and touches nothing zoom/transform/font-size ever could. */
