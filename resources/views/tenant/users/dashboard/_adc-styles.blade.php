@@ -266,9 +266,24 @@
     .adc-asset-num{font-size:1.5rem;}
     .adc-tgt-row{padding:8px 6px;}
     .adc-tgt-row b{font-size:.92rem;}
-    .adc-staff-scroll,.adc-rail-scroll{max-height:38vh;-webkit-overflow-scrolling:touch;}
+    /* !important: .adc-rail-scroll also carries an inline
+       style="max-height:300px" (admin-index.blade.php's approvals rail),
+       which otherwise always wins over any stylesheet rule regardless of
+       selector weight - this is the one place that needs it to actually
+       govern a short viewport. */
+    .adc-staff-scroll,.adc-rail-scroll{max-height:28vh !important;-webkit-overflow-scrolling:touch;}
     .adc .row.g-4{--bs-gutter-y:.85rem;}
     .adc .row.g-3{--bs-gutter-y:.7rem;}
     .adc .mt-4{margin-top:.85rem !important;}
+
+    /* Safety net: whatever is still inside a card (a chart, a list, both
+       stacked) at least cannot make that ONE card taller than the window
+       itself - it scrolls internally instead of pushing the rest of the
+       page down. This is what actually fixed the dashboard: a single
+       .adc-card (My Tasks + Sales Target row) measured 651px tall against
+       a 671px-tall window on its own, and no amount of padding/font-size
+       trimming on its contents was ever going to close a gap that large -
+       the chart heights above are the other half of that fix. */
+    .adc-card{max-height:60vh;overflow-y:auto;}
   }
 </style>

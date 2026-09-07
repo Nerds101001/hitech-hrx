@@ -69,7 +69,14 @@
       ];
     @endphp
     @foreach($kpis as $k)
-      <div class="col-6 col-md-4 col-xxl-2">
+      {{-- col-lg-2 (not col-xxl-2): the xxl breakpoint is 1400px, so a
+           1291-1399px-wide laptop window fell one tier short of the
+           6-per-row layout and wrapped these into two stacked rows of
+           three instead - doubling this section's height for no visual
+           reason, and no amount of padding/font-size trimming inside a
+           card can undo a whole extra row. lg (992px) is the same
+           threshold the short-viewport compacting below already uses. --}}
+      <div class="col-6 col-md-4 col-lg-2">
         <a href="{{ $k['url'] }}" class="adc-kpi adc-tone-{{ $k['tone'] }} h-100 d-block">
           <div class="adc-kpi-top">
             <span class="adc-kpi-icon"><i class="bx {{ $k['icon'] }}"></i></span>
@@ -522,9 +529,19 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function build(AC) {
+    // Every chart on this page hardcodes its own pixel height, which no CSS
+    // media query can touch (ApexCharts sets it as an inline style at
+    // render time). On a short window (~1291x671-class laptops) those
+    // heights alone - 230/280/300/320px each - were the actual reason the
+    // page stayed oversized no matter how much the surrounding CSS
+    // (.adc-kpi, .adc-card padding, etc.) was compacted. Scaled here once,
+    // centrally, rather than hand-tuning each chart's own height value.
     const mk = (sel, opts) => {
       const el = document.querySelector(sel);
       if (!el) return null;
+      if (opts.chart && typeof opts.chart.height === 'number' && window.innerHeight < 750) {
+        opts.chart.height = Math.round(opts.chart.height * 0.65);
+      }
       try { const c = new AC(el, opts); c.render(); return c; }
       catch (e) { console.error('[adc] '+sel, e); empty(el, 'bx-error-circle', 'Chart failed to load'); return null; }
     };
