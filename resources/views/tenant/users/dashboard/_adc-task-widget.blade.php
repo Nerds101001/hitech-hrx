@@ -26,12 +26,6 @@
   // button since nothing exists yet to mark complete. Same source the My
   // Tasks page itself uses, so the two never disagree here either.
   $twUpcomingSchedules = \App\Http\Controllers\tenant\MyTasksController::upcomingSchedulePreviews(auth()->user());
-
-  // due_date is stored at midnight - it never carried a real time of day,
-  // so formatting it directly always rendered "12:00 AM". The actual
-  // deadline is the fixed cutoff Task::is_overdue itself enforces, not
-  // anything stored per-task.
-  $twDueCutoff = \Carbon\Carbon::createFromTime(\App\Models\Task::DUE_CUTOFF_HOUR, 0)->format('g:i A');
 @endphp
 <style>
   #dashTaskWidget{width:100%;height:100%;box-sizing:border-box;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;}
@@ -82,7 +76,6 @@
           <div class="dash-task-title">{{ $t->title }}</div>
           <div class="dash-task-sub">{{ optional($t->assignedBy)->getFullName() ? 'Assigned by ' . $t->assignedBy->getFullName() : '—' }}</div>
         </div>
-        <div class="dtw-due">Due by {{ $twDueCutoff }}</div>
         <button type="button" class="dtw-complete-btn js-dash-task-complete" data-id="{{ $t->id }}">Complete</button>
       </div>
     @empty
