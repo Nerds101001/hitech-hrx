@@ -59,6 +59,12 @@ class AdminRoleGuard
         'my-tasks',
         'announcements',
         'exit-clearance',
+
+        // Opened to every authenticated user: anyone can assign a task to
+        // anyone else, but what they SEE is scoped inside the controller
+        // (TaskManagementController::scopeVisible()) - same self-service
+        // pattern as my-tasks above, not an admin-data page.
+        'task-management',
     ];
 
     public function handle(Request $request, Closure $next): Response
