@@ -35,7 +35,7 @@ class MyTasksController extends Controller
      */
     public static function assignedTaskBuckets($user): array
     {
-        $empty = ['all' => collect(), 'upcoming' => collect(), 'pending' => collect(), 'completed' => collect(), 'overdue' => collect()];
+        $empty = ['all' => collect(), 'upcoming' => collect(), 'pending' => collect(), 'completed' => collect(), 'overdue' => collect(), 'watching' => collect()];
         if (!$user) {
             return $empty;
         }
@@ -51,12 +51,23 @@ class MyTasksController extends Controller
             ->orderBy('due_date')
             ->get();
 
+        // Tasks this person is CC'd on - watching someone else's work, not
+        // their own. Kept out of every other bucket above: mixing a watched
+        // row into "pending"/"overdue" would make it look like this
+        // person's own task is late, when it's actually someone else's.
+        $watching = Task::ccTo($user->id)
+            ->with(['assignedBy', 'user', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+            ->orderByRaw('due_date IS NULL')
+            ->orderBy('due_date')
+            ->get();
+
         return [
             'all'       => $tasks,
             'overdue'   => $tasks->filter(fn ($t) => $t->is_overdue)->values(),
             'completed' => $tasks->filter(fn ($t) => $t->is_completed)->values(),
             'pending'   => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && $t->due_date && $t->due_date->isToday())->values(),
             'upcoming'  => $tasks->filter(fn ($t) => !$t->is_completed && !$t->is_overdue && (!$t->due_date || $t->due_date->isFuture()))->values(),
+            'watching'  => $watching,
         ];
     }
 
@@ -172,6 +183,125 @@ class MyTasksController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Resubmitted.']);
+    }
+
+    /**
+     * Move MY OWN task between Pending / Partially Done / Completed, and
+     * optionally set (or clear) when I actually expect to finish it. Only
+     * the assignee can do this — the assigner and anyone CC'd can watch and
+     * reply (see addReply()), but not change status on someone else's
+     * behalf.
+     */
+    public function updateStatus(Request $request, Task $task)
+    {
+        if ($task->user_id !== auth()->id()) {
+            abort(403, 'This is not your task.');
+        }
+
+        $validated = $request->validate([
+            'status'                    => 'required|in:' . implode(',', array_keys(Task::PROGRESS_STATUSES)),
+            'completion_expected_date'  => 'nullable|date|after_or_equal:today',
+            'remarks'                   => 'nullable|string|max:2000',
+        ]);
+
+        $task->status = $validated['status'];
+        $task->completed_at = $validated['status'] === 'completed' ? now() : null;
+        // Clearing the reminder guard on any status change, not just when a
+        // new date is set: an expected date that already fired its
+        // reminder and then got pushed out (or cleared) must be free to
+        // notify again against whatever now stands, not stay silenced by a
+        // stamp from the old date.
+        $task->completion_expected_date = $validated['status'] === 'completed'
+            ? null
+            : ($validated['completion_expected_date'] ?? $task->completion_expected_date);
+        $task->expected_date_notified_at = null;
+        $task->save();
+
+        $task->taskUpdates()->create([
+            'comment'       => $validated['remarks'] ?? null,
+            'update_type'   => $validated['status'] === 'completed' ? 'complete' : 'comment',
+            'is_admin'      => false,
+            'created_by_id' => auth()->id(),
+            'updated_by_id' => auth()->id(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => Task::PROGRESS_STATUSES[$validated['status']] . '.',
+        ]);
+    }
+
+    /**
+     * A comment that doesn't touch status — how the assigner or a CC'd
+     * co-owner follows up, and how the assignee can answer without that
+     * being read as "I'm done." isVisibleTo() is the one gate: assignee,
+     * assigner, or CC'd, nobody else.
+     */
+    public function addReply(Request $request, Task $task)
+    {
+        if (!$task->isVisibleTo(auth()->id())) {
+            abort(403, 'You do not have access to this task.');
+        }
+
+        $validated = $request->validate([
+            'comment'    => 'required|string|max:2000',
+            'attachment' => TaskAttachment::RULES,
+        ]);
+
+        $update = $task->taskUpdates()->create([
+            'comment'       => $validated['comment'],
+            'file_url'      => $request->hasFile('attachment')
+                ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
+                : null,
+            'update_type'   => 'comment',
+            'is_admin'      => auth()->id() !== $task->user_id,
+            'created_by_id' => auth()->id(),
+            'updated_by_id' => auth()->id(),
+        ]);
+
+        return response()->json(['success' => true, 'update' => [
+            'id'         => $update->id,
+            'comment'    => $update->comment,
+            'created_by' => auth()->user()->getFullName(),
+            'created_at' => $update->created_at->format('d M Y, h:i A'),
+        ]]);
+    }
+
+    /**
+     * The full update thread for one task, for the assignee/assigner/CC'd
+     * detail panel — same isVisibleTo() gate as addReply().
+     */
+    public function thread(Task $task)
+    {
+        if (!$task->isVisibleTo(auth()->id())) {
+            abort(403, 'You do not have access to this task.');
+        }
+
+        $task->load(['assignedBy', 'user', 'ccUsers', 'taskUpdates' => fn ($q) => $q->with('createdBy')->oldest()]);
+
+        return response()->json([
+            'task' => [
+                'id'                        => $task->id,
+                'title'                     => $task->title,
+                'description'               => $task->description,
+                'status'                    => $task->status,
+                'status_label'              => Task::PROGRESS_STATUSES[$task->status] ?? ucfirst($task->status),
+                'assigned_by'               => optional($task->assignedBy)->getFullName(),
+                'assignee'                  => optional($task->user)->getFullName(),
+                'due_date'                  => optional($task->due_date)->format('d M Y'),
+                'completion_expected_date'  => optional($task->completion_expected_date)->format('d M Y'),
+                'is_overdue'                => $task->is_overdue,
+                'cc_users'                  => $task->ccUsers->map(fn ($u) => $u->getFullName())->values(),
+            ],
+            'updates' => $task->taskUpdates->map(fn ($u) => [
+                'id'         => $u->id,
+                'comment'    => $u->comment,
+                'type'       => $u->update_type,
+                'file_url'   => $u->file_url ? route('task-updates.attachment', $u->id) : null,
+                'created_by' => optional($u->createdBy)->getFullName() ?? '—',
+                'created_at' => $u->created_at->format('d M Y, h:i A'),
+            ])->values(),
+        ]);
     }
 
     /**

@@ -614,6 +614,20 @@ Route::middleware([
     // inside the controller, not the route.
     Route::post('my-tasks/{task}/resubmit', [\App\Http\Controllers\tenant\MyTasksController::class, 'resubmit'])
         ->name('my-tasks.resubmit');
+    // Pending/Partially Done/Completed + an optional expected-completion
+    // date — only the assignee can move their own task through this, same
+    // open-to-anyone-who-owns-it shape as complete()/resubmit() above.
+    Route::post('my-tasks/{task}/status', [\App\Http\Controllers\tenant\MyTasksController::class, 'updateStatus'])
+        ->name('my-tasks.status');
+    // A comment that doesn't change status - usable by the assignee, the
+    // assigner, or anyone CC'd, checked inside the controller via
+    // Task::isVisibleTo().
+    Route::post('my-tasks/{task}/reply', [\App\Http\Controllers\tenant\MyTasksController::class, 'addReply'])
+        ->name('my-tasks.reply');
+    // The full update thread for one task, for the detail panel - same
+    // isVisibleTo() gate as reply above.
+    Route::get('my-tasks/{task}/thread', [\App\Http\Controllers\tenant\MyTasksController::class, 'thread'])
+        ->name('my-tasks.thread');
 
     // Attendance setup queue: accounts records each new joiner's employee ID
     // and biometric ID. Drives the login popup and the dashboard task card.
@@ -729,6 +743,7 @@ Route::middleware([
       Route::delete('{id}', [AssetController::class, 'destroy'])->name('destroy');
       Route::post('assign/{id}', [AssetController::class, 'assignAsset'])->name('assign');
       Route::post('unassign/{id}', [AssetController::class, 'unassignAsset'])->name('unassign');
+      Route::post('transfer/{id}', [AssetController::class, 'transferAsset'])->name('transfer');
     });
 
     // --- RECRUITMENT MANAGEMENT ---

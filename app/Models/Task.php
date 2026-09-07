@@ -21,6 +21,20 @@ class Task extends Model implements AuditableContract
 
   public const PRIORITIES = ['low', 'medium', 'high'];
 
+  /**
+   * The three states an assignee actually chooses between when updating
+   * their own progress. 'in_progress' already existed on the status enum
+   * unused elsewhere in the app, so "Partially Done" reuses it rather than
+   * widening the enum for a new value. Every other enum value (hold,
+   * rejected, reassigned, reopened, objection, ...) stays admin/internal,
+   * not offered in this picker.
+   */
+  public const PROGRESS_STATUSES = [
+    'new'         => 'Pending',
+    'in_progress' => 'Partially Done',
+    'completed'   => 'Completed',
+  ];
+
   protected $fillable = [
     'batch_id',
     'task_schedule_id',
@@ -49,6 +63,8 @@ class Task extends Model implements AuditableContract
     'objected_by_id',
     'objected_at',
     'delay_notified_at',
+    'completion_expected_date',
+    'expected_date_notified_at',
     'created_by_id',
     'updated_by_id',
     'tenant_id',
@@ -99,10 +115,36 @@ class Task extends Model implements AuditableContract
     return $this->belongsTo(TaskSchedule::class, 'task_schedule_id');
   }
 
+  /** The pivot rows themselves — carries who added the CC and when. */
+  public function taskCcs()
+  {
+    return $this->hasMany(TaskCc::class);
+  }
+
+  /** The people CC'd on this task — co-owners who can watch status and reply, but aren't the assignee. */
+  public function ccUsers()
+  {
+    return $this->belongsToMany(User::class, 'task_ccs')->withPivot('created_by_id')->withTimestamps();
+  }
+
   /** Only this person's own tasks — the one place "for a user" is decided. */
   public function scopeForUser(Builder $query, int $userId): Builder
   {
     return $query->where('user_id', $userId);
+  }
+
+  /** Tasks this person is CC'd on — watching, not assigned. */
+  public function scopeCcTo(Builder $query, int $userId): Builder
+  {
+    return $query->whereHas('taskCcs', fn ($q) => $q->where('user_id', $userId));
+  }
+
+  /** True if this person can see the task's full update thread and add a reply: assignee, assigner, or CC'd. */
+  public function isVisibleTo(int $userId): bool
+  {
+    return $this->user_id === $userId
+      || $this->assigned_by_id === $userId
+      || $this->taskCcs()->where('user_id', $userId)->exists();
   }
 
   /**
@@ -171,6 +213,8 @@ class Task extends Model implements AuditableContract
     'completed_at' => 'datetime',
     'objected_at' => 'datetime',
     'delay_notified_at' => 'datetime',
+    'completion_expected_date' => 'date',
+    'expected_date_notified_at' => 'datetime',
   ];
 
 

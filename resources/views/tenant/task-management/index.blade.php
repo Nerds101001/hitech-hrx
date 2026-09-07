@@ -409,13 +409,16 @@
                             'actualCompletion' => $t->completed_at ? $t->completed_at->format('d/m/Y h:i A') : '—',
                             'timingLabel' => ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'][$t->completion_timing] ?? null,
                             'timingClass' => ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'][$t->completion_timing] ?? null,
+                            'ccNames' => $t->ccUsers->map(fn($u) => $u->getFullName())->implode(', '),
+                            'threadUrl' => route('my-tasks.thread', $t->id),
                           ]) }}">
                     <i class="bx bx-show"></i>
                   </button>
                   <button type="button" class="icon-sophisticated js-edit-task" title="Edit"
                           data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
                           data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
-                          data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}">
+                          data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}"
+                          data-cc-ids="{{ $t->ccUsers->pluck('id')->implode(',') }}">
                     <i class="bx bx-edit"></i>
                   </button>
                   @if(in_array($t->status, ['completed', 'resolved']))
@@ -764,6 +767,16 @@
             </div>
 
             <div class="col-12">
+              <label class="form-label">CC (optional)</label>
+              <select id="at_cc" class="form-select select2" multiple>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                @endforeach
+              </select>
+              <div class="form-text">People who can follow this task's status and reply without owning it — it shows up on their dashboard as something Assigned to someone else you're watching.</div>
+            </div>
+
+            <div class="col-12">
               <label class="form-label">Attach an image (optional)</label>
               <input type="file" id="at_attachment" class="form-control" accept="image/png,image/jpeg,image/webp">
               <div class="form-text">Reference photo for what's expected — shown to everyone this task is assigned to. JPG/PNG/WEBP, up to 5MB.</div>
@@ -820,6 +833,15 @@
               </select>
               <div class="form-text">Reassigns this one task — only to someone on your own team.</div>
             </div>
+            <div class="col-12">
+              <label class="form-label">CC (optional)</label>
+              <select id="et_cc" class="form-select select2" multiple>
+                @foreach($employees as $e)
+                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                @endforeach
+              </select>
+              <div class="form-text">People who can follow this task's status and reply without owning it.</div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -846,6 +868,7 @@
           <dt class="col-4">Priority</dt><dd class="col-8" id="vt_priority"></dd>
           <dt class="col-4">Assigned To</dt><dd class="col-8" id="vt_assignee"></dd>
           <dt class="col-4">Assigned By</dt><dd class="col-8" id="vt_assignedBy"></dd>
+          <dt class="col-4 d-none" id="vt_cc_label">CC</dt><dd class="col-8 d-none" id="vt_cc"></dd>
           <dt class="col-4">Status</dt><dd class="col-8" id="vt_status"></dd>
           <dt class="col-4 d-none" id="vt_objection_label">Objection</dt><dd class="col-8 d-none" id="vt_objection"></dd>
         </dl>
@@ -864,6 +887,16 @@
         <div class="d-none mt-3" id="vt_update_attachment_wrap">
           <div class="fw-medium small text-muted mb-1">Completion / objection photo</div>
           <a id="vt_update_attachment_link" href="#" target="_blank"><img id="vt_update_attachment_img" src="" alt="Attachment" class="rounded" style="max-width:100%;max-height:220px;border:1px solid #e2e8f0;"></a>
+        </div>
+
+        <hr class="my-3">
+        <div class="fw-medium small text-muted mb-2">Updates &amp; replies</div>
+        <div id="vt_thread" style="max-height:260px;overflow-y:auto;">
+          <div class="text-muted small" id="vt_thread_loading">Loading...</div>
+        </div>
+        <div class="input-group input-group-sm mt-2">
+          <input type="text" id="vt_reply_text" class="form-control" placeholder="Add a reply or follow-up...">
+          <button type="button" class="btn btn-hitech" id="vt_reply_btn">Send</button>
         </div>
       </div>
       <div class="modal-footer">
@@ -1026,7 +1059,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('assignTaskForm').reset();
     atDueDatePicker.clear();
     refreshInterval();
-    $('#at_employees, #at_departments').val(null).trigger('change');
+    $('#at_employees, #at_departments, #at_cc').val(null).trigger('change');
     modal.show();
   });
 
@@ -1047,6 +1080,7 @@ document.addEventListener('DOMContentLoaded', function () {
     fd.append('day_of_month', document.getElementById('at_monthday').value);
     (($('#at_employees').val()) || []).forEach(id => fd.append('employee_ids[]', id));
     (($('#at_departments').val()) || []).forEach(id => fd.append('department_ids[]', id));
+    (($('#at_cc').val()) || []).forEach(id => fd.append('cc_user_ids[]', id));
     const atFile = document.getElementById('at_attachment').files[0];
     if (atFile) fd.append('attachment', atFile);
 
@@ -1235,6 +1269,9 @@ document.addEventListener('DOMContentLoaded', function () {
       document.getElementById('vt_due').textContent = t.due;
       document.getElementById('vt_assignee').textContent = t.assignee;
       document.getElementById('vt_assignedBy').textContent = t.assignedBy;
+      document.getElementById('vt_cc_label').classList.toggle('d-none', !t.ccNames);
+      document.getElementById('vt_cc').classList.toggle('d-none', !t.ccNames);
+      document.getElementById('vt_cc').textContent = t.ccNames || '';
       document.getElementById('vt_status').textContent = t.status;
       const hasObjection = !!t.objection;
       document.getElementById('vt_objection_label').classList.toggle('d-none', !hasObjection);
@@ -1263,8 +1300,95 @@ document.addEventListener('DOMContentLoaded', function () {
         badge.className = 'badge-hitech ' + t.timingClass;
       }
 
+      window.__vtThreadUrl = t.threadUrl;
+      loadTaskThread(t.threadUrl);
+
       viewModal.show();
     });
+  });
+
+  // Renders each update via DOM APIs (never innerHTML with the comment
+  // text itself) since a comment is free text anyone with access to the
+  // task could have typed.
+  function loadTaskThread(threadUrl) {
+    const box = document.getElementById('vt_thread');
+    box.innerHTML = '<div class="text-muted small">Loading...</div>';
+    fetch(threadUrl, { headers: { 'Accept': 'application/json' } })
+      .then(r => r.json())
+      .then(data => {
+        box.innerHTML = '';
+        if (!data.updates || !data.updates.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-muted small';
+          empty.textContent = 'No updates yet.';
+          box.appendChild(empty);
+          return;
+        }
+        data.updates.forEach(function (u) {
+          const row = document.createElement('div');
+          row.className = 'mb-2 pb-2';
+          row.style.borderBottom = '1px solid #f1f5f9';
+
+          const meta = document.createElement('div');
+          meta.className = 'small text-muted';
+          meta.textContent = u.created_by + ' · ' + u.created_at;
+          row.appendChild(meta);
+
+          if (u.comment) {
+            const body = document.createElement('div');
+            body.className = 'small';
+            body.textContent = u.comment;
+            row.appendChild(body);
+          }
+
+          if (u.file_url) {
+            const link = document.createElement('a');
+            link.href = u.file_url;
+            link.target = '_blank';
+            link.className = 'small';
+            link.textContent = 'View attachment';
+            row.appendChild(link);
+          }
+
+          box.appendChild(row);
+        });
+        box.scrollTop = box.scrollHeight;
+      })
+      .catch(() => { box.innerHTML = '<div class="text-danger small">Could not load updates.</div>'; });
+  }
+
+  document.getElementById('vt_reply_btn').addEventListener('click', function () {
+    const input = document.getElementById('vt_reply_text');
+    const comment = input.value.trim();
+    if (!comment || !window.__vtThreadUrl) return;
+
+    const replyUrl = window.__vtThreadUrl.replace(/\/thread$/, '/reply');
+    const btn = this;
+    btn.disabled = true;
+
+    fetch(replyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': "{{ csrf_token() }}",
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ comment: comment }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        btn.disabled = false;
+        if (ok && data.success) {
+          input.value = '';
+          loadTaskThread(window.__vtThreadUrl);
+        } else {
+          Swal.fire({ icon: 'error', title: 'Could not send', text: data.message || 'Something went wrong.' });
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
+        Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+      });
   });
 
   // ══ Edit Task ════════════════════════════════════════════════════════
@@ -1308,6 +1432,9 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       $('#et_assignee').val(etOriginalUserId).trigger('change');
 
+      const ccIds = (btn.dataset.ccIds || '').split(',').filter(Boolean);
+      $('#et_cc').val(ccIds).trigger('change');
+
       editModal.show();
     });
   });
@@ -1337,6 +1464,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const v = $('#et_assignee').val();
           return (v && v !== etOriginalUserId) ? v : null;
         })(),
+        cc_user_ids: $('#et_cc').val() || [],
       }),
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))

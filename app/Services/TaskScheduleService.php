@@ -42,12 +42,19 @@ class TaskScheduleService
             ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->pluck('id');
 
+        // Same active-only filter as targets, and excludes anyone who's also
+        // a target - being CC'd on your own task is meaningless.
+        $ccIds = User::whereIn('id', $schedule->cc_user_ids ?? [])
+            ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->pluck('id')
+            ->diff($targetIds);
+
         $batchId = (string) Str::uuid();
         $created = collect();
 
-        DB::transaction(function () use ($schedule, $targetIds, $batchId, $day, &$created) {
+        DB::transaction(function () use ($schedule, $targetIds, $ccIds, $batchId, $day, &$created) {
             foreach ($targetIds as $uid) {
-                $created->push(Task::create([
+                $task = Task::create([
                     'batch_id'         => $batchId,
                     'task_schedule_id' => $schedule->id,
                     'title'            => $schedule->title,
@@ -61,7 +68,16 @@ class TaskScheduleService
                     'priority'         => $schedule->priority,
                     'created_by_id'    => $schedule->assigned_by_id,
                     'updated_by_id'    => $schedule->assigned_by_id,
-                ]));
+                ]);
+
+                foreach ($ccIds as $ccId) {
+                    $task->taskCcs()->create([
+                        'user_id'       => $ccId,
+                        'created_by_id' => $schedule->assigned_by_id,
+                    ]);
+                }
+
+                $created->push($task);
             }
             $schedule->update(['last_run_on' => $day]);
         });

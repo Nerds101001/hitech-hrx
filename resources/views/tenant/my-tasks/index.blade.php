@@ -69,7 +69,7 @@
 
     {{-- ===================== Assigned Tasks ===================== --}}
     @php
-      $anyAssignedTask = $taskOpenCount + $taskBuckets['completed']->count() + $upcomingSchedules->count() > 0;
+      $anyAssignedTask = $taskOpenCount + $taskBuckets['completed']->count() + $upcomingSchedules->count() + $taskBuckets['watching']->count() > 0;
       $priorityBadge = ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'];
     @endphp
     @if($anyAssignedTask)
@@ -100,6 +100,11 @@
               <i class="bx bx-check-circle"></i> Completed <span class="badge badge-hitech-success badge-hitech ms-1">{{ $taskBuckets['completed']->count() }}</span>
             </button>
           </li>
+          <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#taskWatching" type="button">
+              <i class="bx bx-show"></i> Watching <span class="badge badge-muted badge-hitech ms-1">{{ $taskBuckets['watching']->count() }}</span>
+            </button>
+          </li>
         </ul>
         <div style="min-width:180px">
           <select class="form-select form-select-sm" id="taskPriorityFilter">
@@ -116,9 +121,62 @@
         $timingLabel = ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'];
       @endphp
       <div class="tab-content p-0 border-0 mb-6">
-        @foreach(['all' => 'taskAll', 'overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted'] as $bucketKey => $paneId)
+        @foreach(['all' => 'taskAll', 'overdue' => 'taskOverdue', 'pending' => 'taskPending', 'upcoming' => 'taskUpcoming', 'completed' => 'taskCompleted', 'watching' => 'taskWatching'] as $bucketKey => $paneId)
           <div class="tab-pane fade {{ $bucketKey === 'all' ? 'show active' : '' }}" id="{{ $paneId }}">
-            @if($taskBuckets[$bucketKey]->isNotEmpty())
+            @if($bucketKey === 'watching')
+              {{-- Someone else's task, CC'd to this person - watch status
+                   and reply, no Complete action, it isn't theirs to finish. --}}
+              @if($taskBuckets['watching']->isNotEmpty())
+                <div class="hitech-card">
+                  <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th style="min-width:220px">Task</th>
+                          <th>Assigned To</th>
+                          <th style="min-width:150px">Assigned By</th>
+                          <th>Due</th>
+                          <th class="text-end" style="min-width:150px">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @foreach($taskBuckets['watching'] as $t)
+                          <tr>
+                            <td>
+                              <div class="fw-medium">{{ $t->title }}</div>
+                              @if($t->description)
+                                <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
+                              @endif
+                            </td>
+                            <td><small class="text-muted">{{ optional($t->user)->getFullName() ?? '—' }}</small></td>
+                            <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
+                            <td class="text-nowrap">
+                              {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
+                              @if($t->is_overdue)
+                                <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
+                              @endif
+                            </td>
+                            <td class="text-end">
+                              <span class="badge-hitech {{ $t->is_completed ? 'badge-hitech-success' : 'badge-brand-soft' }} d-block mb-1" style="width:fit-content;margin-left:auto;">
+                                {{ \App\Models\Task::PROGRESS_STATUSES[$t->status] ?? ucfirst($t->status) }}
+                              </span>
+                              <button type="button" class="mt-go js-view-thread" data-url="{{ route('my-tasks.thread', $t->id) }}" data-title="{{ $t->title }}">
+                                View &amp; Reply
+                              </button>
+                            </td>
+                          </tr>
+                        @endforeach
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              @else
+                <div class="mt-empty py-4">
+                  <i class="bx bx-check-circle" style="font-size:2rem"></i>
+                  <p class="mb-0">Nothing you're CC'd on.</p>
+                </div>
+              @endif
+            @elseif($taskBuckets[$bucketKey]->isNotEmpty())
               <div class="hitech-card">
                 <div class="table-responsive">
                   <table class="table table-hover align-middle mb-0">
@@ -177,8 +235,13 @@
                                 Fix &amp; Resubmit
                               </button>
                             @elseif(!$t->is_completed)
-                              <button type="button" class="mt-go js-complete-task {{ $t->is_overdue ? 'mt-go-danger' : '' }}" data-id="{{ $t->id }}" data-title="{{ $t->title }}">
-                                Mark Complete
+                              @if($t->completion_expected_date)
+                                <small class="text-muted d-block mb-1">Expects {{ $t->completion_expected_date->format('d M Y') }}</small>
+                              @endif
+                              <button type="button" class="mt-go js-status-task {{ $t->is_overdue ? 'mt-go-danger' : '' }}"
+                                      data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-status="{{ $t->status }}"
+                                      data-expected="{{ $t->completion_expected_date?->format('Y-m-d') }}">
+                                Update Status
                               </button>
                             @else
                               <small class="text-muted d-block">{{ $t->completed_at ? $t->completed_at->format('d M Y') : '—' }}</small>
@@ -186,6 +249,10 @@
                                 <span class="badge-hitech {{ $timingBadge[$t->completion_timing] }}">{{ $timingLabel[$t->completion_timing] }}</span>
                               @endif
                             @endif
+                            <button type="button" class="mt-go js-view-thread mt-1" style="background:#fff;color:#005a5a;border:1px solid #cfe3e3;"
+                                    data-url="{{ route('my-tasks.thread', $t->id) }}" data-title="{{ $t->title }}">
+                              Updates
+                            </button>
                           </td>
                         </tr>
                       @endforeach
@@ -286,26 +353,67 @@
 </div>
 
 {{-- Mark Complete modal --}}
-<div class="modal fade" id="completeTaskModal" tabindex="-1">
+<div class="modal fade" id="statusTaskModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <form id="completeTaskForm">
+      <form id="statusTaskForm">
         <div class="modal-header">
-          <h5 class="modal-title">Mark Complete</h5>
+          <h5 class="modal-title">Update Status</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <p class="fw-medium mb-3" id="completeTaskTitle"></p>
+          <p class="fw-medium mb-3" id="statusTaskTitle"></p>
+
+          <label class="form-label">Status</label>
+          <div class="btn-group w-100 mb-3" role="group">
+            @foreach(\App\Models\Task::PROGRESS_STATUSES as $key => $label)
+              <input type="radio" class="btn-check" name="statusTaskStatus" id="statusTaskStatus_{{ $key }}" value="{{ $key }}" @if($key === 'new') checked @endif>
+              <label class="btn btn-outline-hitech" for="statusTaskStatus_{{ $key }}">{{ $label }}</label>
+            @endforeach
+          </div>
+
+          <div id="statusTaskExpectedWrap">
+            <label class="form-label">Expected completion date (optional)</label>
+            <input type="date" id="statusTaskExpected" class="form-control mb-3">
+            <div class="form-text mb-3">You'll get a reminder that day if this isn't marked complete yet.</div>
+          </div>
+
           <label class="form-label">Remarks (optional)</label>
-          <textarea id="completeTaskRemarks" class="form-control mb-3" rows="3" placeholder="Anything worth noting about how this was completed..."></textarea>
-          <label class="form-label">Attach a photo (optional)</label>
-          <input type="file" id="completeTaskAttachment" class="form-control" accept="image/png,image/jpeg,image/webp">
+          <textarea id="statusTaskRemarks" class="form-control mb-3" rows="3" placeholder="Anything worth noting..."></textarea>
+          <div id="statusTaskAttachmentWrap">
+            <label class="form-label">Attach a photo (optional)</label>
+            <input type="file" id="statusTaskAttachment" class="form-control" accept="image/png,image/jpeg,image/webp">
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn-hitech">Mark Complete</button>
+          <button type="submit" class="btn-hitech">Save</button>
         </div>
       </form>
+    </div>
+  </div>
+</div>
+
+{{-- Task detail: full update thread + reply — shared by "Updates" on an
+     owned task and "View & Reply" on a watched (CC'd) one. --}}
+<div class="modal fade" id="threadModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="threadModalTitle">Updates</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="threadModalBody" style="min-height:120px;">
+          <div class="text-muted small">Loading...</div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:block;">
+        <div class="input-group input-group-sm">
+          <input type="text" id="threadReplyText" class="form-control" placeholder="Add a reply or follow-up...">
+          <button type="button" class="btn btn-hitech" id="threadReplyBtn">Send</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -351,22 +459,32 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  const completeModalEl = document.getElementById('completeTaskModal');
-  if (!completeModalEl) return;
-  const completeModal = new bootstrap.Modal(completeModalEl);
+  const statusModalEl = document.getElementById('statusTaskModal');
+  if (!statusModalEl) return;
+  const statusModal = new bootstrap.Modal(statusModalEl);
   let currentTaskId = null;
 
-  document.querySelectorAll('.js-complete-task').forEach(function (btn) {
+  function toggleStatusExtras() {
+    const status = document.querySelector('input[name="statusTaskStatus"]:checked').value;
+    document.getElementById('statusTaskExpectedWrap').classList.toggle('d-none', status === 'completed');
+    document.getElementById('statusTaskAttachmentWrap').classList.toggle('d-none', status !== 'completed');
+  }
+  document.querySelectorAll('input[name="statusTaskStatus"]').forEach(r => r.addEventListener('change', toggleStatusExtras));
+
+  document.querySelectorAll('.js-status-task').forEach(function (btn) {
     btn.addEventListener('click', function () {
       currentTaskId = btn.dataset.id;
-      document.getElementById('completeTaskTitle').textContent = btn.dataset.title;
-      document.getElementById('completeTaskRemarks').value = '';
-      document.getElementById('completeTaskAttachment').value = '';
-      completeModal.show();
+      document.getElementById('statusTaskTitle').textContent = btn.dataset.title;
+      document.getElementById('statusTaskStatus_' + (btn.dataset.status === 'completed' ? 'completed' : (btn.dataset.status === 'in_progress' ? 'in_progress' : 'new'))).checked = true;
+      document.getElementById('statusTaskExpected').value = btn.dataset.expected || '';
+      document.getElementById('statusTaskRemarks').value = '';
+      document.getElementById('statusTaskAttachment').value = '';
+      toggleStatusExtras();
+      statusModal.show();
     });
   });
 
-  document.getElementById('completeTaskForm').addEventListener('submit', function (e) {
+  document.getElementById('statusTaskForm').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!currentTaskId) return;
     const btn = e.target.querySelector('button[type="submit"]');
@@ -374,18 +492,48 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.disabled = true;
     btn.innerHTML = 'Saving...';
 
-    const completeFd = new FormData();
-    completeFd.append('remarks', document.getElementById('completeTaskRemarks').value);
-    const completeFile = document.getElementById('completeTaskAttachment').files[0];
-    if (completeFile) completeFd.append('attachment', completeFile);
+    const status = document.querySelector('input[name="statusTaskStatus"]:checked').value;
 
-    fetch('/my-tasks/' + currentTaskId + '/complete', {
+    // Completed carries a possible photo, so it goes through the original
+    // multipart /complete endpoint (unchanged, still what the dashboard
+    // widget's own quick Complete button hits too). Pending/Partially Done
+    // never take a photo, so they go through /status as plain JSON.
+    if (status === 'completed') {
+      const fd = new FormData();
+      fd.append('remarks', document.getElementById('statusTaskRemarks').value);
+      const file = document.getElementById('statusTaskAttachment').files[0];
+      if (file) fd.append('attachment', file);
+
+      fetch('/my-tasks/' + currentTaskId + '/complete', {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
+        body: fd,
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data })))
+        .then(({ ok, data }) => {
+          btn.disabled = false; btn.innerHTML = original;
+          if (ok && data.success) { window.location.reload(); }
+          else { Swal.fire({ icon: 'error', title: 'Could not save', text: data.message || 'Something went wrong.' }); }
+        })
+        .catch(() => {
+          btn.disabled = false; btn.innerHTML = original;
+          Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+        });
+      return;
+    }
+
+    fetch('/my-tasks/' + currentTaskId + '/status', {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'X-CSRF-TOKEN': "{{ csrf_token() }}",
         'Accept': 'application/json',
       },
-      body: completeFd,
+      body: JSON.stringify({
+        status: status,
+        completion_expected_date: document.getElementById('statusTaskExpected').value || null,
+        remarks: document.getElementById('statusTaskRemarks').value || null,
+      }),
     })
       .then(r => r.json().then(data => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
@@ -394,12 +542,111 @@ document.addEventListener('DOMContentLoaded', function () {
         if (ok && data.success) {
           window.location.reload();
         } else {
-          Swal.fire({ icon: 'error', title: 'Could not complete', text: data.message || 'Something went wrong.' });
+          Swal.fire({ icon: 'error', title: 'Could not save', text: data.message || 'Something went wrong.' });
         }
       })
       .catch(() => {
         btn.disabled = false;
         btn.innerHTML = original;
+        Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
+      });
+  });
+
+  // ══ Task detail thread: shared by "Updates" and "View & Reply" ═══════
+  const threadModalEl = document.getElementById('threadModal');
+  const threadModal = new bootstrap.Modal(threadModalEl);
+  let threadUrl = null;
+
+  function loadThread() {
+    const box = document.getElementById('threadModalBody');
+    box.innerHTML = '<div class="text-muted small">Loading...</div>';
+    fetch(threadUrl, { headers: { 'Accept': 'application/json' } })
+      .then(r => r.json())
+      .then(data => {
+        box.innerHTML = '';
+        if (!data.updates || !data.updates.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-muted small';
+          empty.textContent = 'No updates yet.';
+          box.appendChild(empty);
+          return;
+        }
+        // DOM APIs throughout, never innerHTML with the comment text
+        // itself - it's free text anyone with access to the task could
+        // have typed.
+        data.updates.forEach(function (u) {
+          const row = document.createElement('div');
+          row.className = 'mb-2 pb-2';
+          row.style.borderBottom = '1px solid #f1f5f9';
+
+          const meta = document.createElement('div');
+          meta.className = 'small text-muted';
+          meta.textContent = u.created_by + ' · ' + u.created_at;
+          row.appendChild(meta);
+
+          if (u.comment) {
+            const body = document.createElement('div');
+            body.className = 'small';
+            body.textContent = u.comment;
+            row.appendChild(body);
+          }
+
+          if (u.file_url) {
+            const link = document.createElement('a');
+            link.href = u.file_url;
+            link.target = '_blank';
+            link.className = 'small';
+            link.textContent = 'View attachment';
+            row.appendChild(link);
+          }
+
+          box.appendChild(row);
+        });
+        box.scrollTop = box.scrollHeight;
+      })
+      .catch(() => { box.innerHTML = '<div class="text-danger small">Could not load updates.</div>'; });
+  }
+
+  document.querySelectorAll('.js-view-thread').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      threadUrl = btn.dataset.url;
+      document.getElementById('threadModalTitle').textContent = btn.dataset.title;
+      document.getElementById('threadReplyText').value = '';
+      loadThread();
+      threadModal.show();
+    });
+  });
+
+  document.getElementById('threadReplyBtn').addEventListener('click', function () {
+    const input = document.getElementById('threadReplyText');
+    const comment = input.value.trim();
+    if (!comment || !threadUrl) return;
+
+    const replyUrl = threadUrl.replace(/\/thread$/, '/reply');
+    const btn = this;
+    btn.disabled = true;
+
+    fetch(replyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': "{{ csrf_token() }}",
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({ comment: comment }),
+    })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        btn.disabled = false;
+        if (ok && data.success) {
+          input.value = '';
+          loadThread();
+        } else {
+          Swal.fire({ icon: 'error', title: 'Could not send', text: data.message || 'Something went wrong.' });
+        }
+      })
+      .catch(() => {
+        btn.disabled = false;
         Swal.fire({ icon: 'error', title: 'Network error', text: 'Please try again.' });
       });
   });

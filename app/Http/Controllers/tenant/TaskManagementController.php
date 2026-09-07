@@ -44,7 +44,7 @@ class TaskManagementController extends Controller
         // needs attention next — with undated tasks pushed to the end rather
         // than sorting first as NULL otherwise would, and newest-assigned as
         // the final tiebreaker. Same ordering My Tasks uses.
-        $query = Task::with(['user.department', 'assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+        $query = Task::with(['user.department', 'assignedBy', 'ccUsers', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
@@ -271,6 +271,11 @@ class TaskManagementController extends Controller
             'employee_ids.*' => 'integer|exists:users,id',
             'department_ids'   => 'nullable|array',
             'department_ids.*' => 'integer|exists:departments,id',
+            // People watching this task without owning it - e.g. Sadhna CC'd
+            // on a task Mukul assigned to someone else, so she can follow its
+            // status and reply without it counting as her own work.
+            'cc_user_ids'    => 'nullable|array',
+            'cc_user_ids.*'  => 'integer|exists:users,id',
             'attachment'     => TaskAttachment::RULES,
         ]);
 
@@ -307,8 +312,14 @@ class TaskManagementController extends Controller
             return response()->json(['success' => false, 'message' => 'None of the selected people are in your team.'], 422);
         }
 
+        // Not scoped by TaskAccess like $targetIds: CC is watching, not being
+        // assigned work, so it deliberately isn't confined to the assigner's
+        // own reports. Excludes anyone already a target - being CC'd on your
+        // own task is meaningless.
+        $ccIds = collect($validated['cc_user_ids'] ?? [])->unique()->diff($targetIds)->values();
+
         if (!empty($validated['interval'])) {
-            return $this->storeSchedule($validated, $targetIds, $dropped, $user);
+            return $this->storeSchedule($validated, $targetIds, $ccIds, $dropped, $user);
         }
 
         $batchId = (string) Str::uuid();
@@ -321,9 +332,9 @@ class TaskManagementController extends Controller
             ? TaskAttachment::store($request->file('attachment'), 'task-attachments')
             : null;
 
-        DB::transaction(function () use ($targetIds, $validated, $user, $batchId, $attachmentPath, &$created) {
+        DB::transaction(function () use ($targetIds, $ccIds, $validated, $user, $batchId, $attachmentPath, &$created) {
             foreach ($targetIds as $uid) {
-                $created[] = Task::create([
+                $task = Task::create([
                     'batch_id'       => $batchId,
                     'title'          => $validated['title'],
                     'description'    => $validated['description'] ?? null,
@@ -338,6 +349,12 @@ class TaskManagementController extends Controller
                     'created_by_id'  => $user->id,
                     'updated_by_id'  => $user->id,
                 ]);
+
+                foreach ($ccIds as $ccId) {
+                    $task->taskCcs()->create(['user_id' => $ccId, 'created_by_id' => $user->id]);
+                }
+
+                $created[] = $task;
             }
         });
 
@@ -383,7 +400,7 @@ class TaskManagementController extends Controller
      * occurrence right away if the chosen day matches, instead of making the
      * assigner wait for tomorrow's cron run to see anything happen.
      */
-    private function storeSchedule(array $validated, \Illuminate\Support\Collection $targetIds, int $dropped, $user)
+    private function storeSchedule(array $validated, \Illuminate\Support\Collection $targetIds, \Illuminate\Support\Collection $ccIds, int $dropped, $user)
     {
         $schedule = TaskSchedule::create([
             'title'           => $validated['title'],
@@ -393,6 +410,7 @@ class TaskManagementController extends Controller
             'weekday'         => $validated['interval'] === 'weekly' ? $validated['weekday'] : null,
             'day_of_month'    => $validated['interval'] === 'monthly' ? $validated['day_of_month'] : null,
             'target_user_ids' => $targetIds->values()->all(),
+            'cc_user_ids'     => $ccIds->values()->all(),
             'assigned_by_id'  => $user->id,
             'is_active'       => true,
             'created_by_id'   => $user->id,
@@ -560,6 +578,8 @@ class TaskManagementController extends Controller
             'due_date'    => 'nullable|date',
             'priority'    => 'nullable|in:' . implode(',', Task::PRIORITIES),
             'user_id'     => 'nullable|integer|exists:users,id',
+            'cc_user_ids'   => 'nullable|array',
+            'cc_user_ids.*' => 'integer|exists:users,id',
         ]);
 
         $updates = [
@@ -582,6 +602,15 @@ class TaskManagementController extends Controller
         }
 
         $task->update($updates);
+
+        // Not scoped by TaskAccess, same reasoning as store() - CC is
+        // watching, not being assigned work. Excludes the (possibly just
+        // reassigned) owner - being CC'd on your own task is meaningless.
+        if ($request->has('cc_user_ids')) {
+            $ownerId = $updates['user_id'] ?? $task->user_id;
+            $ccIds = collect($validated['cc_user_ids'] ?? [])->unique()->reject(fn ($id) => (int) $id === (int) $ownerId);
+            $task->ccUsers()->sync($ccIds->mapWithKeys(fn ($id) => [$id => ['created_by_id' => $user->id]])->all());
+        }
 
         return response()->json(['success' => true, 'message' => 'Task updated successfully.']);
     }

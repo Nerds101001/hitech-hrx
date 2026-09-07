@@ -58,5 +58,6 @@ Schedule::command('onboarding:enforce-deadline')->daily()->description('Enforce 
 Schedule::command('probation:process-expirations')->daily()->description('Process employee probation expirations');
 Schedule::command('tasks:generate-recurring')->dailyAt('06:00')->description('Fire recurring task schedules due today');
 Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify staff whose assigned task is overdue');
+Schedule::command('tasks:notify-expected-date')->dailyAt('09:00')->description("Remind staff the day their own completion_expected_date arrives");
 
 Schedule::command('hrx:transfer-newbiz-ccare')->daily();

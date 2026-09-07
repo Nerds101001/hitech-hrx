@@ -65,6 +65,7 @@
       <button type="button" class="dtw-tab active js-dash-task-tab" data-target="#dtDueToday">Due Today<span class="dtw-tab-count">{{ $twBuckets['pending']->count() }}</span></button>
       <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtOverdue">Overdue<span class="dtw-tab-count">{{ $twBuckets['overdue']->count() }}</span></button>
       <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtUpcoming">Upcoming<span class="dtw-tab-count">{{ $twBuckets['upcoming']->count() + $twUpcomingSchedules->count() }}</span></button>
+      <button type="button" class="dtw-tab js-dash-task-tab" data-target="#dtWatching" title="Tasks you're CC'd on">CC'd<span class="dtw-tab-count">{{ $twBuckets['watching']->count() }}</span></button>
     </div>
   </div>
 
@@ -124,6 +125,21 @@
         <div class="dtw-due is-upcoming">{{ $s->due_date->format('d M Y') }}</div>
       </div>
     @endforeach
+  </div>
+
+  <div id="dtWatching" class="dash-task-pane d-none">
+    @forelse($twBuckets['watching'] as $t)
+      <div class="dash-task-row">
+        <span class="dtw-check" style="visibility:hidden;"></span>
+        <div class="flex-grow-1" style="min-width:0;">
+          <div class="dash-task-title">{{ $t->title }}</div>
+          <div class="dash-task-sub">Assigned to {{ optional($t->user)->getFullName() ?? '—' }} by {{ optional($t->assignedBy)->getFullName() ?? '—' }}</div>
+        </div>
+        <div class="dtw-due {{ $t->is_completed ? 'is-upcoming' : '' }}">{{ \App\Models\Task::PROGRESS_STATUSES[$t->status] ?? ucfirst($t->status) }}</div>
+      </div>
+    @empty
+      <div class="dash-task-empty"><i class="bx bx-show fs-3 d-block mb-1"></i>Nothing you're CC'd on.</div>
+    @endforelse
   </div>
 
   <a href="{{ url('/my-tasks') }}" class="dtw-viewall">View All Tasks <i class="bx bx-right-arrow-alt"></i></a>

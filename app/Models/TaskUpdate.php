@@ -45,4 +45,9 @@ class TaskUpdate extends Model implements AuditableContract
   {
     return $this->belongsTo(FormEntry::class, 'form_entry_id');
   }
+
+  public function createdBy()
+  {
+    return $this->belongsTo(User::class, 'created_by_id');
+  }
 }

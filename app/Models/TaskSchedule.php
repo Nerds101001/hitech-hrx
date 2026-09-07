@@ -29,6 +29,7 @@ class TaskSchedule extends Model implements AuditableContract
     'weekday',
     'day_of_month',
     'target_user_ids',
+    'cc_user_ids',
     'assigned_by_id',
     'is_active',
     'last_run_on',
@@ -39,6 +40,7 @@ class TaskSchedule extends Model implements AuditableContract
 
   protected $casts = [
     'target_user_ids' => 'array',
+    'cc_user_ids' => 'array',
     'is_active' => 'boolean',
     'last_run_on' => 'date',
     'weekday' => 'integer',
