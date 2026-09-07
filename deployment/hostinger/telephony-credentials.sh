@@ -64,7 +64,10 @@ if [[ "$ACTION" == "rotate" ]]; then
       \"label\" => \"$LABEL\",
       \"api_key\" => \$key,
       \"secret\" => \$secret,
-      \"allowed_ips\" => \$ips ?: null,
+      // allowed_ips is a comma-separated text column, not JSON -- allowlist()
+      // explodes it on commas. Handing it an array would store the word
+      // \"Array\" and quietly refuse every source address.
+      \"allowed_ips\" => \$ips ? implode(\",\", \$ips) : null,
       \"is_active\" => true,
     ]);
 
@@ -78,6 +81,27 @@ if [[ "$ACTION" == "rotate" ]]; then
     echo \"  allowed : \", json_encode(\$ips ?: \"any\"), PHP_EOL;
     echo \"  retired : \", \$old->count(), \" older credential(s)\", PHP_EOL;
   '" 2>/dev/null
+  exit 0
+fi
+
+if [[ "$ACTION" == "allowlist" ]]; then
+  IPS="${2:?usage: allowlist \"1.2.3.4,5.6.7.8\"  (or \"\" to clear)}"
+  echo "Setting the source allowlist on every active credential to: ${IPS:-<none>}"
+  echo
+  # Worth saying out loud: once set, ONLY these addresses can push. Requests
+  # from anywhere else -- including from here -- are refused with 403, which is
+  # the allowlist working rather than a fault.
+  remote "cd $HRX_APP_ROOT && $HRX_PHP artisan tinker --execute='
+    foreach (\App\Models\Telephony\TelephonyCredential::where(\"is_active\", true)->get() as \$c) {
+      \$c->allowed_ips = trim(\"$IPS\") === \"\" ? null : trim(\"$IPS\");
+      \$c->save();
+      echo \$c->label, \" -> \", json_encode(\$c->allowlist() ?? \"any\"), PHP_EOL;
+    }
+  '" 2>/dev/null | grep -v '^$'
+
+  # resolveCredential() caches the row for 60s, so a change is not instant.
+  echo
+  echo "Takes effect within 60 seconds (the credential lookup is cached)."
   exit 0
 fi
 
