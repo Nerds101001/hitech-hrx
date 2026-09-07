@@ -4721,3 +4721,23 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
 
 /* the six lifecycle stat cards were spilling past the card edge */
 .layout-full-width .row.g-6 > [class*="col-"] { min-width: 0; }
+
+/* Small-laptop scale-down (e.g. 1366x768 11-13" screens): reported as
+   "everything's too big, I have to zoom the browser to 80% myself to see
+   a normal amount on screen". This theme mixes rem-based sizing with a
+   LOT of hardcoded px (icon boxes, radii, gaps - see the many `width:
+   38px` / `border-radius: 24px` style rules throughout this file), so a
+   root font-size change alone would shrink text/rem-spacing but leave
+   every fixed-px box exactly as big as before, drifting the layout out
+   of proportion instead of matching what a real browser zoom-out looks
+   like. `zoom` scales the whole rendered page uniformly regardless of
+   unit - literally the same effect as the browser's own zoom control,
+   which is exactly what was being reproduced manually before this. Not
+   applied below ~1024px width: that range is the theme's own tablet/
+   mobile layout switch, which already has its own separate handling and
+   should not additionally be shrunk on top of that. */
+@media (max-width: 1400px) and (max-height: 800px) and (min-width: 1025px) {
+    html {
+        zoom: 0.8;
+    }
+}
