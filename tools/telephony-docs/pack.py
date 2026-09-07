@@ -12,8 +12,10 @@ OUT = 'docs/telephony/HRX-Telephony-Integration-Pack.zip'
 
 ORDER = [
     'START-HERE.md',
+    'HRX-Telephony-QuickStart.pdf',
     'INTEGRATION-GUIDE.md',
     'HRX-Telephony-API-Reference.pdf',
+    'curl-recording-ready.sh',
     'HRX-Telephony.postman_collection.json',
     'hrms-telephony-webhook-v1.yaml',
     'vendor-required-v1.yaml',
