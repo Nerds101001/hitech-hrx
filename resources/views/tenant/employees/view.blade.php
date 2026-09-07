@@ -1110,9 +1110,15 @@
                                 $poolBalances = $leaveBalances->filter(fn($b) =>
                                     $b->leaveType && !in_array(strtoupper($b->leaveType->code), array_merge($excludedLeaveCodes, ['SHL', 'WFH']))
                                 );
-                                $totalAllocated  = $poolBalances->sum('balance') + $poolBalances->sum('used');
+                                // balance is a running total of everything ever credited; used is a
+                                // running total of everything ever consumed - a deduction only ever
+                                // increments used, it never decrements balance (see LeaveRequest's
+                                // approval hook). So Allocated is balance alone, and Available is
+                                // balance minus used - matching resources/views/tenant/users/leaves/
+                                // index.blade.php, which fixed this exact double-counting bug already.
+                                $totalAllocated  = $poolBalances->sum('balance');
                                 $totalUsed       = $poolBalances->sum('used');
-                                $availableBalance = $poolBalances->sum('balance');
+                                $availableBalance = $totalAllocated - $totalUsed;
 
                                 // Short leave
                                 $shlBalance = $leaveBalances->first(fn($b) => $b->leaveType && strtoupper($b->leaveType->code) === 'SHL');
@@ -1195,8 +1201,11 @@
                                                             $amountVal = null; // calculated from dates
                                                             $from = \Carbon\Carbon::parse($item->from_date);
                                                             $to   = \Carbon\Carbon::parse($item->to_date);
-                                                            $days = $from->diffInDays($to) + 1;
-                                                            $amountDisplay = '-' . number_format($days, 1);
+                                                            // paid_days already accounts for half-day and LWP splits
+                                                            // (see LeaveHistoryService::getUnifiedHistory) - a raw
+                                                            // date-diff here ignores both and always shows a flat
+                                                            // -1.0 per day, same bug the My Leaves page already fixed.
+                                                            $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
                                                             $amountClass = 'text-danger';
                                                             $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
                                                             if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
