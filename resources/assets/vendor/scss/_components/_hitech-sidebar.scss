@@ -575,6 +575,64 @@ $border-color: rgba(0, 0, 0, 0.05);
     }
 }
 
+// Short laptop windows (e.g. 1291x671, 1366x768-class): the sidebar is
+// shared across every page via layouts/sections/menu/verticalMenu.blade.php,
+// so unlike the per-page dashboard fix, one change here reaches the whole
+// app at once. Same breakpoint as the dashboard's own short-viewport
+// compacting, for consistency.
+//
+// !important throughout: the real .hitech-menu-link etc. rules above are
+// nested 4-5 selectors deep (.hitech-sidebar .hitech-menu-container
+// .hitech-menu-list .hitech-menu-item .hitech-menu-link), which out-
+// specifies a plain 2-selector override regardless of source order or
+// media query match - confirmed live (window.matchMedia matched, but
+// getComputedStyle still showed the un-compacted padding) before adding
+// these.
+@media (max-height: 800px) and (min-width: 992px) {
+    .hitech-sidebar {
+        .hitech-logo-area {
+            padding: 0.5rem 1rem 0.45rem !important;
+            margin-bottom: 0.2rem !important;
+        }
+
+        .hitech-menu-container {
+            padding: 0.4rem 14px 0.15rem !important;
+        }
+
+        .hitech-menu-list {
+            gap: 2px !important;
+        }
+
+        .hitech-menu-header {
+            margin: 1rem 0 0.35rem !important;
+        }
+
+        .hitech-menu-link {
+            padding: 0.5rem 1rem !important;
+            font-size: 0.85rem !important;
+
+            .hitech-menu-icon {
+                font-size: 1.05rem !important;
+            }
+        }
+
+        .hitech-submenu-link {
+            padding: 0.42rem 1rem !important;
+            font-size: 0.83rem !important;
+        }
+
+        .hitech-profile-card {
+            margin: 0.5rem 14px 0.9rem !important;
+            padding: 0.7rem !important;
+
+            .hitech-avatar {
+                width: 36px !important;
+                height: 36px !important;
+            }
+        }
+    }
+}
+
 @media (max-width: 575.98px) {
     .hitech-sidebar {
         width: 86vw;
