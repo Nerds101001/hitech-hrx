@@ -303,10 +303,8 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
     $live = $liveByCsp[$sp->id] ?? [];
     $liveRows = [
         ['FCST',        'forecast',         '#1d4ed8', '#eff6ff'],
-        ['SERVICE'."
-".'FCST', 'forecast_service', '#7c3aed', '#f5f3ff'],
-        ['ACTUAL'."
-".'SALE',  'actual',           '#065f46', '#ecfdf5'],
+        ['Sc. Fcst',  'forecast_service', '#7c3aed', '#f5f3ff'],
+        ['Act. Sale', 'actual',           '#065f46', '#ecfdf5'],
     ];
 @endphp
 @foreach($liveRows as [$lbl, $key, $fg, $bg])
