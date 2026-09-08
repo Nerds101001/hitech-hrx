@@ -22,6 +22,7 @@ use App\Http\Controllers\tenant\DocumentRequestController;
 use App\Http\Controllers\tenant\DocumentTypeController;
 use App\Http\Controllers\tenant\SetuMappingController;
 use App\Http\Controllers\tenant\SetuSyncController;
+use App\Http\Controllers\tenant\CrmMappingSyncController;
 use App\Http\Controllers\tenant\EmployeeController;
 use App\Http\Controllers\tenant\EmployeeLifecycleController;
 use App\Http\Controllers\tenant\ExpenseController;
@@ -342,6 +343,15 @@ Route::middleware([
     // only the listing page).
     Route::prefix('setu-sync')->name('setu-sync.')->group(function () {
       Route::get('', [SetuSyncController::class, 'index'])->name('index');
+    });
+
+    // CRM Mapping Sync — data reconciliation audit's step 1 ("give
+    // syncCrmMapping a button"). Lists every salesperson's unlinked Sales
+    // Report rows and how many CRM companies are cached to match against;
+    // the actual sync/resolve POSTs reuse sales-visits.pipeline.sync-crm-
+    // mapping / resolve-crm-mapping (already built and routed).
+    Route::prefix('crm-mapping-sync')->name('crm-mapping-sync.')->group(function () {
+      Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
     // IP Groups

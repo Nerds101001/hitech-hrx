@@ -1037,6 +1037,15 @@
                         "admin",
                         "hr"
                     ]
+                },
+                {
+                    "url": "/crm-mapping-sync",
+                    "name": "CRM Mapping Sync",
+                    "slug": "crm-mapping-sync.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
                 }
             ],
             "roles": [
