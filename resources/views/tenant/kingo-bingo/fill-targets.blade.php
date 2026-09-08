@@ -118,6 +118,14 @@ tr.row-sep td { height:4px; background:#f1f5f9; border:none; }
     <a href="{{ route('sales-visits.kingo-bingo.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
         <i class="bx bx-grid-alt me-1"></i> View ScoreCard
     </a>
+    <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-3"
+            onclick="exportGrid('excel')" title="Download this grid as a spreadsheet">
+        <i class="bx bx-export me-1"></i> Excel
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3"
+            onclick="exportGrid('pdf')" title="Download this grid as a PDF">
+        <i class="bx bxs-file-pdf me-1"></i> PDF
+    </button>
 </div>
 
 {{-- filters --}}
@@ -345,6 +353,24 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 @section('page-script')
 <script>
 const SAVE_URL = "{{ route('sales-visits.targets.update') }}";
+const EXPORT_URL = {
+    excel: "{{ route('sales-visits.kingo-bingo.fill-targets.excel') }}",
+    pdf:   "{{ route('sales-visits.kingo-bingo.fill-targets.pdf') }}",
+};
+
+/* The three filters are client-side, so hand their current values to the
+   server or the download would be the whole book rather than what is on
+   screen. Same parameter names the controller reads back. */
+function exportGrid(kind) {
+    const p = new URLSearchParams({ fy: "{{ $selectedFy }}" });
+    const rep   = document.getElementById('fRep').value.trim();
+    const dept  = document.getElementById('fDept').value;
+    const desig = document.getElementById('fDesig').value;
+    if (rep)   p.set('rep', rep);
+    if (dept)  p.set('dept', dept);
+    if (desig) p.set('desig', desig);
+    window.location = EXPORT_URL[kind] + '?' + p.toString();
+}
 const CSRF     = "{{ csrf_token() }}";
 const TARGET_FIELDS = ['super_kingo_target', 'kingo_target', 'bingo_target'];
 let toastTimer;

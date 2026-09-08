@@ -886,6 +886,8 @@ Route::middleware([
             Route::get('/kingo-bingo', [\App\Http\Controllers\tenant\KingoBingoController::class, 'index'])->name('kingo-bingo.index');
             Route::middleware('role_or_permission:admin|hr|kingo_bingo.manage')->group(function () {
                 Route::get('/kingo-bingo/fill-targets', [\App\Http\Controllers\tenant\KingoBingoController::class, 'fillTargets'])->name('kingo-bingo.fill-targets');
+                Route::get('/kingo-bingo/fill-targets/export/excel', [\App\Http\Controllers\tenant\KingoBingoController::class, 'exportTargetsExcel'])->name('kingo-bingo.fill-targets.excel');
+                Route::get('/kingo-bingo/fill-targets/export/pdf', [\App\Http\Controllers\tenant\KingoBingoController::class, 'exportTargetsPdf'])->name('kingo-bingo.fill-targets.pdf');
                 Route::put('/kingo-bingo/kpi-target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateKpiTarget'])->name('kingo-bingo.kpi-target');
                 Route::put('/kingo-bingo/target', [\App\Http\Controllers\tenant\KingoBingoController::class, 'updateTarget'])->name('kingo-bingo.target');
             });

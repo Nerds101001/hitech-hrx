@@ -264,12 +264,54 @@ class KingoBingoController extends Controller
 
     public function fillTargets(Request $request)
     {
-        $user = auth()->user();
         // Target setting is Admin/HR only — see SalesTargetController::update.
         if (!$this->canSetTargets()) {
             abort(403, 'Only Admin/HR can set targets.');
         }
 
+        return view('tenant.kingo-bingo.fill-targets', $this->buildTargetsGrid($request));
+    }
+
+    /**
+     * The same grid as a spreadsheet -- same six rows per person, same
+     * colours. Carries the page's own fy/rep/dept/desig query string so what
+     * downloads is what the person is looking at, not the unfiltered book.
+     */
+    public function exportTargetsExcel(Request $request)
+    {
+        if (!$this->canSetTargets()) {
+            abort(403, 'Only Admin/HR can set targets.');
+        }
+
+        $grid = $this->buildTargetsGrid($request);
+        $file = 'kingo-bingo-targets-FY' . $grid['selectedFy'] . '-' . Carbon::now()->format('Ymd-Hi') . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\KingoBingoTargetsExport($grid), $file
+        );
+    }
+
+    /** The same grid as a PDF. A3 landscape -- 19 columns will not fit on A4. */
+    public function exportTargetsPdf(Request $request)
+    {
+        if (!$this->canSetTargets()) {
+            abort(403, 'Only Admin/HR can set targets.');
+        }
+
+        $grid = $this->buildTargetsGrid($request);
+        $file = 'kingo-bingo-targets-FY' . $grid['selectedFy'] . '-' . Carbon::now()->format('Ymd-Hi') . '.pdf';
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('tenant.kingo-bingo.fill-targets-pdf', $grid)
+            ->setPaper('a3', 'landscape')
+            ->download($file);
+    }
+
+    /**
+     * Everything the Fill Targets grid is built from. Shared by the page and
+     * both exports so a downloaded file can never drift from the screen.
+     */
+    private function buildTargetsGrid(Request $request): array
+    {
         $now         = Carbon::now();
         $fyStartYear = $now->month >= 4 ? $now->year : $now->year - 1;
         $selectedFy  = $request->input('fy', $fyStartYear . '-' . ($fyStartYear + 1));
@@ -308,11 +350,34 @@ class KingoBingoController extends Controller
 
         // Only Admin/HR reach this page now, and they set targets for everyone —
         // the old "restrict to my mapped salespersons" branch no longer applies.
-        $salespersons = $spQuery->orderBy('first_name')->get();
+        $everyone = $spQuery->orderBy('first_name')->get();
 
-        // Filter dropdown options, built from who is actually on the page.
-        $filterDepartments = $salespersons->pluck('department.name')->filter()->unique()->sort()->values();
-        $filterDesignations = $salespersons->pluck('designation.name')->filter()->unique()->sort()->values();
+        // Filter dropdown options, built from who is actually on the page --
+        // always the full set, so narrowing to one department does not empty
+        // the dropdown you would use to get back out of it.
+        $filterDepartments = $everyone->pluck('department.name')->filter()->unique()->sort()->values();
+        $filterDesignations = $everyone->pluck('designation.name')->filter()->unique()->sort()->values();
+
+        // On screen the three filters are pure JavaScript. The export re-reads
+        // them from the query string and applies the identical test, so the
+        // downloaded file matches what is on the screen rather than the whole book.
+        $fRep   = strtolower(trim((string) $request->input('rep', '')));
+        $fDept  = strtolower(trim((string) $request->input('dept', '')));
+        $fDesig = strtolower(trim((string) $request->input('desig', '')));
+
+        $salespersons = $everyone->filter(function ($sp) use ($fRep, $fDept, $fDesig) {
+            if ($fRep !== '' && !str_contains(strtolower($sp->name), $fRep)) return false;
+            if ($fDept !== '' && strtolower($sp->department->name ?? '') !== $fDept) return false;
+            if ($fDesig !== '' && strtolower($sp->designation->name ?? '') !== $fDesig) return false;
+            return true;
+        })->values();
+
+        // Human-readable "what you are looking at", printed on the exports.
+        $scopeLabel = implode(' · ', array_filter([
+            $fDept  !== '' ? ucwords($fDept) : null,
+            $fDesig !== '' ? ucwords($fDesig) : null,
+            $fRep   !== '' ? 'search "' . $fRep . '"' : null,
+        ]));
 
         $annualKey    = $fyStartYear . '-ANN';
         $quarterKeys  = [
@@ -341,50 +406,95 @@ class KingoBingoController extends Controller
         // that customer's forecast in Service Fcst, every other tagging in the
         // person's own. A customer counts once, so the service set is removed
         // from the main one instead of sitting in both.
+        // Read the whole book once and bucket it in memory. This used to be a
+        // query per salesperson, which at ~100 people meant ~200 round trips
+        // over a five-way OR and made the page -- and the exports built from
+        // it -- take tens of seconds.
+        $spIds   = $salespersons->pluck('id')->all();
+        $spIdSet = array_flip($spIds);
+
+        $extraReps = \App\Models\SalesPipelineExtraRep::whereIn('user_id', $spIds)
+            ->get(['sales_pipeline_id', 'user_id', 'type']);
+
+        $repsByPipeline = [];
+        foreach ($extraReps as $er) {
+            $repsByPipeline[$er->sales_pipeline_id][] = $er;
+        }
+
+        $pipelines = SalesPipeline::with(['months' => function ($q) use ($monthKeys) {
+                $q->whereIn('month_year', $monthKeys);
+            }])
+            ->where(function ($q) use ($spIds, $repsByPipeline) {
+                $q->whereIn('salesperson_id', $spIds)
+                  ->orWhereIn('ccare_id', $spIds)
+                  ->orWhereIn('new_biz_id', $spIds)
+                  ->orWhereIn('new_biz_2_id', $spIds);
+                if ($repsByPipeline !== []) {
+                    $q->orWhereIn('id', array_keys($repsByPipeline));
+                }
+            })->get();
+
         $liveByCsp = [];
-        foreach ($salespersons as $sp) {
-            $rows = SalesPipeline::with(['months' => function ($q) use ($monthKeys) {
-                    $q->whereIn('month_year', $monthKeys);
-                }])
-                ->where(function ($q) use ($sp) {
-                    $q->where('salesperson_id', $sp->id)
-                      ->orWhere('ccare_id', $sp->id)
-                      ->orWhere('new_biz_id', $sp->id)
-                      ->orWhere('new_biz_2_id', $sp->id)
-                      ->orWhereExists(function ($e) use ($sp) {
-                          $e->selectRaw('1')->from('sales_pipeline_extra_reps as er')
-                            ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
-                            ->where('er.user_id', $sp->id);
-                      });
-                })->get();
-
-            $serviceIds = \App\Models\SalesPipelineExtraRep::where('user_id', $sp->id)
-                ->where('type', 'service')
-                ->whereIn('sales_pipeline_id', $rows->pluck('id'))
-                ->pluck('sales_pipeline_id')->all();
-
-            $own = $rows->reject(fn($r) => in_array($r->id, $serviceIds));
-            $svc = $rows->filter(fn($r) => in_array($r->id, $serviceIds));
-
+        foreach ($spIds as $id) {
             foreach ($monthKeys as $mk) {
-                $pick = fn($set, $field) => round($set->sum(function ($r) use ($mk, $field) {
-                    $m = $r->months->firstWhere('month_year', $mk);
-                    return $m ? (float) $m->{$field} : 0;
-                }), 2);
-                $liveByCsp[$sp->id][$mk] = [
-                    'forecast'         => $pick($own, 'forecast_amount'),
-                    'forecast_service' => $pick($svc, 'forecast_amount'),
-                    // Booked business is booked business whoever tagged it.
-                    'actual'           => $pick($rows, 'sale_amount'),
-                ];
+                $liveByCsp[$id][$mk] = ['forecast' => 0.0, 'forecast_service' => 0.0, 'actual' => 0.0];
             }
         }
 
-        return view('tenant.kingo-bingo.fill-targets', compact(
+        foreach ($pipelines as $p) {
+            // Who is tagged on this customer, and in what capacity. A service
+            // second-representative tag routes the customer into that person's
+            // Service Fcst; every other tagging goes to their own. A customer
+            // counts once per person, never in both.
+            $tagged = [];
+            foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+                if ($uid && isset($spIdSet[$uid])) {
+                    $tagged[$uid] = $tagged[$uid] ?? false;
+                }
+            }
+            foreach ($repsByPipeline[$p->id] ?? [] as $er) {
+                if (!isset($spIdSet[$er->user_id])) {
+                    continue;
+                }
+                // A service tag wins over any other tagging on the same row.
+                $tagged[$er->user_id] = ($tagged[$er->user_id] ?? false) || $er->type === 'service';
+            }
+
+            if ($tagged === []) {
+                continue;
+            }
+
+            foreach ($p->months as $m) {
+                $mk = $m->month_year;
+                $fc = (float) $m->forecast_amount;
+                $sa = (float) $m->sale_amount;
+
+                foreach ($tagged as $uid => $isService) {
+                    if (!isset($liveByCsp[$uid][$mk])) {
+                        continue;
+                    }
+                    $liveByCsp[$uid][$mk][$isService ? 'forecast_service' : 'forecast'] += $fc;
+                    // Booked business is booked business whoever tagged it.
+                    $liveByCsp[$uid][$mk]['actual'] += $sa;
+                }
+            }
+        }
+
+        foreach ($liveByCsp as &$byMonth) {
+            foreach ($byMonth as &$cell) {
+                $cell['forecast']         = round($cell['forecast'], 2);
+                $cell['forecast_service'] = round($cell['forecast_service'], 2);
+                $cell['actual']           = round($cell['actual'], 2);
+            }
+        }
+        unset($byMonth, $cell);
+
+        return compact(
             'salespersons', 'months', 'targets', 'monthKeys',
             'annualKey', 'quarterKeys', 'currentMonthKey', 'selectedFy', 'fyOptions',
-            'filterDepartments', 'filterDesignations', 'liveByCsp'
-        ));
+            'filterDepartments', 'filterDesignations', 'liveByCsp', 'scopeLabel',
+            'fRep', 'fDept', 'fDesig'
+        );
     }
 
     // Update a manually-set target value (razor_blade_target, payment_target, etc.)
