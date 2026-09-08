@@ -124,3 +124,23 @@ vite.config.js.timestamp-*
 /storage/app/wfh_approvals/
 /storage/app/public/task-attachments/
 /storage/deploy-backups/
+
+# Office lock files (created while an .xlsx is open, deleted on close).
+~$*
+
+# Generated reports and exports written into storage/app at runtime. Same
+# reasoning as the block above - byproducts, not source.
+/storage/app/*.xlsx
+/storage/app/htmlpurifier/
+/storage/app/cg-shortleave-backup-*.json
+
+# Sample exports produced while testing the Kingo Bingo download buttons.
+/kingo-bingo-targets-*.xlsx
+/kingo-bingo-targets-*.pdf
+
+# The CRM .NET solution is a SEPARATE application that was unzipped into this
+# repo's root. It belongs in its own repository, and its appsettings.json
+# files carry live connection strings and passwords - committing it here would
+# publish those credentials to everyone with repo access.
+/CRM.API/
+/CRM.API.zip
