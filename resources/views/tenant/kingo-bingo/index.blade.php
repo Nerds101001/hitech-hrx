@@ -333,6 +333,23 @@ $qLabels=['Q1 Apr–Jun','Q2 Jul–Sep','Q3 Oct–Dec','Q4 Jan–Mar'];
     <td class="ac">{{ $v>0?number_format($v,2):'' }}</td>
     @endforeach
 </tr>
+{{-- Forecast carried from the Sales Report, split by the capacity this person
+     holds on each customer: a service second-representative tag feeds the
+     Service row, everything else feeds their own. Each customer counts once. --}}
+<tr class="r-achieved">
+    <td class="rl" style="color:#1d4ed8;">Forecast <small style="opacity:.7;font-size:9px;background:#dbeafe;padding:1px 4px;border-radius:3px;color:#1d4ed8;">from Sales Report</small></td>
+    @foreach($months as $m)
+    @php $v=round($spAuto[$m['key']]['forecast']??0,2); @endphp
+    <td class="ac" style="color:#1d4ed8;">{{ $v>0?number_format($v,2):'' }}</td>
+    @endforeach
+</tr>
+<tr class="r-achieved">
+    <td class="rl" style="color:#7c3aed;">Service Forecast <small style="opacity:.7;font-size:9px;background:#ede9fe;padding:1px 4px;border-radius:3px;color:#7c3aed;">2nd rep &middot; service</small></td>
+    @foreach($months as $m)
+    @php $v=round($spAuto[$m['key']]['forecast_service']??0,2); @endphp
+    <td class="ac" style="color:#7c3aed;">{{ $v>0?number_format($v,2):'' }}</td>
+    @endforeach
+</tr>
 <tr class="r-score">
     <td class="rl">Score</td>
     @foreach($months as $m)

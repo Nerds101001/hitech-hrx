@@ -166,6 +166,20 @@ class KingoBingoController extends Controller
 
             $lockedPipelines = $pipelines->where('is_locked', true);
 
+            // Forecast is split by the capacity the person holds on each
+            // customer. A service second-representative tag puts that
+            // customer's forecast in the Service column; everything else they
+            // are tagged on lands in their own. A customer is counted once
+            // either way -- one person can hold both roles on the same row
+            // (1 of the 52 service tags does today), so the service set is
+            // subtracted from the main one rather than added alongside it.
+            $serviceRowIds = \App\Models\SalesPipelineExtraRep::where('user_id', $spId)
+                ->where('type', 'service')
+                ->whereIn('sales_pipeline_id', $pipelines->pluck('id'))
+                ->pluck('sales_pipeline_id')
+                ->all();
+
+
             foreach ($monthKeys as $mk) {
                 // Bingo/Kingo actual (locked pipelines only)
                 $actualSale = $lockedPipelines->sum(function ($p) use ($mk) {
@@ -182,8 +196,22 @@ class KingoBingoController extends Controller
                 // KPI counts from completed visits this month
                 $monthVisits = collect($visitsBySpMonth[$spId][$mk] ?? []);
 
+                // Forecast for the month, split the same way.
+                $forecastOwn = round($pipelines->reject(fn($p) => in_array($p->id, $serviceRowIds))
+                    ->sum(function ($p) use ($mk) {
+                        $m = $p->months->firstWhere('month_year', $mk);
+                        return $m ? (float) $m->forecast_amount : 0;
+                    }), 2);
+                $forecastService = round($pipelines->filter(fn($p) => in_array($p->id, $serviceRowIds))
+                    ->sum(function ($p) use ($mk) {
+                        $m = $p->months->firstWhere('month_year', $mk);
+                        return $m ? (float) $m->forecast_amount : 0;
+                    }), 2);
+
                 $autoAchieved[$spId][$mk] = [
                     'actual_sale'       => $actualSale,
+                    'forecast'          => $forecastOwn,
+                    'forecast_service'  => $forecastService,
                     'razor_achieved'    => $monthVisits->where('razor_blade', true)->count(),
                     'new_cust'          => $monthVisits->where('is_new_customer', true)->count(),
                     'upsell_achieved'   => $monthVisits->where('is_upsell', true)->count(),
