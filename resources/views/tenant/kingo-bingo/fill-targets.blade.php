@@ -309,13 +309,13 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 @endphp
 @foreach($liveRows as [$lbl, $key, $fg, $bg])
 <tr class="row-live">
-    <td class="td-lbl" style="color:{{ $fg }};background:{{ $bg }};font-size:9px;line-height:1.1;">{!! nl2br(e($lbl)) !!}</td>
+    <td class="td-lbl" style="color:{{ $fg }};background:{{ $bg }};">{!! nl2br(e($lbl)) !!}</td>
     <td class="v-ann"></td>
     @foreach($quarterKeys as $qk)<td class="v-qtr"></td>@endforeach
     @foreach($months as $m)
     @php $val = $live[$m['key']][$key] ?? 0; @endphp
     <td class="v {{ $m['key'] === $currentMonthKey ? 'v-cur' : '' }}"
-        style="background:{{ $bg }};color:{{ $fg }};font-weight:600;text-align:center;">
+        style="background:{{ $bg }};color:{{ $fg }};font-weight:600;text-align:center;font-size:11.5px;padding:5px 2px;">
         {{ $val > 0 ? number_format($val, 2) : '—' }}
     </td>
     @endforeach
