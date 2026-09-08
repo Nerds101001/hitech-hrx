@@ -845,18 +845,20 @@
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#dc2626;border-radius:2px;"></span> &lt;50%</span>
                     <span class="ms-auto">All figures ₹ Lakh</span>
                 </div>
+                <style>.tgt-table td,.tgt-table th{padding:.28rem .35rem !important;white-space:nowrap;}.tgt-table td:first-child,.tgt-table th:first-child{white-space:normal;}</style>
                 <div style="max-height:62vh;overflow-y:auto;">
-                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;border-collapse:separate;border-spacing:0;">
+                <table class="table table-bordered table-sm mb-0 align-middle tgt-table" style="font-size:0.76rem;border-collapse:separate;border-spacing:0;">
                     {{-- Sticky header needs its own stacking context + solid bg,
                          otherwise the coloured rows paint OVER it while scrolling. --}}
                     <thead class="table-light">
                         <tr>
-                            <th style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Salesperson</th>
-                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Actual Sale</th>
-                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Pending</th>
-                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Bingo</th>
-                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Kingo</th>
-                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;">Super Kingo</th>
+                            <th style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:auto;">Salesperson</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Fcst</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Actual<br>Sale</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Pending</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Bingo</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Kingo</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Super<br>Kingo</th>
                         </tr>
                     </thead>
                     {{-- One tbody per elapsed month; the picker shows exactly one.
@@ -868,6 +870,7 @@
                             @forelse($rowsForMonth as $r)
                                 <tr class="tgt-row" data-category="{{ $r['category'] ?? 'Salesperson' }}">
                                     <td class="fw-semibold">{{ $r['name'] }}</td>
+                                    <td class="text-end font-monospace" style="color:#1d4ed8;">{{ ($r['forecast'] ?? 0) > 0 ? number_format($r['forecast'], 2) : '—' }}</td>
                                     <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
                                     <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
                                     @foreach(['bingo','kingo','super'] as $tier)
@@ -881,7 +884,7 @@
                                     @endforeach
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
                             @endforelse
                         </tbody>
                     @endforeach

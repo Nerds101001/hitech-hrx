@@ -715,14 +715,18 @@ class SalesPipelineController extends Controller
                 foreach ($achieveMonthKeys as $mk) {
                     $actual = 0.0;
                     $pending = 0.0;
+                    $forecast = 0.0;
                     foreach ($achieverPipelines as $p) {
                         $m = $p->months->firstWhere('month_year', $mk);
                         if ($m) {
-                            $actual  += (float) $m->sale_amount;
-                            $pending += (float) $m->pending_amount;
+                            $actual   += (float) $m->sale_amount;
+                            $pending  += (float) $m->pending_amount;
+                            // Same population as Actual and Pending above, so the
+                            // three columns describe one set of customers.
+                            $forecast += (float) $m->forecast_amount;
                         }
                     }
-                    $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending];
+                    $actualByKey[$mk . '|' . $spId] = (object) ['actual' => $actual, 'pending' => $pending, 'forecast' => $forecast];
                 }
             }
             $nameMap = User::whereIn('id', $targetHolderIds)
@@ -760,6 +764,7 @@ class SalesPipelineController extends Controller
                     $list[] = [
                         'name'     => $nameMap[$spId] ?? ('#' . $spId),
                         'category' => $categoryOf($spId),
+                        'forecast' => (float) ($row->forecast ?? 0),
                         'actual'   => (float) ($row->actual ?? 0),
                         'pending'  => (float) ($row->pending ?? 0),
                         'bingo'    => (float) $t->bingo_target,
