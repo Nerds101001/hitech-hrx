@@ -321,7 +321,7 @@ function openContactModal(contact = null) {
     document.getElementById('contactModalTitle').textContent = contact ? 'Edit Contact' : 'Add Contact';
     document.getElementById('contact_id').value = contact ? contact.id : '';
     document.getElementById('contact_name').value = contact ? contact.name : '';
-    // role is stored as a backed enum -- @json() serializes it as {"value":"purchase",...}, not a plain string.
+    // role is stored as a backed enum -- the Blade json directive serializes it as {"value":"purchase",...}, not a plain string.
     document.getElementById('contact_role').value = contact ? (contact.role.value || contact.role) : 'purchase';
     document.getElementById('contact_email').value = contact ? (contact.email || '') : '';
     document.getElementById('contact_phone').value = contact ? (contact.phone || '') : '';
