@@ -333,10 +333,57 @@ class KingoBingoController extends Controller
             $fyOptions[] = $y . '-' . ($y + 1);
         }
 
+        // Actuals shown beside the targets, so whoever is filling them in can
+        // see what the person is forecasting and what they have already booked
+        // rather than setting a number blind.
+        //
+        // Same split as the scorecard: a service second-representative tag puts
+        // that customer's forecast in Service Fcst, every other tagging in the
+        // person's own. A customer counts once, so the service set is removed
+        // from the main one instead of sitting in both.
+        $liveByCsp = [];
+        foreach ($salespersons as $sp) {
+            $rows = SalesPipeline::with(['months' => function ($q) use ($monthKeys) {
+                    $q->whereIn('month_year', $monthKeys);
+                }])
+                ->where(function ($q) use ($sp) {
+                    $q->where('salesperson_id', $sp->id)
+                      ->orWhere('ccare_id', $sp->id)
+                      ->orWhere('new_biz_id', $sp->id)
+                      ->orWhere('new_biz_2_id', $sp->id)
+                      ->orWhereExists(function ($e) use ($sp) {
+                          $e->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                            ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                            ->where('er.user_id', $sp->id);
+                      });
+                })->get();
+
+            $serviceIds = \App\Models\SalesPipelineExtraRep::where('user_id', $sp->id)
+                ->where('type', 'service')
+                ->whereIn('sales_pipeline_id', $rows->pluck('id'))
+                ->pluck('sales_pipeline_id')->all();
+
+            $own = $rows->reject(fn($r) => in_array($r->id, $serviceIds));
+            $svc = $rows->filter(fn($r) => in_array($r->id, $serviceIds));
+
+            foreach ($monthKeys as $mk) {
+                $pick = fn($set, $field) => round($set->sum(function ($r) use ($mk, $field) {
+                    $m = $r->months->firstWhere('month_year', $mk);
+                    return $m ? (float) $m->{$field} : 0;
+                }), 2);
+                $liveByCsp[$sp->id][$mk] = [
+                    'forecast'         => $pick($own, 'forecast_amount'),
+                    'forecast_service' => $pick($svc, 'forecast_amount'),
+                    // Booked business is booked business whoever tagged it.
+                    'actual'           => $pick($rows, 'sale_amount'),
+                ];
+            }
+        }
+
         return view('tenant.kingo-bingo.fill-targets', compact(
             'salespersons', 'months', 'targets', 'monthKeys',
             'annualKey', 'quarterKeys', 'currentMonthKey', 'selectedFy', 'fyOptions',
-            'filterDepartments', 'filterDesignations'
+            'filterDepartments', 'filterDesignations', 'liveByCsp'
         ));
     }
 

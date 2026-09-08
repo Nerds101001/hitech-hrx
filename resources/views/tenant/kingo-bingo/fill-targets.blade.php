@@ -188,7 +188,7 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
 
 {{-- S. KINGO row --}}
 <tr class="row-sk">
-    <td class="td-sp" rowspan="3" title="{{ $sp->name }}{{ $spDept ? ' — '.$spDept : '' }}{{ $spDesig ? ' / '.$spDesig : '' }}">{{ $sp->name }}</td>
+    <td class="td-sp" rowspan="6" title="{{ $sp->name }}{{ $spDept ? ' — '.$spDept : '' }}{{ $spDesig ? ' / '.$spDesig : '' }}">{{ $sp->name }}</td>
     <td class="td-lbl sk">S.<br>KINGO</td>
 
     {{-- Annual --}}
@@ -294,6 +294,35 @@ $qLabels = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar'];
     </td>
     @endforeach
 </tr>
+
+{{-- Live figures from the Sales Report, read-only: what this person is
+     forecasting and what they have already booked, so a target is set against
+     something rather than blind. Annual and quarter cells stay blank -- these
+     are monthly facts, not targets to spread. --}}
+@php
+    $live = $liveByCsp[$sp->id] ?? [];
+    $liveRows = [
+        ['FCST',        'forecast',         '#1d4ed8', '#eff6ff'],
+        ['SERVICE'."
+".'FCST', 'forecast_service', '#7c3aed', '#f5f3ff'],
+        ['ACTUAL'."
+".'SALE',  'actual',           '#065f46', '#ecfdf5'],
+    ];
+@endphp
+@foreach($liveRows as [$lbl, $key, $fg, $bg])
+<tr class="row-live">
+    <td class="td-lbl" style="color:{{ $fg }};background:{{ $bg }};font-size:9px;line-height:1.1;">{!! nl2br(e($lbl)) !!}</td>
+    <td class="v-ann"></td>
+    @foreach($quarterKeys as $qk)<td class="v-qtr"></td>@endforeach
+    @foreach($months as $m)
+    @php $val = $live[$m['key']][$key] ?? 0; @endphp
+    <td class="v {{ $m['key'] === $currentMonthKey ? 'v-cur' : '' }}"
+        style="background:{{ $bg }};color:{{ $fg }};font-weight:600;text-align:center;">
+        {{ $val > 0 ? number_format($val, 2) : '—' }}
+    </td>
+    @endforeach
+</tr>
+@endforeach
 
 <tr class="row-sep"><td colspan="{{ 2 + 1 + count($quarterKeys) + count($months) }}"></td></tr>
 </tbody>
