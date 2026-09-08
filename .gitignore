@@ -124,6 +124,13 @@ vite.config.js.timestamp-*
 /storage/app/wfh_approvals/
 /storage/app/public/task-attachments/
 /storage/deploy-backups/
+/storage/app/htmlpurifier/
+
+# One-off report exports (Fill Targets export, ad hoc reconciliation reports)
+# dropped at storage/app root or the repo root - not source, regenerable.
+/storage/app/*.xlsx
+/storage/app/*.pdf
+/kingo-bingo-targets-*.pdf
 
 # Office lock files (created while an .xlsx is open, deleted on close).
 ~$*
