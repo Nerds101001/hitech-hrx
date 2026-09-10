@@ -45,7 +45,14 @@ class CcAttendanceUnlock extends Model
         if ($this->scope === 'all') {
             return true;
         }
-        return $userId !== null && in_array($userId, $this->user_ids ?? [], true);
+        if ($userId === null) {
+            return false;
+        }
+        // Cast both sides to int before comparing: user_ids can hold strings
+        // for windows saved before storeUnlock() started normalizing them, and
+        // a strict in_array() against $user->id (int) silently never matched,
+        // leaving a "selected" window that never actually unlocked anything.
+        return in_array((int) $userId, array_map('intval', $this->user_ids ?? []), true);
     }
 
     /** Inclusive length in days, as the UI reports it. */

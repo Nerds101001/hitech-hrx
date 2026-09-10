@@ -836,7 +836,19 @@ class CcAttendanceController extends Controller
             ->orderBy('first_name')
             ->get(['id', 'first_name', 'last_name', 'code']);
 
-        return view('tenant.cc_attendance.unlocks', compact('windows', 'people', 'user'));
+        // A window can reference a user who has since left the picker's pool
+        // (role changed, unmapped) - fetch those separately so the "N selected"
+        // popup can still show a real name instead of just an id.
+        $allSelectedIds = $windows->where('scope', 'selected')
+            ->flatMap(fn ($w) => $w->user_ids ?? [])->unique()->values();
+        $missingIds = $allSelectedIds->diff($people->pluck('id'));
+        $extraPeople = $missingIds->isEmpty()
+            ? collect()
+            : \App\Models\User::withTrashed()->whereIn('id', $missingIds)->get(['id', 'first_name', 'last_name', 'code']);
+
+        $peopleById = $people->concat($extraPeople)->keyBy('id');
+
+        return view('tenant.cc_attendance.unlocks', compact('windows', 'people', 'peopleById', 'user'));
     }
 
     /** Open a window. Capped at CcAttendanceUnlock::MAX_DAYS. */
@@ -866,7 +878,7 @@ class CcAttendanceController extends Controller
             'from_date' => $data['from_date'],
             'to_date'   => $data['to_date'],
             'scope'     => $data['scope'],
-            'user_ids'  => $data['scope'] === 'selected' ? array_values($data['user_ids']) : null,
+            'user_ids'  => $data['scope'] === 'selected' ? array_values(array_map('intval', $data['user_ids'])) : null,
             'is_active' => true,
             'reason'    => $data['reason'] ?? null,
             'created_by' => Auth::id(),

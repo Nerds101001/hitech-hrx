@@ -174,7 +174,12 @@ class TravelClaimController extends Controller
         $isDraft = $request->input('action') === 'draft' || $request->boolean('autosave');
 
         $request->validate([
-            'claim_month' => 'required|string',
+            // Must be a real 'YYYY-MM' value: the <input type="month"> falls back to a
+            // plain text box in browsers that don't support the picker (older Safari/
+            // some webviews), and a free-typed value like "AUG" used to sail through
+            // as a bare 'required|string' — saving fine as a draft, then crashing the
+            // whole admin dashboard the moment it tried to chart every claim_month.
+            'claim_month' => ['required', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'company' => 'required|string',
             'sales_collection' => 'nullable|numeric',
             'month_start_odometer_proof' => $isDraft ? 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120' : 'nullable|file|mimes:jpeg,png,jpg,pdf|max:5120',
@@ -754,7 +759,15 @@ public function update(Request $request, $id)
         $split15 = $claim->net_payable - $split85;
         
         // Anchor to day 1 — 'Y-m' alone overflows past short months on days 29-31.
-        $claimMonthDate = Carbon::createFromFormat('Y-m-d', $claim->claim_month . '-01');
+        try {
+            $claimMonthDate = Carbon::createFromFormat('Y-m-d', $claim->claim_month . '-01');
+        } catch (\Exception $e) {
+            // Store-time validation now blocks this, but an older row saved before
+            // that guard existed could still carry a bad claim_month - fail the
+            // approval with something the approver can act on, not a 500 page.
+            return back()->with('error',
+                "This claim's month ({$claim->claim_month}) isn't a valid YYYY-MM value, so a payment schedule can't be calculated. Please fix it before approving.");
+        }
         // Payments happen next month
         $payDate85 = $claimMonthDate->copy()->addMonth()->setDay(11);
         $payDate15 = $claimMonthDate->copy()->addMonth()->setDay(25);
@@ -850,6 +863,13 @@ public function update(Request $request, $id)
 
         $monthlyStats = [];
         foreach ($monthlyStatsRaw as $stat) {
+            // A pre-validation draft can still carry a malformed claim_month (e.g.
+            // "AUG", typed into the <input type="month"> fallback some browsers use)
+            // - skip it here rather than let one bad row 500 the dashboard for every
+            // admin. New saves can no longer produce this; old rows still can exist.
+            if (!preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', (string) $stat->claim_month)) {
+                continue;
+            }
             $monthlyStats[$stat->claim_month] = $stat->count;
         }
 
