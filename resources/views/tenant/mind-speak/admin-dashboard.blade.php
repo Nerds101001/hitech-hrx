@@ -123,6 +123,8 @@
   .badge-sales { background: #fef3c7; color: #92400e; }
   .badge-seminar { background: #dcfce7; color: #166534; }
   .badge-competitor { background: #e0e7ff; color: #4338ca; }
+  .badge-kaizen { background: #fef9c3; color: #854d0e; }
+  .badge-360 { background: #f3e8ff; color: #6b21a8; }
 
   .emp-code-badge {
     background: var(--hitech-primary-light);
@@ -275,8 +277,13 @@
   <div class="hitech-page-hero mb-6 animate__animated animate__fadeIn">
     <div class="hitech-page-hero-text d-flex justify-content-between align-items-center w-100 flex-wrap gap-3">
       <div>
-        <h4 class="greeting">Mind Speak Dashboard</h4>
-        <p class="sub-text mb-0">Review ideas, feedback, complaints, sales pitches, and seminars submitted by staff members.</p>
+        @if($kaizenOnly ?? false)
+          <h4 class="greeting">Kaizen Approvals</h4>
+          <p class="sub-text mb-0">Kaizen / improvement proposals routed to you for approval.</p>
+        @else
+          <h4 class="greeting">Mind Speak Dashboard</h4>
+          <p class="sub-text mb-0">Review ideas, feedback, complaints, sales pitches, seminars, Kaizens and 360° feedback submitted by staff members.</p>
+        @endif
       </div>
       {{-- Admin and HR landed here with no way to post anything themselves. --}}
       <a href="{{ route('mind-speak.index', ['compose' => 1]) }}"
@@ -289,12 +296,19 @@
 
   {{-- KPI strip — one compact row so the submissions table stays above the fold --}}
   <div class="ms-stat-strip">
-    @foreach([
+    @foreach(($kaizenOnly ?? false) ? [
+      ['bx-bulb',          'Total Kaizens', $stats['kaizen'] ?? 0],
+      ['bx-time-five',     'Pending',       $stats['kaizen_pending'] ?? 0],
+      ['bx-check-circle',  'Approved',      $stats['kaizen_approved'] ?? 0],
+      ['bx-x-circle',      'Rejected',      $stats['kaizen_rejected'] ?? 0],
+    ] : [
       ['bx-brain',        'Total Speaks',        $stats['total']],
       ['bx-bulb',         'Ideas',               $stats['idea']],
       ['bx-microphone',   'Sales Pitches',       $stats['sales_pitch'] ?? 0],
       ['bx-presentation', 'Seminars',            $stats['seminar'] ?? 0],
       ['bx-bullseye',     'Competitor Insights', $stats['competitor_insights'] ?? 0],
+      ['bx-cog',          'Kaizens',             $stats['kaizen'] ?? 0],
+      ['bx-transfer',     '360° Feedback',       $stats['feedback_360'] ?? 0],
       ['bx-error-circle', 'Complaints',          $stats['complaint']],
       ['bx-hide',         'Anonymous',           $stats['anonymous']],
     ] as [$icon, $label, $value])
@@ -312,6 +326,7 @@
   <div class="filter-bar">
     <form method="GET" action="{{ route('mind-speak.index') }}" id="filterForm">
       <div class="row g-3 align-items-end">
+        @unless($kaizenOnly ?? false)
         <div class="col-12 col-sm-6 col-md-2">
           <label class="form-label">Category</label>
           <select name="category" class="form-select">
@@ -321,8 +336,11 @@
             <option value="Sales Pitch" {{ request('category') == 'Sales Pitch' ? 'selected' : '' }}>Sales Pitch</option>
             <option value="Seminar" {{ request('category') == 'Seminar' ? 'selected' : '' }}>Seminar</option>
             <option value="Competitor Insights" {{ request('category') == 'Competitor Insights' ? 'selected' : '' }}>Competitor Insights</option>
+            <option value="Kaizen" {{ request('category') == 'Kaizen' ? 'selected' : '' }}>Kaizen</option>
+            <option value="360° Feedback" {{ request('category') == '360° Feedback' ? 'selected' : '' }}>360° Feedback</option>
           </select>
         </div>
+        @endunless
 
         <div class="col-12 col-sm-6 col-md-2">
           <label class="form-label">Visibility</label>
@@ -363,9 +381,14 @@
             <a href="{{ route('mind-speak.index') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Reset Filters">
               <i class="bx bx-reset fs-5"></i>
             </a>
+            {{-- Export is admin/HR only (MindSpeakController::export) — Vijender/
+                 Manoj's access is Kaizen-review only, so don't offer a button
+                 that would just 403 for them. --}}
+            @unless($kaizenOnly ?? false)
             <button type="button" id="msExportBtn" class="btn btn-export d-flex align-items-center justify-content-center" style="border-radius: 9px; height: 40px; width: 40px; min-width: 40px; padding: 0; flex-shrink: 0;" title="Export to CSV">
               <i class="bx bx-download fs-5"></i>
             </button>
+            @endunless
           </div>
         </div>
       </div>
@@ -410,6 +433,8 @@
                         'Sales Pitch' => 'badge-sales',
                         'Seminar' => 'badge-seminar',
                         'Competitor Insights' => 'badge-competitor',
+                        'Kaizen' => 'badge-kaizen',
+                        '360° Feedback' => 'badge-360',
                         default => 'badge-other',
                       };
                       $msBadge = match($sub->status ?? 'pending') {

@@ -47,24 +47,42 @@ class MindSpeakController extends Controller
     {
         $user = Auth::user();
         $isAdminOrHR = $user->hasRole(['admin', 'hr']) || $user->can('mind_speak.manage');
+        $isKaizenReviewer = in_array($user->id, MindSpeak::KAIZEN_REVIEWER_IDS, true);
 
         // Admin and HR were sent straight to the dashboard, which has no submit
         // form — so they had no way to post an entry of their own at all.
         // ?compose=1 gives them the same portal everyone else sees; store()
         // never restricted who may submit.
-        if ($isAdminOrHR && !$request->boolean('compose')) {
-            // --- ADMIN/HR DASHBOARD ---
-            
+        if (($isAdminOrHR || $isKaizenReviewer) && !$request->boolean('compose')) {
+            // --- ADMIN/HR DASHBOARD (or, for Vijender/Manoj, a Kaizen-only one) ---
+
+            // Vijender and Manoj aren't general Mind Speak reviewers - they're
+            // the two people Kaizens route to. If that's the only reason this
+            // user can see this page at all, scope everything to Kaizen so
+            // they never see (or act on) anything else.
+            $kaizenOnly = $isKaizenReviewer && !$isAdminOrHR;
+
             // 1. KPI cards
-            $stats = [
-                'total' => MindSpeak::count(),
-                'idea' => MindSpeak::where('category', 'Idea')->count(),
-                'complaint' => MindSpeak::where('category', 'Complaint')->count(),
-                'sales_pitch' => MindSpeak::where('category', 'Sales Pitch')->count(),
-                'seminar' => MindSpeak::where('category', 'Seminar')->count(),
-                'competitor_insights' => MindSpeak::where('category', 'Competitor Insights')->count(),
-                'anonymous' => MindSpeak::where('is_anonymous', true)->count(),
-            ];
+            if ($kaizenOnly) {
+                $stats = [
+                    'kaizen' => MindSpeak::where('category', 'Kaizen')->count(),
+                    'kaizen_pending' => MindSpeak::where('category', 'Kaizen')->where('status', MindSpeak::STATUS_PENDING)->count(),
+                    'kaizen_approved' => MindSpeak::where('category', 'Kaizen')->where('status', MindSpeak::STATUS_APPROVED)->count(),
+                    'kaizen_rejected' => MindSpeak::where('category', 'Kaizen')->where('status', MindSpeak::STATUS_REJECTED)->count(),
+                ];
+            } else {
+                $stats = [
+                    'total' => MindSpeak::count(),
+                    'idea' => MindSpeak::where('category', 'Idea')->count(),
+                    'complaint' => MindSpeak::where('category', 'Complaint')->count(),
+                    'sales_pitch' => MindSpeak::where('category', 'Sales Pitch')->count(),
+                    'seminar' => MindSpeak::where('category', 'Seminar')->count(),
+                    'competitor_insights' => MindSpeak::where('category', 'Competitor Insights')->count(),
+                    'kaizen' => MindSpeak::where('category', 'Kaizen')->count(),
+                    'feedback_360' => MindSpeak::where('category', '360° Feedback')->count(),
+                    'anonymous' => MindSpeak::where('is_anonymous', true)->count(),
+                ];
+            }
 
             // The monthly-trend chart and the department breakdown were removed
             // from the dashboard — the reviewer's job here is to act on
@@ -79,7 +97,10 @@ class MindSpeakController extends Controller
             // 2. Detailed table with filters
             $query = MindSpeak::with(['user.department']);
 
-            if ($request->filled('category')) {
+            if ($kaizenOnly) {
+                // Not a filter the user can lift - this view only ever shows Kaizen.
+                $query->where('category', 'Kaizen');
+            } elseif ($request->filled('category')) {
                 $query->where('category', $request->category);
             }
 
@@ -111,7 +132,8 @@ class MindSpeakController extends Controller
             return view('tenant.mind-speak.admin-dashboard', compact(
                 'stats',
                 'submissions',
-                'departments'
+                'departments',
+                'kaizenOnly'
             ))->with('pageConfigs', ['contentLayout' => 'wide']);
         } else {
             // --- EMPLOYEE SUBMISSION VIEW ---
@@ -120,25 +142,31 @@ class MindSpeakController extends Controller
                 ->get();
 
             return view('tenant.mind-speak.employee-index', compact('submissions'))
-                // Lets the portal offer a way back for an admin who came here
-                // only to submit something.
-                ->with('canSeeDashboard', $isAdminOrHR)
+                // Lets the portal offer a way back for an admin (or Vijender/
+                // Manoj) who came here only to submit something.
+                ->with('canSeeDashboard', $isAdminOrHR || $isKaizenReviewer)
                 ->with('pageConfigs', ['contentLayout' => 'wide']);
         }
     }
 
     /**
-     * Admin / HR act on a submission.
+     * Admin / HR act on a submission. Vijender Singh and Manoj Patle
+     * (MindSpeak::KAIZEN_REVIEWER_IDS) may act on Kaizen entries specifically,
+     * on top of — not instead of — admin/HR, who keep full access as a
+     * fallback.
      *
-     *   approve      Sales Pitch, Seminar, Competitor Insights — accepted
-     *   acknowledge  Idea, Complaint — seen, with a reply back to the employee
+     *   approve      Sales Pitch, Seminar, Competitor Insights, Kaizen — accepted
+     *   acknowledge  Idea, Complaint, 360° Feedback — seen, with a reply back
      *   reject       any category; a reason is compulsory so the employee knows
      *                what to fix before resubmitting
      */
     public function review(Request $request, $id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr']) && !$user->can('mind_speak.manage')) {
+        $isAdminOrHR = $user->hasRole(['admin', 'hr']) || $user->can('mind_speak.manage');
+        $isKaizenReviewer = in_array($user->id, MindSpeak::KAIZEN_REVIEWER_IDS, true);
+
+        if (!$isAdminOrHR && !$isKaizenReviewer) {
             return back()->with('error', 'You are not allowed to review Mind Speak submissions.');
         }
 
@@ -148,6 +176,13 @@ class MindSpeakController extends Controller
         ]);
 
         $entry = MindSpeak::findOrFail($id);
+
+        // Vijender/Manoj's access is Kaizen-only - a crafted request against
+        // any other category must still be refused, same as if they had no
+        // Mind Speak access at all.
+        if (!$isAdminOrHR && $entry->category !== 'Kaizen') {
+            return back()->with('error', 'You are not allowed to review this submission.');
+        }
 
         // A rejected entry is the employee's to act on; reviewing it again
         // would overwrite the reason they are looking at.
@@ -213,6 +248,12 @@ class MindSpeakController extends Controller
             if (in_array($request->category, MindSpeak::APPROVABLE, true)) {
                 $isAnonymous = false;
             }
+            // 360° Feedback is anonymous unconditionally — there is no toggle
+            // for it in the form, and this is the actual enforcement: even a
+            // hand-rolled POST claiming is_anonymous=0 can't turn it off.
+            if (in_array($request->category, MindSpeak::FORCED_ANONYMOUS, true)) {
+                $isAnonymous = true;
+            }
 
             // A resubmission points back at the rejected original, so the
             // reviewer's reason and the first attempt stay on record. Only the
@@ -270,7 +311,8 @@ class MindSpeakController extends Controller
         $entry = MindSpeak::findOrFail($id);
 
         $isReviewer = $user->hasRole(['admin', 'hr']) || $user->can('mind_speak.manage');
-        if (!$isReviewer && $entry->user_id !== $user->id) {
+        $isKaizenReviewer = $entry->category === 'Kaizen' && in_array($user->id, MindSpeak::KAIZEN_REVIEWER_IDS, true);
+        if (!$isReviewer && !$isKaizenReviewer && $entry->user_id !== $user->id) {
             abort(403, 'Unauthorized action.');
         }
         if (!$entry->attachment) {

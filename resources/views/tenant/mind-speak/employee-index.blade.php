@@ -146,6 +146,8 @@
                 <option value="Sales Pitch" {{ old('category') == 'Sales Pitch' ? 'selected' : '' }}>Sales Pitch</option>
                 <option value="Seminar" {{ old('category') == 'Seminar' ? 'selected' : '' }}>Seminar</option>
                 <option value="Competitor Insights" {{ old('category') == 'Competitor Insights' ? 'selected' : '' }}>Competitor Insights</option>
+                <option value="Kaizen" {{ old('category') == 'Kaizen' ? 'selected' : '' }}>Kaizen</option>
+                <option value="360° Feedback" {{ old('category') == '360° Feedback' ? 'selected' : '' }}>360° Feedback</option>
               </select>
               @error('category')
                 <div class="invalid-feedback">{{ $message }}</div>
@@ -206,6 +208,14 @@
               </div>
             </div>
 
+            {{-- 360° Feedback has no toggle — it is always anonymous, enforced
+                 server-side regardless of what this form sends. This notice
+                 just confirms that to the person filling it in. --}}
+            <div class="mb-4 p-4 d-none" id="alwaysAnonymousNotice" style="background: rgba(18, 116, 100, 0.04); border: 1px solid rgba(18, 116, 100, 0.15); border-radius: 12px;">
+              <h6 class="mb-0 fw-bold" style="font-size: 0.88rem; color: #127464;"><i class="bx bx-shield-quarter me-1 fs-5 align-middle"></i> Always Anonymous</h6>
+              <small class="text-muted" style="font-size: 0.75rem;">This category is never linked back to you — not even your employee ID is shown to reviewers.</small>
+            </div>
+
             <button type="submit" class="btn btn-hitech w-100 mt-2 rounded-pill px-4">
               <i class="bx bx-send me-1"></i> Submit to Mind Speak
             </button>
@@ -247,6 +257,7 @@
                           'Sales Pitch' => 'bg-label-warning',
                           'Seminar' => 'bg-label-success',
                           'Competitor Insights' => 'bg-label-primary',
+                          'Kaizen' => 'bg-label-dark',
                           default => 'bg-label-secondary',
                         };
                       @endphp
@@ -392,6 +403,7 @@
   const categorySelect = document.getElementById('category');
   const contentLabel = document.getElementById('contentLabel');
   const anonymousGroup = document.getElementById('anonymousGroup');
+  const alwaysAnonymousNotice = document.getElementById('alwaysAnonymousNotice');
   const isAnonymousInput = document.getElementById('is_anonymous');
   const attachmentInput = document.getElementById('attachment');
   const attachmentLabel = document.getElementById('attachmentLabel');
@@ -401,13 +413,16 @@
   function handleCategoryChange() {
     if (!categorySelect) return;
     const cat = categorySelect.value;
-    
+    // Only 360° Feedback shows the locked notice instead of the toggle; every
+    // other branch below starts from "neither is visible" and opts back in.
+    anonymousGroup.classList.add('d-none');
+    alwaysAnonymousNotice.classList.add('d-none');
+
     if (cat === 'Sales Pitch') {
       contentLabel.textContent = 'Sales Pitch';
       contentInput.placeholder = 'Write down your sales pitch notes or script here...';
-      anonymousGroup.classList.add('d-none');
       isAnonymousInput.checked = false;
-      
+
       attachmentLabel.textContent = 'Upload or Record Audio Pitch';
       attachmentLabel.innerHTML += ' <span class="text-muted fw-normal">(Optional)</span>';
       attachmentInput.accept = 'audio/*';
@@ -416,9 +431,8 @@
     } else if (cat === 'Seminar') {
       contentLabel.textContent = 'Seminar Description / Summary';
       contentInput.placeholder = 'Briefly describe the seminar you conducted...';
-      anonymousGroup.classList.add('d-none');
       isAnonymousInput.checked = false;
-      
+
       attachmentLabel.innerHTML = 'Upload Seminar Presentation/Document <span class="text-danger fw-bold">*Required</span>';
       attachmentInput.accept = '.pdf,.png,.jpg,.jpeg,.ppt,.pptx,.doc,.docx';
       attachmentInput.required = true;
@@ -426,18 +440,36 @@
     } else if (cat === 'Competitor Insights') {
       contentLabel.textContent = 'Competitor Insights / Market Intel';
       contentInput.placeholder = 'Describe the competitor activity, pricing changes, or new products...';
-      anonymousGroup.classList.add('d-none');
       isAnonymousInput.checked = false;
-      
+
       attachmentLabel.innerHTML = 'Upload Competitor Docs/Screenshots <span class="text-muted fw-normal">(Optional)</span>';
       attachmentInput.accept = '.pdf,.png,.jpg,.jpeg,.doc,.docx';
+      attachmentInput.required = false;
+      audioRecorderUI.classList.add('d-none');
+    } else if (cat === 'Kaizen') {
+      contentLabel.textContent = 'Kaizen / Improvement Idea';
+      contentInput.placeholder = 'Describe the process improvement: what changes, and what it improves...';
+      isAnonymousInput.checked = false;
+
+      attachmentLabel.innerHTML = 'Supporting Document / Photo <span class="text-muted fw-normal">(Optional)</span>';
+      attachmentInput.accept = '.pdf,.png,.jpg,.jpeg,.doc,.docx';
+      attachmentInput.required = false;
+      audioRecorderUI.classList.add('d-none');
+    } else if (cat === '360° Feedback') {
+      contentLabel.textContent = '360° Feedback';
+      contentInput.placeholder = 'Share your honest feedback...';
+      isAnonymousInput.checked = true;
+      alwaysAnonymousNotice.classList.remove('d-none');
+
+      attachmentLabel.textContent = 'Attachment (Optional, PDF/Image only)';
+      attachmentInput.accept = '.pdf,.png,.jpg,.jpeg';
       attachmentInput.required = false;
       audioRecorderUI.classList.add('d-none');
     } else {
       contentLabel.textContent = 'What is on your mind?';
       contentInput.placeholder = 'Please describe your idea or complaint in detail...';
       anonymousGroup.classList.remove('d-none');
-      
+
       attachmentLabel.textContent = 'Attachment (Optional, PDF/Image only)';
       attachmentInput.accept = '.pdf,.png,.jpg,.jpeg';
       attachmentInput.required = false;

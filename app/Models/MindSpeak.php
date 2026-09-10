@@ -38,13 +38,28 @@ class MindSpeak extends Model {
     /** The only categories the form offers, and the only ones store() accepts. */
     public const CATEGORIES = [
         'Idea', 'Complaint', 'Sales Pitch', 'Seminar', 'Competitor Insights',
+        'Kaizen', '360° Feedback',
     ];
 
     /**
      * Categories that are a proposal — the reviewer accepts or turns them down.
-     * Everything else (Idea, Complaint) is feedback the reviewer replies to.
+     * Everything else (Idea, Complaint, 360° Feedback) is feedback the reviewer
+     * replies to (acknowledge/reject).
      */
-    public const APPROVABLE = ['Sales Pitch', 'Seminar', 'Competitor Insights'];
+    public const APPROVABLE = ['Sales Pitch', 'Seminar', 'Competitor Insights', 'Kaizen'];
+
+    /** Categories where anonymity is mandatory — the toggle isn't offered because
+     *  there is no choice; store() always sets is_anonymous = true for these. */
+    public const FORCED_ANONYMOUS = ['360° Feedback'];
+
+    /**
+     * Kaizen proposals go to these two people specifically, not the general
+     * admin/HR reviewer pool: Vijender Singh (GM Manufacturing) and Manoj Patle
+     * (GM Quality). Admin/HR can still act as a fallback — see
+     * MindSpeakController::canReview(). IDs, not emails, so this never depends
+     * on a query at permission-check time.
+     */
+    public const KAIZEN_REVIEWER_IDS = [472, 269]; // Vijender Singh, Manoj Patle
 
     public function isApprovable(): bool
     {
