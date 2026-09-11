@@ -1616,7 +1616,20 @@ function saveNewPipeline() {
         },
         body: JSON.stringify(payload)
     })
-    .then(r => r.json())
+    .then(r => {
+        // A session that has expired since the page loaded (or a page left
+        // open a long time) fails the CSRF check and comes back as valid
+        // JSON with no `success` key -- identical to a real save failure as
+        // far as the check below is concerned, but "try again" cannot work
+        // here: the same stale token just fails the same way every retry.
+        // Reloading is the only fix, so do it instead of repeating a dead end.
+        if (r.status === 419) {
+            alert('Your session has expired. The page will reload so you can try again.');
+            window.location.reload();
+            return Promise.reject(new Error('session expired'));
+        }
+        return r.json();
+    })
     .then(data => {
         if (data.success) {
             window.location.reload();
@@ -1625,7 +1638,8 @@ function saveNewPipeline() {
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="bx bx-save me-1"></i>Save'; }
         }
     })
-    .catch(() => {
+    .catch((err) => {
+        if (err && err.message === 'session expired') return; // already handled above
         alert('Network error. Please try again.');
         if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="bx bx-save me-1"></i>Save'; }
     });
