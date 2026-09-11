@@ -72,15 +72,16 @@ class BaseController extends Controller
 
   public function getSearchDataAjax()
   {
-    $userId = auth()->id();
-    $role = auth()->user()->hasRole('hr') ? 'hr' : 'other';
+    $user = auth()->user();
+    $userId = $user->id;
+    $role = $user->hasRole('hr') ? 'hr' : 'other';
     $cacheKey = "global_search_data_{$userId}_{$role}";
 
-    return Cache::remember($cacheKey, 3600, function () {
+    return Cache::remember($cacheKey, 3600, function () use ($user) {
       //Get json file from resources/menu
       $menuJson = file_get_contents(base_path('resources/menu/tenantVerticalMenu.json'));
 
-      if (auth()->user()->hasRole('hr')) {
+      if ($user->hasRole('hr')) {
         $menuJson = file_get_contents(base_path('resources/menu/horizontalMenu.json'));
       }
 
@@ -89,43 +90,82 @@ class BaseController extends Controller
       $menuItems = $menuData['menu'];
       $pages = [];
 
+      // Same visibility rule the sidebar itself applies (see
+      // verticalMenu.blade.php) — a menu entry can carry its own 'roles',
+      // 'permission' or 'department' gate, and a submenu child can carry
+      // another copy of the same on top of its parent's. Search was reading
+      // this same JSON but skipping all of it, so every admin/HR-only and
+      // department-only page — Admin Dashboard, Agent Mapping, Telephony
+      // Analytics — was searchable and (via Nav::allows below) sometimes
+      // actually openable by anyone signed in.
+      $isAdminUser = $user->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr']);
+      $hasAnyPermission = function ($permission) use ($user) {
+        foreach ((array) $permission as $p) {
+          if ($user->can($p)) return true;
+        }
+        return false;
+      };
+      $passesGate = function (array $item) use ($user, $isAdminUser, $hasAnyPermission) {
+        if (isset($item['roles'])) {
+          $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
+          $rr = array_map('strtolower', (array) $item['roles']);
+          if (empty(array_intersect($ur, $rr))) return false;
+        }
+        if (isset($item['permission']) && !$isAdminUser) {
+          if (!$hasAnyPermission($item['permission'])) return false;
+        }
+        if (isset($item['department']) && !$isAdminUser) {
+          if (!$user->department || stripos($user->department->name, $item['department']) === false) return false;
+        }
+        return true;
+      };
+
       //Populate pages
       foreach ($menuItems as $item) {
-        if (isset($item['menuHeader'])) {
+        if (isset($item['menuHeader']) || !$passesGate($item)) {
           continue;
         }
         //Check if item has submenu
         if (isset($item['submenu'])) {
           foreach ($item['submenu'] as $subItem) {
-            $itemColl = collect($subItem);
-            $url = substr($itemColl->get('url', ''), 1);
+            if (!$passesGate($subItem)) continue;
+            $url = substr($subItem['url'] ?? '', 1);
+            if ($url !== '' && !\App\Support\Nav::allows($url, $user)) continue;
             $pages[] = [
-              'name' => $itemColl->get('name'),
+              'name' => $subItem['name'] ?? null,
               'url' => $url,
-              'icon' => $itemColl->get('icon'),
+              'icon' => $subItem['icon'] ?? null,
             ];
           }
         } else {
-          $itemColl = collect($item);
-          $url = substr($itemColl->get('url', ''), 1);
+          $url = substr($item['url'] ?? '', 1);
+          if ($url !== '' && !\App\Support\Nav::allows($url, $user)) continue;
           $pages[] = [
-            'name' => $itemColl->get('name'),
+            'name' => $item['name'] ?? null,
             'url' => $url,
-            'icon' => $itemColl->get('icon'),
+            'icon' => $item['icon'] ?? null,
           ];
         }
       }
 
-      $users = User::whereNot('id', auth()->id())->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
+      // Members are only searchable by whoever can actually open an employee
+      // profile — the same role_or_permission gate routes/tenant.php puts on
+      // the whole employees/* route group (it doesn't vary per target id, so
+      // one check covers the list). Everyone else gets no results instead of
+      // the entire company directory — matching the 403 they'd already get
+      // from clicking through to employees/view/{id} directly.
       $members = [];
-      foreach ($users as $user) {
-        $members[] = [
-          'name' => $user->getFullName(),
-          'subtitle' => $user->email,
-          'src' => $user->profile_picture ? asset(\Constants::BaseFolderEmployeeProfileWithSlash . $user->profile_picture) : null,
-          'initial' => $user->getInitials(),
-          'url' => 'employees/view/' . $user->id,
-        ];
+      if (\App\Support\Nav::allows('employees/view/' . $user->id, $user)) {
+        $users = User::whereNot('id', $user->id)->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get();
+        foreach ($users as $u) {
+          $members[] = [
+            'name' => $u->getFullName(),
+            'subtitle' => $u->email,
+            'src' => $u->profile_picture ? asset(\Constants::BaseFolderEmployeeProfileWithSlash . $u->profile_picture) : null,
+            'initial' => $u->getInitials(),
+            'url' => 'employees/view/' . $u->id,
+          ];
+        }
       }
 
       return [
