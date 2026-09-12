@@ -310,6 +310,10 @@ class MyTasksController extends Controller
                 'file_url'   => $u->file_url ? route('task-updates.attachment', $u->id) : null,
                 'created_by' => optional($u->createdBy)->getFullName() ?? '—',
                 'created_at' => $u->created_at->format('d M Y, h:i A'),
+                // Drives which side of the WhatsApp-style thread a bubble
+                // renders on — the viewer's own messages right, everyone
+                // else's left, same convention as a chat app.
+                'is_own'     => (int) $u->created_by_id === (int) auth()->id(),
             ])->values(),
         ]);
     }

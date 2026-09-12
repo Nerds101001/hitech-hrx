@@ -72,12 +72,12 @@
   <div id="dtDueToday" class="dash-task-pane">
     @forelse($twBuckets['pending'] as $t)
       <div class="dash-task-row" data-task-row="{{ $t->id }}">
-        <input type="checkbox" class="dtw-check js-dash-task-complete" data-id="{{ $t->id }}">
+        <span class="dtw-check" style="visibility:hidden;"></span>
         <div class="flex-grow-1" style="min-width:0;">
           <div class="dash-task-title">{{ $t->title }}</div>
           <div class="dash-task-sub">{{ optional($t->assignedBy)->getFullName() ? 'Assigned by ' . $t->assignedBy->getFullName() : '—' }}</div>
         </div>
-        <button type="button" class="dtw-complete-btn js-dash-task-complete" data-id="{{ $t->id }}">Complete</button>
+        <button type="button" class="dtw-complete-btn js-dash-task-status" data-id="{{ $t->id }}" data-title="{{ $t->title }}">Update Status</button>
       </div>
     @empty
       <div class="dash-task-empty"><i class="bx bx-check-circle fs-3 d-block mb-1 text-success"></i>Nothing due today.</div>
@@ -87,13 +87,13 @@
   <div id="dtOverdue" class="dash-task-pane d-none">
     @forelse($twBuckets['overdue'] as $t)
       <div class="dash-task-row" data-task-row="{{ $t->id }}">
-        <input type="checkbox" class="dtw-check js-dash-task-complete" data-id="{{ $t->id }}">
+        <span class="dtw-check" style="visibility:hidden;"></span>
         <div class="flex-grow-1" style="min-width:0;">
           <div class="dash-task-title">{{ $t->title }}</div>
           <div class="dash-task-sub">{{ optional($t->assignedBy)->getFullName() ? 'Assigned by ' . $t->assignedBy->getFullName() : '—' }}</div>
         </div>
         <div class="dtw-due">{{ $t->due_deadline->diffForHumans(now(), true) }} overdue</div>
-        <button type="button" class="dtw-complete-btn js-dash-task-complete" data-id="{{ $t->id }}">Complete</button>
+        <button type="button" class="dtw-complete-btn js-dash-task-status" data-id="{{ $t->id }}" data-title="{{ $t->title }}">Update Status</button>
       </div>
     @empty
       <div class="dash-task-empty"><i class="bx bx-check-circle fs-3 d-block mb-1 text-success"></i>No overdue tasks.</div>
@@ -152,6 +152,54 @@
   <a href="{{ url('/my-tasks') }}" class="dtw-viewall">View All Tasks <i class="bx bx-right-arrow-alt"></i></a>
 </div>
 
+{{-- Update Status modal — same Pending/Partially Done/Completed choice,
+     expected date and remarks as the full My Tasks page's own status modal.
+     A self-contained copy (own ids, prefixed dashTaskStatus) rather than a
+     shared include, since this widget is dropped into whichever dashboard
+     includes it and can't assume that page also carries my-tasks/index's
+     modal. Replaces the old one-click "Complete" button, which saved with
+     no remarks and no real status choice at all. --}}
+<div class="modal fade" id="dashTaskStatusModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="dashTaskStatusForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Update Status</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="fw-medium mb-3" id="dashTaskStatusTitle"></p>
+
+          <label class="form-label">Status</label>
+          <div class="btn-group w-100 mb-3" role="group">
+            @foreach(\App\Models\Task::PROGRESS_STATUSES as $key => $label)
+              <input type="radio" class="btn-check" name="dashTaskStatusValue" id="dashTaskStatus_{{ $key }}" value="{{ $key }}" @if($key === 'new') checked @endif>
+              <label class="btn btn-outline-hitech" for="dashTaskStatus_{{ $key }}">{{ $label }}</label>
+            @endforeach
+          </div>
+
+          <div id="dashTaskStatusExpectedWrap">
+            <label class="form-label">Expected completion date (optional)</label>
+            <input type="date" id="dashTaskStatusExpected" class="form-control mb-3">
+            <div class="form-text mb-3">You'll get a reminder that day if this isn't marked complete yet.</div>
+          </div>
+
+          <label class="form-label">Remarks (optional)</label>
+          <textarea id="dashTaskStatusRemarks" class="form-control mb-3" rows="3" placeholder="Anything worth noting..."></textarea>
+          <div id="dashTaskStatusAttachmentWrap">
+            <label class="form-label">Attach a photo (optional)</label>
+            <input type="file" id="dashTaskStatusAttachment" class="form-control" accept="image/png,image/jpeg,image/webp">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-hitech">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   if (window.__dashTaskWidgetBound) return;
@@ -168,44 +216,109 @@
       });
     });
 
-    // Checking the box or clicking Complete both mark the task done -
-    // whichever the person reaches for first.
-    document.querySelectorAll('.js-dash-task-complete').forEach(function (el) {
-      var handler = function () {
-        var id = el.dataset.id;
-        var row = el.closest('.dash-task-row');
-        row.querySelectorAll('.js-dash-task-complete').forEach(function (x) { x.disabled = true; });
-        fetch('/my-tasks/' + id + '/complete', {
+    // A stale session (token expired) surfaced as a raw "CSRF token
+    // mismatch" error dialog rather than what it actually is - reload
+    // bounces through auth middleware straight to login instead, same fix
+    // already applied on the My Tasks / Task Management pages themselves.
+    function dashFetchJson(url, opts) {
+      return fetch(url, opts).then(function (r) {
+        if (r.status === 419) {
+          window.location.reload();
+          return new Promise(function () {}); // page is navigating away
+        }
+        return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+      });
+    }
+
+    var dashStatusModalEl = document.getElementById('dashTaskStatusModal');
+    var dashStatusModal = dashStatusModalEl && window.bootstrap ? new bootstrap.Modal(dashStatusModalEl) : null;
+    var dashCurrentTaskId = null;
+
+    function toggleDashStatusExtras() {
+      var checked = document.querySelector('input[name="dashTaskStatusValue"]:checked');
+      var status = checked ? checked.value : 'new';
+      document.getElementById('dashTaskStatusExpectedWrap').classList.toggle('d-none', status === 'completed');
+      document.getElementById('dashTaskStatusAttachmentWrap').classList.toggle('d-none', status !== 'completed');
+    }
+    document.querySelectorAll('input[name="dashTaskStatusValue"]').forEach(function (r) {
+      r.addEventListener('change', toggleDashStatusExtras);
+    });
+
+    // Opens the same Pending/Partially Done/Completed popup the full My
+    // Tasks page uses, instead of marking the task done in one click with
+    // no remarks and no real status choice.
+    document.querySelectorAll('.js-dash-task-status').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!dashStatusModal) return;
+        dashCurrentTaskId = btn.dataset.id;
+        document.getElementById('dashTaskStatusTitle').textContent = btn.dataset.title;
+        document.getElementById('dashTaskStatus_new').checked = true;
+        document.getElementById('dashTaskStatusExpected').value = '';
+        document.getElementById('dashTaskStatusRemarks').value = '';
+        document.getElementById('dashTaskStatusAttachment').value = '';
+        toggleDashStatusExtras();
+        dashStatusModal.show();
+      });
+    });
+
+    var dashStatusForm = document.getElementById('dashTaskStatusForm');
+    if (dashStatusForm) {
+      dashStatusForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!dashCurrentTaskId) return;
+        var btn = e.target.querySelector('button[type="submit"]');
+        var original = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Saving...';
+
+        var status = document.querySelector('input[name="dashTaskStatusValue"]:checked').value;
+
+        function done(ok, data) {
+          btn.disabled = false;
+          btn.innerHTML = original;
+          if (ok && data.success) {
+            // Status (and possibly the task's tab) changed underneath this
+            // widget - reload so counts/tabs/rows all stay in sync, same as
+            // the full My Tasks page does after either endpoint.
+            window.location.reload();
+          } else {
+            alert((data && data.message) || 'Could not save.');
+          }
+        }
+
+        if (status === 'completed') {
+          var fd = new FormData();
+          fd.append('remarks', document.getElementById('dashTaskStatusRemarks').value);
+          var file = document.getElementById('dashTaskStatusAttachment').files[0];
+          if (file) fd.append('attachment', file);
+
+          dashFetchJson('/my-tasks/' + dashCurrentTaskId + '/complete', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
+            body: fd,
+          })
+            .then(function (res) { done(res.ok, res.data); })
+            .catch(function () { done(false, { message: 'Network error — please try again.' }); });
+          return;
+        }
+
+        dashFetchJson('/my-tasks/' + dashCurrentTaskId + '/status', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': "{{ csrf_token() }}",
             'Accept': 'application/json',
           },
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            status: status,
+            completion_expected_date: document.getElementById('dashTaskStatusExpected').value || null,
+            remarks: document.getElementById('dashTaskStatusRemarks').value || null,
+          }),
         })
-          .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
-          .then(function (res) {
-            if (res.ok && res.data.success) {
-              row.style.transition = 'opacity .2s';
-              row.style.opacity = '0';
-              setTimeout(function () { row.remove(); }, 200);
-            } else {
-              row.querySelectorAll('.js-dash-task-complete').forEach(function (x) { x.disabled = false; if (x.tagName === 'INPUT') x.checked = false; });
-              alert(res.data.message || 'Could not mark this task complete.');
-            }
-          })
-          .catch(function () {
-            row.querySelectorAll('.js-dash-task-complete').forEach(function (x) { x.disabled = false; if (x.tagName === 'INPUT') x.checked = false; });
-            alert('Network error — please try again.');
-          });
-      };
-      if (el.tagName === 'INPUT') {
-        el.addEventListener('change', handler);
-      } else {
-        el.addEventListener('click', handler);
-      }
-    });
+          .then(function (res) { done(res.ok, res.data); })
+          .catch(function () { done(false, { message: 'Network error — please try again.' }); });
+      });
+    }
   }
 
   if (document.readyState === 'loading') {

@@ -46,6 +46,19 @@
   .mt-empty i{font-size:3rem;color:#0d9488;opacity:.5}
   .mt-empty h5{margin:14px 0 4px;font-weight:800;color:#0f172a}
   .mt-empty p{margin:0;color:#64748b;font-size:.86rem}
+
+  /* Task update thread — WhatsApp-style chat bubbles: own messages right
+     (teal, matching --hitech-primary), everyone else's left (white/grey). */
+  #threadModalBody{display:flex;flex-direction:column;gap:2px;padding:4px 2px;}
+  #threadModalBody .chat-bubble-row{display:flex;flex-direction:column;max-width:78%;margin-bottom:6px;}
+  #threadModalBody .chat-bubble-row.is-own{align-self:flex-end;align-items:flex-end;}
+  #threadModalBody .chat-bubble-row.is-other{align-self:flex-start;align-items:flex-start;}
+  #threadModalBody .chat-sender{font-size:.7rem;font-weight:700;color:#0d5c56;margin:0 4px 2px;}
+  #threadModalBody .chat-bubble{border-radius:14px;padding:8px 12px;font-size:.84rem;line-height:1.4;word-break:break-word;box-shadow:0 1px 1px rgba(0,0,0,.04);}
+  #threadModalBody .chat-bubble-row.is-own .chat-bubble{background:var(--hitech-primary-light,rgba(0,128,128,.12));color:#0f2f2d;border-bottom-right-radius:4px;}
+  #threadModalBody .chat-bubble-row.is-other .chat-bubble{background:#f1f5f9;color:#1e293b;border-bottom-left-radius:4px;}
+  #threadModalBody .chat-bubble a{color:inherit;text-decoration:underline;}
+  #threadModalBody .chat-time{font-size:.65rem;color:#94a3b8;margin:2px 4px 0;}
 </style>
 @endsection
 
@@ -398,13 +411,13 @@
 {{-- Task detail: full update thread + reply — shared by "Updates" on an
      owned task and "View & Reply" on a watched (CC'd) one. --}}
 <div class="modal fade" id="threadModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="threadModalTitle">Updates</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="background:#f8fafc;">
         <div id="threadModalBody" style="min-height:120px;">
           <div class="text-muted small">Loading...</div>
         </div>
@@ -590,32 +603,43 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         // DOM APIs throughout, never innerHTML with the comment text
         // itself - it's free text anyone with access to the task could
-        // have typed.
+        // have typed. Rendered as WhatsApp-style bubbles: own messages
+        // (is_own) on the right, everyone else's on the left.
         data.updates.forEach(function (u) {
           const row = document.createElement('div');
-          row.className = 'mb-2 pb-2';
-          row.style.borderBottom = '1px solid #f1f5f9';
+          row.className = 'chat-bubble-row ' + (u.is_own ? 'is-own' : 'is-other');
 
-          const meta = document.createElement('div');
-          meta.className = 'small text-muted';
-          meta.textContent = u.created_by + ' · ' + u.created_at;
-          row.appendChild(meta);
+          if (!u.is_own) {
+            const sender = document.createElement('div');
+            sender.className = 'chat-sender';
+            sender.textContent = u.created_by;
+            row.appendChild(sender);
+          }
+
+          const bubble = document.createElement('div');
+          bubble.className = 'chat-bubble';
 
           if (u.comment) {
             const body = document.createElement('div');
-            body.className = 'small';
             body.textContent = u.comment;
-            row.appendChild(body);
+            bubble.appendChild(body);
           }
 
           if (u.file_url) {
             const link = document.createElement('a');
             link.href = u.file_url;
             link.target = '_blank';
-            link.className = 'small';
+            link.className = 'small d-block';
             link.textContent = 'View attachment';
-            row.appendChild(link);
+            bubble.appendChild(link);
           }
+
+          row.appendChild(bubble);
+
+          const time = document.createElement('div');
+          time.className = 'chat-time';
+          time.textContent = u.created_at;
+          row.appendChild(time);
 
           box.appendChild(row);
         });
