@@ -594,7 +594,13 @@
                                         // one (grace period for month-end reconciliation). Once it
                                         // closes, only Admin/HR can still edit it — mirrors
                                         // isMonthLockedForUser() server-side.
-                                        $monthLocked = !$isAdminOrHr && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
+                                        //
+                                        // One-off, time-boxed reopen of August 2026 for the whole
+                                        // sales team (not just Admin/HR) — mirrors the same exception
+                                        // in isMonthLockedForUser(). Self-expires; safe to delete
+                                        // once past it.
+                                        $augustReopen = $m['key'] === '2026-08' && \Carbon\Carbon::now()->lt(\Carbon\Carbon::parse('2026-09-15 16:30:00', 'Asia/Kolkata'));
+                                        $monthLocked = !$isAdminOrHr && !$augustReopen && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
                                         // Sale / Pending / Remarks stay the book editors' job
                                         // (CCare / New Biz / manager / admin).
                                         $roAttr      = ($canEditBook && !$monthLocked) ? '' : 'readonly';
