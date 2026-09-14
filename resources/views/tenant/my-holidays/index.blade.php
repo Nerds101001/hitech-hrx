@@ -8,7 +8,6 @@
 
 @section('page-style')
 <style>
-  .mh-wrap{max-width:1100px;}
 
   .mh-hero{position:relative;overflow:hidden;border-radius:20px;padding:28px 32px;
     background:linear-gradient(135deg,var(--hitech-primary,#008080),#005a5a);color:#fff;
@@ -72,7 +71,7 @@
 
 @section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
-  <div class="mh-wrap px-4">
+  <div class="px-4">
 
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 py-2">
       <div>
