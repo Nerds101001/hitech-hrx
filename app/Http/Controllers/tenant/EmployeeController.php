@@ -1452,6 +1452,12 @@ class EmployeeController extends Controller
         } else {
           $query->where('users.status', $statusFilter);
         }
+      } else {
+        // No status filter chosen — the directory's default view must never
+        // include someone who has left. Explicitly asking for the "Relieved"
+        // card/filter still works (that goes through the branch above); this
+        // only governs what shows with nothing selected.
+        $query->whereNotIn('users.status', self::EXITED_STATUSES);
       }
 
       if ($request->has('siteFilter') && !empty($request->input('siteFilter'))) {
