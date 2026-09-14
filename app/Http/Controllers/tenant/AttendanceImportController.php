@@ -47,8 +47,17 @@ class AttendanceImportController extends Controller
 
         // Preload users into memory (terminated staff excluded — they must
         // not receive imported attendance)
-        $usersByBiometric = \App\Models\User::notTerminated()->whereNotNull('biometric_id')->get()->keyBy('biometric_id');
+        $biometricUsers = \App\Models\User::notTerminated()->whereNotNull('biometric_id')->get();
+        $usersByBiometric = $biometricUsers->keyBy('biometric_id');
         $usersByCode = \App\Models\User::notTerminated()->whereNotNull('code')->get()->keyBy('code');
+        // Machine exports zero-pad the code (e.g. "0170"), but some users'
+        // biometric_id is stored without the padding ("170") — an exact
+        // string match then silently drops every one of their real punches
+        // into "no matching employee". Match on the un-padded form too.
+        $usersByBiometricNormalized = $biometricUsers->keyBy(fn($u) => ltrim($u->biometric_id, '0') ?: '0');
+        $matchBiometric = function ($code) use ($usersByBiometric, $usersByBiometricNormalized) {
+            return $usersByBiometric->get($code) ?? $usersByBiometricNormalized->get(ltrim($code, '0') ?: '0');
+        };
 
         if ($isReportFormat) {
             // Smart Parser for DLF Manesar style reports
@@ -69,7 +78,7 @@ class AttendanceImportController extends Controller
                     $out = $this->excelTimeToHi($row[7] ?? null);
                     
                     if ($in || $out) {
-                        $user = $usersByBiometric->get($currentBiometricId) ?? $usersByCode->get($currentBiometricId);
+                        $user = $matchBiometric($currentBiometricId) ?? $usersByCode->get($currentBiometricId);
 
                         $previewData[] = [
                             'biometric_id' => $currentBiometricId,
@@ -90,7 +99,7 @@ class AttendanceImportController extends Controller
                 if (empty($row[0])) continue;
                 $biometricId = $row[0];
                 
-                $user = $usersByBiometric->get($biometricId) ?? $usersByCode->get($biometricId);
+                $user = $matchBiometric($biometricId) ?? $usersByCode->get($biometricId);
                 
                 $previewData[] = [
                     'biometric_id' => $biometricId,

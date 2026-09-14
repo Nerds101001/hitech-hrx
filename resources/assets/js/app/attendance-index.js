@@ -657,6 +657,33 @@ window.submitAttendanceFile = function(input, targetId) {
 };
 
 /* ============================================================================
+   Confirm & Commit — this is a plain form POST (not AJAX), so for a large
+   file the browser just sits on the same page for a while with no visual
+   change before the server redirects back. Without a loading state that
+   looks identical to a hang, so people re-click or navigate away mid-import.
+   ========================================================================== */
+$(function () {
+  const confirmForm = document.getElementById('attendanceConfirmForm');
+  if (!confirmForm) return;
+
+  confirmForm.addEventListener('submit', function () {
+    const submitBtn = confirmForm.querySelector('button[type="submit"]');
+    if (submitBtn.disabled) return false; // guard against double submit
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Processing… this can take a minute for large files';
+
+    const modalEl = document.getElementById('attendancePreviewModal');
+    modalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach(btn => btn.setAttribute('disabled', 'disabled'));
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    if (modalInstance) {
+      modalInstance._config.backdrop = 'static';
+      modalInstance._config.keyboard = false;
+    }
+  });
+});
+
+/* ============================================================================
    Monthly Registry — legend status filter + sorting
    ----------------------------------------------------------------------------
    The legend chips below the toolbar double as filters. Clicking "Paid Leave"
