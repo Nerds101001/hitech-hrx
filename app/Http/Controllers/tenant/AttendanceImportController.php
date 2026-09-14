@@ -149,7 +149,10 @@ class AttendanceImportController extends Controller
         // Preload User Data
         $userIds = collect($records)->pluck('user_id')->filter()->unique();
         $usersById = \App\Models\User::with(['department', 'designation', 'shift'])->whereIn('id', $userIds)->get()->keyBy('id');
-        $salesUserIds = \App\Models\CcSalespersonMap::whereIn('sales_user_id', $userIds)->pluck('sales_user_id')->toArray();
+        // role='ccare' only — a 'newbiz' mapping doesn't mean CCare marks this
+        // person's attendance manually, same distinction CcAttendanceController
+        // makes everywhere (see its own role='ccare' filters).
+        $salesUserIds = \App\Models\CcSalespersonMap::where('role', 'ccare')->whereIn('sales_user_id', $userIds)->pluck('sales_user_id')->toArray();
 
         // Parse dates safely for preloading attendances
         $dates = collect($records)->pluck('date')->map(function($dateStr) {
@@ -253,11 +256,13 @@ class AttendanceImportController extends Controller
         $user = $usersById->get($record['user_id']);
         if (!$user) return 'not_found';
 
-        // 1. Skip Salesperson (marked manually by CCARE)
-        $isSales = ($user->department && stripos($user->department->name, 'Sales') !== false)
-            || ($user->designation && stripos($user->designation->name, 'Sales') !== false)
-            || in_array($user->id, $salesUserIds);
-        if ($isSales) return 'skipped_sales';
+        // 1. Skip only someone actually CCare-managed (cc_salesperson_map,
+        // role='ccare') — being in a department/designation whose NAME
+        // happens to contain "Sales" is not the same thing, and wrongly
+        // skipped real biometric punches for people never in that map at
+        // all (e.g. Piyush Sardana, Tanisha Walia — both "Sales Department"
+        // by name, neither CCare-managed).
+        if (in_array($user->id, $salesUserIds)) return 'skipped_sales';
 
         $tenantId = auth()->user()->tenant_id;
 
