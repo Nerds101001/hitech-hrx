@@ -638,6 +638,14 @@ Route::middleware([
     Route::get('my-tasks/{task}/thread', [\App\Http\Controllers\tenant\MyTasksController::class, 'thread'])
         ->name('my-tasks.thread');
 
+    // "My Holidays" — every user's own applicable calendar (site/department/
+    // gender scoped via Holiday::forUser()), open to any signed-in user same
+    // as My Tasks above. The existing /holidays page is the admin/hr
+    // management screen (gated, lists every holiday everywhere) - a
+    // different job from "what applies to me".
+    Route::get('my-holidays', [\App\Http\Controllers\tenant\MyHolidaysController::class, 'index'])
+        ->name('my-holidays.index');
+
     // Attendance setup queue: accounts records each new joiner's employee ID
     // and biometric ID. Drives the login popup and the dashboard task card.
     Route::middleware(['role_or_permission:accounts|admin|hr'])

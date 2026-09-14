@@ -49,6 +49,20 @@
             ]
         },
         {
+            "url": "/my-holidays",
+            "name": "My Holidays",
+            "icon": "menu-icon bx bx-calendar-star",
+            "slug": "my-holidays.index",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
+            ]
+        },
+        {
             "url": "/announcements",
             "name": "Announcements",
             "icon": "menu-icon bx bx-broadcast",

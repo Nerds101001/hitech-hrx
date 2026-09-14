@@ -599,7 +599,7 @@ class DashboardController extends Controller
         }
         $att7Avg = count($att7) ? round($att7pctSum / count($att7), 1) : 0;
 
-        $upcomingHolidays = Holiday::where('date', '>=', now()->toDateString())->orderBy('date')->take(5)->get();
+        $upcomingHolidays = Holiday::upcomingForUser($user);
 
         // ============================================================
         // CEO COMMAND CENTER — the money view of the company, on top of
@@ -708,7 +708,7 @@ class DashboardController extends Controller
           ['icon' => 'bx-cake', 'label' => 'Birthdays Today', 'count' => $todayBirthdays->count(), 'tone' => 'primary'],
           ['icon' => 'bx-gift', 'label' => 'Work Anniversaries', 'count' => $todayAnniversaries->count(), 'tone' => 'info'],
           ['icon' => 'bx-time', 'label' => 'Probation Ending', 'count' => $upcomingProbationEnds->count(), 'tone' => 'warning'],
-          ['icon' => 'bx-calendar-star', 'label' => 'Holidays This Month', 'count' => Holiday::whereMonth('date', now()->month)->whereYear('date', now()->year)->count(), 'tone' => 'success'],
+          ['icon' => 'bx-calendar-star', 'label' => 'Holidays This Month', 'count' => Holiday::countThisMonthForUser($user), 'tone' => 'success'],
           ['icon' => 'bx-calendar-event', 'label' => 'Leaves Pending', 'count' => $pendingLeaveRequests, 'tone' => 'danger'],
           ['icon' => 'bx-user-plus', 'label' => 'Joined This Month', 'count' => $newHiresThisMonth, 'tone' => 'primary'],
         ];
@@ -949,7 +949,7 @@ class DashboardController extends Controller
             'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $mgrPendingExpense,
             'pendingDocument' => $mgrPendingDocument, 'pendingLoan' => $mgrPendingLoan,
             'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
-            'sm' => $sm,
+            'sm' => $sm, 'user' => $user,
         ]);
 
         return view('tenant.users.dashboard.manager-index', array_merge($mgrRail, [
@@ -986,7 +986,7 @@ class DashboardController extends Controller
             'myLeavesCount' => 0,
             'myExpensesCount' => 0,
             'mySOSCount' => 0,
-            'nextHoliday' => Holiday::forUser($user)->where('date', '>=', now())->orderBy('date')->first(),
+            'nextHoliday' => Holiday::upcomingForUser($user, 1)->first(),
             'payrollTrend' => 0,
             'latestNetSalary' => 0,
             'departments' => \App\Models\Department::withTrashed()->where('status', \App\Enums\Status::ACTIVE)->orderBy('name')->get(),
@@ -1053,7 +1053,7 @@ class DashboardController extends Controller
         'upcomingProbationEnds' => $upcomingProbationEnds,
         'probationOverdueCount' => $probationOverdueCount,
         'probationDueSoonCount' => $probationDueSoonCount,
-        'upcomingHolidays' => Holiday::where('date', '>=', now()->toDateString())->orderBy('date', 'asc')->take(5)->get(),
+        'upcomingHolidays' => Holiday::upcomingForUser($user),
         'absentCount' => $absentCount,
         'newHiresThisMonth' => $newHiresThisMonth,
         'roles' => $roles,
@@ -1064,7 +1064,7 @@ class DashboardController extends Controller
         'myLeavesCount' => 0,
         'myExpensesCount' => 0,
         'mySOSCount' => 0,
-        'nextHoliday' => Holiday::forUser($user)->where('date', '>=', now())->orderBy('date')->first(),
+        'nextHoliday' => Holiday::upcomingForUser($user, 1)->first(),
         'recentNotices' => collect(),
         'payrollTrend' => 0,
         'latestNetSalary' => 0

@@ -200,6 +200,39 @@ class Holiday extends Model implements AuditableContract
   }
 
   /**
+   * Up to $limit holidays from today onward that apply to this user — the
+   * single source for every dashboard's "Upcoming Calendar" widget
+   * (admin/hr/manager/employee all shared this one unscoped query before,
+   * which is why a Sales-West-only holiday like Ganesh Chaturthi showed up
+   * for every role regardless of their own site). Every holiday type is
+   * included (full/half/hours), matching what those widgets showed before
+   * this was scoped — only WHO it reaches changes, not WHAT.
+   */
+  public static function upcomingForUser(?User $user, int $limit = 5)
+  {
+    return static::query()
+      ->forUser($user)
+      ->where('date', '>=', now()->toDateString())
+      ->orderBy('date')
+      ->get()
+      ->filter(fn ($h) => $h->appliesToUser($user))
+      ->take($limit)
+      ->values();
+  }
+
+  /** Count of this user's holidays (any type) falling in the current calendar month — the "Holidays This Month" tile. */
+  public static function countThisMonthForUser(?User $user): int
+  {
+    return static::query()
+      ->forUser($user)
+      ->whereMonth('date', now()->month)
+      ->whereYear('date', now()->year)
+      ->get()
+      ->filter(fn ($h) => $h->appliesToUser($user))
+      ->count();
+  }
+
+  /**
    * ['Y-m-d' => name] of holidays applying to $user within a date range.
    * Keyed by date string so callers can do direct lookups.
    */

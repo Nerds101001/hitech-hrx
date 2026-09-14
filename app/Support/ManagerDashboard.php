@@ -123,10 +123,9 @@ class ManagerDashboard
         }
 
         try {
-            $holidaysThisMonth = \App\Models\Holiday::whereMonth('date', now()->month)
-                ->whereYear('date', now()->year)->count();
-            $upcomingHolidays = \App\Models\Holiday::where('date', '>=', now()->toDateString())
-                ->orderBy('date')->take(5)->get();
+            $railUser = $c['user'] ?? null;
+            $holidaysThisMonth = \App\Models\Holiday::countThisMonthForUser($railUser);
+            $upcomingHolidays = \App\Models\Holiday::upcomingForUser($railUser);
         } catch (\Throwable $e) {
             $holidaysThisMonth = 0;
             $upcomingHolidays = collect();

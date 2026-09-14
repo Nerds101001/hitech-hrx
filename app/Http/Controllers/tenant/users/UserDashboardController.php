@@ -190,14 +190,16 @@ class UserDashboardController extends Controller
 
         // --- Revamp Data Points ---
         $user = auth()->user();
-        $nextHoliday = Holiday::where('date', '>=', now()->toDateString())
+        // forUser() also scopes by department (the old inline where() only
+        // scoped by site), and appliesToUser() applies gender scoping too -
+        // both silently missing here before, same gap this whole pass fixes
+        // on the "Upcoming Calendar" widgets.
+        $nextHoliday = Holiday::forUser($user)
+            ->where('date', '>=', now()->toDateString())
             ->where('status', 1)
-            ->where(function ($q) use ($user) {
-                $q->whereNull('site_id')
-                  ->orWhere('site_id', $user->site_id);
-            })
             ->orderBy('date', 'asc')
-            ->first();
+            ->get()
+            ->first(fn ($h) => $h->appliesToUser($user));
 
         // Shared with every other dashboard so the feed cannot drift.
         $recentNotices = \App\Support\DashboardAnnouncements::forUser($user);
@@ -209,8 +211,7 @@ class UserDashboardController extends Controller
         $upcomingHolidays = collect();
         $pendingPolicies = collect();
         try {
-            $upcomingHolidays = \App\Models\Holiday::where('date', '>=', now()->toDateString())
-                ->orderBy('date')->take(5)->get();
+            $upcomingHolidays = \App\Models\Holiday::upcomingForUser($user);
         } catch (\Throwable $e) {
             $upcomingHolidays = collect();
         }
@@ -485,7 +486,7 @@ class UserDashboardController extends Controller
                 'pendingLeave' => $pendingLeaveRequests, 'pendingExpense' => $pendingExpenseRequests,
                 'pendingDocument' => $pendingDocumentRequests, 'pendingLoan' => $pendingLoanRequests,
                 'todayBirthdays' => $todayBirthdays ?? [], 'todayAnniversaries' => $todayAnniversaries ?? [],
-                'sm' => $sm,
+                'sm' => $sm, 'user' => $user,
             ]);
 
             return view('tenant.users.dashboard.manager-index', array_merge($mgrRail, [
