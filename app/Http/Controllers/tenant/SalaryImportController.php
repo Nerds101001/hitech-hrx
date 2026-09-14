@@ -48,11 +48,17 @@ class SalaryImportController extends Controller
                 continue;
             }
 
-            // Find user by biometric_id, code, or email
-            $user = User::where('biometric_id', $searchVal)
+            // Find user by biometric_id, code, or email. Biometric machine
+            // exports zero-pad the code (e.g. "0170") but it's often stored
+            // without padding ("170") — match the un-padded form too, same
+            // fix as the attendance biometric importer.
+            $userQuery = User::where('biometric_id', $searchVal)
                 ->orWhere('code', $searchVal)
-                ->orWhere('email', $searchVal)
-                ->first();
+                ->orWhere('email', $searchVal);
+            if (ctype_digit($searchVal) && $searchVal !== ltrim($searchVal, '0')) {
+                $userQuery->orWhere('biometric_id', ltrim($searchVal, '0') ?: '0');
+            }
+            $user = $userQuery->first();
 
             $baseSalary = $this->getMappedValue($row, $mapping, 'base_salary');
             $policyRaw  = $this->getMappedValue($row, $mapping, 'salary_policy_id');
