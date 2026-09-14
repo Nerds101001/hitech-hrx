@@ -33,12 +33,20 @@ class MyHolidaysController extends Controller
         $upcoming = $holidays->filter(fn ($h) => $h->date->toDateString() >= $today)->values();
         $past = $holidays->filter(fn ($h) => $h->date->toDateString() < $today)->sortByDesc('date')->values();
 
+        // The very next one gets its own hero treatment on the page, so it's
+        // pulled out here rather than the view re-deriving "first of
+        // upcoming" itself.
+        $nextHoliday = $upcoming->first();
+        $daysUntilNext = $nextHoliday ? now()->startOfDay()->diffInDays($nextHoliday->date->copy()->startOfDay()) : null;
+
         return view('tenant.my-holidays.index', [
             'pageConfigs' => ['contentLayout' => 'wide'],
             'upcoming' => $upcoming,
             'past' => $past,
             'year' => $year,
             'yearOptions' => range(now()->year - 1, now()->year + 1),
+            'nextHoliday' => $nextHoliday,
+            'daysUntilNext' => $daysUntilNext,
         ]);
     }
 }

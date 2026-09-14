@@ -49,20 +49,6 @@
             ]
         },
         {
-            "url": "/my-holidays",
-            "name": "My Holidays",
-            "icon": "menu-icon bx bx-calendar-star",
-            "slug": "my-holidays.index",
-            "roles": [
-                "admin",
-                "hr",
-                "manager",
-                "employee",
-                "accounts",
-                "office_employee"
-            ]
-        },
-        {
             "url": "/announcements",
             "name": "Announcements",
             "icon": "menu-icon bx bx-broadcast",
@@ -1254,6 +1240,7 @@
                 "user.payroll.index",
                 "user.leaves.index",
                 "user.attendance.index",
+                "my-holidays.index",
                 "user.sos.index",
                 "user.visits.index",
                 "myAssets.index",
@@ -1299,6 +1286,18 @@
                     "url": "/user/attendance",
                     "name": "My Attendance",
                     "slug": "user.attendance.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "manager",
+                        "employee",
+                        "accounts"
+                    ]
+                },
+                {
+                    "url": "/my-holidays",
+                    "name": "My Holidays",
+                    "slug": "my-holidays.index",
                     "roles": [
                         "admin",
                         "hr",
