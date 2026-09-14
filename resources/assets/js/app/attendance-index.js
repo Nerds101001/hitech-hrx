@@ -340,10 +340,11 @@ function renderRegistry() {
                 const summaryClick = `onclick="showEmployeeSummary('${safeName}', '${row.code}', '${row.presents}', '${row.absents}', '${row.lates}', '${row.leaves}', '${periodStr}')"`;
 
                 html += '<tr>' +
-                        '<td class="sticky-col bg-white fw-bold shadow-sm" style="left:0; z-index:5;">' + 
+                        '<td class="sticky-col bg-white fw-bold shadow-sm" style="left:0; z-index:5;">' +
                           '<div class="d-flex flex-column cursor-pointer" ' + summaryClick + '>' +
                             '<span class="text-teal hover-teal" style="text-decoration: underline dotted;">' + row.employee + '</span>' +
-                            '<small class="text-muted">' + row.code + '</small>' +
+                            '<small class="text-muted">' + (row.department || '—') + '</small>' +
+                            '<small class="text-muted" style="font-size:0.65rem;">' + (row.biometric_id ? ('Biometric: ' + row.biometric_id) : 'No biometric ID') + '</small>' +
                           '</div>' +
                         '</td>';
                 
