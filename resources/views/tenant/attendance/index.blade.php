@@ -761,7 +761,57 @@
   'resources/assets/js/app/attendance-index.js'
 ])
 <script>
-function exportData() { }
+function exportData() {
+  const isRegistry = $('#registry-view-tab').hasClass('active');
+  const params = new URLSearchParams();
+
+  const userId = $('#userId').val();
+  const shiftId = $('#shiftId').val();
+  const departmentId = $('#departmentId').val();
+  const siteId = $('#siteId').val();
+  const searchTerm = $('#customSearchInput').val();
+  if (userId) params.set('userId', userId);
+  if (shiftId) params.set('shiftId', shiftId);
+  if (departmentId) params.set('departmentId', departmentId);
+  if (siteId) params.set('siteId', siteId);
+  if (searchTerm) params.set('searchTerm', searchTerm);
+
+  let url;
+  if (isRegistry) {
+    // Same month input, sort control, and legend-chip filter the Monthly
+    // Registry view itself reads — see loadMonthlyRegistry/registryRowsForDisplay
+    // in attendance-index.js.
+    const monthVal = $('#registryMonth').val();
+    if (monthVal) {
+      const [y, m] = monthVal.split('-');
+      params.set('year', y);
+      params.set('month', m);
+    }
+    const sort = $('#registrySort').val();
+    if (sort) params.set('sort', sort);
+    if (window.__legendStatus) params.set('legendStatus', window.__legendStatus);
+    url = '{{ route('attendance.export.registry') }}';
+  } else {
+    // Same quickPeriod -> date-range logic the Real-Time Logs DataTable ajax
+    // uses — see the `data` function on #attendanceTable in attendance-index.js.
+    const quickPeriod = $('#quickPeriod').val();
+    if (quickPeriod && quickPeriod !== 'custom') {
+      let start = moment();
+      let end = moment();
+      if (quickPeriod === 'yesterday') { start = moment().subtract(1, 'days'); end = moment().subtract(1, 'days'); }
+      else if (quickPeriod === '7days') { start = moment().subtract(7, 'days'); end = moment(); }
+      else if (quickPeriod === 'last_month') { start = moment().subtract(1, 'months').startOf('month'); end = moment().subtract(1, 'months').endOf('month'); }
+      else if (quickPeriod === 'today') { start = moment(); end = moment(); }
+      params.set('startDate', start.format('YYYY-MM-DD'));
+      params.set('endDate', end.format('YYYY-MM-DD'));
+    } else {
+      params.set('date', $('#date').val());
+    }
+    url = '{{ route('attendance.export.logs') }}';
+  }
+
+  window.location.href = url + '?' + params.toString();
+}
 document.addEventListener('DOMContentLoaded', function() {
   const options = {
     series: [{ name: 'Present', data: [] }, { name: 'Absent', data: [] }],

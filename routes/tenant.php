@@ -402,6 +402,8 @@ Route::middleware([
       Route::get('', [AttendanceController::class, 'index'])->name('index');
       Route::get('indexAjax', [AttendanceController::class, 'indexAjax'])->name('indexAjax');
       Route::get('registryAjax', [AttendanceController::class, 'registryAjax'])->name('registryAjax');
+      Route::get('export/logs', [\App\Http\Controllers\tenant\AttendanceExportController::class, 'logs'])->name('export.logs');
+      Route::get('export/registry', [\App\Http\Controllers\tenant\AttendanceExportController::class, 'registry'])->name('export.registry');
       Route::post('import', [AttendanceImportController::class, 'import'])->name('import');
       Route::get('download-sample', [AttendanceImportController::class, 'downloadSample'])->name('download-sample');
       Route::get('chart-ajax', [AttendanceController::class, 'chartAjax'])->name('chart-ajax');
