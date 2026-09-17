@@ -426,10 +426,16 @@ class PipelineImportController extends Controller
         $ccareColIdx = $request->input('ccare_col') !== '' ? (int)$request->input('ccare_col') : null;
         $dataStartRowIdx = (int)$request->input('data_start_row', 2);
 
-        // Pre-load users map for quick lookup by name (case-insensitive)
-        $usersMap = \App\Models\User::where('status', 'active')->pluck('id', 'name')->mapWithKeys(function($id, $name) {
-            return [strtolower(trim($name)) => $id];
-        })->toArray();
+        // Pre-load users map for quick lookup by name (case-insensitive). Keyed
+        // by first+last name — the `name` column itself is blank for almost
+        // every user (it's a legacy field; the app displays getFullName()
+        // everywhere), so a raw `pluck('id', 'name')` silently matched almost
+        // nobody and left Salesperson/New Biz/CCare unset on every imported
+        // row whose sheet carried those columns.
+        $usersMap = \App\Models\User::where('status', 'active')->get(['id', 'first_name', 'last_name'])
+            ->mapWithKeys(function ($u) {
+                return [strtolower(trim($u->first_name . ' ' . $u->last_name)) => $u->id];
+            })->toArray();
 
         // FY key map for YoY totals (fyStart year → DB column). FY 26-27 shown via monthly actuals, not stored here.
         $fyKeyMap = [2022 => 'yoy_22_23', 2023 => 'yoy_23_24', 2024 => 'yoy_24_25', 2025 => 'yoy_25_26'];
