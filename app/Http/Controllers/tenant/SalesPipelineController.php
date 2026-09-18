@@ -914,15 +914,22 @@ class SalesPipelineController extends Controller
         // Salesperson-level list (self / team / explicitly-mapped) drives the
         // filter dropdowns and per-salesperson aggregates below.
         $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
-        // Pipeline visibility is PERSONAL: only prospects this user is actually
-        // tagged on (salesperson / ccare / new_biz / extra rep), plus a
-        // manager's direct reports. Deliberately different from the Sales
-        // Report, where a CCare rep sees their mapped salespeople's whole book
-        // — applying that here showed a rep every prospect owned by another
-        // rep on the same salesperson, which is not theirs to work or edit.
+        // Pipeline visibility now matches the Sales Report by explicit product
+        // decision (2026-09-18): a CCare/New Biz rep sees the COMPLETE book of
+        // any salesperson mapped to them in cc_salesperson_map, and for every
+        // other salesperson only the individual rows personally tagged to them
+        // (ccare_id / new_biz_id = them). This used to be 'personal' => true
+        // (tagged rows only, even for a mapped salesperson) because an
+        // unrestricted view mixed a rep's own prospects together with every
+        // other rep's prospects across ALL of their several mapped
+        // salespeople at once. Reusing the Report's own scope call avoids
+        // that: allowedUserIds() only ever merges in salespeople explicitly
+        // mapped to this rep, so a mapped salesperson's book is exactly the
+        // one they coordinate, and an unmapped salesperson still falls back
+        // to the ccare_id/new_biz_id row-level match.
         \App\Support\SalesScope::applyScope($query, $user, $request, [
             'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id'],
-            'member' => 'sp', 'extra' => true, 'personal' => true,
+            'member' => 'sp', 'extra' => true,
         ]);
 
         // Snapshot for the filter dropdowns — see the note in index().
