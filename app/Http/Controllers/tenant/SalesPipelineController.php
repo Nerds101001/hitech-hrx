@@ -165,15 +165,6 @@ class SalesPipelineController extends Controller
 
         $now = \Carbon\Carbon::now();
 
-        // One-off, time-boxed reopen of August 2026 for the whole sales team
-        // (not just Admin/HR) at the user's request, since it had already
-        // passed the normal Sept-5 grace window. Self-expires — no follow-up
-        // needed to re-lock it. Safe to delete this block once past the
-        // expiry; it does nothing further after that anyway.
-        if ($monthYear === '2026-08' && $now->lt(\Carbon\Carbon::parse('2026-09-15 16:30:00', 'Asia/Kolkata'))) {
-            return false;
-        }
-
         if ($monthYear === $now->format('Y-m')) {
             return false;
         }
