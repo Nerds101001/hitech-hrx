@@ -148,12 +148,12 @@
                     <div class="content"><div class="label small text-muted">Department</div><div id="pop-dept" class="value fw-bold small">...</div></div>
                 </div>
                 <div class="info-item d-flex align-items-center gap-3">
-                    <div class="icon-wrap bg-light rounded-pill p-2"><i class="bx bx-barcode-reader text-muted"></i></div>
-                    <div class="content"><div class="label small text-muted">Employee Code</div><div id="pop-code" class="value fw-bold small">...</div></div>
-                </div>
-                <div class="info-item d-flex align-items-center gap-3">
                     <div class="icon-wrap bg-light rounded-pill p-2"><i class="bx bx-envelope text-muted"></i></div>
                     <div class="content"><div class="label small text-muted">Email</div><div id="pop-email" class="value fw-bold small">...</div></div>
+                </div>
+                <div class="info-item d-flex align-items-center gap-3">
+                    <div class="icon-wrap bg-light rounded-pill p-2"><i class="bx bx-phone text-muted"></i></div>
+                    <div class="content"><div class="label small text-muted">Contact</div><div id="pop-phone" class="value fw-bold small">...</div></div>
                 </div>
             </div>
         </div>
@@ -439,8 +439,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('pop-name').innerText        = d.name || 'Unknown';
         document.getElementById('pop-designation').innerText = d.designation || 'Corporate Root';
         document.getElementById('pop-dept').innerText        = d.department || 'Headquarters';
-        document.getElementById('pop-code').innerText        = d.code || 'N/A';
         document.getElementById('pop-email').innerText       = d.email || '—';
+        document.getElementById('pop-phone').innerText       = d.phone || 'N/A';
 
         var img = document.getElementById('pop-img');
         img.src = (d.img && d.img !== 'null' && d.img !== '')

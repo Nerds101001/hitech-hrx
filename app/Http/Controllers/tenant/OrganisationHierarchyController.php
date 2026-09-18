@@ -207,7 +207,7 @@ class OrganisationHierarchyController extends Controller
       'designation'     => $user->designation?->name ?? 'Staff Member',
       'department'      => $this->getDepartmentName($user),
       'email'           => $user->email,
-      'phone'           => $user->phone ?? 'N/A',
+      'phone'           => $user->official_phone ?? 'N/A',
       'profile_picture' => $user->getProfilePicture(),
       'initials'        => $user->getInitials(),
       'status'          => 'online',
@@ -232,7 +232,7 @@ class OrganisationHierarchyController extends Controller
           'designation' => $designation,
           'department' => $department,
           'email' => $user->email,
-          'phone' => $user->phone ?? 'N/A',
+          'phone' => $user->official_phone ?? 'N/A',
           'profile_picture' => $user->getProfilePicture(),
           'initials' => $user->getInitials(),
           'status' => 'online', // Mocking online status
