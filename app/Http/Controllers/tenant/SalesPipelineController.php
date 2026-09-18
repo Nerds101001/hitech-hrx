@@ -1215,6 +1215,7 @@ class SalesPipelineController extends Controller
         // both. Anyone else genuinely involved is recorded under Other Reps.
         // 27 rows had drifted into holding both, which made the Category and
         // Representative columns disagree with the filter that found them.
+        $extraRepFromConflict = null;
         if ($ccareId && $newBizId) {
             if ($ccareId === $newBizId) {
                 $newBizId = null;                 // same person in both slots
