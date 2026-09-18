@@ -653,12 +653,20 @@ function saveNewPipeline() {
         },
         body: JSON.stringify(payload)
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
+    .then(async r => {
+        let data;
+        try { data = await r.json(); } catch (e) { data = null; }
+        return { ok: r.ok, data };
+    })
+    .then(({ ok, data }) => {
+        if (ok && data && data.success) {
             window.location.reload();
         } else {
-            alert('Could not save. Please try again.');
+            // Surface whatever the server actually said (validation error,
+            // "Unauthorized", a real save failure) instead of a one-size
+            // generic message that gives the reporter nothing to go on.
+            const msg = (data && data.message) || (data && data.errors && Object.values(data.errors).flat().join(' ')) || 'Could not save. Please try again.';
+            alert(msg);
             if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="bx bx-save me-1"></i>Save'; }
         }
     })

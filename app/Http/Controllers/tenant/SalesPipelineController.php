@@ -1238,41 +1238,78 @@ class SalesPipelineController extends Controller
             $partyName = $crmMapping->crm_company_name;
         }
 
-        $pipeline = SalesPipeline::create([
-            'party_name'               => $partyName,
-            'crm_client_mapping_id'    => $crmClientMappingId,
-            'salesperson_id'           => $salespersonId,
-            'ccare_id'                 => $ccareId,
-            'new_biz_id'               => $newBizId,
-            'type'                     => $request->type,
-            'status_stage'             => $request->status_stage ?? 'Prospect',
-            'status_remarks'           => $request->status_remarks,
-            'total_business_potential' => $request->total_business_potential ?? 0,
-            'product'                  => $request->product,
-            'address'                  => $request->address,
-            'is_locked'                => $isLocked,
-        ]);
-
-        // The agent displaced by the one-category rule stays visible on the
-        // customer as an additional representative rather than being dropped.
-        if (!empty($extraRepFromConflict)) {
-            \App\Models\SalesPipelineExtraRep::firstOrCreate([
-                'sales_pipeline_id' => $pipeline->id,
-                'user_id'           => $extraRepFromConflict,
+        $createRow = function () use ($partyName, $crmClientMappingId, $salespersonId, $ccareId, $newBizId, $request, $isLocked, $extraRepFromConflict) {
+            $pipeline = SalesPipeline::create([
+                'party_name'               => $partyName,
+                'crm_client_mapping_id'    => $crmClientMappingId,
+                'salesperson_id'           => $salespersonId,
+                'ccare_id'                 => $ccareId,
+                'new_biz_id'               => $newBizId,
+                'type'                     => $request->type,
+                'status_stage'             => $request->status_stage ?? 'Prospect',
+                'status_remarks'           => $request->status_remarks,
+                'total_business_potential' => $request->total_business_potential ?? 0,
+                'product'                  => $request->product,
+                'address'                  => $request->address,
+                'is_locked'                => $isLocked,
             ]);
-        }
 
-        // Persist any month figures entered on the add form.
-        foreach ((array) $request->input('months', []) as $mk => $fields) {
-            if (!preg_match('/^\d{4}-\d{2}$/', (string) $mk)) continue;
-            \App\Models\SalesPipelineMonth::create([
-                'sales_pipeline_id' => $pipeline->id,
-                'month_year'        => $mk,
-                'sale_amount'       => $fields['sale_amount'] ?? 0,
-                'forecast_amount'   => $fields['forecast_amount'] ?? 0,
-                'pending_amount'    => $fields['pending_amount'] ?? 0,
-                'tenant_id'         => null,
-            ]);
+            // The agent displaced by the one-category rule stays visible on the
+            // customer as an additional representative rather than being dropped.
+            if (!empty($extraRepFromConflict)) {
+                \App\Models\SalesPipelineExtraRep::firstOrCreate([
+                    'sales_pipeline_id' => $pipeline->id,
+                    'user_id'           => $extraRepFromConflict,
+                ]);
+            }
+
+            // Persist any month figures entered on the add form.
+            foreach ((array) $request->input('months', []) as $mk => $fields) {
+                if (!preg_match('/^\d{4}-\d{2}$/', (string) $mk)) continue;
+                \App\Models\SalesPipelineMonth::create([
+                    'sales_pipeline_id' => $pipeline->id,
+                    'month_year'        => $mk,
+                    'sale_amount'       => $fields['sale_amount'] ?? 0,
+                    'forecast_amount'   => $fields['forecast_amount'] ?? 0,
+                    'pending_amount'    => $fields['pending_amount'] ?? 0,
+                    'tenant_id'         => null,
+                ]);
+            }
+
+            return $pipeline;
+        };
+
+        // A brief MySQL connection drop (common on shared hosting under load)
+        // used to surface only as a bare "Could not save" with the real cause
+        // never logged — the global exception reportable() also hits the DB to
+        // resolve auth()->id() for its own error email, so it failed too and
+        // logged THAT failure instead of the original one. One retry after a
+        // reconnect, and the real exception logged either way so a repeat
+        // failure is diagnosable instead of a dead end.
+        $pipeline = null;
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            try {
+                $pipeline = $createRow();
+                break;
+            } catch (\Illuminate\Database\QueryException $e) {
+                $transient = in_array((string) $e->getCode(), ['2002', '2006', 'HY000', '1205', '1213', '40001'], true);
+                if ($attempt === 1 && $transient) {
+                    try { \Illuminate\Support\Facades\DB::reconnect(); } catch (\Throwable $ignore) {}
+                    usleep(250000);
+                    continue;
+                }
+                \Illuminate\Support\Facades\Log::error('Sales Pipeline store() failed: ' . $e->getMessage(), ['party_name' => $partyName, 'user_id' => $user->id]);
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Could not save — a database connection hiccup. Please try again.'], 500);
+                }
+                return redirect()->back()->with('error', 'Could not save — a database connection hiccup. Please try again.');
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Sales Pipeline store() failed: ' . $e->getMessage(), ['party_name' => $partyName, 'user_id' => $user->id]);
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Could not save: ' . $e->getMessage()], 500);
+                }
+                return redirect()->back()->with('error', 'Could not save: ' . $e->getMessage());
+            }
         }
 
         if ($request->ajax() || $request->wantsJson()) {
