@@ -79,6 +79,27 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
         $user->saveQuietly();
       }
     });
+
+    // Auto-assign that department's KPI templates whenever someone joins it
+    // (on create, or a later department transfer) — KpiTemplateService::apply()
+    // only re-scans a department's audience when someone re-applies a
+    // template by hand, so a mid-cycle department change (or a brand new
+    // hire) was otherwise never picked up. Rabina Parkar (New Biz) was found
+    // with zero KPI assignments while all 16 of her department peers had 13
+    // each, for exactly this reason. applyAllForUser() is idempotent, so this
+    // is safe to fire on every relevant save.
+    static::saved(function ($user) {
+      if (!$user->department_id) return;
+      if (!$user->wasRecentlyCreated && !$user->wasChanged('department_id')) return;
+      $status = $user->status instanceof UserAccountStatus ? $user->status->value : $user->status;
+      if ($status !== UserAccountStatus::ACTIVE->value) return;
+
+      try {
+        \App\Services\KpiTemplateService::applyAllForUser($user);
+      } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::warning('KPI auto-assign failed for user ' . $user->id . ': ' . $e->getMessage());
+      }
+    });
   }
 
   /**
