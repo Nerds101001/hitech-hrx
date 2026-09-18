@@ -157,7 +157,7 @@ class SalesPipelineController extends Controller
      * August stays open through Sept 5 so month-end reconciliation has a
      * few days' grace, then only Admin/HR can touch it).
      */
-    private static function isMonthLockedForUser($user, string $monthYear): bool
+    public static function isMonthLockedForUser($user, string $monthYear): bool
     {
         if ($user && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
             return false;

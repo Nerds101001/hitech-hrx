@@ -509,6 +509,7 @@ class PipelineImportController extends Controller
         $successCount = 0;
         $errorCount = 0;
         $errors = [];
+        $lockedMonthsSkipped = 0;
 
         $consecutiveEmptyRows = 0;
         for ($r = $dataStartRowIdx; $r < count($data); $r++) {
@@ -612,6 +613,15 @@ class PipelineImportController extends Controller
                 $yoyTotals = ['yoy_22_23' => 0.0, 'yoy_23_24' => 0.0, 'yoy_24_25' => 0.0, 'yoy_25_26' => 0.0];
 
                 foreach ($monthMappings as $monthYear => $indices) {
+                    // Same month-lock policy the interactive grid enforces via
+                    // monthUpdate() — this bulk path wrote Sale/Pending/Forecast
+                    // for any month with no check at all, letting any Sales/
+                    // CCare/New Biz/Export user silently overwrite a closed
+                    // month's figures through the import screen.
+                    if (\App\Http\Controllers\tenant\SalesPipelineController::isMonthLockedForUser($user, $monthYear)) {
+                        $lockedMonthsSkipped++;
+                        continue;
+                    }
                     $saleVal = 0;
                     $pendingVal = 0;
                     $forecastVal = 0;
@@ -678,6 +688,9 @@ class PipelineImportController extends Controller
         @unlink($fullPath);
 
         $msg = "Successfully processed {$successCount} parties/pipelines.";
+        if ($lockedMonthsSkipped > 0) {
+            $msg .= " Skipped {$lockedMonthsSkipped} month figure(s) — that month is locked for your role.";
+        }
         if ($errorCount > 0) {
             $msg .= " Failed on {$errorCount} rows.";
             return redirect()->route('sales-visits.pipeline.index')->with('warning', $msg)->with('import_errors', $errors);
