@@ -12,8 +12,8 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * The Sales Report month lock, and the one-off reopen of August 2026 that runs
- * through the end of Monday 21 Sept 2026 (IST) and then closes by itself.
+ * The Sales Report month lock, and the one-off reopen of April to August 2026
+ * that runs through the end of Monday 21 Sept 2026 (IST) and then closes by itself.
  */
 class SalesReportMonthLockTest extends TestCase
 {
@@ -42,16 +42,18 @@ class SalesReportMonthLockTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_august_is_open_to_the_sales_team_through_the_end_of_monday_21_sept(): void
+    public function test_april_to_august_are_open_to_the_sales_team_through_the_end_of_monday_21_sept(): void
     {
         $manager = $this->person('manager');
         $plain = $this->person();
 
         foreach (['2026-09-19 12:00:00', '2026-09-20 09:00:00', '2026-09-21 00:00:01', '2026-09-21 23:59:59'] as $moment) {
             $this->at($moment);
-            $this->assertFalse(Sales::isMonthLockedForUser($manager, '2026-08'), "manager, $moment");
-            $this->assertFalse(Sales::isMonthLockedForUser($plain, '2026-08'), "salesperson, $moment");
-            $this->assertTrue(Sales::isReopened('2026-08'), $moment);
+            foreach (['2026-04', '2026-05', '2026-06', '2026-07', '2026-08'] as $month) {
+                $this->assertFalse(Sales::isMonthLockedForUser($manager, $month), "manager, $month, $moment");
+                $this->assertFalse(Sales::isMonthLockedForUser($plain, $month), "salesperson, $month, $moment");
+                $this->assertTrue(Sales::isReopened($month), "$month, $moment");
+            }
         }
     }
 
@@ -59,21 +61,22 @@ class SalesReportMonthLockTest extends TestCase
     {
         $manager = $this->person('manager');
 
-        $this->at('2026-09-22 00:00:01');
-
-        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-08'));
-        $this->assertFalse(Sales::isReopened('2026-08'));
-        $this->at('2026-10-15 10:00:00');
-        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-08'));
+        foreach (['2026-09-22 00:00:01', '2026-10-15 10:00:00'] as $moment) {
+            $this->at($moment);
+            foreach (['2026-04', '2026-05', '2026-06', '2026-07', '2026-08'] as $month) {
+                $this->assertTrue(Sales::isMonthLockedForUser($manager, $month), "$month, $moment");
+                $this->assertFalse(Sales::isReopened($month), "$month, $moment");
+            }
+        }
     }
 
-    public function test_only_august_is_reopened_not_older_or_newer_closed_months(): void
+    public function test_only_the_listed_months_are_reopened_not_older_or_newer_ones(): void
     {
         $manager = $this->person('manager');
         $this->at('2026-09-19 12:00:00');
 
-        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-07'), 'July stays closed');
-        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-04'), 'April stays closed');
+        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-03'), 'last financial year stays closed');
+        $this->assertTrue(Sales::isMonthLockedForUser($manager, '2025-12'), 'older months stay closed');
         $this->assertTrue(Sales::isMonthLockedForUser($manager, '2026-10'), 'a future month stays closed to non-admins');
         $this->assertFalse(Sales::isMonthLockedForUser($manager, '2026-09'), 'the current month is open as always');
     }

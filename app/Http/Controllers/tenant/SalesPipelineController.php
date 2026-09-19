@@ -151,20 +151,20 @@ class SalesPipelineController extends Controller
     }
 
     /**
-     * One-off reopen of a closed month for the whole sales team, not only
-     * Admin/HR, at the client's request. August 2026 had passed its Sept-5
-     * grace window; it is open again through the end of Monday 21 Sept 2026
-     * (IST) and then locks itself with no follow-up. The month and the moment
-     * live here once: the lock check below and the Sales Report view both ask
-     * this method, so they cannot disagree. Once the moment has passed the
-     * constants (and this method) are dead code and safe to delete.
+     * One-off reopen of closed months for the whole sales team, not only
+     * Admin/HR, at the client's request. April to August 2026 had passed their
+     * Sept-5 grace windows; they are open again through the end of Monday
+     * 21 Sept 2026 (IST) and then lock themselves with no follow-up. The months
+     * and the moment live here once: the lock check below and the Sales Report
+     * view both ask this method, so they cannot disagree. Once the moment has
+     * passed the constants (and this method) are dead code and safe to delete.
      */
-    public const REOPEN_MONTH = '2026-08';
-    public const REOPEN_UNTIL = '2026-09-21 23:59:59';   // Asia/Kolkata
+    public const REOPEN_MONTHS = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08'];
+    public const REOPEN_UNTIL  = '2026-09-21 23:59:59';   // Asia/Kolkata
 
     public static function isReopened(string $monthYear): bool
     {
-        return $monthYear === self::REOPEN_MONTH
+        return in_array($monthYear, self::REOPEN_MONTHS, true)
             && \Carbon\Carbon::now()->lte(\Carbon\Carbon::parse(self::REOPEN_UNTIL, 'Asia/Kolkata'));
     }
 
