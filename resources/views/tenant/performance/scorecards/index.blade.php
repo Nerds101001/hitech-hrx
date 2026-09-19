@@ -13,6 +13,19 @@
         Every employee's live KPI/KRA score - the same figures as their own My Scorecard, tracked continuously.
       </p>
     </div>
+    {{-- Month-wise PDF. The month is chosen once here and applied to the row links and the bulk button by the script below. --}}
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <select id="pdfMonth" class="form-select form-select-hitech" style="min-width:160px" aria-label="Month for PDF">
+        @foreach($pdfMonths as $pm)
+          <option value="{{ $pm['key'] }}">{{ $pm['label'] }}</option>
+        @endforeach
+      </select>
+      <a href="#" id="pdfAll" class="btn btn-hitech rounded-pill px-4 d-flex align-items-center gap-2"
+         data-base="{{ route('performance.scorecards.index', array_filter(['department_id' => request('department_id'), 'search' => request('search')])) }}"
+         title="One PDF, a page per person, for the department and search currently selected">
+        <i class="bx bx-download fs-5"></i><span class="fw-bold">Download all</span>
+      </a>
+    </div>
   </div>
 
   <div class="px-4">
@@ -88,7 +101,11 @@
                     <span class="text-muted">—</span>
                   @endif
                 </td>
-                <td class="text-end">
+                <td class="text-end text-nowrap">
+                  @if($sc->has_assignments)
+                    <a href="#" class="btn btn-sm btn-hitech-cancel rounded-pill px-3 js-pdf-row"
+                       data-base="{{ route('performance.scorecards.index', ['user_id' => $sc->user->id]) }}" title="Download this employee's scorecard for the month chosen above"><i class="bx bx-download me-1"></i>PDF</a>
+                  @endif
                   <a href="{{ route('performance.scorecards.show', $sc->user->id) }}" class="btn btn-sm btn-hitech rounded-pill px-3"><i class="bx bx-show me-1"></i>View Report</a>
                 </td>
               </tr>
@@ -103,6 +120,19 @@
     </div>
   </div>
 </div>
+
+<script>
+  // Plain DOM only: nothing here may depend on jQuery/bootstrap, which load deferred.
+  document.addEventListener('DOMContentLoaded', function () {
+    var select = document.getElementById('pdfMonth');
+    function link(base) {
+      return base + (base.indexOf('?') === -1 ? '?' : '&') + 'pdf=' + encodeURIComponent(select.value);
+    }
+    document.querySelectorAll('.js-pdf-row, #pdfAll').forEach(function (a) {
+      a.addEventListener('click', function (e) { e.preventDefault(); window.location.href = link(a.dataset.base); });
+    });
+  });
+</script>
 
 <style>
   /* Grade C has no ready-made semantic badge elsewhere in the theme

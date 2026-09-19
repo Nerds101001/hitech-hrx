@@ -8,6 +8,7 @@ use App\Models\AppraisalCycle;
 use App\Models\Department;
 use App\Models\NinetyDayGoal;
 use App\Models\User;
+use App\Services\KpiScorecardService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -34,6 +35,10 @@ class SalesAssessmentController extends Controller
      */
     public function index(Request $request)
     {
+        if ($request->filled('pdf')) {
+            return $this->monthlyPdf($request);
+        }
+
         $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)->with('department');
 
         if ($request->filled('department_id')) {
@@ -83,8 +88,58 @@ class SalesAssessmentController extends Controller
         }
 
         $departments = Department::cachedActive();
+        $pdfMonths = KpiScorecardService::months();
 
-        return view('tenant.performance.scorecards.index', compact('scorecards', 'departments'));
+        return view('tenant.performance.scorecards.index', compact('scorecards', 'departments', 'pdfMonths'));
+    }
+
+    /**
+     * ?pdf=YYYY-MM on the Scorecards page: one employee's month (user_id), or
+     * everyone the page's own filters would list (department_id / search) as a
+     * single multi-page file. Reaches exactly the people the listing does.
+     */
+    private function monthlyPdf(Request $request)
+    {
+        $month = KpiScorecardService::parseMonth($request->query('pdf'));
+        if (!$month) {
+            return back()->with('error', 'Pick a month that has already started.');
+        }
+
+        $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->whereIn('id', \App\Models\KpiAssignment::query()->select('user_id'));
+        if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
+            $query->where('id', Auth::id());
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('id', (int) $request->query('user_id'));
+        } else {
+            if ($request->filled('department_id')) {
+                $query->where('department_id', (int) $request->query('department_id'));
+            }
+            if ($request->filled('search')) {
+                $term = $request->query('search');
+                $query->where(fn ($q) => $q->where('first_name', 'like', "%{$term}%")->orWhere('last_name', 'like', "%{$term}%"));
+            }
+        }
+
+        $users = $query->orderBy('first_name')->get();
+        if ($users->count() > KpiScorecardService::BULK_LIMIT) {
+            return back()->with('error', 'That is ' . $users->count() . ' people; pick a department so it is at most ' . KpiScorecardService::BULK_LIMIT . '.');
+        }
+
+        $cards = KpiScorecardService::cardsFor($users, $month);
+        if ($cards->isEmpty()) {
+            return back()->with('error', 'No KPIs to show for ' . $month->format('F Y') . '.');
+        }
+
+        $label = $request->filled('user_id')
+            ? \Illuminate\Support\Str::slug($users->first()->first_name . ' ' . $users->first()->last_name)
+            : 'all-' . ($request->filled('department_id')
+                ? \Illuminate\Support\Str::slug(optional(Department::find($request->query('department_id')))->name ?: 'department')
+                : 'departments');
+
+        return KpiScorecardService::download($cards, $month, 'KPI-Scorecard-' . $label . '-' . $month->format('Y-m') . '.pdf');
     }
 
     public function generate(Request $request)

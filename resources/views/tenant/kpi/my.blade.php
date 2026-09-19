@@ -11,7 +11,18 @@
                 Your KPIs and KRAs, what you have reported, and what has been scored.
             </p>
         </div>
-        <div class="d-flex gap-3 flex-wrap">
+        <div class="d-flex gap-3 flex-wrap align-items-center">
+            {{-- One month's scorecard as a PDF: the download is this page with ?pdf=YYYY-MM. --}}
+            <form method="GET" action="{{ url('/kpi/my') }}" class="d-flex gap-2 align-items-center">
+                <select name="pdf" class="form-select form-select-hitech" style="min-width:160px" aria-label="Month">
+                    @foreach($pdfMonths as $pm)
+                        <option value="{{ $pm['key'] }}">{{ $pm['label'] }}</option>
+                    @endforeach
+                </select>
+                <button type="submit" class="btn btn-hitech shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
+                    <i class="bx bx-download fs-5"></i><span class="fw-bold">PDF</span>
+                </button>
+            </form>
             <a href="{{ url('/user/dashboard') }}" class="btn btn-hitech-cancel shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
                 <i class="bx bx-home-alt fs-5"></i><span class="fw-bold">Dashboard</span>
             </a>

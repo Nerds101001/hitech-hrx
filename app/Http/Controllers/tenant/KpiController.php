@@ -11,6 +11,7 @@ use App\Models\KpiTemplate;
 use App\Models\WorkControlRoutine;
 use App\Services\KpiPeriodService;
 use App\Services\KpiEntryService;
+use App\Services\KpiScorecardService;
 use App\Services\KpiTemplateService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -338,6 +339,25 @@ class KpiController extends Controller
     public function my(Request $request)
     {
         $user = Auth::user();
+
+        // ?pdf=YYYY-MM downloads THIS person's scorecard for that month. It is
+        // always the signed-in user's own; nobody else's is reachable from here.
+        if ($request->filled('pdf')) {
+            $month = KpiScorecardService::parseMonth($request->query('pdf'));
+            if (!$month) {
+                return back()->with('error', 'Pick a month that has already started.');
+            }
+            $cards = KpiScorecardService::cardsFor(collect([$user]), $month);
+            if ($cards->isEmpty()) {
+                return back()->with('error', 'You have no KPIs for ' . $month->format('F Y') . '.');
+            }
+
+            return KpiScorecardService::download(
+                $cards, $month,
+                'KPI-Scorecard-' . \Illuminate\Support\Str::slug($user->first_name . ' ' . $user->last_name) . '-' . $month->format('Y-m') . '.pdf'
+            );
+        }
+
         [
             'assignments' => $assignments, 'months' => $months, 'grid' => $grid, 'history' => $history,
             'earned' => $earned, 'possible' => $possible, 'pendingCount' => $pendingCount,
@@ -382,7 +402,10 @@ class KpiController extends Controller
             ->where('status', \App\Models\KpiEntry::REJECTED)
             ->orderByDesc('period_start')->get();
 
+        $pdfMonths = KpiScorecardService::months();
+
         return view('tenant.kpi.my', compact(
+            'pdfMonths',
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
             'pendingCount', 'completedCount',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
