@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\KpiAssignment;
 use App\Models\KpiCheck;
 use App\Models\KpiEntry;
+use App\Models\User;
 use Carbon\Carbon;
 
 /**
@@ -179,13 +180,49 @@ class KpiEntryService
     }
 
     /**
+     * HR and admin review every KPI. Anyone else -- the "manager" role is held by
+     * dozens of people across every department -- reviews only the KPIs that
+     * name them as approver, and never their own numbers.
+     */
+    public static function reviewsEverything(User $reviewer): bool
+    {
+        return $reviewer->hasRole(['admin', 'hr']);
+    }
+
+    public static function canReview(User $reviewer, KpiEntry $entry): bool
+    {
+        if (self::reviewsEverything($reviewer)) {
+            return true;
+        }
+
+        $approverId = optional($entry->assignment)->approver_id;
+
+        return $approverId !== null
+            && (int) $approverId === (int) $reviewer->id
+            && (int) $entry->user_id !== (int) $reviewer->id;
+    }
+
+    /** Narrow an entries query to what this reviewer is allowed to see. */
+    public static function scopeToReviewer($query, User $reviewer)
+    {
+        if (self::reviewsEverything($reviewer)) {
+            return $query;
+        }
+
+        return $query->where('user_id', '!=', $reviewer->id)
+            ->whereHas('assignment', fn ($a) => $a->where('approver_id', $reviewer->id));
+    }
+
+    /**
      * Entries in one status (default: awaiting review), newest week first.
      * The Approvals page's three tabs (pending/approved/rejected) and its
-     * Excel export all read through this one query.
+     * Excel export all read through this one query, so the reviewer is a
+     * required argument: there is no way to get the unfiltered list by
+     * forgetting one.
      */
-    public static function queue(?int $departmentId = null, string $status = KpiEntry::SUBMITTED, ?int $userId = null)
+    public static function queue(?int $departmentId, string $status, ?int $userId, User $reviewer)
     {
-        return KpiEntry::query()
+        return self::scopeToReviewer(KpiEntry::query(), $reviewer)
             ->where('status', $status)
             ->with(['assignment', 'user.department', 'reviewer'])
             ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))

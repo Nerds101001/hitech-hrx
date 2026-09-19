@@ -468,7 +468,10 @@ class KpiController extends Controller
             'action' => 'required|in:approve,reject',
             'note'   => 'nullable|string|max:255',
         ]);
-        $entry = \App\Models\KpiEntry::findOrFail($entryId);
+        $entry = \App\Models\KpiEntry::with('assignment')->findOrFail($entryId);
+        if (!KpiEntryService::canReview($user, $entry)) {
+            return response()->json(['status' => 'error', 'message' => 'You are not the approver for this KPI.'], 403);
+        }
 
         $entry = $data['action'] === 'approve'
             ? KpiEntryService::approve($entry, $user->id, $data['note'] ?? null)
@@ -504,16 +507,24 @@ class KpiController extends Controller
         $employeeId = $request->input('employee_id');
         $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
 
-        $entries = KpiEntryService::queue($departmentId, self::APPROVAL_TABS[$tab], $employeeId);
-        $pendingEntries = $tab === 'pending' ? $entries : KpiEntryService::queue($departmentId, \App\Models\KpiEntry::SUBMITTED, $employeeId);
+        $entries = KpiEntryService::queue($departmentId, self::APPROVAL_TABS[$tab], $employeeId, $user);
+        $pendingEntries = $tab === 'pending' ? $entries : KpiEntryService::queue($departmentId, \App\Models\KpiEntry::SUBMITTED, $employeeId, $user);
 
-        $tabCounts = \App\Models\KpiEntry::query()
+        $tabCounts = KpiEntryService::scopeToReviewer(\App\Models\KpiEntry::query(), $user)
             ->when($departmentId, fn ($q) => $q->whereHas('user', fn ($u) => $u->where('department_id', $departmentId)))
             ->when($employeeId, fn ($q) => $q->where('user_id', $employeeId))
             ->selectRaw('status, COUNT(*) c')->groupBy('status')->pluck('c', 'status');
 
-        $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
-        $employees = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
+        // The filter dropdowns list only what this reviewer can act on -- a
+        // department head should not get the whole staff directory from here.
+        $reviewable = KpiEntryService::reviewsEverything($user)
+            ? null
+            : KpiEntryService::scopeToReviewer(\App\Models\KpiEntry::query(), $user)->pluck('user_id')->unique();
+        $employees = User::notTerminated()->when($reviewable !== null, fn ($q) => $q->whereIn('id', $reviewable))
+            ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'department_id']);
+        $departments = \App\Models\Department::orderBy('name')
+            ->when($reviewable !== null, fn ($q) => $q->whereIn('id', $employees->pluck('department_id')->filter()->unique()))
+            ->get(['id', 'name']);
 
         return view('tenant.kpi.approvals', compact('entries', 'pendingEntries', 'departments', 'employees', 'departmentId', 'employeeId', 'tab', 'tabCounts'));
     }
@@ -530,7 +541,7 @@ class KpiController extends Controller
         $tab = array_key_exists($request->input('tab'), self::APPROVAL_TABS) ? $request->input('tab') : 'pending';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KpiApprovalsExport(self::APPROVAL_TABS[$tab], $departmentId, $employeeId),
+            new \App\Exports\KpiApprovalsExport(self::APPROVAL_TABS[$tab], $departmentId, $employeeId, $user),
             'kpi-' . $tab . '-' . now()->format('Ymd_His') . '.xlsx'
         );
     }

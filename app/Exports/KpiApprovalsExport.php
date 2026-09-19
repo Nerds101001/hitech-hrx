@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\KpiEntry;
+use App\Models\User;
 use App\Services\KpiEntryService;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -14,17 +15,19 @@ class KpiApprovalsExport implements FromCollection, WithHeadings, WithMapping, S
     protected string $status;
     protected ?int $departmentId;
     protected ?int $userId;
+    protected User $reviewer;
 
-    public function __construct(string $status, ?int $departmentId = null, ?int $userId = null)
+    public function __construct(string $status, ?int $departmentId, ?int $userId, User $reviewer)
     {
         $this->status = $status;
         $this->departmentId = $departmentId;
         $this->userId = $userId;
+        $this->reviewer = $reviewer;
     }
 
     public function collection()
     {
-        return KpiEntryService::queue($this->departmentId, $this->status, $this->userId);
+        return KpiEntryService::queue($this->departmentId, $this->status, $this->userId, $this->reviewer);
     }
 
     public function headings(): array
