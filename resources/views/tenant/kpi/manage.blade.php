@@ -1,23 +1,35 @@
 @php $configData = Helper::appClasses(); @endphp
 @extends('layouts/contentNavbarLayout')
-@section('title', 'KPI / KRA Management')
+@section('title', 'Per-employee KPI / KRA')
 
 @section('content')
-<div class="container-xxl flex-grow-1 container-p-y">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h5 class="mb-0 fw-bold"><i class="bx bx-target-lock me-1"></i> KPI / KRA Management</h5>
-        <span class="text-muted small">Sales-department employees are excluded (target-based KRA handled separately).</span>
+<div class="layout-full-width animate__animated animate__fadeIn">
+    {{-- Header: same shape as KPI / KRA Setup, which this page is a companion to. --}}
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
+        <div>
+            <h3 class="fw-extrabold mb-1 text-dark">Per-employee KPI / KRA</h3>
+            <p class="text-muted mb-0 small">
+                Give one person a KPI or KRA of their own, from their daily routines or from scratch.
+                Sales, New Biz and Customer Care are scored through the department templates and are not listed here.
+            </p>
+        </div>
+        <div class="d-flex gap-3 flex-wrap">
+            <a href="{{ route('tenant.kpi.templates') }}" class="btn btn-hitech-cancel shadow-sm rounded-pill px-4 d-flex align-items-center gap-2">
+                <i class="bx bx-arrow-back fs-5"></i><span class="fw-bold">KPI / KRA Setup</span>
+            </a>
+        </div>
     </div>
 
-    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if(session('success'))<div class="alert alert-success mx-4">{{ session('success') }}</div>@endif
 
+    <div class="px-4">
     {{-- Employee picker --}}
-    <div class="card mb-4">
-        <div class="card-body">
+    <div class="hitech-card mb-6">
+        <div class="card-body p-4">
             <form method="GET" action="{{ route('tenant.kpi.manage') }}" class="row g-2 align-items-end">
                 <div class="col-md-6">
-                    <label class="form-label">Select Employee</label>
-                    <select name="user_id" class="form-select" onchange="this.form.submit()">
+                    <label class="form-label fw-bold small text-muted text-uppercase mb-2">Employee</label>
+                    <select name="user_id" class="form-select form-select-hitech" onchange="this.form.submit()">
                         <option value="">-- Choose employee --</option>
                         @foreach($employees as $emp)
                             <option value="{{ $emp->id }}" {{ (optional($selected)->id == $emp->id) ? 'selected' : '' }}>
@@ -33,18 +45,18 @@
     @if($selected)
     <div class="row">
         {{-- DWM routines available to convert --}}
-        <div class="col-lg-5 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><h6 class="mb-0">DWM Routines — {{ $selected->first_name }}</h6></div>
-                <div class="card-body">
+        <div class="col-lg-5 mb-6">
+            <div class="hitech-card h-100">
+                <div class="card-body p-4 border-bottom"><h6 class="fw-bold mb-0 text-dark">DWM routines — {{ $selected->first_name }}</h6></div>
+                <div class="card-body p-4">
                     @forelse($routines as $routine)
-                        <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+                        <div class="d-flex align-items-center justify-content-between gap-3 p-3 mb-3" style="border:1px solid #e2e8f0;border-radius:12px;">
                             <div>
                                 <span class="fw-semibold">{{ $routine->title }}</span>
-                                <span class="badge bg-label-info ms-1 text-capitalize">{{ $routine->frequency }}</span>
+                                <span class="badge badge-hitech badge-brand-soft ms-1 text-capitalize">{{ $routine->frequency }}</span>
                                 <small class="text-muted d-block">{{ $routine->duration_minutes }} min</small>
                             </div>
-                            <button class="btn btn-sm btn-primary add-from-routine"
+                            <button class="btn btn-sm btn-hitech rounded-pill px-3 text-nowrap add-from-routine"
                                 data-id="{{ $routine->id }}" data-title="{{ $routine->title }}" data-frequency="{{ $routine->frequency }}">
                                 <i class="bx bx-plus"></i> To KPI/KRA
                             </button>
@@ -53,7 +65,7 @@
                         <p class="text-muted mb-0">No DWM routines found for this employee.</p>
                     @endforelse
                     <hr>
-                    <button class="btn btn-outline-primary btn-sm w-100 add-from-routine" data-id="" data-title="" data-frequency="daily">
+                    <button class="btn btn-hitech-cancel rounded-pill w-100 add-from-routine" data-id="" data-title="" data-frequency="daily">
                         <i class="bx bx-plus"></i> Add custom KPI/KRA (not from DWM)
                     </button>
                 </div>
@@ -61,11 +73,11 @@
         </div>
 
         {{-- Existing assignments --}}
-        <div class="col-lg-7 mb-4">
-            <div class="card h-100">
-                <div class="card-header"><h6 class="mb-0">Assigned KPI / KRA</h6></div>
-                <div class="card-body table-responsive">
-                    <table class="table table-sm">
+        <div class="col-lg-7 mb-6">
+            <div class="hitech-card h-100">
+                <div class="card-body p-4 border-bottom"><h6 class="fw-bold mb-0 text-dark">Assigned KPI / KRA</h6></div>
+                <div class="card-body p-0 table-responsive">
+                    <table class="table align-middle mb-0">
                         <thead><tr>
                             <th>Title</th><th>Where from</th><th>Type</th><th>Freq</th><th>Scoring</th><th>Marks</th><th>Target</th><th>Status</th><th></th>
                         </tr></thead>
@@ -86,7 +98,7 @@
                                         <span class="badge badge-hitech badge-muted">Added here</span>
                                     @endif
                                 </td>
-                                <td><span class="badge bg-label-{{ $a->category === 'KRA' ? 'warning' : 'primary' }}">{{ $a->category }}</span></td>
+                                <td><span class="badge badge-hitech {{ $a->category === 'KRA' ? 'badge-muted' : 'badge-brand-soft' }}">{{ $a->category }}</span></td>
                                 <td class="text-capitalize">{{ $a->frequency }}</td>
                                 <td class="text-capitalize">{{ $a->scoring_type }}</td>
                                 <td>{{ rtrim(rtrim(number_format($a->max_marks,2),'0'),'.') }}</td>
@@ -102,19 +114,19 @@
                                         @endif
                                     @else — @endif
                                 </td>
-                                <td>{!! $a->is_active ? '<span class="badge bg-label-success">Active</span>' : '<span class="badge bg-label-secondary">Inactive</span>' !!}</td>
-                                <td class="text-end">
+                                <td>{!! $a->is_active ? '<span class="badge badge-hitech badge-hitech-success">Active</span>' : '<span class="badge badge-hitech badge-muted">Inactive</span>' !!}</td>
+                                <td class="text-end text-nowrap">
                                     @if($a->scoring_type === 'target' && $a->is_active)
-                                        <button class="btn btn-icon btn-sm text-success evaluate-kpi" data-id="{{ $a->id }}" data-title="{{ $a->title }}" title="Record achievement"><i class="bx bx-check-square"></i></button>
+                                        <button class="btn btn-icon btn-sm icon-sophisticated text-success evaluate-kpi" data-id="{{ $a->id }}" data-title="{{ $a->title }}" title="Record achievement"><i class="bx bx-check-square"></i></button>
                                     @endif
-                                    <button class="btn btn-icon btn-sm text-primary edit-kpi"
+                                    <button class="btn btn-icon btn-sm icon-sophisticated edit-kpi"
                                         data-id="{{ $a->id }}" data-title="{{ $a->title }}" data-category="{{ $a->category }}"
                                         data-frequency="{{ $a->frequency }}" data-scoring="{{ $a->scoring_type }}"
                                         data-marks="{{ $a->max_marks }}" data-late="{{ $a->late_score }}"
                                         data-target="{{ $a->target_value }}" data-day="{{ $a->check_day }}" data-month="{{ $a->check_month }}"
                                         title="Edit"><i class="bx bx-edit"></i></button>
                                     @if($a->is_active)
-                                        <button class="btn btn-icon btn-sm text-danger deactivate-kpi" data-id="{{ $a->id }}" title="Deactivate"><i class="bx bx-x-circle"></i></button>
+                                        <button class="btn btn-icon btn-sm icon-sophisticated text-danger deactivate-kpi" data-id="{{ $a->id }}" title="Deactivate"><i class="bx bx-x-circle"></i></button>
                                     @endif
                                 </td>
                             </tr>
@@ -128,7 +140,8 @@
         </div>
     </div>
     @endif
-</div>
+    </div>{{-- /px-4 --}}
+</div>{{-- /layout-full-width --}}
 
 {{-- Add / Edit modal --}}
 <div class="modal fade" id="kpiModal" tabindex="-1">
@@ -173,8 +186,8 @@
           <p class="text-muted small mb-0" id="freqHint"></p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-hitech rounded-pill px-4">Save</button>
         </div>
       </form>
     </div>
@@ -196,8 +209,8 @@
             <input type="text" id="eval_remarks" class="form-control"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-label-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-success">Save score</button>
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-hitech rounded-pill px-4">Save score</button>
         </div>
       </form>
     </div>

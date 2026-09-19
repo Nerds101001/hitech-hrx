@@ -775,27 +775,12 @@
             ],
             "submenu": [
                 {
-                    "url": "/performance/scorecards",
-                    "name": "Scorecards",
-                    "slug": "performance.scorecards.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/performance/ninety-day-goals",
-                    "name": "90-Day Goals",
-                    "slug": "performance.ninety-day-goals.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
-                    "url": "/kpi/manage",
-                    "name": "KPI / KRA",
-                    "slug": "tenant.kpi.manage",
+                    "url": "/kpi/templates",
+                    "name": "KPI / KRA Setup",
+                    "slug": [
+                        "tenant.kpi.templates",
+                        "tenant.kpi.manage"
+                    ],
                     "roles": [
                         "admin",
                         "hr"
@@ -812,9 +797,18 @@
                     ]
                 },
                 {
-                    "url": "/kpi/templates",
-                    "name": "KPI / KRA Setup",
-                    "slug": "tenant.kpi.templates",
+                    "url": "/performance/scorecards",
+                    "name": "Scorecards",
+                    "slug": "performance.scorecards.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/performance/ninety-day-goals",
+                    "name": "90-Day Goals",
+                    "slug": "performance.ninety-day-goals.index",
                     "roles": [
                         "admin",
                         "hr"
