@@ -245,4 +245,37 @@ class KpiScorecardPdfTest extends TestCase
         $this->assertStringContainsString('30% of target', $why['ZZ Volume']->why);
         $this->assertStringContainsString('Nothing was reported', $why['ZZ Quality']->why);
     }
+    public function test_an_empty_pending_check_reads_as_not_reported_not_as_reported(): void
+    {
+        // The scoring engine creates the month's check early, with nothing in it.
+        $a = KpiAssignment::where('user_id', $this->alice->id)->where('title', 'ZZ Volume')->firstOrFail();
+        KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $this->alice->id, 'period_start' => $this->month->toDateString(),
+            'period_end' => $this->month->copy()->endOfMonth()->toDateString(), 'due_date' => $this->month->copy()->endOfMonth()->toDateString(), 'status' => 'pending']);
+
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+        $status = collect($card->rows)->pluck('status', 'title');
+
+        $this->assertSame('Not reported', $status['ZZ Volume']);
+        $this->assertSame(['ZZ Volume', 'ZZ Quality'], collect($card->attention)->pluck('title')->all(), 'both are flagged, biggest marks first');
+    }
+
+    public function test_a_number_waiting_for_the_approver_is_shown_as_such(): void
+    {
+        $a = KpiAssignment::where('user_id', $this->alice->id)->where('title', 'ZZ Quality')->firstOrFail();
+        \App\Services\KpiEntryService::submit($a, 7, 'sent');
+
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+        $row = collect($card->rows)->firstWhere('title', 'ZZ Quality');
+
+        $this->assertSame('Awaiting approval', $row->status);
+        $this->assertStringContainsString('waiting for the approver', collect($card->attention)->firstWhere('title', 'ZZ Quality')->why);
+    }
+
+    public function test_rows_follow_the_order_the_scorecard_was_set_up_in_not_the_alphabet(): void
+    {
+        // ZZ Volume was created before ZZ Quality; alphabetically Quality would come first.
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+
+        $this->assertSame(['ZZ Volume', 'ZZ Quality'], collect($card->rows)->pluck('title')->all());
+    }
 }

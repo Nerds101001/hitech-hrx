@@ -78,6 +78,26 @@ class KpiScorecardService
     ];
 
     /**
+     * What the row says about the month. A check that exists but is still
+     * "pending" with no figure means nothing has been reported yet, however
+     * early the scoring engine created the empty check.
+     */
+    private static function statusOf(?KpiCheck $latest, ?float $achieved, bool $awaitingApproval): string
+    {
+        if (!$latest) {
+            return $awaitingApproval ? 'Awaiting approval' : 'Not reported';
+        }
+        if ($latest->status !== 'pending') {
+            return self::STATUS[$latest->status] ?? ucfirst((string) $latest->status);
+        }
+        if ($awaitingApproval) {
+            return 'Awaiting approval';
+        }
+
+        return $achieved === null ? 'Not reported' : 'In progress';
+    }
+
+    /**
      * @param  Collection<int, User>  $users
      * @return Collection  user id => {user, rows, earned, possible, pct, grade}
      */
@@ -108,10 +128,17 @@ class KpiScorecardService
             ->get()
             ->groupBy('user_id');
 
+        // Numbers someone has entered that are still waiting for an approver.
+        $awaiting = \App\Models\KpiEntry::whereIn('user_id', $ids)
+            ->where('status', \App\Models\KpiEntry::SUBMITTED)
+            ->whereDate('period_start', '>=', $start->toDateString())
+            ->whereDate('period_start', '<=', $end->toDateString())
+            ->pluck('kpi_assignment_id')->unique();
+
         $managers = User::whereIn('id', $users->pluck('reporting_to_id')->filter()->unique())
             ->get(['id', 'first_name', 'last_name'])->keyBy('id');
 
-        return $users->mapWithKeys(function (User $user) use ($assignments, $checks, $managers) {
+        return $users->mapWithKeys(function (User $user) use ($assignments, $checks, $managers, $awaiting) {
             $rows = [];
             foreach (($assignments->get($user->id) ?? collect()) as $a) {
                 $mine   = $checks->get($a->id) ?? collect();
@@ -133,10 +160,18 @@ class KpiScorecardService
                     'max'      => (float) $a->max_marks * max(1, $mine->count()),
                     'score'    => (float) $mine->sum('score'),
                     'checks'   => $mine->count(),
-                    'status'   => $latest ? (self::STATUS[$latest->status] ?? ucfirst((string) $latest->status)) : 'Not reported',
+                    'status'   => self::statusOf($latest, $achieved, $awaiting->contains($a->id)),
+                    'order'    => (int) $a->id,
                 ];
             }
-            usort($rows, fn ($x, $y) => [$x->kra === 'Other', $x->kra, $x->title] <=> [$y->kra === 'Other', $y->kra, $y->title]);
+            // The order the department's scorecard was set up in (assignments are
+            // stamped in template order), KRA headings by where their first KPI
+            // sits, not alphabetically. Hand-added rows without a KRA go last.
+            $firstOf = [];
+            foreach ($rows as $r) {
+                $firstOf[$r->kra] = min($firstOf[$r->kra] ?? PHP_INT_MAX, $r->order);
+            }
+            usort($rows, fn ($x, $y) => [$x->kra === 'Other', $firstOf[$x->kra], $x->order] <=> [$y->kra === 'Other', $firstOf[$y->kra], $y->order]);
 
             $earned   = round(array_sum(array_column($rows, 'score')), 2);
             $possible = round(array_sum(array_column($rows, 'max')), 2);
@@ -193,7 +228,8 @@ class KpiScorecardService
         $out = [];
         foreach ($rows as $r) {
             $why = match (true) {
-                $r->status === 'Not reported' => 'Nothing was reported for the month.',
+                $r->status === 'Not reported'     => 'Nothing was reported for the month.',
+                $r->status === 'Awaiting approval' => 'Reported, waiting for the approver.',
                 $r->status === 'Missed'       => 'Marked as missed.',
                 $r->status === 'Late'         => 'Reported late.',
                 $r->max > 0 && $r->result !== null && $r->score < $r->max * 0.5

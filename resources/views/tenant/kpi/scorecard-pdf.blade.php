@@ -145,8 +145,8 @@
           @php
             $i++;
             $earnTone = $r->max > 0 ? ($r->score >= $r->max * 0.8 ? 'good' : ($r->score >= $r->max * 0.5 ? 'warn' : 'bad')) : 'idle';
-            if ($r->status === 'Not reported') { $earnTone = 'idle'; }
-            $chip = ['On time' => 'good', 'Late' => 'warn', 'Missed' => 'bad'][$r->status] ?? 'idle';
+            if (in_array($r->status, ['Not reported', 'Awaiting approval', 'In progress'], true)) { $earnTone = 'idle'; }
+            $chip = ['On time' => 'good', 'Late' => 'warn', 'Missed' => 'bad', 'Awaiting approval' => 'warn'][$r->status] ?? 'idle';
           @endphp
           <tr class="{{ $i % 2 === 0 ? 'alt' : '' }}">
             <td class="muted">{{ $i }}</td>
