@@ -165,7 +165,7 @@
         @endforeach
         <tr class="total">
           <td colspan="5">TOTAL</td>
-          <td class="num">{{ $fmt($card->possible) }}</td>
+          <td class="num">{{ $card->onPoints ? '—' : $fmt($card->possible) }}</td>
           <td class="num">{{ $fmt($card->earned) }}</td>
           <td class="ctr">{{ $card->pct === null ? '' : $fmt($card->pct) . '%' }}</td>
         </tr>
@@ -174,8 +174,14 @@
 
     @if($card->grade)
       <div class="verdict">
-        <b>{{ $month->format('F Y') }} result:</b> {{ $fmt($card->earned) }} of {{ $fmt($card->possible) }} marks ({{ $fmt($card->pct) }}%)
-        &nbsp;—&nbsp; <b>{{ $card->grade }}</b> <span class="muted">({{ \App\Services\KpiScorecardService::gradeBand($card->grade) }})</span>
+        @if($card->onPoints)
+          <b>{{ $month->format('F Y') }} result:</b> {{ $fmt($card->earned) }} points out of 100
+          &nbsp;—&nbsp; <b>{{ $card->grade }}</b> <span class="muted">({{ str_replace('%', ' points', \App\Services\KpiScorecardService::gradeBand($card->grade)) }})</span>
+          <div class="basis" style="margin-top:3px">Graded on points out of 100, the rule book's scale. The Max column shows each parameter's nominal weight; a parameter can earn more than its weight.</div>
+        @else
+          <b>{{ $month->format('F Y') }} result:</b> {{ $fmt($card->earned) }} of {{ $fmt($card->possible) }} marks ({{ $fmt($card->pct) }}%)
+          &nbsp;—&nbsp; <b>{{ $card->grade }}</b> <span class="muted">({{ \App\Services\KpiScorecardService::gradeBand($card->grade) }})</span>
+        @endif
       </div>
     @endif
 

@@ -318,4 +318,49 @@ class KpiScorecardPdfTest extends TestCase
         $this->assertStringNotContainsString('600%', $rowHtml);
         $this->assertStringContainsString('>6<', $rowHtml, 'the figure itself is shown');
     }
+    public function test_the_sales_rule_book_is_graded_on_raw_points_out_of_100_so_63_is_a_c(): void
+    {
+        $desig = \App\Models\Designation::create(['name' => 'ZZ Mgr ' . uniqid(), 'code' => 'ZZR' . random_int(10000, 99999)]);
+        $rep = $this->person();
+        $rep->update(['designation_id' => $desig->id]);
+        foreach (\App\Support\SalesRuleBook::install($this->dept->id, [$desig->id]) as $t) {
+            KpiTemplateService::apply($t);
+        }
+
+        // The points from the annual report the rule book came from: 63 in total.
+        $points = ['Target Achievement (Bingo %)' => 8, 'Pipeline Strength' => 5, 'YoY Revenue Growth' => 0, 'Trial Activity / Demos' => 8,
+            'New Customer Wins (%)' => 15, '90-Day Goals' => 3, 'Sales Pitch Score' => 0, 'Learn@HiTech' => 0, 'Seminars / Presentations' => 0,
+            'Competitor Insights' => 7, 'New Product Ideas' => 7, 'Cost of Selling (COS%)' => 5, 'Cross-Sell / Basket Mix' => 0,
+            'Market Share %' => 10, 'Attrition Penalty' => -5];
+        $fy = $this->month->month >= 4 ? Carbon::create($this->month->year, 4, 1) : Carbon::create($this->month->year - 1, 4, 1);
+        foreach ($points as $title => $score) {
+            $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
+            KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $rep->id, 'period_start' => $fy->toDateString(),
+                'period_end' => $fy->copy()->addYear()->subDay()->toDateString(), 'due_date' => $fy->copy()->addYear()->subDay()->toDateString(),
+                'status' => 'completed_on_time', 'achieved_value' => 1, 'score' => $score]);
+        }
+
+        $card = KpiScorecardService::cardsFor(collect([$rep]), $this->month)->first();
+
+        $this->assertSame(63.0, $card->earned);
+        $this->assertSame(100.0, $card->possible, 'graded out of 100, not out of the 110 the weights add to');
+        $this->assertSame(63.0, $card->pct);
+        $this->assertSame('C - Meets Expectation', $card->grade);
+        $this->assertTrue($card->onPoints);
+
+        $html = view('tenant.kpi.scorecard-pdf', ['cards' => collect([$card]), 'month' => $this->month, 'companyName' => ''])->render();
+        $this->assertStringContainsString('63 points out of 100', $html);
+        $this->assertStringContainsString('C - Meets Expectation', $html);
+    }
+
+    public function test_other_scorecards_are_still_graded_on_their_own_marks(): void
+    {
+        $this->check($this->alice, 'ZZ Volume', 90, 54.0);
+
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+
+        $this->assertFalse($card->onPoints);
+        $this->assertSame(100.0, $card->possible);
+        $this->assertSame(54.0, $card->pct);
+    }
 }

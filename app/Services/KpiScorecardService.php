@@ -190,7 +190,13 @@ class KpiScorecardService
             usort($rows, fn ($x, $y) => [$x->kra === 'Other', $firstOf[$x->kra], $x->order] <=> [$y->kra === 'Other', $firstOf[$y->kra], $y->order]);
 
             $earned   = round(array_sum(array_column($rows, 'score')), 2);
-            $possible = round(array_sum(array_column($rows, 'max')), 2);
+            $rowMax   = round(array_sum(array_column($rows, 'max')), 2);
+            // The Sales Assessment rule book is graded on raw points out of 100 (60 to 69
+            // points is a C), and its parameter weights add to 110, so dividing by the
+            // weights would turn the sheet's 63-point C into a D. Every other scorecard
+            // is graded on its own marks.
+            $onPoints = collect($rows)->contains(fn ($r) => $r->kra === \App\Support\SalesRuleBook::KRA_TITLE);
+            $possible = $onPoints ? 100.0 : $rowMax;
             $pct      = $possible > 0 ? round($earned / $possible * 100, 1) : null;
             $manager  = $managers->get($user->reporting_to_id);
 
@@ -200,6 +206,7 @@ class KpiScorecardService
                 'rows'     => $rows,
                 'earned'   => $earned,
                 'possible' => $possible,
+                'onPoints' => $onPoints,
                 'pct'      => $pct,
                 'grade'    => self::gradeFor($pct),
             ]];
