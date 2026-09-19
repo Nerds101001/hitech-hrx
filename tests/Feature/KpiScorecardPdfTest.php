@@ -198,7 +198,7 @@ class KpiScorecardPdfTest extends TestCase
         $this->assertStringContainsString('user_id=' . $this->alice->id, $list, 'a PDF button on the row');
     }
 
-    public function test_the_pdf_page_carries_every_detail_on_one_page(): void
+    public function test_the_pdf_carries_every_detail_and_a_year_to_date_page(): void
     {
         $this->alice->update(['official_phone' => '9000000001', 'date_of_joining' => '2024-01-15']);
         $this->check($this->alice, 'ZZ Volume', 100, 60.0);
@@ -209,7 +209,40 @@ class KpiScorecardPdfTest extends TestCase
         foreach ([$this->alice->email, $this->alice->code, '9000000001', '15 Jan 2024', $this->dept->name, 'Test Co', 'Total score', 'Reporting manager'] as $needle) {
             $this->assertStringContainsString($needle, $html, $needle);
         }
-        $this->assertSame(1, substr_count($html, 'MONTHLY KPI SCORECARD'), 'one page per person');
-        $this->assertStringNotContainsString('page-break-after: always', $html, 'a single card must not add a blank trailing page');
+        $this->assertSame(1, substr_count($html, 'MONTHLY KPI SCORECARD'), 'one title band per person');
+        $this->assertSame(1, substr_count($html, 'page-break-after: always'), 'one break, between page one and two; nothing trailing');
+        foreach (['Year to date', 'Needs attention this month', 'Remarks'] as $section) {
+            $this->assertStringContainsString($section, $html);
+        }
+    }
+
+    private function pageCount(string $pdf): int
+    {
+        return preg_match_all('/\/Type\s*\/Page(?!s)/', $pdf);
+    }
+
+    public function test_each_person_is_exactly_two_pages_in_a_bulk_file(): void
+    {
+        $this->check($this->alice, 'ZZ Volume', 100, 60.0);
+        $this->check($this->bob, 'ZZ Volume', 50, 30.0);
+
+        $one  = KpiScorecardService::download(KpiScorecardService::cardsFor(collect([$this->alice]), $this->month), $this->month, 'a.pdf')->getContent();
+        $both = KpiScorecardService::download(KpiScorecardService::cardsFor(collect([$this->alice, $this->bob]), $this->month), $this->month, 'b.pdf')->getContent();
+
+        $this->assertSame(2, $this->pageCount($one));
+        $this->assertSame(4, $this->pageCount($both));
+    }
+
+    public function test_year_to_date_lists_earlier_months_and_flags_what_needs_attention(): void
+    {
+        $this->check($this->alice, 'ZZ Volume', 30, 18.0);   // 30 of 100: scored 18 of 60, under half
+
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+
+        $this->assertNotEmpty($card->ytd);
+        $this->assertTrue(end($card->ytd)->current);
+        $why = collect($card->attention)->keyBy('title');
+        $this->assertStringContainsString('30% of target', $why['ZZ Volume']->why);
+        $this->assertStringContainsString('Nothing was reported', $why['ZZ Quality']->why);
     }
 }

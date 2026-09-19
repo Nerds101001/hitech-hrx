@@ -155,13 +155,78 @@ class KpiScorecardService
         });
     }
 
+    /**
+     * Financial-year-to-date, month by month (April → $month), for page two.
+     * One bulk pass per month, so the cost does not grow with the number of people.
+     *
+     * @return array<int, list<object>>  user id => rows of {label, earned, possible, pct, grade, current}
+     */
+    public static function yearToDate(Collection $users, Carbon $month): array
+    {
+        $fyStart = $month->month >= 4
+            ? Carbon::create($month->year, 4, 1)->startOfDay()
+            : Carbon::create($month->year - 1, 4, 1)->startOfDay();
+
+        $out = [];
+        for ($m = $fyStart->copy(); $m->lte($month); $m->addMonthNoOverflow()) {
+            foreach (self::forMonth($users, $m) as $uid => $c) {
+                if (empty($c->rows)) {
+                    continue;   // not yet holding a KPI that month
+                }
+                $out[$uid][] = (object) [
+                    'label'    => $m->format('M Y'),
+                    'earned'   => $c->earned,
+                    'possible' => $c->possible,
+                    'pct'      => $c->pct,
+                    'grade'    => $c->grade,
+                    'current'  => $m->isSameMonth($month),
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /** KPIs worth a conversation this month, biggest marks at stake first. */
+    public static function attention(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $r) {
+            $why = match (true) {
+                $r->status === 'Not reported' => 'Nothing was reported for the month.',
+                $r->status === 'Missed'       => 'Marked as missed.',
+                $r->status === 'Late'         => 'Reported late.',
+                $r->max > 0 && $r->result !== null && $r->score < $r->max * 0.5
+                    => rtrim(rtrim(number_format($r->result, 1), '0'), '.') . '% of target; '
+                       . rtrim(rtrim(number_format($r->score, 2), '0'), '.') . ' of ' . rtrim(rtrim(number_format($r->max, 2), '0'), '.') . ' marks.',
+                default => null,
+            };
+            if ($why !== null) {
+                $out[] = (object) ['title' => $r->title, 'why' => $why, 'max' => $r->max];
+            }
+        }
+        usort($out, fn ($a, $b) => $b->max <=> $a->max);
+
+        return array_slice($out, 0, 12);
+    }
+
     /** Only the people who actually hold a KPI that month, in the order given. */
     public static function cardsFor(Collection $users, Carbon $month): Collection
     {
         $users = \Illuminate\Database\Eloquent\Collection::make($users->all())->loadMissing(['department', 'designation', 'site']);
 
-        return self::forMonth($users, $month)
-            ->filter(fn ($c) => !empty($c->rows))->values();
+        $cards = self::forMonth($users, $month)->filter(fn ($c) => !empty($c->rows))->values();
+        if ($cards->isEmpty()) {
+            return $cards;
+        }
+
+        $ytd = self::yearToDate($cards->pluck('user'), $month);
+        foreach ($cards as $c) {
+            $c->ytd       = $ytd[$c->user->id] ?? [];
+            $c->attention = self::attention($c->rows);
+        }
+
+        return $cards;
     }
 
     /** The PDF download: one page per card. */

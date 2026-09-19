@@ -50,7 +50,11 @@
   .chip { display: inline-block; padding: 1px 5px; font-size: 6.4pt; font-weight: bold; }
 
   .verdict { margin-top: 8px; border: 1px solid #cfe3e2; border-left: 3px solid #007a7a; background: #f0f7f6; padding: 6px 10px; font-size: 8pt; }
-  .sign { margin-top: 26px; }
+  .band.slim { padding: 6px 14px 5px; }
+  .notes td { padding: 0; height: 21px; vertical-align: bottom; }
+  .notes .who { width: 17%; color: #475569; font-size: 6.8pt; text-transform: uppercase; letter-spacing: .3px; }
+  .notes .ruled { border-bottom: 1px solid #cbd5e1; }
+  .sign { margin-top: 30px; }
   .sign td { width: 33%; padding: 0 16px 0 0; vertical-align: bottom; }
   .sign .line { border-top: 1px solid #94a3b8; padding-top: 3px; color: #475569; font-size: 6.8pt; }
   .foot { margin-top: 10px; border-top: 1px solid #e2e8f0; padding-top: 4px; color: #64748b; font-size: 6.4pt; }
@@ -75,7 +79,7 @@
     $span = ($joined && $joined->lte($asOf)) ? $joined->diff($asOf) : null;
     $tenure = $span ? trim(($span->y ? $span->y . ' yr ' : '') . $span->m . ' mo') : '—';
   @endphp
-  <div class="{{ $rows->count() > 12 ? 'dense' : '' }}" @if(!$loop->last) style="page-break-after: always" @endif>
+  <div class="{{ $rows->count() > 14 ? 'dense' : '' }}" style="page-break-after: always">
     <div class="band">
       <div class="kicker">{{ $company !== '' ? $company . '  |  ' : '' }}Monthly Performance Review  |  {{ $month->format('F Y') }}</div>
       <h1>MONTHLY KPI SCORECARD</h1>
@@ -174,6 +178,80 @@
       </div>
     @endif
 
+    <div class="foot">{{ trim($u->first_name . ' ' . $u->last_name) }} &nbsp;·&nbsp; {{ $u->code ?: '—' }} &nbsp;·&nbsp; {{ $month->format('F Y') }} &nbsp;—&nbsp; page 1 of 2</div>
+  </div>
+
+  {{-- Page two: the year so far, what needs attention, room for remarks, sign-off. --}}
+  <div @if(!$loop->last) style="page-break-after: always" @endif>
+    <div class="band slim">
+      <div class="kicker">{{ $company !== '' ? $company . '  |  ' : '' }}Monthly KPI Scorecard, continued  |  {{ $month->format('F Y') }}</div>
+      <h1 style="font-size:11.5pt">{{ trim($u->first_name . ' ' . $u->last_name) }} <span style="font-weight:normal;font-size:8pt"> &nbsp;{{ $u->code ?: '' }} &nbsp;·&nbsp; {{ optional($u->department)->name }}</span></h1>
+    </div>
+
+    <div class="section">Year to date &nbsp;·&nbsp; April – {{ $month->format('F Y') }}</div>
+    <table class="grid">
+      <thead>
+        <tr>
+          <th style="width:30%">Month</th>
+          <th class="num" style="width:20%">Earned</th>
+          <th class="num" style="width:20%">Possible</th>
+          <th class="num" style="width:12%">%</th>
+          <th style="width:18%">Grade</th>
+        </tr>
+      </thead>
+      <tbody>
+        @php $ytdEarned = 0; $ytdPossible = 0; @endphp
+        @forelse($card->ytd as $y)
+          @php $ytdEarned += $y->earned; $ytdPossible += $y->possible; @endphp
+          <tr class="{{ $y->current ? 'kra' : '' }}">
+            <td>{{ $y->label }}@if($y->current) <span class="muted">(this report)</span>@endif</td>
+            <td class="num">{{ $fmt($y->earned) }}</td>
+            <td class="num">{{ $fmt($y->possible) }}</td>
+            <td class="num">{{ $y->pct === null ? '—' : $fmt($y->pct) . '%' }}</td>
+            <td>{{ $y->grade ? strtoupper(substr($y->grade, 0, 1)) : '—' }}</td>
+          </tr>
+        @empty
+          <tr><td colspan="5" class="muted">No earlier months recorded.</td></tr>
+        @endforelse
+        @if(count($card->ytd) > 1)
+          <tr class="total">
+            <td>TOTAL, {{ count($card->ytd) }} months</td>
+            <td class="num">{{ $fmt($ytdEarned) }}</td>
+            <td class="num">{{ $fmt($ytdPossible) }}</td>
+            <td class="num">{{ $ytdPossible > 0 ? $fmt(round($ytdEarned / $ytdPossible * 100, 1)) . '%' : '—' }}</td>
+            <td>&nbsp;</td>
+          </tr>
+        @endif
+      </tbody>
+    </table>
+
+    <div class="section">Needs attention this month</div>
+    @if(count($card->attention))
+      <table class="grid">
+        <thead><tr><th style="width:38%">KPI</th><th>What happened</th><th class="num" style="width:9%">Marks</th></tr></thead>
+        <tbody>
+          @foreach($card->attention as $n => $a)
+            <tr class="{{ $n % 2 ? 'alt' : '' }}">
+              <td><b>{{ $a->title }}</b></td>
+              <td>{{ $a->why }}</td>
+              <td class="num">{{ $fmt($a->max) }}</td>
+            </tr>
+          @endforeach
+        </tbody>
+      </table>
+    @else
+      <div class="verdict">Every KPI was reported and scored at or above half its marks.</div>
+    @endif
+
+    <div class="section">Remarks</div>
+    <table class="notes">
+      <tr><td class="who">Reporting manager</td><td class="ruled">&nbsp;</td></tr>
+      <tr><td class="who">&nbsp;</td><td class="ruled">&nbsp;</td></tr>
+      <tr><td class="who">HR</td><td class="ruled">&nbsp;</td></tr>
+      <tr><td class="who">&nbsp;</td><td class="ruled">&nbsp;</td></tr>
+      <tr><td class="who">Employee</td><td class="ruled">&nbsp;</td></tr>
+    </table>
+
     <table class="sign">
       <tr>
         <td><div class="line">Employee</div></td>
@@ -182,7 +260,7 @@
       </tr>
     </table>
 
-    <div class="foot">Confidential — internal use only &nbsp;·&nbsp; Generated {{ now()->format('d M Y, H:i') }}</div>
+    <div class="foot">Confidential — internal use only &nbsp;·&nbsp; Generated {{ now()->format('d M Y, H:i') }} &nbsp;—&nbsp; page 2 of 2</div>
   </div>
 @endforeach
 </body>
