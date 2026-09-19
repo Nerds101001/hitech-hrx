@@ -236,6 +236,11 @@
                                      prospect. Now anyone who may edit the book can, which matches
                                      what update() already enforces server-side. --}}
                                 @if($canEditBook)
+                                    {{-- Moving a prospect to another salesperson is a transfer that
+                                         update() only allows for real book editors ($canDeleteCustomer
+                                         is that strict flag) — a plain salesperson keeps editing
+                                         their own prospect but sees who owns it as text. --}}
+                                    @if($canDeleteCustomer)
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="salesperson_id">
                                             <option value="">-SP-</option>
@@ -244,6 +249,9 @@
                                             @endforeach
                                         </select>
                                     </td>
+                                    @else
+                                    <td class="align-middle">{{ $row->salesperson->name ?? '-' }}</td>
+                                    @endif
                                     <td class="p-0 align-middle">
                                         <select class="excel-select row-field" data-field="new_biz_id">
                                             <option value="">-NB-</option>

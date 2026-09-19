@@ -2022,8 +2022,12 @@ class SalesPipelineController extends Controller
         // grid or the Sales Pipeline grid -- same endpoint, same model.
         // canEditOwnPipelineRow() only extends past canEditBook() when
         // $pipeline is still open (not_locked) and they are its own
-        // salesperson, i.e. only ever a Sales Pipeline row.
-        if (!self::canEditBook($user)) {
+        // salesperson, i.e. only ever a Sales Pipeline row. This used to
+        // gate on canEditBook() alone despite the comment above, so the
+        // Pipeline grid -- which renders its edit controls for plain
+        // salespeople -- answered every inline edit with "Unauthorized".
+        $viaCarveOutOnly = !self::canEditBook($user);
+        if (!self::canEditOwnPipelineRow($user, $pipeline)) {
             if ($wantsJson) return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             return redirect()->back()->with('error', 'Unauthorized.');
         }
@@ -2045,6 +2049,15 @@ class SalesPipelineController extends Controller
             'product',
             'order_interval'
         ]);
+
+        // Handing a customer to a different salesperson is a transfer, not an
+        // edit of their own prospect -- that stays with the book editors.
+        if ($viaCarveOutOnly && array_key_exists('salesperson_id', $data)
+            && (int) $data['salesperson_id'] !== (int) $pipeline->salesperson_id) {
+            $message = 'Only CCare / New Biz / managers can move a customer to a different salesperson.';
+            if ($wantsJson) return response()->json(['success' => false, 'message' => $message], 403);
+            return redirect()->back()->with('error', $message);
+        }
 
         // party_name is NOT NULL and has no sensible default (unlike the
         // numeric fields below) -- a customer row can't have a blank name.
