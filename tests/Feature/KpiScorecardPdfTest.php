@@ -278,4 +278,44 @@ class KpiScorecardPdfTest extends TestCase
 
         $this->assertSame(['ZZ Volume', 'ZZ Quality'], collect($card->rows)->pluck('title')->all());
     }
+    public function test_a_yearly_kpi_appears_in_every_month_it_spans_as_year_to_date(): void
+    {
+        $t = KpiTemplate::create(['title' => 'ZZ Yearly', 'category' => 'KPI', 'department_id' => $this->dept->id, 'frequency' => 'yearly',
+            'check_month' => 3, 'check_day' => 31, 'scoring_type' => 'banded', 'bands' => [['min' => 0, 'marks' => 0], ['min' => 50, 'marks' => 8]],
+            'max_marks' => 10, 'target_value' => 100, 'data_source' => 'auto:bingo_achievement', 'is_active' => true]);
+        KpiTemplateService::apply($t);
+        $a = KpiAssignment::where('user_id', $this->alice->id)->where('title', 'ZZ Yearly')->firstOrFail();
+
+        // The year's one check starts long before this month and runs to next March.
+        $fy = $this->month->month >= 4 ? Carbon::create($this->month->year, 4, 1) : Carbon::create($this->month->year - 1, 4, 1);
+        KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $this->alice->id, 'period_start' => $fy->toDateString(),
+            'period_end' => $fy->copy()->addYear()->subDay()->toDateString(), 'due_date' => $fy->copy()->addYear()->subDay()->toDateString(),
+            'status' => 'completed_on_time', 'achieved_value' => 60, 'score' => 8]);
+
+        $card = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month)->first();
+        $row = collect($card->rows)->firstWhere('title', 'ZZ Yearly');
+
+        $this->assertNotNull($row);
+        $this->assertSame('Year to date', $row->status);
+        $this->assertSame(8.0, $row->score);
+        $this->assertTrue($row->banded);
+    }
+
+    public function test_a_banded_row_shows_no_target_and_no_percent_of_target(): void
+    {
+        $t = KpiTemplate::create(['title' => 'ZZ Banded', 'category' => 'KPI', 'department_id' => $this->dept->id, 'frequency' => 'monthly',
+            'scoring_type' => 'banded', 'bands' => [['min' => 0, 'marks' => 0], ['min' => 5, 'marks' => 4]],
+            'max_marks' => 4, 'target_value' => 100, 'data_source' => 'approval', 'is_active' => true]);
+        KpiTemplateService::apply($t);
+        $this->check($this->alice, 'ZZ Banded', 6, 4.0);
+
+        $cards = KpiScorecardService::cardsFor(collect([$this->alice]), $this->month);
+        $html = view('tenant.kpi.scorecard-pdf', ['cards' => $cards, 'month' => $this->month, 'companyName' => ''])->render();
+        $pos = strpos($html, 'ZZ Banded');
+        $rowHtml = substr($html, $pos, strpos($html, '</tr>', $pos) - $pos);
+
+        $this->assertStringNotContainsString('100', $rowHtml, 'the stand-in target of 100 must not be printed');
+        $this->assertStringNotContainsString('600%', $rowHtml);
+        $this->assertStringContainsString('>6<', $rowHtml, 'the figure itself is shown');
+    }
 }

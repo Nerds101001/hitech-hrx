@@ -154,9 +154,10 @@
               {{ $r->title }}@if($r->checks > 1) <span class="muted">({{ $r->checks }} checks)</span>@endif
               @if($r->basis)<div class="basis">{{ \Illuminate\Support\Str::limit($r->basis, 70) }}</div>@endif
             </td>
-            <td class="num">{{ $fmt($r->target) }}</td>
+            {{-- A banded KPI is scored by which band the figure lands in; a target and a "% of target" mean nothing for it. --}}
+            <td class="num">{{ !empty($r->banded) ? '—' : $fmt($r->target) }}</td>
             <td class="num">{{ $fmt($r->achieved) }}</td>
-            <td class="num">{{ $r->result === null ? '—' : $fmt(round($r->result, 1)) . '%' }}</td>
+            <td class="num">{{ (!empty($r->banded) || $r->result === null) ? '—' : $fmt(round($r->result, 1)) . '%' }}</td>
             <td class="num">{{ $fmt($r->max) }}</td>
             <td class="num {{ $earnTone }}"><b>{{ $fmt($r->score) }}</b></td>
             <td class="ctr"><span class="chip {{ $chip }}">{{ $r->status }}</span></td>

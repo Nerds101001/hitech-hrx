@@ -53,6 +53,17 @@ class KpiAutoSourceService
         // Digital Library — videos presented under the "Learn @ Hi Tech"
         // shelf, credited to whoever is tagged as presenter_id.
         'auto:learn_hitech_sessions' => 'Learn @ Hi Tech videos presented (Digital Library)',
+
+        // Sales Assessment rule book. Each returns the raw figure the rule book's tiers are
+        // written against (a % or a count), to be scored with bands.
+        'auto:pipeline_vs_target'         => 'Pipeline potential as a % of the Bingo target',
+        'auto:yoy_growth'                 => 'Revenue growth % against the same period a year earlier',
+        'auto:new_customer_revenue_pct'   => '% of revenue from customers whose first ever order falls in the period',
+        'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
+        'auto:cost_of_selling'            => 'Travel + expense cost as a % of revenue',
+        'auto:mindspeak_insights'         => 'Competitor Insights submissions accepted in Mind Speak',
+        'auto:mindspeak_ideas'            => 'New Product Ideas accepted in Mind Speak',
+        'auto:ninety_day_goals'           => '% of 90-Day Goals on track or in regular order',
     ];
 
     /** Null = this KPI is not auto-sourced, or the figure cannot be derived. */
@@ -81,12 +92,21 @@ class KpiAutoSourceService
             'auto:competitor_insight_visits' => self::visitFlagCount($a->user_id, $start, $end, 'competitor_insight'),
             'auto:product_idea_visits'       => self::visitFlagCount($a->user_id, $start, $end, 'product_idea'),
             'auto:new_customer_visits'       => self::visitFlagCount($a->user_id, $start, $end, 'is_new_customer'),
-            'auto:trial_demo_visits'         => self::visitTypeCount($a->user_id, $start, $end, 'Product Trial'),
+            'auto:trial_demo_visits'         => self::visitTypeCount($a->user_id, $start, $end, 'product_trial'),
 
             'auto:sales_pitches'      => self::mindSpeakCount($a->user_id, $start, $end, 'Sales Pitch'),
             'auto:seminars_conducted' => self::mindSpeakCount($a->user_id, $start, $end, 'Seminar'),
 
             'auto:learn_hitech_sessions' => self::learnHitechCount($a->user_id, $start, $end),
+
+            'auto:pipeline_vs_target'       => self::pipelineVsTarget($a->user_id),
+            'auto:yoy_growth'               => self::yoyGrowth($a->user_id, $start, $end),
+            'auto:new_customer_revenue_pct' => self::newCustomerRevenuePct($a->user_id, $start, $end),
+            'auto:customer_attrition'       => self::customerAttrition($a->user_id, $start, $end),
+            'auto:cost_of_selling'          => self::costOfSelling($a->user_id, $start, $end),
+            'auto:mindspeak_insights'       => self::mindSpeakAccepted($a->user_id, $start, $end, 'Competitor Insights'),
+            'auto:mindspeak_ideas'          => self::mindSpeakAccepted($a->user_id, $start, $end, 'Idea'),
+            'auto:ninety_day_goals'         => self::ninetyDayGoals($a->user_id, $start, $end),
 
             default => null,
         };
@@ -323,5 +343,191 @@ class KpiAutoSourceService
             ->where('sub_category', 'Learn @ Hi Tech')
             ->whereBetween('session_date', [$start->toDateString(), $end->toDateString()])
             ->count();
+    }
+    /** Last day the figures can cover: the period's end, or today if it has not ended. */
+    private static function upTo(Carbon $end): Carbon
+    {
+        return $end->copy()->min(Carbon::today());
+    }
+
+    /**
+     * Total business potential of the book against the annual Bingo target, as a
+     * percentage (the rule book's "Pipeline ÷ Target"). Potential is not dated, so
+     * this reads the book as it stands; the target is the current fiscal year's.
+     */
+    public static function pipelineVsTarget(int $userId): ?float
+    {
+        $target = (float) DB::table('salesperson_targets')
+            ->where('salesperson_id', $userId)
+            ->whereIn('month_year', self::currentFiscalKeys())
+            ->sum('bingo_target');
+        if ($target <= 0) {
+            return null;
+        }
+
+        return round((float) self::book($userId)->sum('total_business_potential') / $target * 100, 2);
+    }
+
+    /** The current fiscal year's month keys (Apr to Mar), for the undated figure above. */
+    private static function currentFiscalKeys(): array
+    {
+        $today = Carbon::today();
+        $start = $today->month >= 4 ? Carbon::create($today->year, 4, 1) : Carbon::create($today->year - 1, 4, 1);
+
+        return self::monthKeys($start, $start->copy()->addMonths(11));
+    }
+
+    /**
+     * Revenue growth against the SAME stretch a year earlier. A part-year is
+     * compared with the same part of last year, never with all twelve months.
+     * Null when last year has no revenue: growth from nothing is not a number.
+     */
+    public static function yoyGrowth(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $to   = self::upTo($end);
+        $now  = self::revenue($userId, $start, $to);
+        $then = self::revenue($userId, $start->copy()->subYear(), $to->copy()->subYear());
+        if ($then <= 0) {
+            return null;
+        }
+
+        return round(($now - $then) / $then * 100, 2);
+    }
+
+    /**
+     * Share of the period's revenue that came from customers whose first ever
+     * order falls inside the period. Only as good as the order history loaded:
+     * with a short history nearly everyone looks new.
+     */
+    public static function newCustomerRevenuePct(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $to    = self::upTo($end);
+        $keys  = self::monthKeys($start, $to);
+        $total = self::revenue($userId, $start, $to);
+        if ($total <= 0) {
+            return null;
+        }
+
+        // Without the year before on record, every customer looks new and everybody
+        // would be handed full marks. No history, no figure.
+        if (self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) <= 0) {
+            return null;
+        }
+
+        $firstSale = DB::table('sales_pipeline_months')
+            ->whereIn('sales_pipeline_id', self::book($userId)->select('id'))
+            ->where('sale_amount', '>', 0)
+            ->selectRaw('sales_pipeline_id, MIN(month_year) first_month')
+            ->groupBy('sales_pipeline_id');
+        $newIds = DB::query()->fromSub($firstSale, 'f')->whereIn('f.first_month', $keys)->pluck('f.sales_pipeline_id');
+        if ($newIds->isEmpty()) {
+            return 0.0;
+        }
+
+        $fromNew = (float) DB::table('sales_pipeline_months')
+            ->whereIn('sales_pipeline_id', $newIds)
+            ->whereIn('month_year', $keys)
+            ->sum('sale_amount');
+
+        return round($fromNew / $total * 100, 2);
+    }
+
+    /**
+     * Of the customers who ordered at all in last year's financial year, the share
+     * with no order yet this year. Null when last year had no customers to lose.
+     */
+    public static function customerAttrition(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $lastYear = self::monthKeys($start->copy()->subYear(), $end->copy()->subYear());
+        $base = DB::table('sales_pipeline_months')
+            ->whereIn('sales_pipeline_id', self::book($userId)->select('id'))
+            ->whereIn('month_year', $lastYear)
+            ->where('sale_amount', '>', 0)
+            ->distinct()->pluck('sales_pipeline_id');
+        if ($base->isEmpty()) {
+            return null;
+        }
+
+        $kept = DB::table('sales_pipeline_months')
+            ->whereIn('sales_pipeline_id', $base)
+            ->whereIn('month_year', self::monthKeys($start, self::upTo($end)))
+            ->where('sale_amount', '>', 0)
+            ->distinct()->count('sales_pipeline_id');
+
+        return round(($base->count() - $kept) / $base->count() * 100, 2);
+    }
+
+    /**
+     * Verified/paid travel claims plus approved expenses, as a % of revenue.
+     * Revenue is stored in lakh and money in rupees, hence the 100,000.
+     *
+     * The rule book gives anyone under six months' service 3 points whatever they
+     * spent; 3 is what this returns for them so the bands award exactly that.
+     * Null when there is no revenue, or no claim of any kind, to measure against.
+     */
+    public static function costOfSelling(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $joined = DB::table('users')->where('id', $userId)->value('date_of_joining');
+        if ($joined && Carbon::parse($joined)->diffInMonths(Carbon::today()) < 6) {
+            return 3.0;
+        }
+
+        $to = self::upTo($end);
+        $revenueRupees = self::revenue($userId, $start, $to) * 100000;
+        if ($revenueRupees <= 0) {
+            return null;
+        }
+
+        $window = [$start->copy()->startOfDay(), $to->copy()->endOfDay()];
+        $travel = (float) DB::table('travel_claims')->where('user_id', $userId)
+            ->whereIn('status', ['verified', 'paid'])->whereBetween('created_at', $window)->sum('total_amount');
+        $other = DB::getSchemaBuilder()->hasTable('expense_requests')
+            ? (float) DB::table('expense_requests')->where('user_id', $userId)
+                ->whereIn('status', ['approved', 'processed'])->whereBetween('created_at', $window)->sum('approved_amount')
+            : 0.0;
+
+        // Nothing claimed at all is far more likely to be claims that were never
+        // entered than a genuinely free year, so it is not scored as a perfect one.
+        if ($travel + $other <= 0) {
+            return null;
+        }
+
+        return round(($travel + $other) / $revenueRupees * 100, 2);
+    }
+
+    /** Mind Speak entries of a category that a reviewer has approved or acknowledged. */
+    public static function mindSpeakAccepted(int $userId, Carbon $start, Carbon $end, string $category): float
+    {
+        return (float) DB::table('mind_speaks')
+            ->where('user_id', $userId)
+            ->where('category', $category)
+            ->whereIn('status', ['approved', 'acknowledged'])
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->count();
+    }
+
+    /**
+     * Share of the person's 90-Day Goals (in an appraisal cycle overlapping the
+     * period) that reached week 12 as "Regular Order" or "On Track". Null with no goals.
+     */
+    public static function ninetyDayGoals(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $cycles = DB::table('appraisal_cycles')
+            ->where('start_date', '<=', $end->toDateString())
+            ->where('end_date', '>=', $start->toDateString())
+            ->pluck('id');
+        $goals = DB::table('ninety_day_goals')
+            ->where('user_id', $userId)
+            ->whereNull('deleted_at')
+            ->whereIn('appraisal_cycle_id', $cycles)
+            ->pluck('w12');
+        if ($goals->isEmpty()) {
+            return null;
+        }
+
+        $good = $goals->filter(fn ($w) => in_array($w, ['Regular Order', 'On Track'], true))->count();
+
+        return round($good / $goals->count() * 100, 2);
     }
 }

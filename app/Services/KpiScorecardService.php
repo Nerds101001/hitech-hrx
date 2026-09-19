@@ -82,8 +82,14 @@ class KpiScorecardService
      * "pending" with no figure means nothing has been reported yet, however
      * early the scoring engine created the empty check.
      */
-    private static function statusOf(?KpiCheck $latest, ?float $achieved, bool $awaitingApproval): string
+    private static function statusOf(?KpiCheck $latest, ?float $achieved, bool $awaitingApproval, string $frequency = 'monthly'): string
     {
+        // A yearly or quarterly figure is a running total until its period closes.
+        if ($latest && in_array($frequency, ['quarterly', 'yearly'], true)
+            && $achieved !== null && !in_array($latest->status, ['missed'], true)) {
+            return 'Year to date';
+        }
+
         if (!$latest) {
             return $awaitingApproval ? 'Awaiting approval' : 'Not reported';
         }
@@ -110,12 +116,21 @@ class KpiScorecardService
             return collect();
         }
 
-        $checks = KpiCheck::whereIn('user_id', $ids)
+        $inMonth = KpiCheck::whereIn('user_id', $ids)
             ->whereDate('period_start', '>=', $start->toDateString())
             ->whereDate('period_start', '<=', $end->toDateString())
             ->orderBy('period_start')
-            ->get()
-            ->groupBy('kpi_assignment_id');
+            ->get();
+
+        // A quarterly or yearly KPI has one check that starts months before this
+        // one and is still running; it belongs on every month's scorecard it spans.
+        $spanning = KpiCheck::whereIn('user_id', $ids)
+            ->whereDate('period_start', '<', $start->toDateString())
+            ->whereDate('period_end', '>=', $start->toDateString())
+            ->whereHas('assignment', fn ($q) => $q->whereIn('frequency', ['quarterly', 'yearly']))
+            ->get();
+
+        $checks = $inMonth->concat($spanning)->sortBy('period_start')->groupBy('kpi_assignment_id');
 
         // Everything live at the end of the month, plus anything that was
         // scored in it even if it has since been switched off.
@@ -160,7 +175,8 @@ class KpiScorecardService
                     'max'      => (float) $a->max_marks * max(1, $mine->count()),
                     'score'    => (float) $mine->sum('score'),
                     'checks'   => $mine->count(),
-                    'status'   => self::statusOf($latest, $achieved, $awaiting->contains($a->id)),
+                    'status'   => self::statusOf($latest, $achieved, $awaiting->contains($a->id), (string) $a->frequency),
+                    'banded'   => $a->scoring_type === 'banded',
                     'order'    => (int) $a->id,
                 ];
             }

@@ -1,0 +1,99 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\KpiTemplate;
+
+/**
+ * The Sales Assessment Rule Book as KPI templates: 14 parameters and the
+ * attrition penalty, scored yearly (financial year, April to March).
+ *
+ * Each tier list is a band table of [minimum, points] pairs: the highest band
+ * whose minimum the figure reaches gives the points. Tiers are taken straight
+ * from the rule book's sheet, so the points a person earns here are the points
+ * the sheet would give.
+ *
+ * Two things are worth knowing when reading the tables:
+ *  - Count and percentage figures are scored against a target of 100 so the band
+ *    minimums can be written in the figure's own units (8 demos, 97 %).
+ *  - "Lower is better" rows (cost of selling, attrition, dominant-product share)
+ *    use a decreasing trend, which turns the figure into target ÷ figure × 100;
+ *    their minimums are that converted number, worked out from the sheet's limits
+ *    (a cost of selling of 4 % is 25 when the target is 1). Minimums such as
+ *    30.0001 stand for a strict "more than 30".
+ */
+class SalesRuleBook
+{
+    public const KRA_TITLE = 'Sales Assessment';
+
+    /** title, basis (shown on the scorecard), source, trend, weight, target, tiers [[min, points], ...] */
+    public static function definitions(): array
+    {
+        // One point for each, up to eight.
+        $upTo8 = array_map(fn ($n) => [$n, $n], range(0, 8));
+
+        return [
+            ['Target Achievement (Bingo %)', 'Sale ÷ Bingo target, %',                         'auto:bingo_achievement',        'increase', 25, 100, [[0, 0], [70, 4], [80, 8], [90, 12], [97, 15], [110, 20], [125, 25]]],
+            ['Pipeline Strength',            'Pipeline potential ÷ Bingo target, %',            'auto:pipeline_vs_target',       'increase', 10, 100, [[0, 0], [60, 3], [70, 5], [80, 8], [90, 10]]],
+            ['YoY Revenue Growth',           'Growth on the same period last year, %',          'auto:yoy_growth',               'increase', 25, 100, [[0, 0], [15, 10], [25, 20], [35, 30]]],
+            ['Trial Activity / Demos',       'Product-trial visits completed',                  'auto:trial_demo_visits',        'increase', 5,  100, [[0, 0], [8, 2], [12, 3], [20, 5], [30.0001, 8]]],
+            ['New Customer Wins (%)',        'Revenue from customers new this year, %',         'auto:new_customer_revenue_pct', 'increase', 13, 100, [[0, 0], [15, 5], [20, 8], [25, 13], [30.0001, 15]]],
+            ['90-Day Goals',                 'Goals on track or in regular order, %',           'auto:ninety_day_goals',         'increase', 5,  100, [[0, 0], [40, 3], [50, 5], [70, 8]]],
+            ['Sales Pitch Score',            "Reviewer's score out of 20",                      'approval',                      'increase', 2,  100, [[0, 0], [15, 2], [20, 5]]],
+            ['Learn@HiTech',                 'Programs presented',                              'auto:learn_hitech_sessions',    'increase', 2,  100, [[0, 0], [1, 2], [2, 5]]],
+            ['Seminars / Presentations',     'Seminars conducted',                              'auto:seminars_conducted',       'increase', 2,  100, [[0, 0], [8, 2], [12, 5]]],
+            ['Competitor Insights',          '1 point per insight, up to 8',                    'auto:mindspeak_insights',       'increase', 3,  100, $upTo8],
+            ['New Product Ideas',            '1 point per idea, up to 8',                       'auto:mindspeak_ideas',          'increase', 3,  100, $upTo8],
+            ['Cost of Selling (COS%)',       'Travel + expenses ÷ revenue, %. Lower is better', 'auto:cost_of_selling',          'decrease', 3,  1,   [[0, -5], [10, 0], [16.6666, 1], [25, 3], [50.0001, 5]]],
+            ['Cross-Sell / Basket Mix',      'Dominant product share, %. Lower is better',      'approval',                      'decrease', 2,  100, [[0, 0], [111.1111, 3], [133.3333, 5]]],
+            ['Market Share %',               'Share of the market, %',                          'approval',                      'increase', 10, 100, [[0, 0], [20, 5], [30, 8], [40, 10], [60, 15]]],
+            ['Attrition Penalty',            "Last year's customers with no order yet, %. Lower is better", 'auto:customer_attrition', 'decrease', 0, 1, [[0, -5], [10.0001, -3], [20.0001, 0]]],
+        ];
+    }
+
+    /** Band table in the shape the scoring engine reads. */
+    public static function bands(array $tiers): array
+    {
+        return array_map(fn ($t) => ['min' => (float) $t[0], 'marks' => (float) $t[1]], $tiers);
+    }
+
+    /**
+     * Create (or bring up to date) the KRA heading and its KPIs for one
+     * department, restricted to the given designations. Safe to run twice.
+     *
+     * @return array<string, KpiTemplate>  KPI title => template
+     */
+    public static function install(int $departmentId, array $designationIds, ?int $createdById = null): array
+    {
+        $base = ['department_id' => $departmentId, 'frequency' => 'yearly', 'check_month' => 3, 'check_day' => 31,
+                 'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true];
+
+        $kra = KpiTemplate::updateOrCreate(
+            ['department_id' => $departmentId, 'title' => self::KRA_TITLE, 'category' => 'KRA'],
+            $base + ['max_marks' => 0, 'scoring_type' => 'target', 'data_source' => 'approval', 'created_by_id' => $createdById]
+        );
+
+        $out = [];
+        foreach (self::definitions() as [$title, $basis, $source, $trend, $weight, $target, $tiers]) {
+            $out[$title] = KpiTemplate::updateOrCreate(
+                ['department_id' => $departmentId, 'title' => $title, 'category' => 'KPI'],
+                $base + [
+                    'description'        => $basis,
+                    'parent_template_id' => $kra->id,
+                    'designation_ids'    => array_values(array_map('intval', $designationIds)),
+                    'scoring_type'       => 'banded',
+                    'bands'              => self::bands($tiers),
+                    'trend'              => $trend,
+                    'max_marks'          => $weight,
+                    'target_value'       => $target,
+                    'result_cap_percent' => null,
+                    'data_source'        => $source,
+                    'approver_id'        => null,
+                    'created_by_id'      => $createdById,
+                ]
+            );
+        }
+
+        return $out;
+    }
+}
