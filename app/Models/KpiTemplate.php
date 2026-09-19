@@ -21,6 +21,7 @@ class KpiTemplate extends Model
         'late_score'        => 'decimal:2',
         'late_percent'      => 'decimal:2',
         'per_day_penalty'   => 'decimal:2',
+        'result_cap_percent' => 'decimal:2',
     ];
 
     public const SCORING_TYPES = ['timeline', 'target', 'threshold', 'banded'];
@@ -31,7 +32,7 @@ class KpiTemplate extends Model
         'title', 'category', 'frequency', 'scoring_type', 'max_marks', 'target_value',
         'threshold_percent', 'bands', 'late_policy', 'late_score', 'late_percent',
         'grace_days', 'per_day_penalty', 'data_source', 'approver_id',
-        'check_day', 'check_month',
+        'check_day', 'check_month', 'trend', 'result_cap_percent',
     ];
 
     /**

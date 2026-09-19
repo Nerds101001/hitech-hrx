@@ -268,7 +268,7 @@
                         <td class="text-muted">{{ $a->kra_group ?? '—' }}</td>
                         <td>
                             {{ $a->title }}
-                            <div class="small text-muted text-capitalize">{{ $a->scoring_type }}@if($a->scoring_type === 'threshold') ≥ {{ $fmt($a->threshold_percent) }}% @endif</div>
+                            <div class="small text-muted text-capitalize">{{ $a->scoring_type }}@if($a->scoring_type === 'threshold') ≥ {{ $fmt($a->threshold_percent) }}% @endif@if(($a->trend ?? 'increase') === 'decrease') · lower is better @endif</div>
                         </td>
                         <td class="text-end">
                             {{ $fmt($a->target_value) }}@if(str_starts_with((string) $a->data_source, 'auto:') && (float) $a->target_value == 100.0)<span class="text-muted">%</span>@endif

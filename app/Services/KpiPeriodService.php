@@ -186,13 +186,16 @@ class KpiPeriodService
      *
      * A threshold or banded assignment with nothing configured falls back to
      * linear rather than silently scoring everyone zero.
+     *
+     * "Result %" (see resultPercent) is achieved ÷ target for an increase
+     * KPI and target ÷ achieved for a decrease KPI. A linear KPI stops at 100%
+     * unless the assignment sets result_cap_percent, which lets
+     * over-achievement score above the KPI's marks.
      */
     public static function targetScore(KpiAssignment $a, float $achieved): float
     {
-        $target = (float) $a->target_value;
-        if ($target <= 0) return 0.0;
-
-        $pct = ($achieved / $target) * 100;
+        $pct = self::resultPercent($a, $achieved);
+        if ($pct === null) return 0.0;
 
         if ($a->scoring_type === 'threshold' && $a->threshold_percent !== null) {
             return $pct + 1e-9 >= (float) $a->threshold_percent ? round((float) $a->max_marks, 2) : 0.0;
@@ -214,7 +217,43 @@ class KpiPeriodService
             }
         }
 
-        return round(min($achieved / $target, 1) * $a->max_marks, 2);
+        $ceiling = $a->result_cap_percent !== null ? (float) $a->result_cap_percent : 100.0;
+
+        return round(min($pct, $ceiling) / 100 * $a->max_marks, 2);
+    }
+
+    /**
+     * The KPI's result as a percentage, or null when it has no usable target.
+     *
+     *  increase (default): achieved ÷ target
+     *  decrease          : target ÷ achieved — less is better (waste, mandays,
+     *                      complaints). A zero target is "none allowed":
+     *                      nothing achieved = 100%, anything at all = 0%.
+     *                      Nothing achieved against a real target is the best
+     *                      result there can be, so it earns the ceiling.
+     *
+     * result_cap_percent, when set, bounds the result. It is left unset for
+     * every KPI that predates it, which keeps their scoring unchanged.
+     */
+    public static function resultPercent(KpiAssignment $a, float $achieved): ?float
+    {
+        $target = (float) $a->target_value;
+        $cap = $a->result_cap_percent !== null ? (float) $a->result_cap_percent : null;
+
+        if (($a->trend ?? 'increase') === 'decrease') {
+            if ($target <= 0) {
+                return $achieved <= 0 ? 100.0 : 0.0;
+            }
+            if ($achieved <= 0) {
+                return $cap ?? 100.0;
+            }
+            $pct = ($target / $achieved) * 100;
+        } else {
+            if ($target <= 0) return null;
+            $pct = ($achieved / $target) * 100;
+        }
+
+        return $cap !== null ? min($pct, $cap) : $pct;
     }
 
     /**

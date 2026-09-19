@@ -143,7 +143,10 @@ class KpiTemplateTest extends TestCase
         $this->assertSame(0, $result['created']);
         foreach (KpiAssignment::where('kpi_template_id', $template->id)->get() as $assignment) {
             $this->assertEquals(25.0,  $assignment->max_marks);
-            $this->assertEquals(200.0, $assignment->target_value);
+            // A target is individual: it is seeded from the template once and
+            // then belongs to the person (KpiTemplate::SEEDED_ONCE), so editing
+            // the template must NOT drag it to the new shared number.
+            $this->assertEquals(100.0, $assignment->target_value);
         }
     }
 
@@ -207,10 +210,47 @@ class KpiTemplateTest extends TestCase
         $this->template(['title' => 'ZZ KPI Two']);
         $this->template(['title' => 'ZZ Heading', 'category' => 'KRA', 'max_marks' => 0]);
 
+        // Creating an active employee in the department is enough: User's
+        // saved() hook hands them the department's templates on the spot.
         $joiner = $this->employee();
-        $created = KpiTemplateService::applyAllForUser($joiner);
 
-        $this->assertSame(2, $created, 'the KRA heading must not be assigned');
+        $this->assertSame(2, KpiAssignment::where('user_id', $joiner->id)->count(), 'the KRA heading must not be assigned');
+        $this->assertSame(0, KpiTemplateService::applyAllForUser($joiner), 'nothing left to give — the hook already did');
+    }
+
+    public function test_moving_into_a_department_assigns_its_templates(): void
+    {
+        $this->template(['title' => 'ZZ KPI One']);
+        $this->template(['title' => 'ZZ KPI Two']);
+
+        // Started somewhere with no KPIs, transferred in later — the case that
+        // left Rabina Parkar (New Biz) with none while her peers had 13.
+        $person = $this->employee(['department_id' => null]);
+        $this->assertSame(0, KpiAssignment::where('user_id', $person->id)->count());
+
+        $person->update(['department_id' => $this->department->id]);
+
+        $this->assertSame(2, KpiAssignment::where('user_id', $person->id)->count());
+    }
+
+    public function test_an_unrelated_save_does_not_reassign_or_duplicate(): void
+    {
+        $this->template();
+        $person = $this->employee();
+        $before = KpiAssignment::where('user_id', $person->id)->count();
+
+        $person->update(['first_name' => 'Renamed']);
+        $person->update(['first_name' => 'Renamed Again']);
+
+        $this->assertSame($before, KpiAssignment::where('user_id', $person->id)->count());
+    }
+
+    public function test_someone_not_yet_active_is_not_assigned_until_they_are(): void
+    {
+        $this->template();
+        $person = $this->employee(['status' => 'onboarding']);
+
+        $this->assertSame(0, KpiAssignment::where('user_id', $person->id)->count());
     }
 
     public function test_applying_for_a_user_twice_does_not_duplicate(): void

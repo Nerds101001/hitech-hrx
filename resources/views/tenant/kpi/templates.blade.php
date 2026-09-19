@@ -207,7 +207,9 @@
                   </td>
                   <td>
                     <span class="badge badge-hitech badge-muted">{{ $t->scoring_type }}</span>
-                    @if($t->target_value)<small class="text-muted d-block">target {{ $num($t->target_value) }}</small>@endif
+                    @if($t->target_value !== null && ($t->target_value > 0 || ($t->trend ?? 'increase') === 'decrease'))<small class="text-muted d-block">target {{ $num($t->target_value) }}</small>@endif
+                    @if(($t->trend ?? 'increase') === 'decrease')<small class="text-muted d-block">lower is better</small>@endif
+                    @if($t->result_cap_percent !== null)<small class="text-muted d-block">counts up to {{ $num($t->result_cap_percent) }}%</small>@endif
                   </td>
                   <td class="text-end fw-semibold">{{ $marksOf($t) }}</td>
                   <td>
@@ -362,6 +364,25 @@
                 This seeds each person's target when they first get the KPI — change
                 it per person in the Per-employee view, and editing this will not
                 overwrite what you set there.
+              </div>
+            </div>
+            <div class="col-md-6 needs-target">
+              <label class="form-label">Better when</label>
+              <select id="tpl_trend" class="form-select">
+                <option value="increase">Higher is better — achieved ÷ target</option>
+                <option value="decrease">Lower is better — target ÷ achieved</option>
+              </select>
+              <div class="form-text">
+                Use “lower is better” for waste, mandays or complaints. With a target of 0,
+                zero achieved scores 100% and anything above it scores 0%.
+              </div>
+            </div>
+            <div class="col-md-6 needs-target">
+              <label class="form-label">Highest result that counts (%)</label>
+              <input type="number" step="1" min="100" max="1000" id="tpl_result_cap_percent" class="form-control" placeholder="Blank = stop at 100%">
+              <div class="form-text">
+                Leave blank and the KPI can never score above its marks. Enter e.g. 200 to let
+                over-achievement earn more than the marks, up to 200% of target.
               </div>
             </div>
             <div class="col-md-6 needs-threshold">
@@ -553,6 +574,8 @@
     set('tpl_max_marks', t?.max_marks, 10);
     set('tpl_target_value', t?.target_value);
     set('tpl_threshold_percent', t?.threshold_percent);
+    $('tpl_trend').value              = t?.trend ?? 'increase';
+    set('tpl_result_cap_percent', t?.result_cap_percent);
     $('tpl_late_policy').value        = t?.late_policy ?? 'fixed';
     set('tpl_late_score', t?.late_score, 0);
     set('tpl_late_percent', t?.late_percent);
@@ -659,6 +682,8 @@
       max_marks: numOrNull('tpl_max_marks') ?? 0,
       target_value: numOrNull('tpl_target_value'),
       threshold_percent: numOrNull('tpl_threshold_percent'),
+      trend: $('tpl_trend').value,
+      result_cap_percent: numOrNull('tpl_result_cap_percent'),
       bands: readBands(),
       late_policy: $('tpl_late_policy').value,
       late_score: numOrNull('tpl_late_score'),

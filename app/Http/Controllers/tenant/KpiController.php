@@ -610,6 +610,8 @@ class KpiController extends Controller
             'approver_id'        => 'nullable|exists:users,id',
             'check_day'          => 'nullable|integer|min:1|max:31',
             'check_month'        => 'nullable|integer|min:1|max:12',
+            'trend'              => 'nullable|in:increase,decrease',
+            'result_cap_percent' => 'nullable|numeric|min:100|max:1000',
         ];
     }
 
@@ -641,6 +643,7 @@ class KpiController extends Controller
             return response()->json(['status' => 'error', 'message' => $msg], 403);
         }
         $data = $request->validate($this->templateRules());
+        $data['trend'] = $data['trend'] ?? 'increase';
         if ($err = $this->templateConsistencyError($data)) {
             return response()->json(['status' => 'error', 'message' => $err], 422);
         }
@@ -670,6 +673,7 @@ class KpiController extends Controller
         }
         $t = KpiTemplate::findOrFail($id);
         $data = $request->validate($this->templateRules());
+        $data['trend'] = $data['trend'] ?? 'increase';
         if ($err = $this->templateConsistencyError($data)) {
             return response()->json(['status' => 'error', 'message' => $err], 422);
         }

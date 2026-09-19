@@ -37,6 +37,8 @@ class KpiAssignment extends Model implements AuditableContract
         'per_day_penalty',
         'data_source',
         'approver_id',
+        'trend',
+        'result_cap_percent',
     ];
 
     protected $casts = [
@@ -47,6 +49,7 @@ class KpiAssignment extends Model implements AuditableContract
         'threshold_percent' => 'float',
         'late_percent' => 'float',
         'per_day_penalty' => 'float',
+        'result_cap_percent' => 'float',
         'grace_days' => 'integer',
         // Scoring reads this as an array of {min, marks}
         'bands' => 'array',

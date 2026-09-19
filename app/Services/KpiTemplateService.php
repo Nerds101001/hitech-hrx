@@ -96,6 +96,7 @@ class KpiTemplateService
         'category'     => 'KPI',
         'frequency'    => 'monthly',
         'scoring_type' => 'timeline',
+        'trend'        => 'increase',
     ];
 
     /** The template fields an assignment inherits, plus the KRA heading. */
