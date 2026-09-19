@@ -151,6 +151,24 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * One-off reopen of a closed month for the whole sales team, not only
+     * Admin/HR, at the client's request. August 2026 had passed its Sept-5
+     * grace window; it is open again through the end of Monday 21 Sept 2026
+     * (IST) and then locks itself with no follow-up. The month and the moment
+     * live here once: the lock check below and the Sales Report view both ask
+     * this method, so they cannot disagree. Once the moment has passed the
+     * constants (and this method) are dead code and safe to delete.
+     */
+    public const REOPEN_MONTH = '2026-08';
+    public const REOPEN_UNTIL = '2026-09-21 23:59:59';   // Asia/Kolkata
+
+    public static function isReopened(string $monthYear): bool
+    {
+        return $monthYear === self::REOPEN_MONTH
+            && \Carbon\Carbon::now()->lte(\Carbon\Carbon::parse(self::REOPEN_UNTIL, 'Asia/Kolkata'));
+    }
+
+    /**
      * A closed month's Sale / Pending / Forecast / Remarks figures are
      * locked to everyone except Admin/HR. "Closed" means: not the current
      * month, and not last month before the 5th of this month either (e.g.
@@ -160,6 +178,10 @@ class SalesPipelineController extends Controller
     public static function isMonthLockedForUser($user, string $monthYear): bool
     {
         if ($user && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+            return false;
+        }
+
+        if (self::isReopened($monthYear)) {
             return false;
         }
 

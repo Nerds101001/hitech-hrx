@@ -594,7 +594,11 @@
                                         // one (grace period for month-end reconciliation). Once it
                                         // closes, only Admin/HR can still edit it — mirrors
                                         // isMonthLockedForUser() server-side.
-                                        $monthLocked = !$isAdminOrHr && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
+                                        // A one-off reopen (SalesPipelineController::isReopened) lifts the
+                                        // lock for everyone until it expires by itself.
+                                        $monthLocked = !$isAdminOrHr
+                                            && !\App\Http\Controllers\tenant\SalesPipelineController::isReopened($m['key'])
+                                            && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
                                         // Sale / Pending / Remarks stay the book editors' job
                                         // (CCare / New Biz / manager / admin).
                                         $roAttr      = ($canEditBook && !$monthLocked) ? '' : 'readonly';
