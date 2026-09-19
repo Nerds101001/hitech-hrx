@@ -1165,9 +1165,15 @@ class SalesPipelineController extends Controller
 
         $user = auth()->user();
         // Adding a customer is book editing. Sales staff fill in their own
-        // Forecast figure and nothing else, so creating a row is no longer
-        // theirs to do -- see monthUpdate() for the one write they keep.
-        if (!self::canEditBook($user)) {
+        // Forecast figure and nothing else on the Sales Report -- see
+        // monthUpdate() for the one write they keep there. The Sales Pipeline
+        // is the exception: canEditOwnPipelineRow($user, null) is the
+        // documented carve-out that lets a plain salesperson add a new
+        // (always unlocked) prospect, and the Pipeline page renders the Add
+        // form for them on that basis. store() was still checking the strict
+        // canEditBook() alone, so they got the form and then "Unauthorized".
+        $viaCarveOutOnly = !self::canEditBook($user);
+        if (!self::canEditOwnPipelineRow($user)) {
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
             }
@@ -1228,6 +1234,11 @@ class SalesPipelineController extends Controller
         // Sales Report rows are "locked" (is_locked = true) — that is exactly
         // what the Sales Report page lists. Pipeline rows pass is_locked = 0.
         $isLocked = filter_var($request->input('is_locked', true), FILTER_VALIDATE_BOOLEAN);
+        // The carve-out only ever covers a new, still-open Pipeline prospect.
+        // Creating a LOCKED (Sales Report) row stays a book-editor action.
+        if ($viaCarveOutOnly) {
+            $isLocked = false;
+        }
 
         // Linking to an existing CRM.API customer at creation time is the
         // preferred path over the reconciliation flow below (see
