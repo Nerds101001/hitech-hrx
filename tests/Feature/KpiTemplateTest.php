@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Department;
+use App\Models\Designation;
 use App\Models\KpiAssignment;
 use App\Models\KpiTemplate;
 use App\Models\User;
@@ -66,6 +67,70 @@ class KpiTemplateTest extends TestCase
             'target_value'  => 100,
             'is_active'     => true,
         ], $overrides));
+    }
+
+    private function designation(string $name): Designation
+    {
+        return Designation::create(['name' => $name . ' ' . uniqid(), 'code' => 'ZZ' . random_int(10000, 99999)]);
+    }
+
+    public function test_a_template_restricted_to_designations_only_reaches_them(): void
+    {
+        $manager = $this->designation('ZZ Manager');
+        $gm      = $this->designation('ZZ General Manager');
+        $staff   = $this->designation('ZZ Operator');
+        // People first, template after: apply() is what is under test here,
+        // not the joiner hook (covered separately below).
+        $a = $this->employee(['designation_id' => $manager->id]);
+        $b = $this->employee(['designation_id' => $gm->id]);
+        $c = $this->employee(['designation_id' => $staff->id]);
+        $d = $this->employee(['designation_id' => null]);
+        $template = $this->template(['designation_ids' => [$manager->id]]);
+
+        $res = KpiTemplateService::apply($template);
+
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $template->id)->count());
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $template->id)->where('user_id', $a->id)->count());
+        foreach ([$b, $c, $d] as $excluded) {
+            $this->assertSame(0, KpiAssignment::where('user_id', $excluded->id)->count(), 'outside the designation list');
+        }
+        $this->assertSame(1, $res['created']);
+    }
+
+    public function test_the_joiner_hook_respects_the_designation_list(): void
+    {
+        $manager = $this->designation('ZZ Manager');
+        $gm      = $this->designation('ZZ General Manager');
+        $this->template(['designation_ids' => [$manager->id]]);
+
+        $newManager = $this->employee(['designation_id' => $manager->id]);
+        $newGm      = $this->employee(['designation_id' => $gm->id]);
+
+        $this->assertSame(1, KpiAssignment::where('user_id', $newManager->id)->count());
+        $this->assertSame(0, KpiAssignment::where('user_id', $newGm->id)->count(), 'the General Manager must not get it');
+    }
+
+    public function test_being_promoted_into_a_listed_designation_assigns_it(): void
+    {
+        $manager = $this->designation('ZZ Manager');
+        $staff   = $this->designation('ZZ Operator');
+        $this->template(['designation_ids' => [$manager->id]]);
+
+        $person = $this->employee(['designation_id' => $staff->id]);
+        $this->assertSame(0, KpiAssignment::where('user_id', $person->id)->count());
+
+        $person->update(['designation_id' => $manager->id]);
+
+        $this->assertSame(1, KpiAssignment::where('user_id', $person->id)->count());
+    }
+
+    public function test_a_template_with_no_designation_list_still_reaches_the_whole_department(): void
+    {
+        $this->employee(['designation_id' => $this->designation('ZZ Manager')->id]);
+        $this->employee(['designation_id' => null]);
+        $template = $this->template();
+
+        $this->assertSame(2, KpiTemplateService::apply($template)['created']);
     }
 
     public function test_apply_creates_one_assignment_per_active_employee_in_the_department(): void

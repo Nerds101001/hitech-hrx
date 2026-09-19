@@ -22,6 +22,7 @@ class KpiTemplate extends Model
         'late_percent'      => 'decimal:2',
         'per_day_penalty'   => 'decimal:2',
         'result_cap_percent' => 'decimal:2',
+        'designation_ids'   => 'array',
     ];
 
     public const SCORING_TYPES = ['timeline', 'target', 'threshold', 'banded'];
@@ -71,6 +72,19 @@ class KpiTemplate extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approver_id');
+    }
+
+    /**
+     * Does this template reach someone holding $designationId? A template with
+     * no designation list covers everyone in its department, as it always did.
+     */
+    public function coversDesignation($designationId): bool
+    {
+        $ids = $this->designation_ids;
+        if (empty($ids)) {
+            return true;
+        }
+        return $designationId !== null && in_array((int) $designationId, array_map('intval', $ids), true);
     }
 
     /** null department = every department in the tenant. */

@@ -90,7 +90,9 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     // is safe to fire on every relevant save.
     static::saved(function ($user) {
       if (!$user->department_id) return;
-      if (!$user->wasRecentlyCreated && !$user->wasChanged('department_id')) return;
+      // A promotion into a designation a template is restricted to counts
+      // too, not just a move between departments.
+      if (!$user->wasRecentlyCreated && !$user->wasChanged('department_id') && !$user->wasChanged('designation_id')) return;
       $status = $user->status instanceof UserAccountStatus ? $user->status->value : $user->status;
       if ($status !== UserAccountStatus::ACTIVE->value) return;
 

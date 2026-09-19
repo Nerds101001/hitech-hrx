@@ -26,6 +26,7 @@ class KpiTemplateService
             ->where('status', 'active')
             ->when($t->tenant_id, fn ($q) => $q->where('tenant_id', $t->tenant_id))
             ->when($t->department_id, fn ($q) => $q->where('department_id', $t->department_id))
+            ->when(!empty($t->designation_ids), fn ($q) => $q->whereIn('designation_id', $t->designation_ids))
             ->get();
     }
 
@@ -148,7 +149,9 @@ class KpiTemplateService
             ->where(function ($q) use ($user) {
                 $q->whereNull('department_id')->orWhere('department_id', $user->department_id);
             })
-            ->get();
+            ->get()
+            // A template narrowed to certain designations only reaches them.
+            ->filter(fn ($t) => $t->coversDesignation($user->designation_id));
 
         $n = 0;
         foreach ($templates as $t) {

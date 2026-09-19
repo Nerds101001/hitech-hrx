@@ -573,6 +573,7 @@ class KpiController extends Controller
         $departments = Department::orderBy('name')->get(['id', 'name']);
         $kras = KpiTemplate::where('category', 'KRA')->where('is_active', true)->orderBy('title')->get(['id', 'title', 'department_id']);
         $approvers = User::notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
+        $designations = \App\Models\Designation::orderBy('name')->get(['id', 'name', 'department_id']);
 
         // Built from the service rather than a second list in the view, so a new
         // calculation shows up in the dropdown the moment it is added and the
@@ -581,7 +582,7 @@ class KpiController extends Controller
 
         return view('tenant.kpi.templates', compact(
             'templates', 'departments', 'kras', 'approvers', 'departmentId',
-            'assignmentCounts', 'autoSources'
+            'assignmentCounts', 'autoSources', 'designations'
         ));
     }
 
@@ -612,6 +613,8 @@ class KpiController extends Controller
             'check_month'        => 'nullable|integer|min:1|max:12',
             'trend'              => 'nullable|in:increase,decrease',
             'result_cap_percent' => 'nullable|numeric|min:100|max:1000',
+            'designation_ids'    => 'nullable|array',
+            'designation_ids.*'  => 'integer|exists:designations,id',
         ];
     }
 
@@ -644,6 +647,7 @@ class KpiController extends Controller
         }
         $data = $request->validate($this->templateRules());
         $data['trend'] = $data['trend'] ?? 'increase';
+        $data['designation_ids'] = !empty($data['designation_ids']) ? array_values(array_map('intval', $data['designation_ids'])) : null;
         if ($err = $this->templateConsistencyError($data)) {
             return response()->json(['status' => 'error', 'message' => $err], 422);
         }
@@ -674,6 +678,7 @@ class KpiController extends Controller
         $t = KpiTemplate::findOrFail($id);
         $data = $request->validate($this->templateRules());
         $data['trend'] = $data['trend'] ?? 'increase';
+        $data['designation_ids'] = !empty($data['designation_ids']) ? array_values(array_map('intval', $data['designation_ids'])) : null;
         if ($err = $this->templateConsistencyError($data)) {
             return response()->json(['status' => 'error', 'message' => $err], 422);
         }

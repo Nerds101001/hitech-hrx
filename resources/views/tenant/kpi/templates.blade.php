@@ -209,6 +209,7 @@
                     <span class="badge badge-hitech badge-muted">{{ $t->scoring_type }}</span>
                     @if($t->target_value !== null && ($t->target_value > 0 || ($t->trend ?? 'increase') === 'decrease'))<small class="text-muted d-block">target {{ $num($t->target_value) }}</small>@endif
                     @if(($t->trend ?? 'increase') === 'decrease')<small class="text-muted d-block">lower is better</small>@endif
+                    @if(!empty($t->designation_ids))<small class="text-muted d-block">{{ count($t->designation_ids) }} designation{{ count($t->designation_ids) === 1 ? '' : 's' }} only</small>@endif
                     @if($t->result_cap_percent !== null)<small class="text-muted d-block">counts up to {{ $num($t->result_cap_percent) }}%</small>@endif
                   </td>
                   <td class="text-end fw-semibold">{{ $marksOf($t) }}</td>
@@ -325,6 +326,16 @@
                 <option value="">All departments</option>
                 @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
               </select>
+            </div>
+            <div class="col-12 kpi-only">
+              <label class="form-label">Only these designations <span class="text-muted fw-normal">(optional)</span></label>
+              <select id="tpl_designation_ids" class="form-select" multiple size="5">
+                @foreach($designations as $des)<option value="{{ $des->id }}">{{ $des->name }}</option>@endforeach
+              </select>
+              <div class="form-text">
+                Leave empty and everyone in the department gets it. Pick some (Ctrl/Cmd-click for several)
+                and only people holding those designations do — including anyone later promoted into one.
+              </div>
             </div>
             <div class="col-md-6 kpi-only">
               <label class="form-label">Sits under (KRA)</label>
@@ -569,6 +580,8 @@
     set('tpl_department_id', t?.department_id);
     filterKras();
     set('tpl_parent_template_id', t?.parent_template_id);
+    const wanted = (t?.designation_ids || []).map(Number);
+    Array.from($('tpl_designation_ids').options).forEach(o => { o.selected = wanted.includes(Number(o.value)); });
     $('tpl_frequency').value          = t?.frequency ?? 'monthly';
     $('tpl_scoring_type').value       = t?.scoring_type ?? 'target';
     set('tpl_max_marks', t?.max_marks, 10);
@@ -677,6 +690,7 @@
       category: $('tpl_category').value,
       parent_template_id: $('tpl_parent_template_id').value || null,
       department_id: $('tpl_department_id').value || null,
+      designation_ids: Array.from($('tpl_designation_ids').selectedOptions).map(o => parseInt(o.value, 10)),
       frequency: $('tpl_frequency').value,
       scoring_type: $('tpl_scoring_type').value,
       max_marks: numOrNull('tpl_max_marks') ?? 0,
