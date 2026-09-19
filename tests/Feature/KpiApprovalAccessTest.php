@@ -155,17 +155,36 @@ class KpiApprovalAccessTest extends TestCase
         $this->assertSame(403, $this->review($this->gm, $own)->getStatusCode());
     }
 
-    public function test_the_approvals_screen_counts_and_dropdowns_do_not_leak_other_departments(): void
+    private function openApprovals(User $who)
     {
-        Auth::setUser($this->randomManager);
+        Auth::setUser($who);
         $req = Request::create('/kpi/approvals', 'GET');
-        $req->setUserResolver(fn () => $this->randomManager);
+        $req->setUserResolver(fn () => $who);
         \Illuminate\Support\Facades\View::share('errors', new \Illuminate\Support\ViewErrorBag());
-        $view = app(KpiController::class)->approvals($req);
-        $data = $view->getData();
 
-        $this->assertCount(0, $data['entries']);
-        $this->assertSame(0, (int) collect($data['tabCounts'])->sum(), 'tab counts must not reveal how much is waiting elsewhere');
-        $this->assertCount(0, $data['employees'], 'no staff directory for someone with nothing to review');
+        return app(KpiController::class)->approvals($req);
+    }
+
+    public function test_the_page_is_closed_to_managers_with_nothing_to_approve(): void
+    {
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $this->openApprovals($this->randomManager));
+    }
+
+    public function test_a_named_approvers_screen_shows_only_their_own_numbers(): void
+    {
+        $data = $this->openApprovals($this->gm)->getData();
+
+        $this->assertCount(1, $data['entries']);
+        $this->assertSame(1, (int) collect($data['tabCounts'])->sum(), 'tab counts must not reveal how much is waiting elsewhere');
+        $this->assertSame([$this->productionEntry->user_id], $data['employees']->pluck('id')->all(), 'no staff directory beyond what they review');
+    }
+
+    public function test_the_menu_link_shows_only_for_people_who_can_review_something(): void
+    {
+        \App\Support\Nav::flush();
+        $this->assertTrue(\App\Support\Nav::allows('/kpi/approvals', $this->admin));
+        $this->assertTrue(\App\Support\Nav::allows('/kpi/approvals', $this->hr));
+        $this->assertTrue(\App\Support\Nav::allows('/kpi/approvals', $this->gm), 'named approver');
+        $this->assertFalse(\App\Support\Nav::allows('/kpi/approvals', $this->randomManager), 'manager role alone is not enough');
     }
 }

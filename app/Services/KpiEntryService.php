@@ -189,6 +189,17 @@ class KpiEntryService
         return $reviewer->hasRole(['admin', 'hr']);
     }
 
+    /**
+     * Should this person see the KPI Approvals page at all? HR/admin always;
+     * anyone else only while some KPI names them as its approver. Everyone else
+     * would open an empty screen, so the menu hides it instead.
+     */
+    public static function canOpenApprovals(User $user): bool
+    {
+        return self::reviewsEverything($user)
+            || KpiAssignment::where('approver_id', $user->id)->where('is_active', true)->exists();
+    }
+
     public static function canReview(User $reviewer, KpiEntry $entry): bool
     {
         if (self::reviewsEverything($reviewer)) {

@@ -65,6 +65,14 @@ class Nav
             return false; // no such route — treat as a dead link
         }
 
+        // The KPI Approvals link is role-gated to "manager", which dozens of
+        // people hold. Whether the page has anything for THIS person is data
+        // (are they a named approver?), not a role, so ask the service.
+        if ($route->getName() === 'tenant.kpi.approvals'
+            && !\App\Services\KpiEntryService::canOpenApprovals($user)) {
+            return false;
+        }
+
         foreach ($route->gatherMiddleware() as $m) {
             if (!is_string($m)) {
                 continue;

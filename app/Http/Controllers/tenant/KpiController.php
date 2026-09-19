@@ -461,7 +461,7 @@ class KpiController extends Controller
     public function reviewEntry(Request $request, $entryId)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!KpiEntryService::canOpenApprovals($user)) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         $data = $request->validate([
@@ -500,7 +500,7 @@ class KpiController extends Controller
     public function approvals(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!KpiEntryService::canOpenApprovals($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
         $departmentId = $request->input('department_id');
@@ -533,7 +533,7 @@ class KpiController extends Controller
     public function exportApprovals(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!KpiEntryService::canOpenApprovals($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
         $departmentId = $request->input('department_id');
