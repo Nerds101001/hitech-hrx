@@ -354,6 +354,29 @@ Route::middleware([
       Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
+    // Sales Sources -- the manual Sales Report, Setu and the Tally daily
+    // exports side by side (read-only). Company-wide sales and receivables,
+    // so it is admin/HR/accounts only -- deliberately narrower than the broad
+    // group this sits inside, and enforced again in the controller.
+    Route::middleware(['role_or_permission:admin|hr|accounts'])->prefix('sales-sources')->name('sales-sources.')->group(function () {
+      $c = \App\Http\Controllers\tenant\SalesSourcesController::class;
+      $an = \App\Http\Controllers\tenant\SalesAnalyticsController::class;
+      Route::get('', [$c, 'compare'])->name('index');
+      // Tally analytics dashboard (replaces the older Tally Customers / Tally Invoices pages, which now redirect here)
+      Route::get('analytics', [$an, 'index'])->name('analytics');
+      Route::get('analytics/data', [$an, 'data'])->name('analytics.data');
+      Route::get('analytics/bill', [$an, 'bill'])->name('analytics.bill');
+      Route::get('analytics/item', [$an, 'item'])->name('analytics.item');
+      Route::get('analytics/customer', [$an, 'customer'])->name('analytics.customer');
+      Route::get('analytics/export', [$an, 'export'])->name('analytics.export');
+      Route::redirect('tally', '/sales-sources/analytics#customers')->name('tally');
+      Route::redirect('tally/invoices', '/sales-sources/analytics#bills')->name('invoices');
+      Route::get('tally/outstanding', [$c, 'outstanding'])->name('outstanding');
+      Route::get('tally/outstanding-bills', [$c, 'outstandingBills'])->name('outstanding-bills');
+      Route::get('tally/orders', [$c, 'orders'])->name('orders');
+      Route::get('setu', [$c, 'setu'])->name('setu');
+    });
+
     // IP Groups
     Route::prefix('ipgroup')->name('ipgroup.')->group(function () {
       Route::get('', [IpGroupController::class, 'index'])->name('index');

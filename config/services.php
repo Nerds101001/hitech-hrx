@@ -46,6 +46,14 @@ return [
     'report_id' => env('SETU_SALES_REPORT_ID', 2899),
   ],
 
+  // Tally's daily text exports (Abc.txt, Invoice Details.txt, OutstandingDet.txt,
+  // PartyWiseSaleOrder.txt) -- read by `hrx:import-tally`. On the server this is
+  // the inbox the exports are uploaded to; locally it can point at the folder
+  // Tally writes to.
+  'tally' => [
+    'export_dir' => env('TALLY_EXPORT_DIR', storage_path('app/tally')),
+  ],
+
   // Google Maps key for Live Location, Timeline, SOS map and client
   // create/edit. MUST be read via config() in Blade, never env(): env()
   // returns null once `php artisan config:cache` has run, which silently
