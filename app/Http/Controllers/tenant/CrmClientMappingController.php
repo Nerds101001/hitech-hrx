@@ -583,6 +583,13 @@ class CrmClientMappingController extends Controller
             abort(403);
         }
 
+        // The Customer Profile is the customer view now. This classic Customer 360 page is kept, reachable
+        // with ?classic=1 (the profile's "Classic View" button), in case something is needed that the profile
+        // does not cover yet. The redirect comes AFTER the permission check above, so access is unchanged.
+        if (!$request->boolean('classic')) {
+            return redirect()->route('crm-clients.profile', $mapping->id);
+        }
+
         $contacts = $mapping->contacts()->orderByDesc('is_primary')->orderBy('name')->get();
         $teamByRole = $mapping->teamMembersByRole();
         // The team picker offers everyone active, same pool employeeClients()

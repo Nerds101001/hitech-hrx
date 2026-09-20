@@ -137,7 +137,7 @@
                     </div>
                 </div>
                 <div class="d-flex gap-2">
-                    <a href="{{ route('crm-clients.show', $mapping->id) }}" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold">
+                    <a href="{{ route('crm-clients.show', ['id' => $mapping->id, 'classic' => 1]) }}" class="btn btn-sm btn-outline-secondary rounded-pill fw-bold">
                         <i class="bx bx-grid-alt me-1"></i> Classic View
                     </a>
                     <button class="btn btn-sm rounded-pill fw-bold text-white" style="background:#127464;" onclick="LogCall.open()">
