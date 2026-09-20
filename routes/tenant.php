@@ -883,6 +883,15 @@ Route::middleware([
             Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
             Route::post('/sales-report/resolve-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveCrmMapping'])->name('pipeline.resolve-crm-mapping');
 
+            // Customer <-> Setu verification badge/popup (customers table, not
+            // per-salesperson — see CustomerSetuMappingController).
+            Route::get('/sales-report/customer/{customer}/setu-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'preview'])->name('pipeline.customer.setu-preview');
+            Route::get('/sales-report/setu-customers/search', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'search'])->name('pipeline.setu-customers.search');
+            Route::post('/sales-report/customer/{customer}/map-setu', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'mapSetu'])->name('pipeline.customer.map-setu');
+            Route::post('/sales-report/customers/bulk-confirm-setu', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'bulkConfirmSuggested'])->name('pipeline.customers.bulk-confirm-setu');
+            Route::get('/sales-report/customer/{customer}/sync-current-month-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonthPreview'])->name('pipeline.customer.sync-current-month-preview');
+            Route::post('/sales-report/customer/{customer}/sync-current-month', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonth'])->name('pipeline.customer.sync-current-month');
+
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
             Route::post('/sales-report/import/process', [\App\Http\Controllers\tenant\PipelineImportController::class, 'processImport'])->name('pipeline.import.process');

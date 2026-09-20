@@ -43,6 +43,12 @@ class SalesPipeline extends Model implements AuditableContract
         return $this->belongsTo(User::class, 'salesperson_id');
     }
 
+    /** The canonical customer this row's party_name has been linked to, if any. */
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
     public function ccare()
     {
         return $this->belongsTo(User::class, 'ccare_id');

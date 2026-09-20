@@ -239,7 +239,7 @@ class SalesPipelineController extends Controller
         // Most recent month first so users see the current month without scrolling right
         $months = array_reverse($months);
 
-        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'extraReps.user', 'serviceReps.user', 'months' => function($q) use ($months) {
+        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'customer', 'extraReps.user', 'serviceReps.user', 'months' => function($q) use ($months) {
             $monthKeys = array_column($months, 'key');
             $q->whereIn('month_year', $monthKeys);
         }])->where('is_locked', true);
