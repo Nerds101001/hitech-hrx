@@ -981,6 +981,28 @@ Route::middleware([
             });
             Route::post('activities/{id}/complete-follow-up', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'completeFollowUp'])->name('activities.complete-follow-up');
 
+            // Internal Team (multi-person-per-role) -- same canViewMapping()
+            // scoping as contacts/activities above, not the admin-only group:
+            // an assigned rep manages their own account's team same as they
+            // already manage its contacts.
+            Route::prefix('{mapping}/team')->group(function () {
+                Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'addTeamMember'])->name('team.store');
+                Route::delete('/{userId}/{role}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'removeTeamMember'])->name('team.destroy');
+            });
+
+            // Customer Profile -- a separate, richer tabbed view of the same
+            // account (built alongside show() above, not replacing it).
+            // Contacts/Team/Activities on this page reuse the routes above;
+            // only the page itself, the sales-trend chart, and manual call
+            // log are genuinely new here. (A Documents tab was built and
+            // removed for now -- CrmClientDocument/the migration are still
+            // there if it comes back.)
+            Route::prefix('{mapping}/profile')->group(function () {
+                Route::get('/', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'show'])->name('profile');
+                Route::get('/sales-trend', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'salesTrend'])->name('profile.sales-trend');
+                Route::post('/log-call', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'logCall'])->name('profile.log-call');
+            });
+
             // Kept last: a bare GET /{id} would otherwise shadow the specific
             // single-segment routes above (/search, /sync-status, /debug-crm).
             Route::get('/{id}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'show'])->name('show');

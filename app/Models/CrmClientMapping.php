@@ -83,12 +83,47 @@ class CrmClientMapping extends Model
         return $this->hasMany(CrmClientContact::class);
     }
 
+    /** Everyone tagged on the Internal Team, any role, one or many per role. */
+    public function teamMembers()
+    {
+        return $this->hasMany(CrmClientMappingTeamMember::class);
+    }
+
+    /** Same list, grouped by role — what the Customer 360 team card renders.
+     *  email/phone are extra columns Customer Profile's quick mail/call icons
+     *  use; the classic Customer 360 card simply doesn't read them. */
+    public function teamMembersByRole()
+    {
+        return $this->teamMembers()->with('user:id,first_name,last_name,email,phone')->get()->groupBy('role');
+    }
+
     /** The comment/call activity feed, newest first. Callers must paginate --
      *  this can accumulate one row per dispositioned call over an account's
      *  lifetime and must never be fetched in full. */
     public function activities()
     {
         return $this->hasMany(CrmClientActivity::class)->latest('id');
+    }
+
+    /** Sales Report rows reconciled to this CRM account (see the
+     *  2026_08_22_100300 migration) -- Customer Profile's Sales & Revenue
+     *  tab and sales-trend chart both read off this, not off party_name. */
+    public function salesPipelines()
+    {
+        return $this->hasMany(SalesPipeline::class);
+    }
+
+    /** Every dialer-placed call linked to this account, newest first. */
+    public function telephonyCalls()
+    {
+        return $this->hasMany(TelephonyCall::class)->latest('id');
+    }
+
+    /** Files attached to this account's record (Customer Profile's
+     *  Documents tab). */
+    public function documents()
+    {
+        return $this->hasMany(CrmClientDocument::class)->latest('id');
     }
 
     /**
