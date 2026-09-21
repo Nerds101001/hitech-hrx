@@ -214,8 +214,16 @@ class AuthController extends Controller
             return redirect()->route('login')->with('error', 'Your account is locked. Please request an unlock.');
         }
 
-        // SECURITY (QA fix): removed the local OTP bypass ($request->otp == '123456').
-        if (($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at))) {
+        // Local development only: 123456 stands in for the emailed code, so testing does not
+        // depend on a mailbox. It needs BOTH the "local" environment AND a request to localhost,
+        // so it cannot work on production even if this file were deployed there. The password
+        // step has already been passed by this point. (This replaces the always-on bypass the
+        // 2026-08-31 QA pass removed.)
+        $localBypass = app()->environment('local')
+            && in_array($request->getHost(), ['localhost', '127.0.0.1', '::1', '[::1]'], true)
+            && (string) $request->otp === '123456';
+
+        if ($localBypass || ($user->otp_code == $request->otp && $user->otp_expires_at && now()->lt($user->otp_expires_at))) {
             // Success
             $user->otp_code = null;
             $user->otp_expires_at = null;
