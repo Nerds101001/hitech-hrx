@@ -160,7 +160,9 @@ class Attendance extends Model
 
           if ($checkOut) {
               $mins = $checkIn->diffInMinutes($checkOut);
-              if ($mins >= 240) {
+              // 3h55m, not a strict 4h: see AttendanceDayStatus::OFFDAY_CREDIT_MINUTES.
+              // (The flag keeps its old name; it now means "worked enough for the credit".)
+              if ($mins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
                   $hasFourHours = true;
               }
           }

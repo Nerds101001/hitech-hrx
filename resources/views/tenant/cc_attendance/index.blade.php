@@ -295,9 +295,9 @@
                                             elseif (str_contains($currentStatus, 'half')) $sel = 'Half day';
                                             elseif (str_contains($currentStatus, 'present') && $record->check_in_time) {
                                                 $workMins = $record->check_out_time ? $record->check_in_time->diffInMinutes($record->check_out_time) : 0;
-                                                if ($workMins >= 240 && $record->check_in_time->isSunday()) {
+                                                if ($workMins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES && $record->check_in_time->isSunday()) {
                                                     $sel = 'Sunday working';
-                                                } elseif ($workMins >= 240 && \App\Models\Holiday::appliesTo($emp, $record->check_in_time)) {
+                                                } elseif ($workMins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES && \App\Models\Holiday::appliesTo($emp, $record->check_in_time)) {
                                                     $sel = 'Holiday working';
                                                 } else {
                                                     $sel = 'Present';

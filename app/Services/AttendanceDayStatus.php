@@ -42,7 +42,16 @@ use Carbon\Carbon;
  */
 class AttendanceDayStatus
 {
-    /** Minutes of real work needed to earn the SP/HP/weekly-off-worked credit. */
+    /**
+     * Minutes of real work on a Sunday, an OFF Saturday or a full holiday that
+     * earn the SP/HP credit (and the 1-day ALP comp-off the Attendance model
+     * grants for it). 3h55m: relaxed from a strict 4h at HR's request, so a
+     * punch a few minutes short of four hours still counts. Only these off-day
+     * credits use it; an ordinary weekday's half-day bar is CREDIT_MINUTES.
+     */
+    public const OFFDAY_CREDIT_MINUTES = 235;
+
+    /** Minutes of real work that make an ordinary weekday a half day. */
     public const CREDIT_MINUTES = 240;
 
     /** Minutes of real work a Short Leave day needs to still count as a full Present. */
@@ -133,9 +142,9 @@ class AttendanceDayStatus
 
         if ($attendance) {
             if ($isSunday || $isOffSaturday) {
-                $result['code'] = $workMins >= self::CREDIT_MINUTES ? 'sp' : 'weekly_off';
+                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'sp' : 'weekly_off';
             } elseif ($isFullHoliday) {
-                $result['code'] = $workMins >= self::CREDIT_MINUTES ? 'hp' : 'holiday';
+                $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'hp' : 'holiday';
             } elseif (empty($attendance->admin_reason)) {
                 if ($isWfh) {
                     $result['code'] = 'work_from_home';

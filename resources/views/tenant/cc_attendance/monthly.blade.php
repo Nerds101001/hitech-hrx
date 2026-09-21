@@ -300,7 +300,7 @@
                                                         elseif (str_contains($status, 'leave')) $displayStatus = 'LV';
                                                         elseif ($status === 'present' && $record->check_in_time) {
                                                             $workMins = $record->check_out_time ? $record->check_in_time->diffInMinutes($record->check_out_time) : 0;
-                                                            if ($workMins >= 240) {
+                                                            if ($workMins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
                                                                 if ($dateObj->isSunday()) {
                                                                     $displayStatus = 'PS';
                                                                 } elseif (isset($empHolidayDates[$dateStr])) {
