@@ -353,6 +353,29 @@
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+  // ── weekly status cards ──
+  document.querySelectorAll('.ndg-week').forEach(function (card) {
+    var btn = card.querySelector('.ndg-submit'), msg = card.querySelector('.ndg-msg');
+    var late = card.getAttribute('data-late') === '1';
+    btn.addEventListener('click', function () {
+      var entries = [], problems = [];
+      card.querySelectorAll('tbody tr').forEach(function (tr) {
+        var st = tr.querySelector('.ndg-status').value, cm = tr.querySelector('.ndg-comment').value.trim();
+        if (!st) { return; }
+        if (late && !cm) { problems.push(tr.querySelector('td').firstChild.textContent.trim() + ': add a comment'); return; }
+        entries.push({ goal_id: parseInt(tr.getAttribute('data-goal'), 10), status: st, comment: cm });
+      });
+      if (problems.length) { msg.textContent = problems.join('. ') + '.'; return; }
+      if (!entries.length) { msg.textContent = 'Choose a status for at least one customer.'; return; }
+      msg.textContent = ''; btn.disabled = true;
+      post(URLS.checkin, 'POST', { week_no: parseInt(card.getAttribute('data-week'), 10), entries: entries }).then(function (j) {
+        if (j.success) { location.reload(); return; }
+        btn.disabled = false; msg.textContent = j.message || 'Could not save.';
+        if (j.saved) { setTimeout(function () { location.reload(); }, 1500); }
+      }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
+    });
+  });
+
   // ── remove a customer ──
   document.querySelectorAll('.ndg-remove').forEach(function (b) {
     b.addEventListener('click', function () {
