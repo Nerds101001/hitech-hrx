@@ -54,6 +54,10 @@ return Application::configure(basePath: dirname(__DIR__))
        monthly and quarterly assignments alike; each only actually changes
        when its own period rolls over. */
     $schedule->command('kpi:auto-score')->dailyAt('05:00')->withoutOverlapping();
+    /* 90-Day Goals: every Monday morning, close rounds that have ended, start a
+       round for anyone in Sales without one, open the week's check-ins and put
+       the "submit your status" task on each person's list. Idempotent. */
+    $schedule->command('goals:weekly')->weeklyOn(1, '06:00')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);

@@ -513,21 +513,35 @@ class KpiAutoSourceService
      */
     public static function ninetyDayGoals(int $userId, Carbon $start, Carbon $end): ?float
     {
+        $good = ['Regular Order', 'On Track'];
+        $statuses = collect();
+
+        // The tracker: every goal in a 13-week round that overlaps the period, judged by
+        // the latest status the person has reported for it.
+        $roundIds = DB::table('ninety_day_rounds')->where('user_id', $userId)
+            ->where('starts_on', '<=', $end->toDateString())->where('ends_on', '>=', $start->toDateString())->pluck('id');
+        if ($roundIds->isNotEmpty()) {
+            foreach (DB::table('ninety_day_goals')->where('user_id', $userId)->whereNull('deleted_at')->whereIn('round_id', $roundIds)->pluck('id') as $goalId) {
+                $statuses->push(DB::table('ninety_day_goal_checkins')->where('goal_id', $goalId)->whereNotNull('status')->orderByDesc('week_no')->value('status'));
+            }
+        }
+
+        // Older goals filed against an appraisal cycle and judged by week 12.
         $cycles = DB::table('appraisal_cycles')
             ->where('start_date', '<=', $end->toDateString())
             ->where('end_date', '>=', $start->toDateString())
             ->pluck('id');
-        $goals = DB::table('ninety_day_goals')
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->whereIn('appraisal_cycle_id', $cycles)
-            ->pluck('w12');
-        if ($goals->isEmpty()) {
+        if ($cycles->isNotEmpty()) {
+            $statuses = $statuses->concat(
+                DB::table('ninety_day_goals')->where('user_id', $userId)->whereNull('deleted_at')->whereNull('round_id')
+                    ->whereIn('appraisal_cycle_id', $cycles)->pluck('w12')
+            );
+        }
+
+        if ($statuses->isEmpty()) {
             return null;
         }
 
-        $good = $goals->filter(fn ($w) => in_array($w, ['Regular Order', 'On Track'], true))->count();
-
-        return round($good / $goals->count() * 100, 2);
+        return round($statuses->filter(fn ($w) => in_array($w, $good, true))->count() / $statuses->count() * 100, 2);
     }
 }

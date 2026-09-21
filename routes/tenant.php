@@ -1268,12 +1268,17 @@ Route::middleware([
         // request — no live access change without sign-off. goals.manage /
         // scorecards.manage are available for individual delegation without
         // widening the role-based default.
-        Route::middleware(['role_or_permission:admin|goals.manage|scorecards.manage'])->group(function () {
-            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
-            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
-            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
-            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
+        // 90-Day Goals is the Sales team's own tracker: everyone in Sales works their own
+        // goals, admin/HR/goals.manage see everyone's, a manager sees their team's. These are
+        // login-only on purpose; NinetyDayGoalController decides who may do what.
+        Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+        Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');
+        Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+        Route::post('/ninety-day-goals/checkin', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'checkin'])->name('ninety-day-goals.checkin');
+        Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+        Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
 
+        Route::middleware(['role_or_permission:admin|goals.manage|scorecards.manage'])->group(function () {
             Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
             Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
             Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');

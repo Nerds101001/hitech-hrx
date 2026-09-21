@@ -764,7 +764,6 @@
             "icon": "menu-icon bx bx-trending-up",
             "slug": [
                 "performance.scorecards.index",
-                "performance.ninety-day-goals.index",
                 "tenant.kpi.manage",
                 "tenant.kpi.templates"
             ],
@@ -804,17 +803,15 @@
                         "admin",
                         "hr"
                     ]
-                },
-                {
-                    "url": "/performance/ninety-day-goals",
-                    "name": "90-Day Goals",
-                    "slug": "performance.ninety-day-goals.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
                 }
             ]
+        },
+        {
+            "url": "/performance/ninety-day-goals",
+            "name": "90-Day Goals",
+            "icon": "menu-icon bx bx-target-lock",
+            "slug": "performance.ninety-day-goals.index",
+            "department": "Sales"
         },
         {
             "name": "KRA Management",

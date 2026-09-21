@@ -70,14 +70,25 @@ class KpiPerformanceMenuTest extends TestCase
         return $names;
     }
 
-    public function test_the_group_is_four_entries_in_working_order_and_keeps_ninety_day_goals(): void
+    public function test_the_group_is_three_entries_in_working_order(): void
     {
         $names = array_column($this->performance()['submenu'], 'name');
 
-        $this->assertSame(['KPI / KRA Setup', 'KPI Approvals', 'Scorecards', '90-Day Goals'], $names);
+        $this->assertSame(['KPI / KRA Setup', 'KPI Approvals', 'Scorecards'], $names);
         $urls = array_column($this->performance()['submenu'], 'url');
         $this->assertNotContains('/kpi/manage', $urls, 'the per-employee page opens from Setup, not the sidebar');
-        $this->assertContains('/performance/ninety-day-goals', $urls);
+    }
+
+    public function test_ninety_day_goals_is_its_own_entry_for_the_sales_department(): void
+    {
+        $menu = json_decode(file_get_contents(base_path('resources/menu/tenantVerticalMenu.json')), true)['menu'];
+        $entry = collect($menu)->firstWhere('name', '90-Day Goals');
+
+        $this->assertNotNull($entry, 'the tracker is still in the menu');
+        $this->assertSame('/performance/ninety-day-goals', $entry['url']);
+        $this->assertSame('Sales', $entry['department'], 'shown to the Sales department; admin and HR always see department entries');
+        $this->assertArrayNotHasKey('roles', $entry, 'not limited to admin and HR any more');
+        $this->assertNotContains('/performance/ninety-day-goals', array_column($this->performance()['submenu'], 'url'), 'and not listed twice');
     }
 
     public function test_setup_stays_highlighted_while_the_per_employee_page_is_open(): void
@@ -88,9 +99,9 @@ class KpiPerformanceMenuTest extends TestCase
         $this->assertContains('tenant.kpi.manage', (array) $setup['slug']);
     }
 
-    public function test_admin_sees_all_four(): void
+    public function test_admin_sees_all_three(): void
     {
-        $this->assertSame(['KPI / KRA Setup', 'KPI Approvals', 'Scorecards', '90-Day Goals'], $this->visibleFor($this->person('admin')));
+        $this->assertSame(['KPI / KRA Setup', 'KPI Approvals', 'Scorecards'], $this->visibleFor($this->person('admin')));
     }
 
     public function test_an_ordinary_manager_sees_none_of_it(): void
