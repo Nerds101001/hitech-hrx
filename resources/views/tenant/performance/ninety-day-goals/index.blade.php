@@ -9,19 +9,20 @@
 @php
   $G = \App\Services\NinetyDayGoalService::class;
 
-  /** A week's cell: the status as a coloured chip with its comment written underneath; "late" marks a Monday answered after its day. */
+  /** A week's status as a coloured chip; "late" marks a Monday answered after its day. */
   $chip = function ($checkin, $due, $today) use ($G) {
       if ($checkin && $checkin->status) {
           [$bg, $fg] = $G::STATUS_COLORS[$checkin->status] ?? ['#64748b', '#ffffff'];
           $late = $checkin->is_late ? '<i class="ndg-late">late, sent ' . e(optional($checkin->submitted_at)->format('d M')) . '</i>' : '';
-          $note = $checkin->comment ? '<div class="ndg-note">' . e($checkin->comment) . '</div>' : '';
-          return '<span class="ndg-chip" style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $late . $note;
+          return '<span class="ndg-chip" style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $late;
       }
       if ($checkin && $checkin->due_on->lte($today)) {
           return '<span class="ndg-chip ndg-missing" title="Due ' . $checkin->due_on->format('D d M') . ', not submitted">not sent</span>';
       }
       return '<span class="ndg-none">·</span>';
   };
+  /** The comment for a week, for the cell next to its status. */
+  $note = fn ($checkin) => $checkin && $checkin->comment ? e($checkin->comment) : '<span class="ndg-none">·</span>';
   $fmtL = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
@@ -127,12 +128,15 @@
         <table class="table align-middle mb-0 ndg-grid">
           <thead>
             <tr>
-              <th style="min-width:180px">Customer</th><th style="min-width:150px">Product</th><th>Brand</th><th style="min-width:130px">Goal</th>
-              <th class="text-end">Monthly ₹ L</th>
+              <th rowspan="2" style="min-width:180px">Customer</th><th rowspan="2" style="min-width:150px">Product</th><th rowspan="2">Brand</th><th rowspan="2" style="min-width:130px">Goal</th>
+              <th rowspan="2" class="text-end">Monthly ₹ L</th>
               @for($w = 0; $w < $weeks; $w++)
-                <th class="text-center ndg-wk {{ $w === $weekNo ? 'ndg-now' : '' }}">W{{ $w }}<div class="ndg-date">{{ $dates[$w]->format('d M') }}</div></th>
+                <th colspan="2" class="text-center ndg-wk ndg-wkhead {{ $w === $weekNo ? 'ndg-now' : '' }}">W{{ $w }} <span class="ndg-date">{{ $dates[$w]->format('d M') }}</span></th>
               @endfor
-              <th></th>
+              <th rowspan="2"></th>
+            </tr>
+            <tr class="ndg-sub">
+              @for($w = 0; $w < $weeks; $w++)<th class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">Status</th><th class="{{ $w === $weekNo ? 'ndg-now' : '' }}">Comment</th>@endfor
             </tr>
           </thead>
           <tbody>
@@ -144,7 +148,9 @@
               <td>{{ $g->goal }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($g->monthly_potential) }}</td>
               @for($w = 0; $w < $weeks; $w++)
-                <td class="text-center ndg-cell {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($g->checkins->firstWhere('week_no', $w), $dates[$w], $today) !!}</td>
+                @php $ck = $g->checkins->firstWhere('week_no', $w); @endphp
+                <td class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($ck, $dates[$w], $today) !!}</td>
+                <td class="ndg-cm {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $note($ck) !!}</td>
               @endfor
               <td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>
             </tr>
@@ -252,8 +258,11 @@
         <table class="table align-middle mb-0 ndg-grid">
           <thead>
             <tr>
-              <th style="min-width:180px">Customer</th><th style="min-width:150px">Product</th><th>Brand</th><th style="min-width:130px">Goal</th><th class="text-end">Monthly ₹ L</th>
-              @for($w = 0; $w < $weeks; $w++)<th class="text-center ndg-wk">W{{ $w }}@if($round)<div class="ndg-date">{{ $G::dueOn($round, $w)->format('d M') }}</div>@endif</th>@endfor
+              <th rowspan="2" style="min-width:180px">Customer</th><th rowspan="2" style="min-width:150px">Product</th><th rowspan="2">Brand</th><th rowspan="2" style="min-width:130px">Goal</th><th rowspan="2" class="text-end">Monthly ₹ L</th>
+              @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w }}@if($round) <span class="ndg-date">{{ $G::dueOn($round, $w)->format('d M') }}</span>@endif</th>@endfor
+            </tr>
+            <tr class="ndg-sub">
+              @for($w = 0; $w < $weeks; $w++)<th class="ndg-st">Status</th><th>Comment</th>@endfor
             </tr>
           </thead>
           <tbody>
@@ -265,7 +274,9 @@
               <td>{{ $g->goal ?: $g->goal_type }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($g->monthly_potential) }}</td>
               @for($w = 0; $w < $weeks; $w++)
-                <td class="text-center ndg-cell">{!! $chip($g->checkins->firstWhere('week_no', $w), null, $today) !!}</td>
+                @php $ck = $g->checkins->firstWhere('week_no', $w); @endphp
+                <td class="ndg-st">{!! $chip($ck, null, $today) !!}</td>
+                <td class="ndg-cm">{!! $note($ck) !!}</td>
               @endfor
             </tr>
           @endforeach
@@ -319,14 +330,16 @@
 
 <style>
   .ndg-grid th, .ndg-grid td { white-space: nowrap; }
-  .ndg-wk { min-width: 170px; font-size: .78rem; }
+  .ndg-wk { font-size: .78rem; }
+  .ndg-wkhead { border-left: 2px solid #cfe0de; }
+  .ndg-sub th { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 700; }
+  .ndg-grid td.ndg-st, .ndg-sub th.ndg-st { border-left: 2px solid #cfe0de; min-width: 118px; text-align: center; }
+  .ndg-grid td.ndg-cm { white-space: normal; min-width: 200px; max-width: 260px; font-size: .78rem; line-height: 1.35; color: #334155; overflow-wrap: anywhere; white-space: pre-line; }
   .ndg-date { font-weight: 400; color: #94a3b8; font-size: .68rem; }
   .ndg-now { background: #f0f7f6; }
   .ndg-chip { display: inline-block; position: relative; padding: 3px 9px; border-radius: 6px; font-size: .68rem; font-weight: 700; line-height: 1.25; }
   .ndg-chip.ndg-missing { background: #fff; color: #b42318; border: 1px dashed #f0a5a0; font-weight: 600; }
   .ndg-late { display: block; font-size: .6rem; font-style: normal; color: #b42318; font-weight: 700; margin-top: 2px; }
-  .ndg-grid td.ndg-cell { white-space: normal; vertical-align: top; min-width: 170px; max-width: 220px; }
-  .ndg-note { margin-top: 5px; font-size: .72rem; line-height: 1.35; color: #334155; text-align: left; overflow-wrap: anywhere; white-space: pre-line; }
   .ndg-none { color: #cbd5e1; }
   .ndg-strip { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; min-width: 78px; text-align: center; background: #fbfcfd; }
   .ndg-list .ndg-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
