@@ -9,14 +9,13 @@
 @php
   $G = \App\Services\NinetyDayGoalService::class;
 
-  /** A status as a coloured chip; a small dot marks a comment, "late" marks a Monday that was answered after its day. */
+  /** A week's cell: the status as a coloured chip with its comment written underneath; "late" marks a Monday answered after its day. */
   $chip = function ($checkin, $due, $today) use ($G) {
       if ($checkin && $checkin->status) {
           [$bg, $fg] = $G::STATUS_COLORS[$checkin->status] ?? ['#64748b', '#ffffff'];
-          $tip = trim(($checkin->comment ? $checkin->comment : '') . ($checkin->is_late ? "\n(submitted late, " . optional($checkin->submitted_at)->format('d M') . ')' : ''));
-          $dot = $checkin->comment ? '<span class="ndg-dot" title="' . e($checkin->comment) . '"></span>' : '';
-          $click = $checkin->comment ? ' data-comment="' . e($checkin->comment) . '" data-status="' . e($checkin->status) . '" data-week="' . (int) $checkin->week_no . '" data-when="' . e(optional($checkin->submitted_at)->format('d M Y, h:i A')) . ($checkin->is_late ? ' (late)' : '') . '" role="button"' : '';
-          return '<span class="ndg-chip' . ($checkin->comment ? ' ndg-has' : '') . '"' . $click . ' style="background:' . $bg . ';color:' . $fg . '" title="' . e($tip) . '">' . e($checkin->status) . $dot . ($checkin->is_late ? '<i class="ndg-late">late</i>' : '') . '</span>';
+          $late = $checkin->is_late ? '<i class="ndg-late">late, sent ' . e(optional($checkin->submitted_at)->format('d M')) . '</i>' : '';
+          $note = $checkin->comment ? '<div class="ndg-note">' . e($checkin->comment) . '</div>' : '';
+          return '<span class="ndg-chip" style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $late . $note;
       }
       if ($checkin && $checkin->due_on->lte($today)) {
           return '<span class="ndg-chip ndg-missing" title="Due ' . $checkin->due_on->format('D d M') . ', not submitted">not sent</span>';
@@ -320,14 +319,14 @@
 
 <style>
   .ndg-grid th, .ndg-grid td { white-space: nowrap; }
-  .ndg-wk { min-width: 92px; font-size: .78rem; }
+  .ndg-wk { min-width: 170px; font-size: .78rem; }
   .ndg-date { font-weight: 400; color: #94a3b8; font-size: .68rem; }
   .ndg-now { background: #f0f7f6; }
   .ndg-chip { display: inline-block; position: relative; padding: 3px 9px; border-radius: 6px; font-size: .68rem; font-weight: 700; line-height: 1.25; }
   .ndg-chip.ndg-missing { background: #fff; color: #b42318; border: 1px dashed #f0a5a0; font-weight: 600; }
-  .ndg-chip.ndg-has { cursor: pointer; }
-  .ndg-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; background: #f5a623; border-radius: 50%; border: 1px solid #fff; }
-  .ndg-late { display: block; font-size: .58rem; font-style: normal; opacity: .85; font-weight: 600; }
+  .ndg-late { display: block; font-size: .6rem; font-style: normal; color: #b42318; font-weight: 700; margin-top: 2px; }
+  .ndg-grid td.ndg-cell { white-space: normal; vertical-align: top; min-width: 170px; max-width: 220px; }
+  .ndg-note { margin-top: 5px; font-size: .72rem; line-height: 1.35; color: #334155; text-align: left; overflow-wrap: anywhere; white-space: pre-line; }
   .ndg-none { color: #cbd5e1; }
   .ndg-strip { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; min-width: 78px; text-align: center; background: #fbfcfd; }
   .ndg-list .ndg-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
@@ -336,14 +335,6 @@
   .ndg-list .ndg-row.on .ndg-extra { display: flex; }
   .ndg-src { font-size: .65rem; }
 </style>
-<div class="modal fade" id="ndgCommentModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title fw-bold" id="ndgCommentTitle">Comment</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
-      <div class="modal-body"><div id="ndgCommentBody" style="white-space:pre-line;line-height:1.55"></div><div class="small text-muted mt-3" id="ndgCommentWhen"></div></div>
-    </div>
-  </div>
-</div>
 @endsection
 
 @section('page-script')
@@ -361,38 +352,6 @@
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-
-  // ── read a comment ──
-  document.addEventListener('click', function (e) {
-    var chip = e.target.closest ? e.target.closest('.ndg-chip[data-comment]') : null;
-    if (!chip) return;
-    document.getElementById('ndgCommentTitle').textContent = 'Week ' + chip.dataset.week + ' · ' + chip.dataset.status;
-    document.getElementById('ndgCommentBody').textContent = chip.dataset.comment;
-    document.getElementById('ndgCommentWhen').textContent = 'Sent ' + chip.dataset.when;
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgCommentModal')).show();
-  });
-  // ── weekly status cards ──
-  document.querySelectorAll('.ndg-week').forEach(function (card) {
-    var btn = card.querySelector('.ndg-submit'), msg = card.querySelector('.ndg-msg');
-    var late = card.getAttribute('data-late') === '1';
-    btn.addEventListener('click', function () {
-      var entries = [], problems = [];
-      card.querySelectorAll('tbody tr').forEach(function (tr) {
-        var st = tr.querySelector('.ndg-status').value, cm = tr.querySelector('.ndg-comment').value.trim();
-        if (!st) { return; }
-        if (late && !cm) { problems.push(tr.querySelector('td').firstChild.textContent.trim() + ': add a comment'); return; }
-        entries.push({ goal_id: parseInt(tr.getAttribute('data-goal'), 10), status: st, comment: cm });
-      });
-      if (problems.length) { msg.textContent = problems.join('. ') + '.'; return; }
-      if (!entries.length) { msg.textContent = 'Choose a status for at least one customer.'; return; }
-      msg.textContent = ''; btn.disabled = true;
-      post(URLS.checkin, 'POST', { week_no: parseInt(card.getAttribute('data-week'), 10), entries: entries }).then(function (j) {
-        if (j.success) { location.reload(); return; }
-        btn.disabled = false; msg.textContent = j.message || 'Could not save.';
-        if (j.saved) { setTimeout(function () { location.reload(); }, 1500); }
-      }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
-    });
-  });
 
   // ── remove a customer ──
   document.querySelectorAll('.ndg-remove').forEach(function (b) {

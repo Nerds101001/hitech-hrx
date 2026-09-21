@@ -377,7 +377,7 @@ class NinetyDayGoalsTest extends TestCase
         $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals', ['user_id' => $this->rep->id]))->render();
         $this->assertStringContainsString('Alpha Ltd', $html);
         $this->assertStringContainsString('Regular Order', $html);
-        $this->assertStringContainsString('Second PO in', $html, 'the comment is on the chip');
+        $this->assertStringContainsString('<div class="ndg-note">Second PO in</div>', $html, 'the comment is written in the week cell, not hidden');
         $this->assertStringNotContainsString('Beta Ltd', $html, 'the salesperson filter works');
 
         $all = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
