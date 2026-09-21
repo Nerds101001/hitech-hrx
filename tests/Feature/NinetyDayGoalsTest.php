@@ -417,4 +417,22 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame(50.0, $pct);
         $this->assertNull(KpiAutoSourceService::ninetyDayGoals($this->rep2->id, Carbon::parse('2026-10-01'), Carbon::parse('2027-03-31')));
     }
+    // ── reachable by the people it is for ────────────────────────────────
+
+    public function test_every_goals_route_is_login_only_so_a_plain_salesperson_can_reach_it(): void
+    {
+        foreach (['index', 'pipeline-customers', 'store', 'checkin', 'update', 'destroy'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $roleGates = array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'));
+            $this->assertSame([], array_values($roleGates), "{$name} must not sit behind an admin/HR/manager gate, or the Sales team gets a 403");
+        }
+    }
+
+    public function test_the_sidebar_link_is_allowed_for_a_plain_salesperson(): void
+    {
+        \App\Support\Nav::flush();
+
+        $this->assertTrue(\App\Support\Nav::allows('/performance/ninety-day-goals', $this->rep));
+    }
 }
