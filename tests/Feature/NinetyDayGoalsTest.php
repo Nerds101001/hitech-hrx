@@ -377,8 +377,8 @@ class NinetyDayGoalsTest extends TestCase
         $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals', ['user_id' => $this->rep->id]))->render();
         $this->assertStringContainsString('Alpha Ltd', $html);
         $this->assertStringContainsString('Regular Order', $html);
-        $this->assertStringContainsString('<td class="ndg-cm">Second PO in</td>', $html, 'the comment has its own cell beside the status');
-        $this->assertStringNotContainsString('Beta Ltd', $html, 'the salesperson filter works');
+        $this->assertStringContainsString('<div class="ndg-n ndg-n-status">Second PO in</div>', $html, 'the comment sits in its own cell beside the status');
+        $this->assertStringContainsString('Beta Ltd', $html, 'the whole team is in one table; the salesperson filter narrows it on the page');
 
         $all = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
         $this->assertStringContainsString('Alpha Ltd', $all);
@@ -561,5 +561,144 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame(2, $cards['dueTotal'], "today's Monday is already due");
         $this->assertSame(1, $cards['onTimeTotal']);
         $this->assertEquals(50, $cards['discipline']);
+    }
+    // ── comments from both sides, and nothing the sales team can delete ──
+
+    private function weekRow(User $u, string $client = 'Note Ltd'): array
+    {
+        $g = $this->goal($u, Goals::roundFor($u), $client);
+        Goals::ensureCheckins(Goals::activeRound($u));
+
+        return [$g, NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first()];
+    }
+
+    private function postNote(User $u, NinetyDayGoal $g, int $week, string $body)
+    {
+        return app(NinetyDayGoalController::class)->note($this->ask($u, 'POST', '/performance/ninety-day-goals/notes', ['goal_id' => $g->id, 'week_no' => $week, 'body' => $body]));
+    }
+
+    public function test_the_salesperson_and_an_admin_can_both_add_comments_to_a_week(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        $admin = $this->person(null, 'admin');
+
+        $mine = $this->body($this->postNote($this->rep, $g, 0, 'Sample sent, waiting on lab'));
+        $theirs = $this->body($this->postNote($admin, $g, 0, 'Push for a trial order this week'));
+
+        $this->assertTrue($mine['success']);
+        $this->assertTrue($theirs['success']);
+        $this->assertSame(2, \App\Models\NinetyDayGoalNote::where('goal_id', $g->id)->count());
+        $this->assertFalse($mine['note']['can_delete'], 'the sales team cannot remove their own comment');
+        $this->assertTrue($theirs['note']['can_delete']);
+    }
+
+    public function test_a_colleague_cannot_comment_but_the_reporting_manager_can(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        $manager = $this->person($this->sales, 'manager');
+        $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
+
+        $this->assertSame(403, $this->postNote($this->rep2, $g, 0, 'not mine')->getStatusCode());
+        $this->assertTrue($this->body($this->postNote($manager, $g, 0, 'Good progress'))['success']);
+    }
+
+    public function test_a_comment_needs_a_week_that_has_started(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+
+        $res = $this->postNote($this->rep, $g, 5, 'too early');
+
+        $this->assertSame(422, $res->getStatusCode());
+        $this->assertSame(0, \App\Models\NinetyDayGoalNote::count());
+    }
+
+    public function test_the_sales_team_cannot_delete_a_customer_or_a_comment_but_admin_can(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        $note = $this->body($this->postNote($this->rep, $g, 0, 'stays'))['note'];
+        $admin = $this->person(null, 'admin');
+        $c = app(NinetyDayGoalController::class);
+
+        Auth::setUser($this->rep);
+        $this->assertSame(403, $c->destroy($g->id)->getStatusCode(), 'even with no status yet');
+        $this->assertSame(403, $c->destroyNote($note['id'])->getStatusCode());
+        $this->assertNotNull(NinetyDayGoal::find($g->id));
+
+        Auth::setUser($admin);
+        $this->assertTrue($c->destroyNote($note['id'])->getData()->success);
+        $this->assertTrue($c->destroy($g->id)->getData()->success);
+        $this->assertNull(NinetyDayGoal::find($g->id));
+        $this->assertSame(0, NinetyDayGoalCheckin::where('goal_id', $g->id)->count(), 'its weeks go with it');
+    }
+
+    public function test_a_status_already_on_record_cannot_be_overwritten(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+
+        [$saved, $errors] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Dropped']]);
+
+        $this->assertSame(0, $saved);
+        $this->assertNotEmpty($errors);
+        $this->assertSame('On Track', NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->value('status'));
+    }
+
+    public function test_the_admin_page_lists_the_whole_team_in_one_table_including_people_with_no_customers(): void
+    {
+        $this->at(self::MONDAY);
+        $this->weekRow($this->rep, 'Alpha Ltd');
+        $this->weekRow($this->rep2, 'Beta Ltd');
+        $idle = $this->person($this->sales);
+        $admin = $this->person(null, 'admin');
+
+        $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+
+        $this->assertSame(1, substr_count($html, 'id="ndgTable"'), 'one table for everyone');
+        $this->assertStringContainsString('Alpha Ltd', $html);
+        $this->assertStringContainsString('Beta Ltd', $html);
+        $this->assertStringContainsString('No customers added yet', $html);
+        $this->assertStringContainsString('id="fSearch"', $html, 'filters');
+        $this->assertStringContainsString('ndg-sort', $html, 'sortable headings');
+        $this->assertStringContainsString('ndg-note-del', $this->withNote($admin, 'Alpha Ltd'), 'admin sees the remove button on a comment');
+    }
+
+    private function withNote(User $admin, string $client): string
+    {
+        $g = NinetyDayGoal::where('client_name', $client)->latest('id')->first();
+        $this->postNote($admin, $g, 0, 'Seen by admin');
+
+        return app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+    }
+
+    public function test_a_salesperson_sees_no_delete_button_and_the_comments_page_lists_both_kinds(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep, 'Delete Me Ltd');
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track', 'comment' => 'first look']]);
+        $this->postNote($this->person(null, 'admin'), $g, 0, 'admin says hurry');
+        $c = app(NinetyDayGoalController::class);
+
+        $mine = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringNotContainsString('icon-sophisticated text-danger ndg-remove', $mine, 'no delete button for the sales team');
+        $this->assertStringContainsString('admin says hurry', $mine);
+        $this->assertStringContainsString('ndg-addnote', $mine, 'and can add their own comment');
+
+        $page = $c->comments($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/comments'))->render();
+        $this->assertStringContainsString('first look', $page);
+        $this->assertStringContainsString('admin says hurry', $page);
+    }
+
+    public function test_the_comment_routes_are_login_only(): void
+    {
+        foreach (['note', 'note.destroy'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
+        }
     }
 }

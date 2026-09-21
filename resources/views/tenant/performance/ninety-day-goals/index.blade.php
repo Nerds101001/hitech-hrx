@@ -21,8 +21,24 @@
       }
       return '<span class="ndg-none">·</span>';
   };
-  /** The comment for a week, for the cell next to its status. */
-  $note = fn ($checkin) => $checkin && $checkin->comment ? e($checkin->comment) : '<span class="ndg-none">·</span>';
+  /** A week's comment cell: what was written with the status, then comments added later by the salesperson or an admin, then the add button. */
+  $noteCell = function ($goal, $checkin) use ($isAdmin) {
+      if (!$checkin) {
+          return '<span class="ndg-none">·</span>';
+      }
+      $h = '';
+      if ($checkin->comment) {
+          $h .= '<div class="ndg-n ndg-n-status">' . e($checkin->comment) . '</div>';
+      }
+      foreach ($checkin->notes as $n) {
+          $who = trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name);
+          $h .= '<div class="ndg-n" data-note="' . $n->id . '"><b>' . e($who) . '</b><span>' . $n->created_at->format('d M') . '</span>'
+              . ($isAdmin ? '<button type="button" class="ndg-note-del" data-id="' . $n->id . '" title="Remove comment">&times;</button>' : '')
+              . '<div>' . e($n->body) . '</div></div>';
+      }
+
+      return $h . '<button type="button" class="ndg-addnote" data-goal="' . $goal->id . '" data-week="' . (int) $checkin->week_no . '" data-title="' . e($goal->client_name) . ' · W' . (int) $checkin->week_no . '" title="Add a comment"><i class="bx bx-message-square-add"></i></button>';
+  };
   $fmtL = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.');
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
@@ -133,7 +149,7 @@
               @for($w = 0; $w < $weeks; $w++)
                 <th colspan="2" class="text-center ndg-wk ndg-wkhead {{ $w === $weekNo ? 'ndg-now' : '' }}">W{{ $w }} <span class="ndg-date">{{ $dates[$w]->format('d M') }}</span></th>
               @endfor
-              <th rowspan="2"></th>
+              @if($isAdmin)<th rowspan="2"></th>@endif
             </tr>
             <tr class="ndg-sub">
               @for($w = 0; $w < $weeks; $w++)<th class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">Status</th><th class="{{ $w === $weekNo ? 'ndg-now' : '' }}">Comment</th>@endfor
@@ -150,9 +166,9 @@
               @for($w = 0; $w < $weeks; $w++)
                 @php $ck = $g->checkins->firstWhere('week_no', $w); @endphp
                 <td class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($ck, $dates[$w], $today) !!}</td>
-                <td class="ndg-cm {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $note($ck) !!}</td>
+                <td class="ndg-cm {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $noteCell($g, $ck) !!}</td>
               @endfor
-              <td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>
+              @if($isAdmin)<td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>@endif
             </tr>
           @endforeach
           </tbody>
@@ -208,96 +224,123 @@
     @endif
   </div>
 
-  {{-- Filters --}}
+  {{-- The whole Sales team in one table. Filters and sorting work on the page itself. --}}
+  @php
+    $brandList = $goals->pluck('brand')->filter()->unique()->sort()->values();
+    $personName = fn ($u) => trim(optional($u)->first_name . ' ' . optional($u)->last_name);
+  @endphp
   <div class="hitech-card mb-6">
     <div class="card-body p-4">
-      <form method="GET" action="{{ route('performance.ninety-day-goals.index') }}" class="row g-3 align-items-end">
-        <input type="hidden" name="view" value="overview">
-        <div class="col-md-3">
+      <div class="row g-3 align-items-end">
+        <div class="col-lg-3 col-md-6">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Search</label>
+          <input type="search" id="fSearch" class="form-control" placeholder="Person, customer, product, comment…">
+        </div>
+        <div class="col-lg-3 col-md-6">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Salesperson</label>
+          <select id="fUser" class="form-select form-select-hitech">
+            <option value="">Everyone</option>
+            @foreach($people as $p)<option value="{{ $p->id }}" {{ (int) $preUser === $p->id ? 'selected' : '' }}>{{ $personName($p) }}</option>@endforeach
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Brand</label>
+          <select id="fBrand" class="form-select form-select-hitech">
+            <option value="">All brands</option>
+            @foreach($brandList as $b)<option>{{ $b }}</option>@endforeach
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status in</label>
+          <select id="fWeek" class="form-select form-select-hitech">
+            <option value="">Latest week</option>
+            @for($w = 0; $w < $weeks; $w++)<option value="{{ $w }}">W{{ $w }}</option>@endfor
+          </select>
+        </div>
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
+          <select id="fStatus" class="form-select form-select-hitech">
+            <option value="">Any</option>
+            <option value="__none">Nothing submitted</option>
+            @foreach($statuses as $s)<option>{{ $s }}</option>@endforeach
+          </select>
+        </div>
+        <div class="col-lg-3 col-md-4">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Round</label>
-          <select name="round" class="form-select form-select-hitech" onchange="this.form.submit()">
+          <select id="fRound" class="form-select form-select-hitech">
             <option value="current" {{ $filters['round'] === 'current' ? 'selected' : '' }}>Current rounds</option>
             <option value="all" {{ $filters['round'] === 'all' ? 'selected' : '' }}>All rounds, including closed</option>
           </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Salesperson</label>
-          <select name="user_id" class="form-select form-select-hitech" onchange="this.form.submit()">
-            <option value="">Everyone</option>
-            @foreach($people as $p)<option value="{{ $p->id }}" {{ (int) $filters['user_id'] === $p->id ? 'selected' : '' }}>{{ $p->first_name }} {{ $p->last_name }}</option>@endforeach
-          </select>
+        <div class="col-lg-6 col-md-8 d-flex flex-wrap gap-4 align-items-center pb-2">
+          <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="fComments"><label class="form-check-label small fw-semibold" for="fComments">Has comments</label></div>
+          <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="fOver"><label class="form-check-label small fw-semibold" for="fOver">Has statuses not sent</label></div>
+          <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="fNoGoals" checked><label class="form-check-label small fw-semibold" for="fNoGoals">Show people with no customers</label></div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Latest status</label>
-          <select name="status" class="form-select form-select-hitech" onchange="this.form.submit()">
-            <option value="">Any</option>
-            <option value="pending" {{ $filters['status'] === 'pending' ? 'selected' : '' }}>Nothing submitted yet</option>
-            @foreach($statuses as $s)<option value="{{ $s }}" {{ $filters['status'] === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
-          </select>
+        <div class="col-lg-3 d-flex align-items-center justify-content-end gap-3 pb-1">
+          <span class="small text-muted" id="fCount"></span>
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" id="fClear">Clear</button>
         </div>
-        <div class="col-md-2"><a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}" class="btn btn-hitech-cancel w-100 rounded-pill">Clear</a></div>
-      </form>
+      </div>
     </div>
   </div>
 
-  @forelse($groups as $uid => $rows)
-    @php $u = $rows->first()->user; $round = $rows->first()->round; @endphp
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
-        <div>
-          <div class="fw-bold text-dark">{{ optional($u)->first_name }} {{ optional($u)->last_name }}
-            <span class="text-muted fw-normal">· {{ optional(optional($u)->department)->name }}</span></div>
-          <div class="small text-muted">
-            @if($round) Round {{ $round->round_no }} · {{ $round->starts_on->format('d M') }} to {{ $round->ends_on->format('d M Y') }}@if($round->status !== 'active') · closed @endif
-            @else Earlier goals, not part of a round @endif
-          </div>
-        </div>
-        <div class="small"><b>{{ $rows->count() }}</b> customers · <b>{{ $fmtL($rows->sum('monthly_potential')) }}</b> ₹ L a month</div>
-      </div>
-      <div class="card-body p-0 table-responsive">
-        <table class="table align-middle mb-0 ndg-grid">
-          <thead>
-            <tr>
-              <th rowspan="2" style="min-width:180px">Customer</th><th rowspan="2" style="min-width:150px">Product</th><th rowspan="2">Brand</th><th rowspan="2" style="min-width:130px">Goal</th><th rowspan="2" class="text-end">Monthly ₹ L</th>
-              @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w }}@if($round) <span class="ndg-date">{{ $G::dueOn($round, $w)->format('d M') }}</span>@endif</th>@endfor
-            </tr>
-            <tr class="ndg-sub">
-              @for($w = 0; $w < $weeks; $w++)<th class="ndg-st">Status</th><th>Comment</th>@endfor
-            </tr>
-          </thead>
-          <tbody>
-          @foreach($rows as $g)
-            <tr>
-              <td class="fw-semibold">{{ $g->client_name }}</td>
-              <td>{{ $g->product }}</td>
-              <td>{{ $g->brand }}</td>
-              <td>{{ $g->goal ?: $g->goal_type }}</td>
-              <td class="text-end fw-semibold">{{ $fmtL($g->monthly_potential) }}</td>
-              @for($w = 0; $w < $weeks; $w++)
-                @php $ck = $g->checkins->firstWhere('week_no', $w); @endphp
-                <td class="ndg-st">{!! $chip($ck, null, $today) !!}</td>
-                <td class="ndg-cm">{!! $note($ck) !!}</td>
-              @endfor
-            </tr>
-          @endforeach
-          </tbody>
-        </table>
-      </div>
+  <div class="hitech-card mb-6">
+    <div class="card-body p-0 ndg-scroll">
+      <table class="table align-middle mb-0 ndg-grid" id="ndgTable">
+        <thead>
+          <tr>
+            <th rowspan="2" class="ndg-sort" data-col="0" style="min-width:170px">Salesperson</th>
+            <th rowspan="2" class="ndg-sort" data-col="1" style="min-width:180px">Customer</th>
+            <th rowspan="2" class="ndg-sort" data-col="2" style="min-width:150px">Product</th>
+            <th rowspan="2" class="ndg-sort" data-col="3">Brand</th>
+            <th rowspan="2" class="ndg-sort" data-col="4" style="min-width:130px">Goal</th>
+            <th rowspan="2" class="ndg-sort text-end" data-col="5" data-num="1">Monthly ₹ L</th>
+            @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w }}</th>@endfor
+          </tr>
+          <tr class="ndg-sub">
+            @for($w = 0; $w < $weeks; $w++)
+              <th class="ndg-st ndg-sort" data-col="{{ 6 + 2 * $w }}">Status</th><th class="ndg-sort" data-col="{{ 7 + 2 * $w }}">Comment</th>
+            @endfor
+          </tr>
+        </thead>
+        <tbody>
+        @foreach($goals as $g)
+          @php
+            $cks = $g->checkins->keyBy('week_no');
+            $latest = $G::latestStatus($g);
+            $hasComment = $g->checkins->contains(fn ($c) => $c->comment || $c->notes->isNotEmpty());
+            $overdue = $g->checkins->contains(fn ($c) => $c->status === null && $c->due_on->lte($today));
+            $wattrs = collect(range(0, $weeks - 1))->map(fn ($w) => 'data-w' . $w . '="' . e(optional($cks->get($w))->status) . '"')->implode(' ');
+            $search = strtolower($personName($g->user) . ' ' . $g->client_name . ' ' . $g->product . ' ' . $g->brand . ' ' . ($g->goal ?: $g->goal_type) . ' '
+              . $g->checkins->map(fn ($c) => $c->comment . ' ' . $c->notes->pluck('body')->implode(' '))->implode(' '));
+          @endphp
+          <tr class="ndg-tr" data-user="{{ $g->user_id }}" data-brand="{{ $g->brand }}" data-latest="{{ $latest }}" data-hasc="{{ $hasComment ? 1 : 0 }}" data-over="{{ $overdue ? 1 : 0 }}" data-q="{{ $search }}" {!! $wattrs !!}>
+            <td class="fw-semibold" data-v="{{ strtolower($personName($g->user)) }}">{{ $personName($g->user) }}<div class="small text-muted fw-normal">{{ optional(optional($g->user)->department)->name }}</div></td>
+            <td class="fw-semibold" data-v="{{ strtolower($g->client_name) }}">{{ $g->client_name }}</td>
+            <td data-v="{{ strtolower($g->product) }}">{{ $g->product }}</td>
+            <td data-v="{{ strtolower($g->brand) }}">{{ $g->brand }}</td>
+            <td data-v="{{ strtolower($g->goal ?: $g->goal_type) }}">{{ $g->goal ?: $g->goal_type }}</td>
+            <td class="text-end fw-semibold" data-v="{{ (float) $g->monthly_potential }}">{{ $fmtL($g->monthly_potential) }}</td>
+            @for($w = 0; $w < $weeks; $w++)
+              @php $ck = $cks->get($w); @endphp
+              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today) !!}</td>
+              <td class="ndg-cm" data-v="{{ strtolower(optional($ck)->comment . ' ' . optional($ck)->notes?->pluck('body')->implode(' ')) }}">{!! $noteCell($g, $ck) !!}</td>
+            @endfor
+          </tr>
+        @endforeach
+        @foreach($notStarted as $p)
+          <tr class="ndg-tr ndg-empty" data-user="{{ $p->id }}" data-brand="" data-latest="" data-hasc="0" data-over="0" data-empty="1" data-q="{{ strtolower($personName($p)) }}">
+            <td class="fw-semibold" data-v="{{ strtolower($personName($p)) }}">{{ $personName($p) }}<div class="small text-muted fw-normal">{{ optional($p->department)->name }}</div></td>
+            <td class="text-muted" colspan="1" data-v="">No customers added yet</td>
+            <td data-v=""></td><td data-v=""></td><td data-v=""></td><td data-v=""></td>
+            @for($w = 0; $w < $weeks; $w++)<td class="ndg-st" data-v=""></td><td class="ndg-cm" data-v=""></td>@endfor
+          </tr>
+        @endforeach
+        </tbody>
+      </table>
     </div>
-  @empty
-    <div class="hitech-card mb-6"><div class="card-body p-5 text-center text-muted">No goals match these filters.</div></div>
-  @endforelse
-
-  @if($notStarted->isNotEmpty() && $filters['round'] === 'current' && !$filters['user_id'] && !$filters['status'])
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4">
-        <h6 class="fw-bold text-dark mb-3">Have not added any customers yet ({{ $notStarted->count() }})</h6>
-        <div class="d-flex flex-wrap gap-2">
-          @foreach($notStarted as $p)<span class="badge badge-hitech badge-muted">{{ $p->first_name }} {{ $p->last_name }}</span>@endforeach
-        </div>
-      </div>
-    </div>
-  @endif
+  </div>
 @endif
 
   </div>{{-- /px-4 --}}
@@ -328,8 +371,39 @@
 </div>
 @endif
 
+{{-- Add a comment to one week. Open to the salesperson and to admin/managers; never editable or removable by the sales team. --}}
+<div class="modal fade" id="ndgNoteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title fw-bold" id="ndgNoteTitle">Add a comment</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <textarea id="ndgNoteBody" class="form-control" rows="4" maxlength="1000" placeholder="Write the comment"></textarea>
+        <div class="small text-muted mt-2">Once added, a comment stays on record.</div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="small text-danger" id="ndgNoteMsg"></span>
+        <div class="d-flex gap-2"><button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn-hitech rounded-pill px-5" id="ndgNoteSave">Add comment</button></div>
+      </div>
+    </div>
+  </div>
+</div>
 <style>
   .ndg-grid th, .ndg-grid td { white-space: nowrap; }
+  .ndg-scroll { max-height: 74vh; overflow: auto; }
+  .ndg-scroll thead th { position: sticky; top: 0; z-index: 3; background: #f3f6f9; }
+  .ndg-scroll thead tr.ndg-sub th { z-index: 2; }
+  th.ndg-sort { cursor: pointer; user-select: none; }
+  th.ndg-sort:hover { color: #007a7a; }
+  th.ndg-sort::after { content: ''; margin-left: 5px; font-size: .7rem; color: #007a7a; }
+  th.ndg-sort.asc::after { content: '▲'; }
+  th.ndg-sort.desc::after { content: '▼'; }
+  .ndg-n { padding: 4px 0 5px; border-bottom: 1px dashed #e2e8f0; }
+  .ndg-n b { font-size: .72rem; color: #0f172a; }
+  .ndg-n span { font-size: .66rem; color: #94a3b8; margin-left: 6px; }
+  .ndg-n-status { color: #334155; }
+  .ndg-addnote { border: 0; background: none; padding: 2px 0 0; color: #94a3b8; font-size: 1.05rem; line-height: 1; }
+  .ndg-addnote:hover { color: #007a7a; }
+  .ndg-note-del { border: 0; background: none; color: #ef4444; float: right; line-height: 1; font-size: 1rem; padding: 0 2px; }
   .ndg-wk { font-size: .78rem; }
   .ndg-wkhead { border-left: 2px solid #cfe0de; }
   .ndg-sub th { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 700; }
@@ -358,6 +432,7 @@
     customers: '{{ route('performance.ninety-day-goals.pipeline-customers') }}',
     store: '{{ route('performance.ninety-day-goals.store') }}',
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
+    notes: '{{ url('performance/ninety-day-goals/notes') }}',
     base: '{{ url('performance/ninety-day-goals') }}'
   };
   function post(url, method, body) {
@@ -389,6 +464,42 @@
     });
   });
 
+  // ── comments on a week ──
+  var noteModalEl = document.getElementById('ndgNoteModal'), noteTarget = null;
+  function noteHtml(n) {
+    return '<div class="ndg-n" data-note="' + n.id + '"><b>' + esc(n.by) + '</b><span>' + esc(n.at) + '</span>' +
+      (n.can_delete ? '<button type="button" class="ndg-note-del" data-id="' + n.id + '" title="Remove comment">&times;</button>' : '') +
+      '<div>' + esc(n.body) + '</div></div>';
+  }
+  document.addEventListener('click', function (e) {
+    var add = e.target.closest ? e.target.closest('.ndg-addnote') : null;
+    if (add) {
+      noteTarget = add;
+      document.getElementById('ndgNoteTitle').textContent = add.getAttribute('data-title');
+      document.getElementById('ndgNoteBody').value = ''; document.getElementById('ndgNoteMsg').textContent = '';
+      bootstrap.Modal.getOrCreateInstance(noteModalEl).show();
+      setTimeout(function () { document.getElementById('ndgNoteBody').focus(); }, 300);
+      return;
+    }
+    var del = e.target.closest ? e.target.closest('.ndg-note-del') : null;
+    if (del && confirm('Remove this comment?')) {
+      post(URLS.notes + '/' + del.getAttribute('data-id'), 'DELETE').then(function (j) {
+        if (j.success) { var n = del.closest('.ndg-n'); if (n) { n.remove(); } } else { alert(j.message || 'Could not remove.'); }
+      });
+    }
+  });
+  document.getElementById('ndgNoteSave').addEventListener('click', function () {
+    var body = document.getElementById('ndgNoteBody').value.trim(), msg = document.getElementById('ndgNoteMsg'), btn = this;
+    if (!body) { msg.textContent = 'Write the comment first.'; return; }
+    btn.disabled = true;
+    post(URLS.notes, 'POST', { goal_id: parseInt(noteTarget.getAttribute('data-goal'), 10), week_no: parseInt(noteTarget.getAttribute('data-week'), 10), body: body }).then(function (j) {
+      btn.disabled = false;
+      if (!j.success) { msg.textContent = j.message || (j.errors ? Object.values(j.errors).join(' ') : 'Could not save.'); return; }
+      noteTarget.insertAdjacentHTML('beforebegin', noteHtml(j.note));
+      var tr = noteTarget.closest('tr'); if (tr) { tr.setAttribute('data-hasc', '1'); tr.setAttribute('data-q', (tr.getAttribute('data-q') || '') + ' ' + body.toLowerCase()); }
+      bootstrap.Modal.getOrCreateInstance(noteModalEl).hide();
+    }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
+  });
   // ── remove a customer ──
   document.querySelectorAll('.ndg-remove').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -460,4 +571,70 @@
   });
 })();
 </script>
+@if($mode === 'overview')
+<script>
+(function () {
+  var table = document.getElementById('ndgTable'); if (!table) { return; }
+  var body = table.tBodies[0];
+  function $(id) { return document.getElementById(id); }
+  var rows = function () { return Array.prototype.slice.call(body.querySelectorAll('tr.ndg-tr')); };
+
+  // The second header row sticks just under the first.
+  var head = table.tHead.rows;
+  function stick() { var h = head[0].offsetHeight; Array.prototype.forEach.call(head[1].cells, function (c) { c.style.top = h + 'px'; }); }
+  stick(); window.addEventListener('resize', stick);
+
+  // ── filters ──
+  function apply() {
+    var q = $('fSearch').value.trim().toLowerCase(), user = $('fUser').value, brand = $('fBrand').value, week = $('fWeek').value, status = $('fStatus').value;
+    var hasC = $('fComments').checked, over = $('fOver').checked, showEmpty = $('fNoGoals').checked, shown = 0, all = 0;
+    rows().forEach(function (tr) {
+      var empty = tr.getAttribute('data-empty') === '1', ok = true;
+      all++;
+      if (empty) {
+        ok = showEmpty && !brand && !status && !hasC && !over && (!user || tr.getAttribute('data-user') === user) && (!q || tr.getAttribute('data-q').indexOf(q) !== -1);
+      } else {
+        var st = week === '' ? tr.getAttribute('data-latest') : tr.getAttribute('data-w' + week);
+        if (q && tr.getAttribute('data-q').indexOf(q) === -1) { ok = false; }
+        if (user && tr.getAttribute('data-user') !== user) { ok = false; }
+        if (brand && tr.getAttribute('data-brand') !== brand) { ok = false; }
+        if (status === '__none' ? st : (status && st !== status)) { ok = false; }
+        if (hasC && tr.getAttribute('data-hasc') !== '1') { ok = false; }
+        if (over && tr.getAttribute('data-over') !== '1') { ok = false; }
+      }
+      tr.style.display = ok ? '' : 'none';
+      if (ok) { shown++; }
+    });
+    $('fCount').textContent = 'Showing ' + shown + ' of ' + all;
+  }
+  ['fSearch'].forEach(function (id) { $(id).addEventListener('input', apply); });
+  ['fUser', 'fBrand', 'fWeek', 'fStatus', 'fComments', 'fOver', 'fNoGoals'].forEach(function (id) { $(id).addEventListener('change', apply); });
+  $('fRound').addEventListener('change', function () { location.href = '{{ route('performance.ninety-day-goals.index') }}?view=overview&round=' + this.value; });
+  $('fClear').addEventListener('click', function () {
+    $('fSearch').value = ''; ['fUser', 'fBrand', 'fWeek', 'fStatus'].forEach(function (id) { $(id).value = ''; });
+    $('fComments').checked = false; $('fOver').checked = false; $('fNoGoals').checked = true; apply();
+  });
+
+  // ── sorting: click any heading; click again to reverse ──
+  var dir = {};
+  table.querySelectorAll('th.ndg-sort').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var col = parseInt(th.getAttribute('data-col'), 10), num = th.getAttribute('data-num') === '1';
+      dir[col] = dir[col] === 1 ? -1 : 1;
+      table.querySelectorAll('th.ndg-sort').forEach(function (x) { x.classList.remove('asc', 'desc'); });
+      th.classList.add(dir[col] === 1 ? 'asc' : 'desc');
+      var list = rows();
+      list.sort(function (a, b) {
+        var x = a.cells[col].getAttribute('data-v') || '', y = b.cells[col].getAttribute('data-v') || '';
+        if (x === '' && y !== '') { return 1; }
+        if (y === '' && x !== '') { return -1; }
+        return (num ? parseFloat(x) - parseFloat(y) : x.localeCompare(y)) * dir[col];
+      });
+      list.forEach(function (tr) { body.appendChild(tr); });
+    });
+  });
+  apply();
+})();
+</script>
+@endif
 @endsection

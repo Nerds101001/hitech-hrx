@@ -4,6 +4,7 @@ namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\NinetyDayGoal;
+use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayRound;
 use App\Models\User;
 use App\Services\NinetyDayGoalService as Goals;
@@ -48,12 +49,13 @@ class NinetyDayGoalController extends Controller
         $round = Goals::roundFor($user, $today);
         Goals::ensureCheckins($round, $today);
 
-        $goals = NinetyDayGoal::with('checkins')->where('round_id', $round->id)->where('user_id', $user->id)
+        $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)->where('user_id', $user->id)
             ->whereNull('closed_at')->orderBy('id')->get();
         $pending = Goals::pending($round, $today)->groupBy('week_no');
 
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'      => 'mine',
+            'isAdmin'   => Goals::seesEveryone($user),
             'canSwitch' => Goals::visibleUserIds($user) !== [$user->id],
             'round'     => $round,
             'week'      => Goals::weekOf($round, $today),
@@ -72,41 +74,30 @@ class NinetyDayGoalController extends Controller
     private function overview(Request $request, User $viewer, ?array $scope, bool $isSales)
     {
         $today = Carbon::today();
-        $roundFilter = $request->input('round', 'current');
-        $userFilter = $request->integer('user_id') ?: null;
-        $statusFilter = $request->input('status');
+        $roundFilter = $request->input('round') === 'all' ? 'all' : 'current';
 
-        $q = NinetyDayGoal::with(['user.department', 'round', 'checkins'])->orderBy('user_id')->orderBy('id');
+        $q = NinetyDayGoal::with(['user.department', 'round', 'checkins.notes.author'])->orderBy('id');
         if ($scope !== null) {
             $q->whereIn('user_id', $scope);
-        }
-        if ($userFilter) {
-            $q->where('user_id', $userFilter);
         }
         if ($roundFilter === 'current') {
             $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
         }
-        $goals = $q->get();
-
-        $latest = fn ($g) => optional($g->checkins->whereNotNull('status')->sortByDesc('week_no')->first())->status;
-        if ($statusFilter === 'pending') {
-            $goals = $goals->filter(fn ($g) => $latest($g) === null)->values();
-        } elseif ($statusFilter && in_array($statusFilter, Goals::STATUSES, true)) {
-            $goals = $goals->filter(fn ($g) => $latest($g) === $statusFilter)->values();
-        }
+        // One list for the whole team, people in name order; the page filters and sorts it.
+        $goals = $q->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)) . '|' . str_pad($g->id, 9, '0', STR_PAD_LEFT))->values();
 
         $active = $goals->filter(fn ($g) => $g->round && $g->round->status === 'active' && !$g->closed_at);
         $weekOfGoal = fn ($g) => Goals::weekOf($g->round, $today);
+        $people = Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->values();
 
         $summary = [
-            'staff'    => Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->count(),
+            'staff'    => $people->count(),
             'people'   => $active->pluck('user_id')->unique()->count(),
             'goals'    => $active->count(),
             'potential' => round((float) $active->sum('monthly_potential'), 2),
             'thisWeekDone'  => $active->filter(fn ($g) => optional($g->checkins->firstWhere('week_no', $weekOfGoal($g)))->status !== null)->count(),
             'thisWeekTotal' => $active->filter(fn ($g) => $g->checkins->firstWhere('week_no', $weekOfGoal($g)) !== null)->count(),
             'overdue'  => $active->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
-            'byStatus' => $active->map($latest)->filter()->countBy()->all(),
         ];
 
         $strip = [];
@@ -115,19 +106,21 @@ class NinetyDayGoalController extends Controller
             $strip[$w] = ['total' => $rows->count(), 'done' => $rows->whereNotNull('status')->count(), 'late' => $rows->where('is_late', true)->count()];
         }
 
+        // Everyone on the team appears, including people who have not added a customer yet.
         $withGoals = $goals->pluck('user_id')->unique();
-        $notStarted = Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))
-            ->reject(fn ($u) => $withGoals->contains($u->id))->values();
+        $notStarted = $roundFilter === 'current' ? $people->reject(fn ($u) => $withGoals->contains($u->id))->values() : collect();
 
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'       => 'overview',
             'canSwitch'  => $isSales,
-            'groups'     => $goals->groupBy('user_id'),
+            'goals'      => $goals,
             'summary'    => $summary,
             'strip'      => $strip,
             'notStarted' => $notStarted,
-            'people'     => Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope)),
-            'filters'    => ['round' => $roundFilter, 'user_id' => $userFilter, 'status' => $statusFilter],
+            'people'     => $people,
+            'isAdmin'    => Goals::seesEveryone($viewer),
+            'preUser'    => $request->integer('user_id') ?: null,
+            'filters'    => ['round' => $roundFilter],
             'today'      => $today,
             'statuses'   => Goals::STATUSES,
             'weeks'      => Goals::WEEKS,
@@ -334,18 +327,54 @@ class NinetyDayGoalController extends Controller
 
     public function destroy($id)
     {
+        // Once a customer is added, the sales team cannot remove it: the history stays on record.
+        // Only admin/HR can delete, and the check-ins and comments go with it.
+        if (!Goals::seesEveryone(Auth::user())) {
+            return response()->json(['success' => false, 'message' => 'Once a customer is added it stays on record. Ask an admin if one has to be removed.'], 403);
+        }
         $goal = NinetyDayGoal::findOrFail($id);
-        if (!$this->mayChange($goal)) {
-            return response()->json(['success' => false, 'message' => 'Not allowed.'], 403);
-        }
-        // A person may remove a customer they have not reported on yet; once a
-        // status is on record it stays, so the weekly history cannot be rewritten.
-        if (!Goals::seesEveryone(Auth::user()) && $goal->checkins()->whereNotNull('status')->exists()) {
-            return response()->json(['success' => false, 'message' => 'This customer already has weekly statuses, so it stays on record.'], 422);
-        }
+        $goal->checkins()->each(fn ($c) => $c->notes()->delete());
+        $goal->checkins()->delete();
         $goal->delete();
 
         return response()->json(['success' => true, 'message' => 'Customer removed.']);
+    }
+
+    // ── comments on a week ───────────────────────────────────────────────
+
+    /** The salesperson or an admin/manager adds a comment to one week of a goal. */
+    public function note(Request $request)
+    {
+        $data = $request->validate([
+            'goal_id' => 'required|integer',
+            'week_no' => 'required|integer|min:0|max:' . (Goals::WEEKS - 1),
+            'body'    => 'required|string|max:1000',
+        ]);
+        $user = Auth::user();
+        $goal = NinetyDayGoal::find($data['goal_id']);
+        if (!$goal || !Goals::canNote($user, $goal)) {
+            return response()->json(['success' => false, 'message' => 'You cannot comment on this goal.'], 403);
+        }
+        $note = Goals::addNote($user, $goal, (int) $data['week_no'], $data['body']);
+        if (!$note) {
+            return response()->json(['success' => false, 'message' => 'That week has not started yet.'], 422);
+        }
+
+        return response()->json(['success' => true, 'note' => [
+            'id' => $note->id, 'by' => trim($user->first_name . ' ' . $user->last_name), 'body' => $note->body,
+            'at' => $note->created_at->format('d M'), 'can_delete' => Goals::seesEveryone($user),
+        ]]);
+    }
+
+    /** Only admin/HR remove a comment. */
+    public function destroyNote($id)
+    {
+        if (!Goals::seesEveryone(Auth::user())) {
+            return response()->json(['success' => false, 'message' => 'Comments stay on record.'], 403);
+        }
+        NinetyDayGoalNote::findOrFail($id)->delete();
+
+        return response()->json(['success' => true]);
     }
 
     // ── who may act on whose goals ───────────────────────────────────────

@@ -20,6 +20,11 @@ class NinetyDayGoalCheckin extends Model
         return $this->belongsTo(NinetyDayGoal::class, 'goal_id');
     }
 
+    public function notes()
+    {
+        return $this->hasMany(NinetyDayGoalNote::class, 'checkin_id')->orderBy('id');
+    }
+
     public function isSubmitted(): bool
     {
         return $this->status !== null && $this->status !== '';

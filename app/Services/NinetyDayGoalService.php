@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalCheckin;
+use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayRound;
 use App\Models\SalesPipeline;
 use App\Models\Task;
@@ -247,6 +248,11 @@ class NinetyDayGoalService
                 $errors[] = "{$goal->client_name}: this Monday has passed, so a comment is needed with the status.";
                 continue;
             }
+            $onRecord = NinetyDayGoalCheckin::where('goal_id', $goal->id)->where('week_no', $week)->whereNotNull('status')->where('status', '!=', '')->exists();
+            if ($onRecord) {
+                $errors[] = "{$goal->client_name}: week {$week} already has a status, which stays on record.";
+                continue;
+            }
 
             DB::transaction(function () use ($goal, $round, $week, $due, $status, $comment, $late, $user, $now, &$saved) {
                 NinetyDayGoalCheckin::updateOrCreate(
@@ -488,24 +494,62 @@ class NinetyDayGoalService
         ];
     }
 
-    /** Every weekly comment in scope, newest first. Filters: user_id, status, late. */
-    public static function comments(?array $scope, array $f = [], int $limit = 300): Collection
+    /** The salesperson themselves, and whoever oversees them (admin, HR, their manager), may comment on a goal's week. */
+    public static function canNote(User $user, NinetyDayGoal $goal): bool
     {
-        return NinetyDayGoalCheckin::with(['goal.user.department'])
-            ->whereNotNull('comment')->where('comment', '!=', '')
-            ->whereHas('goal', function ($g) use ($scope, $f) {
-                if ($scope !== null) {
-                    $g->whereIn('user_id', $scope);
-                }
-                if (!empty($f['user_id'])) {
-                    $g->where('user_id', (int) $f['user_id']);
-                }
-            })
-            ->when(!empty($f['status']), fn ($q) => $q->where('status', $f['status']))
-            ->when(!empty($f['late']), fn ($q) => $q->where('is_late', true))
-            ->orderByDesc('submitted_at')->limit($limit)->get();
+        $scope = self::visibleUserIds($user);
+
+        return $scope === null || in_array((int) $goal->user_id, array_map('intval', $scope), true);
     }
 
+    /** Add a comment to a week. The week must already exist (it does from its Monday onward). */
+    public static function addNote(User $user, NinetyDayGoal $goal, int $week, string $body, ?Carbon $now = null): ?NinetyDayGoalNote
+    {
+        $body = trim($body);
+        $checkin = NinetyDayGoalCheckin::where('goal_id', $goal->id)->where('week_no', $week)->first();
+        if ($body === '' || !$checkin || !self::canNote($user, $goal)) {
+            return null;
+        }
+
+        return NinetyDayGoalNote::create(['tenant_id' => $goal->tenant_id, 'checkin_id' => $checkin->id, 'goal_id' => $goal->id,
+            'week_no' => $week, 'user_id' => $user->id, 'body' => $body, 'created_at' => $now ?: now(), 'updated_at' => $now ?: now()]);
+    }
+
+    /**
+     * Every comment in scope, newest first: the ones written with a weekly status and the ones
+     * added afterwards by the salesperson or an admin. Filters: user_id, status, late.
+     * Each item: kind (status|note), goal, week_no, due_on, status, is_late, text, by (User), at.
+     */
+    public static function comments(?array $scope, array $f = [], int $limit = 300): Collection
+    {
+        $ofPerson = function ($g) use ($scope, $f) {
+            if ($scope !== null) {
+                $g->whereIn('user_id', $scope);
+            }
+            if (!empty($f['user_id'])) {
+                $g->where('user_id', (int) $f['user_id']);
+            }
+        };
+
+        $status = NinetyDayGoalCheckin::with(['goal.user.department'])
+            ->whereNotNull('comment')->where('comment', '!=', '')
+            ->whereHas('goal', $ofPerson)
+            ->when(!empty($f['status']), fn ($q) => $q->where('status', $f['status']))
+            ->when(!empty($f['late']), fn ($q) => $q->where('is_late', true))
+            ->orderByDesc('submitted_at')->limit($limit)->get()
+            ->map(fn ($c) => (object) ['kind' => 'status', 'goal' => $c->goal, 'week_no' => $c->week_no, 'due_on' => $c->due_on,
+                'status' => $c->status, 'is_late' => $c->is_late, 'text' => $c->comment, 'by' => optional($c->goal)->user, 'at' => $c->submitted_at]);
+
+        $notes = NinetyDayGoalNote::with(['goal.user.department', 'author', 'checkin'])
+            ->whereHas('goal', $ofPerson)
+            ->when(!empty($f['status']), fn ($q) => $q->whereHas('checkin', fn ($c) => $c->where('status', $f['status'])))
+            ->when(!empty($f['late']), fn ($q) => $q->whereHas('checkin', fn ($c) => $c->where('is_late', true)))
+            ->orderByDesc('id')->limit($limit)->get()
+            ->map(fn ($n) => (object) ['kind' => 'note', 'goal' => $n->goal, 'week_no' => $n->week_no, 'due_on' => optional($n->checkin)->due_on,
+                'status' => optional($n->checkin)->status, 'is_late' => (bool) optional($n->checkin)->is_late, 'text' => $n->body, 'by' => $n->author, 'at' => $n->created_at]);
+
+        return $status->concat($notes)->sortByDesc(fn ($i) => optional($i->at)->timestamp ?? 0)->take($limit)->values();
+    }
     // ── the customer picker ──────────────────────────────────────────────
 
     /**

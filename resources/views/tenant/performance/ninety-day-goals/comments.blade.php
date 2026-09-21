@@ -13,7 +13,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
       <h3 class="fw-extrabold mb-1 text-dark">90-Day Goals</h3>
-      <p class="text-muted mb-0 small">Every comment left with a weekly status, newest first.</p>
+      <p class="text-muted mb-0 small">Comments written with a weekly status and comments added afterwards by the salesperson or an admin, newest first.</p>
     </div>
   </div>
 
@@ -56,20 +56,22 @@
     @forelse($comments as $c)
       @php
         $g = $c->goal;
-        [$bg, $fg] = $G::STATUS_COLORS[$c->status] ?? ['#64748b', '#ffffff'];
+        [$bg, $fg] = $G::STATUS_COLORS[$c->status] ?? ['#e2e8f0', '#475569'];
       @endphp
       <div class="ndg-cm">
         <div class="ndg-cm-head">
-          <span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $c->status }}</span>
+          @if($c->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $c->status }}</span>@endif
           <span class="fw-bold text-dark">{{ $g->client_name }}</span>
           <span class="text-muted small">{{ $g->product }}@if($g->brand) · {{ $g->brand }}@endif</span>
-          <span class="ms-auto small text-muted">Week {{ $c->week_no }} · due {{ $c->due_on->format('D d M') }}</span>
+          <span class="ms-auto small text-muted">Week {{ $c->week_no }}@if($c->due_on) · due {{ $c->due_on->format('D d M') }}@endif</span>
         </div>
-        <div class="ndg-cm-body">{{ $c->comment }}</div>
+        <div class="ndg-cm-body">{{ $c->text }}</div>
         <div class="ndg-cm-foot small text-muted">
-          @if($seesMany)<b class="text-dark">{{ $name($g->user) }}</b> · {{ optional(optional($g->user)->department)->name }} · @endif
-          sent {{ optional($c->submitted_at)->format('d M Y, h:i A') }}
-          @if($c->is_late)<span class="text-danger fw-bold">· late</span>@endif
+          <b class="text-dark">{{ $name($c->by) }}</b>
+          @if($c->kind === 'note') added a comment @else wrote this with the status @endif
+          · {{ optional($c->at)->format('d M Y, h:i A') }}
+          @if($seesMany) · {{ $name($g->user) }}'s customer, {{ optional(optional($g->user)->department)->name }}@endif
+          @if($c->kind === 'status' && $c->is_late)<span class="text-danger fw-bold">· sent late</span>@endif
         </div>
       </div>
     @empty
