@@ -15,7 +15,8 @@
           [$bg, $fg] = $G::STATUS_COLORS[$checkin->status] ?? ['#64748b', '#ffffff'];
           $tip = trim(($checkin->comment ? $checkin->comment : '') . ($checkin->is_late ? "\n(submitted late, " . optional($checkin->submitted_at)->format('d M') . ')' : ''));
           $dot = $checkin->comment ? '<span class="ndg-dot" title="' . e($checkin->comment) . '"></span>' : '';
-          return '<span class="ndg-chip" style="background:' . $bg . ';color:' . $fg . '" title="' . e($tip) . '">' . e($checkin->status) . $dot . ($checkin->is_late ? '<i class="ndg-late">late</i>' : '') . '</span>';
+          $click = $checkin->comment ? ' data-comment="' . e($checkin->comment) . '" data-status="' . e($checkin->status) . '" data-week="' . (int) $checkin->week_no . '" data-when="' . e(optional($checkin->submitted_at)->format('d M Y, h:i A')) . ($checkin->is_late ? ' (late)' : '') . '" role="button"' : '';
+          return '<span class="ndg-chip' . ($checkin->comment ? ' ndg-has' : '') . '"' . $click . ' style="background:' . $bg . ';color:' . $fg . '" title="' . e($tip) . '">' . e($checkin->status) . $dot . ($checkin->is_late ? '<i class="ndg-late">late</i>' : '') . '</span>';
       }
       if ($checkin && $checkin->due_on->lte($today)) {
           return '<span class="ndg-chip ndg-missing" title="Due ' . $checkin->due_on->format('D d M') . ', not submitted">not sent</span>';
@@ -51,6 +52,9 @@
       @endif
     </div>
   </div>
+
+  @php $tab = 'goals'; $seesMany = $mode === 'overview' || $canSwitch; @endphp
+  @include('tenant.performance.ninety-day-goals._tabs')
 
   <div class="px-4">
 
@@ -321,6 +325,7 @@
   .ndg-now { background: #f0f7f6; }
   .ndg-chip { display: inline-block; position: relative; padding: 3px 9px; border-radius: 6px; font-size: .68rem; font-weight: 700; line-height: 1.25; }
   .ndg-chip.ndg-missing { background: #fff; color: #b42318; border: 1px dashed #f0a5a0; font-weight: 600; }
+  .ndg-chip.ndg-has { cursor: pointer; }
   .ndg-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; background: #f5a623; border-radius: 50%; border: 1px solid #fff; }
   .ndg-late { display: block; font-size: .58rem; font-style: normal; opacity: .85; font-weight: 600; }
   .ndg-none { color: #cbd5e1; }
@@ -331,6 +336,14 @@
   .ndg-list .ndg-row.on .ndg-extra { display: flex; }
   .ndg-src { font-size: .65rem; }
 </style>
+<div class="modal fade" id="ndgCommentModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title fw-bold" id="ndgCommentTitle">Comment</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body"><div id="ndgCommentBody" style="white-space:pre-line;line-height:1.55"></div><div class="small text-muted mt-3" id="ndgCommentWhen"></div></div>
+    </div>
+  </div>
+</div>
 @endsection
 
 @section('page-script')
@@ -349,6 +362,15 @@
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
+  // ── read a comment ──
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('.ndg-chip[data-comment]') : null;
+    if (!chip) return;
+    document.getElementById('ndgCommentTitle').textContent = 'Week ' + chip.dataset.week + ' · ' + chip.dataset.status;
+    document.getElementById('ndgCommentBody').textContent = chip.dataset.comment;
+    document.getElementById('ndgCommentWhen').textContent = 'Sent ' + chip.dataset.when;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgCommentModal')).show();
+  });
   // ── weekly status cards ──
   document.querySelectorAll('.ndg-week').forEach(function (card) {
     var btn = card.querySelector('.ndg-submit'), msg = card.querySelector('.ndg-msg');

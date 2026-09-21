@@ -134,6 +134,81 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
+    // ── dashboard and comments ───────────────────────────────────────────
+
+    /** Same rule as the tracker: a salesperson sees their own numbers, a lead sees their team's, admin/HR see all. */
+    private function scopeOrRedirect(): array
+    {
+        $user = Auth::user();
+        if (!Goals::canOpenPage($user)) {
+            return [null, null, redirect()->route('tenant.dashboard')->with('error', 'The 90-Day Goals tracker is for the Sales team.')];
+        }
+
+        return [$user, Goals::visibleUserIds($user), null];
+    }
+
+    private function peopleIn(?array $scope)
+    {
+        return Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->values();
+    }
+
+    public function dashboard(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+
+        $f = [
+            'round'   => $request->input('round') === 'all' ? 'all' : 'current',
+            'user_id' => $request->integer('user_id') ?: null,
+            'brand'   => $request->input('brand') ?: null,
+        ];
+        $people = $this->peopleIn($scope);
+        if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
+            $f['user_id'] = null;
+        }
+
+        return view('tenant.performance.ninety-day-goals.dashboard', [
+            'tab'      => 'dashboard',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'd'        => Goals::dashboard($scope, $f),
+            'filters'  => $f,
+            'people'   => $people,
+            'brands'   => array_merge(array_keys(Goals::BRANDS), ['Other']),
+            'weeks'    => Goals::WEEKS,
+        ]);
+    }
+
+    public function comments(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+
+        $f = [
+            'user_id' => $request->integer('user_id') ?: null,
+            'status'  => in_array($request->input('status'), Goals::STATUSES, true) ? $request->input('status') : null,
+            'late'    => $request->boolean('late'),
+        ];
+        $people = $this->peopleIn($scope);
+        if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
+            $f['user_id'] = null;
+        }
+
+        return view('tenant.performance.ninety-day-goals.comments', [
+            'tab'       => 'comments',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany'  => $scope === null || count($scope) > 1,
+            'comments'  => Goals::comments($scope, $f),
+            'filters'   => $f,
+            'people'    => $people,
+            'statuses'  => Goals::STATUSES,
+        ]);
+    }
+
     // ── the customer picker ──────────────────────────────────────────────
 
     /** The person's own pipeline customers that are not already in their round. */

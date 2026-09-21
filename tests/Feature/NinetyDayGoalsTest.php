@@ -435,4 +435,131 @@ class NinetyDayGoalsTest extends TestCase
 
         $this->assertTrue(\App\Support\Nav::allows('/performance/ninety-day-goals', $this->rep));
     }
+    // ── comments and the dashboard ───────────────────────────────────────
+
+    private function soldGoal(User $u, string $name, float $potential, string $brand, float $soldInOctober): NinetyDayGoal
+    {
+        $pid = $this->pipeline($u, $name, 'P', true);
+        $g = $this->goal($u, Goals::roundFor($u), $name);
+        $g->update(['sales_pipeline_id' => $pid, 'monthly_potential' => $potential, 'brand' => $brand]);
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => '2026-10', 'sale_amount' => $soldInOctober, 'created_at' => now(), 'updated_at' => now()]);
+
+        return $g->fresh();
+    }
+
+    public function test_achievement_is_what_was_sold_in_the_round_against_three_months_of_potential(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'Half Ltd', 2.0, 'KIF', 3.0);       // target 6, sold 3
+        $this->soldGoal($this->rep, 'Over Ltd', 1.0, 'Rust-X', 6.0);    // target 3, sold 6
+
+        $d = Goals::dashboard([$this->rep->id, $this->rep2->id]);
+
+        $this->assertSame(2, $d['cards']['goals']);
+        $this->assertEquals(3.0, $d['cards']['potential']);
+        $this->assertEquals(9.0, $d['cards']['target']);
+        $this->assertEquals(9.0, $d['cards']['achieved']);
+        $this->assertEquals(100.0, $d['cards']['pct']);
+        $this->assertSame('Over Ltd', $d['topAchieved']->first()->goal->client_name);
+    }
+
+    public function test_sales_from_before_the_round_do_not_count(): void
+    {
+        $this->at(self::MONDAY);
+        $g = $this->soldGoal($this->rep, 'Old Ltd', 1.0, 'KIF', 0.0);
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $g->sales_pipeline_id, 'month_year' => '2026-08', 'sale_amount' => 50, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->assertEquals(0.0, Goals::dashboard([$this->rep->id])['cards']['achieved']);
+    }
+
+    public function test_top_customers_and_brands_are_ranked_biggest_first(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'Small Ltd', 1.0, 'KIF', 0);
+        $this->soldGoal($this->rep, 'Big Ltd', 9.0, 'Rust-X', 0);
+        $this->soldGoal($this->rep2, 'Mid Ltd', 4.0, 'Rust-X', 0);
+
+        $d = Goals::dashboard([$this->rep->id, $this->rep2->id]);
+
+        $this->assertSame(['Big Ltd', 'Mid Ltd', 'Small Ltd'], $d['topCustomers']->map(fn ($r) => $r->goal->client_name)->all());
+        $this->assertSame('Rust-X', $d['topBrands']->first()['brand']);
+        $this->assertEquals(13.0, $d['topBrands']->first()['potential']);
+    }
+
+    public function test_people_are_ranked_by_share_of_target_sold(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'A Ltd', 10.0, 'KIF', 3.0);     // 3 of 30 = 10%
+        $this->soldGoal($this->rep2, 'B Ltd', 1.0, 'KIF', 3.0);     // 3 of 3 = 100%
+
+        $users = Goals::dashboard([$this->rep->id, $this->rep2->id])['users'];
+
+        $this->assertSame($this->rep2->id, $users->first()['id']);
+        $this->assertEquals(100.0, $users->first()['pct']);
+    }
+
+    public function test_the_dashboard_only_counts_the_people_in_scope(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'Mine Ltd', 2.0, 'KIF', 1.0);
+        $this->soldGoal($this->rep2, 'Theirs Ltd', 5.0, 'KIF', 1.0);
+
+        $d = Goals::dashboard([$this->rep->id]);
+
+        $this->assertSame(1, $d['cards']['goals']);
+        $this->assertEquals(2.0, $d['cards']['potential']);
+    }
+
+    public function test_pages_render_for_admin_and_a_salesperson_sees_only_their_own(): void
+    {
+        $this->at(self::MONDAY);
+        $mine = $this->soldGoal($this->rep, 'Mine Ltd', 2.0, 'KIF', 1.0);
+        $this->soldGoal($this->rep2, 'Theirs Ltd', 5.0, 'KIF', 1.0);
+        Goals::ensureCheckins(Goals::activeRound($this->rep));
+        Goals::submit($this->rep, 0, [$mine->id => ['status' => 'Trial Order', 'comment' => 'Sample approved by purchase']]);
+        $admin = $this->person(null, 'admin');
+        $c = app(NinetyDayGoalController::class);
+
+        $adminDash = $c->dashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
+        $this->assertStringContainsString('Top 10 brands', $adminDash);
+        $this->assertStringContainsString('Achievement by salesperson', $adminDash);
+        $this->assertStringContainsString('Theirs Ltd', $adminDash);
+
+        $repDash = $c->dashboard($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
+        $this->assertStringContainsString('Mine Ltd', $repDash);
+        $this->assertStringNotContainsString('Theirs Ltd', $repDash);
+        $this->assertStringNotContainsString('Achievement by salesperson', $repDash, 'a salesperson has no league table of colleagues');
+
+        $adminComments = $c->comments($this->ask($admin, 'GET', '/performance/ninety-day-goals/comments'))->render();
+        $this->assertStringContainsString('Sample approved by purchase', $adminComments);
+
+        $otherComments = $c->comments($this->ask($this->rep2, 'GET', '/performance/ninety-day-goals/comments'))->render();
+        $this->assertStringNotContainsString('Sample approved by purchase', $otherComments, "nobody reads a colleague's comments");
+
+        $away = $c->dashboard($this->ask($this->outsider, 'GET', '/performance/ninety-day-goals/dashboard'));
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $away);
+    }
+
+    public function test_the_new_pages_are_login_only_routes(): void
+    {
+        foreach (['dashboard', 'comments'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
+        }
+    }
+    public function test_reporting_on_time_counts_mondays_that_have_come_due_including_today(): void
+    {
+        $this->at(self::MONDAY);
+        $a = $this->soldGoal($this->rep, 'A Ltd', 1.0, 'KIF', 0);
+        $b = $this->soldGoal($this->rep, 'B Ltd', 1.0, 'KIF', 0);
+        Goals::ensureCheckins(Goals::activeRound($this->rep));
+        Goals::submit($this->rep, 0, [$a->id => ['status' => 'On Track']]);   // B is left unsent
+
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+
+        $this->assertSame(2, $cards['dueTotal'], "today's Monday is already due");
+        $this->assertSame(1, $cards['onTimeTotal']);
+        $this->assertEquals(50, $cards['discipline']);
+    }
 }

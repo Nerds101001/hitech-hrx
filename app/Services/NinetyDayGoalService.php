@@ -43,6 +43,9 @@ class NinetyDayGoalService
     /** W0 to W12. */
     public const WEEKS = 13;
 
+    /** A round is about three months, so a customer's round target is its monthly potential times this. */
+    public const ROUND_MONTHS = 3;
+
     /** Days from a round's first Monday to its last day (13 weeks). */
     public const ROUND_SPAN_DAYS = 90;
 
@@ -348,6 +351,159 @@ class NinetyDayGoalService
         }
 
         return $out;
+    }
+
+    // ── the dashboard ────────────────────────────────────────────────────
+
+    /** The latest status a goal has been given, or null if nothing has been reported. */
+    public static function latestStatus(NinetyDayGoal $goal): ?string
+    {
+        return optional($goal->checkins->whereNotNull('status')->sortByDesc('week_no')->first())->status;
+    }
+
+    /**
+     * Everything the dashboard shows, for the goals in $scope (null = everyone).
+     *
+     * Achievement is real sales: what the customer has bought in the Sales Report during
+     * the round (lakh), against its monthly potential over the round's three months.
+     * Filters: round (current|all), user_id, department_id, brand.
+     */
+    public static function dashboard(?array $scope, array $f = [], ?Carbon $today = null): array
+    {
+        $today = ($today ?: Carbon::today())->copy()->startOfDay();
+
+        $q = NinetyDayGoal::with(['user.department', 'round', 'checkins'])->whereNotNull('round_id');
+        if ($scope !== null) {
+            $q->whereIn('user_id', $scope);
+        }
+        if (!empty($f['user_id'])) {
+            $q->where('user_id', (int) $f['user_id']);
+        }
+        if (!empty($f['department_id'])) {
+            $q->whereHas('user', fn ($u) => $u->where('department_id', (int) $f['department_id']));
+        }
+        if (($f['round'] ?? 'current') === 'current') {
+            $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
+        }
+        if (!empty($f['brand'])) {
+            $f['brand'] === 'Other'
+                ? $q->where(fn ($w) => $w->whereNull('brand')->orWhere('brand', ''))
+                : $q->where('brand', $f['brand']);
+        }
+        $goals = $q->get();
+
+        // Actual sales per pipeline customer per month, in lakh.
+        $sales = [];
+        $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
+        if ($ids) {
+            foreach (DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $ids)
+                ->selectRaw('sales_pipeline_id, month_year, SUM(sale_amount) s')->groupBy('sales_pipeline_id', 'month_year')->get() as $r) {
+                $sales[$r->sales_pipeline_id][$r->month_year] = (float) $r->s;
+            }
+        }
+
+        $rows = $goals->map(function (NinetyDayGoal $g) use ($sales, $today) {
+            $from = Carbon::parse($g->round->starts_on)->startOfMonth();
+            $to = Carbon::parse($g->round->ends_on)->min($today->copy())->startOfMonth();
+            $achieved = 0.0;
+            for ($m = $from->copy(); $m->lte($to); $m->addMonth()) {
+                $achieved += $sales[$g->sales_pipeline_id][$m->format('Y-m')] ?? 0.0;
+            }
+            $potential = (float) $g->monthly_potential;
+            $target = $potential * self::ROUND_MONTHS;
+
+            return (object) [
+                'goal'      => $g,
+                'user'      => $g->user,
+                'brand'     => $g->brand ?: 'Other',
+                'potential' => $potential,
+                'target'    => $target,
+                'achieved'  => round($achieved, 2),
+                'pct'       => $target > 0 ? round($achieved / $target * 100, 1) : null,
+                'status'    => self::latestStatus($g),
+            ];
+        });
+
+        $sum = fn ($c) => [
+            'goals'     => $c->count(),
+            'potential' => round($c->sum('potential'), 2),
+            'target'    => round($c->sum('target'), 2),
+            'achieved'  => round($c->sum('achieved'), 2),
+            'pct'       => $c->sum('target') > 0 ? round($c->sum('achieved') / $c->sum('target') * 100, 1) : null,
+        ];
+
+        // Reporting discipline: every Monday that has come due.
+        $due = $goals->flatMap(fn ($g) => $g->checkins->filter(fn ($c) => $c->due_on->lte($today)));
+        $onTime = $due->filter(fn ($c) => $c->status !== null && !$c->is_late)->count();
+        $discipline = fn ($c) => $c->count() > 0 ? round($c->filter(fn ($x) => $x->status !== null && !$x->is_late)->count() / $c->count() * 100) : null;
+
+        $converted = ['Trial Order', 'Regular Order'];
+        $cards = $sum($rows) + [
+            'people'     => $rows->pluck('user.id')->unique()->count(),
+            'converted'  => $rows->whereIn('status', $converted)->count(),
+            'onTrack'    => $rows->where('status', 'On Track')->count(),
+            'discipline' => $discipline($due),
+            'dueTotal'   => $due->count(),
+            'onTimeTotal' => $onTime,
+        ];
+
+        $users = $rows->groupBy('user.id')->map(function ($c) use ($sum, $discipline, $goals, $converted) {
+            $u = $c->first()->user;
+            $mine = $goals->where('user_id', $u->id)->flatMap(fn ($g) => $g->checkins->filter(fn ($x) => $x->due_on->lte(Carbon::today())));
+
+            return $sum($c) + [
+                'id'         => $u->id,
+                'name'       => trim($u->first_name . ' ' . $u->last_name),
+                'department' => optional($u->department)->name,
+                'converted'  => $c->whereIn('status', $converted)->count(),
+                'discipline' => $discipline($mine),
+                'late'       => $mine->where('is_late', true)->count(),
+                'missing'    => $mine->whereNull('status')->count(),
+            ];
+        })->values()->sortByDesc(fn ($u) => [$u['pct'] === null ? -1 : $u['pct'], $u['achieved']])->values();
+
+        $topBrands = $rows->groupBy('brand')->map(fn ($c, $b) => $sum($c) + ['brand' => $b])->sortByDesc('potential')->take(10)->values();
+
+        $statuses = [];
+        foreach (self::STATUSES as $st) {
+            $statuses[$st] = $rows->where('status', $st)->count();
+        }
+        $statuses['Nothing reported yet'] = $rows->whereNull('status')->count();
+
+        $strip = [];
+        for ($w = 0; $w < self::WEEKS; $w++) {
+            $cs = $goals->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
+            $strip[$w] = ['total' => $cs->count(), 'done' => $cs->whereNotNull('status')->count(), 'late' => $cs->where('is_late', true)->count()];
+        }
+
+        return [
+            'cards'        => $cards,
+            'topCustomers' => $rows->sortByDesc('potential')->take(10)->values(),
+            'topBrands'    => $topBrands,
+            'topAchieved'  => $rows->filter(fn ($r) => $r->achieved > 0)->sortByDesc('achieved')->take(10)->values(),
+            'users'        => $users,
+            'statuses'     => $statuses,
+            'strip'        => $strip,
+            'rows'         => $rows,
+        ];
+    }
+
+    /** Every weekly comment in scope, newest first. Filters: user_id, status, late. */
+    public static function comments(?array $scope, array $f = [], int $limit = 300): Collection
+    {
+        return NinetyDayGoalCheckin::with(['goal.user.department'])
+            ->whereNotNull('comment')->where('comment', '!=', '')
+            ->whereHas('goal', function ($g) use ($scope, $f) {
+                if ($scope !== null) {
+                    $g->whereIn('user_id', $scope);
+                }
+                if (!empty($f['user_id'])) {
+                    $g->where('user_id', (int) $f['user_id']);
+                }
+            })
+            ->when(!empty($f['status']), fn ($q) => $q->where('status', $f['status']))
+            ->when(!empty($f['late']), fn ($q) => $q->where('is_late', true))
+            ->orderByDesc('submitted_at')->limit($limit)->get();
     }
 
     // ── the customer picker ──────────────────────────────────────────────

@@ -1111,6 +1111,8 @@ Route::middleware([
         // people it is for. NinetyDayGoalController decides who may do what.
         Route::prefix('performance')->name('performance.')->group(function () {
             Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+            Route::get('/ninety-day-goals/dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'dashboard'])->name('ninety-day-goals.dashboard');
+            Route::get('/ninety-day-goals/comments', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'comments'])->name('ninety-day-goals.comments');
             Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');
             Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
             Route::post('/ninety-day-goals/checkin', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'checkin'])->name('ninety-day-goals.checkin');
