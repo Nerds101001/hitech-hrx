@@ -321,7 +321,7 @@
               . $g->checkins->map(fn ($c) => $c->comment . ' ' . $c->notes->pluck('body')->implode(' '))->implode(' '));
           @endphp
           <tr class="ndg-tr" data-user="{{ $g->user_id }}" data-brand="{{ $g->brand }}" data-latest="{{ $latest }}" data-hasc="{{ $hasComment ? 1 : 0 }}" data-over="{{ $overdue ? 1 : 0 }}" data-q="{{ $search }}" {!! $wattrs !!}>
-            <td class="fw-semibold" data-v="{{ strtolower($personName($g->user)) }}">{{ $personName($g->user) }}<div class="small text-muted fw-normal">{{ optional(optional($g->user)->department)->name }}</div></td>
+            <td class="fw-semibold" data-v="{{ strtolower($personName($g->user)) }}"><a href="{{ route('performance.ninety-day-goals.person', $g->user_id) }}" class="text-dark">{{ $personName($g->user) }}</a><div class="small text-muted fw-normal">{{ optional(optional($g->user)->department)->name }}</div></td>
             <td data-v="{{ (int) optional($g->round)->round_no }}">
               @if($g->round)
                 <span class="ndg-round {{ $g->round->status !== 'active' ? 'ndg-round-closed' : '' }}" title="{{ $g->round->starts_on->format('d M Y') }} to {{ $g->round->ends_on->format('d M Y') }}">R{{ $g->round->round_no }}@if($g->round->status !== 'active') · closed @endif</span>

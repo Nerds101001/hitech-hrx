@@ -1115,6 +1115,7 @@ Route::middleware([
             Route::get('/ninety-day-goals/comments', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'comments'])->name('ninety-day-goals.comments');
             Route::get('/ninety-day-goals/past', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'past'])->name('ninety-day-goals.past');
             Route::get('/ninety-day-goals/past/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pastRound'])->name('ninety-day-goals.past.show');
+            Route::get('/ninety-day-goals/person/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'person'])->name('ninety-day-goals.person');
             Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');
             Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
             Route::post('/ninety-day-goals/checkin', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'checkin'])->name('ninety-day-goals.checkin');

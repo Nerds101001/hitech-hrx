@@ -929,4 +929,87 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertLessThan(strpos($html, 'Big But Zero Ltd'), strpos($html, 'Small But Full Ltd'),
             'the fully achieved small target ranks above the untouched big one');
     }
+    // ── the round report: everything on the one page ───────────────────────
+
+    public function test_the_round_report_has_the_headline_the_result_table_the_matrix_and_the_full_grid_all_on_one_page(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $g = $this->goal($this->rep, $round, 'One Page Ltd');
+        $g->checkins()->create(['round_id' => $round->id, 'week_no' => 0, 'due_on' => '2026-01-05', 'status' => 'On Track']);
+        $g->checkins()->create(['round_id' => $round->id, 'week_no' => 1, 'due_on' => '2026-01-12', 'status' => null]);   // never sent
+        $admin = $this->person(null, 'admin');
+        $this->ask($admin, 'GET', '/x');
+
+        $html = app(NinetyDayGoalController::class)->pastRound($round->id)->render();
+
+        $this->assertStringContainsString('ndg-hero-num', $html, 'the headline number');
+        $this->assertStringContainsString('Result, by customer', $html, 'the ranked result table');
+        $this->assertStringContainsString('Every customer, every week', $html, 'the compact matrix');
+        $this->assertStringContainsString('Week-by-week detail', $html, 'the full status/comment grid');
+        $this->assertSame(3, substr_count($html, 'One Page Ltd'), 'the same customer appears in the result table, the matrix and the full grid');
+        $this->assertStringContainsString('W0: On Track', $html, 'the matrix square tooltip');
+        $this->assertStringContainsString('W1: Not sent', $html);
+        $this->assertStringContainsString('ndg-mx-notsent', $html);
+    }
+
+    public function test_someone_outside_the_team_cannot_open_a_past_round(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $round, 'Blocked Ltd');
+        Auth::setUser($this->rep2);
+
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(NinetyDayGoalController::class)->pastRound($round->id);
+    }
+
+    public function test_the_person_route_is_login_only(): void
+    {
+        $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.person');
+        $this->assertNotNull($route);
+        $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))));
+    }
+
+    // ── the salesperson profile page ───────────────────────────────────────
+
+    public function test_a_persons_page_adds_up_every_round_theyve_ever_had(): void
+    {
+        $this->at(self::MONDAY);
+        $closed = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $closed, 'Old Career Ltd');
+        $active = Goals::roundFor($this->rep);
+        $this->goal($this->rep, $active, 'New Career Ltd');
+        $admin = $this->person(null, 'admin');
+        $this->ask($admin, 'GET', '/x');
+
+        $html = app(NinetyDayGoalController::class)->person($this->rep->id)->render();
+
+        $this->assertStringContainsString('Career achievement', $html);
+        $this->assertStringContainsString('Old Career Ltd', $html, 'top customers pull from every round, not just the active one');
+        $this->assertStringContainsString('running now', $html);
+        $this->assertStringContainsString('2 rounds', $html);
+    }
+
+    public function test_a_colleague_cannot_open_someone_elses_person_page_but_their_manager_can(): void
+    {
+        $this->at(self::MONDAY);
+        $manager = $this->person($this->sales, 'manager');
+        $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
+
+        Auth::setUser($this->rep2);
+        try {
+            app(NinetyDayGoalController::class)->person($this->rep->id);
+            $this->fail('a colleague should have been refused');
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+        }
+
+        $this->ask($manager, 'GET', '/x');
+        $html = app(NinetyDayGoalController::class)->person($this->rep->id)->render();
+        $this->assertStringContainsString('Career achievement', $html);
+    }
 }

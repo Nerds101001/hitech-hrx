@@ -193,7 +193,7 @@
         @foreach($d['users'] as $i => $u)
           <tr>
             <td class="text-muted">{{ $i + 1 }}</td>
-            <td data-v="{{ $u['name'] }}"><a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview', 'user_id' => $u['id']]) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a>
+            <td data-v="{{ $u['name'] }}"><a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a>
               <div class="small text-muted">{{ $u['department'] }}</div></td>
             <td class="text-end" data-v="{{ $u['goals'] }}">{{ $u['goals'] }}</td>
             <td class="text-end" data-v="{{ $u['potential'] }}">{{ $fmtL($u['potential']) }}</td>

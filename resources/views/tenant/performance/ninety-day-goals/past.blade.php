@@ -53,13 +53,13 @@
     <div class="row g-3 mb-6">
       @foreach($leaderboard->take(3) as $i => $u)
         <div class="col-md-4">
-          <div class="ndg-pod {{ $i === 0 ? 'ndg-pod-first' : '' }}">
+          <a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="ndg-pod {{ $i === 0 ? 'ndg-pod-first' : '' }}">
             <div class="ndg-pod-rk">{{ $i + 1 }}</div>
             <div class="ndg-pod-nm">{{ $u['name'] }}</div>
             <div class="ndg-pod-zn">{{ $u['department'] }}</div>
             <div class="ndg-pod-mv" style="color:{{ $pctColor($u['pct']) }}">{{ $pctText($u['pct']) }}</div>
             <div class="ndg-pod-ml">{{ $fmtL($u['achieved']) }} of {{ $fmtL($u['target']) }} ₹L sold</div>
-          </div>
+          </a>
         </div>
       @endforeach
     </div>
@@ -82,7 +82,7 @@
           @foreach($leaderboard as $i => $u)
             <tr>
               <td class="text-muted">{{ $i + 1 }}</td>
-              <td><span class="fw-semibold text-dark">{{ $u['name'] }}</span><div class="small text-muted">{{ $u['department'] }}</div></td>
+              <td><a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a><div class="small text-muted">{{ $u['department'] }}</div></td>
               <td class="text-end">{{ $rounds->where('user_id', $u['id'])->count() }}</td>
               <td class="text-end">{{ $u['goals'] }}</td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>
@@ -153,7 +153,8 @@
   .ndg-kpi-l { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; display: flex; align-items: center; gap: 5px; }
   .ndg-kpi-l i { color: #007a7a; font-size: 1rem; }
   .ndg-kpi-v { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 4px; font-variant-numeric: tabular-nums; }
-  .ndg-pod { border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; background: #fff; height: 100%; }
+  .ndg-pod { display: block; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; background: #fff; height: 100%; text-decoration: none; transition: border-color .15s; }
+  .ndg-pod:hover { border-color: #007a7a; }
   .ndg-pod-first { box-shadow: inset 0 4px 0 #007a7a; }
   .ndg-pod-rk { font-size: 2.6rem; font-weight: 800; color: #cbd5e1; line-height: 1; }
   .ndg-pod-first .ndg-pod-rk { color: #007a7a; }

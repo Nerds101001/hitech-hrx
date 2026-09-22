@@ -262,8 +262,37 @@ class NinetyDayGoalController extends Controller
             'round'    => $round,
             'goals'    => $goals,
             'd'        => Goals::dashboard([$round->user_id], ['round_id' => $round->id]),
-            'comments' => Goals::comments([$round->user_id], ['round_id' => $round->id]),
             'weeks'    => Goals::WEEKS,
+        ]);
+    }
+
+    /** One salesperson's own page: their whole record, current round and every past one, in one place. */
+    public function person($id)
+    {
+        [$viewer, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $target = User::with('department')->findOrFail($id);
+        if ($scope !== null && !in_array((int) $target->id, $scope, true)) {
+            abort(403, 'That person is not in your team.');
+        }
+
+        $rounds = NinetyDayRound::where('user_id', $target->id)->orderByDesc('starts_on')->get();
+        $rounds->each(function (NinetyDayRound $r) {
+            $r->stats = Goals::dashboard([$r->user_id], ['round_id' => $r->id])['cards'];
+        });
+        $active = $rounds->firstWhere('status', 'active');
+
+        return view('tenant.performance.ninety-day-goals.person', [
+            'tab'      => null,
+            'canSwitch' => Goals::isSalesStaff($viewer),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'target'   => $target,
+            'rounds'   => $rounds,
+            'active'   => $active,
+            // Every round this person has ever had, added together — their whole record, not just what's closed.
+            'career'   => Goals::dashboard([$target->id], ['round' => 'all']),
         ]);
     }
 
