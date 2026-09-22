@@ -3,6 +3,14 @@
 
 @section('title', '90-Day Goals Dashboard')
 
+@section('vendor-style')
+  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.scss'])
+@endsection
+
+@section('vendor-script')
+  @vite(['resources/assets/vendor/libs/apex-charts/apexcharts.js'])
+@endsection
+
 @section('content')
 @php
   $G = \App\Services\NinetyDayGoalService::class;
@@ -16,6 +24,13 @@
   $maxBrand = max(1, (float) optional($d['topBrands']->first())->potential);
   $maxAch = max(1, (float) optional($d['topAchieved']->first())->achieved);
   $maxStatus = max(1, max($d['statuses']));
+
+  // Precomputed, then handed to @json() as a bare variable — @json() splits its whole
+  // argument on every comma with no regard for nesting, so an expression with a comma
+  // inside a nested call (e.g. round($x, 1)) gets silently truncated at that comma.
+  $programChartData = $d['byProgram']->map(fn ($p) => ['name' => $p['name'], 'target' => round($p['target'], 1), 'achieved' => round($p['achieved'], 1)])->values();
+  $statusColorMap = collect($G::STATUS_COLORS)->map(fn ($clr) => $clr[0]);
+  $statusColorMap['Nothing reported yet'] = '#cbd5e1';
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
 
@@ -46,7 +61,16 @@
   <div class="hitech-card mb-6">
     <div class="card-body p-4">
       <form method="GET" action="{{ route('performance.ninety-day-goals.dashboard') }}" class="row g-3 align-items-end">
+        @if($programs->isNotEmpty())
         <div class="col-md-3">
+          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Program</label>
+          <select name="program_id" class="form-select form-select-hitech" onchange="this.form.submit()">
+            <option value="">All programs</option>
+            @foreach($programs as $p)<option value="{{ $p->id }}" {{ (int) $filters['program_id'] === $p->id ? 'selected' : '' }}>{{ $p->name }}</option>@endforeach
+          </select>
+        </div>
+        @endif
+        <div class="col-md-2">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Round</label>
           <select name="round" class="form-select form-select-hitech" onchange="this.form.submit()">
             <option value="current" {{ $filters['round'] === 'current' ? 'selected' : '' }}>Current rounds</option>
@@ -54,7 +78,7 @@
           </select>
         </div>
         @if($seesMany)
-        <div class="col-md-4">
+        <div class="col-md-3">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Salesperson</label>
           <select name="user_id" class="form-select form-select-hitech" onchange="this.form.submit()">
             <option value="">Everyone</option>
@@ -62,7 +86,7 @@
           </select>
         </div>
         @endif
-        <div class="col-md-3">
+        <div class="col-md-2">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Brand</label>
           <select name="brand" class="form-select form-select-hitech" onchange="this.form.submit()">
             <option value="">All brands</option>
@@ -83,7 +107,9 @@
   {{-- Summary --}}
   <div class="row g-3 mb-6">
     @php
-      $cards = [
+      $cards = [];
+      if ($isAdmin) { $cards[] = ['bx-calendar-star', 'Active programs', $activePrograms, $programs->count() . ' total']; }
+      $cards = array_merge($cards, [
         ['bx-target-lock', 'Customers tracked', $c['goals'], ($seesMany ? $c['people'] . ' salespeople' : 'in your rounds')],
         ['bx-rupee', 'Monthly potential', $fmtL($c['potential']), '₹ lakh a month'],
         ['bx-flag', 'Round target', $fmtL($c['target']), 'potential × ' . $G::ROUND_MONTHS . ' months'],
@@ -91,7 +117,7 @@
         ['bx-pie-chart-alt-2', 'Achievement', $pctText($c['pct']), 'sold ÷ round target'],
         ['bx-cart-download', 'Turned into orders', $c['converted'], 'Trial or Regular order'],
         ['bx-time-five', 'Reported on time', $c['discipline'] === null ? '–' : $c['discipline'] . '%', $c['onTimeTotal'] . ' of ' . $c['dueTotal'] . ' Mondays'],
-      ];
+      ]);
     @endphp
     @foreach($cards as [$icon, $label, $value, $sub])
       <div class="col-6 col-md-4 col-xl">
@@ -103,6 +129,75 @@
       </div>
     @endforeach
   </div>
+
+  {{-- Charts: program performance, customer status, order results --}}
+  <div class="row g-4 mb-6">
+    @if($isAdmin && $d['byProgram']->isNotEmpty())
+    <div class="col-xl-5">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Program performance</div><div class="small text-muted">Round target vs. actually sold, per program</div></div>
+        <div class="card-body p-3"><div id="ndgProgramChart"></div></div>
+      </div>
+    </div>
+    @endif
+    <div class="col-xl-{{ $isAdmin && $d['byProgram']->isNotEmpty() ? '4' : '6' }}">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Customer status</div><div class="small text-muted">Every tracked customer's latest weekly status</div></div>
+        <div class="card-body p-3"><div id="ndgStatusDonut"></div></div>
+      </div>
+    </div>
+    <div class="col-xl-{{ $isAdmin && $d['byProgram']->isNotEmpty() ? '3' : '6' }}">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom">
+          <div class="fw-bold text-dark">Order results from Sales Report</div>
+          <div class="small text-muted">Never typed by a salesperson — pulled from real sale rows.</div>
+        </div>
+        <div class="card-body p-4">
+          @php
+            $or = $d['orderResults'];
+            $orRows = [
+              ['Qualifying orders', $or['qualifyingOrders']],
+              ['Total order value', $fmtL($or['totalOrderValue']) . ' L'],
+              ['Average order value', $or['avgOrderValue'] === null ? '–' : $fmtL($or['avgOrderValue']) . ' L'],
+              ['Customers converted', $or['customersConverted']],
+              ['Repeat orders', $or['repeatOrders']],
+            ];
+          @endphp
+          <div class="ndg-orlist">
+            @foreach($orRows as [$lbl, $val])
+              <div class="ndg-orlist-row"><span>{{ $lbl }}</span><b>{{ $val }}</b></div>
+            @endforeach
+          </div>
+          <div class="small text-muted mt-3">Counted as "qualifying" the moment its Sales Report shows a real sale in the round — no report, no order.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  @if($isAdmin && $tasksAlerts->isNotEmpty())
+  <div class="hitech-card mb-6">
+    <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+      <div>
+        <div class="fw-bold text-dark">Tasks & alerts</div>
+        <div class="small text-muted">Open "add customers" / "submit status" tasks this module already created, nearest due date first.</div>
+      </div>
+      <span class="small text-muted">{{ $tasksAlerts->count() }}</span>
+    </div>
+    <div class="card-body p-0">
+      @foreach($tasksAlerts as $t)
+        @php $overdue = $t->due_date && \Carbon\Carbon::parse($t->due_date)->lt($today); @endphp
+        <div class="ndg-alert-row">
+          <i class="bx {{ $overdue ? 'bx-error text-danger' : 'bx-calendar-check' }}"></i>
+          <div class="flex-grow-1">
+            <div class="fw-semibold text-dark">{{ $t->title }}</div>
+            <div class="small text-muted">{{ trim(optional($t->user)->first_name . ' ' . optional($t->user)->last_name) }}</div>
+          </div>
+          <span class="small {{ $overdue ? 'text-danger fw-bold' : 'text-muted' }}">{{ $t->due_date ? \Carbon\Carbon::parse($t->due_date)->format('d M') : '' }}</span>
+        </div>
+      @endforeach
+    </div>
+  </div>
+  @endif
 
   {{-- Rankings --}}
   <div class="row g-4 mb-6">
@@ -485,6 +580,14 @@
 
   .ndg-none { color: #cbd5e1; }
   .ndg-overdue { color: #b42318; font-weight: 700; font-size: .82rem; }
+
+  .ndg-orlist-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed #eef2f5; font-size: .86rem; }
+  .ndg-orlist-row:last-child { border-bottom: none; }
+  .ndg-orlist-row span { color: #64748b; }
+  .ndg-orlist-row b { color: #0f172a; font-variant-numeric: tabular-nums; }
+  .ndg-alert-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+  .ndg-alert-row:last-child { border-bottom: none; }
+  .ndg-alert-row i { font-size: 1.2rem; color: #007a7a; flex: none; }
 </style>
 @endsection
 
@@ -505,6 +608,46 @@
         }).forEach(function (r, i) { body.appendChild(r); r.cells[0].textContent = i + 1; });
       });
     });
+  })();
+
+  (function () {
+    if (typeof ApexCharts === 'undefined') { return; }
+    var teal = '#007a7a', muted = '#64748b';
+
+    var programEl = document.querySelector('#ndgProgramChart');
+    if (programEl) {
+      var programData = @json($programChartData);
+      new ApexCharts(programEl, {
+        chart: { type: 'bar', height: 300, toolbar: { show: false }, fontFamily: 'inherit' },
+        series: [
+          { name: 'Target (₹L)', data: programData.map(function (p) { return p.target; }) },
+          { name: 'Actual (₹L)', data: programData.map(function (p) { return p.achieved; }) },
+        ],
+        xaxis: { categories: programData.map(function (p) { return p.name; }), labels: { style: { colors: muted, fontSize: '11px' } } },
+        yaxis: { labels: { style: { colors: muted } } },
+        colors: ['#94c9c9', teal],
+        plotOptions: { bar: { columnWidth: '55%', borderRadius: 4 } },
+        legend: { position: 'top', horizontalAlign: 'right', fontSize: '12px' },
+        dataLabels: { enabled: false },
+        grid: { borderColor: '#eef2f5' },
+      }).render();
+    }
+
+    var donutEl = document.querySelector('#ndgStatusDonut');
+    if (donutEl) {
+      var statuses = @json($d['statuses']);
+      var labels = Object.keys(statuses).filter(function (k) { return statuses[k] > 0; });
+      var colorMap = @json($statusColorMap);
+      new ApexCharts(donutEl, {
+        chart: { type: 'donut', height: 300, fontFamily: 'inherit' },
+        series: labels.map(function (l) { return statuses[l]; }),
+        labels: labels,
+        colors: labels.map(function (l) { return colorMap[l] || muted; }),
+        legend: { position: 'bottom', fontSize: '11px' },
+        dataLabels: { enabled: false },
+        plotOptions: { pie: { donut: { size: '68%', labels: { show: true, total: { show: true, label: 'Customers', color: '#0f172a' } } } } },
+      }).render();
+    }
   })();
 </script>
 @endsection

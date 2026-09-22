@@ -7,6 +7,7 @@ use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
+use App\Models\Task;
 use App\Models\User;
 use App\Notifications\NinetyDayGoal\ProgramInvite;
 use App\Services\NinetyDayGoalService as Goals;
@@ -202,13 +203,21 @@ class NinetyDayGoalController extends Controller
         $today = Carbon::today();
 
         $f = [
-            'round'   => $request->input('round') === 'all' ? 'all' : 'current',
-            'user_id' => $request->integer('user_id') ?: null,
-            'brand'   => $request->input('brand') ?: null,
+            'round'      => $request->input('round') === 'all' ? 'all' : 'current',
+            'user_id'    => $request->integer('user_id') ?: null,
+            'brand'      => $request->input('brand') ?: null,
+            'program_id' => $request->integer('program_id') ?: null,
         ];
         $people = $this->peopleIn($scope);
         if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
             $f['user_id'] = null;
+        }
+        // Only programs that actually reach someone in scope — a manager filtering by program
+        // should never see a program that has none of their own people in it.
+        $programs = NinetyDayProgram::whereHas('rounds', fn ($r) => $r->when($scope !== null, fn ($rr) => $rr->whereIn('user_id', $scope)))
+            ->orderByDesc('id')->get();
+        if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
+            $f['program_id'] = null;
         }
         $d = Goals::dashboard($scope, $f);
 
@@ -229,13 +238,27 @@ class NinetyDayGoalController extends Controller
         $trialing = $current['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values();
         $attention = $this->attentionRows($current['rows'], $today);
 
+        $activePrograms = $programs->filter(fn ($p) => $today->between($p->starts_on, $p->ends_on))->count();
+
+        // Tasks & Alerts: the real "add your customers" / "submit W<n> status" tasks this app
+        // already creates, for people in scope, nearest due date first — not a separate feed.
+        $tasksAlerts = Task::where('title', 'like', '90-Day Goals:%')
+            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
+            ->whereNotIn('status', Task::CLOSED_STATUSES)
+            ->with('user')->orderBy('due_date')->limit(8)->get();
+
         return view('tenant.performance.ninety-day-goals.dashboard', [
             'tab'      => 'dashboard',
             'canSwitch' => Goals::isSalesStaff($user),
             'seesMany' => $scope === null || count($scope) > 1,
+            'isAdmin'  => Goals::seesEveryone($user),
             'd'        => $d,
             'filters'  => $f,
             'people'   => $people,
+            'programs' => $programs,
+            'activePrograms' => $activePrograms,
+            'tasksAlerts' => $tasksAlerts,
+            'today'    => $today,
             'brands'   => array_merge(array_keys(Goals::BRANDS), ['Other']),
             'weeks'    => Goals::WEEKS,
             'team'      => $team,

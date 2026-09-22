@@ -486,7 +486,7 @@ class NinetyDayGoalService
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
 
-        $q = NinetyDayGoal::with(['user.department', 'round', 'checkins'])->whereNotNull('round_id');
+        $q = NinetyDayGoal::with(['user.department', 'round.program', 'checkins'])->whereNotNull('round_id');
         if ($scope !== null) {
             $q->whereIn('user_id', $scope);
         }
@@ -502,6 +502,9 @@ class NinetyDayGoalService
             $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
         } elseif (($f['round'] ?? '') === 'closed') {
             $q->whereHas('round', fn ($r) => $r->where('status', 'closed'));
+        }
+        if (!empty($f['program_id'])) {
+            $q->whereHas('round', fn ($r) => $r->where('program_id', (int) $f['program_id']));
         }
         if (!empty($f['brand'])) {
             $f['brand'] === 'Other'
@@ -524,8 +527,13 @@ class NinetyDayGoalService
             $from = Carbon::parse($g->round->starts_on)->startOfMonth();
             $to = Carbon::parse($g->round->ends_on)->min($today->copy())->startOfMonth();
             $achieved = 0.0;
+            $monthsWithSale = 0;
             for ($m = $from->copy(); $m->lte($to); $m->addMonth()) {
-                $achieved += $sales[$g->sales_pipeline_id][$m->format('Y-m')] ?? 0.0;
+                $inMonth = $sales[$g->sales_pipeline_id][$m->format('Y-m')] ?? 0.0;
+                $achieved += $inMonth;
+                if ($inMonth > 0) {
+                    $monthsWithSale++;
+                }
             }
             $potential = (float) $g->monthly_potential;
             $target = $potential * self::ROUND_MONTHS;
@@ -534,11 +542,15 @@ class NinetyDayGoalService
                 'goal'      => $g,
                 'user'      => $g->user,
                 'brand'     => $g->brand ?: 'Other',
+                'program'   => $g->round->program,
                 'potential' => $potential,
                 'target'    => $target,
                 'achieved'  => round($achieved, 2),
                 'pct'       => $target > 0 ? round($achieved / $target * 100, 1) : null,
                 'status'    => self::latestStatus($g),
+                // "Repeat" here means a real order landed in more than one calendar month of the
+                // round — the closest signal available without a distinct per-order ledger.
+                'repeat'    => $monthsWithSale >= 2,
             ];
         });
 
@@ -594,6 +606,24 @@ class NinetyDayGoalService
 
         $topBrands = $rows->groupBy('brand')->map(fn ($c, $b) => $sum($c) + ['brand' => $b])->sortByDesc('potential')->take(10)->values();
 
+        // Target vs actual per admin-created program (self-started rounds with no program
+        // group under "No program"), for the Program Performance chart.
+        $byProgram = $rows->groupBy(fn ($r) => optional($r->program)->id ?: 0)
+            ->map(fn ($c, $pid) => $sum($c) + ['name' => (int) $pid ? $c->first()->program->name : 'No program'])
+            ->sortByDesc('target')->values();
+
+        // "Order Results from Sales Report": real orders only, never typed by a salesperson.
+        // A qualifying order is a goal with at least one real rupee of Sales Report sale inside
+        // the round; "repeat" means it landed in more than one calendar month of the round.
+        $withOrders = $rows->filter(fn ($r) => $r->achieved > 0);
+        $orderResults = [
+            'qualifyingOrders'  => $withOrders->count(),
+            'totalOrderValue'   => round((float) $withOrders->sum('achieved'), 2),
+            'avgOrderValue'     => $withOrders->count() > 0 ? round($withOrders->sum('achieved') / $withOrders->count(), 2) : null,
+            'customersConverted' => $rows->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
+            'repeatOrders'      => $withOrders->where('repeat', true)->count(),
+        ];
+
         $statuses = [];
         foreach (self::STATUSES as $st) {
             $statuses[$st] = $rows->where('status', $st)->count();
@@ -611,6 +641,8 @@ class NinetyDayGoalService
             'topCustomers' => $rows->sortByDesc('potential')->take(10)->values(),
             'topBrands'    => $topBrands,
             'topAchieved'  => $rows->filter(fn ($r) => $r->achieved > 0)->sortByDesc('achieved')->take(10)->values(),
+            'byProgram'    => $byProgram,
+            'orderResults' => $orderResults,
             'users'        => $users,
             'statuses'     => $statuses,
             'strip'        => $strip,
