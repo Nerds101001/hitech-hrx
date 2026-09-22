@@ -1,8 +1,9 @@
-{{-- Goals | Dashboard | Comments. $tab is one of goals, dashboard, comments. --}}
+{{-- Goals | Dashboard | Past | Comments. $tab is one of goals, dashboard, past, comments. --}}
 @php
   $tabs = [
       'goals'     => ['Goals', 'bx-target-lock', route('performance.ninety-day-goals.index', ['view' => ($seesMany ?? false) ? 'overview' : 'mine'])],
       'dashboard' => ['Dashboard', 'bx-bar-chart-alt-2', route('performance.ninety-day-goals.dashboard')],
+      'past'      => ['Past rounds', 'bx-history', route('performance.ninety-day-goals.past')],
       'comments'  => ['Comments', 'bx-comment-detail', route('performance.ninety-day-goals.comments')],
   ];
 @endphp

@@ -207,6 +207,59 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
+    // ── past rounds ──────────────────────────────────────────────────────
+
+    /** Every finished round in scope, as its own pick — no merging different people's history together. */
+    public function past(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+
+        $rounds = NinetyDayRound::with('user.department')
+            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
+            ->where('status', 'closed')
+            ->orderByDesc('starts_on')->orderBy('user_id')->get();
+
+        $rounds->each(function (NinetyDayRound $r) {
+            $r->stats = Goals::dashboard([$r->user_id], ['round_id' => $r->id])['cards'];
+        });
+
+        return view('tenant.performance.ninety-day-goals.past', [
+            'tab'      => 'past',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'rounds'   => $rounds,
+        ]);
+    }
+
+    /** The report for exactly one past round: its customers, week by week, and its comments. Nothing else mixed in. */
+    public function pastRound($id)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $round = NinetyDayRound::with('user.department')->findOrFail($id);
+        if ($scope !== null && !in_array((int) $round->user_id, $scope, true)) {
+            abort(403, 'That round is not in your team.');
+        }
+
+        $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)->orderBy('id')->get();
+
+        return view('tenant.performance.ninety-day-goals.past-round', [
+            'tab'      => 'past',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'round'    => $round,
+            'goals'    => $goals,
+            'd'        => Goals::dashboard([$round->user_id], ['round_id' => $round->id]),
+            'comments' => Goals::comments([$round->user_id], ['round_id' => $round->id]),
+            'weeks'    => Goals::WEEKS,
+        ]);
+    }
+
     // ── the customer picker ──────────────────────────────────────────────
 
     /** The person's own pipeline customers that are not already in their round. */

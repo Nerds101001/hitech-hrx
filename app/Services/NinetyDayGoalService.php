@@ -419,7 +419,9 @@ class NinetyDayGoalService
         if (!empty($f['department_id'])) {
             $q->whereHas('user', fn ($u) => $u->where('department_id', (int) $f['department_id']));
         }
-        if (($f['round'] ?? 'current') === 'current') {
+        if (!empty($f['round_id'])) {
+            $q->where('round_id', (int) $f['round_id']);
+        } elseif (($f['round'] ?? 'current') === 'current') {
             $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
         }
         if (!empty($f['brand'])) {
@@ -577,6 +579,7 @@ class NinetyDayGoalService
         $status = NinetyDayGoalCheckin::with(['goal.user.department'])
             ->whereNotNull('comment')->where('comment', '!=', '')
             ->whereHas('goal', $ofPerson)
+            ->when(!empty($f['round_id']), fn ($q) => $q->where('round_id', (int) $f['round_id']))
             ->when(!empty($f['status']), fn ($q) => $q->where('status', $f['status']))
             ->when(!empty($f['late']), fn ($q) => $q->where('is_late', true))
             ->orderByDesc('submitted_at')->limit($limit)->get()
@@ -585,6 +588,7 @@ class NinetyDayGoalService
 
         $notes = NinetyDayGoalNote::with(['goal.user.department', 'author', 'checkin'])
             ->whereHas('goal', $ofPerson)
+            ->when(!empty($f['round_id']), fn ($q) => $q->whereHas('checkin', fn ($c) => $c->where('round_id', (int) $f['round_id'])))
             ->when(!empty($f['status']), fn ($q) => $q->whereHas('checkin', fn ($c) => $c->where('status', $f['status'])))
             ->when(!empty($f['late']), fn ($q) => $q->whereHas('checkin', fn ($c) => $c->where('is_late', true)))
             ->orderByDesc('id')->limit($limit)->get()

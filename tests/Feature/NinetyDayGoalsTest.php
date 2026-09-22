@@ -817,4 +817,67 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertMatchesRegularExpression('/stat-value mb-0">2<\/h3><span class="stat-label">Customers tracked/', $all,
             'the summary card must widen to 2 with the closed round included, not silently stay at 1');
     }
+    // ── past rounds, each kept on its own ─────────────────────────────────
+
+    public function test_the_past_list_shows_one_card_per_finished_round_not_merged_together(): void
+    {
+        $this->at(self::MONDAY);
+        $roundA = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $roundA, 'Old Ltd');
+        $roundB = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 2, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-04-06', 'ends_on' => '2026-07-05', 'status' => 'closed']);
+        $this->goal($this->rep, $roundB, 'Newer Ltd');
+        $admin = $this->person(null, 'admin');
+
+        $html = app(NinetyDayGoalController::class)->past($this->ask($admin, 'GET', '/performance/ninety-day-goals/past'))->render();
+
+        $this->assertStringContainsString('Round 1', $html);
+        $this->assertStringContainsString('Round 2', $html);
+        $this->assertSame(2, substr_count($html, route('performance.ninety-day-goals.past.show', $roundA->id))
+            + substr_count($html, route('performance.ninety-day-goals.past.show', $roundB->id)), 'each round links to its own report');
+    }
+
+    public function test_a_past_rounds_report_shows_only_that_rounds_customers_and_comments(): void
+    {
+        $this->at(self::MONDAY);
+        $roundA = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $gA = $this->goal($this->rep, $roundA, 'Round A Ltd');
+        $gA->checkins()->create(['round_id' => $roundA->id, 'week_no' => 0, 'due_on' => '2026-01-05', 'status' => 'On Track', 'comment' => 'From round A']);
+        $roundB = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 2, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-04-06', 'ends_on' => '2026-07-05', 'status' => 'closed']);
+        $gB = $this->goal($this->rep, $roundB, 'Round B Ltd');
+        $gB->checkins()->create(['round_id' => $roundB->id, 'week_no' => 0, 'due_on' => '2026-04-06', 'status' => 'Off Track', 'comment' => 'From round B']);
+        $admin = $this->person(null, 'admin');
+
+        $this->ask($admin, 'GET', '/x');
+        $html = app(NinetyDayGoalController::class)->pastRound($roundA->id)->render();
+
+        $this->assertStringContainsString('Round A Ltd', $html);
+        $this->assertStringContainsString('From round A', $html);
+        $this->assertStringNotContainsString('Round B Ltd', $html);
+        $this->assertStringNotContainsString('From round B', $html);
+    }
+
+    public function test_a_colleague_cannot_open_someone_elses_past_round(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $round, 'Private Ltd');
+
+        Auth::setUser($this->rep2);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(NinetyDayGoalController::class)->pastRound($round->id);
+    }
+
+    public function test_the_past_routes_are_login_only(): void
+    {
+        foreach (['past', 'past.show'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
+        }
+    }
 }
