@@ -57,6 +57,9 @@ class NinetyDayGoalController extends Controller
         $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)->where('user_id', $user->id)
             ->whereNull('closed_at')->orderBy('id')->get();
         $pending = Goals::pending($round, $today)->groupBy('week_no');
+        // A repeat month's Sales Report sale never silently becomes an upsell — it waits here
+        // until the salesperson (or admin on their behalf) says yes or no.
+        $pendingUpsells = NinetyDayGoalCheckin::with('goal')->where('round_id', $round->id)->where('needs_upsell_confirm', true)->orderBy('week_no')->get();
 
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'      => 'mine',
@@ -67,6 +70,7 @@ class NinetyDayGoalController extends Controller
             'dates'     => Goals::weekDates($round),
             'goals'     => $goals,
             'pending'   => $pending,
+            'pendingUpsells' => $pendingUpsells,
             'today'     => $today,
             'statuses'  => Goals::STATUSES,
             'brands'    => array_keys(Goals::BRANDS),
@@ -830,6 +834,32 @@ class NinetyDayGoalController extends Controller
             'id' => $note->id, 'by' => trim($user->first_name . ' ' . $user->last_name), 'body' => $note->body,
             'at' => $note->created_at->format('d M'), 'can_delete' => Goals::seesEveryone($user),
         ]]);
+    }
+
+    // ── upsell confirmation ──────────────────────────────────────────────
+
+    /**
+     * A repeat month's Sales Report sale is flagged, never assumed — the goal's own owner, or
+     * admin/HR/manager on their behalf, says yes (it's an upsell, sets the status) or no (just
+     * clears the flag, leaves the week to be filled in by hand as usual).
+     */
+    public function confirmUpsell(Request $request)
+    {
+        $user = Auth::user();
+        $data = $request->validate([
+            'checkin_id' => 'required|integer',
+            'is_upsell'  => 'required|boolean',
+        ]);
+        $checkin = NinetyDayGoalCheckin::with('goal')->find($data['checkin_id']);
+        if (!$checkin || !$checkin->goal || !Goals::canNote($user, $checkin->goal)) {
+            return response()->json(['success' => false, 'message' => 'Not allowed.'], 403);
+        }
+        if (!$checkin->needs_upsell_confirm) {
+            return response()->json(['success' => false, 'message' => 'Nothing pending confirmation here.'], 422);
+        }
+        Goals::confirmUpsell($checkin, $user, (bool) $data['is_upsell']);
+
+        return response()->json(['success' => true, 'is_upsell' => (bool) $data['is_upsell']]);
     }
 
     /** Only admin/HR remove a comment. */

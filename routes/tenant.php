@@ -1126,6 +1126,7 @@ Route::middleware([
             Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
             Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
             Route::post('/ninety-day-goals/notes', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'note'])->name('ninety-day-goals.note');
+            Route::post('/ninety-day-goals/confirm-upsell', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'confirmUpsell'])->name('ninety-day-goals.confirm-upsell');
             Route::delete('/ninety-day-goals/notes/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroyNote'])->name('ninety-day-goals.note.destroy');
         });
 

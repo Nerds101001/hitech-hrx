@@ -19,10 +19,11 @@
           [$bg, $fg] = $G::STATUS_COLORS[$checkin->status] ?? ['#64748b', '#ffffff'];
           $edited = $checkin->edited_at ? '<i class="ndg-edited" title="Edited ' . e($checkin->edited_at->format('d M, h:i A')) . '">edited</i>' : '';
           $late = $checkin->is_late ? '<i class="ndg-late">late, sent ' . e(optional($checkin->submitted_at)->format('d M')) . '</i>' : '';
+          $auto = $checkin->auto_filled ? '<i class="ndg-auto" title="' . ($checkin->upsell_confirmed ? 'Confirmed as an upsell/repeat order' : 'Auto-detected from the Sales Report') . '">' . ($checkin->upsell_confirmed ? 'upsell' : 'auto') . '</i>' : '';
           $attrs = $editable && $goal ? ' role="button" class="ndg-chip ndg-editable" data-edit-goal="' . $goal->id . '" data-edit-week="' . (int) $checkin->week_no
               . '" data-edit-user="' . $goal->user_id . '" data-edit-status="' . e($checkin->status) . '" data-edit-comment="' . e((string) $checkin->comment) . '" data-edit-title="' . e($goal->client_name) . ' · W' . (int) $checkin->week_no . '" title="Click to edit"'
               : ' class="ndg-chip"';
-          return '<span' . $attrs . ' style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $edited . $late;
+          return '<span' . $attrs . ' style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $auto . $edited . $late;
       }
       if ($checkin && $checkin->due_on->lte($today)) {
           return '<span class="ndg-chip ndg-missing" title="Due ' . $checkin->due_on->format('D d M') . ', not submitted">not sent</span>';
@@ -102,6 +103,31 @@
       </div>
     </div>
   </div>
+
+  {{-- Order detected from the Sales Report, a second time for a customer that already had one:
+       never assumed to be an upsell — confirmed here first. --}}
+  @if($pendingUpsells->isNotEmpty())
+    <div class="hitech-card mb-6" style="border-color:#f5a623">
+      <div class="card-body p-4 border-bottom">
+        <h6 class="fw-bold mb-0 text-dark"><i class="bx bx-receipt" style="color:#f5a623"></i> {{ $pendingUpsells->count() }} order{{ $pendingUpsells->count() === 1 ? '' : 's' }} detected from the Sales Report need confirming</h6>
+        <div class="small text-muted">A customer already had one order this round, and the Sales Report shows another — confirm it's a repeat order/upsell, or leave it to fill in yourself.</div>
+      </div>
+      <div class="card-body p-0">
+        @foreach($pendingUpsells as $ck)
+          <div class="ndg-upsell-row" data-checkin="{{ $ck->id }}">
+            <div class="flex-grow-1">
+              <div class="fw-semibold text-dark">{{ $ck->goal->client_name }} <span class="text-muted fw-normal">· W{{ $ck->week_no }}, due {{ $ck->due_on->format('d M') }}</span></div>
+              <div class="small text-muted">{{ $ck->goal->product }} · {{ $ck->goal->brand }}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-hitech ndg-upsell-yes">Yes, it's an upsell</button>
+              <button type="button" class="btn btn-sm btn-hitech-cancel ndg-upsell-no">No</button>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
 
   {{-- Statuses owed --}}
   @foreach($pending as $wk => $rows)
@@ -552,6 +578,7 @@
   .ndg-chip.ndg-editable:hover { transform: scale(1.04); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
   .ndg-late { display: block; font-size: .6rem; font-style: normal; color: #b42318; font-weight: 700; margin-top: 2px; }
   .ndg-edited { display: block; font-size: .6rem; font-style: normal; color: #64748b; font-weight: 600; margin-top: 2px; }
+  .ndg-auto { display: block; font-size: .6rem; font-style: normal; color: #007a7a; font-weight: 700; margin-top: 2px; }
   .ndg-edit-goal { border: 0; background: none; padding: 0 0 0 6px; color: #cbd5e1; font-size: .8rem; vertical-align: middle; }
   .ndg-edit-goal:hover { color: #007a7a; }
   .ndg-none { color: #cbd5e1; }
@@ -561,6 +588,8 @@
   .ndg-list .ndg-extra { display: none; margin-top: 10px; }
   .ndg-list .ndg-row.on .ndg-extra { display: flex; }
   .ndg-src { font-size: .65rem; }
+  .ndg-upsell-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+  .ndg-upsell-row:last-child { border-bottom: none; }
 </style>
 @endsection
 
@@ -573,6 +602,7 @@
     store: '{{ route('performance.ninety-day-goals.store') }}',
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
     notes: '{{ url('performance/ninety-day-goals/notes') }}',
+    confirmUpsell: '{{ route('performance.ninety-day-goals.confirm-upsell') }}',
     base: '{{ url('performance/ninety-day-goals') }}'
   };
   function post(url, method, body) {
@@ -580,6 +610,21 @@
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  // ── upsell confirmation ──
+  document.querySelectorAll('.ndg-upsell-row').forEach(function (row) {
+    var checkinId = parseInt(row.getAttribute('data-checkin'), 10);
+    function answer(isUpsell, btn) {
+      var buttons = row.querySelectorAll('button');
+      buttons.forEach(function (b) { b.disabled = true; });
+      post(URLS.confirmUpsell, 'POST', { checkin_id: checkinId, is_upsell: isUpsell }).then(function (j) {
+        if (!j.success) { buttons.forEach(function (b) { b.disabled = false; }); alert(j.message || 'Could not save that.'); return; }
+        location.reload();
+      }).catch(function () { buttons.forEach(function (b) { b.disabled = false; }); alert('Request failed. Try again.'); });
+    }
+    row.querySelector('.ndg-upsell-yes').addEventListener('click', function () { answer(true, this); });
+    row.querySelector('.ndg-upsell-no').addEventListener('click', function () { answer(false, this); });
+  });
 
   // ── weekly status cards ──
   document.querySelectorAll('.ndg-week').forEach(function (card) {

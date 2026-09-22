@@ -250,22 +250,94 @@ class NinetyDayGoalService
         return $added->isMonday() ? $week : $week + 1;
     }
 
-    /** Make sure every open goal has a check-in row for each Monday up to today. */
+    /** Real Sales Report sale amount per "Y-m" for this goal's own pipeline customer. */
+    private static function salesByMonth(NinetyDayGoal $goal): array
+    {
+        if (!$goal->sales_pipeline_id) {
+            return [];
+        }
+
+        return DB::table('sales_pipeline_months')->where('sales_pipeline_id', $goal->sales_pipeline_id)
+            ->pluck('sale_amount', 'month_year')->map(fn ($v) => (float) $v)->all();
+    }
+
+    /**
+     * Whether $due's month is this goal's first-ever real sale within the round, or a later
+     * (repeat/upsell) one — sales before the round's own start never count here, same rule the
+     * achievement math already follows. Returns [hasSaleThisMonth, isFirst].
+     */
+    private static function orderSignal(NinetyDayRound $round, array $salesByMonth, Carbon $due): array
+    {
+        $hasSaleThisMonth = ($salesByMonth[$due->format('Y-m')] ?? 0) > 0;
+        if (!$hasSaleThisMonth) {
+            return [false, false];
+        }
+        $monthsWithSaleBefore = 0;
+        $from = Carbon::parse($round->starts_on)->startOfMonth();
+        for ($m = $from->copy(); $m->lt($due->copy()->startOfMonth()); $m->addMonth()) {
+            if (($salesByMonth[$m->format('Y-m')] ?? 0) > 0) {
+                $monthsWithSaleBefore++;
+            }
+        }
+
+        return [true, $monthsWithSaleBefore === 0];
+    }
+
+    /**
+     * Make sure every open goal has a check-in row for each Monday up to today. Status is never
+     * typed in here by a person — a Monday whose month shows a real Sales Report sale for the
+     * first time auto-fills straight to "Regular Order"; a later month's sale for a goal that
+     * already had one is a possible upsell, so it is flagged (needs_upsell_confirm) instead of
+     * silently assumed, and waits for confirmUpsell().
+     */
     public static function ensureCheckins(NinetyDayRound $round, ?Carbon $today = null): int
     {
         $current = self::weekOf($round, $today);
         $made = 0;
         foreach (NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->get() as $goal) {
+            $sales = self::salesByMonth($goal);
             for ($w = self::firstWeek($goal, $round); $w <= $current; $w++) {
-                $row = NinetyDayGoalCheckin::firstOrCreate(
-                    ['goal_id' => $goal->id, 'week_no' => $w],
-                    ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => self::dueOn($round, $w)->toDateString()]
-                );
+                $due = self::dueOn($round, $w);
+                [$hasSale, $isFirst] = self::orderSignal($round, $sales, $due);
+                $attrs = ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString()];
+                if ($hasSale && $isFirst) {
+                    $attrs += [
+                        'status' => 'Regular Order', 'comment' => 'Auto-detected from the Sales Report — a real order was found for this month.',
+                        'submitted_at' => Carbon::now(), 'is_late' => false, 'auto_filled' => true,
+                    ];
+                } elseif ($hasSale) {
+                    $attrs += ['needs_upsell_confirm' => true];
+                }
+                $row = NinetyDayGoalCheckin::firstOrCreate(['goal_id' => $goal->id, 'week_no' => $w], $attrs);
                 $made += $row->wasRecentlyCreated ? 1 : 0;
             }
         }
 
         return $made;
+    }
+
+    /**
+     * A repeat month's Sales Report sale, for a goal that already had an earlier one, is never
+     * assumed to be an upsell — someone (the salesperson, or admin/HR on their behalf) confirms
+     * it first. Confirming sets the status; declining just clears the flag so the week goes back
+     * to being an ordinary pending status, filled in by hand as usual.
+     */
+    public static function confirmUpsell(NinetyDayGoalCheckin $checkin, User $actor, bool $isUpsell, ?Carbon $now = null): void
+    {
+        $now = $now ?: Carbon::now();
+        if ($isUpsell) {
+            $checkin->update([
+                'status'   => 'Regular Order',
+                'comment'  => trim(($checkin->comment ? $checkin->comment . ' ' : '') . 'Confirmed as a repeat/upsell order from the Sales Report.'),
+                'submitted_at'    => $checkin->submitted_at ?: $now,
+                'submitted_by_id' => $checkin->submitted_by_id ?: $actor->id,
+                'auto_filled'          => true,
+                'needs_upsell_confirm' => false,
+                'upsell_confirmed'     => true,
+            ]);
+        } else {
+            $checkin->update(['needs_upsell_confirm' => false, 'upsell_confirmed' => false]);
+        }
     }
 
     /** Pending check-ins that are due today or earlier, oldest week first. */

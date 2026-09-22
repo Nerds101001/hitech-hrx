@@ -247,6 +247,147 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertCount(20, $d['strip']);
     }
 
+    // ── auto-detected order status and upsell confirmation ─────────────────
+
+    public function test_the_first_months_real_sale_auto_fills_the_status_to_regular_order(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $pid = $this->pipeline($this->rep, 'AutoCo');
+        $g = $this->goal($this->rep, $round, 'AutoCo');
+        $g->update(['sales_pipeline_id' => $pid]);
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => Carbon::parse(self::MONDAY)->format('Y-m'), 'sale_amount' => 4.0, 'created_at' => now(), 'updated_at' => now()]);
+
+        Goals::ensureCheckins($round);
+
+        $ck = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertSame('Regular Order', $ck->status);
+        $this->assertTrue($ck->auto_filled);
+        $this->assertFalse($ck->needs_upsell_confirm);
+        $this->assertNotNull($ck->submitted_at);
+    }
+
+    public function test_no_sale_that_month_leaves_the_status_pending_not_auto_filled(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $pid = $this->pipeline($this->rep, 'QuietCo');
+        $g = $this->goal($this->rep, $round, 'QuietCo');
+        $g->update(['sales_pipeline_id' => $pid]);
+
+        Goals::ensureCheckins($round);
+
+        $ck = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertNull($ck->status);
+        $this->assertFalse($ck->auto_filled);
+        $this->assertFalse($ck->needs_upsell_confirm);
+    }
+
+    public function test_a_second_months_sale_is_flagged_for_confirmation_not_silently_marked_upsell(): void
+    {
+        $this->at(self::MONDAY);   // the goal must exist from the round's own start, or firstWeek() skips week 0
+        $round = Goals::roundFor($this->rep, Carbon::parse(self::MONDAY));
+        $pid = $this->pipeline($this->rep, 'RepeatCo');
+        $g = $this->goal($this->rep, $round, 'RepeatCo');
+        $g->update(['sales_pipeline_id' => $pid]);
+        $this->at('2026-11-02');   // a Monday, week 4 of a round starting self::MONDAY
+        DB::table('sales_pipeline_months')->insert([
+            ['sales_pipeline_id' => $pid, 'month_year' => '2026-10', 'sale_amount' => 3.0, 'created_at' => now(), 'updated_at' => now()],
+            ['sales_pipeline_id' => $pid, 'month_year' => '2026-11', 'sale_amount' => 5.0, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        Goals::ensureCheckins($round);
+
+        $week0 = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertSame('Regular Order', $week0->status);
+        $this->assertTrue($week0->auto_filled);
+
+        $week4 = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 4)->first();
+        $this->assertNull($week4->status);
+        $this->assertTrue($week4->needs_upsell_confirm);
+        $this->assertFalse($week4->auto_filled);
+    }
+
+    public function test_confirming_an_upsell_sets_the_status_and_clears_the_flag(): void
+    {
+        $week4 = $this->pendingUpsellCheckin();
+
+        Goals::confirmUpsell($week4, $this->rep, true);
+        $week4->refresh();
+
+        $this->assertSame('Regular Order', $week4->status);
+        $this->assertTrue($week4->upsell_confirmed);
+        $this->assertFalse($week4->needs_upsell_confirm);
+        $this->assertTrue($week4->auto_filled);
+        $this->assertStringContainsString('repeat/upsell', $week4->comment);
+    }
+
+    public function test_declining_an_upsell_just_clears_the_flag_without_setting_a_status(): void
+    {
+        $week4 = $this->pendingUpsellCheckin();
+
+        Goals::confirmUpsell($week4, $this->rep, false);
+        $week4->refresh();
+
+        $this->assertNull($week4->status);
+        $this->assertFalse($week4->upsell_confirmed);
+        $this->assertFalse($week4->needs_upsell_confirm);
+    }
+
+    public function test_the_confirm_upsell_endpoint_requires_being_allowed_on_that_goal(): void
+    {
+        $week4 = $this->pendingUpsellCheckin();
+        $c = app(NinetyDayGoalController::class);
+
+        $blocked = $c->confirmUpsell($this->ask($this->rep2, 'POST', '/x', ['checkin_id' => $week4->id, 'is_upsell' => true]));
+        $this->assertSame(403, $blocked->getStatusCode());
+        $this->assertNull($week4->fresh()->status, "a colleague's confirmation must not have taken effect");
+
+        $ok = $c->confirmUpsell($this->ask($this->rep, 'POST', '/x', ['checkin_id' => $week4->id, 'is_upsell' => true]));
+        $this->assertTrue($this->body($ok)['success']);
+        $this->assertSame('Regular Order', $week4->fresh()->status);
+    }
+
+    public function test_confirm_upsell_endpoint_refuses_when_nothing_is_pending(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $g = $this->goal($this->rep, $round);
+        Goals::ensureCheckins($round);
+        $ck = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+
+        $res = app(NinetyDayGoalController::class)->confirmUpsell($this->ask($this->rep, 'POST', '/x', ['checkin_id' => $ck->id, 'is_upsell' => true]));
+        $this->assertSame(422, $res->getStatusCode());
+    }
+
+    public function test_mine_page_lists_pending_upsell_confirmations(): void
+    {
+        $week4 = $this->pendingUpsellCheckin();
+
+        $html = app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+
+        $this->assertStringContainsString('RepeatCo', $html);
+        $this->assertStringContainsString("it's an upsell", $html);
+    }
+
+    /** A goal whose week 4 checkin is already flagged needs_upsell_confirm (week 0 auto-filled first). */
+    private function pendingUpsellCheckin(): NinetyDayGoalCheckin
+    {
+        $this->at(self::MONDAY);   // the goal must exist from the round's own start, or firstWeek() skips week 0
+        $round = Goals::roundFor($this->rep, Carbon::parse(self::MONDAY));
+        $pid = $this->pipeline($this->rep, 'RepeatCo');
+        $g = $this->goal($this->rep, $round, 'RepeatCo');
+        $g->update(['sales_pipeline_id' => $pid]);
+        $this->at('2026-11-02');
+        DB::table('sales_pipeline_months')->insert([
+            ['sales_pipeline_id' => $pid, 'month_year' => '2026-10', 'sale_amount' => 3.0, 'created_at' => now(), 'updated_at' => now()],
+            ['sales_pipeline_id' => $pid, 'month_year' => '2026-11', 'sale_amount' => 5.0, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+        Goals::ensureCheckins($round);
+
+        return NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 4)->first();
+    }
+
     // ── the weekly status ────────────────────────────────────────────────
 
     public function test_the_status_choices_are_the_sheets_seven(): void

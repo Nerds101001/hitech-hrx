@@ -14,6 +14,9 @@ class NinetyDayGoalCheckin extends Model
         'submitted_at' => 'datetime',
         'edited_at'    => 'datetime',
         'is_late'      => 'boolean',
+        'auto_filled'          => 'boolean',
+        'needs_upsell_confirm' => 'boolean',
+        'upsell_confirmed'     => 'boolean',
     ];
 
     public function goal()
