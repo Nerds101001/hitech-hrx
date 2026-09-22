@@ -1,12 +1,8 @@
-{{-- Goals | Dashboard | Team | Weekly matrix | Trial orders | Needs attention | Past rounds | Comments. --}}
+{{-- Goals | Dashboard | Past | Comments. Dashboard carries every current-round report as its own section. --}}
 @php
   $tabs = [
       'goals'     => ['Goals', 'bx-target-lock', route('performance.ninety-day-goals.index', ['view' => ($seesMany ?? false) ? 'overview' : 'mine'])],
       'dashboard' => ['Dashboard', 'bx-bar-chart-alt-2', route('performance.ninety-day-goals.dashboard')],
-      'team'      => ['Team', 'bx-group', route('performance.ninety-day-goals.team')],
-      'weekly'    => ['Weekly matrix', 'bx-grid-alt', route('performance.ninety-day-goals.weekly')],
-      'trials'    => ['Trial orders', 'bx-filter-alt', route('performance.ninety-day-goals.trials')],
-      'attention' => ['Needs attention', 'bx-error-circle', route('performance.ninety-day-goals.attention')],
       'past'      => ['Past rounds', 'bx-history', route('performance.ninety-day-goals.past')],
       'comments'  => ['Comments', 'bx-comment-detail', route('performance.ninety-day-goals.comments')],
   ];

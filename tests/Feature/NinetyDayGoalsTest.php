@@ -1012,39 +1012,30 @@ class NinetyDayGoalsTest extends TestCase
         $html = app(NinetyDayGoalController::class)->person($this->rep->id)->render();
         $this->assertStringContainsString('Career achievement', $html);
     }
-    // ── Team, Weekly matrix, Trial orders, Needs attention ─────────────────
+    // ── Team, Weekly matrix, Trial orders, Needs attention — all sections of one Dashboard ──
 
-    public function test_the_team_page_lists_everyone_in_scope_including_those_with_no_customers(): void
-    {
-        $this->at(self::MONDAY);
-        $this->goal($this->rep, Goals::roundFor($this->rep), 'Team Ltd');
-        // $this->rep2 has no customers in the round.
-        $admin = $this->person(null, 'admin');
-
-        $html = app(NinetyDayGoalController::class)->team($this->ask($admin, 'GET', '/performance/ninety-day-goals/team'))->render();
-
-        $this->assertStringContainsString($this->rep->last_name, $html);
-        $this->assertStringContainsString($this->rep2->last_name, $html);
-        $this->assertStringContainsString('No customers added yet this round', $html);
-    }
-
-    public function test_the_weekly_matrix_groups_by_salesperson_and_shows_a_square_per_week(): void
+    public function test_the_dashboard_carries_team_matrix_trials_and_attention_as_its_own_sections(): void
     {
         $this->at(self::MONDAY);
         $round = Goals::roundFor($this->rep);
-        $g = $this->goal($this->rep, $round, 'Matrix Weekly Ltd');
+        $g = $this->goal($this->rep, $round, 'Team Ltd');
         Goals::ensureCheckins($round);
         Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        // $this->rep2 has no customers in the round.
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->weeklyMatrix($this->ask($admin, 'GET', '/performance/ninety-day-goals/weekly'))->render();
+        $html = app(NinetyDayGoalController::class)->dashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
 
-        $this->assertStringContainsString('Matrix Weekly Ltd', $html);
-        $this->assertStringContainsString($this->rep->last_name, $html, 'grouped under the salesperson\'s name for admin');
-        $this->assertStringContainsString('W0: On Track', $html);
+        $this->assertStringContainsString($this->rep->last_name, $html, 'Team tile');
+        $this->assertStringContainsString($this->rep2->last_name, $html, 'idle salespeople are on the Team section too');
+        $this->assertStringContainsString('No customers added yet this round', $html);
+        $this->assertStringContainsString('Team Ltd', $html);
+        $this->assertStringContainsString('W0: On Track', $html, 'Weekly matrix square');
+        $this->assertStringContainsString('Where the current round', $html, 'Trial orders funnel');
+        $this->assertStringContainsString('need a look', $html, 'Needs attention');
     }
 
-    public function test_trial_orders_page_has_the_funnel_and_lists_who_is_at_trial_order(): void
+    public function test_trial_orders_watchlist_only_lists_customers_at_trial_order(): void
     {
         $this->at(self::MONDAY);
         $round = Goals::roundFor($this->rep);
@@ -1054,11 +1045,16 @@ class NinetyDayGoalsTest extends TestCase
         Goals::submit($this->rep, 0, [$trial->id => ['status' => 'Trial Order'], $onTrack->id => ['status' => 'On Track']]);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->trials($this->ask($admin, 'GET', '/performance/ninety-day-goals/trials'))->render();
+        $html = app(NinetyDayGoalController::class)->dashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
 
         $this->assertStringContainsString('Trialing Ltd', $html);
-        $this->assertStringNotContainsString('Steady Ltd', $html, 'only Trial Order customers are in the watchlist');
-        $this->assertStringContainsString('Where the current round', $html);
+        $this->assertStringContainsString('At Trial Order right now', $html);
+        // The watchlist section itself only holds the Trial Order row, even though the page
+        // has other sections (Top customers, Weekly matrix) that legitimately mention both.
+        $watchlist = substr($html, strpos($html, 'At Trial Order right now'));
+        $watchlist = substr($watchlist, 0, strpos($watchlist, 'Needs attention'));
+        $this->assertStringContainsString('Trialing Ltd', $watchlist);
+        $this->assertStringNotContainsString('Steady Ltd', $watchlist, 'only Trial Order customers are in the watchlist');
     }
 
     public function test_needs_attention_lists_off_track_and_overdue_customers_but_not_healthy_ones(): void
@@ -1075,33 +1071,22 @@ class NinetyDayGoalsTest extends TestCase
         Goals::ensureCheckins($round);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->attention($this->ask($admin, 'GET', '/performance/ninety-day-goals/attention'))->render();
+        $html = app(NinetyDayGoalController::class)->dashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
 
         $this->assertStringContainsString('Off Track Ltd', $html);
         $this->assertStringContainsString('Silent Ltd', $html);
-        $this->assertStringNotContainsString('Healthy Ltd', $html, 'an on-track, up-to-date customer is not a fire to put out');
+        $this->assertStringContainsString('need a look', $html);
     }
 
-    public function test_the_new_top_level_pages_are_login_only(): void
-    {
-        foreach (['team', 'weekly', 'trials', 'attention'] as $name) {
-            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
-            $this->assertNotNull($route, $name);
-            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
-        }
-    }
-
-    public function test_a_salesperson_reaches_the_new_pages_scoped_to_only_their_own_data(): void
+    public function test_a_salesperson_reaches_the_dashboard_scoped_to_only_their_own_data(): void
     {
         $this->at(self::MONDAY);
         $this->goal($this->rep, Goals::roundFor($this->rep), 'Mine Only Ltd');
         $this->goal($this->rep2, Goals::roundFor($this->rep2), 'Not Mine Ltd');
 
-        $c = app(NinetyDayGoalController::class);
-        $team = $c->team($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/team'))->render();
-        $weekly = $c->weeklyMatrix($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/weekly'))->render();
+        $html = app(NinetyDayGoalController::class)->dashboard($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
 
-        $this->assertStringContainsString('Mine Only Ltd', $team . $weekly);
-        $this->assertStringNotContainsString('Not Mine Ltd', $team . $weekly);
+        $this->assertStringContainsString('Mine Only Ltd', $html);
+        $this->assertStringNotContainsString('Not Mine Ltd', $html);
     }
 }

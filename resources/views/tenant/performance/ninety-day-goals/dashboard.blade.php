@@ -237,6 +237,166 @@
   </p>
   @endif
 
+  {{-- ═══════════════════ Team ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3 mt-2">Team</h5>
+  <div class="ndg-tiles mb-6">
+    @foreach($team as $p)
+      <a href="{{ route('performance.ninety-day-goals.person', $p['id']) }}" class="ndg-tile">
+        <div class="ndg-tile-top"><span>{{ $p['department'] }}</span><b>{{ $p['goals'] }} {{ \Illuminate\Support\Str::plural('customer', $p['goals']) }}</b></div>
+        <div class="ndg-tile-nm">{{ $p['name'] }}</div>
+        @if($p['goals'] > 0)
+          <div class="ndg-track mb-2"><div class="ndg-fill" style="width:{{ min(100, (float) $p['pct']) }}%;background:{{ $pctColor($p['pct']) }}"></div></div>
+          <div class="ndg-tile-stats">
+            <span><b>{{ $fmtL($p['potential']) }}</b><small>₹L potential</small></span>
+            <span><b style="color:{{ $pctColor($p['pct']) }}">{{ $pctText($p['pct']) }}</b><small>achieved</small></span>
+            <span><b>{{ $p['converted'] }}</b><small>converted</small></span>
+            <span><b class="{{ $p['missing'] > 0 ? 'text-danger' : '' }}">{{ $p['missing'] }}</b><small>not sent</small></span>
+          </div>
+        @else
+          <div class="text-muted small">No customers added yet this round.</div>
+        @endif
+      </a>
+    @endforeach
+  </div>
+
+  {{-- ═══════════════════ Weekly matrix ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3">Weekly matrix</h5>
+  @if($weeklyGoals->isEmpty())
+    <div class="hitech-card mb-6"><div class="card-body p-5 text-center text-muted">No customers in the current round yet.</div></div>
+  @else
+    <div class="hitech-card mb-6">
+      <div class="card-body p-4 border-bottom small text-muted">Every customer in the current round, one square per Monday — the fastest way to see the whole round's shape at once.</div>
+      <div class="card-body p-0 ndg-mx-scroll">
+        <table class="ndg-mx">
+          <thead><tr><th class="ndg-mx-l">Customer</th>@for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor</tr></thead>
+          <tbody>
+          @foreach($weeklyGoals->groupBy('user_id') as $userGoals)
+            @php $u = $userGoals->first()->user; @endphp
+            @if($seesMany)
+              <tr class="ndg-mx-grp"><td colspan="{{ $weeks + 1 }}">{{ trim($u->first_name . ' ' . $u->last_name) }} <span class="text-muted fw-normal">· {{ optional($u->department)->name }}</span></td></tr>
+            @endif
+            @foreach($userGoals as $g)
+              @php $cks = $g->checkins->keyBy('week_no'); @endphp
+              <tr>
+                <td class="ndg-mx-l">{{ $g->client_name }}<span class="ndg-mx-sub">{{ $g->brand }}</span></td>
+                @for($w = 0; $w < $weeks; $w++)
+                  @php
+                    $ck = $cks->get($w);
+                    $st = optional($ck)->status;
+                    [$bg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8']) : [null];
+                    $title = $st ? ($st . ($ck->is_late ? ' (late)' : '')) : ($ck ? 'Not sent' : 'Not due yet');
+                  @endphp
+                  <td class="ndg-mx-c {{ !$st && $ck ? 'ndg-mx-notsent' : '' }}" style="{{ $bg ? 'background:' . $bg : '' }}" title="W{{ $w }}: {{ $title }}">@if(!$st && $ck)×@endif</td>
+                @endfor
+              </tr>
+            @endforeach
+          @endforeach
+          </tbody>
+        </table>
+      </div>
+      <div class="card-body pt-0">
+        <div class="ndg-mx-legend">
+          @foreach($G::STATUS_COLORS as $st => [$bg, $fg])<span><i style="background:{{ $bg }}"></i>{{ $st }}</span>@endforeach
+          <span><i class="ndg-mx-x">×</i>Not sent</span>
+          <span><i class="ndg-mx-empty"></i>Not due yet</span>
+        </div>
+      </div>
+    </div>
+  @endif
+
+  {{-- ═══════════════════ Trial orders ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3">Trial orders</h5>
+  @php
+    $funnel = ['No Report' => $statuses['No Report'] ?? 0, 'Off Track' => $statuses['Off Track'] ?? 0, 'On Track' => $statuses['On Track'] ?? 0,
+      'Trial Order' => $statuses['Trial Order'] ?? 0, 'Regular Order' => $statuses['Regular Order'] ?? 0];
+    $maxF = max(1, ...array_values($funnel));
+  @endphp
+  <div class="row g-4 mb-6">
+    <div class="col-xl-6">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom fw-bold text-dark">Where the current round's {{ $currentTotal }} customers stand</div>
+        <div class="card-body">
+          <div class="ndg-fun">
+            @foreach($funnel as $st => $n)
+              @php [$bg] = $G::STATUS_COLORS[$st] ?? ['#94a3b8']; @endphp
+              <div class="ndg-fun-row">
+                <div class="ndg-fun-l">{{ $st }}</div>
+                <div class="ndg-fun-bar"><div style="width:{{ round($n / $maxF * 100) }}%;background:{{ $bg }}"></div></div>
+                <div class="ndg-fun-v">{{ $n }}<small>{{ $currentTotal ? round($n / $currentTotal * 100) : 0 }}%</small></div>
+              </div>
+            @endforeach
+            @if(($statuses['Dropped'] ?? 0) || ($statuses['Transferred'] ?? 0))
+              <div class="ndg-fun-note">Also this round: {{ $statuses['Dropped'] ?? 0 }} dropped, {{ $statuses['Transferred'] ?? 0 }} transferred out.</div>
+            @endif
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom">
+          <div class="fw-bold text-dark">At Trial Order right now</div>
+          <div class="small text-muted">{{ $trialing->count() }} {{ \Illuminate\Support\Str::plural('customer', $trialing->count()) }} closest to becoming a Regular Order.</div>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table align-middle mb-0">
+            <thead><tr>@if($seesMany)<th>Salesperson</th>@endif<th>Customer</th><th>Brand</th><th class="text-end">Monthly ₹L</th></tr></thead>
+            <tbody>
+            @forelse($trialing as $r)
+              <tr>
+                @if($seesMany)<td>{{ $name($r->user) }}</td>@endif
+                <td class="fw-semibold">{{ $r->goal->client_name }}</td>
+                <td>{{ $r->brand }}</td>
+                <td class="text-end">{{ $fmtL($r->potential) }}</td>
+              </tr>
+            @empty
+              <tr><td colspan="{{ $seesMany ? 4 : 3 }}" class="text-center text-muted p-4">Nobody is at Trial Order right now.</td></tr>
+            @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {{-- ═══════════════════ Needs attention ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3">Needs attention</h5>
+  <div class="hitech-card mb-6">
+    <div class="card-body p-4 border-bottom">
+      <div class="fw-bold text-dark">{{ $attention->count() }} of {{ $currentTotal }} customers need a look</div>
+      <div class="small text-muted">Off track, silent, dropped, or a status that never came — most urgent first.</div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr>
+          @if($seesMany)<th>Salesperson</th>@endif
+          <th>Customer</th><th>Brand</th><th class="text-end">Monthly ₹L</th><th>Latest status</th><th>Not sent</th>
+        </tr></thead>
+        <tbody>
+        @forelse($attention as $r)
+          @php [$bg, $fg] = $G::STATUS_COLORS[$r->status] ?? ['#e2e8f0', '#475569']; @endphp
+          <tr>
+            @if($seesMany)<td>{{ $name($r->user) }}</td>@endif
+            <td class="fw-semibold">{{ $r->goal->client_name }}</td>
+            <td>{{ $r->brand }}</td>
+            <td class="text-end">{{ $fmtL($r->potential) }}</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+            <td>
+              @if($r->overdueWeeks > 0)
+                <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>
+              @else
+                <span class="ndg-none">up to date</span>
+              @endif
+            </td>
+          </tr>
+        @empty
+          <tr><td colspan="{{ $seesMany ? 6 : 5 }}" class="text-center text-muted p-4">Nothing needs attention right now.</td></tr>
+        @endforelse
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   </div>
 </div>
 
@@ -261,6 +421,42 @@
   .ndg-people th[data-k] { cursor: pointer; white-space: nowrap; }
   .ndg-people th[data-k]:hover { color: #007a7a; }
   .ndg-people td, .ndg-people th { white-space: nowrap; }
+
+  .ndg-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .ndg-tile { display: block; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; text-decoration: none; transition: border-color .15s; }
+  .ndg-tile:hover { border-color: #007a7a; }
+  .ndg-tile-top { display: flex; justify-content: space-between; font-size: .7rem; color: #64748b; }
+  .ndg-tile-top b { color: #0f172a; font-weight: 700; }
+  .ndg-tile-nm { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 4px 0 10px; line-height: 1.25; }
+  .ndg-tile-stats { display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; gap: 6px; margin-top: 12px; }
+  .ndg-tile-stats b { display: block; font-size: .92rem; font-weight: 700; color: #0f172a; }
+  .ndg-tile-stats small { font-size: .64rem; color: #94a3b8; }
+
+  .ndg-mx-scroll { overflow: auto; max-height: 60vh; }
+  .ndg-mx { border-collapse: separate; border-spacing: 3px; font-size: .78rem; padding: 0 20px 8px; width: 100%; }
+  .ndg-mx thead th { position: sticky; top: 0; background: #fff; font-weight: 700; color: #64748b; font-size: .68rem; text-align: center; padding: 8px 0 6px; z-index: 2; }
+  .ndg-mx-l { text-align: left !important; white-space: nowrap; padding-right: 14px !important; font-weight: 600; color: #0f172a; position: sticky; left: 0; background: #fff; z-index: 1; }
+  .ndg-mx-sub { display: block; font-size: .64rem; font-weight: 400; color: #94a3b8; }
+  .ndg-mx-c { width: 26px; height: 26px; min-width: 26px; border-radius: 4px; text-align: center; color: #fff; font-weight: 700; box-shadow: inset 0 0 0 1px #e2e8f0; background: #f1f5f9; }
+  .ndg-mx-notsent { color: #b42318; background: #fff !important; border: 1px dashed #f0a5a0; }
+  .ndg-mx-grp td { font-weight: 700; color: #0f172a; padding: 14px 8px 4px; font-size: .82rem; background: #fff; position: sticky; left: 0; }
+  .ndg-mx-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: .78rem; color: #64748b; }
+  .ndg-mx-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .ndg-mx-legend i { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+  .ndg-mx-legend i.ndg-mx-x { background: none; color: #b42318; text-align: center; line-height: 14px; font-weight: 800; box-shadow: inset 0 0 0 1px #e2e8f0; }
+  .ndg-mx-legend i.ndg-mx-empty { background: #f1f5f9; box-shadow: inset 0 0 0 1px #e2e8f0; }
+
+  .ndg-fun { display: flex; flex-direction: column; gap: 10px; }
+  .ndg-fun-row { display: grid; grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px; gap: 14px; align-items: center; }
+  .ndg-fun-bar { height: 26px; background: #eef2f5; border-radius: 5px; overflow: hidden; }
+  .ndg-fun-bar div { height: 100%; border-radius: 5px; min-width: 2px; }
+  .ndg-fun-l { font-size: .84rem; font-weight: 600; color: #0f172a; }
+  .ndg-fun-v { text-align: right; font-weight: 700; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .ndg-fun-v small { display: block; font-weight: 400; color: #94a3b8; font-size: .66rem; }
+  .ndg-fun-note { font-size: .8rem; color: #64748b; margin-top: 4px; }
+
+  .ndg-none { color: #cbd5e1; }
+  .ndg-overdue { color: #b42318; font-weight: 700; font-size: .82rem; }
 </style>
 @endsection
 
