@@ -552,7 +552,13 @@
   document.querySelectorAll('.ndg-goto').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
   var initial = (location.hash || '').replace('#', '');
   if (initial && document.querySelector('.ndg-adm-section[data-section="' + initial + '"]')) { show(initial); }
+})();
 
+// ApexCharts loads as an ES module (Vite's build always emits type="module" scripts), which the spec defers
+// until after the document has parsed — after the IIFE above would otherwise already have run
+// and found `ApexCharts` still undefined. DOMContentLoaded fires only once every deferred/
+// module script has finished, so waiting for it is what actually guarantees ApexCharts exists.
+document.addEventListener('DOMContentLoaded', function () {
   if (typeof ApexCharts === 'undefined') { return; }
   var teal = '#007a7a', muted = '#64748b';
 
@@ -603,6 +609,6 @@
       grid: { borderColor: '#eef2f5' },
     }).render();
   });
-})();
+});
 </script>
 @endsection

@@ -610,7 +610,13 @@
     });
   })();
 
-  (function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    // ApexCharts loads as an ES module (Vite's build always emits type="module" scripts),
+    // which the spec defers until after the document has parsed — after this classic inline
+    // script would
+    // otherwise already have run and found `ApexCharts` still undefined. DOMContentLoaded
+    // fires only once every deferred/module script has finished, so waiting for it is what
+    // actually guarantees ApexCharts exists by the time this runs.
     if (typeof ApexCharts === 'undefined') { return; }
     var teal = '#007a7a', muted = '#64748b';
 
@@ -648,6 +654,6 @@
         plotOptions: { pie: { donut: { size: '68%', labels: { show: true, total: { show: true, label: 'Customers', color: '#0f172a' } } } } },
       }).render();
     }
-  })();
+  });
 </script>
 @endsection
