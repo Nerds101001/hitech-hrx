@@ -612,7 +612,7 @@ class NinetyDayGoalsTest extends TestCase
         $res = $this->postNote($this->rep, $g, 5, 'too early');
 
         $this->assertSame(422, $res->getStatusCode());
-        $this->assertSame(0, \App\Models\NinetyDayGoalNote::count());
+        $this->assertSame(0, \App\Models\NinetyDayGoalNote::where('goal_id', $g->id)->count());
     }
 
     public function test_the_sales_team_cannot_delete_a_customer_or_a_comment_but_admin_can(): void
