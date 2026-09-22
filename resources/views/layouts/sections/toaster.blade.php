@@ -156,7 +156,7 @@
   };
 
   window.showSuccessSwal = function(message) {
-    Swal.fire({
+    return Swal.fire({
       title: '<i class="bx bx-check-circle"></i> Success!',
       text: message,
       html: `

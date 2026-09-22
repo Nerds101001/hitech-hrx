@@ -217,6 +217,48 @@
     @endforeach
   </div>
 
+  @if($isAdmin && $programs->isNotEmpty())
+    {{-- Programs: what "New program" just created is otherwise invisible anywhere else on this page. --}}
+    <div class="hitech-card mb-6">
+      <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+        <h6 class="fw-bold mb-0 text-dark">Programs</h6>
+        <span class="small text-muted">{{ $programs->count() }} most recent</span>
+      </div>
+      <div class="table-responsive">
+        <table class="table align-middle mb-0">
+          <thead>
+            <tr class="text-muted small text-uppercase">
+              <th class="ps-4">Name</th>
+              <th>Dates</th>
+              <th>Enrolled</th>
+              <th>Created by</th>
+              <th class="pe-4">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @foreach($programs as $p)
+              <tr>
+                <td class="ps-4 fw-semibold text-dark">{{ $p->name }}</td>
+                <td class="small text-muted">{{ $p->starts_on->format('d M Y') }} – {{ $p->ends_on->format('d M Y') }}</td>
+                <td>{{ $p->rounds_count }}</td>
+                <td class="small text-muted">{{ trim(optional($p->creator)->first_name . ' ' . optional($p->creator)->last_name) ?: '—' }}</td>
+                <td class="pe-4">
+                  @if($p->isLive)
+                    <span class="ndg-chip" style="background:#008080;color:#fff">Live</span>
+                  @elseif($today->lt($p->starts_on))
+                    <span class="ndg-chip" style="background:#f59e0b;color:#fff">Upcoming</span>
+                  @else
+                    <span class="ndg-chip" style="background:#64748b;color:#fff">Ended</span>
+                  @endif
+                </td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table>
+      </div>
+    </div>
+  @endif
+
   {{-- Week by week --}}
   <div class="hitech-card mb-6">
     <div class="card-body p-4 border-bottom">

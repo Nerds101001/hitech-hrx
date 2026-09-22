@@ -30,6 +30,7 @@
         <div class="col-md-3">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">End date</label>
           <input type="date" id="ndgPEnd" class="form-control">
+          <div class="small text-muted mt-1">Auto-filled to {{ $roundSpanDays }} days from the start — change it if this program should run longer or shorter.</div>
         </div>
       </div>
       <div class="small text-muted mt-2">Everyone invited gets a task to add their target customers, due 3 days after the start date — and a notification and email the moment the program is created.</div>
@@ -37,25 +38,37 @@
   </div>
 
   <div class="hitech-card mb-6">
-    <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
-      <div>
-        <div class="fw-bold text-dark">Who's in it</div>
-        <div class="small text-muted">Every salesperson is ticked by default — untick anyone to leave them out.</div>
+    <div class="card-body p-4 border-bottom">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+          <div class="fw-bold text-dark">Who's in it</div>
+          <div class="small text-muted" id="ndgPCount">Every salesperson is ticked by default — untick anyone to leave them out.</div>
+        </div>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPAll">Select all</button>
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPNone">Select none</button>
+        </div>
       </div>
-      <div class="d-flex gap-2">
-        <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPAll">Select all</button>
-        <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPNone">Select none</button>
+      <div class="row g-2 align-items-center">
+        <div class="col-md-6">
+          <input type="search" id="ndgPSearch" class="form-control" placeholder="Search by name or department…">
+        </div>
+        <div class="col-md-6 d-flex gap-2">
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPIncludeShown"><i class="bx bx-check-square"></i> Include shown</button>
+          <button type="button" class="btn btn-hitech-cancel rounded-pill px-3" id="ndgPExcludeShown"><i class="bx bx-square"></i> Exclude shown</button>
+        </div>
       </div>
     </div>
     <div class="card-body p-4">
       <div class="ndg-p-people">
         @foreach($people as $p)
-          <label class="ndg-p-person">
+          <label class="ndg-p-person" data-q="{{ strtolower($p->first_name . ' ' . $p->last_name . ' ' . optional($p->department)->name) }}">
             <input type="checkbox" class="ndg-p-check" value="{{ $p->id }}" checked>
             <span>{{ $p->first_name }} {{ $p->last_name }}<em>{{ optional($p->department)->name }}</em></span>
           </label>
         @endforeach
       </div>
+      <div class="small text-muted mt-2 d-none" id="ndgPNoMatch">Nothing matches that search.</div>
     </div>
   </div>
 
@@ -82,8 +95,53 @@
   var URL = '{{ route('performance.ninety-day-goals.programs.store') }}';
   var BACK = '{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}';
 
-  document.getElementById('ndgPAll').addEventListener('click', function () { document.querySelectorAll('.ndg-p-check').forEach(function (c) { c.checked = true; }); });
-  document.getElementById('ndgPNone').addEventListener('click', function () { document.querySelectorAll('.ndg-p-check').forEach(function (c) { c.checked = false; }); });
+  var ROUND_SPAN_DAYS = {{ (int) $roundSpanDays }};
+  var people = Array.prototype.slice.call(document.querySelectorAll('.ndg-p-person'));
+  var countEl = document.getElementById('ndgPCount');
+
+  function updateCount() {
+    var total = people.length, checked = people.filter(function (p) { return p.querySelector('.ndg-p-check').checked; }).length;
+    countEl.textContent = checked + ' of ' + total + ' selected.';
+  }
+  document.querySelectorAll('.ndg-p-check').forEach(function (c) { c.addEventListener('change', updateCount); });
+  updateCount();
+
+  document.getElementById('ndgPAll').addEventListener('click', function () { document.querySelectorAll('.ndg-p-check').forEach(function (c) { c.checked = true; }); updateCount(); });
+  document.getElementById('ndgPNone').addEventListener('click', function () { document.querySelectorAll('.ndg-p-check').forEach(function (c) { c.checked = false; }); updateCount(); });
+
+  // ── search, and include/exclude just what's showing ──
+  var search = document.getElementById('ndgPSearch'), noMatch = document.getElementById('ndgPNoMatch');
+  function visiblePeople() {
+    var q = search.value.trim().toLowerCase(), shown = 0;
+    people.forEach(function (p) {
+      var match = !q || p.getAttribute('data-q').indexOf(q) !== -1;
+      p.style.display = match ? '' : 'none';
+      if (match) { shown++; }
+    });
+    noMatch.classList.toggle('d-none', shown > 0);
+    return people.filter(function (p) { return p.style.display !== 'none'; });
+  }
+  search.addEventListener('input', visiblePeople);
+  document.getElementById('ndgPIncludeShown').addEventListener('click', function () {
+    visiblePeople().forEach(function (p) { p.querySelector('.ndg-p-check').checked = true; });
+    updateCount();
+  });
+  document.getElementById('ndgPExcludeShown').addEventListener('click', function () {
+    visiblePeople().forEach(function (p) { p.querySelector('.ndg-p-check').checked = false; });
+    updateCount();
+  });
+
+  // ── end date auto-fills to start + 90 days, until the admin edits it directly ──
+  var startEl = document.getElementById('ndgPStart'), endEl = document.getElementById('ndgPEnd'), endTouched = false;
+  function addDays(dateStr, days) {
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+  startEl.addEventListener('change', function () {
+    if (startEl.value && !endTouched) { endEl.value = addDays(startEl.value, ROUND_SPAN_DAYS); }
+  });
+  endEl.addEventListener('input', function () { endTouched = true; });
 
   document.getElementById('ndgPSave').addEventListener('click', function () {
     var name = document.getElementById('ndgPName').value.trim();
@@ -104,9 +162,16 @@
     }).then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); })
       .then(function (j) {
         btn.disabled = false;
-        if (!j.success) { msg.textContent = j.message || (j.errors ? Object.values(j.errors).join(' ') : 'Could not create the program.'); return; }
-        alert(j.message);
-        location.href = BACK;
+        if (!j.success) {
+          msg.textContent = j.message || (j.errors ? Object.values(j.errors).join(' ') : 'Could not create the program.');
+          if (typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg.textContent); }
+          return;
+        }
+        if (typeof window.showSuccessSwal === 'function') {
+          window.showSuccessSwal(j.message).then(function () { location.href = BACK; });
+        } else {
+          location.href = BACK;
+        }
       }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
   });
 })();

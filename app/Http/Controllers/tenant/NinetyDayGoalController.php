@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendNinetyDayProgramInviteMail;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayProgram;
@@ -118,6 +119,17 @@ class NinetyDayGoalController extends Controller
         $withGoals = $goals->pluck('user_id')->unique();
         $notStarted = $roundFilter === 'current' ? $people->reject(fn ($u) => $withGoals->contains($u->id))->values() : collect();
 
+        $isAdmin = Goals::seesEveryone($viewer);
+        // Admin-created programs, newest first, so "New program" has somewhere visible to land —
+        // without this an admin who just created one had no way to see it existed at all.
+        $programs = $isAdmin
+            ? NinetyDayProgram::withCount('rounds')->with('creator')->orderByDesc('id')->limit(20)->get()
+                ->map(function ($p) use ($today) {
+                    $p->isLive = $today->between($p->starts_on, $p->ends_on);
+                    return $p;
+                })
+            : collect();
+
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'       => 'overview',
             'canSwitch'  => $isSales,
@@ -126,7 +138,8 @@ class NinetyDayGoalController extends Controller
             'strip'      => $strip,
             'notStarted' => $notStarted,
             'people'     => $people,
-            'isAdmin'    => Goals::seesEveryone($viewer),
+            'isAdmin'    => $isAdmin,
+            'programs'   => $programs,
             'preUser'    => $request->integer('user_id') ?: null,
             'filters'    => ['round' => $roundFilter],
             'today'      => $today,
@@ -371,6 +384,7 @@ class NinetyDayGoalController extends Controller
             'canSwitch' => false,
             'seesMany'  => true,
             'people' => Goals::salesStaff(),
+            'roundSpanDays' => Goals::ROUND_SPAN_DAYS,
         ]);
     }
 
@@ -391,10 +405,13 @@ class NinetyDayGoalController extends Controller
 
         $result = Goals::createProgram($admin, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']), $data['user_ids']);
 
-        // Sent after the response, not before — the program and every round are already
-        // committed, so a slow or unreachable mail host must not hold up the page. One
-        // try/catch per person, same as bulk task assignment: one bad address never stops
-        // the rest of the invites from going out.
+        // The in-app notification is a fast local insert, sent right away — same deferred,
+        // one-try/catch-per-person pattern as bulk task assignment, so one bad row never stops
+        // the rest. The actual email is dispatched as a queued job instead of sent here inline:
+        // real SMTP sends are slow and this app's local .env points at a real mail account, so
+        // sending them inline used to hold up the HTTP response itself for minutes (see
+        // SendNinetyDayProgramInviteMail's docblock). Dispatching a queued job is just a fast
+        // database insert, so the popup now returns instantly either way.
         $programId = $result['program']->id;
         $enrolledRoundIds = array_map(fn ($e) => $e['round']->id, $result['enrolled']);
         app()->terminating(function () use ($programId, $enrolledRoundIds) {
@@ -408,6 +425,7 @@ class NinetyDayGoalController extends Controller
                 } catch (\Throwable $e) {
                     Log::warning("90-Day Goals program invite failed for user {$round->user_id}: " . $e->getMessage());
                 }
+                SendNinetyDayProgramInviteMail::dispatch($program, $round);
             }
         });
 

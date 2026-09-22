@@ -23,12 +23,31 @@ class ProgramInvite extends Notification
         $this->program = $program;
         $this->round = $round;
         $this->title = 'New 90-Day Goals program: ' . $program->name;
-        $this->message = ($program->creator->getFullName() ?? 'An admin') . ' added you to "' . $program->name . '" — add your target customers within 3 days.';
+        $this->message = (optional($program->creator)->getFullName() ?? 'An admin') . ' added you to "' . $program->name . '" — add your target customers within 3 days.';
+    }
+
+    /**
+     * Demo/import accounts (sales@demo.com, the "(Import)" CSV accounts, etc.) have made-up
+     * addresses that were never meant to be mailed — this app's local .env points at a real
+     * Gmail account, so a fake address here would still be a real send attempt. Shared by
+     * via() and by SendNinetyDayProgramInviteMail, which sends mail on its own queued path
+     * and must apply the same guard rather than trusting via() to have run first.
+     */
+    public static function looksFakeAddress(?string $email): bool
+    {
+        $domain = strtolower((string) strrchr((string) $email, '@'));   // includes the leading "@"
+        $fakeDomains = ['@demo.com', '@example.com', '@example.test', '@example.org'];
+
+        return in_array($domain, $fakeDomains, true) || str_ends_with($domain, '.demo');
     }
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        // The in-app entry is a fast local insert, sent synchronously so it's visible the moment
+        // the program is created. The actual email is never sent from here — it goes out through
+        // SendNinetyDayProgramInviteMail, queued separately so a slow or unreachable mail host
+        // can never hold up the page (see that job's docblock for why).
+        return ['database'];
     }
 
     public function toMail(object $notifiable): MailMessage
