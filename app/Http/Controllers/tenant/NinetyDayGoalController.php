@@ -226,15 +226,18 @@ class NinetyDayGoalController extends Controller
             $r->stats = Goals::dashboard([$r->user_id], ['round_id' => $r->id])['cards'];
         });
         $seesMany = $scope === null || count($scope) > 1;
+        // Every closed round in scope, added together: the top-line picture before the per-person breakdown.
+        $closed = Goals::dashboard($scope, ['round' => 'closed']);
 
         return view('tenant.performance.ninety-day-goals.past', [
             'tab'      => 'past',
             'canSwitch' => Goals::isSalesStaff($user),
             'seesMany' => $seesMany,
             'rounds'   => $rounds,
+            'cards'    => $closed['cards'],
             // Everyone's closed-round record side by side: who actually delivered, across every finished round.
             // Only people with at least one closed round appear — no point listing 58 people at 0/0.
-            'leaderboard' => $seesMany ? Goals::dashboard($scope, ['round' => 'closed'])['users']->filter(fn ($u) => $u['goals'] > 0)->values() : null,
+            'leaderboard' => $seesMany ? $closed['users']->filter(fn ($u) => $u['goals'] > 0)->values() : null,
         ]);
     }
 

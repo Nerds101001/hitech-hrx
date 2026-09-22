@@ -31,14 +31,21 @@ class NinetyDayGoalService
     public const STATUSES = ['On Track', 'Off Track', 'Trial Order', 'Regular Order', 'No Report', 'Dropped', 'Transferred'];
 
     /** Chip colours [background, text], close to the sheet's so the team recognises them at a glance. */
+    /**
+     * [background, text]. A deliberate progression, not arbitrary colours: HRX teal for the
+     * healthy/converting statuses (deepest teal is the best outcome, Regular Order), amber for
+     * "still deciding" (Trial Order), a warmer orange for "needs attention" (Off Track), grey
+     * for silence, red only for the one status that is actually a loss (Dropped), and a neutral
+     * slate for Transferred, which is administrative, not a failure.
+     */
     public const STATUS_COLORS = [
-        'On Track'    => ['#0f7b5c', '#ffffff'],
-        'Off Track'   => ['#b42318', '#ffffff'],
-        'Trial Order' => ['#6d3aa5', '#ffffff'],
-        'Regular Order' => ['#b9d9ea', '#0b3b53'],
-        'No Report'   => ['#3f4652', '#ffffff'],
-        'Dropped'     => ['#4c2a7a', '#ffffff'],
-        'Transferred' => ['#f9d0cf', '#9f1d1a'],
+        'On Track'    => ['#007a7a', '#ffffff'],
+        'Off Track'   => ['#c2540c', '#ffffff'],
+        'Trial Order' => ['#f5a623', '#3a2a04'],
+        'Regular Order' => ['#0b5b48', '#ffffff'],
+        'No Report'   => ['#64748b', '#ffffff'],
+        'Dropped'     => ['#b42318', '#ffffff'],
+        'Transferred' => ['#cbd5e1', '#334155'],
     ];
 
     /** W0 to W12. */

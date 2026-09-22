@@ -23,6 +23,48 @@
 
   <div class="px-4">
 
+  @if($cards['goals'] > 0)
+    {{-- Every closed round in scope, added together. --}}
+    <div class="row g-3 mb-6">
+      @php
+        $c = $cards;
+        $topCards = [
+          ['bx-flag-checkered', 'Rounds finished', $rounds->count()],
+          ['bx-target-lock', 'Customers', $c['goals']],
+          ['bx-rupee', 'Target ₹L', $fmtL($c['target'])],
+          ['bx-trending-up', 'Sold ₹L', $fmtL($c['achieved'])],
+          ['bx-pie-chart-alt-2', 'Achievement', $pctText($c['pct'])],
+          ['bx-cart-download', 'Converted', $c['converted']],
+        ];
+      @endphp
+      @foreach($topCards as [$icon, $label, $value])
+        <div class="col-6 col-md-4 col-xl">
+          <div class="ndg-kpi">
+            <div class="ndg-kpi-l"><i class="bx {{ $icon }}"></i>{{ $label }}</div>
+            <div class="ndg-kpi-v" @if($label==='Achievement') style="color:{{ $pctColor($c['pct']) }}" @endif>{{ $value }}</div>
+          </div>
+        </div>
+      @endforeach
+    </div>
+  @endif
+
+  @if($seesMany && $leaderboard && $leaderboard->count() >= 3)
+    {{-- Top 3, at a glance. --}}
+    <div class="row g-3 mb-6">
+      @foreach($leaderboard->take(3) as $i => $u)
+        <div class="col-md-4">
+          <div class="ndg-pod {{ $i === 0 ? 'ndg-pod-first' : '' }}">
+            <div class="ndg-pod-rk">{{ $i + 1 }}</div>
+            <div class="ndg-pod-nm">{{ $u['name'] }}</div>
+            <div class="ndg-pod-zn">{{ $u['department'] }}</div>
+            <div class="ndg-pod-mv" style="color:{{ $pctColor($u['pct']) }}">{{ $pctText($u['pct']) }}</div>
+            <div class="ndg-pod-ml">{{ $fmtL($u['achieved']) }} of {{ $fmtL($u['target']) }} ₹L sold</div>
+          </div>
+        </div>
+      @endforeach
+    </div>
+  @endif
+
   @if($seesMany && $leaderboard && $leaderboard->isNotEmpty())
     <div class="hitech-card mb-6">
       <div class="card-body p-4 border-bottom">
@@ -107,5 +149,17 @@
   .ndg-round-pct { font-weight: 800; font-size: 1.05rem; }
   .ndg-track { height: 6px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
   .ndg-fill { height: 100%; border-radius: 99px; min-width: 2px; }
+  .ndg-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; }
+  .ndg-kpi-l { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; display: flex; align-items: center; gap: 5px; }
+  .ndg-kpi-l i { color: #007a7a; font-size: 1rem; }
+  .ndg-kpi-v { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .ndg-pod { border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; background: #fff; height: 100%; }
+  .ndg-pod-first { box-shadow: inset 0 4px 0 #007a7a; }
+  .ndg-pod-rk { font-size: 2.6rem; font-weight: 800; color: #cbd5e1; line-height: 1; }
+  .ndg-pod-first .ndg-pod-rk { color: #007a7a; }
+  .ndg-pod-nm { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin-top: 6px; }
+  .ndg-pod-zn { font-size: .78rem; color: #64748b; }
+  .ndg-pod-mv { font-size: 1.6rem; font-weight: 800; margin-top: 12px; font-variant-numeric: tabular-nums; }
+  .ndg-pod-ml { font-size: .76rem; color: #64748b; }
 </style>
 @endsection

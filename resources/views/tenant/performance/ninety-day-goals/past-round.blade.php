@@ -52,6 +52,27 @@
 
   <div class="px-4">
 
+  {{-- The headline: how much of the target landed, and the full spread of outcomes it took to get there. --}}
+  <div class="ndg-hero mb-6">
+    <div class="ndg-hero-num" style="color: {{ $pctColor($c['pct']) }}">{{ $pctText($c['pct']) }}</div>
+    <div class="ndg-hero-what">of round target sold — {{ $fmtL($c['achieved']) }} ₹L of {{ $fmtL($c['target']) }} ₹L, across {{ $c['goals'] }} {{ \Illuminate\Support\Str::plural('customer', $c['goals']) }}</div>
+    @php $statusTotal = max(1, array_sum($d['statuses'])); @endphp
+    <div class="ndg-strip">
+      @foreach($d['statuses'] as $st => $n)
+        @continue($n === 0)
+        @php [$bg] = $G::STATUS_COLORS[$st] ?? ['#94a3b8', '#fff']; @endphp
+        <div class="ndg-seg" style="flex-grow:{{ $n }};background:{{ $bg }}" title="{{ $st }}: {{ $n }}">{{ $n }}</div>
+      @endforeach
+    </div>
+    <div class="ndg-legend">
+      @foreach($d['statuses'] as $st => $n)
+        @continue($n === 0)
+        @php [$bg] = $G::STATUS_COLORS[$st] ?? ['#94a3b8', '#fff']; @endphp
+        <div class="ndg-lg"><span class="ndg-sw" style="background:{{ $bg }}"></span><div><b>{{ $n }}</b><span>{{ $st }} · {{ round($n / $statusTotal * 100) }}%</span></div></div>
+      @endforeach
+    </div>
+  </div>
+
   <div class="row g-3 mb-6">
     @php
       $cards = [
@@ -109,10 +130,10 @@
     </div>
   </div>
 
-  {{-- Full week-by-week detail, for whoever wants to see exactly how a result was reached. --}}
-  <details class="hitech-card mb-6 ndg-detail">
-    <summary class="card-body p-4 fw-bold text-dark">Week-by-week detail (W0 to W{{ $weeks - 1 }}, with every comment)</summary>
-    <div class="card-body p-0 ndg-scroll border-top">
+  {{-- Full week-by-week detail: exactly how the result above was reached, every status and every comment. --}}
+  <div class="hitech-card mb-6">
+    <div class="card-body p-4 border-bottom fw-bold text-dark">Week-by-week detail, W0 to W{{ $weeks - 1 }}</div>
+    <div class="card-body p-0 ndg-scroll">
       <table class="table align-middle mb-0 ndg-grid">
         <thead>
           <tr>
@@ -143,13 +164,23 @@
         </tbody>
       </table>
     </div>
-  </details>
+  </div>
 
   </div>
 </div>
 
 <style>
   .ndg-closed-badge { background: #f1f5f9; color: #64748b; font-size: .68rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .ndg-hero { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px 26px; }
+  .ndg-hero-num { font-size: clamp(40px, 6vw, 64px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .ndg-hero-what { color: #64748b; font-size: .92rem; margin-top: 6px; }
+  .ndg-strip { display: flex; gap: 2px; height: 34px; border-radius: 6px; overflow: hidden; margin-top: 20px; background: #eef2f5; }
+  .ndg-seg { display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: .78rem; min-width: 2px; }
+  .ndg-legend { display: flex; flex-wrap: wrap; gap: 16px 22px; margin-top: 16px; }
+  .ndg-lg { display: flex; gap: 8px; align-items: flex-start; }
+  .ndg-lg .ndg-sw { width: 11px; height: 11px; border-radius: 3px; margin-top: 4px; flex: none; }
+  .ndg-lg b { display: block; font-size: 1.05rem; font-weight: 800; line-height: 1.2; }
+  .ndg-lg span { display: block; font-size: .72rem; color: #64748b; }
   .ndg-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; }
   .ndg-kpi-l { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; display: flex; align-items: center; gap: 5px; }
   .ndg-kpi-l i { color: #007a7a; font-size: 1rem; }
@@ -176,9 +207,5 @@
   .ndg-cm-body { color: #1e293b; line-height: 1.55; white-space: pre-line; max-width: 900px; }
   .ndg-track { height: 7px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
   .ndg-fill { height: 100%; border-radius: 99px; min-width: 2px; }
-  .ndg-detail summary { cursor: pointer; list-style: none; }
-  .ndg-detail summary::-webkit-details-marker { display: none; }
-  .ndg-detail summary::before { content: '\25B8'; display: inline-block; margin-right: 8px; color: #007a7a; transition: transform .15s; }
-  .ndg-detail[open] summary::before { transform: rotate(90deg); }
 </style>
 @endsection
