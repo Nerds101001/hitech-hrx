@@ -28,6 +28,7 @@ class NinetyDayGoal extends Model
         'goal',
         'goal_type',
         'monthly_potential',
+        'expected_order_date',
         'target_value',
         'w0', 'w1', 'w2', 'w3', 'w4', 'w5', 'w6', 'w7', 'w8', 'w9', 'w10', 'w11', 'w12',
         'is_active',
@@ -39,6 +40,7 @@ class NinetyDayGoal extends Model
     protected $casts = [
         'target_value'      => 'float',
         'monthly_potential' => 'float',
+        'expected_order_date' => 'date',
         'is_active'         => 'boolean',
         'closed_at'         => 'datetime',
     ];

@@ -826,6 +826,12 @@
                     "slug": "performance.ninety-day-goals.program-dashboard"
                 },
                 {
+                    "url": "/performance/ninety-day-goals/my-program",
+                    "name": "My Programs",
+                    "icon": "menu-icon bx bx-briefcase",
+                    "slug": "performance.ninety-day-goals.round"
+                },
+                {
                     "url": "/performance/ninety-day-goals/program-dashboard#tracking",
                     "name": "All Programs",
                     "icon": "menu-icon bx bx-list-ul",

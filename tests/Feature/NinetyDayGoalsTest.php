@@ -1648,4 +1648,98 @@ class NinetyDayGoalsTest extends TestCase
         $html = app(NinetyDayGoalController::class)->adminView($this->ask($admin, 'GET', '/performance/ninety-day-goals/admin-view'))->render();
         $this->assertStringContainsString('Order Status', $html, 'adminView() keeps its own Order Status donut, unaffected by the new page');
     }
+
+    // ── the individual round detail page ("90-Day Goals ▸ My Programs") ──────────────────
+
+    public function test_a_colleague_cannot_open_someone_elses_round_but_their_manager_can(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $manager = $this->person($this->sales, 'manager');
+        $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
+
+        Auth::setUser($this->rep2);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(NinetyDayGoalController::class)->roundDetail($round->id);
+    }
+
+    public function test_a_manager_can_open_their_reports_round(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $manager = $this->person($this->sales, 'manager');
+        $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
+
+        Auth::setUser($manager);
+        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+        $this->assertStringContainsString('Customer Targets', $html);
+    }
+
+    public function test_round_detail_buckets_every_customer_into_exactly_one_kpi_count(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+
+        $this->soldGoal($this->rep, 'Ordered Co', 2.0, 'KIF', 5.0);   // achieved > 0
+        $dropped = $this->goal($this->rep, $round, 'Dropped Co');
+        Goals::submit($this->rep, 0, [$dropped->id => ['status' => 'Dropped']]);
+        $atRisk = $this->goal($this->rep, $round, 'AtRisk Co');
+        Goals::submit($this->rep, 0, [$atRisk->id => ['status' => 'Off Track', 'comment' => 'stalled']]);
+        $inProgress = $this->goal($this->rep, $round, 'Progress Co');
+        Goals::submit($this->rep, 0, [$inProgress->id => ['status' => 'On Track']]);
+
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+
+        $this->assertStringContainsString('Ordered Co', $html);
+        $this->assertStringContainsString('Dropped Co', $html);
+        $this->assertStringContainsString('AtRisk Co', $html);
+        $this->assertStringContainsString('Progress Co', $html);
+    }
+
+    public function test_add_customer_is_hidden_once_the_round_is_closed(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $this->goal($this->rep, $round, 'Closed Round Co');
+        $round->update(['status' => 'closed']);
+
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+
+        $this->assertStringNotContainsString('Add Customer', $html, 'a finished round is not where new targets get added');
+        $this->assertStringContainsString('Edit', $html, 'editing an existing target is still allowed');
+    }
+
+    public function test_my_program_redirects_a_salesperson_to_their_own_active_round(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+
+        Auth::setUser($this->rep);
+        $res = app(NinetyDayGoalController::class)->myProgram();
+
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $res);
+        $this->assertStringContainsString('/round/' . $round->id, $res->getTargetUrl());
+    }
+
+    public function test_expected_order_date_can_be_set_through_the_existing_update_endpoint(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $g = $this->goal($this->rep, $round);
+
+        $res = app(NinetyDayGoalController::class)->update($this->ask($this->rep, 'PUT', '/x', ['expected_order_date' => '2027-02-14']), $g->id);
+        $this->assertTrue($this->body($res)['success']);
+        $this->assertSame('2027-02-14', $g->fresh()->expected_order_date->toDateString());
+    }
+
+    public function test_the_round_and_my_program_routes_are_login_only(): void
+    {
+        foreach (['round', 'my-program'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
+        }
+    }
 }

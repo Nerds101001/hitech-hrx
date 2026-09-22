@@ -687,6 +687,78 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
+    /** "90-Day Goals ▸ My Programs" always means the viewer's own current round — resolved here so
+     *  the sidebar's static URL doesn't need to know which round that is. */
+    public function myProgram()
+    {
+        $user = Auth::user();
+        if (!Goals::isSalesStaff($user)) {
+            return redirect()->route('performance.ninety-day-goals.program-dashboard')
+                ->with('error', 'Only the Sales team has a program of their own to view.');
+        }
+
+        return redirect()->route('performance.ninety-day-goals.round', Goals::roundFor($user)->id);
+    }
+
+    /**
+     * One round of one program, in full: the customers in it, each one's weekly status and
+     * comments, and the round's own summary — the individual view behind "My Programs" for a
+     * salesperson, or an admin drilling into a named participant from the Program Wise Summary.
+     */
+    public function roundDetail($id)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $round = NinetyDayRound::with(['user.department', 'program'])->findOrFail($id);
+        if ($scope !== null && !in_array((int) $round->user_id, $scope, true)) {
+            abort(403, 'That round is not in your team.');
+        }
+
+        $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)
+            ->whereNull('closed_at')->orderBy('id')->get();
+        $d = Goals::dashboard([$round->user_id], ['round_id' => $round->id]);
+        $weeks = Goals::weeksOf($round);
+        $today = Carbon::today();
+
+        // The KPI row's buckets, each goal counted exactly once, worst-first: dropped, then an
+        // order already on the books, then at risk, then everything else still in progress.
+        $dropped = $d['rows']->filter(fn ($r) => $r->status === 'Dropped')->pluck('goal.id');
+        $stillOpen = $d['rows']->reject(fn ($r) => $dropped->contains($r->goal->id));
+        $orders = $stillOpen->filter(fn ($r) => $r->achieved > 0)->pluck('goal.id');
+        $notYetOrdered = $stillOpen->reject(fn ($r) => $orders->contains($r->goal->id));
+        $atRisk = $this->attentionRows($notYetOrdered, $today)->pluck('goal.id');
+        $counts = [
+            'total'      => $d['rows']->count(),
+            'orders'     => $orders->count(),
+            'atRisk'     => $atRisk->count(),
+            'dropped'    => $dropped->count(),
+            'inProgress' => $d['rows']->count() - $orders->count() - $atRisk->count() - $dropped->count(),
+        ];
+
+        // Comments and status changes on this round only, newest first — for the Activity Log tab.
+        $activity = Goals::comments([$round->user_id], ['round_id' => $round->id], 100);
+
+        return view('tenant.performance.ninety-day-goals.round-detail', [
+            'tab'      => null,
+            'canSwitch' => Goals::isSalesStaff($user),
+            'isAdmin'  => Goals::seesEveryone($user),
+            'canEdit'  => Goals::seesEveryone($user) || (int) $round->user_id === (int) $user->id,
+            'round'    => $round,
+            'goals'    => $goals,
+            'd'        => $d,
+            'weeks'    => $weeks,
+            'today'    => $today,
+            'counts'   => $counts,
+            'atRiskGoalIds' => $atRisk,
+            'droppedGoalIds' => $dropped,
+            'activity' => $activity,
+            'statuses' => Goals::STATUSES,
+            'brands'   => array_keys(Goals::BRANDS),
+        ]);
+    }
+
     // ── admin-created programs ───────────────────────────────────────────
 
     /** The form: name, dates, and every salesperson to invite (all ticked, deselect to exclude). */
@@ -878,6 +950,7 @@ class NinetyDayGoalController extends Controller
             'brand'             => 'nullable|string|max:100',
             'goal'              => 'nullable|string|max:255',
             'monthly_potential' => 'nullable|numeric|min:0|max:100000',
+            'expected_order_date' => 'nullable|date',
         ]);
         $goal->update(array_filter($data, fn ($v) => $v !== null));
 

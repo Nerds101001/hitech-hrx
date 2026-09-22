@@ -1119,6 +1119,8 @@ Route::middleware([
             Route::get('/ninety-day-goals/past', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'past'])->name('ninety-day-goals.past');
             Route::get('/ninety-day-goals/past/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pastRound'])->name('ninety-day-goals.past.show');
             Route::get('/ninety-day-goals/person/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'person'])->name('ninety-day-goals.person');
+            Route::get('/ninety-day-goals/my-program', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'myProgram'])->name('ninety-day-goals.my-program');
+            Route::get('/ninety-day-goals/round/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'roundDetail'])->name('ninety-day-goals.round');
             Route::get('/ninety-day-goals/programs/create', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programCreate'])->name('ninety-day-goals.programs.create');
             Route::post('/ninety-day-goals/programs', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programStore'])->name('ninety-day-goals.programs.store');
             Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');
