@@ -151,6 +151,27 @@ class NinetyDayGoalController extends Controller
     }
 
     /**
+     * Which of these dashboard() rows need someone to step in, worst first: off track, silent,
+     * dropped, or a Monday that never came. Shared by the live Dashboard and every Past round
+     * report, since "needs attention" is a question every round can be asked, not just the
+     * one running now.
+     */
+    private function attentionRows($rows, Carbon $today)
+    {
+        return $rows->map(function ($r) use ($today) {
+            // Same rule as the cards' own overdue count: due today still has until end of day.
+            $overdue = $r->goal->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today));
+            $r->overdueWeeks = $overdue->count();
+            $r->oldestOverdue = $overdue->min('due_on');
+            $r->urgency = $r->overdueWeeks > 0 ? (2 + $r->overdueWeeks) : match ($r->status) {
+                'Dropped' => 0, 'Off Track' => 3, 'No Report' => 2, default => -1,
+            };
+
+            return $r;
+        })->filter(fn ($r) => $r->urgency >= 0)->sortByDesc('urgency')->values();
+    }
+
+    /**
      * Everything about the current round lives here as one dashboard, in sections — the summary
      * cards, top customers/brands and per-person achievement (already here), then the team as
      * tiles, the week-by-week matrix, the trial-order funnel, and who needs attention. These are
@@ -190,18 +211,7 @@ class NinetyDayGoalController extends Controller
             ->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)))->values();
 
         $trialing = $current['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values();
-
-        $attention = $current['rows']->map(function ($r) use ($today) {
-            // Same rule as the cards' own overdue count: due today still has until end of day.
-            $overdue = $r->goal->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today));
-            $r->overdueWeeks = $overdue->count();
-            $r->oldestOverdue = $overdue->min('due_on');
-            $r->urgency = $r->overdueWeeks > 0 ? (2 + $r->overdueWeeks) : match ($r->status) {
-                'Dropped' => 0, 'Off Track' => 3, 'No Report' => 2, default => -1,
-            };
-
-            return $r;
-        })->filter(fn ($r) => $r->urgency >= 0)->sortByDesc('urgency')->values();
+        $attention = $this->attentionRows($current['rows'], $today);
 
         return view('tenant.performance.ninety-day-goals.dashboard', [
             'tab'      => 'dashboard',
@@ -296,6 +306,7 @@ class NinetyDayGoalController extends Controller
         }
 
         $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)->orderBy('id')->get();
+        $d = Goals::dashboard([$round->user_id], ['round_id' => $round->id]);
 
         return view('tenant.performance.ninety-day-goals.past-round', [
             'tab'      => 'past',
@@ -303,8 +314,11 @@ class NinetyDayGoalController extends Controller
             'seesMany' => $scope === null || count($scope) > 1,
             'round'    => $round,
             'goals'    => $goals,
-            'd'        => Goals::dashboard([$round->user_id], ['round_id' => $round->id]),
+            'd'        => $d,
             'weeks'    => Goals::WEEKS,
+            // Same reports as the live Dashboard, scoped to just this one round.
+            'trialing'  => $d['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values(),
+            'attention' => $this->attentionRows($d['rows'], Carbon::today()),
         ]);
     }
 

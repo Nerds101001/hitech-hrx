@@ -29,6 +29,18 @@
   @include('tenant.performance.ninety-day-goals._tabs')
 
   <div class="px-4">
+  <div class="row g-4">
+    <div class="col-lg-2">
+      @include('tenant.performance.ninety-day-goals._report_nav', ['sections' => [
+        ['overview', 'Overview', 'bx-bar-chart-alt-2'],
+        ['team', 'Team', 'bx-group'],
+        ['weekly', 'Weekly tracker', 'bx-grid-alt'],
+        ['trials', 'Trial orders', 'bx-filter-alt'],
+        ['attention', 'Needs attention', 'bx-error-circle'],
+      ]])
+    </div>
+    <div class="col-lg-10">
+  <section id="overview" class="ndg-report-section">
 
   {{-- Filters --}}
   <div class="hitech-card mb-6">
@@ -237,6 +249,9 @@
   </p>
   @endif
 
+  </section>
+
+  <section id="team" class="ndg-report-section">
   {{-- ═══════════════════ Team ═══════════════════ --}}
   <h5 class="fw-bold text-dark mb-3 mt-2">Team</h5>
   <div class="ndg-tiles mb-6">
@@ -259,6 +274,9 @@
     @endforeach
   </div>
 
+  </section>
+
+  <section id="weekly" class="ndg-report-section">
   {{-- ═══════════════════ Weekly matrix ═══════════════════ --}}
   <h5 class="fw-bold text-dark mb-3">Weekly matrix</h5>
   @if($weeklyGoals->isEmpty())
@@ -304,6 +322,9 @@
     </div>
   @endif
 
+  </section>
+
+  <section id="trials" class="ndg-report-section">
   {{-- ═══════════════════ Trial orders ═══════════════════ --}}
   <h5 class="fw-bold text-dark mb-3">Trial orders</h5>
   @php
@@ -359,6 +380,9 @@
     </div>
   </div>
 
+  </section>
+
+  <section id="attention" class="ndg-report-section">
   {{-- ═══════════════════ Needs attention ═══════════════════ --}}
   <h5 class="fw-bold text-dark mb-3">Needs attention</h5>
   <div class="hitech-card mb-6">
@@ -397,6 +421,10 @@
     </div>
   </div>
 
+  </section>
+
+    </div>
+  </div>
   </div>
 </div>
 

@@ -948,7 +948,10 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertStringContainsString('Result, by customer', $html, 'the ranked result table');
         $this->assertStringContainsString('Every customer, every week', $html, 'the compact matrix');
         $this->assertStringContainsString('Week-by-week detail', $html, 'the full status/comment grid');
-        $this->assertSame(3, substr_count($html, 'One Page Ltd'), 'the same customer appears in the result table, the matrix and the full grid');
+        $this->assertStringContainsString('Where this round', $html, 'the trial-order funnel');
+        $this->assertStringContainsString('customers needed a look', $html, 'the needs-attention section');
+        // Result table, matrix, detail grid, and Needs attention (its W1 was never answered) — four sections, one customer.
+        $this->assertSame(4, substr_count($html, 'One Page Ltd'));
         $this->assertStringContainsString('W0: On Track', $html, 'the matrix square tooltip');
         $this->assertStringContainsString('W1: Not sent', $html);
         $this->assertStringContainsString('ndg-mx-notsent', $html);
@@ -1088,5 +1091,48 @@ class NinetyDayGoalsTest extends TestCase
 
         $this->assertStringContainsString('Mine Only Ltd', $html);
         $this->assertStringNotContainsString('Not Mine Ltd', $html);
+    }
+    // ── the reporting sidebar: every round, live or past, carries the same set ─
+
+    public function test_a_past_rounds_trial_order_watchlist_and_attention_list_are_scoped_to_just_that_round(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $trial = $this->goal($this->rep, $round, 'Round Trial Ltd');
+        $trial->checkins()->create(['round_id' => $round->id, 'week_no' => 0, 'due_on' => '2026-01-05', 'status' => 'Trial Order']);
+        $dropped = $this->goal($this->rep, $round, 'Round Dropped Ltd');
+        $dropped->checkins()->create(['round_id' => $round->id, 'week_no' => 0, 'due_on' => '2026-01-05', 'status' => 'Dropped']);
+        $admin = $this->person(null, 'admin');
+        $this->ask($admin, 'GET', '/x');
+
+        $html = app(NinetyDayGoalController::class)->pastRound($round->id)->render();
+
+        $this->assertStringContainsString('Round Trial Ltd', $html);
+        $this->assertStringContainsString('Round Dropped Ltd', $html);
+        $this->assertStringContainsString('At Trial Order', $html);
+        $this->assertStringContainsString('data-ndg-jump="trials"', $html);
+        $this->assertStringContainsString('data-ndg-jump="attention"', $html);
+    }
+
+    public function test_the_dashboard_and_a_past_round_both_carry_the_same_report_sidebar(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $round, 'Sidebar Ltd');
+        $this->goal($this->rep, Goals::roundFor($this->rep), 'Live Ltd');
+        $admin = $this->person(null, 'admin');
+        $c = app(NinetyDayGoalController::class);
+
+        $dashboard = $c->dashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/dashboard'))->render();
+        $past = $c->pastRound($round->id)->render();
+
+        foreach (['team', 'weekly', 'trials', 'attention'] as $section) {
+            $this->assertStringContainsString('id="' . $section . '"', $dashboard, "dashboard section {$section}");
+        }
+        foreach (['overview', 'result', 'matrix', 'trials', 'attention', 'detail'] as $section) {
+            $this->assertStringContainsString('id="' . $section . '"', $past, "past round section {$section}");
+        }
     }
 }

@@ -51,6 +51,19 @@
   @include('tenant.performance.ninety-day-goals._tabs')
 
   <div class="px-4">
+  <div class="row g-4">
+    <div class="col-lg-2">
+      @include('tenant.performance.ninety-day-goals._report_nav', ['sections' => [
+        ['overview', 'Overview', 'bx-bar-chart-alt-2'],
+        ['result', 'Result', 'bx-list-ol'],
+        ['matrix', 'Weekly tracker', 'bx-grid-alt'],
+        ['trials', 'Trial orders', 'bx-filter-alt'],
+        ['attention', 'Needs attention', 'bx-error-circle'],
+        ['detail', 'Full detail', 'bx-table'],
+      ]])
+    </div>
+    <div class="col-lg-10">
+  <section id="overview" class="ndg-report-section">
 
   {{-- The headline: how much of the target landed, and the full spread of outcomes it took to get there. --}}
   <div class="ndg-hero mb-6">
@@ -95,6 +108,9 @@
     @endforeach
   </div>
 
+  </section>
+
+  <section id="result" class="ndg-report-section">
   {{-- The result, ranked by how much of the target actually landed. --}}
   <div class="hitech-card mb-6">
     <div class="card-body p-4 border-bottom">
@@ -132,6 +148,9 @@
     </div>
   </div>
 
+  </section>
+
+  <section id="matrix" class="ndg-report-section">
   {{-- Every customer, every week, at a glance. --}}
   <div class="hitech-card mb-6">
     <div class="card-body p-4 border-bottom">
@@ -180,6 +199,97 @@
     </div>
   </div>
 
+  </section>
+
+  <section id="trials" class="ndg-report-section">
+  {{-- ═══════════════════ Trial orders ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3">Trial orders</h5>
+  @php
+    $funnel = ['No Report' => $d['statuses']['No Report'] ?? 0, 'Off Track' => $d['statuses']['Off Track'] ?? 0, 'On Track' => $d['statuses']['On Track'] ?? 0,
+      'Trial Order' => $d['statuses']['Trial Order'] ?? 0, 'Regular Order' => $d['statuses']['Regular Order'] ?? 0];
+    $maxF = max(1, ...array_values($funnel));
+  @endphp
+  <div class="row g-4 mb-6">
+    <div class="col-xl-6">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom fw-bold text-dark">Where this round's {{ $c['goals'] }} customers stand</div>
+        <div class="card-body">
+          <div class="ndg-fun">
+            @foreach($funnel as $st => $n)
+              @php [$bg] = $G::STATUS_COLORS[$st] ?? ['#94a3b8']; @endphp
+              <div class="ndg-fun-row">
+                <div class="ndg-fun-l">{{ $st }}</div>
+                <div class="ndg-fun-bar"><div style="width:{{ round($n / $maxF * 100) }}%;background:{{ $bg }}"></div></div>
+                <div class="ndg-fun-v">{{ $n }}<small>{{ $c['goals'] ? round($n / $c['goals'] * 100) : 0 }}%</small></div>
+              </div>
+            @endforeach
+            @if(($d['statuses']['Dropped'] ?? 0) || ($d['statuses']['Transferred'] ?? 0))
+              <div class="ndg-fun-note">Also: {{ $d['statuses']['Dropped'] ?? 0 }} dropped, {{ $d['statuses']['Transferred'] ?? 0 }} transferred out.</div>
+            @endif
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-6">
+      <div class="hitech-card h-100">
+        <div class="card-body p-4 border-bottom">
+          <div class="fw-bold text-dark">At Trial Order</div>
+          <div class="small text-muted">{{ $trialing->count() }} {{ \Illuminate\Support\Str::plural('customer', $trialing->count()) }} closest to becoming a Regular Order.</div>
+        </div>
+        <div class="card-body p-0 table-responsive">
+          <table class="table align-middle mb-0">
+            <thead><tr><th>Customer</th><th>Brand</th><th class="text-end">Monthly ₹L</th></tr></thead>
+            <tbody>
+            @forelse($trialing as $r)
+              <tr><td class="fw-semibold">{{ $r->goal->client_name }}</td><td>{{ $r->brand }}</td><td class="text-end">{{ $fmtL($r->potential) }}</td></tr>
+            @empty
+              <tr><td colspan="3" class="text-center text-muted p-4">Nobody was at Trial Order in this round.</td></tr>
+            @endforelse
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <section id="attention" class="ndg-report-section">
+  {{-- ═══════════════════ Needs attention ═══════════════════ --}}
+  <h5 class="fw-bold text-dark mb-3">Needs attention</h5>
+  <div class="hitech-card mb-6">
+    <div class="card-body p-4 border-bottom">
+      <div class="fw-bold text-dark">{{ $attention->count() }} of {{ $c['goals'] }} customers needed a look</div>
+      <div class="small text-muted">Off track, silent, dropped, or a status that never came, worst first.</div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr><th>Customer</th><th>Brand</th><th class="text-end">Monthly ₹L</th><th>Latest status</th><th>Not sent</th></tr></thead>
+        <tbody>
+        @forelse($attention as $r)
+          @php [$bg, $fg] = $G::STATUS_COLORS[$r->status] ?? ['#e2e8f0', '#475569']; @endphp
+          <tr>
+            <td class="fw-semibold">{{ $r->goal->client_name }}</td>
+            <td>{{ $r->brand }}</td>
+            <td class="text-end">{{ $fmtL($r->potential) }}</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+            <td>
+              @if($r->overdueWeeks > 0)
+                <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>
+              @else
+                <span class="ndg-none">up to date</span>
+              @endif
+            </td>
+          </tr>
+        @empty
+          <tr><td colspan="5" class="text-center text-muted p-4">Nothing needed attention in this round.</td></tr>
+        @endforelse
+        </tbody>
+      </table>
+    </div>
+  </div>
+  </section>
+
+  <section id="detail" class="ndg-report-section">
   {{-- Full week-by-week detail: exactly how the result above was reached, every status and every comment. --}}
   <div class="hitech-card mb-6">
     <div class="card-body p-4 border-bottom fw-bold text-dark">Week-by-week detail, W0 to W{{ $weeks - 1 }}</div>
@@ -218,6 +328,10 @@
     </div>
   </div>
 
+  </section>
+
+    </div>
+  </div>
   </div>
 </div>
 
@@ -267,5 +381,14 @@
   .ndg-n b { font-size: .72rem; color: #0f172a; }
   .ndg-n span { font-size: .66rem; color: #94a3b8; margin-left: 6px; }
   .ndg-n-status { color: #334155; }
+  .ndg-fun { display: flex; flex-direction: column; gap: 10px; }
+  .ndg-fun-row { display: grid; grid-template-columns: minmax(110px, 150px) minmax(0, 1fr) 110px; gap: 14px; align-items: center; }
+  .ndg-fun-bar { height: 26px; background: #eef2f5; border-radius: 5px; overflow: hidden; }
+  .ndg-fun-bar div { height: 100%; border-radius: 5px; min-width: 2px; }
+  .ndg-fun-l { font-size: .84rem; font-weight: 600; color: #0f172a; }
+  .ndg-fun-v { text-align: right; font-weight: 700; font-size: .88rem; font-variant-numeric: tabular-nums; }
+  .ndg-fun-v small { display: block; font-weight: 400; color: #94a3b8; font-size: .66rem; }
+  .ndg-fun-note { font-size: .8rem; color: #64748b; margin-top: 4px; }
+  .ndg-overdue { color: #b42318; font-weight: 700; font-size: .82rem; }
 </style>
 @endsection
