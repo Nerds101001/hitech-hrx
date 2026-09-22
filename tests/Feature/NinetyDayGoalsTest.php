@@ -6,9 +6,11 @@ use App\Http\Controllers\tenant\NinetyDayGoalController;
 use App\Models\Department;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalCheckin;
+use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
 use App\Models\Task;
 use App\Models\User;
+use App\Notifications\NinetyDayGoal\ProgramInvite;
 use App\Services\KpiAutoSourceService;
 use App\Services\NinetyDayGoalService as Goals;
 use Carbon\Carbon;
@@ -18,6 +20,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\View;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -1188,6 +1191,103 @@ class NinetyDayGoalsTest extends TestCase
         }
         foreach (['overview', 'result', 'matrix', 'trials', 'attention', 'detail'] as $section) {
             $this->assertStringContainsString('id="' . $section . '"', $past, "past round section {$section}");
+        }
+    }
+
+    // ── admin-created programs ───────────────────────────────────────────
+
+    public function test_creating_a_program_enrols_everyone_invited_with_the_admins_chosen_dates(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $starts = Carbon::parse('2027-01-04');   // a Monday, deliberately not "today"
+        $ends = Carbon::parse('2027-04-05');
+
+        $result = Goals::createProgram($admin, 'Q1 Push', $starts, $ends, [$this->rep->id, $this->rep2->id]);
+
+        $this->assertSame('Q1 Push', $result['program']->name);
+        $this->assertCount(2, $result['enrolled']);
+        $this->assertCount(0, $result['skipped']);
+
+        $round = NinetyDayRound::where('user_id', $this->rep->id)->first();
+        $this->assertSame($result['program']->id, $round->program_id);
+        $this->assertSame('2027-01-04', $round->starts_on->toDateString(), 'the exact date the admin picked, not a computed Monday');
+        $this->assertSame('2027-04-05', $round->ends_on->toDateString());
+        $this->assertSame('active', $round->status);
+
+        $task = Task::where('user_id', $this->rep->id)->where('title', 'like', '90-Day Goals: add your target customers%')->first();
+        $this->assertNotNull($task);
+        $this->assertSame($admin->id, $task->assigned_by_id);
+        $this->assertSame('2027-01-07', $task->due_date->toDateString(), 'three days from the start date');
+    }
+
+    public function test_someone_already_mid_round_is_skipped_not_replaced(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $existing = Goals::roundFor($this->rep);   // rep already has an active round
+
+        $result = Goals::createProgram($admin, 'Overlap Test', Carbon::parse('2027-01-04'), Carbon::parse('2027-04-05'), [$this->rep->id, $this->rep2->id]);
+
+        $this->assertCount(1, $result['enrolled']);
+        $this->assertCount(1, $result['skipped']);
+        $this->assertSame($this->rep->id, $result['skipped'][0]->id);
+        $this->assertSame($existing->id, Goals::activeRound($this->rep)->id, 'their existing round is untouched');
+    }
+
+    public function test_two_programs_can_run_at_once_with_different_dates(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+
+        Goals::createProgram($admin, 'Early Drive', Carbon::parse('2027-01-04'), Carbon::parse('2027-04-05'), [$this->rep->id]);
+        Goals::createProgram($admin, 'Later Drive', Carbon::parse('2027-02-01'), Carbon::parse('2027-05-02'), [$this->rep2->id]);
+
+        $r1 = NinetyDayRound::where('user_id', $this->rep->id)->first();
+        $r2 = NinetyDayRound::where('user_id', $this->rep2->id)->first();
+        $this->assertNotSame($r1->program_id, $r2->program_id);
+        $this->assertSame('2027-01-04', $r1->starts_on->toDateString());
+        $this->assertSame('2027-02-01', $r2->starts_on->toDateString());
+    }
+
+    public function test_only_admin_can_create_a_program(): void
+    {
+        $this->at(self::MONDAY);
+
+        $res = app(NinetyDayGoalController::class)->programStore($this->ask($this->rep, 'POST', '/x', [
+            'name' => 'Nope', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'user_ids' => [$this->rep2->id],
+        ]));
+
+        $this->assertSame(403, $res->getStatusCode());
+        $this->assertSame(0, NinetyDayProgram::count());
+    }
+
+    public function test_the_program_controller_notifies_every_enrolled_person_and_nobody_skipped(): void
+    {
+        Notification::fake();
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        Goals::roundFor($this->rep2);   // already mid-round, will be skipped
+
+        $res = app(NinetyDayGoalController::class)->programStore($this->ask($admin, 'POST', '/x', [
+            'name' => 'Notify Test', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'user_ids' => [$this->rep->id, $this->rep2->id],
+        ]));
+        app()->terminate();
+
+        $body = $this->body($res);
+        $this->assertTrue($body['success']);
+        $this->assertSame(1, $body['enrolled']);
+        $this->assertSame(1, $body['skipped']);
+        Notification::assertSentTo($this->rep, ProgramInvite::class);
+        Notification::assertNotSentTo($this->rep2, ProgramInvite::class);
+    }
+
+    public function test_the_program_routes_are_login_only(): void
+    {
+        foreach (['programs.create', 'programs.store'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
 }

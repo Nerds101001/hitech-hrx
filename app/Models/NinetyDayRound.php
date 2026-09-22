@@ -20,6 +20,12 @@ class NinetyDayRound extends Model
         return $this->belongsTo(User::class);
     }
 
+    /** Null for a round that started on its own the ordinary way; set when an admin created it as part of a named drive. */
+    public function program()
+    {
+        return $this->belongsTo(NinetyDayProgram::class, 'program_id');
+    }
+
     public function goals()
     {
         return $this->hasMany(NinetyDayGoal::class, 'round_id');

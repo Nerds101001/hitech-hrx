@@ -74,6 +74,11 @@
           <i class="bx bx-plus-circle fs-5"></i><span class="fw-bold">Add customers</span>
         </button>
       @endif
+      @if($mode === 'overview' && $isAdmin)
+        <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
+          <i class="bx bx-calendar-plus fs-5"></i><span class="fw-bold">New program</span>
+        </a>
+      @endif
     </div>
   </div>
 

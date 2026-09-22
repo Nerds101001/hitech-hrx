@@ -5,12 +5,15 @@ namespace App\Http\Controllers\tenant;
 use App\Http\Controllers\Controller;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalNote;
+use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
 use App\Models\User;
+use App\Notifications\NinetyDayGoal\ProgramInvite;
 use App\Services\NinetyDayGoalService as Goals;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 90-Day Goals. Open to everyone in the Sales department for their own goals;
@@ -350,6 +353,72 @@ class NinetyDayGoalController extends Controller
             'active'   => $active,
             // Every round this person has ever had, added together — their whole record, not just what's closed.
             'career'   => Goals::dashboard([$target->id], ['round' => 'all']),
+        ]);
+    }
+
+    // ── admin-created programs ───────────────────────────────────────────
+
+    /** The form: name, dates, and every salesperson to invite (all ticked, deselect to exclude). */
+    public function programCreate()
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Only admin/HR can start a new 90-Day Goals program.');
+        }
+
+        return view('tenant.performance.ninety-day-goals.program-create', [
+            'tab'    => 'goals',
+            'canSwitch' => false,
+            'seesMany'  => true,
+            'people' => Goals::salesStaff(),
+        ]);
+    }
+
+    /** Creates the program, enrolls whoever isn't already mid-round, and notifies each of them. */
+    public function programStore(Request $request)
+    {
+        $admin = Auth::user();
+        if (!Goals::seesEveryone($admin)) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can start a new 90-Day Goals program.'], 403);
+        }
+        $data = $request->validate([
+            'name'          => 'required|string|max:150',
+            'starts_on'     => 'required|date',
+            'ends_on'       => 'required|date|after:starts_on',
+            'user_ids'      => 'required|array|min:1',
+            'user_ids.*'    => 'integer|exists:users,id',
+        ]);
+
+        $result = Goals::createProgram($admin, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']), $data['user_ids']);
+
+        // Sent after the response, not before — the program and every round are already
+        // committed, so a slow or unreachable mail host must not hold up the page. One
+        // try/catch per person, same as bulk task assignment: one bad address never stops
+        // the rest of the invites from going out.
+        $programId = $result['program']->id;
+        $enrolledRoundIds = array_map(fn ($e) => $e['round']->id, $result['enrolled']);
+        app()->terminating(function () use ($programId, $enrolledRoundIds) {
+            $program = NinetyDayProgram::find($programId);
+            if (!$program || !$enrolledRoundIds) {
+                return;
+            }
+            foreach (NinetyDayRound::whereIn('id', $enrolledRoundIds)->with('user')->get() as $round) {
+                try {
+                    $round->user?->notify(new ProgramInvite($program, $round));
+                } catch (\Throwable $e) {
+                    Log::warning("90-Day Goals program invite failed for user {$round->user_id}: " . $e->getMessage());
+                }
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => count($result['enrolled']) . ' salesperson(s) added to "' . $result['program']->name . '".'
+                . ($result['skipped'] ? ' ' . count($result['skipped']) . ' already had an active round and were skipped: '
+                    . collect($result['skipped'])->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name))->implode(', ') . '.' : ''),
+            'program_id' => $result['program']->id,
+            'enrolled'   => count($result['enrolled']),
+            'skipped'    => count($result['skipped']),
         ]);
     }
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalCheckin;
 use App\Models\NinetyDayGoalNote;
+use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
 use App\Models\SalesPipeline;
 use App\Models\Task;
@@ -136,6 +137,60 @@ class NinetyDayGoalService
             'ends_on'   => $monday->copy()->addDays(self::ROUND_SPAN_DAYS)->toDateString(),
             'status'    => 'active',
         ]);
+    }
+
+    /**
+     * Admin creates a named, dated 90-Day Goals program and invites a set of people into it —
+     * several of these can run at once, each with its own start/end date and its own people,
+     * quite separate from anyone's ordinary self-starting round. Anyone already mid-round is
+     * skipped (their existing round stays exactly as it is) rather than silently replaced.
+     * Each enrolled person gets a round dated exactly as the admin chose, an "add your
+     * customers" task due 3 days from the start, and a notification + email — sent by the
+     * caller via notify(new ProgramInvite(...)) for each entry in 'enrolled', same pattern as
+     * bulk task assignment: after the response, one try/catch per person.
+     */
+    public static function createProgram(User $admin, string $name, Carbon $startsOn, Carbon $endsOn, array $userIds): array
+    {
+        $startsOn = $startsOn->copy()->startOfDay();
+        $endsOn = $endsOn->copy()->startOfDay();
+
+        $program = NinetyDayProgram::create([
+            'tenant_id' => $admin->tenant_id, 'name' => trim($name),
+            'starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString(),
+            'created_by_id' => $admin->id,
+        ]);
+
+        $targets = self::salesStaff()->whereIn('id', $userIds)->values();
+        $enrolled = [];
+        $skipped = [];
+
+        DB::transaction(function () use ($targets, $program, $admin, $startsOn, $endsOn, $name, &$enrolled, &$skipped) {
+            foreach ($targets as $user) {
+                if (self::activeRound($user)) {
+                    $skipped[] = $user;
+                    continue;
+                }
+
+                $round = NinetyDayRound::create([
+                    'tenant_id' => $user->tenant_id, 'user_id' => $user->id, 'program_id' => $program->id,
+                    'round_no'  => (int) NinetyDayRound::where('user_id', $user->id)->max('round_no') + 1,
+                    'starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString(),
+                    'status'    => 'active',
+                ]);
+
+                $task = Task::create([
+                    'user_id' => $user->id, 'assigned_by_id' => $admin->id, 'created_by_id' => $admin->id, 'updated_by_id' => $admin->id,
+                    'title'   => self::addCustomersTitle($round),
+                    'description' => 'You have been added to the "' . $name . '" 90-Day Goals program. Open 90-Day Goals and add your target customers within 3 days.',
+                    'type' => 'open', 'status' => 'new', 'priority' => 'medium',
+                    'for_date' => $startsOn, 'due_date' => $startsOn->copy()->addDays(3)->toDateString(), 'tenant_id' => $user->tenant_id,
+                ]);
+
+                $enrolled[] = ['user' => $user, 'round' => $round, 'task' => $task];
+            }
+        });
+
+        return ['program' => $program, 'enrolled' => $enrolled, 'skipped' => $skipped];
     }
 
     /** The user's active round, starting one this week if they have none. */
