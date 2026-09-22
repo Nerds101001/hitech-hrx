@@ -306,6 +306,37 @@ class NinetyDayGoalService
         ]);
     }
 
+    /**
+     * A weekly or add-customers task is closed automatically once the underlying data is
+     * actually done (see completeTaskIfDone / runWeekly). Someone ticking it complete by
+     * hand, on My Tasks or Task Management, must be held to the same rule: this returns
+     * why it cannot be closed yet, or null if it is one of ours and really is done (or it
+     * is not one of ours at all, in which case the normal task rules apply).
+     */
+    public static function taskBlockReason(Task $task): ?string
+    {
+        $title = (string) $task->title;
+
+        if (preg_match('/^90-Day Goals: submit W(\d+) status/', $title, $m)) {
+            $week = (int) $m[1];
+            $open = NinetyDayGoalCheckin::where('week_no', $week)->whereNull('status')
+                ->whereHas('goal', fn ($g) => $g->where('user_id', $task->user_id)->whereNull('closed_at')
+                    ->whereHas('round', fn ($r) => $r->where('status', 'active')))
+                ->exists();
+
+            return $open ? "Give a status for every customer for week {$week} before marking this complete." : null;
+        }
+
+        if (str_starts_with($title, '90-Day Goals: add your target customers')) {
+            $has = NinetyDayGoal::where('user_id', $task->user_id)->whereNull('closed_at')
+                ->whereHas('round', fn ($r) => $r->where('status', 'active'))->exists();
+
+            return $has ? null : 'Add at least one target customer on the 90-Day Goals page before marking this complete.';
+        }
+
+        return null;
+    }
+
     public static function completeTaskIfDone(User $user, NinetyDayRound $round, int $week): void
     {
         $open = NinetyDayGoalCheckin::where('round_id', $round->id)->where('week_no', $week)->whereNull('status')

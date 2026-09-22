@@ -126,6 +126,10 @@ class TaskController extends Controller
             'status' => 'required|in:new,in_progress,completed,cancelled,hold,rejected,reassigned,reopened,resolved,closed',
         ]);
 
+        if (in_array($validated['status'], Task::CLOSED_STATUSES, true) && ($reason = \App\Services\NinetyDayGoalService::taskBlockReason($task))) {
+            return response()->json(['success' => false, 'message' => $reason], 422);
+        }
+
         try {
             $task->status = $validated['status'];
             if (in_array($validated['status'], Task::CLOSED_STATUSES, true)) {

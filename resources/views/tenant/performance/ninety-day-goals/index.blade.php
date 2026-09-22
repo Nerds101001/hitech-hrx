@@ -291,16 +291,17 @@
         <thead>
           <tr>
             <th rowspan="2" class="ndg-sort" data-col="0" style="min-width:170px">Salesperson</th>
-            <th rowspan="2" class="ndg-sort" data-col="1" style="min-width:180px">Customer</th>
-            <th rowspan="2" class="ndg-sort" data-col="2" style="min-width:150px">Product</th>
-            <th rowspan="2" class="ndg-sort" data-col="3">Brand</th>
-            <th rowspan="2" class="ndg-sort" data-col="4" style="min-width:130px">Goal</th>
-            <th rowspan="2" class="ndg-sort text-end" data-col="5" data-num="1">Monthly ₹ L</th>
+            <th rowspan="2" class="ndg-sort" data-col="1" style="min-width:90px" title="Which 90-day round the customer belongs to">Round</th>
+            <th rowspan="2" class="ndg-sort" data-col="2" style="min-width:180px">Customer</th>
+            <th rowspan="2" class="ndg-sort" data-col="3" style="min-width:150px">Product</th>
+            <th rowspan="2" class="ndg-sort" data-col="4">Brand</th>
+            <th rowspan="2" class="ndg-sort" data-col="5" style="min-width:130px">Goal</th>
+            <th rowspan="2" class="ndg-sort text-end" data-col="6" data-num="1">Monthly ₹ L</th>
             @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w }}</th>@endfor
           </tr>
           <tr class="ndg-sub">
             @for($w = 0; $w < $weeks; $w++)
-              <th class="ndg-st ndg-sort" data-col="{{ 6 + 2 * $w }}">Status</th><th class="ndg-sort" data-col="{{ 7 + 2 * $w }}">Comment</th>
+              <th class="ndg-st ndg-sort" data-col="{{ 7 + 2 * $w }}">Status</th><th class="ndg-sort" data-col="{{ 8 + 2 * $w }}">Comment</th>
             @endfor
           </tr>
         </thead>
@@ -317,6 +318,11 @@
           @endphp
           <tr class="ndg-tr" data-user="{{ $g->user_id }}" data-brand="{{ $g->brand }}" data-latest="{{ $latest }}" data-hasc="{{ $hasComment ? 1 : 0 }}" data-over="{{ $overdue ? 1 : 0 }}" data-q="{{ $search }}" {!! $wattrs !!}>
             <td class="fw-semibold" data-v="{{ strtolower($personName($g->user)) }}">{{ $personName($g->user) }}<div class="small text-muted fw-normal">{{ optional(optional($g->user)->department)->name }}</div></td>
+            <td data-v="{{ (int) optional($g->round)->round_no }}">
+              @if($g->round)
+                <span class="ndg-round {{ $g->round->status !== 'active' ? 'ndg-round-closed' : '' }}" title="{{ $g->round->starts_on->format('d M Y') }} to {{ $g->round->ends_on->format('d M Y') }}">R{{ $g->round->round_no }}@if($g->round->status !== 'active') · closed @endif</span>
+              @endif
+            </td>
             <td class="fw-semibold" data-v="{{ strtolower($g->client_name) }}">{{ $g->client_name }}</td>
             <td data-v="{{ strtolower($g->product) }}">{{ $g->product }}</td>
             <td data-v="{{ strtolower($g->brand) }}">{{ $g->brand }}</td>
@@ -332,6 +338,7 @@
         @foreach($notStarted as $p)
           <tr class="ndg-tr ndg-empty" data-user="{{ $p->id }}" data-brand="" data-latest="" data-hasc="0" data-over="0" data-empty="1" data-q="{{ strtolower($personName($p)) }}">
             <td class="fw-semibold" data-v="{{ strtolower($personName($p)) }}">{{ $personName($p) }}<div class="small text-muted fw-normal">{{ optional($p->department)->name }}</div></td>
+            <td data-v="0"></td>
             <td class="text-muted" colspan="1" data-v="">No customers added yet</td>
             <td data-v=""></td><td data-v=""></td><td data-v=""></td><td data-v=""></td>
             @for($w = 0; $w < $weeks; $w++)<td class="ndg-st" data-v=""></td><td class="ndg-cm" data-v=""></td>@endfor
@@ -406,6 +413,8 @@
   .ndg-note-del { border: 0; background: none; color: #ef4444; float: right; line-height: 1; font-size: 1rem; padding: 0 2px; }
   .ndg-wk { font-size: .78rem; }
   .ndg-wkhead { border-left: 2px solid #cfe0de; }
+  .ndg-round { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700; background: #f0f7f6; color: #007a7a; }
+  .ndg-round-closed { background: #f1f5f9; color: #64748b; }
   .ndg-sub th { font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; color: #64748b; font-weight: 700; }
   .ndg-grid td.ndg-st, .ndg-sub th.ndg-st { border-left: 2px solid #cfe0de; min-width: 118px; text-align: center; }
   .ndg-grid td.ndg-cm { white-space: normal; min-width: 200px; max-width: 260px; font-size: .78rem; line-height: 1.35; color: #334155; overflow-wrap: anywhere; white-space: pre-line; }

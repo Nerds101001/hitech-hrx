@@ -717,4 +717,82 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertNull($noGoal['pct']);
         $this->assertSame($this->rep->id, $users->first()['id'], 'the one with a target sorts first');
     }
+    // ── the Monday task cannot be closed without the week's data ─────────
+
+    private function mondayTask(User $u): \App\Models\Task
+    {
+        Goals::runWeekly(Carbon::parse(self::MONDAY));
+
+        return \App\Models\Task::where('user_id', $u->id)->where('title', 'like', '90-Day Goals:%')->firstOrFail();
+    }
+
+    public function test_the_weekly_task_refuses_to_close_from_my_tasks_until_every_customer_has_a_status(): void
+    {
+        $this->at(self::MONDAY);
+        $g = $this->goal($this->rep, Goals::roundFor($this->rep), 'Guard Ltd');
+        Goals::ensureCheckins(Goals::activeRound($this->rep));
+        $task = $this->mondayTask($this->rep);
+
+        Auth::setUser($this->rep);
+        $blocked = app(\App\Http\Controllers\tenant\MyTasksController::class)->updateStatus(
+            Request::create('/x', 'POST', ['status' => 'completed']), $task
+        );
+        $this->assertSame(422, $blocked->getStatusCode());
+        $this->assertStringContainsString('Give a status for every customer', $this->body($blocked)['message']);
+        $this->assertSame('new', $task->fresh()->status);
+
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        // completeTaskIfDone already closed it on submit; reopen it to prove the endpoint itself also lets a truly done one through.
+        $task->update(['status' => 'new', 'completed_at' => null]);
+        $ok = app(\App\Http\Controllers\tenant\MyTasksController::class)->updateStatus(
+            Request::create('/x', 'POST', ['status' => 'completed']), $task->fresh()
+        );
+        $this->assertTrue($this->body($ok)['success']);
+    }
+
+    public function test_the_add_customers_task_refuses_to_close_with_no_customers_added(): void
+    {
+        $this->at(self::MONDAY);
+        $task = $this->mondayTask($this->rep);
+        $this->assertStringContainsString('add your target customers', $task->title);
+
+        Auth::setUser($this->rep);
+        $blocked = app(\App\Http\Controllers\tenant\MyTasksController::class)->updateStatus(
+            Request::create('/x', 'POST', ['status' => 'completed']), $task
+        );
+
+        $this->assertSame(422, $blocked->getStatusCode());
+        $this->assertStringContainsString('Add at least one target customer', $this->body($blocked)['message']);
+    }
+
+    public function test_the_task_controller_endpoint_is_guarded_the_same_way(): void
+    {
+        $this->at(self::MONDAY);
+        $g = $this->goal($this->rep, Goals::roundFor($this->rep), 'Guard Two Ltd');
+        Goals::ensureCheckins(Goals::activeRound($this->rep));
+        $task = $this->mondayTask($this->rep);
+
+        Auth::setUser($this->rep);
+        $res = app(\App\Http\Controllers\tenant\TaskController::class)->updateStatus(
+            Request::create('/x', 'POST', ['status' => 'completed']), $task->id
+        );
+
+        $this->assertSame(422, $res->getStatusCode());
+        $this->assertSame('new', $task->fresh()->status);
+    }
+
+    public function test_marking_a_task_in_progress_is_never_blocked(): void
+    {
+        $this->at(self::MONDAY);
+        $this->goal($this->rep, Goals::roundFor($this->rep), 'Guard Three Ltd');
+        Goals::ensureCheckins(Goals::activeRound($this->rep));
+        $task = $this->mondayTask($this->rep);
+
+        Auth::setUser($this->rep);
+        $res = app(\App\Http\Controllers\tenant\MyTasksController::class)->updateStatus(
+            Request::create('/x', 'POST', ['status' => 'in_progress']), $task
+        );
+
+        $this->assertTrue($this->body($res)['success']);
+    }
 }
