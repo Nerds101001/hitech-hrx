@@ -9,12 +9,20 @@
 @php
   $G = \App\Services\NinetyDayGoalService::class;
 
-  /** A week's status as a coloured chip; "late" marks a Monday answered after its day. */
-  $chip = function ($checkin, $due, $today) use ($G) {
+  /**
+   * A week's status as a coloured chip; "late" marks a Monday answered after its day. If $editable,
+   * a submitted chip opens the same status form again, pre-filled, so a mistake can be corrected
+   * instead of staying wrong forever.
+   */
+  $chip = function ($checkin, $due, $today, $goal = null, $editable = false) use ($G) {
       if ($checkin && $checkin->status) {
           [$bg, $fg] = $G::STATUS_COLORS[$checkin->status] ?? ['#64748b', '#ffffff'];
+          $edited = $checkin->edited_at ? '<i class="ndg-edited" title="Edited ' . e($checkin->edited_at->format('d M, h:i A')) . '">edited</i>' : '';
           $late = $checkin->is_late ? '<i class="ndg-late">late, sent ' . e(optional($checkin->submitted_at)->format('d M')) . '</i>' : '';
-          return '<span class="ndg-chip" style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $late;
+          $attrs = $editable && $goal ? ' role="button" class="ndg-chip ndg-editable" data-edit-goal="' . $goal->id . '" data-edit-week="' . (int) $checkin->week_no
+              . '" data-edit-user="' . $goal->user_id . '" data-edit-status="' . e($checkin->status) . '" data-edit-comment="' . e((string) $checkin->comment) . '" data-edit-title="' . e($goal->client_name) . ' · W' . (int) $checkin->week_no . '" title="Click to edit"'
+              : ' class="ndg-chip"';
+          return '<span' . $attrs . ' style="background:' . $bg . ';color:' . $fg . '">' . e($checkin->status) . '</span>' . $edited . $late;
       }
       if ($checkin && $checkin->due_on->lte($today)) {
           return '<span class="ndg-chip ndg-missing" title="Due ' . $checkin->due_on->format('D d M') . ', not submitted">not sent</span>';
@@ -158,14 +166,18 @@
           <tbody>
           @foreach($goals as $g)
             <tr>
-              <td class="fw-semibold">{{ $g->client_name }}</td>
-              <td>{{ $g->product }}</td>
-              <td>{{ $g->brand }}</td>
-              <td>{{ $g->goal }}</td>
-              <td class="text-end fw-semibold">{{ $fmtL($g->monthly_potential) }}</td>
+              <td class="fw-semibold">{{ $g->client_name }}
+                <button type="button" class="ndg-edit-goal" title="Edit product, brand, goal or potential"
+                  data-id="{{ $g->id }}" data-product="{{ e($g->product) }}" data-brand="{{ e($g->brand) }}" data-goal="{{ e($g->goal) }}" data-potential="{{ $g->monthly_potential }}"
+                  data-title="{{ e($g->client_name) }}"><i class="bx bx-pencil"></i></button>
+              </td>
+              <td class="ndg-p-product">{{ $g->product }}</td>
+              <td class="ndg-p-brand">{{ $g->brand }}</td>
+              <td class="ndg-p-goal">{{ $g->goal }}</td>
+              <td class="text-end fw-semibold ndg-p-potential">{{ $fmtL($g->monthly_potential) }}</td>
               @for($w = 0; $w < $weeks; $w++)
                 @php $ck = $g->checkins->firstWhere('week_no', $w); @endphp
-                <td class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($ck, $dates[$w], $today) !!}</td>
+                <td class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($ck, $dates[$w], $today, $g, true) !!}</td>
                 <td class="ndg-cm {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $noteCell($g, $ck) !!}</td>
               @endfor
               @if($isAdmin)<td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>@endif
@@ -327,14 +339,20 @@
                 <span class="ndg-round {{ $g->round->status !== 'active' ? 'ndg-round-closed' : '' }}" title="{{ $g->round->starts_on->format('d M Y') }} to {{ $g->round->ends_on->format('d M Y') }}">R{{ $g->round->round_no }}@if($g->round->status !== 'active') · closed @endif</span>
               @endif
             </td>
-            <td class="fw-semibold" data-v="{{ strtolower($g->client_name) }}">{{ $g->client_name }}</td>
-            <td data-v="{{ strtolower($g->product) }}">{{ $g->product }}</td>
-            <td data-v="{{ strtolower($g->brand) }}">{{ $g->brand }}</td>
-            <td data-v="{{ strtolower($g->goal ?: $g->goal_type) }}">{{ $g->goal ?: $g->goal_type }}</td>
-            <td class="text-end fw-semibold" data-v="{{ (float) $g->monthly_potential }}">{{ $fmtL($g->monthly_potential) }}</td>
+            <td class="fw-semibold" data-v="{{ strtolower($g->client_name) }}">{{ $g->client_name }}
+              @if($isAdmin)
+                <button type="button" class="ndg-edit-goal" title="Edit product, brand, goal or potential"
+                  data-id="{{ $g->id }}" data-product="{{ e($g->product) }}" data-brand="{{ e($g->brand) }}" data-goal="{{ e($g->goal ?: $g->goal_type) }}" data-potential="{{ $g->monthly_potential }}"
+                  data-title="{{ e($g->client_name) }}"><i class="bx bx-pencil"></i></button>
+              @endif
+            </td>
+            <td class="ndg-p-product" data-v="{{ strtolower($g->product) }}">{{ $g->product }}</td>
+            <td class="ndg-p-brand" data-v="{{ strtolower($g->brand) }}">{{ $g->brand }}</td>
+            <td class="ndg-p-goal" data-v="{{ strtolower($g->goal ?: $g->goal_type) }}">{{ $g->goal ?: $g->goal_type }}</td>
+            <td class="text-end fw-semibold ndg-p-potential" data-v="{{ (float) $g->monthly_potential }}">{{ $fmtL($g->monthly_potential) }}</td>
             @for($w = 0; $w < $weeks; $w++)
               @php $ck = $cks->get($w); @endphp
-              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today) !!}</td>
+              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today, $g, $isAdmin) !!}</td>
               <td class="ndg-cm" data-v="{{ strtolower(optional($ck)->comment . ' ' . optional($ck)->notes?->pluck('body')->implode(' ')) }}">{!! $noteCell($g, $ck) !!}</td>
             @endfor
           </tr>
@@ -398,6 +416,63 @@
     </div>
   </div>
 </div>
+
+{{-- Edit an already-submitted status. Nothing about when it was first reported changes — only the status and comment. --}}
+<div class="modal fade" id="ndgEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title fw-bold" id="ndgEditTitle">Edit status</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
+        <select id="ndgEditStatus" class="form-select form-select-hitech mb-3">
+          @foreach($statuses as $s)<option value="{{ $s }}">{{ $s }}</option>@endforeach
+        </select>
+        <label class="form-label fw-bold small text-muted text-uppercase mb-2">Comment</label>
+        <textarea id="ndgEditComment" class="form-control" rows="4" maxlength="1000" placeholder="Write a comment"></textarea>
+        <div class="small text-muted mt-2">The original report time stays on record; this only changes what was said.</div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="small text-danger" id="ndgEditMsg"></span>
+        <div class="d-flex gap-2"><button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn-hitech rounded-pill px-5" id="ndgEditSave">Save</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{-- Edit a customer's product, brand, goal or monthly potential — the customer itself and its weekly history never change here. --}}
+<div class="modal fade" id="ndgEditGoalModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title fw-bold" id="ndgEditGoalTitle">Edit customer</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Product</label>
+            <input type="text" id="ndgEditGoalProduct" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Brand</label>
+            <select id="ndgEditGoalBrand" class="form-select form-select-hitech">
+              @foreach($brands as $b)<option value="{{ $b }}">{{ $b }}</option>@endforeach
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Goal</label>
+            <input type="text" id="ndgEditGoalGoal" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label fw-bold small text-muted text-uppercase mb-2">Monthly potential (₹L)</label>
+            <input type="number" step="0.01" min="0" id="ndgEditGoalPotential" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <span class="small text-danger" id="ndgEditGoalMsg"></span>
+        <div class="d-flex gap-2"><button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn-hitech rounded-pill px-5" id="ndgEditGoalSave">Save</button></div>
+      </div>
+    </div>
+  </div>
+</div>
 <style>
   .ndg-grid th, .ndg-grid td { white-space: nowrap; }
   .ndg-scroll { max-height: 74vh; overflow: auto; }
@@ -426,7 +501,12 @@
   .ndg-now { background: #f0f7f6; }
   .ndg-chip { display: inline-block; position: relative; padding: 3px 9px; border-radius: 6px; font-size: .68rem; font-weight: 700; line-height: 1.25; }
   .ndg-chip.ndg-missing { background: #fff; color: #b42318; border: 1px dashed #f0a5a0; font-weight: 600; }
+  .ndg-chip.ndg-editable { cursor: pointer; box-shadow: 0 0 0 1px rgba(255,255,255,.001); transition: transform .1s; }
+  .ndg-chip.ndg-editable:hover { transform: scale(1.04); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
   .ndg-late { display: block; font-size: .6rem; font-style: normal; color: #b42318; font-weight: 700; margin-top: 2px; }
+  .ndg-edited { display: block; font-size: .6rem; font-style: normal; color: #64748b; font-weight: 600; margin-top: 2px; }
+  .ndg-edit-goal { border: 0; background: none; padding: 0 0 0 6px; color: #cbd5e1; font-size: .8rem; vertical-align: middle; }
+  .ndg-edit-goal:hover { color: #007a7a; }
   .ndg-none { color: #cbd5e1; }
   .ndg-strip { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; min-width: 78px; text-align: center; background: #fbfcfd; }
   .ndg-list .ndg-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
@@ -513,6 +593,68 @@
       bootstrap.Modal.getOrCreateInstance(noteModalEl).hide();
     }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
   });
+
+  // ── edit an already-submitted status ──
+  var editModalEl = document.getElementById('ndgEditModal'), editTarget = null;
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('.ndg-editable') : null;
+    if (!chip) { return; }
+    editTarget = chip;
+    document.getElementById('ndgEditTitle').textContent = 'Edit — ' + chip.getAttribute('data-edit-title');
+    document.getElementById('ndgEditStatus').value = chip.getAttribute('data-edit-status');
+    document.getElementById('ndgEditComment').value = chip.getAttribute('data-edit-comment') || '';
+    document.getElementById('ndgEditMsg').textContent = '';
+    bootstrap.Modal.getOrCreateInstance(editModalEl).show();
+  });
+  document.getElementById('ndgEditSave').addEventListener('click', function () {
+    var status = document.getElementById('ndgEditStatus').value, comment = document.getElementById('ndgEditComment').value.trim();
+    var msg = document.getElementById('ndgEditMsg'), btn = this;
+    btn.disabled = true;
+    post(URLS.checkin, 'POST', {
+      week_no: parseInt(editTarget.getAttribute('data-edit-week'), 10),
+      user_id: parseInt(editTarget.getAttribute('data-edit-user'), 10),
+      entries: [{ goal_id: parseInt(editTarget.getAttribute('data-edit-goal'), 10), status: status, comment: comment }],
+    }).then(function (j) {
+      btn.disabled = false;
+      if (!j.success) { msg.textContent = j.message || 'Could not save.'; return; }
+      location.reload();
+    }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
+  });
+
+  // ── edit a customer's product / brand / goal / monthly potential ──
+  var editGoalModalEl = document.getElementById('ndgEditGoalModal'), editGoalTarget = null;
+  document.querySelectorAll('.ndg-edit-goal').forEach(function (b) {
+    b.addEventListener('click', function () {
+      editGoalTarget = b;
+      document.getElementById('ndgEditGoalTitle').textContent = 'Edit — ' + b.getAttribute('data-title');
+      document.getElementById('ndgEditGoalProduct').value = b.getAttribute('data-product') || '';
+      document.getElementById('ndgEditGoalBrand').value = b.getAttribute('data-brand') || '';
+      document.getElementById('ndgEditGoalGoal').value = b.getAttribute('data-goal') || '';
+      document.getElementById('ndgEditGoalPotential').value = b.getAttribute('data-potential') || '';
+      document.getElementById('ndgEditGoalMsg').textContent = '';
+      bootstrap.Modal.getOrCreateInstance(editGoalModalEl).show();
+    });
+  });
+  document.getElementById('ndgEditGoalSave').addEventListener('click', function () {
+    var product = document.getElementById('ndgEditGoalProduct').value.trim(), brand = document.getElementById('ndgEditGoalBrand').value;
+    var goal = document.getElementById('ndgEditGoalGoal').value.trim(), potential = document.getElementById('ndgEditGoalPotential').value;
+    var msg = document.getElementById('ndgEditGoalMsg'), btn = this;
+    if (!product || !goal || potential === '' || isNaN(parseFloat(potential))) { msg.textContent = 'Fill in product, goal and a monthly potential.'; return; }
+    btn.disabled = true;
+    post(URLS.base + '/' + editGoalTarget.getAttribute('data-id'), 'PUT', { product: product, brand: brand, goal: goal, monthly_potential: parseFloat(potential) }).then(function (j) {
+      btn.disabled = false;
+      if (!j.success) { msg.textContent = j.message || 'Could not save.'; return; }
+      var row = editGoalTarget.closest('tr');
+      row.querySelector('.ndg-p-product').textContent = product;
+      row.querySelector('.ndg-p-brand').textContent = brand;
+      row.querySelector('.ndg-p-goal').textContent = goal;
+      row.querySelector('.ndg-p-potential').textContent = String(parseFloat(potential));
+      editGoalTarget.setAttribute('data-product', product); editGoalTarget.setAttribute('data-brand', brand);
+      editGoalTarget.setAttribute('data-goal', goal); editGoalTarget.setAttribute('data-potential', potential);
+      bootstrap.Modal.getOrCreateInstance(editGoalModalEl).hide();
+    }).catch(function () { btn.disabled = false; msg.textContent = 'Request failed. Try again.'; });
+  });
+
   // ── remove a customer ──
   document.querySelectorAll('.ndg-remove').forEach(function (b) {
     b.addEventListener('click', function () {

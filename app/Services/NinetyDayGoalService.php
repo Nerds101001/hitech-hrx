@@ -210,17 +210,26 @@ class NinetyDayGoalService
     }
 
     /**
-     * Submit one Monday's statuses. $entries is [goal_id => ['status' => ..., 'comment' => ...]].
-     * A Monday already past is late and needs a comment. Returns [saved, errors[]].
+     * Submit or edit one Monday's statuses. $entries is [goal_id => ['status' => ..., 'comment' => ...]].
+     * A Monday already past is late and needs a comment. $actor is who is doing this — the goal's own
+     * owner, or an admin/HR/manager editing on their behalf; $target is whose round it is (defaults to
+     * $actor). Editing an existing status keeps its original submitted_at/submitted_by/is_late — only
+     * the status and comment themselves change, so the record of when it was first reported is never
+     * rewritten. Returns [saved, errors[]].
      */
-    public static function submit(User $user, int $week, array $entries, ?Carbon $now = null): array
+    public static function submit(User $target, int $week, array $entries, ?Carbon $now = null, ?User $actor = null): array
     {
+        $actor = $actor ?: $target;
+        $user = $target;
         $now = $now ?: Carbon::now();
         $today = $now->copy()->startOfDay();
         $round = self::activeRound($user);
         $errors = [];
         $saved = 0;
 
+        if ($actor->id !== $target->id && !self::seesEveryone($actor)) {
+            return [0, ['You cannot fill this in for someone else.']];
+        }
         if (!$round) {
             return [0, ['You have no active 90-day round.']];
         }
@@ -255,17 +264,23 @@ class NinetyDayGoalService
                 $errors[] = "{$goal->client_name}: this Monday has passed, so a comment is needed with the status.";
                 continue;
             }
-            $onRecord = NinetyDayGoalCheckin::where('goal_id', $goal->id)->where('week_no', $week)->whereNotNull('status')->where('status', '!=', '')->exists();
-            if ($onRecord) {
-                $errors[] = "{$goal->client_name}: week {$week} already has a status, which stays on record.";
-                continue;
-            }
+            $existing = NinetyDayGoalCheckin::where('goal_id', $goal->id)->where('week_no', $week)->first();
+            $isFirst = !$existing || $existing->status === null || $existing->status === '';
 
-            DB::transaction(function () use ($goal, $round, $week, $due, $status, $comment, $late, $user, $now, &$saved) {
+            DB::transaction(function () use ($goal, $round, $week, $due, $status, $comment, $late, $user, $actor, $now, $existing, $isFirst, &$saved) {
                 NinetyDayGoalCheckin::updateOrCreate(
                     ['goal_id' => $goal->id, 'week_no' => $week],
-                    ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(), 'status' => $status,
-                     'comment' => $comment !== '' ? $comment : null, 'submitted_at' => $now, 'submitted_by_id' => $user->id, 'is_late' => $late]
+                    [
+                        'round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(),
+                        'status' => $status, 'comment' => $comment !== '' ? $comment : null,
+                        // First time: this is when/who/how-late it was actually reported, and that never changes
+                        // again. Editing later only updates the content and appends who touched it and when.
+                        'submitted_at'   => $isFirst ? $now : $existing->submitted_at,
+                        'submitted_by_id' => $isFirst ? $user->id : $existing->submitted_by_id,
+                        'is_late'        => $isFirst ? $late : $existing->is_late,
+                        'edited_at'      => $isFirst ? null : $now,
+                        'edited_by_id'   => $isFirst ? null : $actor->id,
+                    ]
                 );
                 $goal->forceFill(["w{$week}" => $status])->save();   // the older columns the scorecard code still reads
                 $saved++;

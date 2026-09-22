@@ -12,12 +12,18 @@ class NinetyDayGoalCheckin extends Model
     protected $casts = [
         'due_on'       => 'date',
         'submitted_at' => 'datetime',
+        'edited_at'    => 'datetime',
         'is_late'      => 'boolean',
     ];
 
     public function goal()
     {
         return $this->belongsTo(NinetyDayGoal::class, 'goal_id');
+    }
+
+    public function editor()
+    {
+        return $this->belongsTo(User::class, 'edited_by_id');
     }
 
     public function notes()

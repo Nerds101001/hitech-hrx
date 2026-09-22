@@ -635,17 +635,72 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame(0, NinetyDayGoalCheckin::where('goal_id', $g->id)->count(), 'its weeks go with it');
     }
 
-    public function test_a_status_already_on_record_cannot_be_overwritten(): void
+    public function test_a_status_already_on_record_can_be_edited_but_keeps_its_original_submitted_at(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        $first = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+
+        $this->at(self::MONDAY, '15:00:00');
+        [$saved, $errors] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Dropped', 'comment' => 'Actually lost this one']]);
+
+        $this->assertSame(1, $saved);
+        $this->assertEmpty($errors);
+        $row = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertSame('Dropped', $row->status);
+        $this->assertSame('Actually lost this one', $row->comment);
+        $this->assertTrue($row->submitted_at->eq($first->submitted_at), 'the original report time never moves');
+        $this->assertNotNull($row->edited_at);
+        $this->assertSame($this->rep->id, $row->edited_by_id);
+    }
+
+    public function test_a_colleague_cannot_edit_someone_elses_status(): void
     {
         $this->at(self::MONDAY);
         [$g] = $this->weekRow($this->rep);
         Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
 
-        [$saved, $errors] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Dropped']]);
+        [$saved, $errors] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Dropped']], null, $this->rep2);
 
         $this->assertSame(0, $saved);
         $this->assertNotEmpty($errors);
         $this->assertSame('On Track', NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->value('status'));
+    }
+
+    public function test_an_admin_can_edit_a_salespersons_status_on_their_behalf(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        $admin = $this->person(null, 'admin');
+
+        [$saved, $errors] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Off Track', 'comment' => 'Corrected by admin']], null, $admin);
+
+        $this->assertSame(1, $saved);
+        $this->assertEmpty($errors);
+        $row = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertSame('Off Track', $row->status);
+        $this->assertSame($admin->id, $row->edited_by_id);
+        $this->assertSame($this->rep->id, $row->submitted_by_id, 'the original reporter is still on record');
+    }
+
+    public function test_the_checkin_endpoint_lets_admin_edit_on_behalf_of_a_named_salesperson(): void
+    {
+        $this->at(self::MONDAY);
+        [$g] = $this->weekRow($this->rep);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        $admin = $this->person(null, 'admin');
+
+        $res = app(NinetyDayGoalController::class)->checkin($this->ask($admin, 'POST', '/x', [
+            'week_no' => 0, 'user_id' => $this->rep->id,
+            'entries' => [['goal_id' => $g->id, 'status' => 'Regular Order', 'comment' => 'Confirmed with the customer']],
+        ]));
+
+        $this->assertTrue($this->body($res)['success']);
+        $row = NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 0)->first();
+        $this->assertSame('Regular Order', $row->status);
+        $this->assertSame($admin->id, $row->edited_by_id);
     }
 
     public function test_the_admin_page_lists_the_whole_team_in_one_table_including_people_with_no_customers(): void

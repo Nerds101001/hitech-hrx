@@ -129,6 +129,7 @@ class NinetyDayGoalController extends Controller
             'today'      => $today,
             'statuses'   => Goals::STATUSES,
             'weeks'      => Goals::WEEKS,
+            'brands'     => array_keys(Goals::BRANDS),
         ]);
     }
 
@@ -432,10 +433,12 @@ class NinetyDayGoalController extends Controller
 
     // ── the weekly status ────────────────────────────────────────────────
 
+    /** Submits new statuses, and edits ones already on record — the owner, or admin/HR on their behalf. */
     public function checkin(Request $request)
     {
-        $user = Auth::user();
-        if (!Goals::isSalesStaff($user)) {
+        $actor = Auth::user();
+        $target = $this->targetUser($request, $actor);
+        if (!$target) {
             return response()->json(['success' => false, 'message' => 'Only the Sales team submits weekly statuses.'], 403);
         }
         $data = $request->validate([
@@ -450,7 +453,7 @@ class NinetyDayGoalController extends Controller
         foreach ($data['entries'] as $e) {
             $entries[(int) $e['goal_id']] = ['status' => $e['status'] ?? '', 'comment' => $e['comment'] ?? ''];
         }
-        [$saved, $errors] = Goals::submit($user, (int) $data['week_no'], $entries);
+        [$saved, $errors] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
 
         return response()->json(['success' => $saved > 0 && !$errors, 'saved' => $saved, 'errors' => $errors,
             'message' => $errors ? implode(' ', $errors) : "Saved {$saved} status" . ($saved === 1 ? '' : 'es') . '.'], $errors && !$saved ? 422 : 200);
