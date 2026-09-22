@@ -45,22 +45,22 @@
   <div class="row g-3 mb-6">
     @php
       $kpis = [
-        ['bx-calendar-star', 'Active programs', $activePrograms, $programs->count() . ' total'],
-        ['bx-group', 'Participants', $cards['people'], 'in scope'],
-        ['bx-building-house', 'Customers tracked', $cards['goals'], 'across all programs'],
-        ['bx-flag', 'Total target', $fmtL($cards['target']), '₹ lakh'],
-        ['bx-trending-up', 'Total achieved', $fmtL($cards['achieved']), 'from Sales Report'],
-        ['bx-pie-chart-alt-2', 'Overall achievement', $pctText($cards['pct']), 'achieved ÷ target'],
-        ['bx-receipt', 'Orders received', $orderResults['qualifyingOrders'], 'qualifying, this scope'],
+        ['bx-calendar-star', 'Active Programs', $activePrograms, 'View All', 'tracking'],
+        ['bx-group', 'Participants', $cards['people'], 'View Team', 'people'],
+        ['bx-flag', 'Total Target', $fmtL($cards['target']) . ' L', 'View Details', 'tracking'],
+        ['bx-trending-up', 'Total Achieved', $fmtL($cards['achieved']) . ' L', 'View Details', 'orders'],
+        ['bx-pie-chart-alt-2', 'Achievement', $pctText($cards['pct']), 'View Details', 'orders'],
+        ['bx-building-house', 'Customers', $cards['goals'], 'View Customers', 'tracking'],
+        ['bx-receipt', 'Orders Received', $orderResults['qualifyingOrders'], 'View Orders', 'orders'],
       ];
     @endphp
-    @foreach($kpis as [$icon, $label, $value, $sub])
+    @foreach($kpis as [$icon, $label, $value, $linkLabel, $goto])
       <div class="col-6 col-md-4 col-xl">
-        <div class="ndg-kpi">
+        <button type="button" class="ndg-kpi ndg-goto w-100 text-start" data-tab="{{ $goto }}">
           <div class="ndg-kpi-l"><i class="bx {{ $icon }}"></i>{{ $label }}</div>
           <div class="ndg-kpi-v">{{ $value }}</div>
-          <div class="ndg-kpi-s">{{ $sub }}</div>
-        </div>
+          <div class="ndg-kpi-link">{{ $linkLabel }} →</div>
+        </button>
       </div>
     @endforeach
   </div>
@@ -125,98 +125,163 @@
 
   {{-- ═══════════════════ Program Overview ═══════════════════ --}}
   <div class="ndg-adm-section" data-section="overview">
+
+    {{-- Row 1: Program Performance | Customer Status | Order Status --}}
     <div class="row g-4 mb-6">
       @if($programChartData->isNotEmpty())
       <div class="col-xl-4">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Program-wise performance</div><div class="small text-muted">Target vs. actual, per program</div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Program Performance</div><div class="small text-muted">Target vs. actual, per program</div></div>
           <div class="card-body p-3"><div id="ndgAdmProgramChart"></div></div>
         </div>
       </div>
       @endif
       <div class="col-xl-4">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Customer status (all programs)</div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Customer Status (All Programs)</div></div>
           <div class="card-body p-3"><div id="ndgAdmStatusDonut"></div></div>
         </div>
       </div>
       <div class="col-xl-4">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Weekly submission compliance</div><div class="small text-muted">Submitted ÷ expected, per Monday</div></div>
-          <div class="card-body p-3"><div id="ndgAdmComplianceChart"></div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Order Status</div><div class="small text-muted">Sold ≥ target = Full, sold &lt; target = Partial</div></div>
+          <div class="card-body p-3"><div id="ndgAdmOrderStatusDonut"></div></div>
         </div>
       </div>
     </div>
 
+    {{-- Row 2: Top Performing Sales Persons | Program Wise Summary | Weekly Update Compliance --}}
     <div class="row g-4 mb-6">
       <div class="col-xl-4">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-            <div class="fw-bold text-dark">Recent activity</div>
-            <span class="small text-muted">{{ $activity->count() }}</span>
+            <div class="fw-bold text-dark">Top Performing Sales Persons</div>
+            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-goto" data-tab="people">View All →</button>
           </div>
-          <div class="card-body p-0">
-            @forelse($activity as $a)
+          <div class="card-body p-0 table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th class="ps-3">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end">Achieved ₹L</th><th class="text-end pe-3">% Ach.</th></tr></thead>
+              <tbody>
+              @forelse($salespeople->take(5) as $i => $u)
+                <tr>
+                  <td class="ps-3 text-muted">{{ $i + 1 }}</td>
+                  <td class="fw-semibold text-dark">{{ $u['name'] }}</td>
+                  <td class="text-end">{{ $u['goals'] }}</td>
+                  <td class="text-end">{{ $fmtL($u['achieved']) }}</td>
+                  <td class="text-end pe-3" style="color:{{ $pctColor($u['pct']) }}">{{ $pctText($u['pct']) }}</td>
+                </tr>
+              @empty
+                <tr><td colspan="5" class="text-center text-muted p-4">No salespeople in scope yet.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">Program Wise Summary</div>
+            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-goto" data-tab="tracking">View All →</button>
+          </div>
+          <div class="card-body p-0 table-responsive" style="max-height:320px;overflow-y:auto">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th class="ps-3">Program</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th class="text-end pe-3">%</th></tr></thead>
+              <tbody>
+              @forelse($programSummary as $r)
+                <tr>
+                  <td class="ps-3">
+                    <div class="fw-semibold text-dark">{{ $r->program->name }}</div>
+                    <div class="small text-muted">{{ $r->program->starts_on->format('d M') }} – {{ $r->program->ends_on->format('d M Y') }} · {{ $r->participants }} {{ \Illuminate\Support\Str::plural('participant', $r->participants) }}</div>
+                  </td>
+                  <td class="text-end">{{ $fmtL($r->target) }}</td>
+                  <td class="text-end">{{ $fmtL($r->achieved) }}</td>
+                  <td class="text-end pe-3" style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
+                </tr>
+              @empty
+                <tr><td colspan="4" class="text-center text-muted p-4">No programs yet.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Weekly Update Compliance</div></div>
+          <div class="card-body p-3 text-center"><div id="ndgAdmWeekDonut"></div></div>
+          <div class="card-body pt-0 d-flex flex-wrap gap-3 justify-content-center small">
+            <span><i class="ndg-dot" style="background:#007a7a"></i> {{ $weekCompliance['updated'] }} Updated</span>
+            <span><i class="ndg-dot" style="background:#ef4444"></i> {{ $weekCompliance['pending'] }} Pending</span>
+            <span><i class="ndg-dot" style="background:#cbd5e1"></i> {{ $weekCompliance['notStarted'] }} Not Started</span>
+          </div>
+          <div class="card-body pt-0 text-center">
+            <button type="button" class="btn btn-sm btn-hitech-cancel rounded-pill px-4 ndg-goto" data-tab="weekly">View Pending Users</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{-- Row 3: Recent Orders | Tasks & Alerts | Quick Actions --}}
+    <div class="row g-4 mb-6">
+      <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">Recent Orders (From Sales Report)</div>
+            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-goto" data-tab="orders">View All →</button>
+          </div>
+          <div class="card-body p-0 table-responsive" style="max-height:320px;overflow-y:auto">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr><th class="ps-3">Month</th><th>Customer</th><th class="text-end pe-3">Amount ₹L</th></tr></thead>
+              <tbody>
+              @forelse($recentOrders as $o)
+                <tr>
+                  <td class="ps-3 small text-muted">{{ $o->month }}</td>
+                  <td>
+                    <div class="fw-semibold text-dark">{{ $o->row->goal->client_name }}</div>
+                    <div class="small text-muted">{{ $o->row->goal->product }} · {{ $name($o->row->user) }}</div>
+                  </td>
+                  <td class="text-end pe-3 fw-semibold">{{ $fmtL($o->amount) }}</td>
+                </tr>
+              @empty
+                <tr><td colspan="3" class="text-center text-muted p-4">No orders in the Sales Report for this scope yet.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">Tasks &amp; Alerts</div>
+            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-goto" data-tab="risk">View All →</button>
+          </div>
+          <div class="card-body p-0" style="max-height:320px;overflow-y:auto">
+            @forelse($tasksAlerts as $a)
               <div class="ndg-alert-row">
-                <i class="bx bx-radio-circle-marked"></i>
+                <i class="bx {{ $a->icon }}" style="{{ $a->urgent ? 'color:#b42318' : '' }}"></i>
                 <div class="flex-grow-1">
-                  <div class="small text-dark"><b>{{ $a->who ?: 'Someone' }}</b> {{ $a->what }}</div>
-                  <div class="small text-muted">{{ $a->at ? \Illuminate\Support\Carbon::parse($a->at)->diffForHumans() : '' }}</div>
+                  <div class="small text-dark fw-semibold">{{ $a->title }}</div>
+                  <div class="small text-muted">{{ $a->sub }}</div>
                 </div>
+                @if($a->when)<span class="small {{ $a->urgent ? 'text-danger fw-bold' : 'text-muted' }}">{{ $a->when }}</span>@endif
               </div>
             @empty
-              <div class="p-4 text-center text-muted small">No activity yet.</div>
+              <div class="p-4 text-center text-muted small">Nothing needs attention right now.</div>
             @endforelse
           </div>
         </div>
       </div>
       <div class="col-xl-4">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-            <div class="fw-bold text-dark">Pending this week</div>
-            <span class="small text-muted">{{ $salespeople->filter(fn ($u) => $u['weekPending'] > 0)->count() }}</span>
-          </div>
-          <div class="card-body p-0 table-responsive" style="max-height:340px;overflow-y:auto">
-            <table class="table table-sm align-middle mb-0">
-              <thead><tr><th class="ps-3">Salesperson</th><th class="text-end">Total</th><th class="text-end">Submitted</th><th class="text-end pe-3">Pending</th></tr></thead>
-              <tbody>
-              @forelse($salespeople->filter(fn ($u) => $u['weekTotal'] > 0)->sortByDesc('weekPending') as $u)
-                <tr>
-                  <td class="ps-3">{{ $u['name'] }}</td>
-                  <td class="text-end">{{ $u['weekTotal'] }}</td>
-                  <td class="text-end">{{ $u['weekSubmitted'] }}</td>
-                  <td class="text-end pe-3"><span class="{{ $u['weekPending'] ? 'text-danger fw-bold' : '' }}">{{ $u['weekPending'] ?: '·' }}</span></td>
-                </tr>
-              @empty
-                <tr><td colspan="4" class="text-center text-muted p-4">Nobody has an active round right now.</td></tr>
-              @endforelse
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div class="col-xl-4">
-        <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-            <div class="fw-bold text-dark">At-risk customers</div>
-            <span class="small text-muted">{{ $atRisk->count() }}</span>
-          </div>
-          <div class="card-body p-0 table-responsive" style="max-height:340px;overflow-y:auto">
-            <table class="table table-sm align-middle mb-0">
-              <thead><tr><th class="ps-3">Customer</th><th>Salesperson</th><th class="pe-3">Status</th></tr></thead>
-              <tbody>
-              @forelse($atRisk->take(10) as $r)
-                @php [$bg, $fg] = $G::STATUS_COLORS[$r->status] ?? ['#e2e8f0', '#475569']; @endphp
-                <tr>
-                  <td class="ps-3 fw-semibold">{{ $r->goal->client_name }}</td>
-                  <td class="small text-muted">{{ $name($r->user) }}</td>
-                  <td class="pe-3">@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-chip" style="background:#e2e8f0;color:#475569">No report</span>@endif</td>
-                </tr>
-              @empty
-                <tr><td colspan="3" class="text-center text-muted p-4">Nothing needs attention right now.</td></tr>
-              @endforelse
-              </tbody>
-            </table>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Quick Actions</div></div>
+          <div class="card-body p-3 d-flex flex-column gap-2">
+            <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
+            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>
+            <a href="{{ route('performance.ninety-day-goals.admin-view.export', request()->query()) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
+            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="people"><i class="bx bx-group"></i> Manage Participants</button>
+            <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-bar-chart-alt-2"></i> View Sales Report</a>
           </div>
         </div>
       </div>
@@ -424,11 +489,14 @@
   .ndg-subtab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid #d5e3e1; background: #fff; color: #334155; font-weight: 700; font-size: .8rem; cursor: pointer; }
   .ndg-subtab:hover { border-color: #007a7a; color: #007a7a; }
   .ndg-subtab.on { background: #007a7a; border-color: #007a7a; color: #fff; }
-  .ndg-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; }
+  .ndg-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; cursor: pointer; transition: border-color .15s; }
+  .ndg-kpi:hover { border-color: #007a7a; }
   .ndg-kpi-l { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; display: flex; align-items: center; gap: 5px; }
   .ndg-kpi-l i { color: #007a7a; font-size: 1rem; }
   .ndg-kpi-v { font-size: 1.5rem; font-weight: 800; color: #0f172a; line-height: 1.25; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .ndg-kpi-s { font-size: .7rem; color: #94a3b8; }
+  .ndg-kpi-link { font-size: .7rem; color: #007a7a; font-weight: 700; margin-top: 2px; }
+  .ndg-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
   .ndg-track { height: 7px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
   .ndg-fill { height: 100%; background: #007a7a; border-radius: 99px; min-width: 2px; }
   .ndg-chip { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: .72rem; font-weight: 700; }
@@ -460,6 +528,7 @@
     try { history.replaceState(null, '', '#' + key); } catch (e) {}
   }
   tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.dataset.tab); }); });
+  document.querySelectorAll('.ndg-goto').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.tab); window.scrollTo({ top: 0, behavior: 'smooth' }); }); });
   var initial = (location.hash || '').replace('#', '');
   if (initial && document.querySelector('.ndg-adm-section[data-section="' + initial + '"]')) { show(initial); }
 
@@ -498,8 +567,38 @@
     }).render();
   }
 
+  var orderStatusEl = document.querySelector('#ndgAdmOrderStatusDonut');
+  if (orderStatusEl) {
+    var orderStatus = @json($orderStatus);
+    var osLabels = Object.keys(orderStatus).filter(function (k) { return orderStatus[k] > 0; });
+    var osColors = { 'Full Order': '#0b5b48', 'Partial Order': '#f5a623', 'Pending': '#94a3b8', 'Cancelled': '#b42318' };
+    new ApexCharts(orderStatusEl, {
+      chart: { type: 'donut', height: 280, fontFamily: 'inherit' },
+      series: osLabels.map(function (l) { return orderStatus[l]; }),
+      labels: osLabels,
+      colors: osLabels.map(function (l) { return osColors[l] || muted; }),
+      legend: { position: 'bottom', fontSize: '11px' },
+      dataLabels: { enabled: false },
+      plotOptions: { pie: { donut: { size: '68%', labels: { show: true, total: { show: true, label: 'Orders', color: '#0f172a' } } } } },
+    }).render();
+  }
+
+  var weekDonutEl = document.querySelector('#ndgAdmWeekDonut');
+  if (weekDonutEl) {
+    var wc = @json($weekCompliance);
+    new ApexCharts(weekDonutEl, {
+      chart: { type: 'donut', height: 240, fontFamily: 'inherit' },
+      series: [wc.updated, wc.pending, wc.notStarted],
+      labels: ['Updated', 'Pending', 'Not Started'],
+      colors: [teal, '#ef4444', '#cbd5e1'],
+      legend: { show: false },
+      dataLabels: { enabled: false },
+      plotOptions: { pie: { donut: { size: '72%', labels: { show: true, total: { show: true, label: 'This Week', formatter: function () { return {{ (int) $weekCompliancePct }} + '%'; }, color: '#0f172a' } } } } },
+    }).render();
+  }
+
   var complianceData = @json($complianceChart);
-  ['#ndgAdmComplianceChart', '#ndgAdmComplianceChart2'].forEach(function (sel) {
+  ['#ndgAdmComplianceChart2'].forEach(function (sel) {
     var el = document.querySelector(sel);
     if (!el) { return; }
     new ApexCharts(el, {

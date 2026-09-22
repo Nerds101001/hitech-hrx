@@ -15,6 +15,7 @@ use App\Services\NinetyDayGoalService as Goals;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -335,7 +336,7 @@ class NinetyDayGoalController extends Controller
         $today = Carbon::today();
         $f = $this->adminViewFilters($request);
 
-        $programs = NinetyDayProgram::orderByDesc('id')->get();
+        $programs = NinetyDayProgram::withCount('rounds')->orderByDesc('id')->get();
         if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
             $f['program_id'] = null;
         }
@@ -381,21 +382,67 @@ class NinetyDayGoalController extends Controller
         // At risk, same rule as the live Dashboard.
         $atRisk = $this->attentionRows($rows, $today);
 
-        // Recent activity: real weekly submissions and comments, newest first — not a separate log.
-        $recentCheckins = NinetyDayGoalCheckin::whereNotNull('status')->whereNotNull('submitted_at')
-            ->with(['goal.user', 'goal.round'])
-            ->when($f['program_id'], fn ($q) => $q->whereHas('goal.round', fn ($r) => $r->where('program_id', $f['program_id'])))
-            ->orderByDesc('submitted_at')->limit(6)->get();
-        $recentNotes = NinetyDayGoalNote::with(['goal.user', 'author'])
-            ->when($f['program_id'], fn ($q) => $q->whereHas('goal.round', fn ($r) => $r->where('program_id', $f['program_id'])))
-            ->orderByDesc('created_at')->limit(6)->get();
-        $activity = $recentCheckins->map(fn ($c) => (object) [
-            'at' => $c->submitted_at, 'who' => trim(optional($c->goal->user)->first_name . ' ' . optional($c->goal->user)->last_name),
-            'what' => 'updated ' . $c->goal->client_name . ' — ' . $c->status . ' (W' . $c->week_no . ')',
-        ])->concat($recentNotes->map(fn ($n) => (object) [
-            'at' => $n->created_at, 'who' => trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name),
-            'what' => 'commented on ' . $n->goal->client_name,
-        ]))->sortByDesc('at')->take(8)->values();
+        // Program Wise Summary: every program, joined to its own achievement stats (zeros if the
+        // current filters leave it with no rows) — a table version of the same byProgram data
+        // the bar chart uses, plus real duration/participant counts from the program itself.
+        $byProgramById = $d['byProgram']->keyBy('id');
+        $programSummary = $programs->map(function ($p) use ($byProgramById) {
+            $stats = $byProgramById->get($p->id, ['target' => 0.0, 'achieved' => 0.0, 'pct' => null]);
+
+            return (object) [
+                'program' => $p, 'target' => $stats['target'], 'achieved' => $stats['achieved'], 'pct' => $stats['pct'],
+                'participants' => $p->rounds_count,
+            ];
+        })->sortByDesc(fn ($r) => $r->program->id)->values();
+
+        // Weekly Update Compliance: this week only, for everyone with an active round in scope —
+        // reuses the same weekTotal/weekSubmitted this loop already worked out above.
+        $weekCompliance = [
+            'updated'    => $salespeople->filter(fn ($u) => $u['weekTotal'] > 0 && $u['weekPending'] === 0)->count(),
+            'pending'    => $salespeople->filter(fn ($u) => $u['weekTotal'] > 0 && $u['weekPending'] > 0)->count(),
+            'notStarted' => $salespeople->filter(fn ($u) => $u['weekTotal'] === 0)->count(),
+        ];
+        $weekComplianceTotal = max(1, $weekCompliance['updated'] + $weekCompliance['pending'] + $weekCompliance['notStarted']);
+        $weekCompliancePct = round($weekCompliance['updated'] / $weekComplianceTotal * 100);
+
+        // Recent Orders (From Sales Report): real sale_amount rows, newest month first — the
+        // Sales Report only stores month-level granularity (no day of sale), so "Month" is what's
+        // shown, not a fabricated exact date.
+        $pipelineIds = $rows->pluck('goal.sales_pipeline_id')->filter()->unique()->values()->all();
+        $rowsByPipeline = $rows->keyBy(fn ($r) => $r->goal->sales_pipeline_id);
+        $recentOrders = $pipelineIds
+            ? DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $pipelineIds)->where('sale_amount', '>', 0)
+                ->orderByDesc('month_year')->limit(8)->get()
+                ->map(fn ($m) => $rowsByPipeline->has($m->sales_pipeline_id) ? (object) [
+                    'month' => $m->month_year, 'amount' => (float) $m->sale_amount, 'row' => $rowsByPipeline->get($m->sales_pipeline_id),
+                ] : null)->filter()->values()
+            : collect();
+
+        // Tasks & Alerts: real open tasks this module already creates, plus a few real,
+        // computed alerts (at-risk count, the most recent real order, a program ending soon) —
+        // never a fabricated activity feed.
+        $openTasks = Task::where('title', 'like', '90-Day Goals:%')
+            ->when($f['program_id'], fn ($q) => $q->whereIn('user_id', NinetyDayRound::where('program_id', $f['program_id'])->pluck('user_id')))
+            ->whereNotIn('status', Task::CLOSED_STATUSES)->with('user')->orderBy('due_date')->limit(4)->get()
+            ->map(fn ($t) => (object) [
+                'icon' => 'bx-calendar-check', 'title' => $t->title, 'sub' => trim(optional($t->user)->first_name . ' ' . optional($t->user)->last_name),
+                'when' => $t->due_date ? Carbon::parse($t->due_date)->format('d M') : '', 'urgent' => $t->due_date && Carbon::parse($t->due_date)->lt($today),
+            ]);
+        $alerts = collect();
+        if ($atRisk->isNotEmpty()) {
+            $alerts->push((object) ['icon' => 'bx-error', 'title' => $atRisk->count() . ' customer' . ($atRisk->count() === 1 ? '' : 's') . ' need attention',
+                'sub' => 'off track, silent, or dropped', 'when' => 'Now', 'urgent' => true]);
+        }
+        $lastOrder = $rows->filter(fn ($r) => $r->achieved > 0)->sortByDesc('achieved')->first();
+        if ($lastOrder) {
+            $alerts->push((object) ['icon' => 'bx-receipt', 'title' => 'Real order on record: ' . $lastOrder->goal->client_name,
+                'sub' => '₹' . number_format($lastOrder->achieved, 2) . ' L from the Sales Report', 'when' => '', 'urgent' => false]);
+        }
+        foreach ($programs->filter(fn ($p) => $today->between($p->starts_on, $p->ends_on) && $today->diffInDays($p->ends_on, false) <= 14) as $p) {
+            $alerts->push((object) ['icon' => 'bx-time-five', 'title' => $p->name . ' is ending soon',
+                'sub' => $today->diffInDays($p->ends_on) . ' days remaining', 'when' => $p->ends_on->format('d M'), 'urgent' => false]);
+        }
+        $tasksAlerts = $openTasks->concat($alerts)->take(6)->values();
 
         // Server-side pagination for the big customer table — the whole filtered set is already
         // in memory (this dataset is hundreds of rows, not millions), but the DOM only ever
@@ -421,13 +468,18 @@ class NinetyDayGoalController extends Controller
             'activePrograms' => $activePrograms,
             'byProgram'  => $d['byProgram'],
             'statusCounts' => $d['statuses'],
+            'orderStatus' => $d['orderStatus'],
             'orderResults' => $d['orderResults'],
             'compliance' => $compliance,
             'salespeople' => $salespeople,
+            'programSummary' => $programSummary,
+            'weekCompliance' => $weekCompliance,
+            'weekCompliancePct' => $weekCompliancePct,
+            'recentOrders' => $recentOrders,
+            'tasksAlerts' => $tasksAlerts,
             'rows'       => $paged,
             'allRowsCount' => $rows->count(),
             'atRisk'     => $atRisk,
-            'activity'   => $activity,
         ]);
     }
 

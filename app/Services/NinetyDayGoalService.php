@@ -643,6 +643,7 @@ class NinetyDayGoalService
 
         $sum = fn ($c) => [
             'goals'     => $c->count(),
+            'people'    => $c->pluck('user.id')->unique()->count(),
             'potential' => round($c->sum('potential'), 2),
             'target'    => round($c->sum('target'), 2),
             'achieved'  => round($c->sum('achieved'), 2),
@@ -694,9 +695,9 @@ class NinetyDayGoalService
         $topBrands = $rows->groupBy('brand')->map(fn ($c, $b) => $sum($c) + ['brand' => $b])->sortByDesc('potential')->take(10)->values();
 
         // Target vs actual per admin-created program (self-started rounds with no program
-        // group under "No program"), for the Program Performance chart.
+        // group under "No program"), for the Program Performance chart and Program Wise Summary.
         $byProgram = $rows->groupBy(fn ($r) => optional($r->program)->id ?: 0)
-            ->map(fn ($c, $pid) => $sum($c) + ['name' => (int) $pid ? $c->first()->program->name : 'No program'])
+            ->map(fn ($c, $pid) => $sum($c) + ['id' => (int) $pid, 'name' => (int) $pid ? $c->first()->program->name : 'No program'])
             ->sortByDesc('target')->values();
 
         // "Order Results from Sales Report": real orders only, never typed by a salesperson.
@@ -709,6 +710,17 @@ class NinetyDayGoalService
             'avgOrderValue'     => $withOrders->count() > 0 ? round($withOrders->sum('achieved') / $withOrders->count(), 2) : null,
             'customersConverted' => $rows->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
             'repeatOrders'      => $withOrders->where('repeat', true)->count(),
+        ];
+
+        // A coarser order-status split for the "Order Status" donut, built only from fields that
+        // already exist (achieved, target, status) — never a separate typed-in order status.
+        // Full: sold at least the target. Partial: some real sale, short of target. Cancelled:
+        // the goal itself was marked Dropped. Pending: no sale yet and not dropped.
+        $orderStatus = [
+            'Full Order'    => $rows->filter(fn ($r) => $r->achieved > 0 && $r->achieved >= $r->target && $r->target > 0)->count(),
+            'Partial Order' => $rows->filter(fn ($r) => $r->achieved > 0 && ($r->achieved < $r->target || $r->target <= 0))->count(),
+            'Cancelled'     => $rows->filter(fn ($r) => $r->achieved <= 0 && $r->status === 'Dropped')->count(),
+            'Pending'       => $rows->filter(fn ($r) => $r->achieved <= 0 && $r->status !== 'Dropped')->count(),
         ];
 
         $statuses = [];
@@ -734,6 +746,7 @@ class NinetyDayGoalService
             'topAchieved'  => $rows->filter(fn ($r) => $r->achieved > 0)->sortByDesc('achieved')->take(10)->values(),
             'byProgram'    => $byProgram,
             'orderResults' => $orderResults,
+            'orderStatus'  => $orderStatus,
             'users'        => $users,
             'statuses'     => $statuses,
             'strip'        => $strip,
