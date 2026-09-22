@@ -6,6 +6,9 @@
       'past'      => ['Past rounds', 'bx-history', route('performance.ninety-day-goals.past')],
       'comments'  => ['Comments', 'bx-comment-detail', route('performance.ninety-day-goals.comments')],
   ];
+  if ($isAdmin ?? false) {
+      $tabs['admin'] = ['Admin View', 'bx-shield-quarter', route('performance.ninety-day-goals.admin-view')];
+  }
 @endphp
 <div class="d-flex gap-2 flex-wrap mb-6 mx-4 ndg-tabs">
   @foreach($tabs as $key => [$label, $icon, $href])

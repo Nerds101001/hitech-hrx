@@ -1317,4 +1317,79 @@ class NinetyDayGoalsTest extends TestCase
             $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
+
+    // ── Admin View ──────────────────────────────────────────────────────
+
+    public function test_admin_view_is_admin_only_a_salesperson_is_redirected_away(): void
+    {
+        $c = app(NinetyDayGoalController::class);
+
+        $res = $c->adminView($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/admin-view'));
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $res);
+
+        $admin = $this->person(null, 'admin');
+        $ok = $c->adminView($this->ask($admin, 'GET', '/performance/ninety-day-goals/admin-view'));
+        $this->assertNotInstanceOf(\Illuminate\Http\RedirectResponse::class, $ok);
+        $this->assertStringContainsString('Admin View', $ok->render());
+    }
+
+    public function test_the_admin_view_tab_only_appears_for_admin_not_a_plain_salesperson(): void
+    {
+        $c = app(NinetyDayGoalController::class);
+        $admin = $this->person(null, 'admin');
+
+        $adminHtml = $c->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringContainsString('Admin View', $adminHtml);
+
+        $repHtml = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringNotContainsString('Admin View', $repHtml, 'a plain salesperson must never see the Admin View tab');
+    }
+
+    public function test_admin_view_shows_every_program_and_the_seven_sections(): void
+    {
+        $this->at(self::MONDAY);
+        $program = \App\Models\NinetyDayProgram::create(['tenant_id' => 1, 'name' => 'Export Drive', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'created_by_id' => $this->person(null, 'admin')->id]);
+        $goal = $this->soldGoal($this->rep, 'Risk Co', 2.0, 'KIF', 1.0);
+        $goal->round->update(['program_id' => $program->id]);
+        $admin = $this->person(null, 'admin');
+
+        $html = app(NinetyDayGoalController::class)->adminView($this->ask($admin, 'GET', '/performance/ninety-day-goals/admin-view'))->render();
+
+        $this->assertStringContainsString('Risk Co', $html);
+        $this->assertStringContainsString('Export Drive', $html);
+        foreach (['Program Overview', 'Salesperson Performance', 'Customer Tracking', 'Weekly Submissions', 'At Risk', 'Reports'] as $section) {
+            $this->assertStringContainsString($section, $html, $section);
+        }
+    }
+
+    public function test_admin_view_export_streams_a_csv_of_every_filtered_row_not_just_one_page(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'Export Me Ltd', 2.0, 'KIF', 1.0);
+        $admin = $this->person(null, 'admin');
+
+        $res = app(NinetyDayGoalController::class)->adminViewExport($this->ask($admin, 'GET', '/performance/ninety-day-goals/admin-view/export'));
+        $body = '';
+        ob_start();
+        $res->sendContent();
+        $body = ob_get_clean();
+
+        $this->assertStringContainsString('Export Me Ltd', $body);
+        $this->assertStringContainsString('text/csv', $res->headers->get('Content-Type'));
+    }
+
+    public function test_admin_view_export_is_admin_only(): void
+    {
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(NinetyDayGoalController::class)->adminViewExport($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/admin-view/export'));
+    }
+
+    public function test_the_admin_view_routes_are_login_only(): void
+    {
+        foreach (['admin-view', 'admin-view.export'] as $name) {
+            $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.' . $name);
+            $this->assertNotNull($route, $name);
+            $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
+        }
+    }
 }

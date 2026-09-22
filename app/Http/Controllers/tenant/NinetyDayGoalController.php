@@ -4,6 +4,7 @@ namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\NinetyDayGoal;
+use App\Models\NinetyDayGoalCheckin;
 use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayProgram;
 use App\Models\NinetyDayRound;
@@ -268,6 +269,192 @@ class NinetyDayGoalController extends Controller
             'currentTotal' => $current['cards']['goals'],
             'attention' => $attention,
         ]);
+    }
+
+    /** Every filter this page takes, read the same way in adminView() and adminViewExport(). */
+    private function adminViewFilters(Request $request): array
+    {
+        return [
+            'program_id' => $request->integer('program_id') ?: null,
+            'user_id'    => $request->integer('user_id') ?: null,
+            'customer'   => trim((string) $request->input('customer')) ?: null,
+            'status'     => in_array($request->input('status'), Goals::STATUSES, true) ? $request->input('status') : null,
+            'week'       => $request->input('week') !== null && $request->input('week') !== '' ? (int) $request->input('week') : null,
+            'brand'      => $request->input('brand') ?: null,
+            'round'      => $request->input('round') === 'all' ? 'all' : 'current',
+        ];
+    }
+
+    /**
+     * The rows for the Customer Submissions / Customer Tracking tables: dashboard()'s own
+     * achievement-scored rows, narrowed by the customer/status/week filters that Goals::dashboard()
+     * itself doesn't know about (it only takes round/user/brand/program).
+     */
+    private function adminViewRows(array $d, array $f, Carbon $today)
+    {
+        return $d['rows']->filter(function ($r) use ($f, $today) {
+            if ($f['customer'] && !str_contains(strtolower($r->goal->client_name), strtolower($f['customer']))) {
+                return false;
+            }
+            if ($f['status'] && $r->status !== $f['status']) {
+                return false;
+            }
+            if ($f['week'] !== null) {
+                $ck = $r->goal->checkins->firstWhere('week_no', $f['week']);
+                if (!$ck || $ck->status === null) {
+                    return false;
+                }
+            }
+
+            return true;
+        })->values();
+    }
+
+    /**
+     * The "Admin View" page: every program, every salesperson, every customer, in one place —
+     * reference screenshot's Program Overview / Salesperson Performance / Customer Tracking /
+     * Weekly Submissions / Orders & Results / At Risk / Reports, as sections of one page (never
+     * separate URLs — the team asked for that explicitly), switched client-side.
+     */
+    public function adminView(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Admin View is for admin/HR.');
+        }
+        $today = Carbon::today();
+        $f = $this->adminViewFilters($request);
+
+        $programs = NinetyDayProgram::orderByDesc('id')->get();
+        if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
+            $f['program_id'] = null;
+        }
+        $people = Goals::salesStaff();
+        if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
+            $f['user_id'] = null;
+        }
+
+        $d = Goals::dashboard(null, $f);
+        $rows = $this->adminViewRows($d, $f, $today);
+
+        // Program Overview KPI cards.
+        $activePrograms = $programs->filter(fn ($p) => $today->between($p->starts_on, $p->ends_on))->count();
+        $cards = $d['cards'];
+
+        // Weekly submission compliance, done ÷ expected, for the chart.
+        $compliance = collect($d['strip'])->map(fn ($s, $w) => [
+            'week' => 'W' . $w, 'submitted' => $s['done'], 'pending' => max(0, $s['total'] - $s['done']),
+            'pct'  => $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0,
+        ])->values();
+
+        // Salesperson performance: reuse dashboard()'s own per-user rollup, add "pending this week".
+        $thisWeekByUser = [];
+        foreach ($d['rows'] as $r) {
+            $wk = Goals::weekOf($r->goal->round, $today);
+            $ck = $r->goal->checkins->firstWhere('week_no', $wk);
+            $thisWeekByUser[$r->user->id]['total'] = ($thisWeekByUser[$r->user->id]['total'] ?? 0) + ($ck ? 1 : 0);
+            $thisWeekByUser[$r->user->id]['submitted'] = ($thisWeekByUser[$r->user->id]['submitted'] ?? 0) + ($ck && $ck->status !== null ? 1 : 0);
+        }
+        $salespeople = $d['users']->map(function ($u) use ($thisWeekByUser) {
+            $wk = $thisWeekByUser[$u['id']] ?? ['total' => 0, 'submitted' => 0];
+            $u['weekTotal'] = $wk['total'];
+            $u['weekSubmitted'] = $wk['submitted'];
+            $u['weekPending'] = max(0, $wk['total'] - $wk['submitted']);
+
+            return $u;
+        });
+
+        // At risk, same rule as the live Dashboard.
+        $atRisk = $this->attentionRows($rows, $today);
+
+        // Recent activity: real weekly submissions and comments, newest first — not a separate log.
+        $recentCheckins = NinetyDayGoalCheckin::whereNotNull('status')->whereNotNull('submitted_at')
+            ->with(['goal.user', 'goal.round'])
+            ->when($f['program_id'], fn ($q) => $q->whereHas('goal.round', fn ($r) => $r->where('program_id', $f['program_id'])))
+            ->orderByDesc('submitted_at')->limit(6)->get();
+        $recentNotes = NinetyDayGoalNote::with(['goal.user', 'author'])
+            ->when($f['program_id'], fn ($q) => $q->whereHas('goal.round', fn ($r) => $r->where('program_id', $f['program_id'])))
+            ->orderByDesc('created_at')->limit(6)->get();
+        $activity = $recentCheckins->map(fn ($c) => (object) [
+            'at' => $c->submitted_at, 'who' => trim(optional($c->goal->user)->first_name . ' ' . optional($c->goal->user)->last_name),
+            'what' => 'updated ' . $c->goal->client_name . ' — ' . $c->status . ' (W' . $c->week_no . ')',
+        ])->concat($recentNotes->map(fn ($n) => (object) [
+            'at' => $n->created_at, 'who' => trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name),
+            'what' => 'commented on ' . $n->goal->client_name,
+        ]))->sortByDesc('at')->take(8)->values();
+
+        // Server-side pagination for the big customer table — the whole filtered set is already
+        // in memory (this dataset is hundreds of rows, not millions), but the DOM only ever
+        // gets one page of it.
+        $perPage = 25;
+        $page = max(1, $request->integer('page', 1));
+        $paged = new \Illuminate\Pagination\LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->except('page')]
+        );
+
+        return view('tenant.performance.ninety-day-goals.admin-view', [
+            'tab'        => 'admin',
+            'isAdmin'    => true,
+            'filters'    => $f,
+            'programs'   => $programs,
+            'people'     => $people,
+            'brands'     => array_merge(array_keys(Goals::BRANDS), ['Other']),
+            'weeks'      => Goals::WEEKS,
+            'statuses'   => Goals::STATUSES,
+            'today'      => $today,
+            'cards'      => $cards,
+            'activePrograms' => $activePrograms,
+            'byProgram'  => $d['byProgram'],
+            'statusCounts' => $d['statuses'],
+            'orderResults' => $d['orderResults'],
+            'compliance' => $compliance,
+            'salespeople' => $salespeople,
+            'rows'       => $paged,
+            'allRowsCount' => $rows->count(),
+            'atRisk'     => $atRisk,
+            'activity'   => $activity,
+        ]);
+    }
+
+    /** Reports tab's "Export to Excel": the same filtered rows as the table, not just the visible page. */
+    public function adminViewExport(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            abort(403);
+        }
+        $f = $this->adminViewFilters($request);
+        $d = Goals::dashboard(null, $f);
+        $rows = $this->adminViewRows($d, $f, Carbon::today());
+
+        $filename = '90-day-goals-' . now()->format('Y-m-d-His') . '.csv';
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ];
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, array_merge(
+                ['Program', 'Salesperson', 'Customer', 'Product', 'Brand', 'Goal (Monthly ₹L)'],
+                array_map(fn ($w) => 'W' . $w, range(0, Goals::WEEKS - 1)),
+                ['Actual (₹L)', 'Achievement %', 'Current Status']
+            ));
+            foreach ($rows as $r) {
+                $weekCells = [];
+                for ($w = 0; $w < Goals::WEEKS; $w++) {
+                    $ck = $r->goal->checkins->firstWhere('week_no', $w);
+                    $weekCells[] = $ck && $ck->status ? $ck->status : '';
+                }
+                fputcsv($out, array_merge([
+                    optional($r->program)->name ?? 'No program',
+                    trim(optional($r->user)->first_name . ' ' . optional($r->user)->last_name),
+                    $r->goal->client_name, $r->goal->product, $r->brand, $r->potential,
+                ], $weekCells, [$r->achieved, $r->pct, $r->status]));
+            }
+            fclose($out);
+        }, $filename, $headers);
     }
 
     public function comments(Request $request)
