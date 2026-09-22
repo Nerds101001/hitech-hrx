@@ -28,13 +28,26 @@
   (function () {
     if (window.__ndgSideBound) return; window.__ndgSideBound = true;
     var links = document.querySelectorAll('[data-ndg-jump]');
+    var linkFor = {};
+    links.forEach(function (l) { linkFor[l.dataset.ndgJump] = l; });
     var sections = Array.prototype.map.call(links, function (l) { return document.getElementById(l.dataset.ndgJump); }).filter(Boolean);
-    function mark() {
-      var pos = window.scrollY + 100, current = sections[0];
-      sections.forEach(function (s) { if (s.offsetTop <= pos) current = s; });
-      links.forEach(function (l) { l.classList.toggle('on', current && l.dataset.ndgJump === current.id); });
+    if (!sections.length) { return; }
+
+    // Which section is most visible right now, tracked properly instead of guessed from
+    // scroll position (which raced with the browser's own scroll restoration on load and
+    // could leave every link marked "on" at once).
+    var visible = {};
+    function setActive() {
+      var bestId = null, bestRatio = 0;
+      Object.keys(visible).forEach(function (id) { if (visible[id] > bestRatio) { bestRatio = visible[id]; bestId = id; } });
+      if (!bestId) { bestId = sections[0].id; }
+      links.forEach(function (l) { l.classList.toggle('on', l.dataset.ndgJump === bestId); });
     }
-    window.addEventListener('scroll', mark, { passive: true });
-    mark();
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { visible[e.target.id] = e.isIntersecting ? e.intersectionRatio : 0; });
+      setActive();
+    }, { rootMargin: '-96px 0px -70% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] });
+    sections.forEach(function (s) { io.observe(s); });
+    setActive();
   })();
 </script>
