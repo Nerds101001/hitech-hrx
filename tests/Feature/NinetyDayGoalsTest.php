@@ -21,7 +21,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\View;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -1283,10 +1282,12 @@ class NinetyDayGoalsTest extends TestCase
         Notification::assertNotSentTo($this->rep2, ProgramInvite::class);
     }
 
-    public function test_the_in_app_invite_is_always_synchronous_the_email_never_goes_via_the_notification_itself(): void
+    public function test_the_invite_is_in_app_only_no_mail_channel_at_all(): void
     {
-        // Mail is sent by the separately-queued SendNinetyDayProgramInviteMail job, never by
-        // ->notify() itself — that's what keeps program creation from blocking on real SMTP.
+        // No email, no queue — Goals::createProgram() already gives everyone enrolled an "add
+        // your target customers" task in the existing Task Management module, which is the
+        // real notification. Mailing from this app's local Gmail account is neither wanted
+        // nor needed on top of that.
         $person = $this->person($this->sales, null, ['email' => 'a.real.looking@company.com']);
         $program = \App\Models\NinetyDayProgram::create(['tenant_id' => 1, 'name' => 'X', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'created_by_id' => $this->person(null, 'admin')->id]);
         $round = NinetyDayRound::create(['tenant_id' => 1, 'user_id' => $person->id, 'program_id' => $program->id, 'round_no' => 1, 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'status' => 'active']);
@@ -1294,26 +1295,18 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame(['database'], (new ProgramInvite($program, $round))->via($person));
     }
 
-    public function test_a_fake_demo_address_is_skipped_by_the_queued_mail_job_but_a_real_looking_one_is_not(): void
+    public function test_creating_a_program_still_gives_everyone_enrolled_their_add_customers_task(): void
     {
-        $this->assertTrue(ProgramInvite::looksFakeAddress('ishan.demo@sobika-import.demo'));
-        $this->assertTrue(ProgramInvite::looksFakeAddress('sales@demo.com'));
-        $this->assertFalse(ProgramInvite::looksFakeAddress('a.real.looking@company.com'));
-    }
-
-    public function test_creating_a_program_queues_the_invite_mail_job_instead_of_sending_it_inline(): void
-    {
-        Queue::fake();
         $this->at(self::MONDAY);
         $admin = $this->person(null, 'admin');
 
         $res = app(NinetyDayGoalController::class)->programStore($this->ask($admin, 'POST', '/x', [
-            'name' => 'Queued Mail Test', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'user_ids' => [$this->rep->id],
+            'name' => 'Task Notify Test', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'user_ids' => [$this->rep->id],
         ]));
         app()->terminate();
 
         $this->assertTrue($this->body($res)['success']);
-        Queue::assertPushedOn('notifications', \App\Jobs\SendNinetyDayProgramInviteMail::class);
+        $this->assertTrue(Task::where('user_id', $this->rep->id)->where('due_date', '2027-01-07')->exists());
     }
 
     public function test_the_program_routes_are_login_only(): void

@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\tenant;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\SendNinetyDayProgramInviteMail;
 use App\Models\NinetyDayGoal;
 use App\Models\NinetyDayGoalNote;
 use App\Models\NinetyDayProgram;
@@ -405,13 +404,12 @@ class NinetyDayGoalController extends Controller
 
         $result = Goals::createProgram($admin, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']), $data['user_ids']);
 
-        // The in-app notification is a fast local insert, sent right away — same deferred,
-        // one-try/catch-per-person pattern as bulk task assignment, so one bad row never stops
-        // the rest. The actual email is dispatched as a queued job instead of sent here inline:
-        // real SMTP sends are slow and this app's local .env points at a real mail account, so
-        // sending them inline used to hold up the HTTP response itself for minutes (see
-        // SendNinetyDayProgramInviteMail's docblock). Dispatching a queued job is just a fast
-        // database insert, so the popup now returns instantly either way.
+        // No email: Goals::createProgram() already gives everyone enrolled a "add your target
+        // customers" task in the existing Task Management module (due 3 days after the start
+        // date), which is the notification — a real send through this app's local Gmail SMTP
+        // is both slow and unwanted here. The in-app ('database') entry is a fast local insert,
+        // sent right away, same deferred one-try/catch-per-person pattern as bulk task
+        // assignment so one bad row never stops the rest.
         $programId = $result['program']->id;
         $enrolledRoundIds = array_map(fn ($e) => $e['round']->id, $result['enrolled']);
         app()->terminating(function () use ($programId, $enrolledRoundIds) {
@@ -425,7 +423,6 @@ class NinetyDayGoalController extends Controller
                 } catch (\Throwable $e) {
                     Log::warning("90-Day Goals program invite failed for user {$round->user_id}: " . $e->getMessage());
                 }
-                SendNinetyDayProgramInviteMail::dispatch($program, $round);
             }
         });
 
