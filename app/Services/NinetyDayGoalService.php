@@ -573,7 +573,7 @@ class NinetyDayGoalService
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
 
-        $q = NinetyDayGoal::with(['user.department', 'round.program', 'checkins'])->whereNotNull('round_id');
+        $q = NinetyDayGoal::with(['user.department', 'round.program', 'checkins.notes.author'])->whereNotNull('round_id');
         if ($scope !== null) {
             $q->whereIn('user_id', $scope);
         }

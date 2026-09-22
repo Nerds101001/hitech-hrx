@@ -334,13 +334,18 @@
         <span class="small text-muted">Showing {{ $rows->count() }} of {{ $allRowsCount }}</span>
       </div>
       <div class="card-body p-0 ndg-mx-scroll">
-        <table class="ndg-mx" style="font-size:.74rem">
-          <thead><tr>
-            <th class="ndg-mx-l" style="left:0">Program</th><th class="ndg-mx-l" style="left:110px">Salesperson</th><th class="ndg-mx-l" style="left:220px">Customer</th>
-            <th>Product</th><th>Goal ₹</th>
-            @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
-            <th>Actual ₹L</th><th>Achv %</th><th>Status</th>
-          </tr></thead>
+        <table class="ndg-mx ndg-mx-wide" style="font-size:.74rem">
+          <thead>
+            <tr>
+              <th class="ndg-mx-l" style="left:0" rowspan="2">Program</th><th class="ndg-mx-l" style="left:110px" rowspan="2">Salesperson</th><th class="ndg-mx-l" style="left:220px" rowspan="2">Customer</th>
+              <th rowspan="2">Product</th><th rowspan="2">Goal ₹</th>
+              @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center">W{{ $w }}</th>@endfor
+              <th rowspan="2">Actual ₹L</th><th rowspan="2">Achv %</th><th rowspan="2">Status</th>
+            </tr>
+            <tr>
+              @for($w = 0; $w < $weeks; $w++)<th>Status</th><th>Comment</th>@endfor
+            </tr>
+          </thead>
           <tbody>
           @foreach($rows as $r)
             <tr>
@@ -353,9 +358,14 @@
                 @php
                   $ck = $r->goal->checkins->firstWhere('week_no', $w);
                   $st = optional($ck)->status;
-                  [$bg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8']) : [null];
+                  [$bg, $fg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8', '#fff']) : [null, null];
                 @endphp
-                <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $st ?: '—' }}"></td>
+                <td class="text-center">@if($st)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $st }}</span>@else<span class="ndg-none">-</span>@endif</td>
+                <td class="ndg-mx-comment">
+                  @if($ck && $ck->comment)<div>{{ $ck->comment }}</div>@endif
+                  @if($ck)@foreach($ck->notes as $n)<div class="ndg-mx-note"><b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}</div>@endforeach @endif
+                  @if(!$ck || (!$ck->comment && $ck->notes->isEmpty()))<span class="ndg-none">-</span>@endif
+                </td>
               @endfor
               <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
               <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
@@ -514,6 +524,8 @@
   .ndg-mx thead th { position: sticky; top: 0; background: #fff; font-weight: 700; color: #64748b; font-size: .66rem; text-align: center; padding: 8px 4px 6px; z-index: 2; white-space: nowrap; }
   .ndg-mx-l { text-align: left !important; white-space: nowrap; padding: 4px 10px !important; font-weight: 600; color: #0f172a; position: sticky; background: #fff; z-index: 1; }
   .ndg-mx-c { width: 22px; height: 22px; min-width: 22px; border-radius: 4px; box-shadow: inset 0 0 0 1px #e2e8f0; background: #f1f5f9; }
+  .ndg-mx-wide .ndg-mx-comment { min-width: 130px; max-width: 180px; text-align: left !important; white-space: normal; font-size: .72rem; color: #334155; vertical-align: top; padding: 6px 8px !important; }
+  .ndg-mx-note { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #e2e8f0; color: #64748b; }
 </style>
 @endsection
 
