@@ -296,6 +296,102 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
+    /** Every salesperson in scope, one tile each — including anyone with no customers yet. */
+    public function team(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $d = Goals::dashboard($scope, ['round' => 'current']);
+        $byId = $d['users']->keyBy('id');
+
+        $people = $this->peopleIn($scope)->map(function ($p) use ($byId) {
+            return $byId->get($p->id, ['id' => $p->id, 'name' => trim($p->first_name . ' ' . $p->last_name), 'department' => optional($p->department)->name,
+                'goals' => 0, 'potential' => 0.0, 'achieved' => 0.0, 'pct' => null, 'converted' => 0, 'missing' => 0]);
+        })->sortByDesc(fn ($p) => [$p['pct'] ?? -1, $p['achieved']])->values();
+
+        return view('tenant.performance.ninety-day-goals.team', [
+            'tab'      => 'team',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'people'   => $people,
+        ]);
+    }
+
+    /** Everyone's current round, every customer, as a compact square-per-week matrix — no comments, just the shape of the round. */
+    public function weeklyMatrix(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $goals = NinetyDayGoal::with(['user.department', 'checkins'])
+            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
+            ->whereHas('round', fn ($r) => $r->where('status', 'active'))
+            ->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)))->values();
+
+        return view('tenant.performance.ninety-day-goals.weekly', [
+            'tab'      => 'weekly',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'goals'    => $goals,
+            'weeks'    => Goals::WEEKS,
+        ]);
+    }
+
+    /** How the current round's customers are moving through the statuses, and who is at Trial Order right now. */
+    public function trials(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $d = Goals::dashboard($scope, ['round' => 'current']);
+        $trialing = $d['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values();
+
+        return view('tenant.performance.ninety-day-goals.trials', [
+            'tab'      => 'trials',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'statuses' => $d['statuses'],
+            'trialing' => $trialing,
+            'total'    => $d['cards']['goals'],
+        ]);
+    }
+
+    /** The customers that need someone to step in: off track, silent, dropped, or a status that never came. */
+    public function attention(Request $request)
+    {
+        [$user, $scope, $redirect] = $this->scopeOrRedirect();
+        if ($redirect) {
+            return $redirect;
+        }
+        $today = Carbon::today();
+        $d = Goals::dashboard($scope, ['round' => 'current']);
+
+        $rows = $d['rows']->map(function ($r) use ($today) {
+            // Same rule as the dashboard's own overdue count: due today still has until end of day, so only
+            // a Monday that has actually passed counts against someone here.
+            $overdue = $r->goal->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today));
+            $r->overdueWeeks = $overdue->count();
+            $r->oldestOverdue = $overdue->min('due_on');
+            $r->urgency = $r->overdueWeeks > 0 ? (2 + $r->overdueWeeks) : match ($r->status) {
+                'Dropped' => 0, 'Off Track' => 3, 'No Report' => 2, default => -1,
+            };
+
+            return $r;
+        })->filter(fn ($r) => $r->urgency >= 0)->sortByDesc('urgency')->values();
+
+        return view('tenant.performance.ninety-day-goals.attention', [
+            'tab'      => 'attention',
+            'canSwitch' => Goals::isSalesStaff($user),
+            'seesMany' => $scope === null || count($scope) > 1,
+            'rows'     => $rows,
+            'total'    => $d['cards']['goals'],
+        ]);
+    }
+
     // ── the customer picker ──────────────────────────────────────────────
 
     /** The person's own pipeline customers that are not already in their round. */
