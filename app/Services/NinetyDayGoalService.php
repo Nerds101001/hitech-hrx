@@ -19,8 +19,10 @@ use Illuminate\Support\Facades\DB;
  *
  * Each person in the Sales department picks target customers from their own
  * Sales Pipeline (customer, product, brand, goal, monthly potential in lakh) and
- * reports a status on every Monday for 13 weeks (W0 to W12). Then the round
- * closes and a new one starts the following Monday.
+ * reports a status on every Monday until the round ends — 13 weeks (W0 to W12)
+ * for the usual 90-day round, but an admin-created program can run a different
+ * length, and its rounds stretch or shrink to match (see weeksOf()). Then the
+ * round closes and a new one starts the following Monday.
  *
  * A Monday that has passed without a status is late: the person can still fill
  * it in, but must choose a status AND write a comment saying why. Each Monday
@@ -199,13 +201,26 @@ class NinetyDayGoalService
         return self::activeRound($user) ?? self::startRound($user, $today ?: Carbon::today());
     }
 
-    /** Which week (0..12) a date falls in for the round. */
+    /**
+     * How many Mondays a round actually has, from its own starts_on/ends_on — not the fixed
+     * 90-day/13-week assumption. A self-started round is always exactly self::WEEKS (13), since
+     * startRound() always uses ROUND_SPAN_DAYS; an admin-created program can run longer or
+     * shorter, and its rounds must stretch or shrink the same way.
+     */
+    public static function weeksOf(NinetyDayRound $round): int
+    {
+        $span = Carbon::parse($round->starts_on)->startOfDay()->diffInDays(Carbon::parse($round->ends_on)->startOfDay());
+
+        return max(1, (int) ceil($span / 7));
+    }
+
+    /** Which week a date falls in for the round, clamped to that round's own real span. */
     public static function weekOf(NinetyDayRound $round, ?Carbon $today = null): int
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
         $days = Carbon::parse($round->starts_on)->startOfDay()->diffInDays($today, false);
 
-        return max(0, min(self::WEEKS - 1, intdiv((int) $days, 7)));
+        return max(0, min(self::weeksOf($round) - 1, intdiv((int) $days, 7)));
     }
 
     public static function dueOn(NinetyDayRound $round, int $week): Carbon
@@ -213,10 +228,10 @@ class NinetyDayGoalService
         return Carbon::parse($round->starts_on)->startOfDay()->addDays(7 * $week);
     }
 
-    /** Monday-by-Monday dates for the column headers. */
+    /** Monday-by-Monday dates for the column headers, for this round's own real span. */
     public static function weekDates(NinetyDayRound $round): array
     {
-        return array_map(fn ($w) => self::dueOn($round, $w), range(0, self::WEEKS - 1));
+        return array_map(fn ($w) => self::dueOn($round, $w), range(0, self::weeksOf($round) - 1));
     }
 
     // ── check-ins ────────────────────────────────────────────────────────
@@ -288,7 +303,7 @@ class NinetyDayGoalService
         if (!$round) {
             return [0, ['You have no active 90-day round.']];
         }
-        if ($week < 0 || $week >= self::WEEKS) {
+        if ($week < 0 || $week >= self::weeksOf($round)) {
             return [0, ['That week does not exist.']];
         }
         $due = self::dueOn($round, $week);
@@ -630,8 +645,12 @@ class NinetyDayGoalService
         }
         $statuses['Nothing reported yet'] = $rows->whereNull('status')->count();
 
+        // Rounds in this scope can be different lengths (an admin-created program can run
+        // longer or shorter than the usual 90 days) — the strip spans the longest one included,
+        // so nothing gets truncated; a shorter round just has no rows past its own last week.
+        $weeksSpan = $goals->isEmpty() ? self::WEEKS : $goals->max(fn ($g) => self::weeksOf($g->round));
         $strip = [];
-        for ($w = 0; $w < self::WEEKS; $w++) {
+        for ($w = 0; $w < $weeksSpan; $w++) {
             $cs = $goals->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
             $strip[$w] = ['total' => $cs->count(), 'done' => $cs->whereNotNull('status')->count(), 'late' => $cs->where('is_late', true)->count()];
         }
@@ -646,6 +665,7 @@ class NinetyDayGoalService
             'users'        => $users,
             'statuses'     => $statuses,
             'strip'        => $strip,
+            'weeksSpan'    => $weeksSpan,
             'rows'         => $rows,
         ];
     }

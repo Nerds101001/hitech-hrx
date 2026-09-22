@@ -194,6 +194,59 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame('On Track', $g->checkins()->first()->status, 'the closed round keeps its history');
     }
 
+    // ── dynamic week counts (an admin-created program can run a different length) ────────
+
+    public function test_a_self_started_round_is_still_exactly_13_weeks(): void
+    {
+        $round = Goals::roundFor($this->rep, Carbon::parse(self::MONDAY));
+        $this->assertSame(13, Goals::weeksOf($round));
+        $this->assertCount(13, Goals::weekDates($round));
+    }
+
+    public function test_a_shorter_program_has_fewer_weeks_and_a_longer_one_has_more(): void
+    {
+        $admin = $this->person(null, 'admin');
+        $short = Goals::createProgram($admin, 'Six Weeks', Carbon::parse('2027-01-04'), Carbon::parse('2027-02-15'), [$this->rep->id]);
+        $long = Goals::createProgram($admin, 'Half a Year', Carbon::parse('2027-01-04'), Carbon::parse('2027-07-05'), [$this->rep2->id]);
+
+        // 42 days = exactly 6 weeks.
+        $this->assertSame(6, Goals::weeksOf($short['enrolled'][0]['round']));
+        // 182 days = 26 weeks (rounded up).
+        $this->assertSame(26, Goals::weeksOf($long['enrolled'][0]['round']));
+    }
+
+    public function test_a_status_cannot_be_submitted_past_a_shorter_programs_real_last_week(): void
+    {
+        $this->at('2027-01-04');
+        $admin = $this->person(null, 'admin');
+        $result = Goals::createProgram($admin, 'Four Weeks', Carbon::parse('2027-01-04'), Carbon::parse('2027-02-01'), [$this->rep->id]);
+        $round = $result['enrolled'][0]['round'];   // 28 days = 4 weeks (W0-W3)
+        $g = $this->goal($this->rep, $round);
+
+        $this->at('2027-01-25');   // week 3, the round's last real week
+        [$saved, $errors] = Goals::submit($this->rep, 3, [$g->id => ['status' => 'On Track']]);
+        $this->assertSame(1, $saved);
+        $this->assertSame([], $errors);
+
+        [$saved, $errors] = Goals::submit($this->rep, 4, [$g->id => ['status' => 'On Track']]);
+        $this->assertSame(0, $saved);
+        $this->assertSame(['That week does not exist.'], $errors);
+    }
+
+    public function test_mixed_round_lengths_in_one_dashboard_dont_truncate_the_longer_ones_strip(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        // rep is on the usual 13-week round; rep2 is on a 20-week program.
+        $this->goal($this->rep, Goals::roundFor($this->rep));
+        $long = Goals::createProgram($admin, 'Twenty Weeks', Carbon::parse(self::MONDAY), Carbon::parse(self::MONDAY)->addDays(140), [$this->rep2->id]);
+        $this->goal($this->rep2, $long['enrolled'][0]['round']);
+
+        $d = Goals::dashboard([$this->rep->id, $this->rep2->id]);
+        $this->assertSame(20, $d['weeksSpan']);
+        $this->assertCount(20, $d['strip']);
+    }
+
     // ── the weekly status ────────────────────────────────────────────────
 
     public function test_the_status_choices_are_the_sheets_seven(): void

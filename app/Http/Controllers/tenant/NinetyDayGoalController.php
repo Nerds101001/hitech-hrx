@@ -70,7 +70,7 @@ class NinetyDayGoalController extends Controller
             'today'     => $today,
             'statuses'  => Goals::STATUSES,
             'brands'    => array_keys(Goals::BRANDS),
-            'weeks'     => Goals::WEEKS,
+            'weeks'     => Goals::weeksOf($round),
         ]);
     }
 
@@ -110,8 +110,11 @@ class NinetyDayGoalController extends Controller
             'overdue'  => $scoped->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
         ];
 
+        // Rounds in view can be different lengths (an admin-created program can run longer or
+        // shorter than the usual 90 days) — span the longest one so nothing gets truncated.
+        $weeksSpan = $scoped->isEmpty() ? Goals::WEEKS : $scoped->max(fn ($g) => Goals::weeksOf($g->round));
         $strip = [];
-        for ($w = 0; $w < Goals::WEEKS; $w++) {
+        for ($w = 0; $w < $weeksSpan; $w++) {
             $rows = $scoped->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
             $strip[$w] = ['total' => $rows->count(), 'done' => $rows->whereNotNull('status')->count(), 'late' => $rows->where('is_late', true)->count()];
         }
@@ -145,7 +148,7 @@ class NinetyDayGoalController extends Controller
             'filters'    => ['round' => $roundFilter],
             'today'      => $today,
             'statuses'   => Goals::STATUSES,
-            'weeks'      => Goals::WEEKS,
+            'weeks'      => $weeksSpan,
             'brands'     => array_keys(Goals::BRANDS),
         ]);
     }
@@ -231,10 +234,13 @@ class NinetyDayGoalController extends Controller
                 'goals' => 0, 'potential' => 0.0, 'achieved' => 0.0, 'pct' => null, 'converted' => 0, 'missing' => 0]);
         })->sortByDesc(fn ($p) => [$p['pct'] ?? -1, $p['achieved']])->values();
 
-        $weeklyGoals = NinetyDayGoal::with(['user.department', 'checkins'])
+        $weeklyGoals = NinetyDayGoal::with(['user.department', 'round', 'checkins'])
             ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
             ->whereHas('round', fn ($r) => $r->where('status', 'active'))
             ->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)))->values();
+        // Rounds here can be different lengths (an admin-created program can run longer or
+        // shorter than 90 days) — the matrix spans the longest one so nothing is cut off.
+        $weeklyGoalsSpan = $weeklyGoals->isEmpty() ? Goals::WEEKS : $weeklyGoals->max(fn ($g) => Goals::weeksOf($g->round));
 
         $trialing = $current['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values();
         $attention = $this->attentionRows($current['rows'], $today);
@@ -261,7 +267,7 @@ class NinetyDayGoalController extends Controller
             'tasksAlerts' => $tasksAlerts,
             'today'    => $today,
             'brands'   => array_merge(array_keys(Goals::BRANDS), ['Other']),
-            'weeks'    => Goals::WEEKS,
+            'weeks'    => $weeklyGoalsSpan,
             'team'      => $team,
             'weeklyGoals' => $weeklyGoals,
             'statuses'  => $current['statuses'],
@@ -336,6 +342,10 @@ class NinetyDayGoalController extends Controller
 
         $d = Goals::dashboard(null, $f);
         $rows = $this->adminViewRows($d, $f, $today);
+        // Rounds here can be different lengths (an admin-created program can run longer or
+        // shorter than 90 days) — the table spans the longest one in the filtered set, not just
+        // whichever page is showing, so the header never changes width as you turn the page.
+        $weeksSpan = $rows->isEmpty() ? Goals::WEEKS : $rows->max(fn ($r) => Goals::weeksOf($r->goal->round));
 
         // Program Overview KPI cards.
         $activePrograms = $programs->filter(fn ($p) => $today->between($p->starts_on, $p->ends_on))->count();
@@ -400,7 +410,7 @@ class NinetyDayGoalController extends Controller
             'programs'   => $programs,
             'people'     => $people,
             'brands'     => array_merge(array_keys(Goals::BRANDS), ['Other']),
-            'weeks'      => Goals::WEEKS,
+            'weeks'      => $weeksSpan,
             'statuses'   => Goals::STATUSES,
             'today'      => $today,
             'cards'      => $cards,
@@ -427,6 +437,9 @@ class NinetyDayGoalController extends Controller
         $f = $this->adminViewFilters($request);
         $d = Goals::dashboard(null, $f);
         $rows = $this->adminViewRows($d, $f, Carbon::today());
+        // Same reasoning as the on-screen table: span the longest round in the export, not a
+        // fixed 13 — a shorter round just has blank cells past its own last week.
+        $weeksSpan = $rows->isEmpty() ? Goals::WEEKS : $rows->max(fn ($r) => Goals::weeksOf($r->goal->round));
 
         $filename = '90-day-goals-' . now()->format('Y-m-d-His') . '.csv';
         $headers = [
@@ -434,16 +447,16 @@ class NinetyDayGoalController extends Controller
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ];
 
-        return response()->streamDownload(function () use ($rows) {
+        return response()->streamDownload(function () use ($rows, $weeksSpan) {
             $out = fopen('php://output', 'w');
             fputcsv($out, array_merge(
                 ['Program', 'Salesperson', 'Customer', 'Product', 'Brand', 'Goal (Monthly ₹L)'],
-                array_map(fn ($w) => 'W' . $w, range(0, Goals::WEEKS - 1)),
+                array_map(fn ($w) => 'W' . $w, range(0, $weeksSpan - 1)),
                 ['Actual (₹L)', 'Achievement %', 'Current Status']
             ));
             foreach ($rows as $r) {
                 $weekCells = [];
-                for ($w = 0; $w < Goals::WEEKS; $w++) {
+                for ($w = 0; $w < $weeksSpan; $w++) {
                     $ck = $r->goal->checkins->firstWhere('week_no', $w);
                     $weekCells[] = $ck && $ck->status ? $ck->status : '';
                 }
@@ -541,7 +554,7 @@ class NinetyDayGoalController extends Controller
             'round'    => $round,
             'goals'    => $goals,
             'd'        => $d,
-            'weeks'    => Goals::WEEKS,
+            'weeks'    => Goals::weeksOf($round),
             // Same reports as the live Dashboard, scoped to just this one round.
             'trialing'  => $d['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values(),
             'attention' => $this->attentionRows($d['rows'], Carbon::today()),
@@ -735,8 +748,11 @@ class NinetyDayGoalController extends Controller
         if (!$target) {
             return response()->json(['success' => false, 'message' => 'Only the Sales team submits weekly statuses.'], 403);
         }
+        // Just a sanity bound — Goals::submit() itself is the real, round-aware check. A round
+        // with no active round yet falls back to the default 13-week span for this bound only.
+        $maxWeek = (($round = Goals::activeRound($target)) ? Goals::weeksOf($round) : Goals::WEEKS) - 1;
         $data = $request->validate([
-            'week_no'             => 'required|integer|min:0|max:' . (Goals::WEEKS - 1),
+            'week_no'             => 'required|integer|min:0|max:' . $maxWeek,
             'entries'             => 'required|array|min:1',
             'entries.*.goal_id'   => 'required|integer',
             'entries.*.status'    => 'nullable|string|max:40',
@@ -792,9 +808,12 @@ class NinetyDayGoalController extends Controller
     /** The salesperson or an admin/manager adds a comment to one week of a goal. */
     public function note(Request $request)
     {
+        // Just a sanity bound (the goal, and so its round, isn't resolved until after
+        // validation) — Goals::addNote() is the real check: it needs an actual check-in row
+        // for that goal/week, which only exists for weeks that round has really reached.
         $data = $request->validate([
             'goal_id' => 'required|integer',
-            'week_no' => 'required|integer|min:0|max:' . (Goals::WEEKS - 1),
+            'week_no' => 'required|integer|min:0|max:51',
             'body'    => 'required|string|max:1000',
         ]);
         $user = Auth::user();
