@@ -15,7 +15,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
       <h3 class="fw-extrabold mb-1 text-dark">90-Day Goals</h3>
-      <p class="text-muted mb-0 small">Every finished round, kept on its own — pick one to see just that round's customers, weekly statuses and comments.</p>
+      <p class="text-muted mb-0 small">Who actually delivered across every finished round, and each round kept on its own to open and check.</p>
     </div>
   </div>
 
@@ -23,11 +23,50 @@
 
   <div class="px-4">
 
+  @if($seesMany && $leaderboard && $leaderboard->isNotEmpty())
+    <div class="hitech-card mb-6">
+      <div class="card-body p-4 border-bottom">
+        <div class="fw-bold text-dark">Closed-round record, by salesperson</div>
+        <div class="small text-muted">Every finished round added together — what they were targeting against what they actually sold.</div>
+      </div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr>
+            <th>#</th><th>Salesperson</th><th class="text-end">Rounds</th><th class="text-end">Customers</th>
+            <th class="text-end">Target ₹L</th><th class="text-end">Sold ₹L</th><th style="min-width:170px">Achievement</th>
+            <th class="text-end">Converted</th><th class="text-end">Reported on time</th>
+          </tr></thead>
+          <tbody>
+          @foreach($leaderboard as $i => $u)
+            <tr>
+              <td class="text-muted">{{ $i + 1 }}</td>
+              <td><span class="fw-semibold text-dark">{{ $u['name'] }}</span><div class="small text-muted">{{ $u['department'] }}</div></td>
+              <td class="text-end">{{ $rounds->where('user_id', $u['id'])->count() }}</td>
+              <td class="text-end">{{ $u['goals'] }}</td>
+              <td class="text-end">{{ $fmtL($u['target']) }}</td>
+              <td class="text-end">{{ $fmtL($u['achieved']) }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="ndg-track flex-grow-1"><div class="ndg-fill" style="width:{{ min(100, (float) $u['pct']) }}%;background:{{ $pctColor($u['pct']) }}"></div></div>
+                  <b class="small" style="min-width:44px;text-align:right;color:{{ $pctColor($u['pct']) }}">{{ $pctText($u['pct']) }}</b>
+                </div>
+              </td>
+              <td class="text-end">{{ $u['converted'] }}</td>
+              <td class="text-end">{{ $u['discipline'] === null ? '–' : $u['discipline'] . '%' }}</td>
+            </tr>
+          @endforeach
+          </tbody>
+        </table>
+      </div>
+    </div>
+  @endif
+
   @if($rounds->isEmpty())
     <div class="hitech-card"><div class="card-body p-5 text-center text-muted">
       No round has finished yet. A round closes itself 90 days after it starts, and shows up here from then on.
     </div></div>
   @else
+    @if($seesMany && $leaderboard && $leaderboard->isNotEmpty())<div class="fw-bold text-dark mb-3">Every round, to open</div>@endif
     @foreach($rounds->groupBy('user_id') as $userRounds)
       @php $u = $userRounds->first()->user; @endphp
       <div class="mb-6">

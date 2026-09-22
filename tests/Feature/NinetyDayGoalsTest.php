@@ -880,4 +880,53 @@ class NinetyDayGoalsTest extends TestCase
             $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
+    public function test_the_past_list_has_a_closed_round_leaderboard_ranked_by_achievement(): void
+    {
+        $this->at(self::MONDAY);
+        $roundA = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $roundA, 'Weak Ltd');   // monthly_potential 2.5, no sales -> 0%
+        $roundB = NinetyDayRound::create(['user_id' => $this->rep2->id, 'round_no' => 1, 'tenant_id' => $this->rep2->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $g2 = $this->goal($this->rep2, $roundB, 'Strong Ltd');
+        $pid = $this->pipeline($this->rep2, 'Strong Pipe', 'P', true);
+        $g2->update(['sales_pipeline_id' => $pid]);
+        foreach (['2026-01', '2026-02', '2026-03'] as $m) {
+            DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => $m, 'sale_amount' => 2.5, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $admin = $this->person(null, 'admin');
+
+        $this->ask($admin, 'GET', '/x');
+        $html = app(NinetyDayGoalController::class)->past($this->ask($admin, 'GET', '/performance/ninety-day-goals/past'))->render();
+
+        $this->assertStringContainsString('Closed-round record, by salesperson', $html);
+        $strongPos = strpos($html, htmlspecialchars($this->rep2->last_name));
+        $weakPos = strpos($html, htmlspecialchars($this->rep->last_name));
+        $this->assertNotFalse($strongPos);
+        $this->assertNotFalse($weakPos);
+        $this->assertLessThan($weakPos, $strongPos, 'the fully achieved round outranks the 0% one');
+    }
+
+    public function test_a_past_rounds_report_ranks_customers_by_achievement_not_potential(): void
+    {
+        $this->at(self::MONDAY);
+        $round = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 1, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $big = $this->goal($this->rep, $round, 'Big But Zero Ltd');
+        $big->update(['monthly_potential' => 20]);
+        $small = $this->goal($this->rep, $round, 'Small But Full Ltd');
+        $small->update(['monthly_potential' => 1]);
+        $pid = $this->pipeline($this->rep, 'Small Pipe', 'P', true);
+        $small->update(['sales_pipeline_id' => $pid]);
+        foreach (['2026-01', '2026-02', '2026-03'] as $m) {
+            DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => $m, 'sale_amount' => 1, 'created_at' => now(), 'updated_at' => now()]);
+        }
+        $admin = $this->person(null, 'admin');
+        $this->ask($admin, 'GET', '/x');
+
+        $html = app(NinetyDayGoalController::class)->pastRound($round->id)->render();
+
+        $this->assertLessThan(strpos($html, 'Big But Zero Ltd'), strpos($html, 'Small But Full Ltd'),
+            'the fully achieved small target ranks above the untouched big one');
+    }
 }

@@ -423,6 +423,8 @@ class NinetyDayGoalService
             $q->where('round_id', (int) $f['round_id']);
         } elseif (($f['round'] ?? 'current') === 'current') {
             $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
+        } elseif (($f['round'] ?? '') === 'closed') {
+            $q->whereHas('round', fn ($r) => $r->where('status', 'closed'));
         }
         if (!empty($f['brand'])) {
             $f['brand'] === 'Other'

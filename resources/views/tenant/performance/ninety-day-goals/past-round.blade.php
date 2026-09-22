@@ -74,8 +74,45 @@
     @endforeach
   </div>
 
+  {{-- The result, ranked by how much of the target actually landed — the number that matters, not the log of who said what. --}}
   <div class="hitech-card mb-6">
-    <div class="card-body p-0 ndg-scroll">
+    <div class="card-body p-4 border-bottom">
+      <div class="fw-bold text-dark">Result, by customer</div>
+      <div class="small text-muted">Sold against target, best achievement first. Ended at {{ $round->ends_on->format('d M Y') }}.</div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr>
+          <th style="min-width:180px">Customer</th><th>Brand</th><th class="text-end">Monthly ₹L</th>
+          <th class="text-end">Target ₹L</th><th class="text-end">Sold ₹L</th><th style="min-width:170px">Achievement</th><th>Final status</th>
+        </tr></thead>
+        <tbody>
+        @foreach($d['rows']->sortByDesc(fn ($r) => [$r->pct ?? -1, $r->achieved])->values() as $r)
+          @php [$bg, $fg] = $G::STATUS_COLORS[$r->status] ?? ['#e2e8f0', '#475569']; @endphp
+          <tr>
+            <td class="fw-semibold">{{ $r->goal->client_name }}</td>
+            <td>{{ $r->brand }}</td>
+            <td class="text-end">{{ $fmtL($r->potential) }}</td>
+            <td class="text-end">{{ $fmtL($r->target) }}</td>
+            <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="ndg-track flex-grow-1"><div class="ndg-fill" style="width:{{ min(100, (float) $r->pct) }}%;background:{{ $pctColor($r->pct) }}"></div></div>
+                <b class="small" style="min-width:44px;text-align:right;color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</b>
+              </div>
+            </td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">no status left</span>@endif</td>
+          </tr>
+        @endforeach
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {{-- Full week-by-week detail, for whoever wants to see exactly how a result was reached. --}}
+  <details class="hitech-card mb-6 ndg-detail">
+    <summary class="card-body p-4 fw-bold text-dark">Week-by-week detail (W0 to W{{ $weeks - 1 }}, with every comment)</summary>
+    <div class="card-body p-0 ndg-scroll border-top">
       <table class="table align-middle mb-0 ndg-grid">
         <thead>
           <tr>
@@ -106,25 +143,7 @@
         </tbody>
       </table>
     </div>
-  </div>
-
-  <div class="hitech-card mb-6">
-    <div class="card-body p-4 border-bottom fw-bold text-dark">{{ $comments->count() }} {{ \Illuminate\Support\Str::plural('comment', $comments->count()) }} in this round</div>
-    @forelse($comments as $cm)
-      @php [$bg, $fg] = $G::STATUS_COLORS[$cm->status] ?? ['#e2e8f0', '#475569']; @endphp
-      <div class="ndg-cm">
-        <div class="ndg-cm-head">
-          @if($cm->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $cm->status }}</span>@endif
-          <span class="fw-bold text-dark">{{ $cm->goal->client_name }}</span>
-          <span class="ms-auto small text-muted">Week {{ $cm->week_no }}</span>
-        </div>
-        <div class="ndg-cm-body">{{ $cm->text }}</div>
-        <div class="ndg-cm-foot small text-muted"><b class="text-dark">{{ $name($cm->by) }}</b> · {{ optional($cm->at)->format('d M Y, h:i A') }}</div>
-      </div>
-    @empty
-      <div class="card-body p-5 text-center text-muted">No comments in this round.</div>
-    @endforelse
-  </div>
+  </details>
 
   </div>
 </div>
@@ -155,5 +174,11 @@
   .ndg-cm:last-child { border-bottom: 0; }
   .ndg-cm-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
   .ndg-cm-body { color: #1e293b; line-height: 1.55; white-space: pre-line; max-width: 900px; }
+  .ndg-track { height: 7px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
+  .ndg-fill { height: 100%; border-radius: 99px; min-width: 2px; }
+  .ndg-detail summary { cursor: pointer; list-style: none; }
+  .ndg-detail summary::-webkit-details-marker { display: none; }
+  .ndg-detail summary::before { content: '\25B8'; display: inline-block; margin-right: 8px; color: #007a7a; transition: transform .15s; }
+  .ndg-detail[open] summary::before { transform: rotate(90deg); }
 </style>
 @endsection
