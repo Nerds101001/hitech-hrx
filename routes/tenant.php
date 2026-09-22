@@ -1114,6 +1114,7 @@ Route::middleware([
             Route::get('/ninety-day-goals/dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'dashboard'])->name('ninety-day-goals.dashboard');
             Route::get('/ninety-day-goals/admin-view', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'adminView'])->name('ninety-day-goals.admin-view');
             Route::get('/ninety-day-goals/admin-view/export', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'adminViewExport'])->name('ninety-day-goals.admin-view.export');
+            Route::get('/ninety-day-goals/program-dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDashboard'])->name('ninety-day-goals.program-dashboard');
             Route::get('/ninety-day-goals/comments', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'comments'])->name('ninety-day-goals.comments');
             Route::get('/ninety-day-goals/past', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'past'])->name('ninety-day-goals.past');
             Route::get('/ninety-day-goals/past/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pastRound'])->name('ninety-day-goals.past.show');

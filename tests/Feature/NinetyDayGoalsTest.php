@@ -1586,4 +1586,66 @@ class NinetyDayGoalsTest extends TestCase
             $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
+
+    // ── the sidebar's "90-Day Goals ▸ Dashboard" page (left entirely separate from Admin View) ──
+
+    public function test_program_dashboard_is_admin_only_a_salesperson_is_redirected_away(): void
+    {
+        $c = app(NinetyDayGoalController::class);
+
+        $blocked = $c->programDashboard($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/program-dashboard'));
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $blocked);
+
+        $admin = $this->person(null, 'admin');
+        $ok = $c->programDashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/program-dashboard'));
+        $this->assertNotInstanceOf(\Illuminate\Http\RedirectResponse::class, $ok);
+        $this->assertStringContainsString('Program Wise Performance', $ok->render());
+    }
+
+    public function test_program_dashboard_defaults_to_every_program_past_and_live_not_just_current(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $goal = $this->goal($this->rep, Goals::roundFor($this->rep), 'Dbg ' . uniqid());
+        // Close the round — adminView() (current-only default) would drop it; the sidebar
+        // Dashboard's own 'all' default must still show it. Filtered straight to this one
+        // customer, so a real dev database's own accumulated rows can never push it off the
+        // first page of an otherwise-unfiltered, unsorted table.
+        $goal->round->update(['status' => 'closed']);
+
+        $html = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/program-dashboard', ['customer' => $goal->client_name]))->render();
+
+        $this->assertStringContainsString($goal->client_name, $html);
+    }
+
+    public function test_program_dashboard_shows_real_trend_counts_not_fabricated_ones(): void
+    {
+        $admin = $this->person(null, 'admin');
+        $before = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/program-dashboard'))->render();
+        preg_match('/Active Programs.*?ndg-kpi-v">(\d+)</s', $before, $m);
+        $countBefore = (int) ($m[1] ?? 0);
+
+        Goals::createProgram($admin, 'Fresh Program', Carbon::today(), Carbon::today()->addDays(90), [$this->rep->id]);
+
+        $after = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/program-dashboard'))->render();
+        preg_match('/Active Programs.*?ndg-kpi-v">(\d+)</s', $after, $m);
+        $countAfter = (int) ($m[1] ?? 0);
+
+        // A real dev database may already have programs from before this test — the trend must
+        // still move by exactly the one program this test just created, not a made-up number.
+        $this->assertSame($countBefore + 1, $countAfter);
+        $this->assertMatchesRegularExpression('/↑\d+ new/', $after, "the KPI card's own trend line must be a real count");
+    }
+
+    public function test_program_dashboard_route_is_login_only_and_admin_view_is_left_untouched(): void
+    {
+        $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.program-dashboard');
+        $this->assertNotNull($route);
+        $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))));
+
+        // adminView() itself must still behave exactly as before this page existed.
+        $admin = $this->person(null, 'admin');
+        $html = app(NinetyDayGoalController::class)->adminView($this->ask($admin, 'GET', '/performance/ninety-day-goals/admin-view'))->render();
+        $this->assertStringContainsString('Order Status', $html, 'adminView() keeps its own Order Status donut, unaffected by the new page');
+    }
 }

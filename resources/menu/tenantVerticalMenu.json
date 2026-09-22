@@ -811,7 +811,45 @@
             "name": "90-Day Goals",
             "icon": "menu-icon bx bx-target-lock",
             "slug": "performance.ninety-day-goals.index",
-            "department": "Sales"
+            "department": "Sales",
+            "submenu": [
+                {
+                    "url": "/performance/ninety-day-goals",
+                    "name": "My Goals",
+                    "icon": "menu-icon bx bx-target-lock",
+                    "slug": "performance.ninety-day-goals.index"
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard",
+                    "name": "Dashboard",
+                    "icon": "menu-icon bx bx-grid-alt",
+                    "slug": "performance.ninety-day-goals.program-dashboard"
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard#tracking",
+                    "name": "All Programs",
+                    "icon": "menu-icon bx bx-list-ul",
+                    "slug": "performance.ninety-day-goals.program-dashboard"
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard#people",
+                    "name": "Participants",
+                    "icon": "menu-icon bx bx-group",
+                    "slug": "performance.ninety-day-goals.program-dashboard"
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard#tracking",
+                    "name": "Customer Tracking",
+                    "icon": "menu-icon bx bx-search-alt",
+                    "slug": "performance.ninety-day-goals.program-dashboard"
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard#reports",
+                    "name": "Reports",
+                    "icon": "menu-icon bx bx-download",
+                    "slug": "performance.ninety-day-goals.program-dashboard"
+                }
+            ]
         },
         {
             "name": "KRA Management",

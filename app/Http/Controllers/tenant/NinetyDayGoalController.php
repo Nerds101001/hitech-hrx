@@ -282,8 +282,8 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
-    /** Every filter this page takes, read the same way in adminView() and adminViewExport(). */
-    private function adminViewFilters(Request $request): array
+    /** Every filter this page takes, read the same way in adminView(), programDashboard() and adminViewExport(). */
+    private function adminViewFilters(Request $request, string $defaultRound = 'current'): array
     {
         return [
             'program_id' => $request->integer('program_id') ?: null,
@@ -292,7 +292,7 @@ class NinetyDayGoalController extends Controller
             'status'     => in_array($request->input('status'), Goals::STATUSES, true) ? $request->input('status') : null,
             'week'       => $request->input('week') !== null && $request->input('week') !== '' ? (int) $request->input('week') : null,
             'brand'      => $request->input('brand') ?: null,
-            'round'      => $request->input('round') === 'all' ? 'all' : 'current',
+            'round'      => in_array($request->input('round'), ['all', 'current'], true) ? $request->input('round') : $defaultRound,
         ];
     }
 
@@ -322,19 +322,17 @@ class NinetyDayGoalController extends Controller
     }
 
     /**
-     * The "Admin View" page: every program, every salesperson, every customer, in one place —
-     * reference screenshot's Program Overview / Salesperson Performance / Customer Tracking /
-     * Weekly Submissions / Orders & Results / At Risk / Reports, as sections of one page (never
-     * separate URLs — the team asked for that explicitly), switched client-side.
+     * Everything both admin overview pages (adminView() and programDashboard()) show, built once
+     * so the two pages can never quietly drift apart on how a number is worked out. Only the
+     * default round scope differs between callers (adminView() keeps its original 'current'
+     * default; programDashboard() defaults to 'all' — "every program, past and live" per the
+     * team's own words), and each page's own controller method adds whatever is specific to it
+     * (programDashboard() adds the real trend deltas its KPI cards show).
      */
-    public function adminView(Request $request)
+    private function buildAdminOverviewData(Request $request, string $defaultRound = 'current'): array
     {
-        $user = Auth::user();
-        if (!Goals::seesEveryone($user)) {
-            return redirect()->route('tenant.dashboard')->with('error', 'Admin View is for admin/HR.');
-        }
         $today = Carbon::today();
-        $f = $this->adminViewFilters($request);
+        $f = $this->adminViewFilters($request, $defaultRound);
 
         $programs = NinetyDayProgram::withCount('rounds')->orderByDesc('id')->get();
         if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
@@ -454,9 +452,7 @@ class NinetyDayGoalController extends Controller
             ['path' => $request->url(), 'query' => $request->except('page')]
         );
 
-        return view('tenant.performance.ninety-day-goals.admin-view', [
-            'tab'        => 'admin',
-            'isAdmin'    => true,
+        return [
             'filters'    => $f,
             'programs'   => $programs,
             'people'     => $people,
@@ -480,7 +476,51 @@ class NinetyDayGoalController extends Controller
             'rows'       => $paged,
             'allRowsCount' => $rows->count(),
             'atRisk'     => $atRisk,
-        ]);
+        ];
+    }
+
+    /**
+     * The "Admin View" page: every program, every salesperson, every customer, in one place —
+     * Program Overview / Salesperson Performance / Customer Tracking / Weekly Submissions /
+     * Orders & Results / At Risk / Reports, as sections of one page (never separate URLs — the
+     * team asked for that explicitly), switched client-side.
+     */
+    public function adminView(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Admin View is for admin/HR.');
+        }
+
+        return view('tenant.performance.ninety-day-goals.admin-view',
+            $this->buildAdminOverviewData($request, 'current') + ['tab' => 'admin', 'isAdmin' => true]);
+    }
+
+    /**
+     * The sidebar's "90-Day Goals ▸ Dashboard" page: a separate, fresher-styled overview built to
+     * match the team's own reference design exactly, left entirely apart from adminView() above
+     * (which stays exactly as it was) rather than editing it in place. Defaults to every program,
+     * past and live, together — the team's own words — with a Program picker to narrow to one.
+     */
+    public function programDashboard(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'This page is for admin/HR.');
+        }
+        $data = $this->buildAdminOverviewData($request, 'all');
+
+        // Real trend deltas only — "new in the last 30 days", never a fabricated percentage.
+        // Left blank (shown as "—") wherever there is no honest way to compute one.
+        $since = Carbon::today()->subDays(30);
+        $data['trends'] = [
+            'activePrograms' => NinetyDayProgram::where('created_at', '>=', $since)->count(),
+            'participants'   => NinetyDayRound::where('created_at', '>=', $since)->distinct('user_id')->count('user_id'),
+            'customers'      => NinetyDayGoal::where('created_at', '>=', $since)->count(),
+            'ordersThisMonth' => DB::table('sales_pipeline_months')->where('month_year', Carbon::today()->format('Y-m'))->where('sale_amount', '>', 0)->count(),
+        ];
+
+        return view('tenant.performance.ninety-day-goals.program-dashboard', $data + ['tab' => 'admin', 'isAdmin' => true]);
     }
 
     /** Reports tab's "Export to Excel": the same filtered rows as the table, not just the visible page. */
