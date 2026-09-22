@@ -86,23 +86,28 @@ class NinetyDayGoalController extends Controller
         // One list for the whole team, people in name order; the page filters and sorts it.
         $goals = $q->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)) . '|' . str_pad($g->id, 9, '0', STR_PAD_LEFT))->values();
 
-        $active = $goals->filter(fn ($g) => $g->round && $g->round->status === 'active' && !$g->closed_at);
+        // "This week" only means something for a round that is actually running right now; the cards,
+        // the strip and the overdue count follow whichever round filter is selected, so choosing "All
+        // rounds, including closed" visibly changes the numbers instead of silently staying on the
+        // active round only.
+        $trueActive = $goals->filter(fn ($g) => $g->round && $g->round->status === 'active' && !$g->closed_at);
+        $scoped = $roundFilter === 'current' ? $trueActive : $goals;
         $weekOfGoal = fn ($g) => Goals::weekOf($g->round, $today);
         $people = Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->values();
 
         $summary = [
             'staff'    => $people->count(),
-            'people'   => $active->pluck('user_id')->unique()->count(),
-            'goals'    => $active->count(),
-            'potential' => round((float) $active->sum('monthly_potential'), 2),
-            'thisWeekDone'  => $active->filter(fn ($g) => optional($g->checkins->firstWhere('week_no', $weekOfGoal($g)))->status !== null)->count(),
-            'thisWeekTotal' => $active->filter(fn ($g) => $g->checkins->firstWhere('week_no', $weekOfGoal($g)) !== null)->count(),
-            'overdue'  => $active->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
+            'people'   => $scoped->pluck('user_id')->unique()->count(),
+            'goals'    => $scoped->count(),
+            'potential' => round((float) $scoped->sum('monthly_potential'), 2),
+            'thisWeekDone'  => $trueActive->filter(fn ($g) => optional($g->checkins->firstWhere('week_no', $weekOfGoal($g)))->status !== null)->count(),
+            'thisWeekTotal' => $trueActive->filter(fn ($g) => $g->checkins->firstWhere('week_no', $weekOfGoal($g)) !== null)->count(),
+            'overdue'  => $scoped->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
         ];
 
         $strip = [];
         for ($w = 0; $w < Goals::WEEKS; $w++) {
-            $rows = $active->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
+            $rows = $scoped->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
             $strip[$w] = ['total' => $rows->count(), 'done' => $rows->whereNotNull('status')->count(), 'late' => $rows->where('is_late', true)->count()];
         }
 

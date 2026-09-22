@@ -795,4 +795,26 @@ class NinetyDayGoalsTest extends TestCase
 
         $this->assertTrue($this->body($res)['success']);
     }
+    public function test_switching_to_all_rounds_widens_the_summary_cards_not_just_the_table(): void
+    {
+        $this->at(self::MONDAY);
+        $active = $this->goal($this->rep, Goals::roundFor($this->rep), 'Active Ltd');
+        $closedRound = NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 0, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+        $this->goal($this->rep, $closedRound, 'From A Closed Round Ltd');
+        // A manager whose team is only $this->rep, so the server-side scope (unlike the client-side
+        // salesperson filter) is exactly this one person's goals — the count below is then exact
+        // regardless of whatever other 90-Day Goals data already lives in the database.
+        $manager = $this->person($this->sales, 'manager');
+        $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
+
+        $current = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview']))->render();
+        $this->assertStringNotContainsString('From A Closed Round Ltd', $current);
+        $this->assertMatchesRegularExpression('/stat-value mb-0">1<\/h3><span class="stat-label">Customers tracked/', $current);
+
+        $all = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview', 'round' => 'all']))->render();
+        $this->assertStringContainsString('From A Closed Round Ltd', $all);
+        $this->assertMatchesRegularExpression('/stat-value mb-0">2<\/h3><span class="stat-label">Customers tracked/', $all,
+            'the summary card must widen to 2 with the closed round included, not silently stay at 1');
+    }
 }

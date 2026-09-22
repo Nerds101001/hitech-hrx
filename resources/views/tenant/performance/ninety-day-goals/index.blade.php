@@ -181,12 +181,13 @@
   {{-- ───────────────────────── EVERYONE ───────────────────────── --}}
   <div class="row g-6 mb-6 mx-0">
     @php
+      $allRounds = $filters['round'] === 'all';
       $cards = [
-        ['card-teal', 'bx-group', $summary['people'] . ' / ' . $summary['staff'], 'Sales people with goals'],
-        ['card-blue', 'bx-target-lock', $summary['goals'], 'Customers tracked'],
-        ['card-amber', 'bx-rupee', $fmtL($summary['potential']), 'Monthly potential (₹ L)'],
-        ['card-teal', 'bx-check-circle', $summary['thisWeekDone'] . ' / ' . $summary['thisWeekTotal'], 'This week submitted'],
-        ['card-red', 'bx-time-five', $summary['overdue'], 'Overdue statuses'],
+        ['card-teal', 'bx-group', $summary['people'] . ' / ' . $summary['staff'], 'Sales people with goals' . ($allRounds ? ', all rounds' : '')],
+        ['card-blue', 'bx-target-lock', $summary['goals'], 'Customers tracked' . ($allRounds ? ', all rounds' : '')],
+        ['card-amber', 'bx-rupee', $fmtL($summary['potential']), 'Monthly potential (₹ L)' . ($allRounds ? ', all rounds' : '')],
+        ['card-teal', 'bx-check-circle', $summary['thisWeekDone'] . ' / ' . $summary['thisWeekTotal'], 'This week submitted (current round only)'],
+        ['card-red', 'bx-time-five', $summary['overdue'], 'Overdue statuses' . ($allRounds ? ', all rounds' : '')],
       ];
     @endphp
     @foreach($cards as [$cls, $icon, $val, $lab])
@@ -201,7 +202,10 @@
 
   {{-- Week by week --}}
   <div class="hitech-card mb-6">
-    <div class="card-body p-4 border-bottom"><h6 class="fw-bold mb-0 text-dark">Statuses submitted, week by week</h6></div>
+    <div class="card-body p-4 border-bottom">
+      <h6 class="fw-bold mb-0 text-dark">Statuses submitted, week by week</h6>
+      @if($allRounds)<div class="small text-muted">W0 to W12 of every round in the list, added together — not just the round running now.</div>@endif
+    </div>
     <div class="card-body p-4 d-flex flex-wrap gap-2">
       @foreach($strip as $w => $s)
         <div class="ndg-strip">
