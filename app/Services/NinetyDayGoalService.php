@@ -466,7 +466,19 @@ class NinetyDayGoalService
                 'late'       => $mine->where('is_late', true)->count(),
                 'missing'    => $mine->whereNull('status')->count(),
             ];
-        })->values()->sortByDesc(fn ($u) => [$u['pct'] === null ? -1 : $u['pct'], $u['achieved']])->values();
+        });
+
+        // Every salesperson in scope, including anyone with no customers added yet (all zeros).
+        $withRow = $users->keys();
+        $idle = self::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))
+            ->reject(fn ($u) => $withRow->contains($u->id))
+            ->mapWithKeys(fn ($u) => [$u->id => [
+                'id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name), 'department' => optional($u->department)->name,
+                'goals' => 0, 'potential' => 0.0, 'target' => 0.0, 'achieved' => 0.0, 'pct' => null,
+                'converted' => 0, 'discipline' => null, 'late' => 0, 'missing' => 0,
+            ]]);
+
+        $users = $users->union($idle)->values()->sortByDesc(fn ($u) => [$u['pct'] === null ? -1 : $u['pct'], $u['achieved']])->values();
 
         $topBrands = $rows->groupBy('brand')->map(fn ($c, $b) => $sum($c) + ['brand' => $b])->sortByDesc('potential')->take(10)->values();
 

@@ -701,4 +701,20 @@ class NinetyDayGoalsTest extends TestCase
             $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
+    public function test_the_dashboard_people_table_includes_everyone_in_scope_not_just_those_with_goals(): void
+    {
+        $this->at(self::MONDAY);
+        $this->soldGoal($this->rep, 'Has Goals Ltd', 2.0, 'KIF', 0);
+        $idle = $this->person($this->sales);   // $this->rep2 and $idle both have no customers
+
+        $users = Goals::dashboard([$this->rep->id, $this->rep2->id, $idle->id])['users'];
+
+        $this->assertSame(3, $users->count());
+        $withGoal = $users->firstWhere('id', $this->rep->id);
+        $noGoal = $users->firstWhere('id', $idle->id);
+        $this->assertSame(1, $withGoal['goals']);
+        $this->assertSame(0, $noGoal['goals']);
+        $this->assertNull($noGoal['pct']);
+        $this->assertSame($this->rep->id, $users->first()['id'], 'the one with a target sorts first');
+    }
 }
