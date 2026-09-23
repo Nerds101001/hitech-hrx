@@ -385,11 +385,11 @@ class NinetyDayGoalController extends Controller
         // the bar chart uses, plus real duration/participant counts from the program itself.
         $byProgramById = $d['byProgram']->keyBy('id');
         $programSummary = $programs->map(function ($p) use ($byProgramById) {
-            $stats = $byProgramById->get($p->id, ['target' => 0.0, 'achieved' => 0.0, 'pct' => null]);
+            $stats = $byProgramById->get($p->id, ['target' => 0.0, 'achieved' => 0.0, 'pct' => null, 'goals' => 0]);
 
             return (object) [
                 'program' => $p, 'target' => $stats['target'], 'achieved' => $stats['achieved'], 'pct' => $stats['pct'],
-                'participants' => $p->rounds_count,
+                'customers' => $stats['goals'], 'participants' => $p->rounds_count,
             ];
         })->sortByDesc(fn ($r) => $r->program->id)->values();
 
@@ -756,6 +756,108 @@ class NinetyDayGoalController extends Controller
             'activity' => $activity,
             'statuses' => Goals::STATUSES,
             'brands'   => array_keys(Goals::BRANDS),
+        ]);
+    }
+
+    /**
+     * "Program Details": one admin-created program, every participant, every customer, in full —
+     * reached from the "View" action on the main Dashboard's programs table. Everything here is
+     * Goals::dashboard() filtered to this one program_id; nothing computed twice, two different ways.
+     */
+    public function programDetail(Request $request, $id)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'Program Details is for admin/HR.');
+        }
+        $program = NinetyDayProgram::with('creator')->withCount('rounds')->findOrFail($id);
+        $today = Carbon::today();
+
+        $f = [
+            'program_id' => $program->id,
+            'round'      => 'all',
+            'user_id'    => $request->integer('user_id') ?: null,
+            'customer'   => trim((string) $request->input('customer')) ?: null,
+            'status'     => in_array($request->input('status'), Goals::STATUSES, true) ? $request->input('status') : null,
+            'week'       => $request->input('week') !== null && $request->input('week') !== '' ? (int) $request->input('week') : null,
+            'brand'      => $request->input('brand') ?: null,
+        ];
+        $people = Goals::salesStaff();
+        if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
+            $f['user_id'] = null;
+        }
+
+        $d = Goals::dashboard(null, $f);
+        $rows = $this->adminViewRows($d, $f, $today);
+        $weeks = $rows->isEmpty() ? Goals::WEEKS : $rows->max(fn ($r) => Goals::weeksOf($r->goal->round));
+
+        // Real participants: everyone with a round in this program, whether or not they have
+        // added a customer yet — not just the people who show up in $rows.
+        $participantIds = NinetyDayRound::where('program_id', $program->id)->pluck('user_id')->unique()->values();
+        $atRisk = $this->attentionRows($rows, $today);
+
+        // Which week is "current" for this program specifically, clamped to its own real span —
+        // the same math weekOf() uses for a round, applied to the program's own start date.
+        $currentWeek = max(0, min($weeks - 1, intdiv($program->starts_on->diffInDays($today, false), 7)));
+        $selectedWeek = $request->integer('w', $currentWeek);
+        $selectedWeek = max(0, min($weeks - 1, $selectedWeek));
+        $weekDue = $program->starts_on->copy()->addDays(7 * $selectedWeek);
+
+        // The week strip: every week's done/expected, from the same per-goal checkin rows.
+        $weekStrip = collect($d['strip'])->map(fn ($s, $w) => ['week' => $w, 'done' => $s['done'], 'total' => $s['total'],
+            'pct' => $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0])->values();
+
+        // Selected week's summary, per participant (not per customer): submitted every customer's
+        // status for that week, has some still pending, or has none due yet.
+        $weekByUser = [];
+        foreach ($d['rows'] as $r) {
+            $ck = $r->goal->checkins->firstWhere('week_no', $selectedWeek);
+            if (!$ck) {
+                continue;
+            }
+            $uid = $r->user->id;
+            $weekByUser[$uid]['total'] = ($weekByUser[$uid]['total'] ?? 0) + 1;
+            $weekByUser[$uid]['done'] = ($weekByUser[$uid]['done'] ?? 0) + ($ck->status !== null ? 1 : 0);
+        }
+        $weekSummary = ['submitted' => 0, 'pending' => 0, 'overdue' => 0, 'notStarted' => 0];
+        foreach ($participantIds as $uid) {
+            $wk = $weekByUser[$uid] ?? null;
+            if (!$wk || $wk['total'] === 0) {
+                $weekSummary['notStarted']++;
+            } elseif ($wk['done'] >= $wk['total']) {
+                $weekSummary['submitted']++;
+            } elseif ($weekDue->lt($today)) {
+                $weekSummary['overdue']++;
+            } else {
+                $weekSummary['pending']++;
+            }
+        }
+
+        // Recent activity: every comment and status change from this program's own participants.
+        $activity = Goals::comments($participantIds->all(), [], 20);
+
+        return view('tenant.performance.ninety-day-goals.program-detail', [
+            'tab'        => null,
+            'isAdmin'    => true,
+            'program'    => $program,
+            'filters'    => $f,
+            'people'     => $people,
+            'brands'     => array_merge(array_keys(Goals::BRANDS), ['Other']),
+            'weeks'      => $weeks,
+            'statuses'   => Goals::STATUSES,
+            'today'      => $today,
+            'cards'      => $d['cards'],
+            'statusCounts' => $d['statuses'],
+            'atRisk'     => $atRisk,
+            'participants' => $participantIds->count(),
+            'currentWeek' => $currentWeek,
+            'selectedWeek' => $selectedWeek,
+            'weekDue'    => $weekDue,
+            'weekStrip'  => $weekStrip,
+            'weekSummary' => $weekSummary,
+            'rows'       => $rows,
+            'salespeople' => $d['users'],
+            'activity'   => $activity,
         ]);
     }
 

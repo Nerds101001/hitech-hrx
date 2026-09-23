@@ -56,6 +56,37 @@
     @endif
   </div>
 
+  {{-- Select Program: click to scope the whole page to one program, or back to all --}}
+  <div class="mb-4">
+    <div class="small fw-bold text-muted text-uppercase mb-2">Select Program</div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ route('performance.ninety-day-goals.program-dashboard', array_merge(request()->except(['program_id', 'page']))) }}" class="ndg-prog-pill {{ !$filters['program_id'] ? 'on' : '' }}">
+        <div class="fw-bold">All Programs</div><div class="small">{{ $programs->count() }}</div>
+      </a>
+      @foreach($programs->take(6) as $p)
+        <a href="{{ route('performance.ninety-day-goals.program-dashboard', array_merge(request()->except(['program_id', 'page']), ['program_id' => $p->id])) }}" class="ndg-prog-pill {{ (int) $filters['program_id'] === $p->id ? 'on' : '' }}">
+          <div class="fw-bold">{{ \Illuminate\Support\Str::limit($p->name, 18) }}</div>
+          <div class="small">{{ $today->between($p->starts_on, $p->ends_on) ? 'Active' : ($today->lt($p->starts_on) ? 'Upcoming' : 'Ended') }}</div>
+        </a>
+      @endforeach
+      @if($programs->count() > 6)
+        <button type="button" class="ndg-prog-pill ndg-prog-more" data-bs-toggle="collapse" data-bs-target="#ndgPdMorePrograms">…</button>
+      @endif
+    </div>
+    @if($programs->count() > 6)
+      <div class="collapse mt-2" id="ndgPdMorePrograms">
+        <div class="d-flex flex-wrap gap-2">
+          @foreach($programs->slice(6) as $p)
+            <a href="{{ route('performance.ninety-day-goals.program-dashboard', array_merge(request()->except(['program_id', 'page']), ['program_id' => $p->id])) }}" class="ndg-prog-pill {{ (int) $filters['program_id'] === $p->id ? 'on' : '' }}">
+              <div class="fw-bold">{{ \Illuminate\Support\Str::limit($p->name, 18) }}</div>
+              <div class="small">{{ $today->between($p->starts_on, $p->ends_on) ? 'Active' : ($today->lt($p->starts_on) ? 'Upcoming' : 'Ended') }}</div>
+            </a>
+          @endforeach
+        </div>
+      </div>
+    @endif
+  </div>
+
   {{-- KPI cards, with real trend deltas — never a fabricated percentage --}}
   <div class="row g-3 mb-6">
     @php
@@ -84,14 +115,8 @@
   <div class="hitech-card mb-6">
     <div class="card-body p-4">
       <form method="GET" action="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="row g-3 align-items-end" id="ndgPdFilters">
-        <div class="col-md-2">
-          <label class="form-label fw-bold small text-muted text-uppercase mb-2">Program</label>
-          <select name="program_id" class="form-select form-select-hitech">
-            <option value="">All programs</option>
-            @foreach($programs as $p)<option value="{{ $p->id }}" {{ (int) $filters['program_id'] === $p->id ? 'selected' : '' }}>{{ $p->name }}</option>@endforeach
-          </select>
-        </div>
-        <div class="col-md-2">
+        <input type="hidden" name="program_id" value="{{ $filters['program_id'] }}">
+        <div class="col-md-3">
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Salesperson</label>
           <select name="user_id" class="form-select form-select-hitech">
             <option value="">All salespersons</option>
@@ -158,9 +183,68 @@
       </div>
     </div>
 
-    {{-- Row 2: Top Performing Sales Persons | Program Wise Summary | At Risk --}}
+    {{-- All Programs Overview | Program Progress — every program, with a real View action --}}
     <div class="row g-4 mb-6">
+      <div class="col-xl-8">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">All Programs Overview</div>
+            <span class="small text-muted">{{ $programSummary->count() }} programs</span>
+          </div>
+          <div class="card-body p-0 table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr>
+                <th class="ps-3">#</th><th>Program Name</th><th>Code</th><th>Start Date</th><th>End Date</th><th>Duration</th>
+                <th class="text-end">Participants</th><th class="text-end">Customers</th><th class="text-end">Target (₹)</th><th class="text-end">Achieved (₹)</th><th class="text-end">Ach. %</th><th>Status</th><th class="pe-3"></th>
+              </tr></thead>
+              <tbody>
+              @forelse($programSummary as $i => $r)
+                @php $pActive = $today->between($r->program->starts_on, $r->program->ends_on); @endphp
+                <tr>
+                  <td class="ps-3 text-muted">{{ $i + 1 }}</td>
+                  <td class="fw-semibold text-dark">{{ $r->program->name }}</td>
+                  <td class="small text-muted">PRG-{{ $r->program->id }}</td>
+                  <td class="small text-muted">{{ $r->program->starts_on->format('d M Y') }}</td>
+                  <td class="small text-muted">{{ $r->program->ends_on->format('d M Y') }}</td>
+                  <td class="small text-muted">{{ $r->program->starts_on->diffInDays($r->program->ends_on) }} days</td>
+                  <td class="text-end">{{ $r->participants }}</td>
+                  <td class="text-end">{{ $r->customers }}</td>
+                  <td class="text-end">{{ $fmtL($r->target) }} L</td>
+                  <td class="text-end">{{ $fmtL($r->achieved) }} L</td>
+                  <td class="text-end" style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
+                  <td><span class="badge rounded-pill" style="background:{{ $pActive ? '#d7f3ee' : '#e2e8f0' }};color:{{ $pActive ? '#0b5b48' : '#475569' }}">{{ $pActive ? 'Active' : ($today->lt($r->program->starts_on) ? 'Upcoming' : 'Ended') }}</span></td>
+                  <td class="pe-3"><a href="{{ route('performance.ninety-day-goals.program', $r->program->id) }}" class="btn btn-sm btn-hitech-cancel rounded-pill">View</a></td>
+                </tr>
+              @empty
+                <tr><td colspan="13" class="text-center text-muted p-4">No programs yet.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
       <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">Program Progress</div>
+          </div>
+          <div class="card-body p-4" style="max-height:360px;overflow-y:auto">
+            @forelse($programSummary as $r)
+              <a href="{{ route('performance.ninety-day-goals.program', $r->program->id) }}" class="ndg-bar d-block text-decoration-none">
+                <div class="ndg-bar-top"><span class="ndg-bar-name">{{ $r->program->name }}<em>{{ $r->customers }} {{ \Illuminate\Support\Str::plural('customer', $r->customers) }}</em></span><span class="ndg-bar-val" style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</span></div>
+                <div class="ndg-track"><div class="ndg-fill" style="width:{{ $r->pct === null ? 0 : min(100, $r->pct) }}%;background:{{ $pctColor($r->pct) }}"></div></div>
+              </a>
+            @empty
+              <div class="small text-muted">No programs yet.</div>
+            @endforelse
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {{-- Row 2: Top Performing Sales Persons | At Risk --}}
+    <div class="row g-4 mb-6">
+      <div class="col-xl-6">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
             <div class="fw-bold text-dark">Top Performing Sales Persons</div>
@@ -186,35 +270,7 @@
           </div>
         </div>
       </div>
-      <div class="col-xl-4">
-        <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-            <div class="fw-bold text-dark">Program Wise Summary</div>
-            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-goto" data-tab="tracking">View All →</button>
-          </div>
-          <div class="card-body p-0 table-responsive" style="max-height:320px;overflow-y:auto">
-            <table class="table table-sm align-middle mb-0">
-              <thead><tr><th class="ps-3">Program</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th class="text-end pe-3">%</th></tr></thead>
-              <tbody>
-              @forelse($programSummary as $r)
-                <tr>
-                  <td class="ps-3">
-                    <div class="fw-semibold text-dark">{{ $r->program->name }}</div>
-                    <div class="small text-muted">{{ $r->program->starts_on->format('d M') }} – {{ $r->program->ends_on->format('d M Y') }} · {{ $r->participants }} {{ \Illuminate\Support\Str::plural('participant', $r->participants) }}</div>
-                  </td>
-                  <td class="text-end">{{ $fmtL($r->target) }}</td>
-                  <td class="text-end">{{ $fmtL($r->achieved) }}</td>
-                  <td class="text-end pe-3" style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-                </tr>
-              @empty
-                <tr><td colspan="4" class="text-center text-muted p-4">No programs yet.</td></tr>
-              @endforelse
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      <div class="col-xl-4">
+      <div class="col-xl-6">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
             <div class="fw-bold text-dark">At Risk Customers</div>
@@ -519,6 +575,13 @@
   .ndg-subtab:hover { border-color: #007a7a; color: #007a7a; }
   .ndg-subtab.on { background: #007a7a; border-color: #007a7a; color: #fff; }
   .ndg-daterange { border: 1px solid #d5e3e1; border-radius: 10px; padding: 8px 16px; font-size: .8rem; font-weight: 600; color: #334155; background: #fff; white-space: nowrap; }
+  .ndg-prog-pill { display: inline-block; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 14px; text-decoration: none; color: #334155; background: #fff; cursor: pointer; min-width: 110px; }
+  .ndg-prog-pill:hover { border-color: #007a7a; }
+  .ndg-prog-pill .fw-bold { font-size: .82rem; color: #0f172a; }
+  .ndg-prog-pill .small { color: #94a3b8; }
+  .ndg-prog-pill.on { background: #007a7a; border-color: #007a7a; }
+  .ndg-prog-pill.on .fw-bold, .ndg-prog-pill.on .small { color: #fff; }
+  .ndg-prog-more { border: 0; background: #f1f5f9; }
   .ndg-daterange i { color: #007a7a; margin-right: 4px; }
   .ndg-kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; cursor: pointer; transition: border-color .15s; }
   .ndg-kpi:hover { border-color: #007a7a; }

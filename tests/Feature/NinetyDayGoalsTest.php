@@ -1742,4 +1742,55 @@ class NinetyDayGoalsTest extends TestCase
             $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))), $name);
         }
     }
+
+    // ── Program Details (one program, every participant) ───────────────────
+
+    public function test_program_detail_is_admin_only_a_salesperson_is_redirected_away(): void
+    {
+        $admin = $this->person(null, 'admin');
+        $program = NinetyDayProgram::create(['tenant_id' => 1, 'name' => 'Detail Test', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'created_by_id' => $admin->id]);
+        $c = app(NinetyDayGoalController::class);
+
+        $blocked = $c->programDetail($this->ask($this->rep, 'GET', '/x'), $program->id);
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $blocked);
+
+        $ok = $c->programDetail($this->ask($admin, 'GET', '/x'), $program->id);
+        $this->assertStringContainsString('Program Code', $ok->render());
+    }
+
+    public function test_program_detail_shows_every_participant_even_with_no_customers_yet(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $result = Goals::createProgram($admin, 'Empty Participant Co', Carbon::parse(self::MONDAY), Carbon::parse(self::MONDAY)->addDays(90), [$this->rep->id, $this->rep2->id]);
+        $round = $result['enrolled'][0]['round'];
+        $this->goal($result['enrolled'][0]['user'], $round, 'Only One Customer');
+        // rep2 has a round in this program but never added a customer.
+
+        $html = app(NinetyDayGoalController::class)->programDetail($this->ask($admin, 'GET', '/x'), $result['program']->id)->render();
+
+        $this->assertStringContainsString('Only One Customer', $html);
+        // Both enrolled people count as participants, even though only one of them has a
+        // customer yet — the sub-tab label spells the real count out directly.
+        $this->assertStringContainsString('Participants (2)', $html);
+        $this->assertStringContainsString('Customers (1)', $html);
+    }
+
+    public function test_program_dashboards_view_button_links_to_the_real_program_detail_page(): void
+    {
+        $admin = $this->person(null, 'admin');
+        $program = NinetyDayProgram::create(['tenant_id' => 1, 'name' => 'Linked Program', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'created_by_id' => $admin->id]);
+
+        $html = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/performance/ninety-day-goals/program-dashboard'))->render();
+
+        $this->assertStringContainsString('Linked Program', $html);
+        $this->assertStringContainsString(route('performance.ninety-day-goals.program', $program->id), $html);
+    }
+
+    public function test_the_program_detail_route_is_login_only(): void
+    {
+        $route = app('router')->getRoutes()->getByName('performance.ninety-day-goals.program');
+        $this->assertNotNull($route);
+        $this->assertSame([], array_values(array_filter($route->gatherMiddleware(), fn ($m) => is_string($m) && str_starts_with($m, 'role'))));
+    }
 }
