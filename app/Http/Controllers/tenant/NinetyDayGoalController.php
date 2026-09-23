@@ -853,7 +853,7 @@ class NinetyDayGoalController extends Controller
      * comments, and the round's own summary — the individual view behind "My Programs" for a
      * salesperson, or an admin drilling into a named participant from the Program Wise Summary.
      */
-    public function roundDetail($id)
+    public function roundDetail(Request $request, $id)
     {
         [$user, $scope, $redirect] = $this->scopeOrRedirect();
         if ($redirect) {
@@ -869,6 +869,35 @@ class NinetyDayGoalController extends Controller
         $d = Goals::dashboard([$round->user_id], ['round_id' => $round->id]);
         $weeks = Goals::weeksOf($round);
         $today = Carbon::today();
+
+        // The week picker: every week's real Monday date, which week is genuinely "now" for this
+        // round, and which one the picker has open — same pattern the admin Program Details page
+        // already uses, just scoped to this one person's one round.
+        $dates = Goals::weekDates($round);
+        $currentWeek = Goals::weekOf($round, $today);
+        $selectedWeek = max(0, min($weeks - 1, $request->integer('w', $currentWeek)));
+        $weekDue = $dates[$selectedWeek];
+        // $d['strip'] can run longer than this round's own real span — dashboard() falls back to
+        // the default 13-week span when a round has no customers yet to derive a length from —
+        // so it's capped to $weeks here, never indexed past this round's own real dates.
+        $weekStrip = collect($d['strip'])->take($weeks)->map(fn ($s, $w) => ['week' => $w, 'done' => $s['done'], 'total' => $s['total'],
+            'pct' => $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0])->values();
+
+        // Selected week's summary, per customer: submitted, still pending, overdue (Monday
+        // already passed), or nothing due yet for a goal added after that week started.
+        $weekSummary = ['submitted' => 0, 'pending' => 0, 'overdue' => 0, 'notStarted' => 0];
+        foreach ($goals as $g) {
+            $ck = $g->checkins->firstWhere('week_no', $selectedWeek);
+            if (!$ck) {
+                $weekSummary['notStarted']++;
+            } elseif ($ck->status !== null && $ck->status !== '') {
+                $weekSummary['submitted']++;
+            } elseif ($weekDue->lt($today)) {
+                $weekSummary['overdue']++;
+            } else {
+                $weekSummary['pending']++;
+            }
+        }
 
         // The KPI row's buckets, each goal counted exactly once, worst-first: dropped, then an
         // order already on the books, then at risk, then everything else still in progress.
@@ -904,6 +933,12 @@ class NinetyDayGoalController extends Controller
             'activity' => $activity,
             'statuses' => Goals::STATUSES,
             'brands'   => array_keys(Goals::BRANDS),
+            'dates'    => $dates,
+            'currentWeek' => $currentWeek,
+            'selectedWeek' => $selectedWeek,
+            'weekDue'  => $weekDue,
+            'weekStrip' => $weekStrip,
+            'weekSummary' => $weekSummary,
         ]);
     }
 
@@ -1233,11 +1268,16 @@ class NinetyDayGoalController extends Controller
             'entries.*.goal_id'   => 'required|integer',
             'entries.*.status'    => 'nullable|string|max:40',
             'entries.*.comment'   => 'nullable|string|max:1000',
+            'entries.*.next_action' => 'nullable|string|max:255',
+            'entries.*.next_follow_up_date' => 'nullable|date',
         ]);
 
         $entries = [];
         foreach ($data['entries'] as $e) {
-            $entries[(int) $e['goal_id']] = ['status' => $e['status'] ?? '', 'comment' => $e['comment'] ?? ''];
+            $entries[(int) $e['goal_id']] = [
+                'status' => $e['status'] ?? '', 'comment' => $e['comment'] ?? '',
+                'next_action' => $e['next_action'] ?? '', 'next_follow_up_date' => $e['next_follow_up_date'] ?? null,
+            ];
         }
         [$saved, $errors] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
 

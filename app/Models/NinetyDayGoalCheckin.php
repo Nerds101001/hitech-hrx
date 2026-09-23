@@ -11,6 +11,7 @@ class NinetyDayGoalCheckin extends Model
 
     protected $casts = [
         'due_on'       => 'date',
+        'next_follow_up_date' => 'date',
         'submitted_at' => 'datetime',
         'edited_at'    => 'datetime',
         'is_late'      => 'boolean',

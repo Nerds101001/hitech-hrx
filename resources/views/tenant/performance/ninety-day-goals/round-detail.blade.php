@@ -24,70 +24,184 @@
   $target = (float) $d['cards']['target'];
   $achieved = (float) $d['cards']['achieved'];
   $pct = $d['cards']['pct'];
+  $updatedThisWeek = $weekSummary['submitted'];
+  $pendingThisWeek = $counts['total'] - $updatedThisWeek;
+  $nextWeekIdx = min($weeks - 1, $currentWeek + 1);
+  $daysLeft = max(0, $today->diffInDays($round->ends_on, false));
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
 
   <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4 mx-4">
     <div>
+      <nav class="small text-muted mb-1">
+        <a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i>
+        <a href="{{ route('performance.ninety-day-goals.index') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i>
+        {{ $title }} <i class="bx bx-chevron-right"></i> Weekly Submission
+      </nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">
         {{ $title }}
         <span class="badge rounded-pill fw-bold" style="font-size:.62rem;background:{{ $isActive ? '#d7f3ee' : '#e2e8f0' }};color:{{ $isActive ? '#0b5b48' : '#475569' }}">{{ ucfirst($round->status) }}</span>
       </h3>
-      <p class="text-muted mb-0 small">Track weekly progress and results for every target customer in this round.</p>
+      <p class="text-muted mb-0 small">{{ $round->starts_on->format('d M Y') }} – {{ $round->ends_on->format('d M Y') }} ({{ $weeks * 7 }} days) · Submit your weekly updates, track progress and achieve your sales goals.</p>
     </div>
-    <div class="d-flex gap-2">
-      <a href="{{ url()->previous() ?: route('performance.ninety-day-goals.index') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> Back</a>
+    <div class="d-flex gap-2 flex-wrap">
+      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Current Week</div><div class="fw-bold text-dark fs-5">W{{ $currentWeek }}</div><div class="small text-muted">{{ $dates[$currentWeek]->format('d M') }} – {{ $dates[$currentWeek]->copy()->addDays(6)->format('d M Y') }}</div></div>
+      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Next Week</div><div class="fw-bold text-dark fs-5">W{{ $nextWeekIdx }}</div><div class="small text-muted">{{ $dates[$nextWeekIdx]->format('d M') }} – {{ $dates[$nextWeekIdx]->copy()->addDays(6)->format('d M Y') }}</div></div>
+      <div class="ndg-infobox"><div class="small text-muted fw-semibold"><i class="bx bx-calendar"></i> Days Left</div><div class="fw-bold text-dark fs-5">{{ $daysLeft }}</div><div class="small text-muted">&nbsp;</div></div>
     </div>
   </div>
 
   <div class="px-4">
 
-  {{-- Round summary strip --}}
-  <div class="hitech-card mb-6">
-    <div class="card-body p-4 d-flex flex-wrap align-items-center gap-4">
-      <div class="d-flex align-items-center gap-2">
-        <i class="bx bx-calendar fs-4" style="color:#007a7a"></i>
-        <div>
-          <div class="fw-bold text-dark">{{ $round->starts_on->format('d M Y') }} - {{ $round->ends_on->format('d M Y') }}</div>
-          <div class="small text-muted">({{ $weeks * 7 }} days)</div>
+  {{-- KPI cards + Submit All Updates --}}
+  <div class="row g-3 mb-6 align-items-stretch">
+    <div class="col-6 col-lg">
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#e0f2fe;color:#0369a1"><i class="bx bx-group"></i></div><div><div class="small text-muted fw-semibold">My Customers</div><div class="ndg-kpi3-v">{{ $counts['total'] }}</div></div></div>
+    </div>
+    <div class="col-6 col-lg">
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fff7ed;color:#c2540c"><i class="bx bx-rupee"></i></div><div><div class="small text-muted fw-semibold">My Target</div><div class="ndg-kpi3-v">{{ $fmtRs($target * 100000 / 100) }}</div></div></div>
+    </div>
+    <div class="col-6 col-lg">
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#dcfce7;color:#166534"><i class="bx bx-bar-chart-alt-2"></i></div>
+        <div class="flex-grow-1"><div class="small text-muted fw-semibold">My Achieved</div><div class="ndg-kpi3-v">{{ $fmtRs($achieved * 100000 / 100) }}</div>
+          <div class="d-flex align-items-center gap-2 mt-1"><div class="ndg-track flex-grow-1" style="height:6px"><div class="ndg-fill" style="width:{{ $pct === null ? 0 : min(100, $pct) }}%;background:{{ $pctColor($pct) }}"></div></div><b class="small" style="color:{{ $pctColor($pct) }}">{{ $pctText($pct) }}</b></div>
         </div>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <i class="bx bx-user fs-4" style="color:#007a7a"></i>
-        <div>
-          <div class="fw-bold text-dark">{{ trim($round->user->first_name . ' ' . $round->user->last_name) }}</div>
-          <div class="small text-muted">{{ optional($round->user->department)->name }}</div>
-        </div>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <i class="bx bx-target-lock fs-4" style="color:#007a7a"></i>
-        <div>
-          <div class="fw-bold text-dark">{{ $fmtRs($target * 100000 / 100) }}</div>
-          <div class="small text-muted">Target (₹{{ $fmtL($target) }} L)</div>
-        </div>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <i class="bx bx-line-chart fs-4" style="color:#007a7a"></i>
-        <div>
-          <div class="fw-bold text-dark">₹{{ $fmtL($achieved) }} L <span style="color:{{ $pctColor($pct) }}">({{ $pctText($pct) }})</span></div>
-          <div class="small text-muted">Achievement · {{ $counts['orders'] }} of {{ $counts['total'] }} converted</div>
-        </div>
-      </div>
-      <div class="flex-grow-1" style="min-width:180px">
-        <div class="progress" style="height:8px"><div class="progress-bar" style="width:{{ $pct === null ? 0 : min(100, $pct) }}%;background:{{ $pctColor($pct) }}"></div></div>
       </div>
     </div>
+    <div class="col-6 col-lg">
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#ede9fe;color:#5b21b6"><i class="bx bx-file"></i></div><div><div class="small text-muted fw-semibold">Updated This Week</div><div class="ndg-kpi3-v">{{ $updatedThisWeek }} / {{ $counts['total'] }}</div></div></div>
+    </div>
+    <div class="col-6 col-lg">
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fee2e2;color:#b42318"><i class="bx bx-hourglass"></i></div><div><div class="small text-muted fw-semibold">Pending Updates</div><div class="ndg-kpi3-v">{{ $pendingThisWeek }}</div></div></div>
+    </div>
+    @if($canEdit && $isActive)
+    <div class="col-12 col-lg-auto d-flex align-items-stretch">
+      <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center justify-content-center gap-2 w-100" id="ndgSubmitAllTop"><i class="bx bx-send"></i> Submit All Updates</button>
+    </div>
+    @endif
   </div>
 
   {{-- Sub-tabs --}}
   <div class="d-flex gap-2 flex-wrap mb-6 ndg-subtabs" id="ndgRdTabs">
-    @foreach(['customers' => ['Customers','bx-list-ul'], 'overview' => ['Overview','bx-grid-alt'], 'weekly' => ['Weekly Updates','bx-calendar-check'], 'orders' => ['Orders & Results','bx-cart-download'], 'activity' => ['Activity Log','bx-history'], 'comments' => ['Comments','bx-comment-detail']] as $key => [$lbl, $ic])
-      <button type="button" class="ndg-subtab {{ $key === 'customers' ? 'on' : '' }}" data-tab="{{ $key }}"><i class="bx {{ $ic }}"></i>{{ $lbl }}</button>
+    @foreach(['weekly' => ['Weekly Submission','bx-calendar-check'], 'customers' => ['Customer Summary','bx-list-ul'], 'orders' => ['Orders & Results','bx-cart-download'], 'details' => ['Program Details','bx-info-circle']] as $key => [$lbl, $ic])
+      <button type="button" class="ndg-subtab {{ $key === 'weekly' ? 'on' : '' }}" data-tab="{{ $key }}"><i class="bx {{ $ic }}"></i>{{ $lbl }}</button>
     @endforeach
   </div>
 
-  {{-- ═══════════════════ Customers ═══════════════════ --}}
-  <div class="ndg-rd-section" data-section="customers">
+  {{-- ═══════════════════ Weekly Submission ═══════════════════ --}}
+  <div class="ndg-rd-section" data-section="weekly">
+
+    {{-- Week strip --}}
+    <div class="card-body p-0 d-flex gap-2 mb-6 ndg-week-strip" id="ndgRdWeekStrip">
+      @foreach($weekStrip as $w)
+        <a href="?{{ http_build_query(['w' => $w['week']]) }}" class="ndg-week-pill {{ $w['week'] === $selectedWeek ? 'on' : '' }} {{ $w['week'] === $currentWeek ? 'is-current' : '' }}">
+          <div class="fw-bold">W{{ $w['week'] }}</div>
+          <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
+          <div class="small">{{ $w['total'] ? $w['pct'] . '%' : '—' }}</div>
+        </a>
+      @endforeach
+    </div>
+
+    <div class="row g-4">
+      <div class="col-xl-9">
+        <div class="hitech-card mb-6">
+          <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+              <div class="fw-bold text-dark">Weekly Updates — Week {{ $selectedWeek }} ({{ $weekDue->format('d M') }} – {{ $weekDue->copy()->addDays(6)->format('d M Y') }})</div>
+              <div class="small text-muted" id="ndgRdMsg"></div>
+            </div>
+            @if($weekDue->gt($today))
+              <span class="badge badge-hitech badge-brand-soft">Not due yet</span>
+            @elseif($weekDue->lt($today))
+              <span class="badge badge-hitech badge-hitech-danger">Monday has passed — a comment is needed with any new status</span>
+            @else
+              <span class="badge badge-hitech badge-brand-soft">Due today</span>
+            @endif
+          </div>
+          <div class="card-body p-0 ndg-mx-scroll">
+            <table class="table align-middle mb-0" id="ndgWeeklyTable" style="min-width:1100px">
+              <thead class="small text-uppercase text-muted">
+                <tr>
+                  <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹)</th><th style="min-width:120px">Expected Order</th>
+                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th style="min-width:150px">Next Follow-up Date</th><th class="pe-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+              @forelse($goals as $i => $g)
+                @php $ck = $g->checkins->firstWhere('week_no', $selectedWeek); @endphp
+                <tr class="ndg-wk-row" data-goal="{{ $g->id }}">
+                  <td class="ps-3 text-muted">{{ $i + 1 }}</td>
+                  <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
+                  <td class="small text-muted">{{ $g->product }}</td>
+                  <td class="text-end">{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</td>
+                  <td class="small text-muted">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
+                  <td>
+                    <select class="form-select form-select-hitech ndg-wk-status" {{ $canEdit && $isActive ? '' : 'disabled' }}>
+                      <option value="">Choose…</option>
+                      @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($ck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
+                    </select>
+                  </td>
+                  <td><input type="text" class="form-control ndg-wk-comment" maxlength="1000" placeholder="Optional note" value="{{ optional($ck)->comment }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td><input type="text" class="form-control ndg-wk-next-action" maxlength="255" placeholder="e.g. Share quotation" value="{{ optional($ck)->next_action }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td><input type="date" class="form-control ndg-wk-next-date" value="{{ optional($ck)->next_follow_up_date ? $ck->next_follow_up_date->format('Y-m-d') : '' }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td class="pe-3 text-end">
+                    @if($canEdit && $isActive)
+                      <button type="button" class="btn btn-sm btn-hitech-cancel ndg-wk-save">Save</button>
+                    @endif
+                  </td>
+                </tr>
+              @empty
+                <tr><td colspan="10" class="text-center text-muted p-5">No target customers yet — add one from Customer Summary.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+          @if($canEdit && $isActive && $goals->isNotEmpty())
+          <div class="card-body pt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" id="ndgWkPrev"><i class="bx bx-chevron-left"></i> Previous Week</button>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" id="ndgSaveDraft">Save Draft</button>
+              <button type="button" class="btn-hitech rounded-pill px-5" id="ndgSubmitAllBottom"><i class="bx bx-send"></i> Submit All Updates</button>
+            </div>
+          </div>
+          @endif
+        </div>
+      </div>
+
+      <div class="col-xl-3">
+        <div class="hitech-card mb-4">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Week {{ $selectedWeek }} Progress</div></div>
+          <div class="card-body p-3 text-center"><div id="ndgWeekDonut"></div></div>
+        </div>
+        <div class="hitech-card mb-4" style="background:#fffbeb;border-color:#fde68a">
+          <div class="card-body p-3 small">
+            <i class="bx bx-bulb" style="color:#f5a623"></i> Please submit your weekly updates by Monday, 11:59 PM. Your updates help in tracking progress and enable better support from the team.
+          </div>
+        </div>
+        <div class="hitech-card">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Status Reference</div></div>
+          <div class="card-body p-3">
+            @foreach($G::STATUS_COLORS as $st => [$bg, $fg])
+              <div class="d-flex align-items-center gap-2 small mb-2">
+                <span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:{{ $fg }};flex:none"></span>
+                <span><b>{{ $st }}</b> — {{ ['On Track' => 'Progress as planned', 'Off Track' => 'Significant delay', 'Trial Order' => 'Trial order placed', 'Regular Order' => 'Order received', 'No Report' => 'Not updated this week', 'Dropped' => 'Not interested', 'Transferred' => 'Moved to another team'][$st] }}</span>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hitech-card">
+      <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div><div class="fw-bold text-dark">Need Help?</div><div class="small text-muted">Contact your Sales Head or check the program guide.</div></div>
+        <button type="button" class="btn btn-hitech-cancel rounded-pill px-4">View Guide</button>
+      </div>
+    </div>
+  </div>
+
+  {{-- ═══════════════════ Customer Summary ═══════════════════ --}}
+  <div class="ndg-rd-section d-none" data-section="customers">
 
     {{-- KPI cards --}}
     <div class="row g-3 mb-6">
@@ -199,6 +313,7 @@
                         <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
                         <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status }}</span>
                         <div class="small mt-1">{{ $ck->comment ?: 'No comment added.' }}</div>
+                        @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
                       </div>
                     @empty
                       <div class="small text-muted">No weekly updates submitted yet.</div>
@@ -273,6 +388,7 @@
                     <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
                     <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status }}</span>
                     <div class="small mt-1">{{ $ck->comment ?: '—' }}</div>
+                    @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
                     @foreach($ck->notes as $n)
                       <div class="small mt-1 pt-1 border-top"><b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}</div>
                     @endforeach
@@ -308,57 +424,6 @@
     </div>
   </div>
 
-  {{-- ═══════════════════ Overview ═══════════════════ --}}
-  <div class="ndg-rd-section d-none" data-section="overview">
-    <div class="row g-4 mb-6">
-      <div class="col-xl-6">
-        <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by monthly potential</div></div>
-          <div class="card-body p-4">
-            @php $maxCust = max(1, (float) optional($d['topCustomers']->first())->potential); @endphp
-            @forelse($d['topCustomers'] as $tc)
-              <div class="ndg-bar">
-                <div class="ndg-bar-top"><span class="ndg-bar-name">{{ $tc->goal->client_name }}<em>{{ $tc->brand }}</em></span><span class="ndg-bar-val">{{ $fmtL($tc->potential) }} L</span></div>
-                <div class="ndg-track"><div class="ndg-fill" style="width:{{ round($tc->potential / $maxCust * 100) }}%"></div></div>
-              </div>
-            @empty
-              <div class="small text-muted">No customers yet.</div>
-            @endforelse
-          </div>
-        </div>
-      </div>
-      <div class="col-xl-6">
-        <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Latest status, all customers</div></div>
-          <div class="card-body p-3"><div id="ndgRdStatusDonut"></div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {{-- ═══════════════════ Weekly Updates ═══════════════════ --}}
-  <div class="ndg-rd-section d-none" data-section="weekly">
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Compliance by week</div></div>
-      <div class="card-body p-0 table-responsive">
-        <table class="table align-middle mb-0">
-          <thead><tr><th class="ps-4">Week</th><th class="text-end">Expected</th><th class="text-end">Submitted</th><th class="text-end">Pending</th><th class="text-end pe-4">Compliance</th></tr></thead>
-          <tbody>
-          @foreach($d['strip'] as $w => $s)
-            <tr>
-              <td class="ps-4 fw-semibold">W{{ $w }}</td>
-              <td class="text-end">{{ $s['total'] }}</td>
-              <td class="text-end">{{ $s['done'] }}</td>
-              <td class="text-end"><span class="{{ $s['total'] - $s['done'] ? 'text-danger fw-bold' : '' }}">{{ ($s['total'] - $s['done']) ?: '·' }}</span></td>
-              <td class="text-end pe-4">{{ $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0 }}%</td>
-            </tr>
-          @endforeach
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   {{-- ═══════════════════ Orders & Results ═══════════════════ --}}
   <div class="ndg-rd-section d-none" data-section="orders">
     <div class="hitech-card mb-6">
@@ -383,47 +448,58 @@
     </div>
   </div>
 
-  {{-- ═══════════════════ Activity Log ═══════════════════ --}}
-  <div class="ndg-rd-section d-none" data-section="activity">
+  {{-- ═══════════════════ Program Details ═══════════════════ --}}
+  <div class="ndg-rd-section d-none" data-section="details">
     <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">{{ $activity->count() }} events</div></div>
-      <div class="card-body p-0">
-        @forelse($activity as $a)
-          <div class="ndg-alert-row">
-            <i class="bx {{ $a->kind === 'note' ? 'bx-message-square-detail' : 'bx-radio-circle-marked' }}"></i>
-            <div class="flex-grow-1">
-              <div class="small text-dark"><b>{{ trim(optional($a->by)->first_name . ' ' . optional($a->by)->last_name) ?: 'Someone' }}</b>
-                {{ $a->kind === 'note' ? 'commented on' : 'set status for' }} {{ $a->goal->client_name }}
-                @if($a->kind !== 'note' && $a->status)· <span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$a->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$a->status][1] ?? '#475569' }}">{{ $a->status }}</span>@endif
-              </div>
-              @if($a->text)<div class="small text-muted">{{ $a->text }}</div>@endif
-              <div class="small text-muted">{{ optional($a->at)->diffForHumans() }}</div>
-            </div>
-          </div>
-        @empty
-          <div class="p-4 text-center text-muted small">No activity yet.</div>
-        @endforelse
+      <div class="card-body p-4 d-flex flex-wrap align-items-center gap-4">
+        <div><div class="small text-muted text-uppercase fw-bold" style="font-size:.65rem">Program</div><div class="fw-bold text-dark">{{ $title }}</div></div>
+        <div><div class="small text-muted text-uppercase fw-bold" style="font-size:.65rem">Salesperson</div><div class="fw-bold text-dark">{{ trim($round->user->first_name . ' ' . $round->user->last_name) }}</div></div>
+        <div><div class="small text-muted text-uppercase fw-bold" style="font-size:.65rem">Department</div><div class="fw-bold text-dark">{{ optional($round->user->department)->name ?? '—' }}</div></div>
+        <div><div class="small text-muted text-uppercase fw-bold" style="font-size:.65rem">Duration</div><div class="fw-bold text-dark">{{ $round->starts_on->format('d M Y') }} – {{ $round->ends_on->format('d M Y') }} ({{ $weeks * 7 }} days)</div></div>
+        <div><div class="small text-muted text-uppercase fw-bold" style="font-size:.65rem">Status</div><div class="fw-bold text-dark">{{ ucfirst($round->status) }}</div></div>
       </div>
     </div>
-  </div>
-
-  {{-- ═══════════════════ Comments ═══════════════════ --}}
-  <div class="ndg-rd-section d-none" data-section="comments">
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Every comment, newest first</div></div>
-      <div class="card-body p-0">
-        @forelse($activity->filter(fn ($a) => $a->text) as $a)
-          <div class="ndg-alert-row">
-            <i class="bx bx-message-square-detail"></i>
-            <div class="flex-grow-1">
-              <div class="small text-dark"><b>{{ trim(optional($a->by)->first_name . ' ' . optional($a->by)->last_name) ?: 'Someone' }}</b> on {{ $a->goal->client_name }} <span class="text-muted">· W{{ $a->week_no }}</span></div>
-              <div class="small text-muted">{{ $a->text }}</div>
-              <div class="small text-muted">{{ optional($a->at)->diffForHumans() }}</div>
-            </div>
+    <div class="row g-4">
+      <div class="col-xl-6">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by monthly potential</div></div>
+          <div class="card-body p-4">
+            @php $maxCust = max(1, (float) optional($d['topCustomers']->first())->potential); @endphp
+            @forelse($d['topCustomers'] as $tc)
+              <div class="ndg-bar">
+                <div class="ndg-bar-top"><span class="ndg-bar-name">{{ $tc->goal->client_name }}<em>{{ $tc->brand }}</em></span><span class="ndg-bar-val">{{ $fmtL($tc->potential) }} L</span></div>
+                <div class="ndg-track"><div class="ndg-fill" style="width:{{ round($tc->potential / $maxCust * 100) }}%"></div></div>
+              </div>
+            @empty
+              <div class="small text-muted">No customers yet.</div>
+            @endforelse
           </div>
-        @empty
-          <div class="p-4 text-center text-muted small">No comments yet.</div>
-        @endforelse
+        </div>
+      </div>
+      <div class="col-xl-6">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Latest status, all customers</div></div>
+          <div class="card-body p-3"><div id="ndgRdStatusDonut"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="hitech-card mt-6">
+      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Compliance by week</div></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th class="ps-4">Week</th><th class="text-end">Expected</th><th class="text-end">Submitted</th><th class="text-end">Pending</th><th class="text-end pe-4">Compliance</th></tr></thead>
+          <tbody>
+          @foreach($d['strip'] as $w => $s)
+            <tr>
+              <td class="ps-4 fw-semibold">W{{ $w }}</td>
+              <td class="text-end">{{ $s['total'] }}</td>
+              <td class="text-end">{{ $s['done'] }}</td>
+              <td class="text-end"><span class="{{ $s['total'] - $s['done'] ? 'text-danger fw-bold' : '' }}">{{ ($s['total'] - $s['done']) ?: '·' }}</span></td>
+              <td class="text-end pe-4">{{ $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0 }}%</td>
+            </tr>
+          @endforeach
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -479,10 +555,19 @@
   .ndg-subtab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid #d5e3e1; background: #fff; color: #334155; font-weight: 700; font-size: .8rem; cursor: pointer; }
   .ndg-subtab:hover { border-color: #007a7a; color: #007a7a; }
   .ndg-subtab.on { background: #007a7a; border-color: #007a7a; color: #fff; }
+  .ndg-infobox { border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 16px; background: #fff; min-width: 130px; }
   .ndg-kpi2 { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; height: 100%; display: flex; align-items: center; gap: 10px; }
   .ndg-kpi2-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: none; }
   .ndg-kpi2-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .ndg-kpi2-l { font-size: .68rem; color: #94a3b8; font-weight: 600; }
+  .ndg-kpi3 { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; display: flex; align-items: flex-start; gap: 12px; }
+  .ndg-kpi3-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex: none; }
+  .ndg-kpi3-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums; }
+  .ndg-week-strip { overflow-x: auto; }
+  .ndg-week-pill { flex: none; min-width: 78px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; text-align: center; text-decoration: none; color: #334155; }
+  .ndg-week-pill:hover { border-color: #007a7a; }
+  .ndg-week-pill.on { background: #fff; border-color: #007a7a; box-shadow: 0 0 0 1px #007a7a; }
+  .ndg-week-pill.is-current .fw-bold { color: #007a7a; }
   .ndg-rd-expand { border: 0; background: none; color: #64748b; padding: 0; cursor: pointer; }
   .ndg-rd-expand.on i { transform: rotate(-180deg); }
   .ndg-rd-expand i { transition: transform .15s; }
@@ -498,13 +583,11 @@
   .ndg-bar-val { font-weight: 800; white-space: nowrap; }
   .ndg-track { height: 7px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
   .ndg-fill { height: 100%; background: #007a7a; border-radius: 99px; min-width: 2px; }
-  .ndg-alert-row { display: flex; align-items: start; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #f1f5f9; }
-  .ndg-alert-row:last-child { border-bottom: none; }
-  .ndg-alert-row i { font-size: 1.1rem; color: #007a7a; flex: none; margin-top: 2px; }
   .ndg-mx-scroll { overflow: auto; }
   .ndg-list { max-height: 50vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
   .ndg-list .ndg-row:last-child { border-bottom: none !important; }
   .ndg-list .ndg-row:hover { background: #f8fafc; }
+  #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
 </style>
 @endsection
 
@@ -513,6 +596,7 @@
 (function () {
   var CSRF = '{{ csrf_token() }}';
   var ROUND_USER_ID = {{ (int) $round->user_id }};
+  var SELECTED_WEEK = {{ (int) $selectedWeek }};
   var URLS = {
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
     update: '{{ url('performance/ninety-day-goals') }}',
@@ -534,8 +618,65 @@
       sections.forEach(function (s) { s.classList.toggle('d-none', s.dataset.section !== t.dataset.tab); });
     });
   });
+  var strip = document.getElementById('ndgRdWeekStrip');
+  var onWeek = strip ? strip.querySelector('.ndg-week-pill.on') : null;
+  if (onWeek) { onWeek.scrollIntoView({ inline: 'center', block: 'nearest' }); }
 
-  // ── expand a customer row: shows its weekly-comments sub-row and its detail panel ──
+  // ── Weekly Submission: read every row, save one or many via the same checkin endpoint ──
+  var wkMsg = document.getElementById('ndgRdMsg');
+  function readRow(row) {
+    var status = row.querySelector('.ndg-wk-status'), comment = row.querySelector('.ndg-wk-comment'),
+        nextAction = row.querySelector('.ndg-wk-next-action'), nextDate = row.querySelector('.ndg-wk-next-date');
+    return {
+      goal_id: parseInt(row.dataset.goal, 10),
+      status: status ? status.value : '',
+      comment: comment ? comment.value.trim() : '',
+      next_action: nextAction ? nextAction.value.trim() : '',
+      next_follow_up_date: nextDate ? (nextDate.value || null) : null,
+    };
+  }
+  function saveEntries(entries, btn) {
+    if (!entries.length) { return; }
+    if (btn) { btn.disabled = true; }
+    wkMsg.textContent = 'Saving…'; wkMsg.className = 'small text-muted';
+    post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: entries }).then(function (j) {
+      if (btn) { btn.disabled = false; }
+      if (j.success) {
+        wkMsg.textContent = j.message || 'Saved.'; wkMsg.className = 'small text-success';
+        if (typeof window.showSuccessSwal === 'function' && entries.length > 1) { window.showSuccessSwal(j.message); }
+      } else {
+        wkMsg.textContent = j.message || (j.errors ? j.errors.join(' ') : 'Nothing saved — check the statuses above.'); wkMsg.className = 'small text-danger';
+      }
+    }).catch(function () {
+      if (btn) { btn.disabled = false; }
+      wkMsg.textContent = 'Request failed. Try again.'; wkMsg.className = 'small text-danger';
+    });
+  }
+  document.querySelectorAll('.ndg-wk-save').forEach(function (btn) {
+    btn.addEventListener('click', function () { saveEntries([readRow(btn.closest('.ndg-wk-row'))], btn); });
+  });
+  function allRows() { return Array.prototype.map.call(document.querySelectorAll('.ndg-wk-row'), readRow).filter(function (e) { return e.status; }); }
+  ['ndgSubmitAllTop', 'ndgSubmitAllBottom'].forEach(function (id) {
+    var btn = document.getElementById(id);
+    if (btn) { btn.addEventListener('click', function () {
+      var entries = allRows();
+      if (!entries.length) { wkMsg.textContent = 'Pick a status for at least one customer first.'; wkMsg.className = 'small text-danger'; return; }
+      saveEntries(entries, btn);
+    }); }
+  });
+  var draftBtn = document.getElementById('ndgSaveDraft');
+  if (draftBtn) { draftBtn.addEventListener('click', function () {
+    var entries = allRows();
+    if (!entries.length) { wkMsg.textContent = 'Nothing filled in yet.'; wkMsg.className = 'small text-muted'; return; }
+    saveEntries(entries, draftBtn);
+  }); }
+  var prevBtn = document.getElementById('ndgWkPrev');
+  if (prevBtn) { prevBtn.addEventListener('click', function () {
+    var w = Math.max(0, SELECTED_WEEK - 1);
+    location.href = '?w=' + w;
+  }); }
+
+  // ── expand a customer row (Customer Summary tab): shows its weekly-comments sub-row and its detail panel ──
   function selectGoal(goalId) {
     document.querySelectorAll('.ndg-rd-row').forEach(function (r) { r.classList.toggle('on', r.dataset.goal === String(goalId)); });
     document.querySelectorAll('.ndg-rd-exp').forEach(function (r) { r.classList.toggle('d-none', r.id !== 'ndgRdExp' + goalId); });
@@ -554,11 +695,9 @@
       }
     });
   });
-  // Show the first customer's detail panel by default.
   var firstRow = document.querySelector('.ndg-rd-row');
   if (firstRow) { document.querySelector('.ndg-rd-detail-panel[data-goal="' + firstRow.dataset.goal + '"]')?.classList.remove('d-none'); }
 
-  // ── detail panel's own inner tabs (Details & Progress / Weekly Comments / Orders / Documents) ──
   document.querySelectorAll('.ndg-rd-detail-panel').forEach(function (panel) {
     panel.querySelectorAll('.ndg-rd-dtab').forEach(function (t) {
       t.addEventListener('click', function () {
@@ -586,10 +725,11 @@
   [statusSel, brandSel].forEach(function (el) { el.addEventListener('change', applyFilter); });
   applyFilter();
 
-  // ── ApexCharts (Overview tab) — waits for DOMContentLoaded since Vite's build emits
-  // ApexCharts as an ES module, which the spec defers until after the document has parsed.
+  // ── ApexCharts — waits for DOMContentLoaded since Vite's build emits ApexCharts as an ES
+  // module, which the spec defers until after the document has parsed.
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof ApexCharts === 'undefined') { return; }
+    var teal = '#007a7a';
     var donutEl = document.querySelector('#ndgRdStatusDonut');
     if (donutEl) {
       var statuses = @json($d['statuses']);
@@ -600,6 +740,19 @@
         series: labels.map(function (l) { return statuses[l]; }),
         labels: labels,
         colors: labels.map(function (l) { return colorMap[l] || '#94a3b8'; }),
+        legend: { position: 'bottom', fontSize: '11px' },
+        dataLabels: { enabled: false },
+        plotOptions: { pie: { donut: { size: '68%' } } },
+      }).render();
+    }
+    var weekDonutEl = document.querySelector('#ndgWeekDonut');
+    if (weekDonutEl) {
+      var ws = @json($weekSummary);
+      new ApexCharts(weekDonutEl, {
+        chart: { type: 'donut', height: 220, fontFamily: 'inherit' },
+        series: [ws.submitted, ws.pending, ws.overdue, ws.notStarted],
+        labels: ['Submitted', 'Pending', 'Overdue', 'Not Started'],
+        colors: [teal, '#f5a623', '#ef4444', '#cbd5e1'],
         legend: { position: 'bottom', fontSize: '11px' },
         dataLabels: { enabled: false },
         plotOptions: { pie: { donut: { size: '68%' } } },

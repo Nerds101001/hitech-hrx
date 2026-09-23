@@ -391,6 +391,10 @@ class NinetyDayGoalService
             $goal = $goals->get($goalId);
             $status = trim((string) ($e['status'] ?? ''));
             $comment = trim((string) ($e['comment'] ?? ''));
+            // Both optional, both real free-typed plans — never required, never validated
+            // against a fixed list, same as the comment beside them.
+            $nextAction = trim((string) ($e['next_action'] ?? ''));
+            $nextFollowUp = $e['next_follow_up_date'] ?? null;
             if (!$goal) {
                 $errors[] = "Goal #{$goalId} is not one of yours.";
                 continue;
@@ -409,12 +413,14 @@ class NinetyDayGoalService
             $existing = NinetyDayGoalCheckin::where('goal_id', $goal->id)->where('week_no', $week)->first();
             $isFirst = !$existing || $existing->status === null || $existing->status === '';
 
-            DB::transaction(function () use ($goal, $round, $week, $due, $status, $comment, $late, $user, $actor, $now, $existing, $isFirst, &$saved) {
+            DB::transaction(function () use ($goal, $round, $week, $due, $status, $comment, $nextAction, $nextFollowUp, $late, $user, $actor, $now, $existing, $isFirst, &$saved) {
                 NinetyDayGoalCheckin::updateOrCreate(
                     ['goal_id' => $goal->id, 'week_no' => $week],
                     [
                         'round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(),
                         'status' => $status, 'comment' => $comment !== '' ? $comment : null,
+                        'next_action' => $nextAction !== '' ? $nextAction : null,
+                        'next_follow_up_date' => $nextFollowUp ?: null,
                         // First time: this is when/who/how-late it was actually reported, and that never changes
                         // again. Editing later only updates the content and appends who touched it and when.
                         'submitted_at'   => $isFirst ? $now : $existing->submitted_at,
