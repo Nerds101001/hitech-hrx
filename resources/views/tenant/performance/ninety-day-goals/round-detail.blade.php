@@ -28,6 +28,11 @@
   $pendingThisWeek = $counts['total'] - $updatedThisWeek;
   $nextWeekIdx = min($weeks - 1, $currentWeek + 1);
   $daysLeft = max(0, $today->diffInDays($round->ends_on, false));
+  // The expected stage for a customer — a 90-day target isn't only ever "an order by a date";
+  // it might genuinely be a trial, a renewal, an upsell. Same list the Add Customer dropdown
+  // uses, so "what we're aiming for" reads the same everywhere in this module.
+  $stageOptions = ['Order', 'New Order', 'Regular Order', 'Repeat Order', 'Trial Order', 'Renewal', 'Upsell'];
+  $stageChoices = fn ($current) => $current && !in_array($current, $stageOptions, true) ? array_merge($stageOptions, [$current]) : $stageOptions;
 @endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
 
@@ -135,7 +140,7 @@
             <table class="table align-middle mb-0" id="ndgWeeklyTable" style="min-width:1100px">
               <thead class="small text-uppercase text-muted">
                 <tr>
-                  <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹)</th><th style="min-width:120px">Expected Order</th>
+                  <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹)</th><th style="min-width:150px">Expected Stage</th>
                   <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th style="min-width:150px">Next Follow-up Date</th><th class="pe-3"></th>
                 </tr>
               </thead>
@@ -147,7 +152,14 @@
                   <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
                   <td class="small text-muted">{{ $g->product }}</td>
                   <td class="text-end">{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</td>
-                  <td><input type="date" class="form-control ndg-wk-expected" value="{{ optional($g->expected_order_date)->format('Y-m-d') }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
+                  <td>
+                    @php $curStage = $g->goal ?: 'Order'; @endphp
+                    <select class="form-select form-select-hitech ndg-wk-expected" {{ $canEdit && $isActive ? '' : 'disabled' }}>
+                      @foreach($stageChoices($curStage) as $stage)
+                        <option value="{{ $stage }}" {{ $curStage === $stage ? 'selected' : '' }}>{{ $stage }}</option>
+                      @endforeach
+                    </select>
+                  </td>
                   <td>
                     <select class="form-select form-select-hitech ndg-wk-status" {{ $canEdit && $isActive ? '' : 'disabled' }}>
                       <option value="">Choose…</option>
@@ -610,7 +622,7 @@
   .ndg-list .ndg-row.on .ndg-extra { display: flex; }
   .ndg-src { font-size: .65rem; }
   #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
-  #ndgWeeklyTable .ndg-needs-date { border-color: #f5a623 !important; box-shadow: 0 0 0 1px #f5a623; }
+  #ndgWeeklyTable .ndg-needs-stage { border-color: #f5a623 !important; box-shadow: 0 0 0 1px #f5a623; }
 </style>
 @endsection
 
@@ -649,7 +661,7 @@
   var wkMsg = document.getElementById('ndgRdMsg');
   // Status values that mean a real order is on the books — the same two the rest of this module
   // already treats as "converted" (see attentionRows()/counts elsewhere). Reported this way, the
-  // customer's Expected Order date is worth having on record; not enforced, just nudged for.
+  // customer's Expected Stage is worth being specific, not left at the generic default.
   var ORDER_STATUSES = ['Trial Order', 'Regular Order'];
   function readRow(row) {
     var status = row.querySelector('.ndg-wk-status'), comment = row.querySelector('.ndg-wk-comment'),
@@ -661,23 +673,23 @@
       comment: comment ? comment.value.trim() : '',
       next_action: nextAction ? nextAction.value.trim() : '',
       next_follow_up_date: nextDate ? (nextDate.value || null) : null,
-      expected_order_date: expected ? (expected.value || null) : null,
+      expected_stage: expected ? expected.value : null,
     };
   }
-  // Expected Order Date lives on the goal itself, not the weekly checkin, so it saves through
-  // the existing per-goal update endpoint — a small extra call alongside the checkin save,
-  // fired only for rows whose date was actually touched.
-  function saveExpectedDates(entries) {
+  // Expected Stage lives on the goal itself (the same "goal" field Add Customer's own dropdown
+  // sets), not the weekly checkin, so it saves through the existing per-goal update endpoint —
+  // a small extra call alongside the checkin save.
+  function saveExpectedStages(entries) {
     entries.forEach(function (e) {
-      if (e.expected_order_date === null) { return; }
-      post(URLS.update + '/' + e.goal_id, 'PUT', { expected_order_date: e.expected_order_date });
+      if (!e.expected_stage) { return; }
+      post(URLS.update + '/' + e.goal_id, 'PUT', { goal: e.expected_stage });
     });
   }
   function saveEntries(entries, btn) {
     if (!entries.length) { return; }
     if (btn) { btn.disabled = true; }
     wkMsg.textContent = 'Saving…'; wkMsg.className = 'small text-muted';
-    saveExpectedDates(entries);
+    saveExpectedStages(entries);
     post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: entries }).then(function (j) {
       if (btn) { btn.disabled = false; }
       if (j.success) {
@@ -694,16 +706,17 @@
   document.querySelectorAll('.ndg-wk-save').forEach(function (btn) {
     btn.addEventListener('click', function () { saveEntries([readRow(btn.closest('.ndg-wk-row'))], btn); });
   });
-  // Marking a customer Trial Order / Regular Order for the week is exactly the moment an
-  // expected order date is worth having — nudge for it right there instead of leaving it to be
-  // noticed later. Never blocks the save; just draws the eye to the empty field.
+  // Marking a customer Trial Order / Regular Order for the week is exactly the moment the
+  // Expected Stage is worth being specific — nudge to pick the real one (New Order, Repeat
+  // Order, Upsell…) instead of leaving it at the generic "Order" default. Never blocks the
+  // save; just draws the eye to the field.
   document.querySelectorAll('.ndg-wk-status').forEach(function (sel) {
     sel.addEventListener('change', function () {
       var row = sel.closest('.ndg-wk-row'), expected = row.querySelector('.ndg-wk-expected');
       if (!expected) { return; }
-      var needsDate = ORDER_STATUSES.indexOf(sel.value) !== -1 && !expected.value;
-      expected.classList.toggle('ndg-needs-date', needsDate);
-      if (needsDate) { expected.focus(); wkMsg.textContent = 'Add an expected order date for ' + row.querySelector('td:nth-child(2)').textContent.trim() + '.'; wkMsg.className = 'small text-warning'; }
+      var needsStage = ORDER_STATUSES.indexOf(sel.value) !== -1 && expected.value === 'Order';
+      expected.classList.toggle('ndg-needs-stage', needsStage);
+      if (needsStage) { expected.focus(); wkMsg.textContent = 'Set the expected stage for ' + row.querySelector('td:nth-child(2)').textContent.trim() + ' — still just "Order".'; wkMsg.className = 'small text-warning'; }
     });
   });
   function allRows() { return Array.prototype.map.call(document.querySelectorAll('.ndg-wk-row'), readRow).filter(function (e) { return e.status; }); }
