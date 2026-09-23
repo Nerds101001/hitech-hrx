@@ -691,6 +691,150 @@ class NinetyDayGoalController extends Controller
         ]);
     }
 
+    /**
+     * "My Dashboard": a salesperson's own self-service equivalent of the admin's
+     * programDashboard() — same Goals::dashboard() underneath, scoped to just this one person
+     * across every program/round they've ever had (or the one picked from "Select Program"),
+     * instead of the whole company.
+     */
+    public function myDashboard(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::isSalesStaff($user)) {
+            return redirect()->route('tenant.dashboard')->with('error', 'The 90-Day Goals tracker is for the Sales team.');
+        }
+        $today = Carbon::today();
+
+        // Every round this person has ever had, newest first — the "Select Program" picker's
+        // source. A self-started round (no admin-created program) has no $r->program and is
+        // simply left out of the picker's own list; its goals still count toward "All Programs".
+        $myRounds = NinetyDayRound::with('program')->where('user_id', $user->id)->orderByDesc('starts_on')->get();
+        $myPrograms = $myRounds->pluck('program')->filter()->unique('id')->sortByDesc('starts_on')->values();
+
+        $programId = $request->integer('program_id') ?: null;
+        if ($programId && !$myPrograms->contains('id', $programId)) {
+            $programId = null;
+        }
+        $f = ['round' => 'all'];
+        if ($programId) {
+            $f['program_id'] = $programId;
+        }
+        $d = Goals::dashboard([$user->id], $f);
+
+        // The one round that drives the weekly charts and strip — the round tied to the selected
+        // program, or this person's own current/most recent round for "All Programs". A chart
+        // needs one real week axis; this is the same "which round is live" roundFor() already uses.
+        $focusRound = $programId
+            ? $myRounds->first(fn ($r) => optional($r->program)->id === $programId)
+            : ($myRounds->first(fn ($r) => $r->status === 'active') ?? $myRounds->first());
+
+        $weeklyProgress = $focusRound ? $this->myWeeklyProgress($user, $focusRound) : ['labels' => [], 'target' => [], 'achieved' => []];
+        $weekStrip = collect();
+        $currentWeek = 0;
+        if ($focusRound) {
+            $currentWeek = Goals::weekOf($focusRound, $today);
+            $fStrip = Goals::dashboard([$user->id], ['round_id' => $focusRound->id])['strip'];
+            // The last 5 weeks up to and including the current one — same shape as every other
+            // weekly strip in this module, just windowed to fit a small card.
+            $weekStrip = collect($fStrip)->map(fn ($s, $w) => ['week' => $w, 'done' => $s['done'], 'pending' => max(0, $s['total'] - $s['done']), 'total' => $s['total']])
+                ->slice(max(0, $currentWeek - 4), 5)->values();
+        }
+
+        // Same paginated customer table pattern the admin pages use, just this person's own rows.
+        $rows = $d['rows'];
+        $perPage = 10;
+        $page = max(1, $request->integer('page', 1));
+        $paged = new \Illuminate\Pagination\LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
+            ['path' => $request->url(), 'query' => $request->except('page')]
+        );
+
+        // Open tasks this module already assigns on every Monday, same query the admin
+        // dashboard's Tasks & Alerts runs, scoped to just this person.
+        $pendingTasks = Task::where('user_id', $user->id)->where('title', 'like', '90-Day Goals:%')
+            ->whereNotIn('status', Task::CLOSED_STATUSES)->orderBy('due_date')->limit(6)->get();
+
+        $activity = Goals::comments([$user->id], [], 8);
+
+        // Real trend deltas only — "new in the last 30 days" — same honest-or-blank rule the
+        // admin dashboard's KPI cards already follow, just scoped to this one person.
+        $since = $today->copy()->subDays(30);
+        $myPipelineIds = $rows->pluck('goal.sales_pipeline_id')->filter()->unique()->values()->all();
+        $trends = [
+            'customers' => NinetyDayGoal::where('user_id', $user->id)->where('created_at', '>=', $since)->count(),
+            'ordersThisMonth' => $myPipelineIds
+                ? DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $myPipelineIds)
+                    ->where('month_year', $today->format('Y-m'))->where('sale_amount', '>', 0)->count()
+                : 0,
+        ];
+
+        // Team performance, summary only: target/achieved/% for the rest of this person's own
+        // department, current round — reuses dashboard()'s own per-user rollup, never exposes a
+        // teammate's customer names (the page itself says so, same restriction as the reference).
+        $peerIds = Goals::salesStaff()->pluck('id')->reject(fn ($id) => (int) $id === (int) $user->id)->values()->all();
+        $team = $peerIds ? Goals::dashboard($peerIds, ['round' => 'current'])['users']->take(5)->values() : collect();
+
+        return view('tenant.performance.ninety-day-goals.my-dashboard', [
+            'tab'        => null,
+            'today'      => $today,
+            'myPrograms' => $myPrograms,
+            'selectedProgramId' => $programId,
+            'selectedProgram'   => $programId ? $myPrograms->firstWhere('id', $programId) : null,
+            'cards'      => $d['cards'],
+            'statusCounts' => $d['statuses'],
+            'focusRound' => $focusRound,
+            'weeklyProgress' => $weeklyProgress,
+            'weekStrip'  => $weekStrip,
+            'currentWeek' => $currentWeek,
+            'rows'       => $paged,
+            'allRowsCount' => $rows->count(),
+            'pendingTasks' => $pendingTasks,
+            'activity'   => $activity,
+            'team'       => $team,
+            'statuses'   => Goals::STATUSES,
+            'trends'     => $trends,
+        ]);
+    }
+
+    /**
+     * Week-by-week cumulative target vs. real achieved for the one round driving "My Progress" —
+     * target accrues evenly across the round's own weeks (the same flat pacing every KPI card
+     * already assumes); achieved is real Sales Report money, summed month by month up to each
+     * week's due date, exactly the same lookup dashboard() itself runs for a goal's own achieved.
+     */
+    private function myWeeklyProgress(User $user, NinetyDayRound $round): array
+    {
+        $goals = NinetyDayGoal::where('round_id', $round->id)->where('user_id', $user->id)->get();
+        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * Goals::ROUND_MONTHS);
+        $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
+
+        $monthlySales = [];
+        if ($ids) {
+            foreach (DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $ids)
+                ->selectRaw('month_year, SUM(sale_amount) s')->groupBy('month_year')->get() as $r) {
+                $monthlySales[$r->month_year] = (float) $r->s;
+            }
+        }
+
+        $weeks = Goals::weeksOf($round);
+        $targetPerWeek = $weeks > 0 ? $totalTarget / $weeks : 0.0;
+        $labels = [];
+        $target = [];
+        $achieved = [];
+        foreach (range(0, $weeks - 1) as $w) {
+            $due = Goals::dueOn($round, $w);
+            $labels[] = 'W' . $w . ' ' . $due->format('d M');
+            $target[] = round($targetPerWeek * ($w + 1), 2);
+            $cum = 0.0;
+            for ($m = Carbon::parse($round->starts_on)->copy()->startOfMonth(); $m->lte($due); $m->addMonth()) {
+                $cum += $monthlySales[$m->format('Y-m')] ?? 0.0;
+            }
+            $achieved[] = round($cum, 2);
+        }
+
+        return ['labels' => $labels, 'target' => $target, 'achieved' => $achieved];
+    }
+
     /** "90-Day Goals ▸ My Programs" always means the viewer's own current round — resolved here so
      *  the sidebar's static URL doesn't need to know which round that is. */
     public function myProgram()

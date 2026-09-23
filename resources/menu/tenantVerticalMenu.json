@@ -814,6 +814,12 @@
             "department": "Sales",
             "submenu": [
                 {
+                    "url": "/performance/ninety-day-goals/my-dashboard",
+                    "name": "My Dashboard",
+                    "icon": "menu-icon bx bx-grid-alt",
+                    "slug": "performance.ninety-day-goals.my-dashboard"
+                },
+                {
                     "url": "/performance/ninety-day-goals",
                     "name": "My Goals",
                     "icon": "menu-icon bx bx-target-lock",

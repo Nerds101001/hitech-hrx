@@ -1120,6 +1120,7 @@ Route::middleware([
             Route::get('/ninety-day-goals/past/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pastRound'])->name('ninety-day-goals.past.show');
             Route::get('/ninety-day-goals/person/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'person'])->name('ninety-day-goals.person');
             Route::get('/ninety-day-goals/my-program', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'myProgram'])->name('ninety-day-goals.my-program');
+            Route::get('/ninety-day-goals/my-dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'myDashboard'])->name('ninety-day-goals.my-dashboard');
             Route::get('/ninety-day-goals/round/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'roundDetail'])->name('ninety-day-goals.round');
             Route::get('/ninety-day-goals/program/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDetail'])->name('ninety-day-goals.program');
             Route::post('/ninety-day-goals/program/{id}/remind', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programSendReminder'])->name('ninety-day-goals.program.remind');
