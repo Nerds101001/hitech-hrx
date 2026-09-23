@@ -197,9 +197,22 @@ class LeaveRequest extends Model implements AuditableContract
                       ->first();
 
                   if ($attendance) {
+                      // Keep a real punch's own status: someone who actually worked
+                      // must not have that erased by a leave label. But 'absent' is
+                      // the one status an approved leave exists to explain, and an
+                      // admin-marked absence carries a clock time too (placeholder
+                      // shift hours, working_hours 0), so this test preserved it --
+                      // leaving the employee unpaid for the day AND carrying an
+                      // absence penalty on a day HR had approved. An approved leave
+                      // always outranks an absence.
+                      $existingStatus = strtolower((string) $attendance->status);
+                      $isRealPunch = $attendance->check_in_time
+                          && $attendance->check_in_time->format('H:i') !== '00:00';
+                      $absenceLike = in_array($existingStatus, ['absent', 'miss-punch', 'miss_punch'], true);
+
                       $attendance->update([
                           'leave_request_id' => $leaveRequest->id,
-                          'status'           => ($attendance->check_in_time && $attendance->check_in_time->format('H:i') !== '00:00') ? $attendance->status : $attendanceStatus,
+                          'status'           => ($isRealPunch && !$absenceLike) ? $attendance->status : $attendanceStatus,
                       ]);
                   } else {
                       Attendance::create([
