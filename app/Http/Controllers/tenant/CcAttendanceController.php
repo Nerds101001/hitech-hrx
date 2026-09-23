@@ -155,6 +155,35 @@ class CcAttendanceController extends Controller
     }
 
     /**
+     * Salespeople with a leave request covering this date, as [user_id => status].
+     *
+     * The existing guard only looked at the attendance row, so it caught a day
+     * the leave module had already written to and nothing else. A leave that
+     * was merely APPLIED FOR, or approved before its attendance row existed,
+     * left the day open for CCare to mark -- and someone marked absent that
+     * way keeps the absence even after the leave is approved, because an
+     * admin-marked row carries clock times and used to survive approval.
+     *
+     * Pending counts as well as approved: the answer to "was this person at
+     * work" is not CCare's to give while the leave module is still deciding.
+     */
+    private function leaveClaimsByUser(array $userIds, string $date)
+    {
+        if ($userIds === []) {
+            return collect();
+        }
+
+        return \App\Models\LeaveRequest::whereIn('user_id', $userIds)
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereNull('deleted_at')
+            ->whereDate('from_date', '<=', $date)
+            ->whereDate('to_date', '>=', $date)
+            ->get()
+            ->keyBy('user_id')
+            ->map(fn ($r) => $r->status->value ?? $r->status);
+    }
+
+    /**
      * PHASE 1 (temporary): the whole of July 2026 is open for back-dated filling
      * so the teams can complete the month. Remove this window in the next phase
      * to enforce the D+2 12:00 PM deadline everywhere.
@@ -443,7 +472,13 @@ class CcAttendanceController extends Controller
         // Counted so the message can tell the truth. It used to say "Attendance
         // saved" unconditionally — including when every row was skipped and
         // nothing at all was written.
-        $cleared = 0; $saved = 0; $onLeave = 0;
+        $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0;
+
+        // Who has a leave request over this date, applied or approved.
+        $leaveClaims = $this->leaveClaimsByUser(
+            array_map('intval', array_keys($request->attendance)),
+            $date
+        );
 
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
@@ -455,6 +490,15 @@ class CcAttendanceController extends Controller
             // pass). Approved leave is owned by the leave module.
             if ($attendance && $this->isLeaveStatus($attendance->status)) {
                 $onLeave++;
+                continue;
+            }
+
+            // The day belongs to the leave module from the moment leave is
+            // applied for, not from the moment it is approved. Clearing stays
+            // allowed so a wrongly-marked day can still be removed.
+            $claim = $leaveClaims->get((int) $userId);
+            if ($claim && $status !== '__clear') {
+                $claim === 'pending' ? $onPending++ : $onLeave++;
                 continue;
             }
 
@@ -522,17 +566,24 @@ class CcAttendanceController extends Controller
         // Nothing written is a FAILURE, not a success — reporting it as saved is
         // what let a lost submission look like a completed one.
         if ($saved === 0 && $cleared === 0) {
-            $why = $onLeave
-                ? "those salespeople are on approved leave for {$date} — leave is managed by the Leave module."
-                : 'no attendance status was ticked. Choose P / A / HD / WFH / PS / HP for at least one salesperson.';
+            if ($onLeave && $onPending) {
+                $why = "those salespeople have leave for {$date} — {$onLeave} approved, {$onPending} awaiting approval. The Leave module owns those days.";
+            } elseif ($onLeave) {
+                $why = "those salespeople are on approved leave for {$date} — leave is managed by the Leave module.";
+            } elseif ($onPending) {
+                $why = "those salespeople have applied for leave on {$date} and it is still awaiting approval — their attendance cannot be marked until the leave is decided.";
+            } else {
+                $why = 'no attendance status was ticked. Choose P / A / HD / WFH / PS / HP for at least one salesperson.';
+            }
             return redirect()->back()->withInput()
                 ->with('error', "Nothing was saved — {$why}");
         }
 
         $parts = [];
-        if ($saved)   { $parts[] = $saved . ' ' . str('salesperson')->plural($saved) . ' marked'; }
-        if ($cleared) { $parts[] = $cleared . ' ' . str('entry')->plural($cleared) . ' cleared'; }
-        if ($onLeave) { $parts[] = $onLeave . ' skipped (on approved leave)'; }
+        if ($saved)     { $parts[] = $saved . ' ' . str('salesperson')->plural($saved) . ' marked'; }
+        if ($cleared)   { $parts[] = $cleared . ' ' . str('entry')->plural($cleared) . ' cleared'; }
+        if ($onLeave)   { $parts[] = $onLeave . ' skipped (on approved leave)'; }
+        if ($onPending) { $parts[] = $onPending . ' skipped (leave applied, awaiting approval)'; }
         $msg = 'Attendance saved for ' . Carbon::parse($date)->format('d M Y') . ' — ' . implode(', ', $parts) . '.';
 
         return redirect()->route('cc-attendance.index', ['date' => $date])->with('success', $msg);
@@ -682,6 +733,18 @@ class CcAttendanceController extends Controller
         }
 
         $savedCount = 0;
+        $skippedForLeave = 0;
+
+        // Every date being submitted, so leave claims are fetched once rather
+        // than per cell -- a month grid for a whole team is a lot of cells.
+        $allDates = collect($request->attendance)->flatMap(fn ($d) => array_keys($d))->unique()->values();
+        $claimsByDate = [];
+        foreach ($allDates as $d) {
+            $claimsByDate[$d] = $this->leaveClaimsByUser(
+                array_map('intval', array_keys($request->attendance)),
+                $d
+            );
+        }
 
         foreach ($request->attendance as $userId => $dates) {
             foreach ($dates as $dateStr => $status) {
@@ -690,9 +753,16 @@ class CcAttendanceController extends Controller
                 // Window: open until D+2 12:00 PM; Admin/HR always open. No future dates.
                 if ($dateStr > $maxDate) continue;
                 if ($this->isLockedFor($dateStr, Auth::user())) continue;
-                
+
                 // Allowed statuses
                 if (!in_array($status, ['Present', 'Absent', 'Half day', 'Work from home', 'Sunday working', 'Holiday working'])) continue;
+
+                // Applied-for or approved leave takes the day out of CCare's
+                // hands, same rule as the daily register.
+                if (isset($claimsByDate[$dateStr]) && $claimsByDate[$dateStr]->has((int) $userId)) {
+                    $skippedForLeave++;
+                    continue;
+                }
 
                 $existing = Attendance::where('user_id', $userId)
                     ->whereDate('check_in_time', $dateStr)
@@ -701,6 +771,7 @@ class CcAttendanceController extends Controller
                 // Corrections allowed while the date is open; approved leave is
                 // owned by the leave module and never overwritten here.
                 if ($existing && $this->isLeaveStatus($existing->status)) {
+                    $skippedForLeave++;
                     continue;
                 }
 
@@ -741,8 +812,14 @@ class CcAttendanceController extends Controller
             }
         }
 
-        return redirect()->back()
-            ->with('success', "Attendance marked successfully. $savedCount records processed.");
+        // Say what was skipped. A silent skip is how somebody concludes the
+        // save worked and only finds out at payroll that it did not.
+        $msg = "Attendance marked successfully. $savedCount records processed.";
+        if ($skippedForLeave) {
+            $msg .= " {$skippedForLeave} skipped — those days have leave applied or approved, which the Leave module owns.";
+        }
+
+        return redirect()->back()->with('success', $msg);
     }
 
     /**
