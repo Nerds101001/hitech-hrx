@@ -91,14 +91,22 @@
   {{-- ═══════════════════ Weekly Submission ═══════════════════ --}}
   <div class="ndg-rd-section" data-section="weekly">
 
-    {{-- Week strip --}}
+    {{-- Week strip — a future week has nothing to submit yet, so it's shown but not a link. --}}
     <div class="card-body p-0 d-flex gap-2 mb-6 ndg-week-strip" id="ndgRdWeekStrip">
       @foreach($weekStrip as $w)
-        <a href="?{{ http_build_query(['w' => $w['week']]) }}" class="ndg-week-pill {{ $w['week'] === $selectedWeek ? 'on' : '' }} {{ $w['week'] === $currentWeek ? 'is-current' : '' }}">
-          <div class="fw-bold">W{{ $w['week'] }}</div>
-          <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
-          <div class="small">{{ $w['total'] ? $w['pct'] . '%' : '—' }}</div>
-        </a>
+        @if($w['week'] > $currentWeek)
+          <span class="ndg-week-pill is-future" title="Not due yet">
+            <div class="fw-bold">W{{ $w['week'] }}</div>
+            <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
+            <div class="small">—</div>
+          </span>
+        @else
+          <a href="?{{ http_build_query(['w' => $w['week']]) }}" class="ndg-week-pill {{ $w['week'] === $selectedWeek ? 'on' : '' }} {{ $w['week'] === $currentWeek ? 'is-current' : '' }}">
+            <div class="fw-bold">W{{ $w['week'] }}</div>
+            <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
+            <div class="small">{{ $w['total'] ? $w['pct'] . '%' : '—' }}</div>
+          </a>
+        @endif
       @endforeach
     </div>
 
@@ -575,6 +583,8 @@
   .ndg-week-pill:hover { border-color: #007a7a; }
   .ndg-week-pill.on { background: #fff; border-color: #007a7a; box-shadow: 0 0 0 1px #007a7a; }
   .ndg-week-pill.is-current .fw-bold { color: #007a7a; }
+  .ndg-week-pill.is-future { display: inline-block; background: #f8fafc; color: #cbd5e1; cursor: not-allowed; }
+  .ndg-week-pill.is-future:hover { border-color: #e2e8f0; }
   .ndg-rd-expand { border: 0; background: none; color: #64748b; padding: 0; cursor: pointer; }
   .ndg-rd-expand.on i { transform: rotate(-180deg); }
   .ndg-rd-expand i { transition: transform .15s; }

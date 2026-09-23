@@ -886,7 +886,12 @@ class NinetyDayGoalController extends Controller
         // already uses, just scoped to this one person's one round.
         $dates = Goals::weekDates($round);
         $currentWeek = Goals::weekOf($round, $today);
-        $selectedWeek = max(0, min($weeks - 1, $request->integer('w', $currentWeek)));
+        // Never a future week — this is a real submission form, not just a viewer, and
+        // Goals::submit() already refuses to save a status for a week that isn't due yet. Capping
+        // the picker itself to $currentWeek means the whole page (fields, Save, the week strip)
+        // simply never opens on data that doesn't exist yet, instead of opening it disabled/dead
+        // or letting someone fill it in only to have the save silently rejected.
+        $selectedWeek = max(0, min($currentWeek, $request->integer('w', $currentWeek)));
         $weekDue = $dates[$selectedWeek];
         // $d['strip'] can run longer than this round's own real span — dashboard() falls back to
         // the default 13-week span when a round has no customers yet to derive a length from —
