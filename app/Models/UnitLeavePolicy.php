@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class UnitLeavePolicy extends Model
+class UnitLeavePolicy extends Model implements AuditableContract
 {
-    use TenantTrait, SoftDeletes;
+    use TenantTrait, SoftDeletes, Auditable;
 
     protected $table = 'unit_leave_policies';
 

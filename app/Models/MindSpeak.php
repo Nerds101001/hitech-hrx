@@ -5,9 +5,12 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class MindSpeak extends Model {
-    use TenantTrait, UserActionsTrait, SoftDeletes;
+class MindSpeak extends Model implements AuditableContract
+{
+    use TenantTrait, UserActionsTrait, SoftDeletes, Auditable;
 
     protected $table = 'mind_speaks';
 

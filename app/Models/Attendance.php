@@ -6,10 +6,12 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Attendance extends Model
+class Attendance extends Model implements AuditableContract
 {
-  use UserActionsTrait, TenantTrait, SoftDeletes;
+  use UserActionsTrait, TenantTrait, SoftDeletes, Auditable;
 
   public const STATUS_PRESENT  = 'Present';
   public const STATUS_HALF_DAY = 'Half-Day';

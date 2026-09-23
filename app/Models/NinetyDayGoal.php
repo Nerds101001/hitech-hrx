@@ -6,6 +6,8 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * One target customer inside a person's 13-week round: the customer (from their
@@ -13,9 +15,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * potential in lakh. Its week-by-week status lives in ninety_day_goal_checkins;
  * w0..w12 are still written alongside so the older scorecard code keeps working.
  */
-class NinetyDayGoal extends Model
+class NinetyDayGoal extends Model implements AuditableContract
 {
-    use TenantTrait, UserActionsTrait, SoftDeletes;
+    use TenantTrait, UserActionsTrait, SoftDeletes, Auditable;
 
     protected $fillable = [
         'user_id',

@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 use App\Traits\TenantTrait;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class AssetCategory extends Model
+class AssetCategory extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     protected $fillable = [
         'tenant_id',

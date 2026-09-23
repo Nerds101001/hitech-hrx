@@ -4,13 +4,17 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * The attendance setup accounts owes a new joiner: employee ID and, unless
  * their department is exempt, biometric enrolment.
  */
-class EmployeeSetupTask extends Model
+class EmployeeSetupTask extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $fillable = [
         'user_id', 'needs_emp_id', 'needs_biometric', 'status',
         'emp_id_value', 'biometric_id_value', 'notes',

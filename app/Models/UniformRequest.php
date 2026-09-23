@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class UniformRequest extends Model
+class UniformRequest extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     /** What can be requested. Adding a line here is all it takes to offer more. */
     public const ITEMS = [

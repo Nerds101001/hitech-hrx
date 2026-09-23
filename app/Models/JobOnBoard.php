@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class JobOnBoard extends Model
+class JobOnBoard extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $fillable = [
         'application',
         'joining_date',

@@ -3,9 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class TravelClaimAttachment extends Model
+class TravelClaimAttachment extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $fillable = [];
 
     protected $casts = [

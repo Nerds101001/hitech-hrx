@@ -3,10 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /** One goal's status for one Monday. Pending (status null) until the person submits it. */
-class NinetyDayGoalCheckin extends Model
+class NinetyDayGoalCheckin extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $guarded = ['id'];
 
     protected $casts = [

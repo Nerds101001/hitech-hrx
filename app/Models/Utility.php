@@ -7,9 +7,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Utility extends Model
+class Utility extends Model implements AuditableContract
 {
+    use Auditable;
+
     private static $settings = null;
     private static $languages = null;
 

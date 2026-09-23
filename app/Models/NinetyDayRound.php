@@ -3,10 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /** One person's 13-week goal period. Closes by itself; the next starts the following Monday. */
-class NinetyDayRound extends Model
+class NinetyDayRound extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $guarded = ['id'];
 
     protected $casts = [
