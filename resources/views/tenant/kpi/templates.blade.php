@@ -490,6 +490,25 @@
   const $ = (id) => document.getElementById(id);
   const modal = () => bootstrap.Modal.getOrCreateInstance($('tplModal'));
 
+  // Belt-and-suspenders: force the scrollable-modal layout with inline styles too, not just
+  // the .modal-dialog-scrollable CSS class — this form is long enough to run past the viewport,
+  // and inline styles set here can never be stuck behind a stale cached stylesheet, whatever the
+  // cause of that turns out to be.
+  $('tplModal').addEventListener('shown.bs.modal', function () {
+    const content = this.querySelector('.modal-content');
+    const body = this.querySelector('.modal-body');
+    if (content) {
+      content.style.maxHeight = 'calc(100vh - 3.5rem)';
+      content.style.display = 'flex';
+      content.style.flexDirection = 'column';
+    }
+    if (body) {
+      body.style.overflowY = 'auto';
+      body.style.flex = '1 1 auto';
+      body.style.minHeight = '0';
+    }
+  });
+
   // Only show the fields the chosen scoring type and late policy actually use,
   // so nobody fills in a threshold on a KPI that ignores it.
   function toggleFields() {
