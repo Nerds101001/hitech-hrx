@@ -147,7 +147,7 @@
                   <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
                   <td class="small text-muted">{{ $g->product }}</td>
                   <td class="text-end">{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</td>
-                  <td class="small text-muted">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
+                  <td><input type="date" class="form-control ndg-wk-expected" value="{{ optional($g->expected_order_date)->format('Y-m-d') }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
                   <td>
                     <select class="form-select form-select-hitech ndg-wk-status" {{ $canEdit && $isActive ? '' : 'disabled' }}>
                       <option value="">Choose…</option>
@@ -610,6 +610,7 @@
   .ndg-list .ndg-row.on .ndg-extra { display: flex; }
   .ndg-src { font-size: .65rem; }
   #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
+  #ndgWeeklyTable .ndg-needs-date { border-color: #f5a623 !important; box-shadow: 0 0 0 1px #f5a623; }
 </style>
 @endsection
 
@@ -646,21 +647,37 @@
 
   // ── Weekly Submission: read every row, save one or many via the same checkin endpoint ──
   var wkMsg = document.getElementById('ndgRdMsg');
+  // Status values that mean a real order is on the books — the same two the rest of this module
+  // already treats as "converted" (see attentionRows()/counts elsewhere). Reported this way, the
+  // customer's Expected Order date is worth having on record; not enforced, just nudged for.
+  var ORDER_STATUSES = ['Trial Order', 'Regular Order'];
   function readRow(row) {
     var status = row.querySelector('.ndg-wk-status'), comment = row.querySelector('.ndg-wk-comment'),
-        nextAction = row.querySelector('.ndg-wk-next-action'), nextDate = row.querySelector('.ndg-wk-next-date');
+        nextAction = row.querySelector('.ndg-wk-next-action'), nextDate = row.querySelector('.ndg-wk-next-date'),
+        expected = row.querySelector('.ndg-wk-expected');
     return {
       goal_id: parseInt(row.dataset.goal, 10),
       status: status ? status.value : '',
       comment: comment ? comment.value.trim() : '',
       next_action: nextAction ? nextAction.value.trim() : '',
       next_follow_up_date: nextDate ? (nextDate.value || null) : null,
+      expected_order_date: expected ? (expected.value || null) : null,
     };
+  }
+  // Expected Order Date lives on the goal itself, not the weekly checkin, so it saves through
+  // the existing per-goal update endpoint — a small extra call alongside the checkin save,
+  // fired only for rows whose date was actually touched.
+  function saveExpectedDates(entries) {
+    entries.forEach(function (e) {
+      if (e.expected_order_date === null) { return; }
+      post(URLS.update + '/' + e.goal_id, 'PUT', { expected_order_date: e.expected_order_date });
+    });
   }
   function saveEntries(entries, btn) {
     if (!entries.length) { return; }
     if (btn) { btn.disabled = true; }
     wkMsg.textContent = 'Saving…'; wkMsg.className = 'small text-muted';
+    saveExpectedDates(entries);
     post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: entries }).then(function (j) {
       if (btn) { btn.disabled = false; }
       if (j.success) {
@@ -676,6 +693,18 @@
   }
   document.querySelectorAll('.ndg-wk-save').forEach(function (btn) {
     btn.addEventListener('click', function () { saveEntries([readRow(btn.closest('.ndg-wk-row'))], btn); });
+  });
+  // Marking a customer Trial Order / Regular Order for the week is exactly the moment an
+  // expected order date is worth having — nudge for it right there instead of leaving it to be
+  // noticed later. Never blocks the save; just draws the eye to the empty field.
+  document.querySelectorAll('.ndg-wk-status').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var row = sel.closest('.ndg-wk-row'), expected = row.querySelector('.ndg-wk-expected');
+      if (!expected) { return; }
+      var needsDate = ORDER_STATUSES.indexOf(sel.value) !== -1 && !expected.value;
+      expected.classList.toggle('ndg-needs-date', needsDate);
+      if (needsDate) { expected.focus(); wkMsg.textContent = 'Add an expected order date for ' + row.querySelector('td:nth-child(2)').textContent.trim() + '.'; wkMsg.className = 'small text-warning'; }
+    });
   });
   function allRows() { return Array.prototype.map.call(document.querySelectorAll('.ndg-wk-row'), readRow).filter(function (e) { return e.status; }); }
   ['ndgSubmitAllTop', 'ndgSubmitAllBottom'].forEach(function (id) {
