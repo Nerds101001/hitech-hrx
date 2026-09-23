@@ -1206,6 +1206,8 @@
                                                             // date-diff here ignores both and always shows a flat
                                                             // -1.0 per day, same bug the My Leaves page already fixed.
                                                             $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
+                                                            // Unpaid portion, shown beside the deduction below.
+                                                            $lwpDaysRow = (float) ($item->lwp_days ?? 0);
                                                             $amountClass = 'text-danger';
                                                             $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
                                                             if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
@@ -1213,6 +1215,7 @@
                                                                 $reason = $item->leave_type . ' - ' . $reason;
                                                             }
                                                         } else {
+                                                            $lwpDaysRow = 0;
                                                             $amt = (float)$item->amount;
                                                             $notes = $item->notes ?? '';
                                                             // Detect carry forward
@@ -1244,6 +1247,14 @@
                                                         </td>
                                                         <td class="py-2 text-center fw-bold">
                                                             <span class="{{ $amountClass }}">{{ $amountDisplay }}</span>
+                                                            {{-- Days the balance could not cover. Without this the row shows
+                                                                 only what was deducted, so a leave that was half unpaid reads
+                                                                 as though it was fully paid for. --}}
+                                                            @if(($lwpDaysRow ?? 0) > 0)
+                                                                <div class="small fw-semibold" style="color:#a855f7;">
+                                                                    {{ rtrim(rtrim(number_format($lwpDaysRow, 1), '0'), '.') }} non-paid
+                                                                </div>
+                                                            @endif
                                                         </td>
                                                         <td class="py-2">
                                                             <div class="text-muted small">{{ $reason }}</div>

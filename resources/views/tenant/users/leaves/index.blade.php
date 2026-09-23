@@ -194,6 +194,10 @@
                                     // regardless of is_lwp/lwp_days.
                                     $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
                                 }
+                                // Days the balance could not cover. The service already
+                                // splits these out; the table just never showed them.
+                                $lwpDays = $isShortReq ? 0 : (float) ($item->lwp_days ?? 0);
+                                $paidDaysShown = (float) ($item->paid_days ?? 0);
                                 $amountClass   = 'text-danger';
                                 $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ') - ' . $leaveTypeDetail;
                                 if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
@@ -225,6 +229,10 @@
                                 if ($item->leave_type ?? null) {
                                     $reason = $item->leave_type . ' — ' . $reason;
                                 }
+                                // Reset per-row, or a leave row's unpaid days leak onto the
+                                // credit/adjustment rows rendered after it.
+                                $lwpDays = 0;
+                                $paidDaysShown = 0;
                                 $isBackdated = false;
                             }
                             $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : ($item->status ?? 'Processed');
@@ -253,10 +261,28 @@
                                     @if($isBackdated ?? false)
                                         <span class="badge bg-label-warning" style="font-size: 0.6rem;">BACK DATED</span>
                                     @endif
+                                    {{-- A request longer than the balance covers is split: some days
+                                         come off the balance, the rest are leave without pay. Only the
+                                         deducted part was ever shown, so the unpaid days simply vanished
+                                         from the statement and the row read as if the whole leave had
+                                         been paid for. --}}
+                                    @if(($lwpDays ?? 0) > 0)
+                                        <span class="badge" style="font-size: 0.6rem; font-weight:700; background-color:#a855f7; color:#fff !important;">
+                                            NON-PAID {{ rtrim(rtrim(number_format($lwpDays, 1), '0'), '.') }}
+                                        </span>
+                                    @endif
                                 </div>
                             </td>
                             <td class="py-3">
                                 <span class="fw-bold {{ $amountClass }}">{{ $amountDisplay }}</span>
+                                @if(($lwpDays ?? 0) > 0)
+                                    <div class="small" style="color:#a855f7; font-weight:600;">
+                                        {{ rtrim(rtrim(number_format($lwpDays, 1), '0'), '.') }} non-paid
+                                    </div>
+                                    @if(($paidDaysShown ?? 0) <= 0)
+                                        <div class="text-muted" style="font-size:0.7rem;">nothing deducted</div>
+                                    @endif
+                                @endif
                             </td>
                             <td class="py-3">
                                 <span class="text-muted small" title="{{ $reason }}">{{ \Illuminate\Support\Str::limit($reason, 50) }}</span>

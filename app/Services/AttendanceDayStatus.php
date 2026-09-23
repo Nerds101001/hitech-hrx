@@ -81,6 +81,80 @@ class AttendanceDayStatus
      * holidayMapsForMonth()/holidayForUserOnDate() when checking many rows
      * across a date range.
      */
+    /**
+     * Is THIS day of the leave a paid one?
+     *
+     * `is_lwp` and `lwp_days` describe the whole request, not a day of it. A
+     * two-day leave taken with one day of balance left carries is_lwp = true,
+     * and reading that flag per-day painted BOTH days unpaid -- 51 days across
+     * 43 requests were being shown as unpaid on the calendar despite having
+     * been paid for and deducted from the balance.
+     *
+     * The per-day answer is already written onto the attendance row at
+     * approval: 'leave'/'half-Day' for a day the balance covered,
+     * 'unpaid_leave' for one it did not. Prefer that.
+     *
+     * Where no row exists, fall back to the rule the approval hook itself
+     * applies: it walks the span in date order and pays for working days
+     * until the balance runs out, so the paid days are the leading ones.
+     */
+    private static function leaveDayIsPaid(User $user, ?LeaveRequest $leave, ?Attendance $attendance, Carbon $date): bool
+    {
+        if (!$leave || !($leave->leaveType?->is_paid)) {
+            return false;
+        }
+
+        // Wholly paid or wholly unpaid: the request-level flag is the answer.
+        if (!$leave->is_lwp) {
+            return true;
+        }
+
+        $perDay = $attendance ? strtolower((string) $attendance->status) : null;
+        if (in_array($perDay, ['leave', 'paid_leave', 'half-day'], true)) {
+            return true;
+        }
+        if ($perDay === 'unpaid_leave') {
+            return false;
+        }
+
+        $paidDays = max(0.0, self::leaveSpanDays($user, $leave) - (float) ($leave->lwp_days ?? 0));
+        if ($paidDays <= 0) {
+            return false;
+        }
+
+        $step = $leave->is_half_day ? 0.5 : 1.0;
+        $consumed = 0.0;
+
+        for ($d = $leave->from_date->copy(); $d->lte($leave->to_date); $d->addDay()) {
+            if (!LeavePolicyService::isWorkingDay($user, $d)) {
+                continue;
+            }
+            if ($d->isSameDay($date)) {
+                return $consumed < $paidDays;
+            }
+            $consumed += $step;
+        }
+
+        return false;
+    }
+
+    /** Working days the leave actually spans, counted the way approval counts them. */
+    private static function leaveSpanDays(User $user, LeaveRequest $leave): float
+    {
+        if ($leave->is_half_day) {
+            return 0.5;
+        }
+
+        $days = 0.0;
+        for ($d = $leave->from_date->copy(); $d->lte($leave->to_date); $d->addDay()) {
+            if (LeavePolicyService::isWorkingDay($user, $d)) {
+                $days += 1.0;
+            }
+        }
+
+        return $days;
+    }
+
     public static function isPresentLikeRow(Attendance $attendance, ?Holiday $holiday): bool
     {
         if (!$attendance->user || !$attendance->check_in_time) {
@@ -122,7 +196,7 @@ class AttendanceDayStatus
             || ($matchingLeave && ($matchingLeave->is_half_day || ($matchingLeave->leaveType?->is_half_day ?? false)));
         $isFullDayLeave = ($attendanceLeave && !$isShort && !$isHalfDay) || ($matchingLeave && !$isShort && !$isHalfDay);
         $leaveReq = $attendanceLeave ?: $matchingLeave;
-        $isPaid = $leaveReq && $leaveReq->leaveType?->is_paid && !$leaveReq->is_lwp;
+        $isPaid = self::leaveDayIsPaid($user, $leaveReq, $attendance, $date);
         $isWfh = $leaveReq && strtoupper($leaveReq->leaveType->code ?? '') === 'WFH';
 
         $result = [
@@ -220,7 +294,7 @@ class AttendanceDayStatus
         if ($matchingLeave) {
             $isShortLeave = $matchingLeave->leaveType?->is_short_leave ?? false;
             $isHalfDayLeave = $matchingLeave->is_half_day || ($matchingLeave->leaveType?->is_half_day ?? false);
-            $isPaidLeave = $matchingLeave->leaveType?->is_paid && !$matchingLeave->is_lwp;
+            $isPaidLeave = self::leaveDayIsPaid($user, $matchingLeave, null, $date);
 
             if ($isShortLeave) {
                 $result['code'] = 'absent';
