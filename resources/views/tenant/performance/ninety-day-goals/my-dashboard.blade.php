@@ -33,6 +33,9 @@
   };
   $rupeeTarget = (float) $cards['target'] * 100000 / 100;
   $rupeeAchieved = (float) $cards['achieved'] * 100000 / 100;
+  // Every round always has a real label, whether or not an admin program is behind it.
+  $roundLabel = fn ($r) => optional($r->program)->name ?: ('My 90-Day Goals · Round ' . $r->round_no);
+  $selectedLabel = $selectedRound ? $roundLabel($selectedRound) : null;
   // A simple, purely presentational next-step hint from the current status — not a stored field.
   $nextAction = fn ($status) => match ($status) {
     'Regular Order' => 'Order received',
@@ -56,32 +59,49 @@
 
   <div class="px-4">
 
+  {{-- A program an admin (or the person themselves) started that has zero customers yet —
+       surfaced right here so a freshly-invited person doesn't have to go hunting for it. --}}
+  @foreach($needsEnrollment as $r)
+    <div class="hitech-card mb-4" style="border-color:#f5a623;background:#fffbeb">
+      <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <i class="bx bx-user-plus fs-2" style="color:#f5a623"></i>
+          <div>
+            <div class="fw-bold text-dark">You're enrolled in "{{ $roundLabel($r) }}" — add your target customers to get started</div>
+            <div class="small text-muted">{{ $r->starts_on->format('d M Y') }} – {{ $r->ends_on->format('d M Y') }} · no customers added yet</div>
+          </div>
+        </div>
+        <a href="{{ route('performance.ninety-day-goals.round', $r->id) }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-search-alt"></i> Search &amp; Add Customers</a>
+      </div>
+    </div>
+  @endforeach
+
   {{-- Select Program: a compact dropdown for small screens, real cards for the rest --}}
   <div class="d-flex flex-wrap align-items-stretch gap-3 mb-6">
     <div style="min-width:220px">
       <select class="form-select form-select-hitech h-100" onchange="if(this.value){location.href=this.value}" style="font-weight:700">
-        <option value="{{ route('performance.ninety-day-goals.my-dashboard') }}" {{ !$selectedProgramId ? 'selected' : '' }}>All Programs ({{ $myPrograms->count() }})</option>
-        @foreach($myPrograms as $p)
-          <option value="{{ route('performance.ninety-day-goals.my-dashboard', ['program_id' => $p->id]) }}" {{ $selectedProgramId === $p->id ? 'selected' : '' }}>
-            {{ $p->name }} ({{ $today->between($p->starts_on, $p->ends_on) ? 'Active' : ($today->lt($p->starts_on) ? 'Upcoming' : 'Ended') }})
+        <option value="{{ route('performance.ninety-day-goals.my-dashboard') }}" {{ !$selectedRoundId ? 'selected' : '' }}>All Programs ({{ $myRounds->count() }})</option>
+        @foreach($myRounds as $r)
+          <option value="{{ route('performance.ninety-day-goals.my-dashboard', ['round_id' => $r->id]) }}" {{ $selectedRoundId === $r->id ? 'selected' : '' }}>
+            {{ $roundLabel($r) }} ({{ ucfirst($r->status) }})
           </option>
         @endforeach
       </select>
     </div>
     <div class="d-flex flex-wrap gap-2 flex-grow-1">
-      <a href="{{ route('performance.ninety-day-goals.my-dashboard') }}" class="ndg-prog-card {{ !$selectedProgramId ? 'on' : '' }}">
+      <a href="{{ route('performance.ninety-day-goals.my-dashboard') }}" class="ndg-prog-card {{ !$selectedRoundId ? 'on' : '' }}">
         <i class="bx bx-group"></i>
         <div><div class="fw-bold">All Programs</div><div class="small">Overview</div></div>
       </a>
-      @foreach($myPrograms as $p)
-        @php $pActive = $today->between($p->starts_on, $p->ends_on); $pUpcoming = $today->lt($p->starts_on); @endphp
-        <a href="{{ route('performance.ninety-day-goals.my-dashboard', ['program_id' => $p->id]) }}" class="ndg-prog-card {{ $selectedProgramId === $p->id ? 'on' : '' }}">
-          <i class="bx {{ $pActive ? 'bx-broadcast' : ($pUpcoming ? 'bx-time-five' : 'bx-check-shield') }}"></i>
+      @foreach($myRounds as $r)
+        @php $rActive = $r->status === 'active'; @endphp
+        <a href="{{ route('performance.ninety-day-goals.my-dashboard', ['round_id' => $r->id]) }}" class="ndg-prog-card {{ $selectedRoundId === $r->id ? 'on' : '' }}">
+          <i class="bx {{ $rActive ? 'bx-broadcast' : 'bx-check-shield' }}"></i>
           <div>
-            <div class="fw-bold">{{ \Illuminate\Support\Str::limit($p->name, 20) }}</div>
+            <div class="fw-bold">{{ \Illuminate\Support\Str::limit($roundLabel($r), 20) }}</div>
             <div class="small d-flex align-items-center gap-2">
-              <span class="ndg-status-dot" style="background:{{ $pActive ? '#0b5b48' : ($pUpcoming ? '#f5a623' : '#94a3b8') }}"></span>
-              {{ $pActive ? 'Active' : ($pUpcoming ? 'Upcoming' : 'Ended') }} · {{ $p->starts_on->format('d M') }} – {{ $p->ends_on->format('d M Y') }}
+              <span class="ndg-status-dot" style="background:{{ $rActive ? '#0b5b48' : '#94a3b8' }}"></span>
+              {{ ucfirst($r->status) }} · {{ $r->starts_on->format('d M') }} – {{ $r->ends_on->format('d M Y') }}
             </div>
           </div>
         </a>
@@ -95,7 +115,7 @@
       <div class="ndg-kpi3">
         <div class="ndg-kpi3-icon" style="background:#e0f2fe;color:#0369a1"><i class="bx bx-building-house"></i></div>
         <div>
-          <div class="small text-muted fw-semibold">My Customers @if($selectedProgram)— {{ \Illuminate\Support\Str::limit($selectedProgram->name, 14) }}@else (All Programs)@endif</div>
+          <div class="small text-muted fw-semibold">My Customers @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 14) }}@else (All Programs)@endif</div>
           <div class="ndg-kpi3-v">{{ $cards['goals'] }}</div>
           @if($trends['customers'] > 0)<div class="small" style="color:#0b5b48">↑{{ $trends['customers'] }} this month</div>@endif
         </div>
@@ -105,7 +125,7 @@
       <div class="ndg-kpi3">
         <div class="ndg-kpi3-icon" style="background:#ede9fe;color:#5b21b6"><i class="bx bx-bar-chart-alt-2"></i></div>
         <div>
-          <div class="small text-muted fw-semibold">My Target @if($selectedProgram)— {{ \Illuminate\Support\Str::limit($selectedProgram->name, 14) }}@else (All Programs)@endif</div>
+          <div class="small text-muted fw-semibold">My Target @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 14) }}@else (All Programs)@endif</div>
           <div class="ndg-kpi3-v">₹{{ $fmtINR($rupeeTarget) }}</div>
         </div>
       </div>
@@ -114,7 +134,7 @@
       <div class="ndg-kpi3">
         <div class="ndg-kpi3-icon" style="background:#dcfce7;color:#166534"><i class="bx bx-rupee"></i></div>
         <div class="flex-grow-1">
-          <div class="small text-muted fw-semibold">My Achieved @if($selectedProgram)— {{ \Illuminate\Support\Str::limit($selectedProgram->name, 14) }}@else (All Programs)@endif</div>
+          <div class="small text-muted fw-semibold">My Achieved @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 14) }}@else (All Programs)@endif</div>
           <div class="ndg-kpi3-v">₹{{ $fmtINR($rupeeAchieved) }}</div>
           <div class="d-flex align-items-center gap-2 mt-1">
             <div class="ndg-track flex-grow-1" style="height:6px"><div class="ndg-fill" style="width:{{ $cards['pct'] === null ? 0 : min(100, $cards['pct']) }}%;background:{{ $pctColor($cards['pct']) }}"></div></div>
@@ -139,13 +159,13 @@
   <div class="row g-4 mb-6">
     <div class="col-xl-4">
       <div class="hitech-card h-100">
-        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">My Progress @if($selectedProgram)— {{ $selectedProgram->name }}@else (All Programs)@endif</div><div class="small text-muted">@if($focusRound){{ $focusRound->starts_on->format('d M') }} – {{ $focusRound->ends_on->format('d M Y') }}@else No round yet @endif</div></div>
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">My Progress @if($selectedLabel)— {{ $selectedLabel }}@else (All Programs)@endif</div><div class="small text-muted">@if($focusRound){{ $focusRound->starts_on->format('d M') }} – {{ $focusRound->ends_on->format('d M Y') }}@else No round yet @endif</div></div>
         <div class="card-body p-3"><div id="myProgressChart"></div></div>
       </div>
     </div>
     <div class="col-xl-4">
       <div class="hitech-card h-100">
-        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">My Customer Status @if($selectedProgram)— {{ \Illuminate\Support\Str::limit($selectedProgram->name, 16) }}@else (All Programs)@endif</div></div>
+        <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">My Customer Status @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 16) }}@else (All Programs)@endif</div></div>
         <div class="card-body p-3"><div id="myStatusDonut"></div></div>
       </div>
     </div>
@@ -164,7 +184,7 @@
   <div class="hitech-card mb-6">
     <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
       <div>
-        <div class="fw-bold text-dark">My Customers @if($selectedProgram)— {{ $selectedProgram->name }}@else (All Programs)@endif</div>
+        <div class="fw-bold text-dark">My Customers @if($selectedLabel)— {{ $selectedLabel }}@else (All Programs)@endif</div>
         <div class="small text-muted">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('customer', $allRowsCount) }}</div>
       </div>
       <a href="{{ $focusRound ? route('performance.ninety-day-goals.round', $focusRound->id) : route('performance.ninety-day-goals.my-program') }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-plus"></i> Add Customer</a>
@@ -173,7 +193,7 @@
       <table class="ndg-mx" style="font-size:.72rem">
         <thead><tr>
           <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th>
-          @if(!$selectedProgramId)<th>Program</th>@endif
+          @if(!$selectedRoundId)<th>Program</th>@endif
           <th>Target ₹</th><th>Expected</th>
           @for($w = 0; $w < $G::WEEKS; $w++)<th>W{{ $w }}</th>@endfor
           <th>Actual ₹</th><th>Ach.%</th><th>Status</th><th>Next Action</th><th></th>
@@ -185,7 +205,7 @@
             <td class="ndg-mx-l" style="left:0">{{ ($rows->currentPage() - 1) * $rows->perPage() + $i + 1 }}</td>
             <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
             <td>{{ $r->goal->product }}</td>
-            @if(!$selectedProgramId)<td class="small text-muted">{{ optional($r->program)->name ?? 'No program' }}</td>@endif
+            @if(!$selectedRoundId)<td class="small text-muted">{{ optional($r->program)->name ?? 'No program' }}</td>@endif
             <td>{{ $fmtINR($r->goal->monthly_potential * 100000 / 100) }}</td>
             <td class="small text-muted">{{ $r->goal->expected_order_date ? $r->goal->expected_order_date->format('d M Y') : '—' }}</td>
             @for($w = 0; $w < $G::WEEKS; $w++)
@@ -203,7 +223,7 @@
             <td><a href="{{ route('performance.ninety-day-goals.round', $r->goal->round_id) }}" class="text-muted" title="View in My Programs"><i class="bx bx-dots-vertical-rounded"></i></a></td>
           </tr>
         @empty
-          <tr><td colspan="{{ $selectedProgramId ? 10 + $G::WEEKS : 11 + $G::WEEKS }}" class="text-center text-muted p-5">
+          <tr><td colspan="{{ $selectedRoundId ? 10 + $G::WEEKS : 11 + $G::WEEKS }}" class="text-center text-muted p-5">
             No target customers yet — <a href="{{ route('performance.ninety-day-goals.my-program') }}">add your first one</a>.
           </td></tr>
         @endforelse

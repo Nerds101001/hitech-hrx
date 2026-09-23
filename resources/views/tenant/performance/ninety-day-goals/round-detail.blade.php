@@ -110,13 +110,18 @@
               <div class="fw-bold text-dark">Weekly Updates — Week {{ $selectedWeek }} ({{ $weekDue->format('d M') }} – {{ $weekDue->copy()->addDays(6)->format('d M Y') }})</div>
               <div class="small text-muted" id="ndgRdMsg"></div>
             </div>
-            @if($weekDue->gt($today))
-              <span class="badge badge-hitech badge-brand-soft">Not due yet</span>
-            @elseif($weekDue->lt($today))
-              <span class="badge badge-hitech badge-hitech-danger">Monday has passed — a comment is needed with any new status</span>
-            @else
-              <span class="badge badge-hitech badge-brand-soft">Due today</span>
-            @endif
+            <div class="d-flex align-items-center gap-2">
+              @if($weekDue->gt($today))
+                <span class="badge badge-hitech badge-brand-soft">Not due yet</span>
+              @elseif($weekDue->lt($today))
+                <span class="badge badge-hitech badge-hitech-danger">Monday has passed — a comment is needed with any new status</span>
+              @else
+                <span class="badge badge-hitech badge-brand-soft">Due today</span>
+              @endif
+              @if($canEdit && $isActive)
+                <button type="button" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.8rem" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
+              @endif
+            </div>
           </div>
           <div class="card-body p-0 ndg-mx-scroll">
             <table class="table align-middle mb-0" id="ndgWeeklyTable" style="min-width:1100px">

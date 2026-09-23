@@ -705,28 +705,38 @@ class NinetyDayGoalController extends Controller
         }
         $today = Carbon::today();
 
-        // Every round this person has ever had, newest first — the "Select Program" picker's
-        // source. A self-started round (no admin-created program) has no $r->program and is
-        // simply left out of the picker's own list; its goals still count toward "All Programs".
-        $myRounds = NinetyDayRound::with('program')->where('user_id', $user->id)->orderByDesc('starts_on')->get();
-        $myPrograms = $myRounds->pluck('program')->filter()->unique('id')->sortByDesc('starts_on')->values();
+        // Every round this person has ever had, newest first — the "Select Program" picker's real
+        // source. Not every round has an admin-created program behind it: a self-started round
+        // doesn't, so picking off $r->program alone left someone with only self-started rounds
+        // seeing "0 programs" despite having real customers and real goals. The picker works off
+        // rounds themselves — always real, always at least one — and just shows the program's
+        // name where one exists.
+        $myRounds = NinetyDayRound::with('program')
+            ->withCount(['goals' => fn ($q) => $q->whereNull('closed_at')])
+            ->where('user_id', $user->id)->orderByDesc('starts_on')->get();
 
-        $programId = $request->integer('program_id') ?: null;
-        if ($programId && !$myPrograms->contains('id', $programId)) {
-            $programId = null;
+        $roundId = $request->integer('round_id') ?: null;
+        if ($roundId && !$myRounds->contains('id', $roundId)) {
+            $roundId = null;
         }
         $f = ['round' => 'all'];
-        if ($programId) {
-            $f['program_id'] = $programId;
+        if ($roundId) {
+            $f['round_id'] = $roundId;
         }
         $d = Goals::dashboard([$user->id], $f);
 
-        // The one round that drives the weekly charts and strip — the round tied to the selected
-        // program, or this person's own current/most recent round for "All Programs". A chart
-        // needs one real week axis; this is the same "which round is live" roundFor() already uses.
-        $focusRound = $programId
-            ? $myRounds->first(fn ($r) => optional($r->program)->id === $programId)
+        // The one round that drives the weekly charts and strip — the selected round, or this
+        // person's own current/most recent round for "All Programs". A chart needs one real week
+        // axis; this is the same "which round is live" roundFor() already uses.
+        $focusRound = $roundId
+            ? $myRounds->firstWhere('id', $roundId)
             : ($myRounds->first(fn ($r) => $r->status === 'active') ?? $myRounds->first());
+
+        // Rounds an admin enrolled this person in (or they started themselves) that still have
+        // zero customers — the dashboard's own visible equivalent of the "add your target
+        // customers" task this module already assigns, so a freshly-invited person sees it right
+        // here instead of having to go find the task or the program on their own.
+        $needsEnrollment = $myRounds->filter(fn ($r) => $r->status === 'active' && $r->goals_count === 0)->values();
 
         $weeklyProgress = $focusRound ? $this->myWeeklyProgress($user, $focusRound) : ['labels' => [], 'target' => [], 'achieved' => []];
         $weekStrip = collect();
@@ -777,9 +787,10 @@ class NinetyDayGoalController extends Controller
         return view('tenant.performance.ninety-day-goals.my-dashboard', [
             'tab'        => null,
             'today'      => $today,
-            'myPrograms' => $myPrograms,
-            'selectedProgramId' => $programId,
-            'selectedProgram'   => $programId ? $myPrograms->firstWhere('id', $programId) : null,
+            'myRounds'   => $myRounds,
+            'selectedRoundId' => $roundId,
+            'selectedRound'   => $roundId ? $myRounds->firstWhere('id', $roundId) : null,
+            'needsEnrollment' => $needsEnrollment,
             'cards'      => $d['cards'],
             'statusCounts' => $d['statuses'],
             'focusRound' => $focusRound,
