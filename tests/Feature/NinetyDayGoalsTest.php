@@ -1660,7 +1660,7 @@ class NinetyDayGoalsTest extends TestCase
 
         Auth::setUser($this->rep2);
         $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
-        app(NinetyDayGoalController::class)->roundDetail($round->id);
+        app(NinetyDayGoalController::class)->roundDetail(new Request(), $round->id);
     }
 
     public function test_a_manager_can_open_their_reports_round(): void
@@ -1671,7 +1671,7 @@ class NinetyDayGoalsTest extends TestCase
         $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
 
         Auth::setUser($manager);
-        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+        $html = app(NinetyDayGoalController::class)->roundDetail(new Request(), $round->id)->render();
         $this->assertStringContainsString('Customer Targets', $html);
     }
 
@@ -1689,7 +1689,7 @@ class NinetyDayGoalsTest extends TestCase
         Goals::submit($this->rep, 0, [$inProgress->id => ['status' => 'On Track']]);
 
         Auth::setUser($this->rep);
-        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+        $html = app(NinetyDayGoalController::class)->roundDetail(new Request(), $round->id)->render();
 
         $this->assertStringContainsString('Ordered Co', $html);
         $this->assertStringContainsString('Dropped Co', $html);
@@ -1705,7 +1705,7 @@ class NinetyDayGoalsTest extends TestCase
         $round->update(['status' => 'closed']);
 
         Auth::setUser($this->rep);
-        $html = app(NinetyDayGoalController::class)->roundDetail($round->id)->render();
+        $html = app(NinetyDayGoalController::class)->roundDetail(new Request(), $round->id)->render();
 
         $this->assertStringNotContainsString('Add Customer', $html, 'a finished round is not where new targets get added');
         $this->assertStringContainsString('Edit', $html, 'editing an existing target is still allowed');
