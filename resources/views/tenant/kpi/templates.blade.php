@@ -491,23 +491,27 @@
   const modal = () => bootstrap.Modal.getOrCreateInstance($('tplModal'));
 
   // Belt-and-suspenders: force the scrollable-modal layout with inline styles too, not just
-  // the .modal-dialog-scrollable CSS class — this form is long enough to run past the viewport,
-  // and inline styles set here can never be stuck behind a stale cached stylesheet, whatever the
-  // cause of that turns out to be.
-  $('tplModal').addEventListener('shown.bs.modal', function () {
+  // the .modal-dialog-scrollable CSS class — this form is long enough to run past the viewport.
+  // Plain `el.style.x = ...` loses to ANY stylesheet rule that uses !important (including this
+  // page's own CSS fix, and any other rule on this property we haven't found) — an inline style
+  // only ever wins that fight via style.setProperty(prop, value, 'important'). That's the actual
+  // bug in the first version of this fix: it ran, set the styles, and still lost the cascade.
+  function forceScrollableModal() {
     const content = this.querySelector('.modal-content');
     const body = this.querySelector('.modal-body');
     if (content) {
-      content.style.maxHeight = 'calc(100vh - 3.5rem)';
-      content.style.display = 'flex';
-      content.style.flexDirection = 'column';
+      content.style.setProperty('max-height', 'calc(100vh - 3.5rem)', 'important');
+      content.style.setProperty('display', 'flex', 'important');
+      content.style.setProperty('flex-direction', 'column', 'important');
     }
     if (body) {
-      body.style.overflowY = 'auto';
-      body.style.flex = '1 1 auto';
-      body.style.minHeight = '0';
+      body.style.setProperty('overflow-y', 'auto', 'important');
+      body.style.setProperty('flex', '1 1 auto', 'important');
+      body.style.setProperty('min-height', '0', 'important');
     }
-  });
+  }
+  $('tplModal').addEventListener('show.bs.modal', forceScrollableModal);
+  $('tplModal').addEventListener('shown.bs.modal', forceScrollableModal);
 
   // Only show the fields the chosen scoring type and late policy actually use,
   // so nobody fills in a threshold on a KPI that ignores it.
