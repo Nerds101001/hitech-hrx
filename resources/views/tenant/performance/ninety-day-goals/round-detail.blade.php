@@ -813,8 +813,16 @@
     var addList = document.getElementById('ndgRdAddList'), addSearch = document.getElementById('ndgRdAddSearch'), addMsg = document.getElementById('ndgRdAddMsg');
     var pipeline = [], addBrands = [], addLoaded = false;
 
+    var GOAL_OPTIONS = ['Order', 'New Order', 'Regular Order', 'Repeat Order', 'Trial Order', 'Renewal', 'Upsell'];
     function brandOptions(sel) {
       return '<option value="">Brand</option>' + addBrands.map(function (b) { return '<option' + (b === sel ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('');
+    }
+    function goalOptions(sel) {
+      sel = sel || 'Order';
+      // A custom value already on record (typed before this was a dropdown) stays selectable —
+      // never silently swapped out for the nearest preset just because the list changed.
+      var opts = GOAL_OPTIONS.indexOf(sel) === -1 ? GOAL_OPTIONS.concat([sel]) : GOAL_OPTIONS;
+      return opts.map(function (g) { return '<option' + (g === sel ? ' selected' : '') + '>' + esc(g) + '</option>'; }).join('');
     }
     function renderList() {
       var q = addSearch.value.trim().toLowerCase();
@@ -829,7 +837,7 @@
           '<div class="ndg-extra gap-2 flex-wrap">' +
             '<input type="text" class="form-control form-control-sm ndg-product" style="max-width:220px" placeholder="Product" value="' + esc(c.pProduct != null ? c.pProduct : c.product) + '">' +
             '<select class="form-select form-select-sm ndg-brand" style="max-width:150px">' + brandOptions(c.pBrand != null ? c.pBrand : c.brand) + '</select>' +
-            '<input type="text" class="form-control form-control-sm ndg-goal" style="max-width:220px" placeholder="Goal, for example Regular order" value="' + esc(c.pGoal != null ? c.pGoal : 'Order') + '">' +
+            '<select class="form-select form-select-sm ndg-goal" style="max-width:170px">' + goalOptions(c.pGoal != null ? c.pGoal : 'Order') + '</select>' +
             '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Monthly ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
           '</div></div>';
       }).join('');
