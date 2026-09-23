@@ -167,7 +167,7 @@
         <div class="fw-bold text-dark">My Customers @if($selectedProgram)— {{ $selectedProgram->name }}@else (All Programs)@endif</div>
         <div class="small text-muted">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('customer', $allRowsCount) }}</div>
       </div>
-      <a href="{{ route('performance.ninety-day-goals.index') }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-plus"></i> Add Customer</a>
+      <a href="{{ $focusRound ? route('performance.ninety-day-goals.round', $focusRound->id) : route('performance.ninety-day-goals.my-program') }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-plus"></i> Add Customer</a>
     </div>
     <div class="card-body p-0 ndg-mx-scroll">
       <table class="ndg-mx" style="font-size:.72rem">
@@ -204,7 +204,7 @@
           </tr>
         @empty
           <tr><td colspan="{{ $selectedProgramId ? 10 + $G::WEEKS : 11 + $G::WEEKS }}" class="text-center text-muted p-5">
-            No target customers yet — <a href="{{ route('performance.ninety-day-goals.index') }}">add your first one</a>.
+            No target customers yet — <a href="{{ route('performance.ninety-day-goals.my-program') }}">add your first one</a>.
           </td></tr>
         @endforelse
         </tbody>
