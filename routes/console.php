@@ -61,3 +61,12 @@ Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify
 Schedule::command('tasks:notify-expected-date')->dailyAt('09:00')->description("Remind staff the day their own completion_expected_date arrives");
 
 Schedule::command('hrx:transfer-newbiz-ccare')->daily();
+
+// Keeps the audits table's monthly partitions rolling: extends the runway of
+// future months so nothing ever falls into the pmax catch-all, and drops whole
+// months past config('audit.retain_months'). Monthly is ample -- the migration
+// lays down a year of partitions in advance, so this has eleven months of slack
+// before anything could go wrong.
+Schedule::command('audits:partitions --force')
+    ->monthlyOn(1, '01:30')
+    ->description('Roll audit partitions forward and prune past retention');

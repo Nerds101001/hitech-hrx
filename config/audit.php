@@ -84,8 +84,51 @@ return [
     |
     */
 
-    'exclude' => [],
+    /*
+    |--------------------------------------------------------------------------
+    | Retention
+    |--------------------------------------------------------------------------
+    |
+    | Retention is owned by `hrx:archive-audits`, which MOVES rows older than
+    | 12 months into audits_archive rather than deleting them, so nothing is
+    | actually lost. This setting is a second, destructive horizon on top of
+    | that: audits:partitions drops whole monthly partitions older than this.
+    |
+    | It defaults to 0 (off) deliberately. With archiving already running,
+    | dropping partitions only ever reclaims months that are already empty,
+    | and the command refuses to drop a month that still holds rows unless
+    | told to. Set a value here only if you want emptied months tidied away
+    | automatically.
+    |
+    */
 
+    'retain_months' => (int) env('AUDIT_RETAIN_MONTHS', 0),
+
+    'exclude' => [
+        // Secrets. 434 rows already hold a bcrypt hash of somebody's password
+        // because this list was empty -- an audit trail is read by more people
+        // than the users table is, and a hash sitting in it is an offline
+        // cracking target that buys nothing. The event that the password
+        // CHANGED is still recorded; only the value is dropped.
+        'password',
+        'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'api_token',
+        'device_token',
+        'fcm_token',
+
+        // Bookkeeping columns. They change on every single write, so leaving
+        // them in means every audit row carries two timestamps that duplicate
+        // the row's own created_at and tell a reader nothing.
+        'updated_at',
+        'created_at',
+        'updated_by_id',
+        'deleted_at',
+
+        // Laravel's own cache of a relation count / eager-loaded aggregates.
+        'remember_created_at',
+    ],
     /*
     |--------------------------------------------------------------------------
     | Empty Values
