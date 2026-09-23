@@ -239,7 +239,7 @@
 
                             {{-- Client Name --}}
                             <td class="ps-4 py-2">
-                                <a href="{{ route('crm-clients.show', $map->id) }}" class="fw-semibold text-dark text-decoration-none" style="font-size:0.88rem;">{{ $map->crm_company_name }}</a>
+                                <a href="{{ route('crm-clients.profile', $map->id) }}" class="fw-semibold text-dark text-decoration-none" style="font-size:0.88rem;">{{ $map->crm_company_name }}</a>
                                 @if($map->crm_city)
                                 <small class="text-muted d-block mt-1" style="font-size:0.75rem;">
                                     <i class="bx bx-map-pin"></i> {{ $map->crm_city }}{{ $map->crm_state ? ', '.$map->crm_state : '' }}
@@ -319,7 +319,7 @@
                             {{-- Actions --}}
                             <td class="py-2 text-center pe-4">
                                 <div class="d-flex gap-1 justify-content-center">
-                                    <a href="{{ route('crm-clients.show', $map->id) }}" class="btn btn-sm btn-icon btn-outline-success rounded-circle" title="View 360">
+                                    <a href="{{ route('crm-clients.profile', $map->id) }}" class="btn btn-sm btn-icon btn-outline-success rounded-circle" title="Open customer profile">
                                         <i class="bx bx-detail"></i>
                                     </a>
                                     <button class="btn btn-sm btn-icon btn-outline-primary rounded-circle"

@@ -1087,6 +1087,16 @@
                         "admin",
                         "hr"
                     ]
+                },
+                {
+                    "url": "/sales-sources",
+                    "name": "Sales Sources",
+                    "slug": "sales-sources.index",
+                    "roles": [
+                        "admin",
+                        "hr",
+                        "accounts"
+                    ]
                 }
             ],
             "roles": [

@@ -354,6 +354,29 @@ Route::middleware([
       Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
+    // Sales Sources -- the manual Sales Report, Setu and the Tally daily
+    // exports side by side (read-only). Company-wide sales and receivables,
+    // so it is admin/HR/accounts only -- deliberately narrower than the broad
+    // group this sits inside, and enforced again in the controller.
+    Route::middleware(['role_or_permission:admin|hr|accounts'])->prefix('sales-sources')->name('sales-sources.')->group(function () {
+      $c = \App\Http\Controllers\tenant\SalesSourcesController::class;
+      $an = \App\Http\Controllers\tenant\SalesAnalyticsController::class;
+      Route::get('', [$c, 'compare'])->name('index');
+      // Tally analytics dashboard (replaces the older Tally Customers / Tally Invoices pages, which now redirect here)
+      Route::get('analytics', [$an, 'index'])->name('analytics');
+      Route::get('analytics/data', [$an, 'data'])->name('analytics.data');
+      Route::get('analytics/bill', [$an, 'bill'])->name('analytics.bill');
+      Route::get('analytics/item', [$an, 'item'])->name('analytics.item');
+      Route::get('analytics/customer', [$an, 'customer'])->name('analytics.customer');
+      Route::get('analytics/export', [$an, 'export'])->name('analytics.export');
+      Route::redirect('tally', '/sales-sources/analytics#customers')->name('tally');
+      Route::redirect('tally/invoices', '/sales-sources/analytics#bills')->name('invoices');
+      Route::get('tally/outstanding', [$c, 'outstanding'])->name('outstanding');
+      Route::get('tally/outstanding-bills', [$c, 'outstandingBills'])->name('outstanding-bills');
+      Route::get('tally/orders', [$c, 'orders'])->name('orders');
+      Route::get('setu', [$c, 'setu'])->name('setu');
+    });
+
     // IP Groups
     Route::prefix('ipgroup')->name('ipgroup.')->group(function () {
       Route::get('', [IpGroupController::class, 'index'])->name('index');
@@ -883,6 +906,15 @@ Route::middleware([
             Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
             Route::post('/sales-report/resolve-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveCrmMapping'])->name('pipeline.resolve-crm-mapping');
 
+            // Customer <-> Setu verification badge/popup (customers table, not
+            // per-salesperson — see CustomerSetuMappingController).
+            Route::get('/sales-report/customer/{customer}/setu-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'preview'])->name('pipeline.customer.setu-preview');
+            Route::get('/sales-report/setu-customers/search', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'search'])->name('pipeline.setu-customers.search');
+            Route::post('/sales-report/customer/{customer}/map-setu', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'mapSetu'])->name('pipeline.customer.map-setu');
+            Route::post('/sales-report/customers/bulk-confirm-setu', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'bulkConfirmSuggested'])->name('pipeline.customers.bulk-confirm-setu');
+            Route::get('/sales-report/customer/{customer}/sync-current-month-preview', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonthPreview'])->name('pipeline.customer.sync-current-month-preview');
+            Route::post('/sales-report/customer/{customer}/sync-current-month', [\App\Http\Controllers\tenant\CustomerSetuMappingController::class, 'syncCurrentMonth'])->name('pipeline.customer.sync-current-month');
+
             Route::get('/sales-report/import', [\App\Http\Controllers\tenant\PipelineImportController::class, 'showImport'])->name('pipeline.import');
             Route::post('/sales-report/import/preview', [\App\Http\Controllers\tenant\PipelineImportController::class, 'previewImport'])->name('pipeline.import.preview');
             Route::post('/sales-report/import/process', [\App\Http\Controllers\tenant\PipelineImportController::class, 'processImport'])->name('pipeline.import.process');
@@ -971,6 +1003,28 @@ Route::middleware([
                 Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'storeActivity'])->name('activities.store');
             });
             Route::post('activities/{id}/complete-follow-up', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'completeFollowUp'])->name('activities.complete-follow-up');
+
+            // Internal Team (multi-person-per-role) -- same canViewMapping()
+            // scoping as contacts/activities above, not the admin-only group:
+            // an assigned rep manages their own account's team same as they
+            // already manage its contacts.
+            Route::prefix('{mapping}/team')->group(function () {
+                Route::post('/', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'addTeamMember'])->name('team.store');
+                Route::delete('/{userId}/{role}', [\App\Http\Controllers\tenant\CrmClientMappingController::class, 'removeTeamMember'])->name('team.destroy');
+            });
+
+            // Customer Profile -- a separate, richer tabbed view of the same
+            // account (built alongside show() above, not replacing it).
+            // Contacts/Team/Activities on this page reuse the routes above;
+            // only the page itself, the sales-trend chart, and manual call
+            // log are genuinely new here. (A Documents tab was built and
+            // removed for now -- CrmClientDocument/the migration are still
+            // there if it comes back.)
+            Route::prefix('{mapping}/profile')->group(function () {
+                Route::get('/', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'show'])->name('profile');
+                Route::get('/sales-trend', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'salesTrend'])->name('profile.sales-trend');
+                Route::post('/log-call', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'logCall'])->name('profile.log-call');
+            });
 
             // Kept last: a bare GET /{id} would otherwise shadow the specific
             // single-segment routes above (/search, /sync-status, /debug-crm).

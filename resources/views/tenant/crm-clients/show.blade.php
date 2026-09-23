@@ -2,6 +2,17 @@
 
 @section('title', $mapping->crm_company_name . ' — Customer 360')
 
+{{-- SweetAlert2 isn't bundled globally -- the click-to-call result (and the
+     Internal Team add/remove error paths) need it for a styled popup instead
+     of a native alert(). --}}
+@section('vendor-style')
+    @vite(['resources/assets/vendor/libs/sweetalert2/sweetalert2.scss'])
+@endsection
+
+@section('vendor-script')
+    @vite(['resources/assets/vendor/libs/sweetalert2/sweetalert2.js'])
+@endsection
+
 @section('page-style')
 <style>
     .crm-header-gradient {
@@ -75,7 +86,7 @@
                         <i class="bx bx-building-house me-2"></i>{{ $mapping->crm_company_name }}
                     </h4>
                     <p class="mb-1 text-white opacity-75 small">
-                        <code class="bg-white bg-opacity-25 text-white px-2 py-1 rounded">{{ $mapping->crm_company_code }}</code>
+                        <code class="px-2 py-1 rounded fw-bold" style="background:rgba(255,255,255,.9);color:#127464;">{{ $mapping->crm_company_code }}</code>
                         @if($mapping->crm_city)
                             &nbsp;<i class="bx bx-map-pin"></i> {{ $mapping->crm_city }}{{ $mapping->crm_state ? ', '.$mapping->crm_state : '' }}
                         @endif
@@ -88,48 +99,17 @@
         </div>
     </div>
 
+    @php
+        // Same agent lookup the dashboard's dialpad uses (ClickToCallService::agentFor)
+        // -- the logged-in user's own campaign/agent/client_id (or Convoque extension),
+        // so whoever is signed in dials with their own telephony identity.
+        $__ctcAgent = app(\App\Services\ClickToCallService::class)->agentFor(auth()->user());
+    @endphp
     <div class="row g-4">
-        {{-- LEFT: Team + Contacts --}}
+        {{-- LEFT: Contacts + Team --}}
         <div class="col-lg-4">
-            {{-- Team card --}}
-            <div class="card c360-card mb-4">
-                <div class="card-body">
-                    <h6 class="fw-bold mb-3"><i class="bx bx-group me-1 text-primary"></i>Internal Team</h6>
-                    @php
-                        $teamRoles = [
-                            ['key' => 'salesperson', 'label' => 'Salesperson', 'color' => '#7c3aed'],
-                            ['key' => 'ccare',       'label' => 'CCare',       'color' => '#1d4ed8'],
-                            ['key' => 'newBiz',      'label' => 'New Biz',     'color' => '#a16207'],
-                            ['key' => 'billing',     'label' => 'Billing',     'color' => '#15803d'],
-                            ['key' => 'finance',     'label' => 'Finance',     'color' => '#be185d'],
-                        ];
-                    @endphp
-                    @foreach($teamRoles as $role)
-                        @php $person = $mapping->{$role['key']}; @endphp
-                        <div class="team-slot">
-                            @if($person)
-                                <div class="team-avatar" style="background:{{ $role['color'] }};">{{ substr($person->first_name,0,1) }}{{ substr($person->last_name,0,1) }}</div>
-                                <div class="flex-grow-1" style="min-width:0;">
-                                    <div class="fw-semibold text-truncate" style="font-size:0.85rem;">{{ $person->first_name }} {{ $person->last_name }}</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">{{ $role['label'] }}</div>
-                                </div>
-                            @else
-                                <div class="team-avatar" style="background:#e2e8f0;color:#94a3b8;"><i class="bx bx-user"></i></div>
-                                <div class="flex-grow-1">
-                                    <div class="text-muted" style="font-size:0.8rem;">Not assigned</div>
-                                    <div class="text-muted" style="font-size:0.7rem;">{{ $role['label'] }}</div>
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
-                    <a href="{{ route('crm-clients.index') }}" class="btn btn-sm btn-outline-secondary rounded-pill mt-3 w-100">
-                        <i class="bx bx-edit-alt me-1"></i>Edit Team (Client Mappings)
-                    </a>
-                </div>
-            </div>
-
             {{-- Contacts card --}}
-            <div class="card c360-card">
+            <div class="card c360-card mb-4">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h6 class="fw-bold mb-0"><i class="bx bx-id-card me-1 text-success"></i>Customer Contacts</h6>
@@ -152,6 +132,25 @@
                                         @if($contact->phone)<div class="text-muted" style="font-size:0.76rem;"><i class="bx bx-phone"></i> {{ $contact->phone }}</div>@endif
                                     </div>
                                     <div class="d-flex gap-1 flex-shrink-0">
+                                        @if($contact->phone)
+                                            @if($__ctcAgent)
+                                                {{-- Dials through Smart Agent using the SIGNED-IN user's own
+                                                     telephony identity (ClickToCallService::agentFor) -- same
+                                                     dialer the header's Click to Call widget uses, just aimed
+                                                     straight at this contact's number instead of a typed one. --}}
+                                                <button type="button" class="btn btn-sm btn-icon btn-outline-success rounded-circle js-ctc-call"
+                                                    style="width:26px;height:26px;padding:0;"
+                                                    data-phone="{{ $contact->phone }}" data-name="{{ $contact->name }}"
+                                                    title="Call {{ $contact->name }} via Smart Agent">
+                                                    <i class="bx bx-phone-call" style="font-size:0.75rem;"></i>
+                                                </button>
+                                            @else
+                                                <a class="btn btn-sm btn-icon btn-outline-success rounded-circle" style="width:26px;height:26px;padding:0;"
+                                                    href="tel:{{ $contact->phone }}" title="Call {{ $contact->name }}">
+                                                    <i class="bx bx-phone-call" style="font-size:0.75rem;"></i>
+                                                </a>
+                                            @endif
+                                        @endif
                                         <button class="btn btn-sm btn-icon btn-outline-primary rounded-circle" style="width:26px;height:26px;padding:0;"
                                             onclick='openContactModal(@json($contact))'>
                                             <i class="bx bx-edit-alt" style="font-size:0.75rem;"></i>
@@ -166,6 +165,75 @@
                         @empty
                             <p class="text-muted small text-center py-3 mb-0">No contacts yet — add their purchase or finance team here.</p>
                         @endforelse
+                    </div>
+                </div>
+            </div>
+
+            {{-- Team card --}}
+            <div class="card c360-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold mb-0"><i class="bx bx-group me-1 text-primary"></i>Internal Team</h6>
+                        <button class="btn btn-sm btn-primary rounded-pill" onclick="TeamCard.openAdd()">
+                            <i class="bx bx-plus"></i>
+                        </button>
+                    </div>
+                    @php
+                        $teamRoleMeta = [
+                            'sales_person' => ['label' => 'Sales Person', 'color' => '#7c3aed'],
+                            'ccare'        => ['label' => 'CCare',       'color' => '#1d4ed8'],
+                            'new_biz'      => ['label' => 'New Biz',     'color' => '#a16207'],
+                            'billing'      => ['label' => 'Billing',     'color' => '#15803d'],
+                            'finance'      => ['label' => 'Finance',     'color' => '#be185d'],
+                            'other'        => ['label' => 'Other',       'color' => '#64748b'],
+                        ];
+                    @endphp
+                    <div id="teamCardList">
+                        @foreach($teamRoleMeta as $roleKey => $meta)
+                            @php $members = $teamByRole->get($roleKey, collect()); @endphp
+                            @if($members->isNotEmpty())
+                                @foreach($members as $member)
+                                    <div class="team-slot" data-user-id="{{ $member->user_id }}" data-role="{{ $roleKey }}">
+                                        <div class="team-avatar" style="background:{{ $meta['color'] }};">{{ substr($member->user->first_name,0,1) }}{{ substr($member->user->last_name,0,1) }}</div>
+                                        <div class="flex-grow-1" style="min-width:0;">
+                                            <div class="fw-semibold text-truncate" style="font-size:0.85rem;">{{ $member->user->first_name }} {{ $member->user->last_name }}</div>
+                                            <div class="text-muted" style="font-size:0.7rem;">{{ $meta['label'] }}</div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm text-danger p-0 border-0" title="Remove"
+                                                onclick="TeamCard.remove({{ $member->user_id }}, '{{ $roleKey }}', this)">
+                                            <i class="bx bx-x fs-5"></i>
+                                        </button>
+                                    </div>
+                                @endforeach
+                            @else
+                                <div class="team-slot" data-role="{{ $roleKey }}">
+                                    <div class="team-avatar" style="background:#e2e8f0;color:#94a3b8;"><i class="bx bx-user"></i></div>
+                                    <div class="flex-grow-1">
+                                        <div class="text-muted" style="font-size:0.8rem;">Not assigned</div>
+                                        <div class="text-muted" style="font-size:0.7rem;">{{ $meta['label'] }}</div>
+                                    </div>
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    {{-- Add-member row: hidden until "+" is clicked --}}
+                    <div id="teamAddRow" class="d-none mt-3 pt-3" style="border-top:1px dashed #eef2f7;">
+                        <select id="teamAddUser" class="form-select form-select-sm mb-2">
+                            <option value="">— choose person —</option>
+                            @foreach($teamPickable as $p)
+                                <option value="{{ $p->id }}">{{ $p->first_name }} {{ $p->last_name }}</option>
+                            @endforeach
+                        </select>
+                        <select id="teamAddRole" class="form-select form-select-sm mb-2">
+                            @foreach($teamRoleMeta as $roleKey => $meta)
+                                <option value="{{ $roleKey }}">{{ $meta['label'] }}</option>
+                            @endforeach
+                        </select>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-success flex-grow-1" onclick="TeamCard.add()">Add</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="TeamCard.closeAdd()">Cancel</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -303,6 +371,15 @@
     </div>
 </div>
 
+{{-- Same "Click to Call" dialpad the Employee Dashboard uses -- its own
+     launch button is kept out of sight here (the Customer Contacts card's
+     per-contact call icon opens it instead, pre-filled), but the modal and
+     its dial/hangup/dispose JS are unchanged, so the popup looks and behaves
+     exactly the same as everywhere else it's used. --}}
+<div class="d-none">
+    @include('tenant.users.dashboard._click-to-call')
+</div>
+
 @endsection
 
 @section('page-script')
@@ -315,6 +392,58 @@ const ROUTES = {
     destroyContact:  (id) => `{{ url('crm-clients/contacts') }}/${id}`,
     storeActivity:   '{{ route('crm-clients.activities.store', $mapping->id) }}',
     completeFollowUp:(id) => `{{ url('crm-clients/activities') }}/${id}/complete-follow-up`,
+    addTeamMember:   '{{ route('crm-clients.team.store', $mapping->id) }}',
+    removeTeamMember:(userId, role) => `{{ url('crm-clients') }}/{{ $mapping->id }}/team/${userId}/${role}`,
+};
+
+// Click-to-call from a Customer Contact row -- opens the SAME dialpad modal
+// as the Employee Dashboard's "Click to Call" (hidden-but-included above),
+// pre-filled with this contact's number, instead of a bare toast. The modal's
+// own script (see _click-to-call.blade.php) owns dial/hangup/dispose from here.
+function callContact(phone) {
+    const modalEl = document.getElementById('clickToCallModal');
+    if (!modalEl) return; // no dialer agent mapped to this login -- nothing to open
+
+    document.getElementById('ctcPhone').value = phone;
+    document.getElementById('ctcResult').classList.add('d-none');
+    document.getElementById('ctcLive').classList.add('d-none');
+    new bootstrap.Modal(modalEl).show();
+}
+
+document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-ctc-call');
+    if (btn) callContact(btn.dataset.phone);
+});
+
+// Internal Team add/remove. Reloads on success rather than patching the DOM —
+// the card has several per-role empty/populated states that would be easy to
+// get subtly wrong by hand; a full reload is simple and always correct.
+const TeamCard = {
+    openAdd() { document.getElementById('teamAddRow').classList.remove('d-none'); },
+    closeAdd() { document.getElementById('teamAddRow').classList.add('d-none'); },
+    add() {
+        const userId = document.getElementById('teamAddUser').value;
+        const role = document.getElementById('teamAddRole').value;
+        if (!userId) { if (window.Swal) Swal.fire({icon:'warning', title:'Pick a person first'}); return; }
+        fetch(ROUTES.addTeamMember, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            body: JSON.stringify({ user_id: userId, role: role }),
+        }).then(r => r.json()).then(d => {
+            if (!d.success) { if (window.Swal) Swal.fire({icon:'error', title:'Could not add'}); return; }
+            location.reload();
+        });
+    },
+    remove(userId, role, btn) {
+        if (!confirm('Remove this person from the team?')) return;
+        fetch(ROUTES.removeTeamMember(userId, role), {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': CSRF },
+        }).then(r => r.json()).then(d => {
+            if (!d.success) { if (window.Swal) Swal.fire({icon:'error', title:'Could not remove'}); return; }
+            location.reload();
+        });
+    },
 };
 
 function openContactModal(contact = null) {

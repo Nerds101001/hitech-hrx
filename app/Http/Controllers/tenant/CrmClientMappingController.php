@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CrmClientActivity;
 use App\Models\CrmClientContact;
 use App\Models\CrmClientMapping;
+use App\Models\CrmClientMappingTeamMember;
 use App\Models\User;
 use App\Services\CrmClientService;
 use Illuminate\Http\Request;
@@ -582,7 +583,18 @@ class CrmClientMappingController extends Controller
             abort(403);
         }
 
+        // The Customer Profile is the customer view now. This classic Customer 360 page is kept, reachable
+        // with ?classic=1 (the profile's "Classic View" button), in case something is needed that the profile
+        // does not cover yet. The redirect comes AFTER the permission check above, so access is unchanged.
+        if (!$request->boolean('classic')) {
+            return redirect()->route('crm-clients.profile', $mapping->id);
+        }
+
         $contacts = $mapping->contacts()->orderByDesc('is_primary')->orderBy('name')->get();
+        $teamByRole = $mapping->teamMembersByRole();
+        // The team picker offers everyone active, same pool employeeClients()
+        // already treats as fair game for this kind of assignment.
+        $teamPickable = User::where('status', 'active')->notTerminated()->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
 
         $activities = $mapping->activities()
             ->with([
@@ -600,7 +612,7 @@ class CrmClientMappingController extends Controller
             ->orderBy('follow_up_due_at')
             ->get();
 
-        return view('tenant.crm-clients.show', compact('mapping', 'contacts', 'activities', 'openFollowUps'));
+        return view('tenant.crm-clients.show', compact('mapping', 'contacts', 'activities', 'openFollowUps', 'teamByRole', 'teamPickable'));
     }
 
     /**
@@ -668,6 +680,66 @@ class CrmClientMappingController extends Controller
         }
 
         $contact->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Internal Team: add a person to a role. A role may hold several people
+     * (crm_client_mapping_team) — but the 5 legacy single-FK columns on
+     * crm_client_mappings itself (used by telephony call-linking and
+     * SalesScope visibility, unrelated to this page) only ever hold one. If
+     * this is the first person tagged for a role that legacy column is still
+     * empty for, mirror them into it so those other subsystems keep working
+     * without needing to learn about this table at all.
+     */
+    public function addTeamMember(Request $request, $mappingId)
+    {
+        $mapping = CrmClientMapping::findOrFail($mappingId);
+        if (!$this->canViewMapping($mapping, $request)) {
+            abort(403);
+        }
+
+        $data = $request->validate([
+            'user_id' => ['required', 'exists:users,id'],
+            'role' => ['required', 'in:' . implode(',', CrmClientMappingTeamMember::ROLES)],
+        ]);
+
+        $member = CrmClientMappingTeamMember::firstOrCreate($data + [
+            'crm_client_mapping_id' => $mapping->id,
+        ], ['tenant_id' => $mapping->tenant_id]);
+
+        $column = CrmClientMappingTeamMember::PRIMARY_COLUMN[$data['role']] ?? null;
+        if ($column && !$mapping->{$column}) {
+            $mapping->forceFill([$column => $data['user_id']])->save();
+        }
+
+        return response()->json(['success' => true, 'member' => $member->load('user:id,first_name,last_name')]);
+    }
+
+    public function removeTeamMember(Request $request, $mappingId, $userId, $role)
+    {
+        $mapping = CrmClientMapping::findOrFail($mappingId);
+        if (!$this->canViewMapping($mapping, $request)) {
+            abort(403);
+        }
+
+        CrmClientMappingTeamMember::where('crm_client_mapping_id', $mapping->id)
+            ->where('user_id', $userId)
+            ->where('role', $role)
+            ->get()
+            ->each->delete();
+
+        // If the removed person was the legacy column's single holder, promote
+        // whoever's left in that role (oldest tag first), or clear it if no
+        // one else is tagged — the column must never keep pointing at someone
+        // who was just removed from the team.
+        $column = CrmClientMappingTeamMember::PRIMARY_COLUMN[$role] ?? null;
+        if ($column && (int) $mapping->{$column} === (int) $userId) {
+            $next = CrmClientMappingTeamMember::where('crm_client_mapping_id', $mapping->id)
+                ->where('role', $role)->oldest()->first();
+            $mapping->forceFill([$column => $next->user_id ?? null])->save();
+        }
 
         return response()->json(['success' => true]);
     }

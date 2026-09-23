@@ -46,6 +46,22 @@ return [
     'report_id' => env('SETU_SALES_REPORT_ID', 2899),
   ],
 
+  // Tally's daily text exports (Abc.txt, Invoice Details.txt, OutstandingDet.txt,
+  // PartyWiseSaleOrder.txt) -- read by `hrx:import-tally`. On the server this is
+  // the inbox the exports are uploaded to; locally it can point at the folder
+  // Tally writes to.
+  'tally' => [
+    'export_dir' => env('TALLY_EXPORT_DIR', storage_path('app/tally')),
+
+    // Tally's own HTTP/XML gateway (the port opened by Tally's Client/Server setting; ODBC uses the same one).
+    // READ-ONLY use only, see App\Services\TallyGateway. `gateway_company` is the name of the ONE company that
+    // may be read: every request names it, and a pull refuses to start if it is not the company Tally has
+    // loaded, so a sandbox and the real books can never be mixed up.
+    'gateway_url' => env('TALLY_GATEWAY_URL', 'http://localhost:9000'),
+    'gateway_company' => env('TALLY_GATEWAY_COMPANY', ''),
+    'gateway_timeout' => (int) env('TALLY_GATEWAY_TIMEOUT', 30),
+  ],
+
   // Google Maps key for Live Location, Timeline, SOS map and client
   // create/edit. MUST be read via config() in Blade, never env(): env()
   // returns null once `php artisan config:cache` has run, which silently

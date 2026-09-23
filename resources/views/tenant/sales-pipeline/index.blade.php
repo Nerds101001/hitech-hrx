@@ -35,7 +35,8 @@
     @vite([
       'resources/assets/js/app/setu-period-picker.js',
       'resources/assets/js/app/setu-review-common.js',
-      'resources/assets/js/app/crm-mapping-review-common.js'
+      'resources/assets/js/app/crm-mapping-review-common.js',
+      'resources/assets/js/app/customer-setu-mapping.js'
     ])
 @endsection
 
@@ -133,6 +134,12 @@
                             </button>
                         </li>
                     @endif
+                    <li>
+                        <button type="button" id="btnBulkConfirmSetu"
+                                class="dropdown-item d-flex align-items-center gap-2">
+                            <i class="bx bx-check-shield text-success"></i> Confirm all exact Setu matches
+                        </button>
+                    </li>
 
                     {{-- Targets are Admin/HR only — CCare and New Biz may view, never set. --}}
                     @if($isAdmin)
@@ -465,6 +472,22 @@
                                 <td class="col-party text-dark p-0" title="{{ $row->party_name }}">
                                     <input type="text" class="excel-input row-field fw-semibold" data-field="party_name"
                                            value="{{ $row->party_name }}" style="font-size:0.72rem;">
+                                    @if($row->customer)
+                                        @php
+                                            $setuBadge = match($row->customer->setu_match_status) {
+                                                'verified' => ['bg-label-success', 'bx-check-shield', 'Verified'],
+                                                'suggested' => ['bg-label-warning', 'bx-search-alt', 'Match Found'],
+                                                'similar' => ['bg-label-info', 'bx-git-compare', 'Similar Match'],
+                                                default => ['bg-label-danger', 'bx-x-circle', 'Not Found'],
+                                            };
+                                        @endphp
+                                        <span class="badge {{ $setuBadge[0] }} js-setu-badge d-inline-flex align-items-center gap-1"
+                                              style="cursor:pointer; font-size:0.62rem; margin:0 0 2px 4px;"
+                                              data-customer-id="{{ $row->customer->id }}"
+                                              title="Click to verify against Setu">
+                                            <i class="bx {{ $setuBadge[1] }}"></i> {{ $setuBadge[2] }}
+                                        </span>
+                                    @endif
                                 </td>
 
                                 <td class="col-status p-0 align-middle">
@@ -978,6 +1001,10 @@
 @if(\App\Support\SalesScope::canClaimCustomer($user))
     @include('tenant.partials.customer-claim-modal')
 @endif
+
+{{-- Per-customer Setu verification badge/popup — click any badge in the Party
+     Name column to confirm or search-and-map. --}}
+@include('tenant.partials.customer-setu-mapping-modal')
 
 {{-- ─── STYLES ──────────────────────────────────────────────────────── --}}
 <style>
