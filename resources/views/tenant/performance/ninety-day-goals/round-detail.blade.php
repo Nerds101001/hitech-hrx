@@ -516,17 +516,19 @@
   {{-- Add Customer: same source of truth as the Goals page — only the round owner's own
        Sales Pipeline, nobody types a customer in. --}}
   <div class="modal fade" id="ndgRdAddModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header"><h5 class="modal-title">Add target customers</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
-          <input type="search" id="ndgRdAddSearch" class="form-control mb-3" placeholder="Search the pipeline…">
-          <div id="ndgRdAddList" class="ndg-list"></div>
-          <div class="small text-danger mt-2" id="ndgRdAddMsg"></div>
+          <input type="search" id="ndgRdAddSearch" class="form-control mb-3" placeholder="Search your pipeline and sales report by customer, product or brand…" autocomplete="off">
+          <div id="ndgRdAddList" class="ndg-list"><div class="text-muted p-3">Loading your customers…</div></div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-hitech-cancel" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn-hitech" id="ndgRdAddSave">Add selected</button>
+        <div class="modal-footer justify-content-between">
+          <span class="small text-danger" id="ndgRdAddMsg"></span>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn-hitech rounded-pill px-5" id="ndgRdAddSave">Add selected</button>
+          </div>
         </div>
       </div>
     </div>
@@ -589,9 +591,14 @@
   .ndg-track { height: 7px; background: #eef2f5; border-radius: 99px; overflow: hidden; }
   .ndg-fill { height: 100%; background: #007a7a; border-radius: 99px; min-width: 2px; }
   .ndg-mx-scroll { overflow: auto; }
-  .ndg-list { max-height: 50vh; overflow: auto; border: 1px solid #e2e8f0; border-radius: 10px; }
-  .ndg-list .ndg-row:last-child { border-bottom: none !important; }
+  .ndg-list { max-height: 55vh; overflow: auto; padding: 4px; }
+  .ndg-list .ndg-row { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .ndg-list .ndg-row.on { border-color: #007a7a; background: #f0f7f6; }
   .ndg-list .ndg-row:hover { background: #f8fafc; }
+  .ndg-list .ndg-row.on:hover { background: #f0f7f6; }
+  .ndg-list .ndg-extra { display: none; margin-top: 10px; }
+  .ndg-list .ndg-row.on .ndg-extra { display: flex; }
+  .ndg-src { font-size: .65rem; }
   #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
 </style>
 @endsection
@@ -798,42 +805,73 @@
     });
   }
 
-  // ── add customer modal: only this round owner's own Sales Pipeline, nobody types one in ──
+  // ── add customer modal: only this round owner's own Sales Pipeline, nobody types one in.
+  // Checking a customer expands Product / Brand / Goal / Monthly potential right there, editable
+  // before it's added — not just accepted blind from whatever the pipeline already says. ──
   var addModalEl = document.getElementById('ndgRdAddModal');
   if (addModalEl) {
     var addList = document.getElementById('ndgRdAddList'), addSearch = document.getElementById('ndgRdAddSearch'), addMsg = document.getElementById('ndgRdAddMsg');
-    var pipeline = [];
+    var pipeline = [], addBrands = [], addLoaded = false;
+
+    function brandOptions(sel) {
+      return '<option value="">Brand</option>' + addBrands.map(function (b) { return '<option' + (b === sel ? ' selected' : '') + '>' + esc(b) + '</option>'; }).join('');
+    }
+    function renderList() {
+      var q = addSearch.value.trim().toLowerCase();
+      var shown = pipeline.filter(function (c) { return !q || (c.customer + ' ' + c.product + ' ' + c.brand).toLowerCase().indexOf(q) !== -1; });
+      if (!pipeline.length) { addList.innerHTML = '<div class="text-muted p-3">No customers left to add. Everything in your Sales Pipeline and Sales Report is already in this round, or you have none yet.</div>'; return; }
+      if (!shown.length) { addList.innerHTML = '<div class="text-muted p-3">Nothing matches that search.</div>'; return; }
+      addList.innerHTML = shown.map(function (c) {
+        return '<div class="ndg-row' + (c.picked ? ' on' : '') + '" data-id="' + c.id + '">' +
+          '<label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer"><input type="checkbox" class="form-check-input ndg-pick"' + (c.picked ? ' checked' : '') + '>' +
+          '<span class="fw-semibold">' + esc(c.customer) + '</span> <span class="badge badge-hitech badge-muted ndg-src">' + esc(c.source) + '</span>' +
+          '<span class="text-muted small ms-2">' + esc(c.product) + '</span></label>' +
+          '<div class="ndg-extra gap-2 flex-wrap">' +
+            '<input type="text" class="form-control form-control-sm ndg-product" style="max-width:220px" placeholder="Product" value="' + esc(c.pProduct != null ? c.pProduct : c.product) + '">' +
+            '<select class="form-select form-select-sm ndg-brand" style="max-width:150px">' + brandOptions(c.pBrand != null ? c.pBrand : c.brand) + '</select>' +
+            '<input type="text" class="form-control form-control-sm ndg-goal" style="max-width:220px" placeholder="Goal, for example Regular order" value="' + esc(c.pGoal != null ? c.pGoal : 'Order') + '">' +
+            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Monthly ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
+          '</div></div>';
+      }).join('');
+    }
+    function remember(row) {
+      var c = pipeline.filter(function (x) { return String(x.id) === row.getAttribute('data-id'); })[0]; if (!c) { return; }
+      c.picked = row.querySelector('.ndg-pick').checked;
+      c.pProduct = row.querySelector('.ndg-product').value; c.pBrand = row.querySelector('.ndg-brand').value;
+      c.pGoal = row.querySelector('.ndg-goal').value; c.pPot = row.querySelector('.ndg-pot').value;
+    }
+    addList.addEventListener('input', function (e) { var r = e.target.closest('.ndg-row'); if (r) { remember(r); } });
+    addList.addEventListener('change', function (e) { var r = e.target.closest('.ndg-row'); if (r) { remember(r); r.classList.toggle('on', r.querySelector('.ndg-pick').checked); } });
+    addSearch.addEventListener('input', renderList);
+
     addModalEl.addEventListener('show.bs.modal', function () {
-      addMsg.textContent = ''; addList.innerHTML = '<div class="small text-muted">Loading…</div>';
+      if (addLoaded) { addSearch.focus(); return; }
+      addMsg.textContent = ''; addList.innerHTML = '<div class="text-muted p-3">Loading your customers…</div>';
       fetch(URLS.customers + '?user_id=' + ROUND_USER_ID, { headers: { Accept: 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (j) {
-          pipeline = j.success ? j.customers : [];
-          renderList();
-        });
+          pipeline = j.success ? j.customers : []; addBrands = j.brands || []; addLoaded = true;
+          renderList(); addSearch.focus();
+        })
+        .catch(function () { addList.innerHTML = '<div class="text-danger p-3">Could not load your customers. Close this and try again.</div>'; });
     });
-    function renderList() {
-      var q = addSearch.value.trim().toLowerCase();
-      var shown = pipeline.filter(function (c) { return !q || (c.customer + ' ' + c.product).toLowerCase().indexOf(q) !== -1; });
-      if (!shown.length) { addList.innerHTML = '<div class="small text-muted p-2">' + (pipeline.length ? 'Nothing matches that search.' : 'Every pipeline customer is already in this round.') + '</div>'; return; }
-      addList.innerHTML = shown.map(function (c) {
-        return '<label class="ndg-row d-flex align-items-start gap-2 p-2 border-bottom">' +
-          '<input type="checkbox" class="form-check-input mt-1" data-id="' + c.id + '" data-customer="' + esc(c.customer) + '" data-product="' + esc(c.product) + '" data-brand="' + esc(c.brand) + '" data-potential="' + c.potential + '">' +
-          '<span class="flex-grow-1"><b>' + esc(c.customer) + '</b><br><span class="small text-muted">' + esc(c.product) + ' · ' + esc(c.brand) + ' · ₹' + c.potential + ' L/mo · ' + esc(c.source) + '</span></span>' +
-          '</label>';
-      }).join('');
-    }
-    addSearch.addEventListener('input', renderList);
+
     document.getElementById('ndgRdAddSave').addEventListener('click', function () {
-      var checked = Array.prototype.filter.call(addList.querySelectorAll('input[type=checkbox]'), function (c) { return c.checked; });
-      if (!checked.length) { addMsg.textContent = 'Pick at least one customer.'; return; }
-      var customers = checked.map(function (c) {
-        return { sales_pipeline_id: parseInt(c.dataset.id, 10), product: c.dataset.product, brand: c.dataset.brand, goal: 'Order', monthly_potential: parseFloat(c.dataset.potential) };
+      var picked = pipeline.filter(function (c) { return c.picked; });
+      if (!picked.length) { addMsg.textContent = 'Tick at least one customer.'; return; }
+      for (var i = 0; i < picked.length; i++) {
+        if (!String(picked[i].pGoal != null ? picked[i].pGoal : 'Order').trim()) { addMsg.textContent = picked[i].customer + ': write the goal.'; return; }
+        if (picked[i].pPot === undefined || picked[i].pPot === '' || isNaN(parseFloat(picked[i].pPot))) { addMsg.textContent = picked[i].customer + ': enter the monthly potential in lakh.'; return; }
+      }
+      addMsg.textContent = ''; this.disabled = true; var btn = this;
+      var customers = picked.map(function (c) {
+        return { sales_pipeline_id: c.id, product: c.pProduct != null ? c.pProduct : c.product, brand: c.pBrand != null ? c.pBrand : c.brand, goal: c.pGoal != null ? c.pGoal : 'Order', monthly_potential: parseFloat(c.pPot) };
       });
       post(URLS.store, 'POST', { user_id: ROUND_USER_ID, customers: customers }).then(function (j) {
         if (j.success) { location.reload(); return; }
+        btn.disabled = false;
         addMsg.textContent = j.message || (j.errors ? Object.values(j.errors).join(' ') : 'Could not add.');
-      });
+      }).catch(function () { btn.disabled = false; addMsg.textContent = 'Request failed. Try again.'; });
     });
   }
 })();

@@ -1226,6 +1226,7 @@ class NinetyDayGoalController extends Controller
 
         $added = 0;
         $skipped = [];
+        $newGoalIds = [];
         foreach ($data['customers'] as $row) {
             $pid = (int) $row['sales_pipeline_id'];
             $c = $mine->get($pid);
@@ -1237,7 +1238,7 @@ class NinetyDayGoalController extends Controller
                 $skipped[] = $c['customer'] . ' is already in this round';
                 continue;
             }
-            NinetyDayGoal::create([
+            $goal = NinetyDayGoal::create([
                 'user_id'           => $target->id,
                 'round_id'          => $round->id,
                 'sales_pipeline_id' => $pid,
@@ -1253,9 +1254,29 @@ class NinetyDayGoalController extends Controller
                 'tenant_id'         => $target->tenant_id,
             ]);
             $have[] = $pid;
+            $newGoalIds[] = $goal->id;
             $added++;
         }
         Goals::ensureCheckins($round);
+
+        // A brand new customer's current-week row gets a sensible default next-follow-up date —
+        // one real week out from today — rather than leaving it blank until the salesperson has
+        // even had a chance to talk to them. ensureCheckins() above only creates a checkin row
+        // from the goal's own first Monday onward (never for a week that was already over when
+        // the goal was added), so a goal added mid-week has no row yet for the current week —
+        // this creates just that one row for it, without touching the "late" rules that gate
+        // real status submissions.
+        if ($newGoalIds) {
+            $currentWeek = Goals::weekOf($round);
+            $due = Goals::dueOn($round, $currentWeek);
+            $followUp = Carbon::today()->addDays(7)->toDateString();
+            foreach (NinetyDayGoal::whereIn('id', $newGoalIds)->get() as $goal) {
+                NinetyDayGoalCheckin::firstOrCreate(
+                    ['goal_id' => $goal->id, 'week_no' => $currentWeek],
+                    ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(), 'next_follow_up_date' => $followUp]
+                );
+            }
+        }
 
         return response()->json(['success' => true, 'added' => $added, 'skipped' => $skipped]);
     }
