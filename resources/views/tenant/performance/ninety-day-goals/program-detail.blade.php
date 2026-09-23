@@ -112,9 +112,14 @@
 
     {{-- Weekly Submission Progress strip --}}
     <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+      <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
         <div class="fw-bold text-dark">Weekly Submission Progress (Team)</div>
-        <div class="small text-muted">Current week: W{{ $currentWeek }} · {{ $weekDue->format('d M Y') }}</div>
+        <div class="d-flex align-items-center gap-3">
+          <div class="small text-muted">Current week: W{{ $currentWeek }} · {{ $weekDue->format('d M Y') }}</div>
+          <button type="button" id="ndgPrRemindBtn" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.78rem" data-week="{{ $selectedWeek }}">
+            <i class="bx bx-bell"></i> Send Reminder
+          </button>
+        </div>
       </div>
       <div class="card-body p-3 d-flex gap-2 ndg-week-strip" id="ndgPrWeekStrip">
         @foreach($weekStrip as $w)
@@ -126,15 +131,18 @@
       </div>
     </div>
 
+    {{-- The same customer tracking grid the Customers tab shows, surfaced right on Overview. --}}
+    @include('tenant.performance.ninety-day-goals.partials.customer-tracking-table')
+
     {{-- Charts --}}
     <div class="row g-4 mb-6">
-      <div class="col-xl-4">
+      <div class="col-xl-3 col-md-6">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Week W{{ $selectedWeek }} Summary</div><div class="small text-muted">{{ $weekDue->format('d M Y') }}</div></div>
           <div class="card-body p-3 text-center"><div id="ndgPrWeekDonut"></div></div>
         </div>
       </div>
-      <div class="col-xl-4">
+      <div class="col-xl-3 col-md-6">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Status Distribution ({{ $cards['goals'] }} Customers)</div></div>
           <div class="card-body p-4">
@@ -151,7 +159,7 @@
           </div>
         </div>
       </div>
-      <div class="col-xl-4">
+      <div class="col-xl-3 col-md-6">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
             <div class="fw-bold text-dark">Top Performing Salespersons</div>
@@ -171,26 +179,26 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-        <div class="fw-bold text-dark">Recent Activity</div>
-        <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-pr-goto" data-tab="activity">View All →</button>
-      </div>
-      <div class="card-body p-0">
-        @forelse($activity->take(6) as $a)
-          <div class="ndg-alert-row">
-            <i class="bx {{ $a->kind === 'note' ? 'bx-message-square-detail' : 'bx-radio-circle-marked' }}"></i>
-            <div class="flex-grow-1">
-              <div class="small text-dark"><b>{{ trim(optional($a->by)->first_name . ' ' . optional($a->by)->last_name) ?: 'Someone' }}</b> {{ $a->kind === 'note' ? 'commented on' : 'updated' }} {{ $a->goal->client_name }} @if($a->status)· <span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$a->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$a->status][1] ?? '#475569' }}">{{ $a->status }}</span>@endif</div>
-              @if($a->text)<div class="small text-muted">{{ $a->text }}</div>@endif
-              <div class="small text-muted">{{ optional($a->at)->diffForHumans() }}</div>
-            </div>
+      <div class="col-xl-3 col-md-6">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
+            <div class="fw-bold text-dark">Recent Activity</div>
+            <button type="button" class="small text-decoration-none border-0 bg-transparent text-primary fw-semibold ndg-pr-goto" data-tab="activity">View All →</button>
           </div>
-        @empty
-          <div class="p-4 text-center text-muted small">No activity yet.</div>
-        @endforelse
+          <div class="card-body p-0" style="max-height:320px;overflow-y:auto">
+            @forelse($activity->take(8) as $a)
+              <div class="ndg-alert-row">
+                <i class="bx {{ $a->kind === 'note' ? 'bx-message-square-detail' : 'bx-radio-circle-marked' }}"></i>
+                <div class="flex-grow-1">
+                  <div class="small text-dark"><b>{{ trim(optional($a->by)->first_name . ' ' . optional($a->by)->last_name) ?: 'Someone' }}</b> {{ $a->kind === 'note' ? 'commented on' : 'updated' }} {{ $a->goal->client_name }}</div>
+                  <div class="small text-muted">{{ optional($a->at)->diffForHumans() }}</div>
+                </div>
+              </div>
+            @empty
+              <div class="p-4 text-center text-muted small">No activity yet.</div>
+            @endforelse
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -222,87 +230,7 @@
 
   {{-- ═══════════════════ Customers ═══════════════════ --}}
   <div class="ndg-pr-section d-none" data-section="customers">
-
-    {{-- Filters --}}
-    <div class="hitech-card mb-4">
-      <div class="card-body p-3">
-        <form method="GET" class="row g-2 align-items-end">
-          <input type="hidden" name="w" value="{{ $selectedWeek }}">
-          <div class="col-md-3"><input type="text" name="customer" value="{{ $filters['customer'] }}" class="form-control" placeholder="Search customer, product…"></div>
-          <div class="col-md-2">
-            <select name="status" class="form-select form-select-hitech" onchange="this.form.submit()">
-              <option value="">All Status</option>
-              @foreach($statuses as $s)<option value="{{ $s }}" {{ $filters['status'] === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
-            </select>
-          </div>
-          <div class="col-md-2">
-            <select name="brand" class="form-select form-select-hitech" onchange="this.form.submit()">
-              <option value="">All Products</option>
-              @foreach($brands as $b)<option value="{{ $b }}" {{ $filters['brand'] === $b ? 'selected' : '' }}>{{ $b }}</option>@endforeach
-            </select>
-          </div>
-          <div class="col-md-2">
-            <select name="user_id" class="form-select form-select-hitech" onchange="this.form.submit()">
-              <option value="">All Salespersons</option>
-              @foreach($people as $p)<option value="{{ $p->id }}" {{ (int) $filters['user_id'] === $p->id ? 'selected' : '' }}>{{ $p->first_name }} {{ $p->last_name }}</option>@endforeach
-            </select>
-          </div>
-          <div class="col-md-3 d-flex gap-2">
-            <button type="submit" class="btn-hitech rounded-pill px-4 flex-grow-1">Apply</button>
-            <a href="{{ route('performance.ninety-day-goals.program', $program->id) }}" class="btn btn-hitech-cancel rounded-pill px-3">Clear</a>
-            <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge($filters, ['program_id' => $program->id])) }}" class="btn btn-hitech-cancel rounded-pill px-3"><i class="bx bx-download"></i></a>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom d-flex align-items-center justify-content-between">
-        <div class="fw-bold text-dark">Customer Tracking &amp; Weekly Updates ({{ $rows->count() }} Customers)</div>
-      </div>
-      <div class="card-body p-0 ndg-mx-scroll">
-        <table class="ndg-mx" style="font-size:.74rem">
-          <thead><tr>
-            <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹</th><th>Expected</th>
-            @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
-            <th>Actual ₹</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
-          </tr></thead>
-          <tbody>
-          @forelse($paged as $i => $r)
-            @php
-              $cks = $r->goal->checkins->keyBy('week_no');
-              $lastComment = $r->goal->checkins->whereNotNull('comment')->sortByDesc('week_no')->first();
-            @endphp
-            <tr>
-              <td class="ndg-mx-l" style="left:0">{{ ($paged->currentPage() - 1) * $paged->perPage() + $i + 1 }}</td>
-              <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
-              <td>{{ $r->goal->product }}</td>
-              <td class="small text-muted">{{ $name($r->user) }}</td>
-              <td>{{ number_format($r->goal->monthly_potential * 100000 / 100, 0) }}</td>
-              <td class="small text-muted">{{ $r->goal->expected_order_date ? $r->goal->expected_order_date->format('d M Y') : '—' }}</td>
-              @for($w = 0; $w < $weeks; $w++)
-                @php
-                  $ck = $cks->get($w);
-                  $st = optional($ck)->status;
-                  [$bg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8']) : [null];
-                @endphp
-                <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $st ?: '—' }}"></td>
-              @endfor
-              <td class="fw-semibold">{{ number_format($r->achieved * 100000 / 100, 0) }}</td>
-              <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
-              <td class="small text-muted" style="max-width:160px;white-space:normal">{{ $lastComment ? $lastComment->comment : '—' }}</td>
-            </tr>
-          @empty
-            <tr><td colspan="{{ 9 + $weeks }}" class="text-center text-muted p-5">
-              No customers have been added to this program yet — {{ $participants }} {{ \Illuminate\Support\Str::plural('participant', $participants) }} enrolled, none have added a target customer.
-            </td></tr>
-          @endforelse
-          </tbody>
-        </table>
-      </div>
-      <div class="card-body pt-3">{{ $paged->links() }}</div>
-    </div>
+    @include('tenant.performance.ninety-day-goals.partials.customer-tracking-table')
   </div>
 
   {{-- ═══════════════════ Weekly Tracking ═══════════════════ --}}
@@ -472,6 +400,28 @@
   var strip = document.getElementById('ndgPrWeekStrip');
   var onWeek = strip ? strip.querySelector('.ndg-week-pill.on') : null;
   if (onWeek) { onWeek.scrollIntoView({ inline: 'center', block: 'nearest' }); }
+
+  // Send Reminder: nudges only whoever hasn't submitted the currently-selected week yet.
+  var remindBtn = document.getElementById('ndgPrRemindBtn');
+  if (remindBtn) {
+    remindBtn.addEventListener('click', function () {
+      var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+      remindBtn.disabled = true;
+      fetch('{{ route('performance.ninety-day-goals.program.remind', $program->id) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf },
+        body: JSON.stringify({ week: remindBtn.dataset.week }),
+      }).then(function (r) { return r.json(); })
+        .then(function (j) {
+          remindBtn.disabled = false;
+          var msg = j.message || 'Could not send the reminder.';
+          if (j.success) {
+            if (typeof window.showSuccessSwal === 'function') { window.showSuccessSwal(msg); } else { alert(msg); }
+          } else if (typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg); } else { alert(msg); }
+        })
+        .catch(function () { remindBtn.disabled = false; alert('Request failed. Try again.'); });
+    });
+  }
 })();
 
 document.addEventListener('DOMContentLoaded', function () {

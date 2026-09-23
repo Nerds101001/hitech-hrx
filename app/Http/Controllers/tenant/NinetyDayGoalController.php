@@ -11,6 +11,7 @@ use App\Models\NinetyDayRound;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\NinetyDayGoal\ProgramInvite;
+use App\Notifications\NinetyDayGoal\WeekReminder;
 use App\Services\NinetyDayGoalService as Goals;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -862,6 +863,60 @@ class NinetyDayGoalController extends Controller
             'rows'       => $rows,
             'salespeople' => $d['users'],
             'activity'   => $activity,
+        ]);
+    }
+
+    /** "Send Reminder" on a program's Overview page: nudges only the participants who still have
+     *  an unsubmitted customer status for the given week — nobody who is already done, nobody
+     *  outside this program. In-app notification only, per this app's no-real-mail rule. */
+    public function programSendReminder(Request $request, $id)
+    {
+        $admin = Auth::user();
+        if (!Goals::seesEveryone($admin)) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can send reminders.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $week = max(0, $request->integer('week', 0));
+
+        $participantIds = NinetyDayRound::where('program_id', $program->id)->pluck('user_id')->unique()->values();
+        $d = Goals::dashboard($participantIds->all(), ['program_id' => $program->id, 'round' => 'all']);
+
+        // Same "submitted every customer this week or not" tally programDetail() itself uses,
+        // just kept to who's short instead of a summary count.
+        $byUser = [];
+        foreach ($d['rows'] as $r) {
+            $ck = $r->goal->checkins->firstWhere('week_no', $week);
+            if (!$ck) {
+                continue;
+            }
+            $uid = $r->user->id;
+            $byUser[$uid]['total'] = ($byUser[$uid]['total'] ?? 0) + 1;
+            $byUser[$uid]['done']  = ($byUser[$uid]['done'] ?? 0) + ($ck->status !== null ? 1 : 0);
+        }
+        $targetIds = [];
+        foreach ($participantIds as $uid) {
+            $wk = $byUser[$uid] ?? null;
+            if ($wk && $wk['total'] > 0 && $wk['done'] < $wk['total']) {
+                $targetIds[] = $uid;
+            }
+        }
+        if (!$targetIds) {
+            return response()->json(['success' => true, 'message' => 'Everyone has already submitted week W' . $week . '.', 'count' => 0]);
+        }
+
+        $weekDue = $program->starts_on->copy()->addDays(7 * $week);
+        foreach (User::whereIn('id', $targetIds)->get() as $u) {
+            try {
+                $u->notify(new WeekReminder($program, $week, $weekDue));
+            } catch (\Throwable $e) {
+                Log::warning("90-Day Goals week reminder failed for user {$u->id}: " . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Reminder sent to ' . count($targetIds) . ' ' . \Illuminate\Support\Str::plural('salesperson', count($targetIds)) . ' for week W' . $week . '.',
+            'count'   => count($targetIds),
         ]);
     }
 
