@@ -159,9 +159,13 @@
   {{-- ═══════════════════ Program Overview ═══════════════════ --}}
   <div class="ndg-adm-section" data-section="overview">
 
-    {{-- Row 1: Program Wise Performance | Customer Status | Weekly Submission Compliance --}}
+    {{-- Row 1: Program Wise Performance | Customer Status | Weekly Submission Compliance.
+         Program Wise Performance only means something as a cross-program comparison — scoped to
+         one program it's just that program's own target vs. achieved re-shown as a lone bar,
+         already on the KPI cards above, so it drops out once a program is selected. --}}
+    @php $oneCol = $filters['program_id'] ? 'col-xl-6' : 'col-xl-4'; @endphp
     <div class="row g-4 mb-6">
-      @if($programChartData->isNotEmpty())
+      @if(!$filters['program_id'] && $programChartData->isNotEmpty())
       <div class="col-xl-4">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Program Wise Performance</div><div class="small text-muted">Target vs. actual, per program</div></div>
@@ -169,13 +173,13 @@
         </div>
       </div>
       @endif
-      <div class="col-xl-4">
+      <div class="{{ $oneCol }}">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Customer Status (All Programs)</div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Customer Status @if($selectedProgram)— {{ $selectedProgram->name }}@else(All Programs)@endif</div></div>
           <div class="card-body p-3"><div id="ndgPdStatusDonut"></div></div>
         </div>
       </div>
-      <div class="col-xl-4">
+      <div class="{{ $oneCol }}">
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Weekly Submission Compliance</div><div class="small text-muted">Submitted ÷ expected, per Monday</div></div>
           <div class="card-body p-3"><div id="ndgPdComplianceChart"></div></div>
