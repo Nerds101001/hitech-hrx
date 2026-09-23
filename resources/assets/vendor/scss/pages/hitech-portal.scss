@@ -621,6 +621,30 @@ div.dtr-modal div.dtr-modal-content {
     padding: 2rem !important;
 }
 
+// ── Scrollable modals must actually scroll ─────────────────
+// A form-heavy modal (e.g. the KPI/KRA "Edit KPI" dialog) is genuinely taller than most
+// viewports. Bootstrap's own .modal-dialog-scrollable already caps .modal-content and lets
+// .modal-body scroll, but this file's !important rules above only ever set overflow: hidden —
+// never a max-height or overflow-y — so on some viewports the modal simply ran off-screen with
+// no way to reach the rest of the form. This re-asserts the scrollable behaviour explicitly.
+.modal-dialog-scrollable {
+    .modal-content {
+        max-height: calc(100vh - 3.5rem) !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .modal-header, .modal-footer {
+        flex-shrink: 0 !important;
+    }
+
+    .modal-body {
+        overflow-y: auto !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+}
+
 // ── Table & Row Premium Styling ──
 .table-flush-spacing {
     border-collapse: separate !important;
