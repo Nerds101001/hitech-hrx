@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class TaskCc extends Model
+class TaskCc extends Model implements AuditableContract
 {
-  use TenantTrait;
+  use TenantTrait, Auditable;
 
   protected $table = 'task_ccs';
 

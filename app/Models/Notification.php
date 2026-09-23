@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Notification extends Model
+class Notification extends Model implements AuditableContract
 {
-  use UserActionsTrait, TenantTrait;
+  use UserActionsTrait, TenantTrait, Auditable;
 
   protected $table = 'notifications';
 

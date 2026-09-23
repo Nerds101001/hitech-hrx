@@ -9,10 +9,12 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class TelephonyCall extends Model
+class TelephonyCall extends Model implements AuditableContract
 {
-  use UserActionsTrait, TenantTrait, SoftDeletes;
+  use UserActionsTrait, TenantTrait, SoftDeletes, Auditable;
 
   protected $table = 'telephony_calls';
 

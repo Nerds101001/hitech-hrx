@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 use App\Traits\TenantTrait;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class UserDevice extends Model
+class UserDevice extends Model implements AuditableContract
 {
-  use TenantTrait, UserActionsTrait, SoftDeletes;
+  use TenantTrait, UserActionsTrait, SoftDeletes, Auditable;
 
   protected $table = 'user_devices';
 
