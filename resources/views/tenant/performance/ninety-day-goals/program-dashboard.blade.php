@@ -183,6 +183,7 @@
       </div>
     </div>
 
+    @if(!$filters['program_id'])
     {{-- All Programs Overview | Program Progress — every program, with a real View action --}}
     <div class="row g-4 mb-6">
       <div class="col-xl-8">
@@ -241,6 +242,67 @@
         </div>
       </div>
     </div>
+    @else
+    {{-- A specific program is selected: its own customer-level weekly tracking grid, not the
+         all-programs list — $rows is already scoped to this one program_id by buildAdminOverviewData(). --}}
+    <div class="row g-4 mb-6">
+      <div class="col-12">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <div>
+              <div class="fw-bold text-dark">Customer Tracking &amp; Weekly Updates @if($selectedProgram)— {{ $selectedProgram->name }}@endif</div>
+              <div class="small text-muted">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('customer', $allRowsCount) }} in this program</div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-3">
+              <div class="d-flex flex-wrap gap-3 small text-muted">
+                @foreach($G::STATUS_COLORS as $st => [$bg, $fg])
+                  <span class="d-inline-flex align-items-center gap-1"><span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:{{ $fg }}"></span>{{ $st }}</span>
+                @endforeach
+              </div>
+              @if($selectedProgram)
+                <a href="{{ route('performance.ninety-day-goals.program', $selectedProgram->id) }}" class="btn btn-sm btn-hitech-cancel rounded-pill px-3">Full Program Details →</a>
+              @endif
+            </div>
+          </div>
+          <div class="card-body p-0 ndg-mx-scroll">
+            <table class="ndg-mx" style="font-size:.74rem">
+              <thead><tr>
+                <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹</th>
+                @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
+                <th>Actual ₹</th><th>Ach.%</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+              @forelse($rows as $i => $r)
+                @php $cks = $r->goal->checkins->keyBy('week_no'); @endphp
+                <tr>
+                  <td class="ndg-mx-l" style="left:0">{{ ($rows->currentPage() - 1) * $rows->perPage() + $i + 1 }}</td>
+                  <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
+                  <td>{{ $r->goal->product }}</td>
+                  <td class="small text-muted">{{ $name($r->user) }}</td>
+                  <td>{{ number_format($r->goal->monthly_potential * 100000 / 100, 0) }}</td>
+                  @for($w = 0; $w < $weeks; $w++)
+                    @php
+                      $ck = $cks->get($w);
+                      $st = optional($ck)->status;
+                      [$bg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8']) : [null];
+                    @endphp
+                    <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $st ?: '—' }}"></td>
+                  @endfor
+                  <td class="fw-semibold">{{ number_format($r->achieved * 100000 / 100, 0) }}</td>
+                  <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
+                  <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+                </tr>
+              @empty
+                <tr><td colspan="{{ 8 + $weeks }}" class="text-center text-muted p-5">No customers have been added to this program yet.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+          <div class="card-body pt-3">{{ $rows->links() }}</div>
+        </div>
+      </div>
+    </div>
+    @endif
 
     {{-- Row 2: Top Performing Sales Persons | At Risk --}}
     <div class="row g-4 mb-6">

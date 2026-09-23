@@ -455,6 +455,9 @@ class NinetyDayGoalController extends Controller
 
         return [
             'filters'    => $f,
+            // The one program the "Select Program" pills narrowed to, or null for "All Programs" —
+            // lets the view swap the all-programs list for that program's own customer tracking.
+            'selectedProgram' => $f['program_id'] ? $programs->firstWhere('id', $f['program_id']) : null,
             'programs'   => $programs,
             'people'     => $people,
             'brands'     => array_merge(array_keys(Goals::BRANDS), ['Other']),
