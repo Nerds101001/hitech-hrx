@@ -1776,6 +1776,31 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertStringContainsString('Customers (1)', $html);
     }
 
+    public function test_program_detail_never_shows_a_salesperson_from_outside_the_program(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $result = Goals::createProgram($admin, 'Just Rep Co', Carbon::parse(self::MONDAY), Carbon::parse(self::MONDAY)->addDays(90), [$this->rep->id]);
+        // rep2 is a real salesperson in the company but was never invited to this program.
+
+        $html = app(NinetyDayGoalController::class)->programDetail($this->ask($admin, 'GET', '/x'), $result['program']->id)->render();
+
+        $this->assertStringNotContainsString(trim($this->rep2->first_name . ' ' . $this->rep2->last_name), $html,
+            "Top Performing Salespersons must only ever list this program's own participants");
+    }
+
+    public function test_program_detail_shows_a_clear_empty_state_not_a_confusing_zero_table(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $result = Goals::createProgram($admin, 'Nobody Added Anyone Co', Carbon::parse(self::MONDAY), Carbon::parse(self::MONDAY)->addDays(90), [$this->rep->id]);
+
+        $html = app(NinetyDayGoalController::class)->programDetail($this->ask($admin, 'GET', '/x'), $result['program']->id)->render();
+
+        $this->assertStringContainsString('No customers added yet', $html);
+        $this->assertStringContainsString('No customers have been added to this program yet', $html);
+    }
+
     public function test_program_dashboards_view_button_links_to_the_real_program_detail_page(): void
     {
         $admin = $this->person(null, 'admin');

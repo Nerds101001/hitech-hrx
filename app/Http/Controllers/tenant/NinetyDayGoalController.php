@@ -782,18 +782,22 @@ class NinetyDayGoalController extends Controller
             'week'       => $request->input('week') !== null && $request->input('week') !== '' ? (int) $request->input('week') : null,
             'brand'      => $request->input('brand') ?: null,
         ];
-        $people = Goals::salesStaff();
+        // Real participants: everyone with a round in this program, whether or not they have
+        // added a customer yet — not just the people who show up in $rows. Passed as the scope
+        // to dashboard() itself, not just used afterward — otherwise its own "every salesperson
+        // in scope, including idle ones" fallback pulls in the whole company's sales team, not
+        // just this program's, and Top Performing Salespersons shows people who were never in it.
+        $participantIds = NinetyDayRound::where('program_id', $program->id)->pluck('user_id')->unique()->values();
+        // Same reasoning for the salesperson filter dropdown: nobody outside this program has
+        // anything to filter to, so the list only offers this program's own participants.
+        $people = Goals::salesStaff()->whereIn('id', $participantIds);
         if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
             $f['user_id'] = null;
         }
 
-        $d = Goals::dashboard(null, $f);
+        $d = Goals::dashboard($participantIds->all(), $f);
         $rows = $this->adminViewRows($d, $f, $today);
         $weeks = $rows->isEmpty() ? Goals::WEEKS : $rows->max(fn ($r) => Goals::weeksOf($r->goal->round));
-
-        // Real participants: everyone with a round in this program, whether or not they have
-        // added a customer yet — not just the people who show up in $rows.
-        $participantIds = NinetyDayRound::where('program_id', $program->id)->pluck('user_id')->unique()->values();
         $atRisk = $this->attentionRows($rows, $today);
 
         // Which week is "current" for this program specifically, clamped to its own real span —

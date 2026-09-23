@@ -74,6 +74,18 @@
   {{-- ═══════════════════ Overview ═══════════════════ --}}
   <div class="ndg-pr-section" data-section="overview">
 
+    @if($cards['goals'] === 0)
+      <div class="hitech-card mb-6" style="border-color:#f5a623">
+        <div class="card-body p-4 d-flex align-items-center gap-3">
+          <i class="bx bx-info-circle fs-3" style="color:#f5a623"></i>
+          <div>
+            <div class="fw-bold text-dark">No customers added yet</div>
+            <div class="small text-muted">{{ $participants }} {{ \Illuminate\Support\Str::plural('person', $participants) }} {{ $participants === 1 ? 'is' : 'are' }} enrolled in this program, but none of them have added a target customer yet — every number below is genuinely zero, not an error.</div>
+          </div>
+        </div>
+      </div>
+    @endif
+
     {{-- KPI cards --}}
     <div class="row g-3 mb-6">
       @php
@@ -256,7 +268,7 @@
             <th>Actual ₹</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
           </tr></thead>
           <tbody>
-          @foreach($paged as $i => $r)
+          @forelse($paged as $i => $r)
             @php
               $cks = $r->goal->checkins->keyBy('week_no');
               $lastComment = $r->goal->checkins->whereNotNull('comment')->sortByDesc('week_no')->first();
@@ -281,7 +293,11 @@
               <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
               <td class="small text-muted" style="max-width:160px;white-space:normal">{{ $lastComment ? $lastComment->comment : '—' }}</td>
             </tr>
-          @endforeach
+          @empty
+            <tr><td colspan="{{ 9 + $weeks }}" class="text-center text-muted p-5">
+              No customers have been added to this program yet — {{ $participants }} {{ \Illuminate\Support\Str::plural('participant', $participants) }} enrolled, none have added a target customer.
+            </td></tr>
+          @endforelse
           </tbody>
         </table>
       </div>
