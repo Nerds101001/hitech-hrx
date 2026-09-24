@@ -173,7 +173,7 @@ class KpiScorecardPdfTest extends TestCase
         $all = app(SalesAssessmentController::class)->index($this->asUser($this->admin, "/performance/scorecards?pdf={$ym}&department_id={$this->dept->id}"));
         $this->assertStringStartsWith('%PDF', $all->getContent());
         $this->assertStringContainsString('all-', $all->headers->get('content-disposition'));
-        $this->assertGreaterThan(strlen($one->getContent()), strlen($all->getContent()), 'two people, two pages');
+        $this->assertGreaterThan(strlen($one->getContent()), strlen($all->getContent()), 'two people, two pages of one page each');
     }
 
     public function test_someone_without_the_manager_admin_or_hr_role_cannot_pull_a_colleague(): void
@@ -210,8 +210,10 @@ class KpiScorecardPdfTest extends TestCase
             $this->assertStringContainsString($needle, $html, $needle);
         }
         $this->assertSame(1, substr_count($html, 'MONTHLY KPI SCORECARD'), 'one title band per person');
-        $this->assertSame(1, substr_count($html, 'page-break-after: always'), 'one break, between page one and two; nothing trailing');
-        foreach (['Year to date', 'Needs attention this month', 'Remarks'] as $section) {
+        // One person, one page: a review is read side by side, not turned
+        // over. So a single card has NO break at all -- breaks separate people.
+        $this->assertSame(0, substr_count($html, 'page-break-after: always'), 'a single card must not break');
+        foreach (['Year to date', 'Needs attention', 'Remarks'] as $section) {
             $this->assertStringContainsString($section, $html);
         }
     }
@@ -221,7 +223,7 @@ class KpiScorecardPdfTest extends TestCase
         return preg_match_all('/\/Type\s*\/Page(?!s)/', $pdf);
     }
 
-    public function test_each_person_is_exactly_two_pages_in_a_bulk_file(): void
+    public function test_each_person_is_exactly_one_page_in_a_bulk_file(): void
     {
         $this->check($this->alice, 'ZZ Volume', 100, 60.0);
         $this->check($this->bob, 'ZZ Volume', 50, 30.0);
@@ -229,8 +231,8 @@ class KpiScorecardPdfTest extends TestCase
         $one  = KpiScorecardService::download(KpiScorecardService::cardsFor(collect([$this->alice]), $this->month), $this->month, 'a.pdf')->getContent();
         $both = KpiScorecardService::download(KpiScorecardService::cardsFor(collect([$this->alice, $this->bob]), $this->month), $this->month, 'b.pdf')->getContent();
 
-        $this->assertSame(2, $this->pageCount($one));
-        $this->assertSame(4, $this->pageCount($both));
+        $this->assertSame(1, $this->pageCount($one));
+        $this->assertSame(2, $this->pageCount($both));
     }
 
     public function test_year_to_date_lists_earlier_months_and_flags_what_needs_attention(): void
@@ -340,7 +342,11 @@ class KpiScorecardPdfTest extends TestCase
                 'status' => 'completed_on_time', 'achieved_value' => 1, 'score' => $score]);
         }
 
-        $card = KpiScorecardService::cardsFor(collect([$rep]), $this->month)->first();
+        // forMonth(), not cardsFor(): cardsFor() is the PRINT path and re-reads
+        // every auto source, which would recompute these hand-written points
+        // out of thin source data. What is under test here is the scale.
+        $card = KpiScorecardService::forMonth(collect([$rep]), $this->month)->first();
+        $card->onPoints = $card->onPoints ?? false;
 
         $this->assertSame(63.0, $card->earned);
         $this->assertSame(100.0, $card->possible, 'graded out of 100, not out of the 110 the weights add to');
