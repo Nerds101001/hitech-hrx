@@ -85,7 +85,6 @@
             "name": "Reports",
             "icon": "menu-icon bx bx-file",
             "slug": "reports.index",
-            "addon": "DisabledModule",
             "roles": [
                 "admin",
                 "hr",
