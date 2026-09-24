@@ -88,6 +88,18 @@
 .rp-panel-stat-value { font-size: 1.1rem; font-weight: 800; color: #1e293b; line-height: 1; }
 .rp-panel-stat-label { font-size: .6rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
 
+/* "Why is this sparse" truth banners */
+.rp-truth-banner { display: flex; align-items: flex-start; gap: 10px; padding: .8rem 1rem; border-radius: 12px; margin-top: 1rem; font-size: .8rem; line-height: 1.5; }
+.rp-truth-banner i { font-size: 1.15rem; flex-shrink: 0; margin-top: 1px; }
+.rp-truth-banner strong { display: block; margin-bottom: 2px; }
+.rp-truth-banner-info { background: rgba(77,108,240,.08); color: #364fc7; }
+.rp-truth-banner-info i { color: #4d6cf0; }
+.rp-truth-banner-warn { background: rgba(245,166,35,.1); color: #92610f; }
+.rp-truth-banner-warn i { color: #f5a623; }
+.rp-truth-banner-muted { background: #f8fafc; color: #64748b; border: 1px dashed #e2e8f0; }
+.rp-truth-banner-muted i { color: #94a3b8; }
+.rp-preview-link { font-size: .8rem; font-weight: 700; color: #127464 !important; text-decoration: underline; vertical-align: baseline; }
+
 /* Tabs */
 .rp-tabs { display: flex; gap: 1.5rem; margin-top: 1.1rem; border-bottom: 1px solid var(--hitech-border); }
 .rp-tab { padding: 10px 2px; font-size: .84rem; font-weight: 700; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }

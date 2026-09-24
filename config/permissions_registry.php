@@ -17,6 +17,10 @@ return [
         'dashboard.view' => 'View Dashboard',
     ],
 
+    'Announcements' => [
+        'announcements.manage' => 'Manage Announcements',
+    ],
+
     'Employees' => [
         'employee.view' => 'View Employee List',
         'employee.edit' => 'Edit Employee Profile',
@@ -94,6 +98,7 @@ return [
         'Move Job Application' => 'Move Application Between Stages',
         'Add Job Application Skill' => 'Tag Applicant Skills',
         'Add Job Application Note' => 'Add Applicant Notes',
+        'Delete Job Application Note' => 'Delete Applicant Notes',
         'Delete Job Application' => 'Delete Job Application',
     ],
 

@@ -149,6 +149,14 @@ document.addEventListener('DOMContentLoaded', function (e) {
     });
   });
 
+  // ── Panel: "see everything this role can reach" -> Preview Access ────
+  $(document).on('click', '.rp-preview-link', function () {
+    var roleName = $(this).data('role');
+    $('#previewTarget').val('role:' + roleName);
+    $('#previewAccessModal').modal('show');
+    $('#runPreview').trigger('click');
+  });
+
   // ── Panel: delete role ───────────────────────────────────────────────
   $(document).on('click', '.rp-delete-role', function () {
     window.deleteRole($(this).data('id'));

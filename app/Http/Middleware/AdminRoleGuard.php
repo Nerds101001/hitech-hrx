@@ -20,8 +20,13 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AdminRoleGuard
 {
-    /** Roles that grant admin dashboard access */
-    private const ADMIN_ROLES = ['admin', 'hr', 'accounts', 'manager'];
+    /**
+     * Roles that grant admin dashboard access by name alone, independent of
+     * the Spatie permission system. Public so RoleController/the permission
+     * editor can explain this on-screen instead of showing a sparse-looking
+     * checkbox grid with no context for why it's sparse.
+     */
+    public const ADMIN_ROLES = ['admin', 'hr', 'accounts', 'manager'];
 
     /**
      * Permissions that, by themselves, grant admin.guard passage. Public so

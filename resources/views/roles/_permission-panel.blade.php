@@ -45,6 +45,39 @@
     </div>
   </div>
 
+  {{-- Why this grid looks sparse for some roles: baseline page access for
+       several roles is decided by role NAME, not by anything below - being
+       explicit about that here beats a checkbox grid that just looks broken. --}}
+  @php
+    $adminAreaRoles = \App\Http\Middleware\AdminRoleGuard::ADMIN_ROLES;
+    $isAdminAreaRole = in_array($role->name, $adminAreaRoles);
+    $isBlockedEmployeeRole = in_array($role->name, ['employee', 'office_employee']);
+  @endphp
+  @if($isAdminAreaRole)
+    <div class="rp-truth-banner rp-truth-banner-info">
+      <i class="bx bx-key"></i>
+      <div>
+        <strong>@lang('Gets full admin-area access by role name alone.')</strong>
+        @lang('AdminRoleGuard grants every :roles role the whole admin dashboard directly - independent of any checkbox below. This matrix only controls the extra, specific capabilities layered on top (approvals, exports, management actions), not whether this role can reach admin pages at all.', ['roles' => implode(' / ', array_map('ucfirst', $adminAreaRoles))])
+      </div>
+    </div>
+  @elseif($isBlockedEmployeeRole)
+    <div class="rp-truth-banner rp-truth-banner-warn">
+      <i class="bx bx-block"></i>
+      <div>
+        <strong>@lang('Blocked from admin-area pages by role name, regardless of what\'s checked below.')</strong>
+        @lang('AdminRoleGuard always redirects this role away from admin pages unless one of a specific 7-permission allowlist is granted. Its baseline access (own dashboard, own attendance, self-service pages) is also role-based, not controlled by anything in this matrix - a plain employee legitimately holds few or none of these by default.')
+      </div>
+    </div>
+  @endif
+  <div class="rp-truth-banner rp-truth-banner-muted">
+    <i class="bx bx-info-circle"></i>
+    <div>
+      @lang('This shows only permissions that can be individually granted or revoked - not this role\'s full reachable page list, which depends on role name too.')
+      <button type="button" class="btn btn-link p-0 rp-preview-link" data-role="{{ $role->name }}">@lang('See everything this role can actually reach →')</button>
+    </div>
+  </div>
+
   {{-- Tabs --}}
   <div class="rp-tabs">
     <div class="rp-tab rp-tab-active" data-tab="modules">@lang('Module / Feature Permissions')</div>
