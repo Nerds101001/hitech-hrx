@@ -918,10 +918,14 @@ class EmployeeController extends Controller
    */
   public function initiateTermination(Request $request, User $user)
   {
-    /*// --- Authorization & Pre-condition Check ---
-     if (!Auth::user()->can('terminate employees')) { // Example permission
-     return Error::response('Permission denied.', 403);
-     }*/
+    // Was commented out entirely - the outer employees/* route gate (which
+    // OR's in narrow permissions like employee.kpa and employee.manage_device
+    // for unrelated tabs) was the only thing standing between a device-
+    // management delegate and terminating anyone. Matches moveToOnboarding's
+    // existing, correct check below.
+    if (!Auth::user()->hasRole(['admin', 'hr', 'super_admin']) && !Auth::user()->can('employee.lifecycle_action')) {
+      return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
+    }
     if ($user->status == UserAccountStatus::TERMINATED) { // Use Enum comparison
       return Error::response('Employee is already terminated.', 409);
     }
@@ -1011,11 +1015,10 @@ class EmployeeController extends Controller
    */
   public function confirmProbation(Request $request, User $user)
   {
-    /* // --- Authorization Check ---
-     // Example: Replace with your actual permission check
-     if (!Auth::user()->can('manage_probation')) {
-     return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
-     }*/
+    // Was commented out entirely - see initiateTermination() above for why.
+    if (!Auth::user()->hasRole(['admin', 'hr', 'super_admin']) && !Auth::user()->can('employee.lifecycle_action')) {
+      return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
+    }
 
     // --- Pre-condition Check ---
     // Check if user exists and is actually eligible for probation confirmation
@@ -1097,10 +1100,10 @@ class EmployeeController extends Controller
    */
   public function extendProbation(Request $request, User $user): JsonResponse
   {
-    /* // --- Authorization Check ---
-     if (!Auth::user()->can('manage_probation')) { // Example permission
-     return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
-     }*/
+    // Was commented out entirely - see initiateTermination() above for why.
+    if (!Auth::user()->hasRole(['admin', 'hr', 'super_admin']) && !Auth::user()->can('employee.lifecycle_action')) {
+      return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
+    }
 
     // --- Pre-condition Check ---
     if ($user->probation_confirmed_at !== null) {
@@ -1175,11 +1178,10 @@ class EmployeeController extends Controller
    */
   public function failProbation(Request $request, User $user): JsonResponse
   {
-    // --- Authorization Check ---
-    // Failing probation often leads to termination, might require termination permission
-    /* if (!Auth::user()->can('manage_probation') || !Auth::user()->can('terminate_employees')) {
-     return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
-     }*/
+    // Was commented out entirely - see initiateTermination() above for why.
+    if (!Auth::user()->hasRole(['admin', 'hr', 'super_admin']) && !Auth::user()->can('employee.lifecycle_action')) {
+      return response()->json(['success' => false, 'message' => 'Permission denied.'], 403);
+    }
 
     // --- Pre-condition Check ---
     if ($user->probation_confirmed_at !== null) {
@@ -2152,7 +2154,7 @@ class EmployeeController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
-    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin']) && !auth()->user()->can('employee.lifecycle_action')) {
       return Error::response('Unauthorized action.', 403);
     }
 
@@ -2173,7 +2175,7 @@ class EmployeeController extends Controller
       return Error::response('This feature is disabled in the demo.');
     }
 
-    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin'])) {
+    if (!auth()->user()->hasRole(['admin', 'hr', 'super_admin']) && !auth()->user()->can('employee.lifecycle_action')) {
       return Error::response('Unauthorized action.', 403);
     }
 

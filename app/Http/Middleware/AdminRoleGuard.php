@@ -37,6 +37,15 @@ class AdminRoleGuard
         'loans.view_all',
         'loans.approve',
         'onboarding.manage',
+        // Added 2026-09: verified via `route:list -v` the same way as the six
+        // above - employee.lifecycle_action only sits behind route middleware
+        // inside employees/* (terminate, confirm/extend/fail probation,
+        // relieve, retire), all within this guard's own route tree. Those
+        // controller methods now check it (see EmployeeController), so
+        // without it here, granting the permission alone would look like it
+        // worked and silently do nothing - blocked at this guard before ever
+        // reaching that check.
+        'employee.lifecycle_action',
     ];
 
     /**
