@@ -7,58 +7,72 @@ use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
- * The fill-in sheet for one KPI, one month, one team.
+ * The fill-in sheet: one row per person, one column per KPI.
  *
- * Column A carries the assignment id and is what the import matches on -- a
- * name can be spelled two ways or shared by two people, an id cannot. It is
- * locked and greyed so nobody edits it by accident, and any row whose id the
- * uploader is not entitled to fill is rejected on the way back in.
+ * A matrix rather than a sheet per KPI, because that is the shape the numbers
+ * arrive in -- one report listing everyone's calls, quotations and upsells
+ * side by side. Choose one KPI and it is simply a one-column matrix.
+ *
+ * Column A carries the USER id and is what the import matches rows on; a name
+ * can be spelled two ways or shared by two people, an id cannot. The KPI
+ * columns are matched by their header text, so a reordered or partly deleted
+ * sheet still lands in the right KPI.
  */
 class KpiBulkEntryExport implements FromArray, WithTitle, ShouldAutoSize, WithEvents
 {
     private const HEADER_ROWS = 2;
+    private const FIXED_COLS = 3;      // id, employee, department
 
     public function __construct(
-        private $template,
+        private $templates,
         private \Carbon\Carbon $month,
         private $rows,
     ) {}
 
     public function title(): string
     {
-        return mb_substr(preg_replace('/[:\\\\\/?*\[\]]/', '-', $this->template->title) ?: 'KPI', 0, 31);
+        $t = $this->templates->count() === 1 ? $this->templates->first()->title : 'KPI Entry';
+
+        return mb_substr(preg_replace('/[:\\\\\/?*\[\]]/', '-', $t) ?: 'KPI', 0, 31);
     }
 
     public function array(): array
     {
-        $target = $this->template->target_value;
+        $titles = $this->templates->pluck('title')->all();
+
+        $intro = $this->month->format('F Y') . '   ·   fill the shaded columns and upload this file back'
+            . '   ·   do not edit column A or the header row';
+
+        $header = ['User ID (do not edit)', 'Employee', 'Department'];
+        foreach ($this->templates as $t) {
+            // The header text is how the import knows which KPI a column is.
+            $header[] = $t->title;
+        }
 
         $out = [
-            [
-                $this->template->title . '  —  ' . $this->month->format('F Y')
-                . ($target ? '   (target ' . rtrim(rtrim(number_format((float) $target, 2), '0'), '.') . ')' : '')
-                . '   ·   fill the VALUE column and upload this file back',
-            ],
-            ['ID (do not edit)', 'Employee', 'Department', 'VALUE', 'Note (optional)'],
+            array_pad([$intro], count($header), null),
+            $header,
         ];
 
-        foreach ($this->rows as $a) {
-            $out[] = [
-                $a->id,
-                trim(($a->user->first_name ?? '') . ' ' . ($a->user->last_name ?? '')),
-                $a->user->department->name ?? '—',
-                null,
-                null,
-            ];
+        foreach ($this->rows as $r) {
+            $line = [$r->user->id, $r->name, $r->department];
+            foreach ($this->templates as $t) {
+                $cell = $r->cells[$t->id] ?? null;
+                // Pre-fill what is already recorded, so this doubles as a
+                // correction sheet rather than only a blank form.
+                $line[] = ($cell && $cell->value !== null) ? (float) $cell->value : null;
+            }
+            $out[] = $line;
         }
 
         if (count($out) === self::HEADER_ROWS) {
-            $out[] = ['', 'Nobody is assigned this KPI.', '', '', ''];
+            $out[] = array_pad(['', 'Nobody is assigned the KPIs you chose.'], count($header), null);
         }
 
         return $out;
@@ -71,38 +85,45 @@ class KpiBulkEntryExport implements FromArray, WithTitle, ShouldAutoSize, WithEv
                 $sheet = $e->sheet->getDelegate();
                 $last = $sheet->getHighestRow();
                 $hdr = self::HEADER_ROWS;
+                $cols = self::FIXED_COLS + $this->templates->count();
+                $lastCol = Coordinate::stringFromColumnIndex($cols);
 
-                $sheet->mergeCells('A1:E1');
-                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12)
-                    ->getColor()->setARGB('FF1E3A5F');
+                $sheet->mergeCells("A1:{$lastCol}1");
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12)->getColor()->setARGB('FF1E3A5F');
                 $sheet->getRowDimension(1)->setRowHeight(22);
 
-                $sheet->getStyle("A{$hdr}:E{$hdr}")->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
-                $sheet->getStyle("A{$hdr}:E{$hdr}")->getFill()->setFillType(Fill::FILL_SOLID)
+                $sheet->getStyle("A{$hdr}:{$lastCol}{$hdr}")->getFont()->setBold(true)->getColor()->setARGB('FFFFFFFF');
+                $sheet->getStyle("A{$hdr}:{$lastCol}{$hdr}")->getFill()->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setARGB('FF0F766E');
-                $sheet->getStyle("A{$hdr}:E{$hdr}")->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("A{$hdr}:{$lastCol}{$hdr}")->getAlignment()
+                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                    ->setVertical(Alignment::VERTICAL_CENTER)->setWrapText(true);
+                $sheet->getRowDimension($hdr)->setRowHeight(30);
 
                 if ($last <= $hdr) {
                     return;
                 }
 
-                $sheet->getStyle("A{$hdr}:E{$last}")->getBorders()->getAllBorders()
+                $sheet->getStyle("A{$hdr}:{$lastCol}{$last}")->getBorders()->getAllBorders()
                     ->setBorderStyle(Border::BORDER_THIN)->getColor()->setARGB('FFD0D7DE');
 
-                // The id column is reference data, not something to type in.
+                // Reference data, not something to type in.
                 $sheet->getStyle('A' . ($hdr + 1) . ":A{$last}")->getFill()->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setARGB('FFF1F5F9');
                 $sheet->getStyle('A' . ($hdr + 1) . ":A{$last}")->getFont()->getColor()->setARGB('FF94A3B8');
 
-                // The one column anyone should be typing in.
-                $sheet->getStyle('D' . ($hdr + 1) . ":D{$last}")->getFill()->setFillType(Fill::FILL_SOLID)
-                    ->getStartColor()->setARGB('FFFEF9C3');
-                $sheet->getStyle('D' . ($hdr + 1) . ":D{$last}")->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle('D' . ($hdr + 1) . ":D{$last}")->getNumberFormat()->setFormatCode('#,##0.00');
+                // Every KPI column is one to type in.
+                for ($c = self::FIXED_COLS + 1; $c <= $cols; $c++) {
+                    $col = Coordinate::stringFromColumnIndex($c);
+                    $range = $col . ($hdr + 1) . ':' . $col . $last;
+                    $sheet->getStyle($range)->getFill()->setFillType(Fill::FILL_SOLID)
+                        ->getStartColor()->setARGB('FFFEF9C3');
+                    $sheet->getStyle($range)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle($range)->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->getColumnDimension($col)->setWidth(16);
+                }
 
-                $sheet->freezePane('A' . ($hdr + 1));
+                $sheet->freezePane('D' . ($hdr + 1));
             },
         ];
     }

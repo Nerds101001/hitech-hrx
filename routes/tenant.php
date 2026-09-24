@@ -1229,6 +1229,8 @@ Route::middleware([
             Route::post('/bulk-entry', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'store'])->name('bulk-entry.store');
             Route::get('/bulk-entry/template', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'template'])->name('bulk-entry.template');
             Route::post('/bulk-entry/import', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'import'])->name('bulk-entry.import');
+            Route::get('/bulk-entry/preview', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'preview'])->name('bulk-entry.preview');
+            Route::post('/bulk-entry/import/apply', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'importApply'])->name('bulk-entry.import.apply');
             Route::post('/bulk-entry/owner', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'addOwner'])->name('bulk-entry.owner.add');
             Route::delete('/bulk-entry/owner/{id}', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'removeOwner'])->name('bulk-entry.owner.remove');
         });

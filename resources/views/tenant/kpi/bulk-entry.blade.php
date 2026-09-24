@@ -15,19 +15,31 @@
     .bk-note { font-size:12px; color:#64748b; padding:10px 20px; background:#f8fafc; border-bottom:1px solid #eef2f6; }
     .bk-note strong { color:#0f766e; }
 
+    /* KPI chooser */
+    .kpi-pick { display:flex; flex-wrap:wrap; gap:8px; }
+    .kpi-chip { position:relative; }
+    .kpi-chip input { position:absolute; opacity:0; pointer-events:none; }
+    .kpi-chip span {
+        display:inline-block; padding:7px 14px; border-radius:999px; cursor:pointer;
+        border:1.5px solid #cbd5e1; background:#fff; font-size:12.5px; font-weight:600; color:#475569;
+        transition:all .12s;
+    }
+    .kpi-chip input:checked + span { background:#0f766e; border-color:#0f766e; color:#fff; }
+    .kpi-chip span:hover { border-color:#0f766e; }
+
     table.bk { width:100%; border-collapse:collapse; font-size:13px; }
     table.bk thead th { background:#0f2848; color:#fff; font-weight:600; font-size:11.5px; text-align:left;
-        padding:9px 12px; position:sticky; top:0; z-index:2; }
-    table.bk tbody td { border-bottom:1px solid #eef2f6; padding:7px 12px; vertical-align:middle; }
+        padding:9px 12px; position:sticky; top:0; z-index:2; white-space:nowrap; }
+    table.bk thead th.kpi-col { text-align:center; background:#0f766e; }
+    table.bk tbody td { border-bottom:1px solid #eef2f6; padding:6px 12px; vertical-align:middle; }
     table.bk tbody tr:hover { background:#f8fafc; }
     .bk-emp { font-weight:600; color:#1e3a5f; }
     .bk-dept { font-size:11.5px; color:#64748b; }
-    .bk-val input { width:110px; text-align:center; font-weight:600; }
-    .bk-note-in input { width:100%; }
-    .bk-filled { background:#f0fdf4 !important; }
-
+    .bk-cell { text-align:center; }
+    .bk-cell input { width:96px; text-align:center; font-weight:600; }
+    .bk-cell.filled input { background:#f0fdf4; border-color:#86efac; }
+    .bk-na { color:#cbd5e1; font-size:11px; }
     .bk-empty { padding:36px; text-align:center; color:#94a3b8; }
-    .owner-row td { font-size:12.5px; }
 </style>
 
 <div class="bk-page">
@@ -41,7 +53,7 @@
 
     @foreach (['success' => 'success', 'warning' => 'warning', 'error' => 'danger'] as $key => $cls)
         @if(session($key))
-            <div class="alert alert-{{ $cls }} alert-dismissible" role="alert">
+            <div class="alert alert-{{ $cls }} alert-dismissible">
                 {{ session($key) }}
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
@@ -55,123 +67,125 @@
         </div></div>
     @else
 
-    {{-- Pick the KPI and the month --}}
+    {{-- Choose KPIs + month --}}
     <div class="bk-card">
-        <div class="bk-card-head">
-            <h6>Choose what to fill</h6>
+        <div class="bk-card-head"><h6>Choose what to fill</h6></div>
+        <div class="bk-note">
+            Tick as many KPIs as you report together — the grid and the spreadsheet both get one column per KPI.
         </div>
         <div class="p-3">
-            <form method="GET" class="row g-2 align-items-end">
-                <div class="col-md-5">
-                    <label class="form-label small mb-1">KPI</label>
-                    <select name="template" class="form-select form-select-sm" onchange="this.form.submit()">
-                        @foreach($templates as $t)
-                            <option value="{{ $t->id }}" {{ $template && $template->id == $t->id ? 'selected' : '' }}>
-                                {{ $t->title }}@if($t->target_value) — target {{ rtrim(rtrim(number_format((float)$t->target_value, 2), '0'), '.') }}@endif
-                            </option>
-                        @endforeach
-                    </select>
+            <form method="GET" id="pickForm">
+                <div class="kpi-pick mb-3">
+                    @foreach($templates as $t)
+                        <label class="kpi-chip">
+                            <input type="checkbox" name="templates[]" value="{{ $t->id }}"
+                                   {{ in_array($t->id, $selectedIds) ? 'checked' : '' }}
+                                   onchange="document.getElementById('pickForm').submit()">
+                            <span>{{ $t->title }}</span>
+                        </label>
+                    @endforeach
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small mb-1">Month</label>
-                    <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
-                        @foreach($months as $m)
-                            <option value="{{ $m->format('Y-m') }}" {{ $month->format('Y-m') === $m->format('Y-m') ? 'selected' : '' }}>
-                                {{ $m->format('F Y') }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="col-md-4 d-flex gap-2">
-                    <a class="btn btn-sm btn-outline-success rounded-pill px-3"
-                       href="{{ route('tenant.kpi.bulk-entry.template', ['template' => $template->id ?? 0, 'month' => $month->format('Y-m')]) }}">
-                        <i class="bx bx-download me-1"></i> Excel
-                    </a>
-                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3"
-                            data-bs-toggle="modal" data-bs-target="#importModal">
-                        <i class="bx bx-upload me-1"></i> Upload filled
-                    </button>
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Month</label>
+                        <select name="month" class="form-select form-select-sm" onchange="this.form.submit()">
+                            @foreach($months as $m)
+                                <option value="{{ $m->format('Y-m') }}" {{ $month->format('Y-m') === $m->format('Y-m') ? 'selected' : '' }}>
+                                    {{ $m->format('F Y') }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-9 d-flex gap-2">
+                        <a class="btn btn-sm btn-outline-success rounded-pill px-3"
+                           href="{{ route('tenant.kpi.bulk-entry.template', array_merge(['month' => $month->format('Y-m')], ['templates' => $selectedIds])) }}">
+                            <i class="bx bx-download me-1"></i> Download Excel ({{ count($selectedIds) }} {{ \Illuminate\Support\Str::plural('KPI', count($selectedIds)) }})
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3"
+                                data-bs-toggle="modal" data-bs-target="#importModal">
+                            <i class="bx bx-upload me-1"></i> Upload filled
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 
-    {{-- The grid --}}
+    {{-- The matrix --}}
     <div class="bk-card">
         <div class="bk-card-head">
-            <h6>{{ $template->title ?? 'KPI' }} — {{ $month->format('F Y') }}</h6>
+            <h6>{{ $month->format('F Y') }}</h6>
             <span class="badge bg-label-secondary">{{ $rows->count() }} {{ \Illuminate\Support\Str::plural('person', $rows->count()) }}</span>
         </div>
         <div class="bk-note">
-            Whatever you enter here counts immediately — <strong>no approval step</strong>. You are recorded as the
-            source. Leave a box empty to clear a figure rather than storing a zero, so "not reported" stays
-            distinguishable from "reported as none".
+            Whatever you enter counts immediately — <strong>no approval step</strong>. You are recorded as the source.
+            Leave a box empty to clear a figure rather than storing a zero, so "not reported" stays distinguishable
+            from "reported as none". A dash means that person does not carry that KPI.
         </div>
 
         <form method="POST" action="{{ route('tenant.kpi.bulk-entry.store') }}">
             @csrf
-            <input type="hidden" name="template" value="{{ $template->id ?? '' }}">
             <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
+            @foreach($selectedIds as $tid)
+                <input type="hidden" name="templates[]" value="{{ $tid }}">
+            @endforeach
 
             <div style="max-height:62vh; overflow:auto;">
                 <table class="bk">
                     <thead>
                         <tr>
-                            <th style="width:46px">#</th>
+                            <th style="width:44px">#</th>
                             <th>Employee</th>
-                            <th style="width:170px">Department</th>
-                            <th style="width:140px">Value</th>
-                            <th>Note (optional)</th>
-                            <th style="width:110px">Current</th>
+                            <th style="width:160px">Department</th>
+                            @foreach($selected as $t)
+                                <th class="kpi-col">
+                                    {{ $t->title }}
+                                    @if($t->target_value)
+                                        <div style="font-weight:500;opacity:.8;font-size:10px">target {{ rtrim(rtrim(number_format((float)$t->target_value, 2), '0'), '.') }}</div>
+                                    @endif
+                                </th>
+                            @endforeach
                         </tr>
                     </thead>
                     <tbody>
                         @forelse($rows as $i => $r)
-                            <tr class="{{ $r->value !== null ? 'bk-filled' : '' }}">
+                            <tr>
                                 <td class="text-muted">{{ $i + 1 }}</td>
-                                <td>
-                                    <div class="bk-emp">{{ trim($r->employee->first_name . ' ' . $r->employee->last_name) }}</div>
-                                </td>
+                                <td><div class="bk-emp">{{ $r->name }}</div></td>
                                 <td class="bk-dept">{{ $r->department }}</td>
-                                <td class="bk-val">
-                                    <input type="number" step="0.01" min="0" class="form-control form-control-sm"
-                                           name="values[{{ $r->assignment->id }}]"
-                                           value="{{ $r->value !== null ? rtrim(rtrim(number_format((float)$r->value, 2, '.', ''), '0'), '.') : '' }}"
-                                           placeholder="—">
-                                </td>
-                                <td class="bk-note-in">
-                                    <input type="text" class="form-control form-control-sm"
-                                           name="notes[{{ $r->assignment->id }}]"
-                                           value="{{ $r->note }}" placeholder="optional">
-                                </td>
-                                <td>
-                                    @if($r->status)
-                                        <span class="badge bg-label-{{ $r->status === 'approved' ? 'success' : ($r->status === 'rejected' ? 'danger' : 'warning') }}">
-                                            {{ ucfirst($r->status) }}
-                                        </span>
-                                    @else
-                                        <span class="text-muted small">not reported</span>
-                                    @endif
-                                </td>
+                                @foreach($selected as $t)
+                                    @php $c = $r->cells[$t->id] ?? null; @endphp
+                                    <td class="bk-cell {{ $c && $c->value !== null ? 'filled' : '' }}">
+                                        @if($c && $c->assignment_id)
+                                            <input type="number" step="0.01" min="0" class="form-control form-control-sm"
+                                                   name="values[{{ $c->assignment_id }}]"
+                                                   value="{{ $c->value !== null ? rtrim(rtrim(number_format((float)$c->value, 2, '.', ''), '0'), '.') : '' }}"
+                                                   placeholder="—">
+                                        @else
+                                            <span class="bk-na">—</span>
+                                        @endif
+                                    </td>
+                                @endforeach
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="bk-empty">Nobody is assigned this KPI.</td></tr>
+                            <tr><td colspan="{{ 3 + $selected->count() }}" class="bk-empty">
+                                Nobody is assigned the {{ \Illuminate\Support\Str::plural('KPI', $selected->count()) }} you chose.
+                            </td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
 
             @if($rows->isNotEmpty())
-                <div class="p-3 border-top d-flex justify-content-end gap-2">
-                    <button class="btn btn-hitech-primary rounded-pill px-4">
-                        <i class="bx bx-save me-1"></i> Save all
-                    </button>
+                <div class="p-3 border-top d-flex justify-content-end">
+                    <button class="btn btn-hitech-primary rounded-pill px-4"><i class="bx bx-save me-1"></i> Save all</button>
                 </div>
             @endif
         </form>
     </div>
 
-    {{-- Who owns what --}}
+    {{-- Ownership --}}
     @if($isKpiAdmin)
     <div class="bk-card">
         <div class="bk-card-head">
@@ -182,16 +196,13 @@
             An owner fills that KPI for everyone, without approval. Leave the department blank to cover every team,
             or set it so one person owns Calls for New Biz while somebody else owns it for Sales.
         </div>
-
         <div class="p-3">
             <form method="POST" action="{{ route('tenant.kpi.bulk-entry.owner.add') }}" class="row g-2 align-items-end mb-3">
                 @csrf
                 <div class="col-md-4">
                     <label class="form-label small mb-1">KPI</label>
                     <select name="kpi_template_id" class="form-select form-select-sm" required>
-                        @foreach($allManualTemplates as $t)
-                            <option value="{{ $t->id }}">{{ $t->title }}</option>
-                        @endforeach
+                        @foreach($templates as $t)<option value="{{ $t->id }}">{{ $t->title }}</option>@endforeach
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -206,25 +217,19 @@
                     <label class="form-label small mb-1">Department (optional)</label>
                     <select name="department_id" class="form-select form-select-sm">
                         <option value="">All departments</option>
-                        @foreach($departments as $d)
-                            <option value="{{ $d->id }}">{{ $d->name }}</option>
-                        @endforeach
+                        @foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach
                     </select>
                 </div>
                 <div class="col-md-2">
-                    <button class="btn btn-sm btn-hitech-primary w-100 rounded-pill">
-                        <i class="bx bx-plus"></i> Add
-                    </button>
+                    <button class="btn btn-sm btn-hitech-primary w-100 rounded-pill"><i class="bx bx-plus"></i> Add</button>
                 </div>
             </form>
 
             <table class="bk">
-                <thead>
-                    <tr><th>KPI</th><th>Owner</th><th>Scope</th><th style="width:90px"></th></tr>
-                </thead>
+                <thead><tr><th>KPI</th><th>Owner</th><th>Scope</th><th style="width:80px"></th></tr></thead>
                 <tbody>
                     @forelse($owners as $o)
-                        <tr class="owner-row">
+                        <tr>
                             <td>{{ $o->template->title ?? '—' }}</td>
                             <td class="bk-emp">{{ trim(($o->user->first_name ?? '') . ' ' . ($o->user->last_name ?? '')) }}</td>
                             <td>{{ $o->department->name ?? 'All departments' }}</td>
@@ -232,9 +237,7 @@
                                 <form method="POST" action="{{ route('tenant.kpi.bulk-entry.owner.remove', $o->id) }}"
                                       onsubmit="return confirm('Remove this data owner?')">
                                     @csrf @method('DELETE')
-                                    <button class="btn btn-sm btn-outline-danger rounded-pill px-2">
-                                        <i class="bx bx-trash"></i>
-                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger rounded-pill px-2"><i class="bx bx-trash"></i></button>
                                 </form>
                             </td>
                         </tr>
@@ -250,29 +253,30 @@
     @endif
 </div>
 
-{{-- Upload a filled sheet --}}
 <div class="modal fade" id="importModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form class="modal-content" method="POST" enctype="multipart/form-data"
               action="{{ route('tenant.kpi.bulk-entry.import') }}">
             @csrf
-            <input type="hidden" name="template" value="{{ $template->id ?? '' }}">
             <input type="hidden" name="month" value="{{ $month->format('Y-m') }}">
+            @foreach($selectedIds as $tid)<input type="hidden" name="templates[]" value="{{ $tid }}">@endforeach
             <div class="modal-header">
                 <h5 class="modal-title">Upload filled sheet</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <p class="text-muted small mb-2">
+                    You'll see a preview of every change before anything is saved.
+                </p>
                 <p class="text-muted small">
-                    Download the Excel for <strong>{{ $template->title ?? 'this KPI' }}</strong>,
-                    fill the <strong>VALUE</strong> column and upload it back. The ID column is what rows are
-                    matched on — don't edit it. Anything outside what you may fill is skipped and reported.
+                    Columns are matched by their <strong>header text</strong> and rows by the <strong>User ID</strong>
+                    in column A — so don't edit those. Anything outside what you may fill is listed and skipped.
                 </p>
                 <input type="file" name="file" class="form-control" accept=".xlsx,.xls,.csv" required>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-hitech-primary"><i class="bx bx-upload me-1"></i> Import</button>
+                <button class="btn btn-hitech-primary"><i class="bx bx-search-alt me-1"></i> Preview</button>
             </div>
         </form>
     </div>

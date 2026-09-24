@@ -18,22 +18,25 @@ use Illuminate\Support\Facades\DB;
  * Filling the manual KPIs for a whole team in one go.
  *
  * The manual KPIs were built as self-reporting with HR approval on each
- * number. That is not how the data actually arrives: call hours come off the
- * GSM gateway, quotation counts out of the CRM, and one person holds the real
+ * number. That is not how the data arrives: call hours come off the GSM
+ * gateway, quotation counts out of the CRM, and one person holds the real
  * figure for everybody. Asking seventeen people to each type their own and
- * then queue for approval produced five reports out of seventeen in September
- * and 473 unclaimed marks.
+ * queue for approval produced five reports out of seventeen in September and
+ * 473 unclaimed marks.
  *
- * So: a KPI can have a data OWNER (see kpi_data_owners), and an owner fills
- * that one KPI for every assignee at once -- on screen or from a spreadsheet.
- * Their figure needs no approval, because they are the source.
+ * So a KPI can have a data OWNER, and an owner fills it for every assignee at
+ * once. Several KPIs can be filled together: the grid and the spreadsheet both
+ * become a matrix, one row per person and one column per KPI, which is how the
+ * numbers actually arrive -- a single report listing everyone's calls,
+ * quotations and upsells side by side.
  *
- * Admin and HR can fill any KPI and manage who owns what. Everyone else sees
- * only the KPIs they own, for the departments they own them in.
+ * An owner's figure needs no approval, because they are the source.
  */
 class KpiBulkEntryController extends Controller
 {
-    /** Admin/HR may fill anything and assign owners. */
+    /** Where a parsed upload waits while the user looks at the preview. */
+    private const PREVIEW_KEY = 'kpi_bulk_preview';
+
     private function isKpiAdmin(?User $user): bool
     {
         return $user && ($user->hasRole(['admin', 'hr']) || $user->can('kpi.manage'));
@@ -44,7 +47,8 @@ class KpiBulkEntryController extends Controller
     {
         $manualTemplateIds = KpiAssignment::where('is_active', 1)
             ->where(fn ($q) => $q->whereNull('data_source')->orWhereIn('data_source', ['approval', 'manual']))
-            ->distinct()->pluck('kpi_template_id')->filter();
+            ->whereNotNull('kpi_template_id')
+            ->distinct()->pluck('kpi_template_id');
 
         $query = KpiTemplate::whereIn('id', $manualTemplateIds)->orderBy('title');
 
@@ -59,24 +63,97 @@ class KpiBulkEntryController extends Controller
         return $query->get();
     }
 
-    /** Assignees of $template the current user may fill, honouring department scope. */
-    private function assigneesFor(User $user, KpiTemplate $template)
+    /**
+     * Active assignments of $templateIds this user may fill.
+     *
+     * The status test is done in SQL on purpose. users.status is cast to the
+     * UserAccountStatus enum, so comparing $a->user->status to the string
+     * 'active' in PHP is never true -- it silently filtered out every person
+     * and the grid came up empty for a KPI that had seventeen assignees.
+     */
+    private function assignmentsFor(User $user, array $templateIds)
     {
-        $query = KpiAssignment::with('user.department')
-            ->where('kpi_template_id', $template->id)
-            ->where('is_active', 1);
+        if ($templateIds === []) {
+            return collect();
+        }
+
+        $query = KpiAssignment::with(['user.department'])
+            ->whereIn('kpi_template_id', $templateIds)
+            ->where('is_active', 1)
+            ->whereHas('user', fn ($q) => $q->where('status', 'active')->whereNull('deleted_at'));
 
         if (!$this->isKpiAdmin($user)) {
-            $depts = KpiDataOwner::departmentScopeFor($user, $template->id);
-            if ($depts !== []) {
-                $query->whereIn('user_id', User::whereIn('department_id', $depts)->pluck('id'));
+            // A department-scoped owner only fills their own teams.
+            $scopes = [];
+            $unrestricted = false;
+            foreach ($templateIds as $tid) {
+                $s = KpiDataOwner::departmentScopeFor($user, $tid);
+                if ($s === []) {
+                    $unrestricted = true;
+                    break;
+                }
+                $scopes = array_merge($scopes, $s);
+            }
+            if (!$unrestricted && $scopes !== []) {
+                $query->whereIn('user_id', User::whereIn('department_id', array_unique($scopes))->pluck('id'));
             }
         }
 
-        return $query->get()
-            ->filter(fn ($a) => $a->user && $a->user->status === 'active')
-            ->sortBy(fn ($a) => mb_strtolower($a->user->first_name . ' ' . $a->user->last_name))
+        return $query->get();
+    }
+
+    /** Rows of [employee, department, value per template] for the grid and the sheet. */
+    private function matrix($assignments, Carbon $month, array $templateIds): \Illuminate\Support\Collection
+    {
+        $existing = DB::table('kpi_entries')
+            ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
+            ->whereDate('period_start', '>=', $month->toDateString())
+            ->whereDate('period_start', '<=', $month->copy()->endOfMonth()->toDateString())
+            ->get()->keyBy('kpi_assignment_id');
+
+        return $assignments
+            ->groupBy('user_id')
+            ->map(function ($forUser) use ($existing, $templateIds) {
+                $first = $forUser->first();
+                $cells = [];
+
+                foreach ($templateIds as $tid) {
+                    $a = $forUser->firstWhere('kpi_template_id', $tid);
+                    $e = $a ? $existing->get($a->id) : null;
+                    $cells[$tid] = (object) [
+                        'assignment_id' => $a->id ?? null,
+                        'value' => $e->value ?? null,
+                        'status' => $e->status ?? null,
+                        'note' => $e->note ?? null,
+                    ];
+                }
+
+                return (object) [
+                    'user' => $first->user,
+                    'name' => trim(($first->user->first_name ?? '') . ' ' . ($first->user->last_name ?? '')),
+                    'department' => $first->user->department->name ?? '—',
+                    'cells' => $cells,
+                ];
+            })
+            ->sortBy(fn ($r) => mb_strtolower($r->name))
             ->values();
+    }
+
+    /** Template ids requested, narrowed to the ones this user may actually fill. */
+    private function requestedTemplates(Request $request, $fillable): array
+    {
+        $asked = (array) ($request->input('templates') ?: array_filter([$request->input('template')]));
+        $asked = array_values(array_unique(array_map('intval', $asked)));
+
+        $allowed = $fillable->pluck('id')->all();
+        $ids = array_values(array_intersect($asked, $allowed));
+
+        // Nothing chosen yet: start on the first one so the page is never blank.
+        if ($ids === [] && $fillable->isNotEmpty()) {
+            $ids = [$fillable->first()->id];
+        }
+
+        return $ids;
     }
 
     public function index(Request $request)
@@ -87,75 +164,46 @@ class KpiBulkEntryController extends Controller
         abort_if($templates->isEmpty() && !$this->isKpiAdmin($user), 403,
             'You are not set as the data owner for any KPI.');
 
-        $templateId = (int) ($request->input('template') ?: ($templates->first()->id ?? 0));
-        $template = $templates->firstWhere('id', $templateId) ?: $templates->first();
+        $selectedIds = $this->requestedTemplates($request, $templates);
+        $selected = $templates->whereIn('id', $selectedIds)->values();
 
         $month = $request->filled('month')
             ? Carbon::createFromFormat('Y-m', $request->input('month'))->startOfMonth()
             : Carbon::now()->startOfMonth();
 
-        $rows = collect();
-        if ($template) {
-            $assignments = $this->assigneesFor($user, $template);
-
-            $existing = DB::table('kpi_entries')
-                ->whereIn('kpi_assignment_id', $assignments->pluck('id'))
-                ->whereDate('period_start', '>=', $month->toDateString())
-                ->whereDate('period_start', '<=', $month->copy()->endOfMonth()->toDateString())
-                ->get()->keyBy('kpi_assignment_id');
-
-            $rows = $assignments->map(function ($a) use ($existing) {
-                $e = $existing->get($a->id);
-
-                return (object) [
-                    'assignment' => $a,
-                    'employee' => $a->user,
-                    'department' => $a->user->department->name ?? '—',
-                    'value' => $e->value ?? null,
-                    'status' => $e->status ?? null,
-                    'note' => $e->note ?? null,
-                ];
-            });
-        }
+        $assignments = $this->assignmentsFor($user, $selectedIds);
+        $rows = $this->matrix($assignments, $month, $selectedIds);
 
         $months = collect(range(0, 11))->map(fn ($i) => Carbon::now()->startOfMonth()->subMonths($i));
 
         $owners = $this->isKpiAdmin($user)
-            ? KpiDataOwner::with('template', 'user', 'department')->get()
-            : collect();
-
+            ? KpiDataOwner::with('template', 'user', 'department')->get() : collect();
         $ownerCandidates = $this->isKpiAdmin($user)
-            ? User::where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name'])
-            : collect();
-
-        $allManualTemplates = $this->isKpiAdmin($user) ? $templates : collect();
+            ? User::where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name']) : collect();
         $departments = $this->isKpiAdmin($user) ? Department::orderBy('name')->get(['id', 'name']) : collect();
 
         return view('tenant.kpi.bulk-entry', compact(
-            'templates', 'template', 'month', 'months', 'rows',
-            'owners', 'ownerCandidates', 'allManualTemplates', 'departments'
+            'templates', 'selected', 'selectedIds', 'month', 'months', 'rows',
+            'owners', 'ownerCandidates', 'departments'
         ))->with('isKpiAdmin', $this->isKpiAdmin($user));
     }
 
-    /** Save the grid. Values are authoritative: no approval step. */
+    /** Save the grid. Authoritative: no approval step. */
     public function store(Request $request)
     {
         $user = Auth::user();
 
         $request->validate([
-            'template' => 'required|integer',
             'month' => 'required|date_format:Y-m',
             'values' => 'array',
             'values.*' => 'nullable|numeric|min:0',
         ]);
 
-        $template = $this->fillableTemplates($user)->firstWhere('id', (int) $request->input('template'));
-        abort_unless($template, 403, 'You may not fill that KPI.');
-
+        $fillable = $this->fillableTemplates($user);
+        $templateIds = $this->requestedTemplates($request, $fillable);
         $month = Carbon::createFromFormat('Y-m', $request->input('month'))->startOfMonth();
 
-        // Only ever touch assignments this user is entitled to.
-        $allowed = $this->assigneesFor($user, $template)->keyBy('id');
+        $allowed = $this->assignmentsFor($user, $templateIds)->keyBy('id');
 
         $saved = 0;
         $cleared = 0;
@@ -167,104 +215,208 @@ class KpiBulkEntryController extends Controller
             }
 
             $value = ($value === null || $value === '') ? null : (float) $value;
-            $note = $request->input('notes.' . $assignmentId) ?: null;
-
-            $entry = KpiEntryService::fillForTeam($a, $value, $user->id, $note, $month->copy());
-            $entry ? $saved++ : $cleared++;
+            KpiEntryService::fillForTeam($a, $value, $user->id,
+                $request->input('notes.' . $assignmentId) ?: null, $month->copy()) ? $saved++ : $cleared++;
         }
 
-        $msg = sprintf('%s — %d value%s saved', $template->title, $saved, $saved === 1 ? '' : 's');
+        $msg = sprintf('%d value%s saved', $saved, $saved === 1 ? '' : 's');
         if ($cleared) {
-            $msg .= sprintf(', %d cleared', $cleared);
+            $msg .= ', ' . $cleared . ' cleared';
         }
         $msg .= ' for ' . $month->format('F Y') . '. No approval needed.';
 
-        return redirect()
-            ->route('tenant.kpi.bulk-entry', ['template' => $template->id, 'month' => $month->format('Y-m')])
-            ->with('success', $msg);
+        return redirect()->route('tenant.kpi.bulk-entry', [
+            'templates' => $templateIds, 'month' => $month->format('Y-m'),
+        ])->with('success', $msg);
     }
 
-    /** A spreadsheet of the current grid, ready to fill and upload back. */
+    /** One sheet: a row per person, a column per chosen KPI. */
     public function template(Request $request)
     {
         $user = Auth::user();
-        $template = $this->fillableTemplates($user)->firstWhere('id', (int) $request->input('template'));
-        abort_unless($template, 403);
+        $fillable = $this->fillableTemplates($user);
+        $templateIds = $this->requestedTemplates($request, $fillable);
+
+        abort_if($templateIds === [], 403, 'Choose at least one KPI you are allowed to fill.');
 
         $month = Carbon::createFromFormat('Y-m', $request->input('month', Carbon::now()->format('Y-m')))->startOfMonth();
-        $rows = $this->assigneesFor($user, $template);
+        $selected = $fillable->whereIn('id', $templateIds)->values();
+        $assignments = $this->assignmentsFor($user, $templateIds);
+        $rows = $this->matrix($assignments, $month, $templateIds);
+
+        $name = $selected->count() === 1
+            ? \Illuminate\Support\Str::slug($selected->first()->title)
+            : 'kpis-' . $selected->count();
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KpiBulkEntryExport($template, $month, $rows),
-            'kpi-' . \Illuminate\Support\Str::slug($template->title) . '-' . $month->format('Y-m') . '.xlsx'
+            new \App\Exports\KpiBulkEntryExport($selected, $month, $rows),
+            'kpi-' . $name . '-' . $month->format('Y-m') . '.xlsx'
         );
     }
 
-    /** Read a filled spreadsheet back in. */
+    /** Read the sheet and show what it would do, before anything is written. */
     public function import(Request $request)
     {
         $user = Auth::user();
 
         $request->validate([
-            'template' => 'required|integer',
             'month' => 'required|date_format:Y-m',
             'file' => 'required|file|mimes:xlsx,xls,csv',
         ]);
 
-        $template = $this->fillableTemplates($user)->firstWhere('id', (int) $request->input('template'));
-        abort_unless($template, 403, 'You may not fill that KPI.');
-
+        $fillable = $this->fillableTemplates($user);
+        $templateIds = $this->requestedTemplates($request, $fillable);
         $month = Carbon::createFromFormat('Y-m', $request->input('month'))->startOfMonth();
-        $allowed = $this->assigneesFor($user, $template)->keyBy('id');
 
-        $sheets = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\KpiBulkEntryImport(), $request->file('file'));
-        $sheet = $sheets[0] ?? [];
+        $allowed = $this->assignmentsFor($user, $templateIds);
+        $byUserAndTemplate = [];
+        foreach ($allowed as $a) {
+            $byUserAndTemplate[$a->user_id][$a->kpi_template_id] = $a;
+        }
+
+        $sheet = \Maatwebsite\Excel\Facades\Excel::toArray(new \App\Imports\KpiBulkEntryImport(), $request->file('file'))[0] ?? [];
+
+        // Row 2 is the header; its columns from D onward name the KPIs, in the
+        // order the export wrote them. Match on the header text so a reordered
+        // or partially deleted sheet still lands in the right KPI.
+        $header = $sheet[1] ?? [];
+        $columnTemplate = [];
+        foreach ($header as $i => $label) {
+            if ($i < 3 || $label === null || $label === '') {
+                continue;
+            }
+            $t = $fillable->first(fn ($x) => mb_strtolower(trim($x->title)) === mb_strtolower(trim((string) $label)));
+            if ($t && in_array($t->id, $templateIds, true)) {
+                $columnTemplate[$i] = $t;
+            }
+        }
+
+        $preview = [];
+        $problems = [];
+
+        foreach ($sheet as $i => $row) {
+            $userId = (int) ($row[0] ?? 0);
+            if ($userId <= 0) {
+                continue;
+            }
+
+            $mine = $byUserAndTemplate[$userId] ?? null;
+            if (!$mine) {
+                $problems[] = 'row ' . ($i + 1) . ': that person is not yours to fill';
+                continue;
+            }
+
+            $cells = [];
+            foreach ($columnTemplate as $col => $t) {
+                $raw = $row[$col] ?? null;
+                if ($raw !== null && $raw !== '' && !is_numeric($raw)) {
+                    $problems[] = sprintf('row %d, %s: "%s" is not a number', $i + 1, $t->title, mb_substr((string) $raw, 0, 12));
+                    continue;
+                }
+                $a = $mine[$t->id] ?? null;
+                if (!$a) {
+                    continue;   // that person does not carry this KPI
+                }
+                $cells[$t->id] = [
+                    'assignment_id' => $a->id,
+                    'value' => ($raw === null || $raw === '') ? null : (float) $raw,
+                ];
+            }
+
+            if ($cells === []) {
+                continue;
+            }
+
+            $u = $allowed->firstWhere('user_id', $userId)->user ?? null;
+            $preview[] = [
+                'user_id' => $userId,
+                'name' => $u ? trim($u->first_name . ' ' . $u->last_name) : ('#' . $userId),
+                'department' => $u->department->name ?? '—',
+                'cells' => $cells,
+            ];
+        }
+
+        if ($preview === []) {
+            return back()->with('error',
+                'Nothing in that file could be matched. Use the Excel button to get a sheet with the right columns.'
+                . ($problems ? ' (' . implode('; ', array_slice($problems, 0, 3)) . ')' : ''));
+        }
+
+        session([self::PREVIEW_KEY => [
+            'month' => $month->format('Y-m'),
+            'template_ids' => array_values(array_map(fn ($t) => $t->id, $columnTemplate)),
+            'rows' => $preview,
+            'problems' => $problems,
+        ]]);
+
+        return redirect()->route('tenant.kpi.bulk-entry.preview');
+    }
+
+    /** What the upload will change, before it changes it. */
+    public function preview(Request $request)
+    {
+        $user = Auth::user();
+        $data = session(self::PREVIEW_KEY);
+
+        if (!$data) {
+            return redirect()->route('tenant.kpi.bulk-entry')
+                ->with('error', 'Nothing to preview — upload a file first.');
+        }
+
+        $fillable = $this->fillableTemplates($user);
+        $selected = $fillable->whereIn('id', $data['template_ids'])->values();
+        $month = Carbon::createFromFormat('Y-m', $data['month'])->startOfMonth();
+
+        return view('tenant.kpi.bulk-preview', [
+            'selected' => $selected,
+            'month' => $month,
+            'rows' => $data['rows'],
+            'problems' => $data['problems'],
+        ]);
+    }
+
+    /** Commit what the preview showed. */
+    public function importApply(Request $request)
+    {
+        $user = Auth::user();
+        $data = session(self::PREVIEW_KEY);
+
+        if (!$data) {
+            return redirect()->route('tenant.kpi.bulk-entry')->with('error', 'That preview has expired — upload again.');
+        }
+
+        $month = Carbon::createFromFormat('Y-m', $data['month'])->startOfMonth();
+
+        // Re-check entitlement at commit time: the preview is only a proposal.
+        $allowed = $this->assignmentsFor($user, $data['template_ids'])->keyBy('id');
 
         $saved = 0;
         $cleared = 0;
-        $skipped = [];
 
-        foreach ($sheet as $i => $row) {
-            // The export writes: assignment id, employee, department, value, note
-            $assignmentId = (int) ($row[0] ?? 0);
-            if ($assignmentId <= 0) {
-                continue;   // header or blank
+        foreach ($data['rows'] as $row) {
+            foreach ($row['cells'] as $cell) {
+                $a = $allowed->get($cell['assignment_id']);
+                if (!$a) {
+                    continue;
+                }
+                KpiEntryService::fillForTeam($a, $cell['value'], $user->id, null, $month->copy())
+                    ? $saved++ : $cleared++;
             }
-
-            $a = $allowed->get($assignmentId);
-            if (!$a) {
-                $skipped[] = 'row ' . ($i + 1) . ' (not yours to fill)';
-                continue;
-            }
-
-            $raw = $row[3] ?? null;
-            if ($raw !== null && $raw !== '' && !is_numeric($raw)) {
-                $skipped[] = 'row ' . ($i + 1) . ' ("' . mb_substr((string) $raw, 0, 12) . '" is not a number)';
-                continue;
-            }
-
-            $value = ($raw === null || $raw === '') ? null : (float) $raw;
-            $note = $row[4] ?? null;
-
-            KpiEntryService::fillForTeam($a, $value, $user->id, $note ?: null, $month->copy())
-                ? $saved++ : $cleared++;
         }
 
-        $msg = sprintf('%s — imported %d value%s', $template->title, $saved, $saved === 1 ? '' : 's');
+        session()->forget(self::PREVIEW_KEY);
+
+        $msg = sprintf('Imported %d value%s', $saved, $saved === 1 ? '' : 's');
         if ($cleared) {
             $msg .= ', ' . $cleared . ' cleared';
         }
-        if ($skipped) {
-            $msg .= '. Skipped: ' . implode('; ', array_slice($skipped, 0, 5))
-                . (count($skipped) > 5 ? ' and ' . (count($skipped) - 5) . ' more' : '');
-        }
+        $msg .= ' for ' . $month->format('F Y') . '.';
 
-        return redirect()
-            ->route('tenant.kpi.bulk-entry', ['template' => $template->id, 'month' => $month->format('Y-m')])
-            ->with($skipped ? 'warning' : 'success', $msg);
+        return redirect()->route('tenant.kpi.bulk-entry', [
+            'templates' => $data['template_ids'], 'month' => $month->format('Y-m'),
+        ])->with('success', $msg);
     }
 
-    /** Admin/HR: put someone in charge of a KPI. */
     public function addOwner(Request $request)
     {
         abort_unless($this->isKpiAdmin(Auth::user()), 403);
@@ -291,7 +443,6 @@ class KpiBulkEntryController extends Controller
     public function removeOwner($id)
     {
         abort_unless($this->isKpiAdmin(Auth::user()), 403);
-
         KpiDataOwner::findOrFail($id)->delete();
 
         return back()->with('success', 'Data owner removed.');
