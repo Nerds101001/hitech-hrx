@@ -98,6 +98,24 @@ class AppServiceProvider extends ServiceProvider
         return in_array($user->department_id, $salesDeptIds);
     });
 
+    // ── Employee profile tab gate: KPIs ─────────────────────────────────
+    // Pilot for per-tab granular access (see the 2026-09 granular-access
+    // review). employee.kpa already existed in the permissions registry but
+    // nothing ever checked it, so the KPIs tab rendered unconditionally for
+    // anyone who could open the profile at all — unlike the Banking &
+    // Payroll tab next to it, which already does exactly this same check
+    // (see $canViewFinancials in employees/view.blade.php).
+    //
+    // Today, in practice, that population is exactly admin/hr/accounts (no
+    // role currently holds employee.kpa directly, and route access is
+    // role_or_permission:admin|hr|accounts|employee.view|...|employee.kpa|...) —
+    // so the role check here is not a new grant, it is what already
+    // determines who sees this tab today. Wiring the real permission on top,
+    // rather than instead of, means nobody's current access changes.
+    \Illuminate\Support\Facades\Gate::define('employees.tab.kpa', function ($user) {
+        return $user->hasRole(['admin', 'hr', 'accounts', 'Admin', 'HR']) || $user->can('employee.kpa');
+    });
+
     Paginator::useBootstrapFive();
 
     Vite::useStyleTagAttributes(function (?string $src, string $url, ?array $chunk, ?array $manifest) {

@@ -616,10 +616,12 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab"><i
                                         class="bx bx-bullseye me-1"></i> Key Result Areas (KRAs)</a>
                             </li>
+                            @can('employees.tab.kpa')
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#kpis-tab"><i
                                         class="bx bx-trending-up me-1"></i> Key Performance Indicators (KPIs)</a>
                             </li>
+                            @endcan
                             
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#activity"><i class="bx bx-history me-1"></i>
@@ -2484,6 +2486,7 @@
                         </div>
 
                         <!-- KPIs Tab -->
+                        @can('employees.tab.kpa')
                         <div class="tab-pane fade" id="kpis-tab">
                             {{-- Learn @ HiTech participation + score --}}
                             <div class="card border-0 shadow-sm rounded-3 mb-4">
@@ -2760,6 +2763,7 @@
                                 </div>
                             </div>
                         </div>
+                        @endcan
 
 
 
