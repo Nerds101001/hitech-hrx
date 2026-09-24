@@ -11,20 +11,42 @@ use Illuminate\Console\Command;
  * Fills in the achieved figure for every auto-sourced KPI and scores it.
  * Manual and approval-based KPIs are left alone — a human owns those.
  *
- * Safe to re-run: recordAchievement() overwrites the current period's check
- * rather than adding another, so a nightly schedule keeps scores current.
+ * Safe to re-run: recordAchievement() overwrites that period's check rather
+ * than adding another, so a nightly schedule keeps scores current.
+ *
+ * It scores the period containing --as-of (today by default) and, with
+ * --months=N, the N-1 periods before it as well. Re-scoring a closed month is
+ * not housekeeping: a sales month stays open to the 5th and is often reopened
+ * for weeks, so the figure that was true on the 1st is not the figure that is
+ * true on the 20th. A month scored once and never revisited freezes a
+ * half-entered number into somebody's appraisal.
  */
 class KpiAutoScoreCommand extends Command
 {
     protected $signature = 'kpi:auto-score
-                            {--user= : only this user id}
-                            {--dry   : show what would be written, change nothing}';
+                            {--user=   : only this user id}
+                            {--as-of=  : score the period containing this date (Y-m-d or Y-m), default today}
+                            {--months=1 : also re-score this many earlier periods}
+                            {--dry     : show what would be written, change nothing}';
 
     protected $description = 'Compute and score KPIs whose data_source is auto:*';
 
     public function handle(): int
     {
         $dry = (bool) $this->option('dry');
+
+        $asOf = $this->option('as-of');
+        try {
+            $anchor = $asOf
+                ? (preg_match('/^\d{4}-\d{2}$/', $asOf)
+                    ? \Carbon\Carbon::createFromFormat('!Y-m', $asOf)->endOfMonth()->startOfDay()
+                    : \Carbon\Carbon::parse($asOf)->startOfDay())
+                : \Carbon\Carbon::today();
+        } catch (\Throwable $e) {
+            $this->error("--as-of={$asOf} is not a date I can read (use Y-m-d or Y-m).");
+            return self::FAILURE;
+        }
+        $months = max(1, (int) $this->option('months'));
 
         $assignments = KpiAssignment::query()
             ->where('is_active', true)
@@ -37,30 +59,53 @@ class KpiAutoScoreCommand extends Command
             return self::SUCCESS;
         }
 
-        $this->info(($dry ? '[DRY RUN] ' : '') . "Scoring {$assignments->count()} auto-sourced KPI(s)...");
+        $this->info(($dry ? '[DRY RUN] ' : '')
+            . "Scoring {$assignments->count()} auto-sourced KPI(s) over {$months} period(s) to "
+            . $anchor->format('d M Y') . ' ...');
         $rows = [];
-        $scored = $skipped = 0;
+        $scored = $skipped = $changed = 0;
 
-        foreach ($assignments as $a) {
-            [$start, $end] = KpiPeriodService::currentPeriod($a);
-            $achieved = KpiAutoSourceService::compute($a, $start, $end);
+        // Walk back a month at a time. A quarterly or yearly KPI resolves to
+        // the same period for several of those steps; scoring it twice is
+        // harmless (the check is overwritten) but pointless, so skip repeats.
+        $seen = [];
+        for ($i = 0; $i < $months; $i++) {
+            $day = $anchor->copy()->subMonthsNoOverflow($i);
 
-            if ($achieved === null) {
-                $skipped++;
-                $rows[] = [$a->user_id, substr($a->title, 0, 26), $a->data_source, '—', 'no data'];
-                continue;
+            foreach ($assignments as $a) {
+                [$start, $end] = KpiPeriodService::currentPeriod($a, $day);
+                $key = $a->id . '|' . $start->toDateString();
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+
+                $achieved = KpiAutoSourceService::compute($a, $start, $end);
+
+                if ($achieved === null) {
+                    $skipped++;
+                    $rows[] = [$a->user_id, substr($a->title, 0, 24), $start->format('M y'), '—', 'no data', ''];
+                    continue;
+                }
+
+                $was = \App\Models\KpiCheck::where('kpi_assignment_id', $a->id)
+                    ->where('period_start', $start->toDateString())->value('achieved_value');
+                $score = KpiPeriodService::targetScore($a, $achieved);
+                if (!$dry) {
+                    KpiPeriodService::recordAchievement($a, $achieved, null, null, $day);
+                }
+                $moved = $was === null || abs((float) $was - $achieved) > 0.005;
+                $scored++;
+                $changed += $moved ? 1 : 0;
+                $rows[] = [$a->user_id, substr($a->title, 0, 24), $start->format('M y'),
+                    round($achieved, 2), "{$score} / {$a->max_marks}",
+                    $moved ? ('was ' . ($was === null ? '—' : round((float) $was, 2))) : ''];
             }
-
-            $score = KpiPeriodService::targetScore($a, $achieved);
-            if (!$dry) {
-                KpiPeriodService::recordAchievement($a, $achieved);
-            }
-            $scored++;
-            $rows[] = [$a->user_id, substr($a->title, 0, 26), $a->data_source, $achieved, "{$score} / {$a->max_marks}"];
         }
 
-        $this->table(['user', 'kpi', 'source', 'achieved', 'score'], $rows);
-        $this->info(($dry ? 'Would score' : 'Scored') . " {$scored}, skipped {$skipped} with no data.");
+        $this->table(['user', 'kpi', 'period', 'achieved', 'score', 'change'], $rows);
+        $this->info(($dry ? 'Would score' : 'Scored') . " {$scored} ({$changed} would move)"
+            . ", skipped {$skipped} with no data.");
 
         return self::SUCCESS;
     }

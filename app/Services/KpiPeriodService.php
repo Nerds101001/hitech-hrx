@@ -96,12 +96,18 @@ class KpiPeriodService
     }
 
     /**
-     * Ensure a check row exists for the assignment's current period and
-     * close out (score) any past-period rows still pending.
+     * Ensure a check row exists for the period containing $day (today by
+     * default) and close out (score) any past-period rows still pending.
+     *
+     * $day exists because a figure does not always arrive inside the month it
+     * belongs to. Sales months stay open to the 5th and can be reopened for
+     * weeks; a data owner fills last month's call hours this month. Resolving
+     * the check from today would file that figure against the wrong period --
+     * and, worse, recalculate it there, overwriting a month nobody touched.
      */
-    public static function sync(KpiAssignment $a): KpiCheck
+    public static function sync(KpiAssignment $a, ?Carbon $day = null): KpiCheck
     {
-        [$start, $end, $due] = self::currentPeriod($a);
+        [$start, $end, $due] = self::currentPeriod($a, $day);
 
         $check = KpiCheck::firstOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
@@ -117,6 +123,7 @@ class KpiPeriodService
         // Close overdue past periods: pending + period ended => missed/scored
         $stale = KpiCheck::where('kpi_assignment_id', $a->id)
             ->where('status', 'pending')
+            ->whereKeyNot($check->getKey())
             ->whereDate('period_end', '<', Carbon::today())
             ->get();
         foreach ($stale as $s) {
@@ -162,9 +169,9 @@ class KpiPeriodService
     }
 
     /** Record achieved value for a target-based assignment (current period). */
-    public static function recordAchievement(KpiAssignment $a, float $achieved, ?int $evaluatorId = null, ?string $remarks = null): KpiCheck
+    public static function recordAchievement(KpiAssignment $a, float $achieved, ?int $evaluatorId = null, ?string $remarks = null, ?Carbon $day = null): KpiCheck
     {
-        $check = self::sync($a);
+        $check = self::sync($a, $day);
         $check->achieved_value = $achieved;
         $check->score = self::targetScore($a, $achieved);
         $onTime = Carbon::today()->lte($check->due_date);

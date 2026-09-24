@@ -78,7 +78,9 @@ class KpiEntryService
     public static function submit(KpiAssignment $a, float $value, ?string $note = null, ?Carbon $day = null): KpiEntry
     {
         [$start, $end] = self::periodFor($a, $day);
-        $check = KpiPeriodService::sync($a);   // the check this rolls into
+        // The check for the period being REPORTED, not the one today falls in:
+        // a figure filed in October for September belongs to September.
+        $check = KpiPeriodService::sync($a, $start);
 
         $entry = KpiEntry::updateOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
@@ -132,15 +134,14 @@ class KpiEntryService
                 ->where('period_start', $start->toDateString())->first();
 
             if ($existing) {
-                $check = $existing->check;
                 $existing->delete();
-                self::recalculate($a, $check);
+                self::recalculate($a, KpiPeriodService::sync($a, $start));
             }
 
             return null;
         }
 
-        $check = KpiPeriodService::sync($a);
+        $check = KpiPeriodService::sync($a, $start);
 
         $entry = KpiEntry::updateOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
@@ -201,7 +202,7 @@ class KpiEntryService
      * The month's achieved value is the sum of approved weeks inside it. Runs
      * the normal scoring so the check behaves exactly like an HR-typed figure.
      */
-    public static function recalculate(KpiAssignment $a, ?KpiCheck $check = null): ?KpiCheck
+    public static function recalculate(KpiAssignment $a, ?KpiCheck $check = null, ?Carbon $day = null): ?KpiCheck
     {
         // An auto KPI is filled by kpi:auto-score from real data and has no
         // entries of its own. Recalculating one would set its achieved value to
@@ -210,7 +211,7 @@ class KpiEntryService
             return null;
         }
 
-        $check = $check ?: KpiPeriodService::sync($a);
+        $check = $check ?: KpiPeriodService::sync($a, $day);
         if (!$check) {
             return null;
         }
@@ -229,7 +230,12 @@ class KpiEntryService
             ->whereDate('period_start', '>=', $check->period_start)
             ->whereDate('period_start', '<=', $check->period_end)
             ->exists();
-        if ($check->status === 'pending' && $total > 0 && !$pending) {
+        // A figure can arrive after the period closed -- the owner of the
+        // number reports in the first week of the next month, or a correction
+        // lands weeks later. sync() will have stamped that check 'missed', and
+        // leaving it there would score a reported figure as unreported. A
+        // total we now hold reopens it; late, but not missing.
+        if ($total > 0 && !$pending && !in_array($check->status, ['completed_on_time', 'completed_late'], true)) {
             $check->status = Carbon::today()->lte(Carbon::parse($check->due_date))
                 ? 'completed_on_time' : 'completed_late';
             $check->completed_at = now();
