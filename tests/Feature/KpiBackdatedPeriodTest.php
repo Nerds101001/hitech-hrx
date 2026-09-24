@@ -204,6 +204,40 @@ class KpiBackdatedPeriodTest extends TestCase
             'a period that ended before the KPI was assigned was scored anyway');
     }
 
+    /**
+     * A monthly April and a fiscal year both START on 1 April. Keying a check
+     * on period_start alone let an April pass adopt the year-to-date row and
+     * overwrite its running total with one month's figure -- it did that to 33
+     * live rows, moving 258 marks across 24 people before this was found.
+     */
+    public function test_a_monthly_period_does_not_adopt_a_fiscal_year_check(): void
+    {
+        $a = $this->assignment(['frequency' => 'monthly']);
+        $fyStart = Carbon::create(Carbon::today()->month >= 4 ? Carbon::today()->year : Carbon::today()->year - 1, 4, 1);
+
+        // A year-to-date row, as the rule book left behind when these KPIs
+        // were switched from yearly to monthly.
+        $yearly = KpiCheck::create([
+            'kpi_assignment_id' => $a->id,
+            'user_id' => $this->rep->id,
+            'period_start' => $fyStart->toDateString(),
+            'period_end' => $fyStart->copy()->addYear()->subDay()->toDateString(),
+            'due_date' => $fyStart->copy()->addYear()->subDay()->toDateString(),
+            'status' => 'completed_on_time',
+            'achieved_value' => 40.72,
+            'score' => 8,
+        ]);
+
+        // kpi_checks is unique on (assignment, period_start), so April cannot
+        // get its own row -- the write has to be refused instead.
+        KpiPeriodService::recordAchievement($a, 112.09, null, null, $fyStart->copy()->addDays(10));
+
+        $yearly->refresh();
+        $this->assertEquals(40.72, (float) $yearly->achieved_value,
+            'one month\'s figure overwrote the year-to-date total');
+        $this->assertEquals(8.0, (float) $yearly->score, 'the year-to-date score was rewritten');
+    }
+
     /** --dry changes nothing. */
     public function test_dry_run_writes_nothing(): void
     {

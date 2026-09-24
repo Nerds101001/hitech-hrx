@@ -63,7 +63,7 @@ class KpiAutoScoreCommand extends Command
             . "Scoring {$assignments->count()} auto-sourced KPI(s) over {$months} period(s) to "
             . $anchor->format('d M Y') . ' ...');
         $rows = [];
-        $scored = $skipped = $changed = 0;
+        $scored = $skipped = $changed = $legacy = 0;
 
         // Walk back a month at a time. A quarterly or yearly KPI resolves to
         // the same period for several of those steps; scoring it twice is
@@ -81,6 +81,19 @@ class KpiAutoScoreCommand extends Command
                 // harmless zero -- it puts a KPI on a month's sheet that nobody
                 // was working to, and its marks into that month's denominator.
                 if ($a->created_at && $end->lt($a->created_at->copy()->startOfDay())) {
+                    continue;
+                }
+
+                // A check can already occupy this period_start with a different
+                // window: 297 of them do, because these KPIs were yearly when
+                // their checks were made and are monthly now. Scoring into it
+                // overwrites a year-to-date total with one month; creating a
+                // second row shows the KPI twice on that month's sheet. Neither
+                // is ours to choose -- report it and leave the row alone.
+                if (\App\Models\KpiCheck::where('kpi_assignment_id', $a->id)
+                        ->whereDate('period_start', $start->toDateString())
+                        ->whereDate('period_end', '!=', $end->toDateString())->exists()) {
+                    $legacy++;
                     continue;
                 }
 
@@ -115,7 +128,8 @@ class KpiAutoScoreCommand extends Command
 
         $this->table(['user', 'kpi', 'period', 'achieved', 'score', 'change'], $rows);
         $this->info(($dry ? 'Would score' : 'Scored') . " {$scored} ({$changed} would move)"
-            . ", skipped {$skipped} with no data.");
+            . ", skipped {$skipped} with no data"
+            . ($legacy ? ", left {$legacy} alone (a check already holds that period with a different window)" : '') . '.');
 
         return self::SUCCESS;
     }

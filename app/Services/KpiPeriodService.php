@@ -109,6 +109,11 @@ class KpiPeriodService
     {
         [$start, $end, $due] = self::currentPeriod($a, $day);
 
+        // One check per (assignment, period_start) -- the table has a unique
+        // index on exactly that, so period_start is the identity whether we
+        // like it or not. What it does NOT tell us is the window: a monthly
+        // April and a fiscal year both start on 1 April. recordAchievement()
+        // therefore checks the window before writing; see the note there.
         $check = KpiCheck::firstOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
             [
@@ -172,6 +177,19 @@ class KpiPeriodService
     public static function recordAchievement(KpiAssignment $a, float $achieved, ?int $evaluatorId = null, ?string $remarks = null, ?Carbon $day = null): KpiCheck
     {
         $check = self::sync($a, $day);
+
+        // The row holding this period_start may span a different window. 297 on
+        // production do: these KPIs were yearly when their checks were made and
+        // are monthly now, so a monthly April resolves onto a year-to-date row.
+        // Writing would replace a running annual total with one month's figure
+        // -- it moved 258 marks across 24 people before this guard existed. What
+        // to do with those rows is a decision about the assignment, not
+        // something a scoring pass should settle silently.
+        [, $expectedEnd] = self::currentPeriod($a, $day);
+        if ($check->period_end && !Carbon::parse($check->period_end)->isSameDay($expectedEnd)) {
+            return $check;
+        }
+
         $check->achieved_value = $achieved;
         $check->score = self::targetScore($a, $achieved);
         // Judged from the day being scored, not the day the scoring ran. An
