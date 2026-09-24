@@ -14,12 +14,6 @@
 /storage/framework/testing/*
 /storage/framework/views/*
 /storage/logs/*
-/tests/Feature/*
-# ...except the telephony ingest suite. This is the contract we publish to
-# an external vendor; it must be reviewable and runnable by anyone who
-# touches it, not sit untracked on one machine.
-!/tests/Feature/Telephony/
-/tests/Unit/*
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
