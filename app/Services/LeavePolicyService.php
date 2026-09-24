@@ -176,7 +176,10 @@ class LeavePolicyService
             // Subtract pending requests from available balance
             $pendingRequests = LeaveRequest::where('user_id', $user->id)
                 ->whereHas('leaveType', function($q) {
-                    $q->where('is_paid', true)->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+                    // Same pool-exclusion list as getPoolBalance() and
+                    // processApproval() -- WFH included, or a pending WFH
+                    // request would subtract days from a pool it never draws on.
+                    $q->where('is_paid', true)->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH']);
                 })
                 ->where('status', 'pending')
                 ->get();
@@ -417,11 +420,15 @@ class LeavePolicyService
 
     public static function getPoolBalance(User $user): float
     {
-        // Poolable types are all paid types EXCEPT Maternity, Paternity, and Short Leave
+        // Poolable types are all paid types EXCEPT Maternity, Paternity, Short
+        // Leave and WFH. WFH belongs here for the same reason as the rest: it
+        // is paid, but never out of this pool -- LeaveRequest::processApproval()
+        // excludes it from $excludedPoolCodes, so counting its balance here
+        // would inflate the pool by days approval will never deduct.
         $poolableBalances = LeaveBalance::where('user_id', $user->id)
             ->whereHas('leaveType', function($q) {
                 $q->where('is_paid', true)
-                  ->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+                  ->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH']);
             })
             ->get();
 

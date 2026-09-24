@@ -50,7 +50,13 @@
 
     {{-- STATS SECTION --}}
     @php
-        $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+        // WFH belongs in this list. It is paid, but never out of the ALP/PL
+        // pool these three cards total - approval pays it directly and never
+        // deducts a balance. Leaving it out counted any WFH balance into
+        // Total Allocated and Available, so the cards disagreed with both the
+        // deduction logic and the JS copy of this same list further down,
+        // which already had it right.
+        $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
 
         $poolableBalances = $leaveBalances->filter(function($b) use ($excludedCodes) {
             return $b->leaveType && $b->leaveType->is_paid && !in_array(strtoupper($b->leaveType->code), $excludedCodes);
