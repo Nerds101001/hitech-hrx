@@ -49,10 +49,17 @@ class LeavePolicyService
         // --- Short Leave: strictly one per month, enforced even when no
         // policy rule is configured for the type ---
         if ($leaveType && $leaveType->is_short_leave) {
+            // Scoped to THIS leave type, not to every type carrying the
+            // is_short_leave flag. Matching on the flag meant any two types
+            // that both had it shared a single monthly allowance: a
+            // Compensatory OFF (type 12, flagged is_short_leave by mistake
+            // when it was created) silently consumed the real Short Leave
+            // quota, so the balance card still read "1 available" while the
+            // application came back "already consumed" — confirmed live on
+            // seven CG Office employees. The flag says what KIND of leave
+            // this is; it was never an identity for one particular type.
             $usedThisMonth = LeaveRequest::where('user_id', $user->id)
-                ->whereHas('leaveType', function($q) {
-                    $q->where('is_short_leave', true);
-                })
+                ->where('leave_type_id', $leaveTypeId)
                 ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
                 ->whereYear('from_date', $from->year)
                 ->whereMonth('from_date', $from->month)
