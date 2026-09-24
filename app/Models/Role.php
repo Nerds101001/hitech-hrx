@@ -12,6 +12,7 @@ class Role extends SpatieRole implements AuditableContract
 
   protected $fillable = [
     'name',
+    'description',
     'guard_name',
     'is_location_activity_tracking_enabled',
     'is_mobile_app_access_enabled',

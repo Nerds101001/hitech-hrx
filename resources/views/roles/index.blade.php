@@ -30,6 +30,7 @@
 @section('page-script')
   @vite([
     'resources/assets/js/app/role-index.js',
+    'resources/assets/js/app/preview-access.js',
     ])
 @endsection
 
@@ -62,15 +63,20 @@
       <div class="col-xl-4 col-lg-6 col-md-6">
         <div class="hitech-card h-100 shadow-sm border-0 transition-3d">
           <div class="role-card-content h-100 d-flex flex-column">
-            <div class="hitech-card-header border-bottom-0 p-0 mb-4 d-flex justify-content-between align-items-center">
-                <h5 class="title mb-0 fw-bold" style="color: #005a5a; font-size: 1.15rem;">{{$role->display_name}}</h5>
+            <div class="hitech-card-header border-bottom-0 p-0 mb-4 d-flex justify-content-between align-items-start">
+                <div>
+                  <h5 class="title mb-0 fw-bold" style="color: #005a5a; font-size: 1.15rem;">{{$role->display_name}}</h5>
+                  @if($role->description)
+                    <p class="text-muted small mb-0 mt-1">{{ $role->description }}</p>
+                  @endif
+                </div>
                 @if(in_array($role->name, Constants::BuiltInRoles))
-                    <span class="badge bg-label-success rounded-pill px-3">System</span>
+                    <span class="badge bg-label-success rounded-pill px-3 flex-shrink-0">System</span>
                 @else
-                    <span class="badge bg-label-warning rounded-pill px-3">Custom</span>
+                    <span class="badge bg-label-warning rounded-pill px-3 flex-shrink-0">Custom</span>
                 @endif
             </div>
-            
+
             <div class="d-flex justify-content-between align-items-center mb-5">
               <div class="d-flex flex-column">
                   <h6 class="fw-bold mb-1 text-heading" style="font-size: 0.95rem;">@lang('Users Assigned')</h6>
@@ -106,7 +112,8 @@
             </div>
             
             <div class="d-flex justify-content-end gap-3 pt-4 border-top mt-auto">
-                <a href="javascript:void(0);" class="btn btn-icon btn-label-warning edit rounded-circle shadow-sm" data-value="{{$role}}" style="width: 38px; height: 38px;">
+                <a href="{{ route('roles.editPermissions', $role->id) }}" class="btn btn-icon btn-label-warning rounded-circle shadow-sm" style="width: 38px; height: 38px;"
+                   data-bs-toggle="tooltip" data-bs-placement="top" title="Configure permissions">
                     <i class="bx bx-pencil fs-5"></i>
                 </a>
                 @if(!in_array($role->name, Constants::BuiltInRoles))
@@ -153,38 +160,41 @@
   @endif
 
   {{-- 2. USER SPECIAL PERMISSIONS SECTION --}}
+  @php $specialUsers = $users->filter(fn($u) => $u->permissions->count() > 0); @endphp
   <div class="row mt-6">
     <div class="col-12">
       <div class="hitech-card p-5" style="border: 1px dashed #00ced1; background: rgba(0, 206, 209, 0.02);">
         <div class="d-flex align-items-center justify-content-between mb-4">
           <div>
             <h4 class="fw-bold text-heading mb-1"><i class="bx bx-user-check me-2 text-teal"></i>User Special Permissions</h4>
-            <p class="text-muted mb-0">Assign additional permissions to specific employees beyond their role defaults.</p>
+            <p class="text-muted mb-0">{{ $specialUsers->count() }} @lang('of') {{ $users->count() }} @lang('employees have a direct permission override on top of their role.')</p>
           </div>
-          <button class="btn btn-primary btn-hitech-glow add-user-permission">
-            <i class="bx bx-plus me-1"></i> Add Special Access
-          </button>
+          <a href="{{ route('roles.specialPermissions') }}" class="btn btn-primary btn-hitech-glow">
+            <i class="bx bx-user-check me-1"></i> @lang('Open User Special Permissions')
+          </a>
         </div>
 
         <div class="row g-4">
-          @foreach($users->filter(fn($u) => $u->permissions->count() > 0) as $user)
+          @foreach($specialUsers->take(6) as $user)
           <div class="col-md-4">
-            <div class="d-flex align-items-center p-3 rounded" style="background: #fff; border: 1px solid #eee;">
+            <a href="{{ route('roles.specialPermissions') }}" class="d-flex align-items-center p-3 rounded text-decoration-none" style="background: #fff; border: 1px solid #eee;">
               <div class="avatar avatar-sm me-3">
-                <img src="{{ $user->profile_photo_url }}" alt="Avatar" class="rounded-circle">
+                @if($user->profile_picture)
+                  <img src="{{ $user->getProfilePicture() }}" alt="Avatar" class="rounded-circle">
+                @else
+                  <span class="avatar-initial rounded-circle bg-label-primary">{{ $user->getInitials() }}</span>
+                @endif
               </div>
               <div class="me-auto">
-                <span class="d-block fw-bold text-heading">{{ $user->name }}</span>
+                <span class="d-block fw-bold text-heading">{{ $user->getFullName() }}</span>
                 <span class="badge bg-label-info x-small">{{ $user->permissions->count() }} specialized perms</span>
               </div>
-              <button class="btn btn-icon btn-label-primary edit-user-perm" data-id="{{ $user->id }}">
-                <i class="bx bx-edit-alt"></i>
-              </button>
-            </div>
+              <i class="bx bx-chevron-right text-muted"></i>
+            </a>
           </div>
           @endforeach
 
-          @if($users->filter(fn($u) => $u->permissions->count() > 0)->isEmpty())
+          @if($specialUsers->isEmpty())
           <div class="col-12 text-center py-5">
             <div class="opacity-25 mb-2"><i class="bx bx-info-circle fs-1"></i></div>
             <p class="text-muted">No users have direct special permissions yet.</p>
@@ -196,7 +206,6 @@
   </div>
 
   {{-- 3. MODALS --}}
-  @include('_partials._modals.role.addOrUpdate-role', ['groupedPermissions' => $groupedPermissions])
-  @include('_partials._modals.role.addOrUpdate-user-permission', ['groupedPermissions' => $groupedPermissions, 'users' => $users])
+  @include('_partials._modals.role.addOrUpdate-role', ['rolePresets' => $rolePresets])
   @include('_partials._modals.role.preview-access', ['roles' => $roles, 'users' => $users])
 @endsection

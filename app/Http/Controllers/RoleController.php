@@ -38,6 +38,244 @@ class RoleController extends Controller
     ]);
   }
 
+  /**
+   * The dedicated "configure this role" workbench - replaces cramming all
+   * ~103 permissions into a modal. One page per role, reached from the
+   * pencil icon on its card (or straight after Create Role).
+   */
+  public function editPermissions($id)
+  {
+    $role = Role::with('permissions')->find($id);
+    if (!$role) {
+      abort(404);
+    }
+
+    $groupedPermissions = config('permissions_registry');
+    $totalPermissionsCount = array_sum(array_map('count', $groupedPermissions));
+
+    return view('roles.permissions', [
+      'pageConfigs' => ['contentLayout' => 'wide'],
+      'role' => $role,
+      'rolePermissionNames' => $role->permissions->pluck('name')->toArray(),
+      'groupedPermissions' => $groupedPermissions,
+      'permissionMatrix' => $this->buildPermissionMatrix($groupedPermissions),
+      'totalPermissionsCount' => $totalPermissionsCount,
+      'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
+      'rolePresets' => config('role_presets', []),
+    ]);
+  }
+
+  /**
+   * Reshapes the flat permissions_registry.php into a CRUD-style matrix per
+   * module: a permission slots into the View/Create/Edit/Delete column only
+   * when its key is an EXACT "<module>.<verb>" match (e.g. "assets.delete"),
+   * never a substring match - "employee.view_banking" must never collide
+   * with the generic "View" column, since granting one is not granting the
+   * other.
+   *
+   * A verb only becomes its own column when exactly ONE permission in that
+   * module claims it. Some modules have several distinct "view"-type keys
+   * (e.g. "Hierarchy & Probation" has both hierarchy.view and probation.view;
+   * "Sales Field Ops" has five separate *.view permissions) - a single
+   * checkbox can't represent more than one of those without silently
+   * dropping the rest, so when a verb has more than one claimant, all of
+   * them fall through to "Other Permissions" instead, which has no such
+   * limit. Every key from the input ends up in exactly one place, by
+   * construction - this can never lose a permission.
+   */
+  private function buildPermissionMatrix(array $groupedPermissions): array
+  {
+    $verbs = ['view', 'create', 'edit', 'delete'];
+    $matrix = [];
+
+    foreach ($groupedPermissions as $moduleName => $permsArray) {
+      $claimants = array_fill_keys($verbs, []);
+      foreach ($permsArray as $permName => $label) {
+        foreach ($verbs as $verb) {
+          if (\Illuminate\Support\Str::endsWith($permName, '.' . $verb)) {
+            $claimants[$verb][] = $permName;
+            break;
+          }
+        }
+      }
+
+      // Map permission name -> the verb it exclusively owns, for verbs with
+      // exactly one claimant in this module.
+      $soleOwner = [];
+      foreach ($verbs as $verb) {
+        if (count($claimants[$verb]) === 1) {
+          $soleOwner[$claimants[$verb][0]] = $verb;
+        }
+      }
+
+      $crud = array_fill_keys($verbs, null);
+      $other = [];
+      foreach ($permsArray as $permName => $label) {
+        if (isset($soleOwner[$permName])) {
+          $crud[$soleOwner[$permName]] = ['name' => $permName, 'label' => $label];
+        } else {
+          $other[$permName] = $label;
+        }
+      }
+
+      $matrix[$moduleName] = [
+        'slug' => \Illuminate\Support\Str::slug($moduleName),
+        'crud' => $crud,
+        'other' => $other,
+      ];
+    }
+
+    return $matrix;
+  }
+
+  /**
+   * "User Special Permissions" — the dedicated page. The employee list and
+   * search live here; the reconciliation detail for whichever person is
+   * selected is fetched on demand via specialPermissionsDataAjax, the same
+   * master-detail pattern as the role editor's left rail.
+   */
+  public function specialPermissionsPage()
+  {
+    $employees = User::with('roles')->withCount('permissions')->orderBy('first_name')->get();
+    $groupedPermissions = config('permissions_registry');
+
+    return view('roles.special-permissions', [
+      'pageConfigs' => ['contentLayout' => 'wide'],
+      'employees' => $employees,
+      'roles' => Role::all(),
+      'users' => $employees,
+      'groupedPermissions' => $groupedPermissions,
+      'permissionMatrix' => $this->buildPermissionMatrix($groupedPermissions),
+      'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
+    ]);
+  }
+
+  /**
+   * For one employee: exactly what their ROLE grants, what they hold as a
+   * direct/"special" override, and the Final Access that actually results -
+   * which under Spatie is simply role-granted OR direct-granted (a user's
+   * `permissions` relation is direct-only; `getPermissionsViaRoles()` is
+   * role-only; there is no "deny" concept in either, so special permissions
+   * are additive-only here, same as the underlying library). Reuses the same
+   * CRUD matrix the role editor is built on, so a module reads identically
+   * in both places.
+   */
+  public function specialPermissionsDataAjax($userId)
+  {
+    $user = User::with(['roles', 'permissions', 'designation'])->find($userId);
+    if (!$user) {
+      return Error::response('Employee not found');
+    }
+
+    $matrix = $this->buildPermissionMatrix(config('permissions_registry'));
+    $reconciled = $this->reconcilePermissionsForUser($user, $matrix);
+    $role = $user->roles->first();
+
+    return Success::response([
+      'user' => [
+        'id' => $user->id,
+        'name' => $user->getFullName(),
+        'email' => $user->email,
+        'phone' => $user->phone,
+        'initials' => $user->getInitials(),
+        'avatar' => $user->profile_picture ? $user->getProfilePicture() : null,
+        'statusLabel' => $user->status ? ucfirst($user->status->value) : 'Unknown',
+        'designation' => optional($user->designation)->name,
+        'profileUrl' => route('employees.show', $user->id),
+      ],
+      'role' => $role ? [
+        'name' => $role->display_name,
+        'description' => $role->description,
+        'url' => route('roles.editPermissions', $role->id),
+        'multiCheckIn' => (bool) $role->is_multiple_check_in_enabled,
+        'mobileApp' => (bool) $role->is_mobile_app_access_enabled,
+        'webLogin' => (bool) $role->is_web_access_enabled,
+        'gpsTracking' => (bool) $role->is_location_activity_tracking_enabled,
+      ] : null,
+      'specialCount' => $user->permissions->count(),
+      'summary' => $reconciled['summary'],
+      'modules' => $reconciled['modules'],
+    ]);
+  }
+
+  /**
+   * Per module: every applicable permission tagged with whether it comes
+   * from the role, a direct/special grant, both, or neither, plus a rollup
+   * state (full / partial / view_only / none) for the role, special, and
+   * final columns respectively - the exact shape the reconciliation table
+   * renders one row per module from.
+   */
+  private function reconcilePermissionsForUser(User $user, array $matrix): array
+  {
+    $roleNames = $user->getPermissionsViaRoles()->pluck('name')->flip();
+    $specialNames = $user->permissions->pluck('name')->flip();
+
+    $cellFor = function ($permName, $label) use ($roleNames, $specialNames) {
+      $role = isset($roleNames[$permName]);
+      $special = isset($specialNames[$permName]);
+      return [
+        'name' => $permName,
+        'label' => $label,
+        'role' => $role,
+        'special' => $special,
+        'final' => $role || $special,
+      ];
+    };
+
+    $rollup = function (array $cells, string $key): string {
+      $total = count($cells);
+      if ($total === 0) return 'none';
+      $granted = count(array_filter($cells, fn($c) => $c[$key]));
+      if ($granted === 0) return 'none';
+      return $granted === $total ? 'full' : 'partial';
+    };
+
+    $modules = [];
+    $summary = ['totalModules' => 0, 'fullAccess' => 0, 'viewOnly' => 0, 'partial' => 0, 'notGranted' => 0];
+
+    foreach ($matrix as $moduleName => $m) {
+      $columns = [];
+      foreach ($m['crud'] as $verb => $entry) {
+        $columns[$verb] = $entry ? $cellFor($entry['name'], $entry['label']) : null;
+      }
+      $other = [];
+      foreach ($m['other'] as $permName => $label) {
+        $other[] = $cellFor($permName, $label);
+      }
+      $allCells = array_merge(array_values(array_filter($columns)), $other);
+
+      $finalState = $rollup($allCells, 'final');
+      if ($finalState === 'partial' && ($columns['view']['final'] ?? false) && count(array_filter($allCells, fn($c) => $c['final'])) === 1) {
+        $finalState = 'view_only';
+      }
+
+      $anyRole = count(array_filter($allCells, fn($c) => $c['role'])) > 0;
+      $anySpecial = count(array_filter($allCells, fn($c) => $c['special'])) > 0;
+      $source = $anyRole && $anySpecial ? 'both' : ($anyRole ? 'role' : ($anySpecial ? 'special' : 'none'));
+
+      $summary['totalModules']++;
+      match ($finalState) {
+        'full' => $summary['fullAccess']++,
+        'view_only' => $summary['viewOnly']++,
+        'partial' => $summary['partial']++,
+        default => $summary['notGranted']++,
+      };
+
+      $modules[] = [
+        'name' => $moduleName,
+        'slug' => $m['slug'],
+        'roleState' => $rollup($allCells, 'role'),
+        'specialState' => $rollup($allCells, 'special'),
+        'finalState' => $finalState,
+        'source' => $source,
+        'columns' => $columns,
+        'other' => $other,
+      ];
+    }
+
+    return ['modules' => $modules, 'summary' => $summary];
+  }
+
   public function addOrUpdateAjax(Request $request)
   {
 
@@ -48,6 +286,8 @@ class RoleController extends Controller
     // Validate the request
     $validator = validator($request->all(), [
       'name' => 'required|string|unique:roles,name' . ($request->id ? ',' . $request->id : ''),
+      'description' => 'nullable|string|max:255',
+      'preset' => 'nullable|string',
     ]);
 
     if ($validator->fails()) {
@@ -57,6 +297,7 @@ class RoleController extends Controller
     // Prepare role data
     $roleData = [
       'name' => $request->name,
+      'description' => $request->input('description') ?: null,
       'is_multiple_check_in_enabled' => $request->has('isMultiCheckInEnabled') && $request->isMultiCheckInEnabled == 'on',
       'is_mobile_app_access_enabled' => $request->has('mobileAppAccess') && $request->mobileAppAccess == 'on',
       'is_web_access_enabled' => $request->has('webAppAccess') && $request->webAppAccess == 'on',
@@ -80,23 +321,42 @@ class RoleController extends Controller
         return Error::response('Role not found');
       }
       $role->update($roleData);
-      
+
       // Sync Permissions (Filter valid names only to avoid crash)
       $requestedPermissions = $request->permissions ?? [];
       $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
-      $role->syncPermissions($existingPermissions);
-      
+
+      // SAFETY: the permissions UI only ever renders a checkbox for keys in
+      // config/permissions_registry.php. Several roles still carry older
+      // permission names from before that registry existed (e.g. the
+      // Job/Job Application/Interview Schedule family, still live-checked
+      // via Auth::user()->can(...) in the recruitment controllers) that have
+      // no checkbox anywhere in this form. Never let a save silently strip a
+      // permission it never had the chance to show - only sync away a
+      // registry-tracked one that was actually unticked.
+      $registryKeys = collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->all();
+      $outsideRegistry = $role->permissions->pluck('name')->diff($registryKeys)->values()->all();
+      $role->syncPermissions(array_values(array_unique(array_merge($existingPermissions, $outsideRegistry))));
+
       return Success::response('Role updated successfully');
     } else {
       // Create New Role
       $role = Role::create($roleData);
-      
-      // Sync Permissions (Filter valid names only to avoid crash)
-      $requestedPermissions = $request->permissions ?? [];
-      $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
+
+      // The create step only ever offers a template picker, never raw
+      // checkboxes - the permission list comes from our own config, not the
+      // request, so there is nothing here for a client to tamper with. Fine
+      // tuning happens next, on the dedicated permissions page.
+      $presetKey = $request->input('preset');
+      $presets = config('role_presets', []);
+      $presetPermissions = ($presetKey && isset($presets[$presetKey])) ? ($presets[$presetKey]['permissions'] ?? []) : [];
+      $existingPermissions = Permission::whereIn('name', $presetPermissions)->pluck('name')->toArray();
+      if ($guard = $this->guardPrivilegeEscalation($existingPermissions)) {
+        return $guard;
+      }
       $role->syncPermissions($existingPermissions);
-      
-      return Success::response('Role created successfully');
+
+      return Success::response(['message' => 'Role created successfully', 'id' => $role->id]);
     }
   }
 
@@ -191,7 +451,7 @@ class RoleController extends Controller
   public function syncUserPermissionsAjax(Request $request)
   {
     $userId = $request->user_id;
-    $user = User::find($userId);
+    $user = User::with('permissions')->find($userId);
     if (!$user) {
         return Error::response('User not found');
     }
@@ -204,7 +464,13 @@ class RoleController extends Controller
         return $guard;
     }
 
-    $user->syncPermissions($existingPermissions);
+    // SAFETY: same reasoning as the role save above - this form only ever
+    // shows a checkbox for a registry key, so it must never be the thing
+    // that silently deletes a pre-registry direct permission it was never
+    // able to display in the first place.
+    $registryKeys = collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->all();
+    $outsideRegistry = $user->permissions->pluck('name')->diff($registryKeys)->values()->all();
+    $user->syncPermissions(array_values(array_unique(array_merge($existingPermissions, $outsideRegistry))));
 
     return Success::response('User-specific permissions updated successfully');
   }
