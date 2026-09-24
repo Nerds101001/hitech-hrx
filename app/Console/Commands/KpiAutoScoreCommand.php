@@ -74,6 +74,16 @@ class KpiAutoScoreCommand extends Command
 
             foreach ($assignments as $a) {
                 [$start, $end] = KpiPeriodService::currentPeriod($a, $day);
+
+                // A KPI cannot be measured before it existed. The scorecard shows
+                // any period that has a check row, so creating one for a period
+                // that closed before the assignment was made does not just add a
+                // harmless zero -- it puts a KPI on a month's sheet that nobody
+                // was working to, and its marks into that month's denominator.
+                if ($a->created_at && $end->lt($a->created_at->copy()->startOfDay())) {
+                    continue;
+                }
+
                 $key = $a->id . '|' . $start->toDateString();
                 if (isset($seen[$key])) {
                     continue;

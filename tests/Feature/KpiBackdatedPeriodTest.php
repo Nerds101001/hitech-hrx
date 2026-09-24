@@ -150,6 +150,8 @@ class KpiBackdatedPeriodTest extends TestCase
             'target_value' => 100,
             'max_marks' => 10,
         ]);
+        // Assigned before the month it is being scored for, as a real one would be.
+        $a->forceFill(['created_at' => $this->lastMonth->copy()->subMonthNoOverflow()])->save();
 
         // Something for the source to measure: one day present in that month.
         \Illuminate\Support\Facades\DB::table('attendances')->insert([
@@ -172,6 +174,34 @@ class KpiBackdatedPeriodTest extends TestCase
         $check->refresh();
         $this->assertNotEquals(1.0, (float) $check->achieved_value,
             'the closed month was not re-scored');
+        // An auto figure has no human deadline: re-reading it later is not lateness.
+        $this->assertSame('completed_on_time', $check->status,
+            're-scoring a closed month stamped it late');
+    }
+
+    /**
+     * A re-score must not invent months. The scorecard shows any period that
+     * has a check row, so scoring a period that closed before the KPI was
+     * assigned puts a KPI on a sheet nobody was working to -- and its marks
+     * into that month's denominator. A first run of --months=6 created 1,228
+     * such rows for 50 people before this guard existed.
+     */
+    public function test_a_period_that_closed_before_the_kpi_existed_is_skipped(): void
+    {
+        $a = $this->assignment([
+            'data_source' => 'auto:attendance_percent',
+            'target_value' => 100,
+        ]);
+        $a->forceFill(['created_at' => Carbon::today()->startOfMonth()])->save();
+
+        $this->artisan('kpi:auto-score', [
+            '--user' => $this->rep->id,
+            '--months' => 6,
+        ])->assertSuccessful();
+
+        $earliest = KpiCheck::where('kpi_assignment_id', $a->id)->min('period_start');
+        $this->assertSame(Carbon::today()->startOfMonth()->toDateString(), $earliest,
+            'a period that ended before the KPI was assigned was scored anyway');
     }
 
     /** --dry changes nothing. */

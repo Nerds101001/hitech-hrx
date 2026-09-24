@@ -174,7 +174,11 @@ class KpiPeriodService
         $check = self::sync($a, $day);
         $check->achieved_value = $achieved;
         $check->score = self::targetScore($a, $achieved);
-        $onTime = Carbon::today()->lte($check->due_date);
+        // Judged from the day being scored, not the day the scoring ran. An
+        // auto-sourced figure involves no human deadline: re-reading August's
+        // sales in September would otherwise stamp every row 'Late' and put
+        // that word on the sheet of somebody who did nothing late.
+        $onTime = ($day ? $day->copy()->startOfDay() : Carbon::today())->lte($check->due_date);
         $check->status = $onTime ? 'completed_on_time' : 'completed_late';
         $check->completed_at = Carbon::now();
         if ($evaluatorId) $check->evaluated_by_id = $evaluatorId;
