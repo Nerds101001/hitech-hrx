@@ -21,6 +21,35 @@ use Yajra\DataTables\Facades\DataTables;
 
 class LeaveController extends Controller
 {
+  /**
+   * Two approval tiers, additive on top of today's role defaults:
+   *  - leave.approve.all  : anyone's request (admin/hr already get this by role)
+   *  - leave.approve.team : only people who report to you (manager already
+   *    gets this by role, scoped the same way getListAjax() already scopes
+   *    what a manager SEES — this just makes the action agree with the list).
+   *
+   * Before this, actionAjax()/bulkActionAjax() had no scope check at all: any
+   * non-accounts user who could reach this page could approve/reject ANY
+   * leave request by id, not just the ones the list ever showed them. The
+   * UI never sent an out-of-scope id, so this was invisible in normal use,
+   * but nothing stopped a crafted request. Both action methods now check
+   * this before writing, using the identical managerIdentityIds() scope the
+   * list already uses — so an already-legitimate approval keeps working
+   * exactly as before, and only an out-of-scope id newly gets rejected.
+   */
+  private function canApproveFor($actor, int $targetUserId): bool
+  {
+    if ($actor->hasRole(['admin', 'hr']) || $actor->can('leave.approve.all')) {
+        return true;
+    }
+    if ($actor->hasRole('manager') || $actor->can('leave.approve.team')) {
+        $scopedIds = User::whereIn('reporting_to_id', $actor->managerIdentityIds())
+            ->notTerminated()->pluck('id')->toArray();
+        return in_array($targetUserId, $scopedIds, true);
+    }
+    return false;
+  }
+
   public function index()
   {
     $employees = User::select('id', 'first_name', 'last_name', 'code')
@@ -377,9 +406,13 @@ class LeaveController extends Controller
     try {
 
       $leaveRequest = LeaveRequest::findOrFail($validated['id']);
-      
+
       if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
           return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own leave request.']);
+      }
+
+      if (!$this->canApproveFor(auth()->user(), $leaveRequest->user_id)) {
+          return response()->json(['status' => 'error', 'message' => 'This leave request is outside what you can approve.']);
       }
 
       $leaveRequest->status = $validated['status'];
@@ -432,9 +465,13 @@ class LeaveController extends Controller
       // Process Leaves
       if (count($leaveIds) > 0) {
           $leaveRequests = LeaveRequest::whereIn('id', $leaveIds)->get();
+          $actor = auth()->user();
           foreach ($leaveRequests as $leaveRequest) {
             if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
                 continue; // Skip their own requests
+            }
+            if (!$this->canApproveFor($actor, $leaveRequest->user_id)) {
+                continue; // Skip requests outside what this actor can approve
             }
             $newStatus = LeaveRequestStatus::tryFrom($validated['status']) ?? $validated['status'];
             $leaveRequest->status = $newStatus;
@@ -458,6 +495,9 @@ class LeaveController extends Controller
           foreach ($outdoorDuties as $duty) {
               if ($duty->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
                   continue; // Cannot approve/reject own outdoor duty
+              }
+              if (!$this->canApproveFor($actor, $duty->user_id)) {
+                  continue; // Skip requests outside what this actor can approve
               }
               $duty->status = $validated['status'];
               if ($validated['status'] === 'approved') {

@@ -41,6 +41,8 @@ return [
 
     'Leaves' => [
         'leave.approve' => 'Approve / Reject Leave',
+        'leave.approve.team' => 'Approve Leave — Own Reports Only',
+        'leave.approve.all' => 'Approve Leave — Company-wide',
         'leave.create_type' => 'Create Leave Type',
         'leave.create_policy' => 'Create Leave Policy',
         'leave.view_all' => 'View All Leaves',
