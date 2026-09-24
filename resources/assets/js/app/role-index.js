@@ -73,6 +73,36 @@ document.addEventListener('DOMContentLoaded', function (e) {
     $('#rpAdvancedSection').toggleClass('d-none');
   });
 
+  // ── Grant button on a hidden reachability item ────────────────────────
+  // Ticks whichever of that item's alternative permissions actually have a
+  // checkbox on this page (any one satisfies the underlying role_or_permission
+  // check), opens Advanced so the change is visible, and leaves Save as the
+  // explicit last step - this never writes anything by itself.
+  $(document).on('click', '.rp-grant-btn', function () {
+    var $btn = $(this);
+    var perms = ($btn.data('permissions') || '').toString().split(',').filter(Boolean);
+    if (!perms.length) return;
+
+    $('#rpAdvancedSection').removeClass('d-none');
+    $('#rpAdvancedToggle').addClass('rp-advanced-open');
+
+    var $firstRow = null;
+    perms.forEach(function (p) {
+      var $cb = $('#rpPanel .rp-permission-checkbox[value="' + p + '"]');
+      if ($cb.length) {
+        $cb.prop('checked', true).trigger('change');
+        if (!$firstRow) $firstRow = $cb.closest('tr, .rp-chip');
+      }
+    });
+
+    $btn.addClass('rp-grant-done').html('<i class="bx bx-check"></i> Granted — click Save below');
+    if ($firstRow && $firstRow.length) {
+      $firstRow[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      $firstRow.css('background', '#dcfce7');
+      setTimeout(function () { $firstRow.css('background', ''); }, 1500);
+    }
+  });
+
   // A switch's ON/OFF look normally comes from the browser's own
   // `:checked + label` CSS matching. That's fine for an ordinary saved
   // setting, but #rpGrantAll isn't one - it's a value CLIENT-COMPUTED from

@@ -70,7 +70,14 @@
             <span class="pmt-badge {{ $item['visible'] ? 'pmt-badge-on' : 'pmt-badge-off' }}">{{ $item['visible'] ? 'VISIBLE' : 'HIDDEN' }}</span>
           </div>
           @if(!$item['visible'] && $item['reason'])
-            <div class="pmt-reason">{{ $item['reason'] }}</div>
+            <div class="pmt-reason">
+              {{ $item['reason'] }}
+              @if(!empty($item['grantable']))
+                <button type="button" class="rp-grant-btn" data-permissions="{{ implode(',', $item['grantable']) }}" data-section="{{ $item['name'] }}">
+                  <i class="bx bx-plus-circle"></i> @lang('Grant')
+                </button>
+              @endif
+            </div>
           @endif
         </div>
       @endforeach

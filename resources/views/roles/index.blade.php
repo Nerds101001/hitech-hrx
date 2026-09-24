@@ -110,6 +110,13 @@
 .rp-reach-stat-label { font-size: .65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
 .rp-reach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
 .rp-reach-item.pmt-item { margin-bottom: 0; }
+.rp-grant-btn {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 10px;
+  background: #127464; color: #fff; border: none; border-radius: 20px;
+  font-size: .66rem; font-weight: 700; cursor: pointer; transition: all .15s; vertical-align: middle;
+}
+.rp-grant-btn:hover { background: #0d5c50; }
+.rp-grant-btn.rp-grant-done { background: #dcfce7; color: #166534; cursor: default; }
 
 /* Advanced section toggle - deliberately quiet until opened */
 .rp-advanced-toggle {

@@ -168,36 +168,41 @@ class Nav
             return false;
         };
 
+        $registryKeys = array_flip(collect(config('permissions_registry'))->flatMap(fn($p) => array_keys($p))->all());
+
         // Same gates the render loop applies at each level - a parent AND a
         // child can each carry their own addon/roles/permission/department.
-        // Returns null when the item passes, or the SPECIFIC reason it
-        // doesn't - these read very differently to whoever's looking
-        // ("this whole feature is switched off site-wide" vs "this person
-        // specifically lacks a permission"), and collapsing them into one
-        // generic message is actively misleading, not just imprecise.
-        $gateReason = function ($item) use ($user, $isAdminUser, $hasAnyPermission, $addonService, $settings) {
+        // Returns null when the item passes, or ['text' => ..., 'grantable'
+        // => [...]] when it doesn't. 'grantable' is only ever populated for
+        // a permission gate, and only with names that are real, manageable
+        // registry keys - an addon/role/department gate has no per-role fix
+        // a checkbox could ever represent (switching off "Reports" for
+        // everyone isn't undone by ticking a box on one role's form), so
+        // offering one there would be a button that lies about what it does.
+        $gateReason = function ($item) use ($user, $isAdminUser, $hasAnyPermission, $addonService, $settings, $registryKeys) {
             if (isset($item->addon) && !$addonService->isAddonEnabled($item->addon)) {
-                return "The \"{$item->addon}\" add-on is switched off site-wide - not specific to this person or role.";
+                return ['text' => "The \"{$item->addon}\" add-on is switched off site-wide - not specific to this person or role.", 'grantable' => []];
             }
             if (isset($item->standardAddon)
                 && !in_array($item->standardAddon, $settings->available_modules ?? [])) {
-                return "The \"{$item->standardAddon}\" module is switched off site-wide - not specific to this person or role.";
+                return ['text' => "The \"{$item->standardAddon}\" module is switched off site-wide - not specific to this person or role.", 'grantable' => []];
             }
             if (isset($item->roles)) {
                 $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $item->roles);
                 if (empty(array_intersect($ur, $rr))) {
-                    return 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list.';
+                    return ['text' => 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list.', 'grantable' => []];
                 }
             }
             if (isset($item->permission) && !$isAdminUser) {
                 if (!$hasAnyPermission($item->permission)) {
-                    return 'Requires permission: ' . implode(' or ', (array) $item->permission) . ', which this role doesn\'t hold.';
+                    $options = array_values(array_filter((array) $item->permission, fn($p) => isset($registryKeys[$p])));
+                    return ['text' => 'Requires permission: ' . implode(' or ', (array) $item->permission) . ', which this role doesn\'t hold.', 'grantable' => $options];
                 }
             }
             if (isset($item->department) && !$isAdminUser) {
                 if (!$user->department || stripos($user->department->name, $item->department) === false) {
-                    return "Limited to the \"{$item->department}\" department" . ($user->department ? " - this person is in \"{$user->department->name}\"." : ' - this person has no department set.');
+                    return ['text' => "Limited to the \"{$item->department}\" department" . ($user->department ? " - this person is in \"{$user->department->name}\"." : ' - this person has no department set.'), 'grantable' => []];
                 }
             }
             return null;
@@ -209,17 +214,19 @@ class Nav
                 continue; // section labels, nothing to preview
             }
 
-            $parentGateReason = $gateReason($item);
+            $parentGate = $gateReason($item);
             $entry = [
                 'name' => $item->name ?? '(unnamed)',
                 'icon' => $item->icon ?? null,
                 'visible' => false,
                 'reason' => null,
+                'grantable' => [],
                 'submenu' => null,
             ];
 
-            if ($parentGateReason !== null) {
-                $entry['reason'] = $parentGateReason;
+            if ($parentGate !== null) {
+                $entry['reason'] = $parentGate['text'];
+                $entry['grantable'] = $parentGate['grantable'];
                 $tree[] = $entry;
                 continue;
             }
@@ -228,15 +235,16 @@ class Nav
                 $children = [];
                 $anyChildVisible = false;
                 foreach ($item->submenu as $sub) {
-                    $childGateReason = $gateReason($sub);
-                    $urlOk = $childGateReason === null && (!isset($sub->url) || self::allows(url($sub->url), $user));
+                    $childGate = $gateReason($sub);
+                    $urlOk = $childGate === null && (!isset($sub->url) || self::allows(url($sub->url), $user));
                     $anyChildVisible = $anyChildVisible || $urlOk;
                     $children[] = [
                         'name' => $sub->name ?? '(unnamed)',
                         'url' => $sub->url ?? null,
                         'visible' => $urlOk,
-                        'reason' => $urlOk ? null : ($childGateReason
+                        'reason' => $urlOk ? null : ($childGate['text']
                             ?? 'The route itself refuses this person (role/permission check on the page, not the menu).'),
+                        'grantable' => $urlOk ? [] : ($childGate['grantable'] ?? []),
                     ];
                 }
                 $entry['visible'] = $anyChildVisible;
