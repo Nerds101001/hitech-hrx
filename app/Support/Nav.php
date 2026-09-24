@@ -168,24 +168,39 @@ class Nav
             return false;
         };
 
-        // Same three gates the render loop applies at each level - a parent
-        // AND a child can each carry their own roles/permission/department.
-        $passesGate = function ($item) use ($user, $isAdminUser, $hasAnyPermission, $addonService, $settings) {
-            if (isset($item->addon) && !$addonService->isAddonEnabled($item->addon)) return false;
+        // Same gates the render loop applies at each level - a parent AND a
+        // child can each carry their own addon/roles/permission/department.
+        // Returns null when the item passes, or the SPECIFIC reason it
+        // doesn't - these read very differently to whoever's looking
+        // ("this whole feature is switched off site-wide" vs "this person
+        // specifically lacks a permission"), and collapsing them into one
+        // generic message is actively misleading, not just imprecise.
+        $gateReason = function ($item) use ($user, $isAdminUser, $hasAnyPermission, $addonService, $settings) {
+            if (isset($item->addon) && !$addonService->isAddonEnabled($item->addon)) {
+                return "The \"{$item->addon}\" add-on is switched off site-wide - not specific to this person or role.";
+            }
             if (isset($item->standardAddon)
-                && !in_array($item->standardAddon, $settings->available_modules ?? [])) return false;
+                && !in_array($item->standardAddon, $settings->available_modules ?? [])) {
+                return "The \"{$item->standardAddon}\" module is switched off site-wide - not specific to this person or role.";
+            }
             if (isset($item->roles)) {
                 $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $item->roles);
-                if (empty(array_intersect($ur, $rr))) return false;
+                if (empty(array_intersect($ur, $rr))) {
+                    return 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list.';
+                }
             }
             if (isset($item->permission) && !$isAdminUser) {
-                if (!$hasAnyPermission($item->permission)) return false;
+                if (!$hasAnyPermission($item->permission)) {
+                    return 'Requires permission: ' . implode(' or ', (array) $item->permission) . ', which this role doesn\'t hold.';
+                }
             }
             if (isset($item->department) && !$isAdminUser) {
-                if (!$user->department || stripos($user->department->name, $item->department) === false) return false;
+                if (!$user->department || stripos($user->department->name, $item->department) === false) {
+                    return "Limited to the \"{$item->department}\" department" . ($user->department ? " - this person is in \"{$user->department->name}\"." : ' - this person has no department set.');
+                }
             }
-            return true;
+            return null;
         };
 
         $tree = [];
@@ -194,7 +209,7 @@ class Nav
                 continue; // section labels, nothing to preview
             }
 
-            $parentGateOk = $passesGate($item);
+            $parentGateReason = $gateReason($item);
             $entry = [
                 'name' => $item->name ?? '(unnamed)',
                 'icon' => $item->icon ?? null,
@@ -203,8 +218,8 @@ class Nav
                 'submenu' => null,
             ];
 
-            if (!$parentGateOk) {
-                $entry['reason'] = 'Restricted to a role, permission, or department this person does not have.';
+            if ($parentGateReason !== null) {
+                $entry['reason'] = $parentGateReason;
                 $tree[] = $entry;
                 continue;
             }
@@ -213,17 +228,15 @@ class Nav
                 $children = [];
                 $anyChildVisible = false;
                 foreach ($item->submenu as $sub) {
-                    $childGateOk = $passesGate($sub);
-                    $urlOk = !isset($sub->url) || self::allows(url($sub->url), $user);
-                    $visible = $childGateOk && $urlOk;
-                    $anyChildVisible = $anyChildVisible || $visible;
+                    $childGateReason = $gateReason($sub);
+                    $urlOk = $childGateReason === null && (!isset($sub->url) || self::allows(url($sub->url), $user));
+                    $anyChildVisible = $anyChildVisible || $urlOk;
                     $children[] = [
                         'name' => $sub->name ?? '(unnamed)',
                         'url' => $sub->url ?? null,
-                        'visible' => $visible,
-                        'reason' => $visible ? null : (!$childGateOk
-                            ? 'Restricted to a role, permission, or department this person does not have.'
-                            : 'The route itself refuses this person (role/permission check on the page, not the menu).'),
+                        'visible' => $urlOk,
+                        'reason' => $urlOk ? null : ($childGateReason
+                            ?? 'The route itself refuses this person (role/permission check on the page, not the menu).'),
                     ];
                 }
                 $entry['visible'] = $anyChildVisible;
