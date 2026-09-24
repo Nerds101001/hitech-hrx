@@ -145,3 +145,17 @@ vite.config.js.timestamp-*
 # publish those credentials to everyone with repo access.
 /CRM.API/
 /CRM.API.zip
+
+# Generated KPI scorecards. Produced on demand by /kpi/my?pdf= and
+# /performance/scorecards?pdf=, landing in the repo root when run from here -
+# byproducts of a report run, not source, and they carry named employees'
+# appraisal figures.
+/KPI-Scorecard-*.pdf
+
+# Work-order QC reports downloaded for reference while investigating.
+/QC Report - *.pdf
+
+# A 265 MB Google Drive installer that was downloaded into the repo root.
+# Committing it would bloat every clone permanently and could only be undone
+# by rewriting history.
+/GoogleDriveSetup.exe
