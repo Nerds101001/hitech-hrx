@@ -87,8 +87,7 @@
             "slug": "reports.index",
             "roles": [
                 "admin",
-                "hr",
-                "accounts"
+                "hr"
             ]
         },
         {
