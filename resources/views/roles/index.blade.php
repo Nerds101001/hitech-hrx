@@ -8,8 +8,6 @@
 
 @section('vendor-style')
   @vite([
-    'resources/assets/vendor/libs/datatables-bs5/datatables.bootstrap5.scss',
-    'resources/assets/vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.scss',
     'resources/assets/vendor/libs/@form-validation/form-validation.scss',
     'resources/assets/vendor/libs/animate-css/animate.scss',
     'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
@@ -19,7 +17,6 @@
 
 @section('vendor-script')
   @vite([
-    'resources/assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js',
     'resources/assets/vendor/libs/@form-validation/popular.js',
     'resources/assets/vendor/libs/@form-validation/bootstrap5.js',
     'resources/assets/vendor/libs/@form-validation/auto-focus.js',
@@ -35,177 +32,224 @@
 @endsection
 
 @section('content')
-  {{-- 1. HITECH HERO SECTION --}}
-  <div class="hitech-page-hero animate__animated animate__fadeIn">
-      <div class="hitech-page-hero-text">
-          <h1 class="greeting">@lang('Roles & Permissions')</h1>
-          <p class="sub-text">@lang('Manage system access levels, security roles, and functional permissions.')</p>
-      </div>
-      <div class="emp-hero-meta">
-          <div class="hero-quick-stat">
-              <div class="stat-value">{{ count($roles) }}</div>
-              <div class="stat-label">@lang('Roles')</div>
-          </div>
-          <div class="hero-quick-stat">
-              <div class="stat-value">{{ \App\Models\User::count() }}</div>
-              <div class="stat-label">@lang('Users')</div>
-          </div>
-          <button type="button" class="btn btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center px-4"
-                  data-bs-target="#previewAccessModal" data-bs-toggle="modal">
-              <i class="bx bx-show-alt me-1"></i> @lang('Preview Access')
-          </button>
-      </div>
+<style>
+/* ── Roles & Permissions — master-detail shell, scoped to this page ──── */
+.rp-shell-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem; }
+.rp-shell-title { font-size: 1.5rem; font-weight: 800; color: #1e293b; margin-bottom: .2rem; }
+.rp-shell-sub { color: #64748b; font-size: .88rem; margin: 0; }
+.rp-shell-stats { display: flex; align-items: center; gap: .75rem; }
+.rp-stat-pill { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--hitech-border); border-radius: 14px; padding: .55rem 1rem; }
+.rp-stat-pill i { font-size: 1.1rem; color: #127464; }
+.rp-stat-pill-value { font-weight: 800; color: #1e293b; font-size: .95rem; line-height: 1; }
+.rp-stat-pill-label { font-size: .65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+
+.rp-shell-body { display: flex; align-items: flex-start; gap: 1.5rem; }
+
+.rp-role-col { width: 300px; flex-shrink: 0; }
+.rp-role-search { margin-bottom: .85rem; }
+.rp-role-list { max-height: calc(100vh - 15rem); overflow-y: auto; display: flex; flex-direction: column; gap: 3px; padding-right: 2px; }
+.rp-role-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  border: 1px solid transparent; transition: all .15s;
+}
+.rp-role-row:hover { background: #fff; border-color: var(--hitech-border); }
+.rp-role-row.rp-role-active { background: var(--hitech-primary-light); border-color: rgba(18,116,100,.25); }
+.rp-role-row-icon { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: rgba(18,116,100,.1); color: #127464; flex-shrink: 0; }
+.rp-role-row-info { min-width: 0; flex: 1; }
+.rp-role-row-name { font-size: .85rem; font-weight: 700; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-role-row-count { font-size: .7rem; color: #94a3b8; }
+.rp-role-row-badge { font-size: .6rem; font-weight: 800; border-radius: 20px; padding: 2px 8px; flex-shrink: 0; }
+.rp-role-row-badge.rp-badge-system { background: #dcfce7; color: #166534; }
+.rp-role-row-badge.rp-badge-custom { background: rgba(245,166,35,.15); color: #92610f; }
+
+.rp-detail-col { flex: 1; min-width: 0; }
+.rp-detail-col .hitech-card,
+.rp-panel-wrap { background: #fff; border: 1px solid var(--hitech-border); border-radius: 20px; padding: 1.5rem 1.75rem; box-shadow: 0 4px 20px rgba(0,0,0,.02); }
+
+/* Panel header */
+.rp-panel-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding-bottom: 1.25rem; border-bottom: 1px solid #f1f5f9; }
+.rp-panel-head-left { display: flex; align-items: center; gap: 14px; }
+.rp-panel-icon { width: 46px !important; height: 46px !important; font-size: 1.3rem !important; margin-bottom: 0 !important; flex-shrink: 0; }
+.rp-name-row { display: flex; align-items: center; gap: 8px; }
+.rp-name-input {
+  background: transparent; border: none; border-bottom: 2px solid transparent; color: #1e293b;
+  font-size: 1.15rem; font-weight: 800; padding: 2px 2px; max-width: 280px; border-radius: 4px; transition: all .2s;
+}
+.rp-name-input:hover:not([readonly]) { border-bottom-color: #cbd5e1; }
+.rp-name-input:focus { outline: none; border-bottom-color: #127464; background: #f8fafc; }
+.rp-desc-input {
+  display: block; background: transparent; border: none; border-bottom: 1px dashed transparent; color: #64748b;
+  font-size: .8rem; padding: 2px 2px; margin-top: 3px; max-width: 340px; width: 100%; border-radius: 4px; transition: all .2s;
+}
+.rp-desc-input:hover { border-bottom-color: #cbd5e1; }
+.rp-desc-input:focus { outline: none; border-bottom-color: #127464; background: #f8fafc; }
+.rp-panel-head-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rp-panel-stat { text-align: center; }
+.rp-panel-stat-value { font-size: 1.1rem; font-weight: 800; color: #1e293b; line-height: 1; }
+.rp-panel-stat-label { font-size: .6rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+
+/* Tabs */
+.rp-tabs { display: flex; gap: 1.5rem; margin-top: 1.1rem; border-bottom: 1px solid var(--hitech-border); }
+.rp-tab { padding: 10px 2px; font-size: .84rem; font-weight: 700; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
+.rp-tab.rp-tab-active { color: #127464; border-bottom-color: #127464; }
+
+/* Toolbar */
+.rp-toolbar { background: rgba(248,250,252,.9); border: 1px solid var(--hitech-border); border-radius: 14px; padding: .75rem 1rem; margin: 1.1rem 0; }
+.rp-toolbar-inner { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
+.rp-search { flex: 1 1 220px; max-width: 280px; }
+.rp-search input { font-size: .85rem; }
+.rp-preset-picker { flex: 0 0 auto; width: 220px; }
+.rp-preset-picker .form-select { font-size: .8rem; font-weight: 600; }
+.rp-toolbar-divider { width: 1px; align-self: stretch; background: var(--hitech-border); margin: 0 .25rem; }
+.rp-admin-toggle { display: flex; align-items: center; gap: .6rem; font-size: .76rem; font-weight: 700; color: #127464; cursor: pointer; margin-left: auto; white-space: nowrap; }
+#rpPresetHint { flex-basis: 100%; font-size: .74rem; color: #64748b; margin: -.25rem 0 0; }
+.rp-legend { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
+.rp-legend-item { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 700; color: #64748b; white-space: nowrap; }
+.rp-legend-swatch { width: 14px; height: 14px; border-radius: 4px; border: 2px solid #d8dfe4; background: #fff; flex-shrink: 0; }
+.rp-legend-swatch.rp-legend-granted { background: #127464; border-color: #127464; position: relative; }
+.rp-legend-swatch.rp-legend-granted::after { content: ''; position: absolute; left: 3px; top: 0; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.rp-legend-swatch.rp-legend-partial { background: rgba(245,166,35,.15); border-color: #f5a623; }
+
+/* Matrix table */
+.rp-matrix-wrap { border: 1px solid var(--hitech-border); border-radius: 16px; overflow: hidden; }
+.rp-matrix-table { width: 100%; margin: 0; border-collapse: collapse; }
+.rp-matrix-table thead th { background: rgba(18,116,100,.03); border: none; padding: 11px 14px; color: #127464; font-weight: 700; font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.rp-matrix-table thead th.text-center { text-align: center; }
+.rp-matrix-table tbody tr { border-top: 1px solid #f1f5f9; transition: background .15s; }
+.rp-matrix-table tbody tr:hover { background: #fbfdfd; }
+.rp-matrix-table td { padding: 11px 14px; vertical-align: middle; }
+.rp-matrix-module { display: flex; align-items: center; gap: 9px; min-width: 170px; }
+.rp-module-icon { margin-bottom: 0 !important; flex-shrink: 0; width: 30px !important; height: 30px !important; font-size: .95rem !important; }
+.rp-module-title { font-size: .82rem; font-weight: 800; color: #1e293b; }
+.rp-crud-cell { text-align: center; width: 60px; }
+.rp-matrix-na { color: #d8dfe4; font-size: 1rem; }
+.hitech-checkbox.rp-crud-check .checkmark { width: 16px; height: 16px; margin-right: 0; }
+
+.rp-other-cell { min-width: 240px; }
+.rp-other-chips { display: flex; flex-wrap: wrap; gap: 5px 12px; }
+.rp-chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; margin: 0; }
+.rp-chip .chip-box { position: relative; width: 15px; height: 15px; border-radius: 5px; flex-shrink: 0; background: rgba(18,116,100,.05); border: 1.5px solid rgba(18,116,100,.25); transition: all .15s; }
+.rp-chip .chip-box::after { content: ''; position: absolute; display: none; left: 3px; top: 0; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.rp-chip input { position: absolute; opacity: 0; width: 0; height: 0; }
+.rp-chip input:checked ~ .chip-box { background: #127464; border-color: #127464; }
+.rp-chip input:checked ~ .chip-box::after { display: block; }
+.rp-chip-label { font-size: .74rem; font-weight: 600; color: #475569; }
+.rp-chip-unwired .rp-chip-label { color: #94a3b8; }
+.rp-unwired-dot { color: #f5a623; font-size: .78rem; cursor: help; }
+.rp-hidden-by-search { display: none !important; }
+
+/* Access Channels (Advanced tab) */
+.rp-channels-card { border: 1px solid var(--hitech-border) !important; }
+.rp-channels-head { display: flex; align-items: center; gap: 12px; padding: 1.1rem 1.4rem; }
+.rp-channels-body { padding: .2rem 1.4rem 1.3rem; border-top: 1px solid #f1f5f9; }
+.rp-tile-grid-channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 4px 18px; padding-top: 1rem; }
+.rp-tile { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; transition: background .15s; }
+.rp-tile:hover { background: #f8fafc; }
+.rp-tile-switch { flex-shrink: 0; transform: scale(.8); transform-origin: left center; }
+.rp-tile-label { font-size: .81rem; font-weight: 600; color: #334155; }
+
+/* Footer / save bar */
+.rp-save-bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 1.25rem; padding-top: 1.1rem; border-top: 1px solid #f1f5f9; }
+.rp-save-summary { font-size: .82rem; color: #64748b; }
+.rp-save-summary strong { color: #127464; font-size: 1rem; }
+.rp-copy-picker { width: 200px; }
+.rp-copy-picker .form-select { font-size: .8rem; }
+
+@media (max-width: 992px) {
+  .rp-role-col { display: none; }
+  .rp-toolbar-inner { flex-direction: column; align-items: stretch; }
+  .rp-admin-toggle { margin-left: 0; }
+}
+</style>
+
+{{-- Header --}}
+<div class="rp-shell-header animate__animated animate__fadeIn">
+  <div>
+    <h1 class="rp-shell-title">@lang('Roles & Permissions')</h1>
+    <p class="rp-shell-sub">@lang('Manage system access levels, security roles, and functional permissions.')</p>
   </div>
-  
-  {{-- 2. ROLE CARDS GRID --}}
-  <div class="row g-6 animate__animated animate__fadeInUp">
-    @foreach($roles as $role)
-      <div class="col-xl-4 col-lg-6 col-md-6">
-        <div class="hitech-card h-100 shadow-sm border-0 transition-3d">
-          <div class="role-card-content h-100 d-flex flex-column">
-            <div class="hitech-card-header border-bottom-0 p-0 mb-4 d-flex justify-content-between align-items-start">
-                <div>
-                  <h5 class="title mb-0 fw-bold" style="color: #005a5a; font-size: 1.15rem;">{{$role->display_name}}</h5>
-                  @if($role->description)
-                    <p class="text-muted small mb-0 mt-1">{{ $role->description }}</p>
-                  @endif
-                </div>
-                @if(in_array($role->name, Constants::BuiltInRoles))
-                    <span class="badge bg-label-success rounded-pill px-3 flex-shrink-0">System</span>
-                @else
-                    <span class="badge bg-label-warning rounded-pill px-3 flex-shrink-0">Custom</span>
-                @endif
-            </div>
+  <div class="rp-shell-stats">
+    <div class="rp-stat-pill"><i class="bx bx-group"></i><div><div class="rp-stat-pill-value">{{ $roles->count() }}</div><div class="rp-stat-pill-label">@lang('Total Roles')</div></div></div>
+    <div class="rp-stat-pill"><i class="bx bx-user"></i><div><div class="rp-stat-pill-value">{{ $users->count() }}</div><div class="rp-stat-pill-label">@lang('Total Users')</div></div></div>
+    <div class="rp-stat-pill"><i class="bx bx-shield"></i><div><div class="rp-stat-pill-value">{{ $roles->filter(fn($r) => in_array($r->name, Constants::BuiltInRoles))->count() }}</div><div class="rp-stat-pill-label">@lang('System Roles')</div></div></div>
+    <button type="button" class="btn btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center px-3"
+            data-bs-target="#previewAccessModal" data-bs-toggle="modal">
+        <i class="bx bx-show-alt me-1"></i> @lang('Preview Access')
+    </button>
+    <button data-bs-target="#addOrUpdateRoleModal" data-bs-toggle="modal" class="btn btn-primary btn-hitech-glow add-new-role">
+      <i class="bx bx-plus me-1"></i> @lang('Create New Role')
+    </button>
+  </div>
+</div>
 
-            <div class="d-flex justify-content-between align-items-center mb-5">
-              <div class="d-flex flex-column">
-                  <h6 class="fw-bold mb-1 text-heading" style="font-size: 0.95rem;">@lang('Users Assigned')</h6>
-                  <small class="text-muted">{{$role->users()->count()}} @lang('Total')</small>
-              </div>
-              <ul class="list-unstyled d-flex align-items-center avatar-group mb-0 ms-2">
-                @foreach($role->users()->limit(4)->get() as $user)
-                  @php
-                    $randomStatusColor = ['primary', 'success', 'danger', 'warning', 'info', 'dark'];
-                    $randomColor = $randomStatusColor[array_rand($randomStatusColor)];
-                  @endphp
-                  <li data-bs-toggle="tooltip" data-popup="tooltip-custom" data-bs-placement="top"
-                      title="{{$user->getFullName()}}"
-                      class="avatar avatar-sm pull-up">
-                    @if($user->profile_picture)
-                      <img class="rounded-circle"
-                           src="{{$user->getProfilePicture()}}"
-                           alt="Avatar">
-                    @else
-                      <span
-                        class="avatar-initial rounded-circle bg-label-{{$randomColor}}">{{ $user->getInitials() }}</span>
-                    @endif
-                  </li>
-                @endforeach
-                @if($role->users()->count() > 4)
-                  <li class="avatar avatar-sm">
-                    <span class="avatar-initial rounded-circle pull-up bg-label-secondary" data-bs-toggle="tooltip"
-                          data-bs-placement="bottom"
-                          title="{{$role->users()->count() - 4}} more">+{{$role->users()->count() - 4}}</span>
-                  </li>
-                @endif
-              </ul>
-            </div>
-            
-            <div class="d-flex justify-content-end gap-3 pt-4 border-top mt-auto">
-                <a href="{{ route('roles.editPermissions', $role->id) }}" class="btn btn-icon btn-label-warning rounded-circle shadow-sm" style="width: 38px; height: 38px;"
-                   data-bs-toggle="tooltip" data-bs-placement="top" title="Configure permissions">
-                    <i class="bx bx-pencil fs-5"></i>
-                </a>
-                @if(!in_array($role->name, Constants::BuiltInRoles))
-                <a href="javascript:void(0);" class="btn btn-icon btn-label-danger rounded-circle shadow-sm" onclick="deleteRole({{$role->id}})" style="width: 38px; height: 38px;">
-                    <i class="bx bx-trash fs-5"></i>
-                </a>
-                @endif
-            </div>
+<div class="rp-shell-body animate__animated animate__fadeInUp">
+  {{-- Role list --}}
+  <aside class="rp-role-col">
+    <div class="search-wrapper-hitech rp-role-search">
+      <i class='bx bx-search ms-2 text-muted'></i>
+      <input type="text" id="rpRoleSearch" class="form-control border-0 shadow-none" placeholder="@lang('Search role…')">
+    </div>
+    <div class="rp-role-list" id="rpRoleList">
+      @foreach($roles as $r)
+        @php $rIsBuiltIn = in_array($r->name, Constants::BuiltInRoles); @endphp
+        <div class="rp-role-row {{ $selectedRole && $selectedRole->id === $r->id ? 'rp-role-active' : '' }}" data-id="{{ $r->id }}" data-name="{{ strtolower($r->name) }}">
+          <span class="rp-role-row-icon"><i class="bx {{ $rIsBuiltIn ? 'bx-crown' : 'bx-shield-quarter' }}"></i></span>
+          <div class="rp-role-row-info">
+            <div class="rp-role-row-name">{{ $r->display_name }}</div>
+            <div class="rp-role-row-count">{{ $r->users_count }} @lang('users')</div>
           </div>
+          <span class="rp-role-row-badge {{ $rIsBuiltIn ? 'rp-badge-system' : 'rp-badge-custom' }}">{{ $rIsBuiltIn ? 'System' : 'Custom' }}</span>
         </div>
-      </div>
-    @endforeach
+      @endforeach
+    </div>
+  </aside>
 
-    
-    <div class="col-xl-4 col-lg-6 col-md-6">
-      <div class="hitech-card h-100 d-flex align-items-center justify-content-center" style="border: 2px dashed #e2e8f0 !important;">
-        <div class="card-body text-center d-flex flex-column align-items-center justify-content-center h-100 py-5">
-            <div class="stat-icon-wrap icon-teal mb-3" style="width: 50px; height: 50px; font-size: 1.5rem;">
-                <i class="bx bx-plus"></i>
-            </div>
-            <button data-bs-target="#addOrUpdateRoleModal" data-bs-toggle="modal"
-                  class="btn btn-primary btn-hitech-glow mb-2 text-nowrap add-new-role">
-              @lang('Create New Role')
-            </button>
-            <p class="mb-0 text-muted small px-4">Define new access levels for your team.</p>
+  {{-- Detail panel --}}
+  <main class="rp-detail-col">
+    <div class="rp-panel-wrap" id="rpPanel">
+      @if($selectedRole)
+        @include('roles._permission-panel')
+      @else
+        <div class="text-center py-5 text-muted">@lang('No roles yet — create one to get started.')</div>
+      @endif
+    </div>
+  </main>
+</div>
+
+@if($settings->is_helper_text_enabled)
+  <div class="alert alert-warning alert-dismissible fade show mt-5 animate__animated animate__fadeIn hitech-note-card" role="alert" style="background: rgba(255, 171, 0, 0.05); border: 1px solid rgba(255, 171, 0, 0.2); color: #ffab00;">
+    <div class="d-flex align-items-center">
+        <i class="bx bx-info-circle me-3 fs-3"></i>
+        <div>
+            <h6 class="alert-heading mb-1 text-warning fw-bold">System Protection</h6>
+            <p class="mb-0 opacity-75 small">
+              Default system roles ({{ implode(', ', array_map(fn($r) => ucwords(str_replace(['_', '-'], ' ', $r)), Constants::BuiltInRoles)) }}) are protected and cannot be deleted to ensure platform stability.
+            </p>
         </div>
+        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  </div>
+@endif
+
+{{-- User Special Permissions summary --}}
+@php $specialUsers = $users->filter(fn($u) => $u->permissions->count() > 0); @endphp
+<div class="row mt-6">
+  <div class="col-12">
+    <div class="hitech-card p-5" style="border: 1px dashed #00ced1; background: rgba(0, 206, 209, 0.02);">
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+          <h4 class="fw-bold text-heading mb-1"><i class="bx bx-user-check me-2 text-teal"></i>User Special Permissions</h4>
+          <p class="text-muted mb-0">{{ $specialUsers->count() }} @lang('of') {{ $users->count() }} @lang('employees have a direct permission override on top of their role.')</p>
+        </div>
+        <a href="{{ route('roles.specialPermissions') }}" class="btn btn-primary btn-hitech-glow">
+          <i class="bx bx-user-check me-1"></i> @lang('Open User Special Permissions')
+        </a>
       </div>
     </div>
   </div>
+</div>
 
-  @if($settings->is_helper_text_enabled)
-    <div class="alert alert-warning alert-dismissible fade show mt-5 animate__animated animate__fadeIn hitech-note-card" role="alert" style="background: rgba(255, 171, 0, 0.05); border: 1px solid rgba(255, 171, 0, 0.2); color: #ffab00;">
-      <div class="d-flex align-items-center">
-          <i class="bx bx-info-circle me-3 fs-3"></i>
-          <div>
-              <h6 class="alert-heading mb-1 text-warning fw-bold">System Protection</h6>
-              <p class="mb-0 opacity-75 small">
-                Default system roles ({{ implode(', ', array_map(fn($r) => ucwords(str_replace(['_', '-'], ' ', $r)), Constants::BuiltInRoles)) }}) are protected and cannot be deleted to ensure platform stability.
-              </p>
-          </div>
-          <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
-      </div>
-    </div>
-  @endif
-
-  {{-- 2. USER SPECIAL PERMISSIONS SECTION --}}
-  @php $specialUsers = $users->filter(fn($u) => $u->permissions->count() > 0); @endphp
-  <div class="row mt-6">
-    <div class="col-12">
-      <div class="hitech-card p-5" style="border: 1px dashed #00ced1; background: rgba(0, 206, 209, 0.02);">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-          <div>
-            <h4 class="fw-bold text-heading mb-1"><i class="bx bx-user-check me-2 text-teal"></i>User Special Permissions</h4>
-            <p class="text-muted mb-0">{{ $specialUsers->count() }} @lang('of') {{ $users->count() }} @lang('employees have a direct permission override on top of their role.')</p>
-          </div>
-          <a href="{{ route('roles.specialPermissions') }}" class="btn btn-primary btn-hitech-glow">
-            <i class="bx bx-user-check me-1"></i> @lang('Open User Special Permissions')
-          </a>
-        </div>
-
-        <div class="row g-4">
-          @foreach($specialUsers->take(6) as $user)
-          <div class="col-md-4">
-            <a href="{{ route('roles.specialPermissions') }}" class="d-flex align-items-center p-3 rounded text-decoration-none" style="background: #fff; border: 1px solid #eee;">
-              <div class="avatar avatar-sm me-3">
-                @if($user->profile_picture)
-                  <img src="{{ $user->getProfilePicture() }}" alt="Avatar" class="rounded-circle">
-                @else
-                  <span class="avatar-initial rounded-circle bg-label-primary">{{ $user->getInitials() }}</span>
-                @endif
-              </div>
-              <div class="me-auto">
-                <span class="d-block fw-bold text-heading">{{ $user->getFullName() }}</span>
-                <span class="badge bg-label-info x-small">{{ $user->permissions->count() }} specialized perms</span>
-              </div>
-              <i class="bx bx-chevron-right text-muted"></i>
-            </a>
-          </div>
-          @endforeach
-
-          @if($specialUsers->isEmpty())
-          <div class="col-12 text-center py-5">
-            <div class="opacity-25 mb-2"><i class="bx bx-info-circle fs-1"></i></div>
-            <p class="text-muted">No users have direct special permissions yet.</p>
-          </div>
-          @endif
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {{-- 3. MODALS --}}
-  @include('_partials._modals.role.addOrUpdate-role', ['rolePresets' => $rolePresets])
-  @include('_partials._modals.role.preview-access', ['roles' => $roles, 'users' => $users])
+{{-- Modals --}}
+@include('_partials._modals.role.addOrUpdate-role', ['rolePresets' => $rolePresets ?? config('role_presets', [])])
+@include('_partials._modals.role.preview-access', ['roles' => $roles, 'users' => $users])
 @endsection

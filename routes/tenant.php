@@ -1387,6 +1387,8 @@ Route::middleware([
 Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.manage'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
     Route::get('roles/{id}/permissions', [RoleController::class, 'editPermissions'])->name('roles.editPermissions');
+    Route::get('roles/{id}/panelAjax', [RoleController::class, 'panelAjax'])->name('roles.panelAjax');
+    Route::get('roles/{id}/getRolePermissionsAjax', [RoleController::class, 'getRolePermissionsAjax'])->name('roles.getRolePermissionsAjax');
     Route::post('roles/addOrUpdateAjax', [RoleController::class, 'addOrUpdateAjax'])->name('roles.addOrUpdateAjax');
     Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
     Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');

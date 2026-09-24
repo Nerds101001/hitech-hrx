@@ -11,9 +11,10 @@
 .usp-edit-matrix .rp-crud-cell { text-align: center; width: 58px; }
 .usp-edit-module { display: flex; align-items: center; gap: 8px; font-size: .8rem; font-weight: 800; color: #1e293b; min-width: 170px; }
 
-/* Shared with roles/permissions.blade.php — duplicated here (not shared via
+/* Same visual language as the role editor's matrix (roles/index.blade.php
+   and roles/_permission-panel.blade.php) — duplicated here (not shared via
    hitech-portal.scss) since this modal is also included from pages that
-   never load that page's scoped stylesheet. */
+   never load those pages' scoped stylesheets. */
 .rp-matrix-na { color: #d8dfe4; font-size: 1rem; }
 .hitech-checkbox.rp-crud-check .checkmark { width: 17px; height: 17px; margin-right: 0; }
 .rp-other-chips { display: flex; flex-wrap: wrap; gap: 6px 14px; }

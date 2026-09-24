@@ -12,57 +12,86 @@ use App\Models\User;
 
 class RoleController extends Controller
 {
-  public function index()
+  /**
+   * One page: a role list on the left, the selected role's full permission
+   * panel on the right - switching roles re-fetches the panel via AJAX
+   * (panelAjax) instead of navigating away, so nothing is ever lost or
+   * reloaded just to look at a different role.
+   */
+  public function index(Request $request)
   {
-    $roles = Role::with(['users', 'permissions'])->get();
-    $permissions = Permission::all();
-    $users = User::all(); // Fetch all users for the special permissions section
-    
-    // Read exact business logic groupings from our centralized registry
-    $groupedPermissions = config('permissions_registry');
+    $roles = Role::withCount('users')->with(['permissions', 'users'])->orderBy('name')->get();
+    $users = User::all(); // special-permissions summary + preview access picker
 
-    // Persona templates for one-click role setup (see config/role_presets.php)
-    $rolePresets = config('role_presets', []);
+    $selectedRole = $request->filled('role')
+      ? $roles->firstWhere('id', (int) $request->query('role'))
+      : null;
+    $selectedRole = $selectedRole ?: $roles->first();
 
-    // "Does checking this box actually do anything?" - see PermissionWiringAudit.
-    $wiredPermissions = \App\Support\PermissionWiringAudit::wiredMap();
-
-    return view('roles.index', [
+    return view('roles.index', array_merge([
       'pageConfigs' => ['contentLayout' => 'wide'],
       'roles' => $roles,
-      'permissions' => $permissions,
       'users' => $users,
-      'groupedPermissions' => $groupedPermissions,
-      'rolePresets' => $rolePresets,
-      'wiredPermissions' => $wiredPermissions,
-    ]);
+      'selectedRole' => $selectedRole,
+    ], $selectedRole ? $this->rolePanelData($selectedRole) : []));
   }
 
   /**
-   * The dedicated "configure this role" workbench - replaces cramming all
-   * ~103 permissions into a modal. One page per role, reached from the
-   * pencil icon on its card (or straight after Create Role).
+   * Returns just the rendered right-hand panel for one role - what the left
+   * role list AJAX-swaps in when you click a different role, so the matrix
+   * table is written and maintained in exactly one place (this Blade
+   * partial), not duplicated between an initial server render and a
+   * client-side JS template.
    */
-  public function editPermissions($id)
+  public function panelAjax($id)
+  {
+    $role = Role::withCount('users')->with(['permissions', 'users'])->find($id);
+    if (!$role) {
+      return Error::response('Role not found');
+    }
+
+    return response()->view('roles._permission-panel', array_merge([
+      'selectedRole' => $role,
+      'roles' => Role::orderBy('name')->get(['id', 'name']), // for the "Copy From Role" picker
+    ], $this->rolePanelData($role)));
+  }
+
+  /**
+   * The permission names belonging to one role, for "Copy From Role" - the
+   * new (unsaved) role's checkboxes get ticked to match, nothing is written
+   * until the user hits Save on the role they're actually editing.
+   */
+  public function getRolePermissionsAjax($id)
   {
     $role = Role::with('permissions')->find($id);
     if (!$role) {
-      abort(404);
+      return Error::response('Role not found');
     }
+    return Success::response($role->permissions->pluck('name'));
+  }
 
+  /**
+   * Superseded by the master-detail /roles page - kept as a thin redirect
+   * so any existing link (e.g. the post-create handoff) still lands
+   * somewhere useful, with that role pre-selected.
+   */
+  public function editPermissions($id)
+  {
+    return redirect()->route('roles.index', ['role' => $id]);
+  }
+
+  private function rolePanelData(Role $role): array
+  {
     $groupedPermissions = config('permissions_registry');
-    $totalPermissionsCount = array_sum(array_map('count', $groupedPermissions));
 
-    return view('roles.permissions', [
-      'pageConfigs' => ['contentLayout' => 'wide'],
+    return [
       'role' => $role,
       'rolePermissionNames' => $role->permissions->pluck('name')->toArray(),
-      'groupedPermissions' => $groupedPermissions,
       'permissionMatrix' => $this->buildPermissionMatrix($groupedPermissions),
-      'totalPermissionsCount' => $totalPermissionsCount,
+      'totalPermissionsCount' => array_sum(array_map('count', $groupedPermissions)),
       'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
       'rolePresets' => config('role_presets', []),
-    ]);
+    ];
   }
 
   /**
