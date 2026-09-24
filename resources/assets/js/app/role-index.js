@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', function (e) {
   // .checked / :checked state of every box and derives the toggle from
   // that, not the other way around.
   recomputeCounts();
+  initAccessChannelToggles();
 
   // ── Role list: search + switch ──────────────────────────────────────
   var currentRoleId = $('.rp-role-row.rp-role-active').data('id') || null;
@@ -52,6 +53,7 @@ document.addEventListener('DOMContentLoaded', function (e) {
       $('#rpPanel').html(html);
       initTooltips();
       recomputeCounts();
+      initAccessChannelToggles();
       if (window.history && window.history.replaceState) {
         window.history.replaceState(null, '', `${baseUrl}roles?role=${roleId}`);
       }
@@ -64,6 +66,22 @@ document.addEventListener('DOMContentLoaded', function (e) {
     var id = $(this).data('id');
     if (id !== currentRoleId) loadRolePanel(id);
   });
+
+  // A switch's ON/OFF look normally comes from the browser's own
+  // `:checked + label` CSS matching. That's fine for an ordinary saved
+  // setting, but #rpGrantAll isn't one - it's a value CLIENT-COMPUTED from
+  // every other checkbox, and different browsers/extensions (ad-block /
+  // shields-style content alteration, autofill heuristics, etc.) have been
+  // seen to render a switch's :checked state inconsistently with its real
+  // DOM property, with no server bug and nothing wrong in the data. Rather
+  // than keep trusting that native rendering, this puts a class on the
+  // wrapper that OUR code controls end to end, and roles/index.blade.php's
+  // CSS paints strictly off that class (with !important, so it cannot lose
+  // to the theme's own :checked rule either way).
+  function syncSwitchVisual($checkbox, isOn) {
+    $checkbox.prop('checked', isOn);
+    $checkbox.closest('.hitech-toggle-wrapper').toggleClass('rp-switch-on', !!isOn);
+  }
 
   // ── Panel: live permission counters ─────────────────────────────────
   function recomputeCounts() {
@@ -86,7 +104,24 @@ document.addEventListener('DOMContentLoaded', function (e) {
     });
 
     $('#rpSaveCount').text(totalChecked);
-    $('#rpGrantAll').prop('checked', totalAll > 0 && totalChecked === totalAll);
+    syncSwitchVisual($('#rpGrantAll'), totalAll > 0 && totalChecked === totalAll);
+  }
+
+  // The four access-channel switches carry their own real, saved value -
+  // not derived from the permission grid, so (unlike #rpGrantAll) they must
+  // NOT be re-asserted every time recomputeCounts() runs for an unrelated
+  // reason, or a manual click here would get silently reverted the next
+  // time any permission checkbox changes. This seeds each one from the
+  // data-actual the server rendered, once per panel render (initial load
+  // and after each AJAX role-switch); a direct click after that is handled
+  // by its own change listener below, which only ever mirrors that one
+  // switch's own new state.
+  function initAccessChannelToggles() {
+    ['rpMultiCheckIn', 'rpMobileApp', 'rpWebLogin', 'rpGpsTracking'].forEach(function (id) {
+      var $el = $('#' + id);
+      if (!$el.length) return;
+      syncSwitchVisual($el, String($el.attr('data-actual')) === '1');
+    });
   }
 
   $(document).on('change', '.rp-permission-checkbox', recomputeCounts);
@@ -100,6 +135,10 @@ document.addEventListener('DOMContentLoaded', function (e) {
   $(document).on('change', '#rpGrantAll', function () {
     $('#rpPanel .rp-permission-checkbox').prop('checked', $(this).is(':checked'));
     recomputeCounts();
+  });
+
+  $(document).on('change', '#rpMultiCheckIn, #rpMobileApp, #rpWebLogin, #rpGpsTracking', function () {
+    syncSwitchVisual($(this), this.checked);
   });
 
   // ── Panel: tabs ──────────────────────────────────────────────────────

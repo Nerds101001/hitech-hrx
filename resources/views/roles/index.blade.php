@@ -114,6 +114,16 @@
 .rp-preset-picker .form-select { font-size: .8rem; font-weight: 600; }
 .rp-toolbar-divider { width: 1px; align-self: stretch; background: var(--hitech-border); margin: 0 .25rem; }
 .rp-admin-toggle { display: flex; align-items: center; gap: .6rem; font-size: .76rem; font-weight: 700; color: #127464; cursor: pointer; margin-left: auto; white-space: nowrap; }
+
+/* Every switch on this page (Grant Full Admin + the 4 access-channel
+   toggles) is painted from the .rp-switch-on class role-index.js sets,
+   never from the browser's own :checked matching - see syncSwitchVisual()
+   for why. !important + being declared after hitech-portal.scss in the
+   document guarantees this always wins the cascade. */
+.hitech-toggle-wrapper .hitech-switch-label { background-color: rgba(18, 116, 100, .1) !important; border-color: rgba(18, 116, 100, .2) !important; }
+.hitech-toggle-wrapper .hitech-switch-label::before { transform: translateY(-50%) !important; background-color: #127464 !important; }
+.hitech-toggle-wrapper.rp-switch-on .hitech-switch-label { background-color: #127464 !important; border-color: #127464 !important; }
+.hitech-toggle-wrapper.rp-switch-on .hitech-switch-label::before { transform: translate(1.8125rem, -50%) !important; background-color: #fff !important; }
 #rpPresetHint { flex-basis: 100%; font-size: .74rem; color: #64748b; margin: -.25rem 0 0; }
 .rp-legend { display: flex; align-items: center; gap: .85rem; flex-wrap: wrap; }
 .rp-legend-item { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 700; color: #64748b; white-space: nowrap; }
