@@ -49,6 +49,10 @@
               <div class="stat-value">{{ \App\Models\User::count() }}</div>
               <div class="stat-label">@lang('Users')</div>
           </div>
+          <button type="button" class="btn btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center px-4"
+                  data-bs-target="#previewAccessModal" data-bs-toggle="modal">
+              <i class="bx bx-show-alt me-1"></i> @lang('Preview Access')
+          </button>
       </div>
   </div>
   
@@ -194,4 +198,5 @@
   {{-- 3. MODALS --}}
   @include('_partials._modals.role.addOrUpdate-role', ['groupedPermissions' => $groupedPermissions])
   @include('_partials._modals.role.addOrUpdate-user-permission', ['groupedPermissions' => $groupedPermissions, 'users' => $users])
+  @include('_partials._modals.role.preview-access', ['roles' => $roles, 'users' => $users])
 @endsection

@@ -100,6 +100,62 @@ class RoleController extends Controller
     }
   }
 
+  /**
+   * "What does this actually give someone?" - the other half of the wiring
+   * badge. That says a permission does SOMETHING; this shows exactly what,
+   * for a real person or for a role in the abstract, using the same
+   * Nav::allows()-based check the sidebar itself is built on.
+   *
+   * A role has no menu of its own to read - only a real user does, since
+   * roles/permission/department gates are evaluated against one specific
+   * person. Previewing "Manager" in the abstract means asking what a person
+   * who holds ONLY that role, and nothing else, would see - which needs a
+   * real (if temporary) row, because Spatie's hasRole()/can() query real
+   * pivot tables and cannot be faked on an unsaved model. Opened in a
+   * transaction that is always rolled back before the response returns, so
+   * nothing is left behind - the same pattern used to verify every fix in
+   * this pass without touching real data.
+   */
+  public function previewAccessAjax(Request $request)
+  {
+    $request->validate([
+      'user_id' => 'nullable|integer|exists:users,id',
+      'role'    => 'nullable|string|exists:roles,name',
+    ]);
+
+    if (!$request->filled('user_id') && !$request->filled('role')) {
+      return Error::response('Pick a person or a role to preview.');
+    }
+
+    if ($request->filled('user_id')) {
+      $user = User::with('department', 'roles')->find($request->user_id);
+      $label = $user->getFullName() . ' (' . implode(', ', $user->roles->pluck('name')->toArray() ?: ['no role']) . ')';
+      $tree = \App\Support\Nav::previewMenuFor($user);
+      return Success::response(['label' => $label, 'menu' => $tree]);
+    }
+
+    \Illuminate\Support\Facades\DB::beginTransaction();
+    try {
+      $role = $request->role;
+      $temp = User::create([
+        'first_name' => 'Preview', 'last_name' => ucfirst($role),
+        'email' => 'preview-' . uniqid() . '@example.invalid',
+        'code' => 'PREVIEW-' . uniqid(),
+        'password' => bcrypt(bin2hex(random_bytes(8))),
+        'status' => 'active',
+      ]);
+      $temp->assignRole($role);
+      $temp->load('department', 'roles');
+
+      $tree = \App\Support\Nav::previewMenuFor($temp);
+      $label = 'Anyone with only the "' . $role . '" role';
+
+      return Success::response(['label' => $label, 'menu' => $tree]);
+    } finally {
+      \Illuminate\Support\Facades\DB::rollBack();
+    }
+  }
+
   public function getUserPermissionsAjax($userId)
   {
     $user = User::with('permissions')->find($userId);
