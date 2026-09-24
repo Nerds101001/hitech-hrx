@@ -99,13 +99,19 @@
                         <div class="d-flex flex-wrap gap-4 py-2">
                             @foreach($permsArray as $permName => $humanLabel)
                                 <label class="hitech-checkbox m-0 d-flex align-items-center">
-                                    <input class="permission-checkbox {{ \Illuminate\Support\Str::slug($moduleName) }}-checkbox" 
-                                           type="checkbox" 
-                                           name="permissions[]" 
-                                           value="{{ $permName }}" 
+                                    <input class="permission-checkbox {{ \Illuminate\Support\Str::slug($moduleName) }}-checkbox"
+                                           type="checkbox"
+                                           name="permissions[]"
+                                           value="{{ $permName }}"
                                            id="perm_{{ md5($permName) }}" />
                                     <span class="checkmark me-2"></span>
                                     <span class="small fw-medium text-muted" style="margin-top: 1px;">{{ $humanLabel }}</span>
+                                    @unless($wiredPermissions[$permName] ?? true)
+                                        <span class="badge bg-label-warning ms-2" style="font-size: 0.55rem; letter-spacing: .02em;"
+                                              data-bs-toggle="tooltip" title="Not checked anywhere in the app yet — granting this currently has no effect.">
+                                            NOT WIRED
+                                        </span>
+                                    @endunless
                                 </label>
                             @endforeach
                         </div>

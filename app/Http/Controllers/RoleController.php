@@ -24,13 +24,17 @@ class RoleController extends Controller
     // Persona templates for one-click role setup (see config/role_presets.php)
     $rolePresets = config('role_presets', []);
 
+    // "Does checking this box actually do anything?" - see PermissionWiringAudit.
+    $wiredPermissions = \App\Support\PermissionWiringAudit::wiredMap();
+
     return view('roles.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
       'roles' => $roles,
       'permissions' => $permissions,
       'users' => $users,
       'groupedPermissions' => $groupedPermissions,
-      'rolePresets' => $rolePresets
+      'rolePresets' => $rolePresets,
+      'wiredPermissions' => $wiredPermissions,
     ]);
   }
 
