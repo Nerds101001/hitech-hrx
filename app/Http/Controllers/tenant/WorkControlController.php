@@ -12,20 +12,60 @@ use App\Exports\tenant\WorkControlExport;
 
 class WorkControlController extends Controller
 {
+    /**
+     * Whose DWM this viewer is allowed to see on the team dashboard.
+     *
+     * null  = everyone (admin / HR keep the org-wide view).
+     * array = exactly these user ids - a reporting manager's own direct
+     *         reports, and nobody else. One level only, matching every other
+     *         manager-scoped surface (attendance, KPI); it does not walk the
+     *         tree down to reports-of-reports.
+     * []    = no team, so the caller falls back to their own intake form.
+     *
+     * Scoped by who actually reports to them rather than by the 'manager'
+     * role: on live, 6 of the 45 people with direct reports hold admin/hr/
+     * accounts instead, and role alone would have shown them nothing.
+     * managerIdentityIds() folds in any vacant position delegated to them.
+     */
+    private function visibleUserIds($user): ?array
+    {
+        if ($user->hasRole(['admin', 'hr'])) {
+            return null;
+        }
+
+        return User::whereIn('reporting_to_id', $user->managerIdentityIds())
+            ->notTerminated()
+            ->pluck('id')
+            ->all();
+    }
+
     public function export()
     {
-        return Excel::download(new WorkControlExport, 'work_control_routines.xlsx');
+        // Was exporting every routine in the company to anyone who could reach
+        // the URL - and /work-control/* is open to all authenticated users.
+        // Same scope as the dashboard the button sits on.
+        return Excel::download(
+            new WorkControlExport($this->visibleUserIds(Auth::user())),
+            'work_control_routines.xlsx'
+        );
     }
 
     public function index(Request $request)
     {
         $user = Auth::user();
-        
-        $isAdminOrHR = $user->hasRole(['admin', 'hr']);
 
-        if ($isAdminOrHR) {
+        $scopedIds = $this->visibleUserIds($user);
+
+        // Admin/HR see everyone; a reporting manager sees their own reports.
+        // Anyone else - including a manager-by-role with nobody under them -
+        // gets their personal intake form.
+        if ($scopedIds === null || $scopedIds !== []) {
             $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
                 ->with(['department', 'workControlRoutines']);
+
+            if ($scopedIds !== null) {
+                $query->whereIn('id', $scopedIds);
+            }
 
             if ($request->filled('search')) {
                 // `name` is a computed accessor, not a DB column — searching it
@@ -44,8 +84,18 @@ class WorkControlController extends Controller
             }
 
             $users = $query->get();
-            $departments = \App\Models\Department::orderBy('name')->get();
-            
+
+            // A manager's Department filter lists only the departments their
+            // own team sits in - offering all 30 would imply they can see them.
+            $departments = \App\Models\Department::orderBy('name')
+                ->when($scopedIds !== null, function ($q) use ($scopedIds) {
+                    $q->whereIn('id', User::whereIn('id', $scopedIds)
+                        ->whereNotNull('department_id')
+                        ->distinct()
+                        ->pluck('department_id'));
+                })
+                ->get();
+
             return view('tenant.work-control.admin-dashboard', compact('users', 'departments'));
         } else {
             // Employee view
