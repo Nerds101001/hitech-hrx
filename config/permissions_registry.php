@@ -65,6 +65,57 @@ return [
     'Recruitment & Onboarding' => [
         'recruitment.view' => 'Access Recruitment (Jobs & Candidates)',
         'onboarding.manage' => 'Manage & Review Onboarding',
+        'Manage Job OnBoard' => 'Manage Onboarding Checklist',
+    ],
+
+    /*
+    | The four modules below are pre-registry permission names (plain
+    | English, not dotted keys) still actively checked via
+    | Auth::user()->can('...') in Job/JobApplication/JobCategory/
+    | JobStage/CustomQuestion/InterviewScheduleController - real,
+    | live-enforced access for Admin/HR/Manager that the registry never
+    | had an equivalent for. Keys are exactly the strings those
+    | controllers check, so they must not be renamed. A handful of
+    | sibling names in the same old scheme (e.g. "Delete Job", "Edit Job
+    | Application") were checked against the same controllers and found
+    | unused - left out on purpose, not missed.
+    */
+    'Job Postings' => [
+        'Manage Job' => 'Manage Job Postings',
+        'Create Job' => 'Create Job Posting',
+        'Edit Job' => 'Edit Job Posting',
+        'Show Job' => 'View Job Posting Details',
+    ],
+
+    'Job Applications' => [
+        'Manage Job Application' => 'Manage Job Applications',
+        'Create Job Application' => 'Create Job Application',
+        'Show Job Application' => 'View Job Application Details',
+        'Move Job Application' => 'Move Application Between Stages',
+        'Add Job Application Skill' => 'Tag Applicant Skills',
+        'Add Job Application Note' => 'Add Applicant Notes',
+        'Delete Job Application' => 'Delete Job Application',
+    ],
+
+    'Job Categories & Stages' => [
+        'Manage Job Category' => 'Manage Job Categories',
+        'Create Job Category' => 'Create Job Category',
+        'Edit Job Category' => 'Edit Job Category',
+        'Delete Job Category' => 'Delete Job Category',
+        'Manage Job Stage' => 'Manage Job Stages',
+        'Create Job Stage' => 'Create Job Stage',
+        'Edit Job Stage' => 'Edit Job Stage',
+        'Delete Job Stage' => 'Delete Job Stage',
+    ],
+
+    'Interview & Screening' => [
+        'Manage Custom Question' => 'Manage Screening Questions',
+        'Create Custom Question' => 'Create Screening Question',
+        'Edit Custom Question' => 'Edit Screening Question',
+        'Delete Custom Question' => 'Delete Screening Question',
+        'Create Interview Schedule' => 'Schedule Interview',
+        'Edit Interview Schedule' => 'Reschedule Interview',
+        'Delete Interview Schedule' => 'Cancel Interview',
     ],
 
     'Hierarchy & Probation' => [
