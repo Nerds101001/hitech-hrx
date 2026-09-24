@@ -3,7 +3,7 @@
   $role = $selectedRole;
 @endphp
 
-<form id="rpForm" onsubmit="return false">
+<form id="rpForm" onsubmit="return false" autocomplete="off">
   <input type="hidden" name="id" value="{{ $role->id }}">
 
   {{-- Role header --}}
@@ -118,7 +118,7 @@
 
         <label class="rp-admin-toggle" for="rpGrantAll">
           <div class="hitech-toggle-wrapper">
-            <input type="checkbox" class="hitech-switch-input" id="rpGrantAll">
+            <input type="checkbox" class="hitech-switch-input" id="rpGrantAll" autocomplete="off">
             <label class="hitech-switch-label" for="rpGrantAll"></label>
           </div>
           @lang('Grant Full Administrative Access')
@@ -221,28 +221,28 @@
         <div class="rp-tile-grid-channels">
           <label class="rp-tile">
             <div class="hitech-toggle-wrapper rp-tile-switch">
-              <input type="checkbox" class="hitech-switch-input" id="rpMultiCheckIn" name="isMultiCheckInEnabled" {{ $role->is_multiple_check_in_enabled ? 'checked' : '' }}>
+              <input type="checkbox" class="hitech-switch-input" id="rpMultiCheckIn" name="isMultiCheckInEnabled" autocomplete="off" {{ $role->is_multiple_check_in_enabled ? 'checked' : '' }}>
               <label class="hitech-switch-label" for="rpMultiCheckIn"></label>
             </div>
             <span class="rp-tile-label">@lang('Multi Check-In')</span>
           </label>
           <label class="rp-tile">
             <div class="hitech-toggle-wrapper rp-tile-switch">
-              <input type="checkbox" class="hitech-switch-input" id="rpMobileApp" name="mobileAppAccess" {{ $role->is_mobile_app_access_enabled ? 'checked' : '' }}>
+              <input type="checkbox" class="hitech-switch-input" id="rpMobileApp" name="mobileAppAccess" autocomplete="off" {{ $role->is_mobile_app_access_enabled ? 'checked' : '' }}>
               <label class="hitech-switch-label" for="rpMobileApp"></label>
             </div>
             <span class="rp-tile-label">@lang('Mobile App')</span>
           </label>
           <label class="rp-tile">
             <div class="hitech-toggle-wrapper rp-tile-switch">
-              <input type="checkbox" class="hitech-switch-input" id="rpWebLogin" name="webAppAccess" {{ $role->is_web_access_enabled ? 'checked' : '' }}>
+              <input type="checkbox" class="hitech-switch-input" id="rpWebLogin" name="webAppAccess" autocomplete="off" {{ $role->is_web_access_enabled ? 'checked' : '' }}>
               <label class="hitech-switch-label" for="rpWebLogin"></label>
             </div>
             <span class="rp-tile-label">@lang('Web Login')</span>
           </label>
           <label class="rp-tile">
             <div class="hitech-toggle-wrapper rp-tile-switch">
-              <input type="checkbox" class="hitech-switch-input" id="rpGpsTracking" name="locationActivityTracking" {{ $role->is_location_activity_tracking_enabled ? 'checked' : '' }}>
+              <input type="checkbox" class="hitech-switch-input" id="rpGpsTracking" name="locationActivityTracking" autocomplete="off" {{ $role->is_location_activity_tracking_enabled ? 'checked' : '' }}>
               <label class="hitech-switch-label" for="rpGpsTracking"></label>
             </div>
             <span class="rp-tile-label">@lang('GPS Tracking')</span>

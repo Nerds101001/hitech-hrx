@@ -19,6 +19,20 @@ document.addEventListener('DOMContentLoaded', function (e) {
   }
   initTooltips();
 
+  // Force every checkbox/toggle to reflect what the server actually sent,
+  // on this very first render too - not just after an AJAX role-switch.
+  // Chrome/Edge restore a field's checked state across page loads by id,
+  // independent of the HTML the server just rendered; on a long-lived tab
+  // that's been through several role switches and reloads, a toggle like
+  // "Grant Full Administrative Access" can end up visually checked while
+  // the underlying data (and the count right next to it) says otherwise.
+  // autocomplete="off" on these fields discourages that in the first
+  // place; this call is the actual guarantee - it can't be fooled by
+  // whatever the browser tried to restore, because it reads the real
+  // .checked / :checked state of every box and derives the toggle from
+  // that, not the other way around.
+  recomputeCounts();
+
   // ── Role list: search + switch ──────────────────────────────────────
   var currentRoleId = $('.rp-role-row.rp-role-active').data('id') || null;
 
