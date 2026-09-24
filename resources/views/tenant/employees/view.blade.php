@@ -606,7 +606,7 @@
                                         class="bx bx-credit-card me-1"></i> Banking & Payroll</a>
                             </li>
                             @endif
-                            @if(!auth()->user()->hasRole('accounts'))
+                            @if(!auth()->user()->hasRole('accounts') || auth()->user()->can('employee.view_document'))
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#documents"><i class="bx bx-file me-1"></i>
                                     Documents</a>
@@ -2068,7 +2068,12 @@
                         {{-- /Banking & Payroll Tab (gated by $canViewFinancials) --}}
 
                         <!-- Documents Tab -->
-                        @if(!auth()->user()->hasRole('accounts'))
+                        {{-- Default: hidden from accounts role, same as always. The
+                             employee.view_document permission is an explicit override
+                             for a specific accounts-role person, not a general grant -
+                             nobody holds it today, so this changes nothing until it's
+                             deliberately assigned. --}}
+                        @if(!auth()->user()->hasRole('accounts') || auth()->user()->can('employee.view_document'))
                         <div class="tab-pane fade" id="documents">
                             <div class="card mb-4 emp-card">
                                 <div class="card-body p-5">
