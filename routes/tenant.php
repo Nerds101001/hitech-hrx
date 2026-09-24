@@ -1386,6 +1386,11 @@ Route::middleware([
 // roles.manage-only holder before this middleware ever runs.
 Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.manage'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+    // A brand-new, never-before-visited URL serving the exact same
+    // controller/view as /roles - a clean way to rule out any lingering
+    // browser/CDN cache confusion once and for all, byte-for-byte identical
+    // to the real page.
+    Route::get('roles-fresh', [RoleController::class, 'index'])->name('roles.fresh');
     Route::get('roles/{id}/permissions', [RoleController::class, 'editPermissions'])->name('roles.editPermissions');
     Route::get('roles/{id}/panelAjax', [RoleController::class, 'panelAjax'])->name('roles.panelAjax');
     Route::get('roles/{id}/getRolePermissionsAjax', [RoleController::class, 'getRolePermissionsAjax'])->name('roles.getRolePermissionsAjax');
