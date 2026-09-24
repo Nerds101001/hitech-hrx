@@ -184,6 +184,12 @@
 }
 </style>
 
+{{-- TEMP DIAGNOSTIC MARKER - prove whether the browser is getting current
+     server output at all. Remove once the caching question is settled. --}}
+<div style="background:#ff0000; color:#fff; font-size:24px; font-weight:900; text-align:center; padding:20px; margin-bottom:20px; border-radius:8px;">
+  DIAGNOSTIC MARKER — SERVER TIME: {{ now()->format('Y-m-d H:i:s') }} — NONCE: {{ \Illuminate\Support\Str::random(8) }}
+</div>
+
 {{-- Header --}}
 <div class="rp-shell-header animate__animated animate__fadeIn">
   <div>
