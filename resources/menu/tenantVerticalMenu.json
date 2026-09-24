@@ -803,6 +803,11 @@
                         "admin",
                         "hr"
                     ]
+                },
+                {
+                    "url": "/kpi/bulk-entry",
+                    "name": "Bulk KPI Entry",
+                    "slug": "tenant.kpi.bulk-entry"
                 }
             ]
         },

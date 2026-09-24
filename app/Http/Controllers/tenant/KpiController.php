@@ -404,10 +404,20 @@ class KpiController extends Controller
 
         $pdfMonths = KpiScorecardService::months();
 
+        // Two headline figures that people were reading off the grid by eye:
+        // the pipeline they are carrying, and this month's attendance. Both are
+        // computed the same way their KPIs are, so the cards and the scored
+        // rows can never disagree.
+        $cardStart = now()->startOfMonth();
+        $cardEnd = now()->endOfMonth();
+
+        $totalPipeline = \App\Services\KpiAutoSourceService::totalPipelineValue($user->id);
+        $attendancePct = \App\Services\KpiAutoSourceService::attendancePercentFor($user->id, $cardStart, $cardEnd);
+
         return view('tenant.kpi.my', compact(
             'pdfMonths',
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
-            'pendingCount', 'completedCount',
+            'pendingCount', 'completedCount', 'totalPipeline', 'attendancePct',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
             'targetNote', 'entryPeriod', 'lastMonthEntries', 'lastMonthKey'
         ));

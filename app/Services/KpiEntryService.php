@@ -103,6 +103,66 @@ class KpiEntryService
         return $entry;
     }
 
+    /**
+     * A KPI data owner fills the number on somebody else's behalf.
+     *
+     * Unlike submit(), this never waits for approval. The owner IS the source
+     * -- call hours come off the gateway they run, quotation counts out of the
+     * CRM they keep -- so there is nobody better placed to sign it off, and
+     * routing it through the approval queue only recreated the bottleneck that
+     * left five of seventeen people reported in September.
+     *
+     * Recorded as reviewed by the owner so the audit trail still shows who
+     * stands behind the figure.
+     */
+    public static function fillForTeam(
+        KpiAssignment $a,
+        ?float $value,
+        int $ownerId,
+        ?string $note = null,
+        ?Carbon $day = null
+    ): ?KpiEntry {
+        [$start, $end] = self::periodFor($a, $day);
+
+        // A blank clears the figure rather than storing a zero: "not reported"
+        // and "reported as none" score the same today, but they are different
+        // facts and a zero would hide a gap.
+        if ($value === null) {
+            $existing = KpiEntry::where('kpi_assignment_id', $a->id)
+                ->where('period_start', $start->toDateString())->first();
+
+            if ($existing) {
+                $check = $existing->check;
+                $existing->delete();
+                self::recalculate($a, $check);
+            }
+
+            return null;
+        }
+
+        $check = KpiPeriodService::sync($a);
+
+        $entry = KpiEntry::updateOrCreate(
+            ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
+            [
+                'tenant_id'      => $a->tenant_id,
+                'kpi_check_id'   => $check->id,
+                'user_id'        => $a->user_id,
+                'period_end'     => $end->toDateString(),
+                'value'          => $value,
+                'note'           => $note,
+                'status'         => KpiEntry::APPROVED,
+                'reviewed_by_id' => $ownerId,
+                'reviewed_at'    => now(),
+                'review_note'    => 'Filled in bulk by the KPI data owner',
+            ]
+        );
+
+        self::recalculate($a, $check);
+
+        return $entry;
+    }
+
     /** HR accepts the number: it starts counting toward the month. */
     public static function approve(KpiEntry $entry, int $reviewerId, ?string $note = null): KpiEntry
     {

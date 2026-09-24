@@ -1218,6 +1218,19 @@ Route::middleware([
             Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
             Route::get('/approvals/export', [\App\Http\Controllers\tenant\KpiController::class, 'exportApprovals'])->name('approvals.export');
             Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
+
+            // Bulk manual entry. Deliberately OUTSIDE the admin|hr group below:
+            // a KPI data owner is whoever actually holds the number -- the person
+            // running the GSM gateway, the one who keeps the CRM -- and they are
+            // usually neither admin nor HR. KpiBulkEntryController checks on every
+            // action that the caller owns the KPI being filled, and that each row
+            // belongs to a team they own it for.
+            Route::get('/bulk-entry', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'index'])->name('bulk-entry');
+            Route::post('/bulk-entry', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'store'])->name('bulk-entry.store');
+            Route::get('/bulk-entry/template', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'template'])->name('bulk-entry.template');
+            Route::post('/bulk-entry/import', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'import'])->name('bulk-entry.import');
+            Route::post('/bulk-entry/owner', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'addOwner'])->name('bulk-entry.owner.add');
+            Route::delete('/bulk-entry/owner/{id}', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'removeOwner'])->name('bulk-entry.owner.remove');
         });
 
         // Management side. NOTE: kept admin-only by default (not widened to

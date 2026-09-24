@@ -27,8 +27,8 @@ class KpiAutoSourceService
         'auto:customers_added'     => 'Customers whose first ever order falls in the period',
         'auto:customers_retained'  => '% of customers first seen 6+ months ago still ordering',
 
-        // Kingo/Bingo — salesperson_id ONLY (not the broader "book" the sources
-        // above use), matching the real Kingo/Bingo scorecard exactly
+        // Kingo/Bingo — the same five attribution routes as book(), matching
+        // the real Kingo/Bingo scorecard exactly
         // (SalesPipelineController@index's $targetAchieversByMonth) so a KPI
         // score never disagrees with what the scorecard itself shows.
         'auto:bingo_achievement'       => 'Sale ÷ Bingo target, as a % (matches the Kingo/Bingo scorecard)',
@@ -64,6 +64,10 @@ class KpiAutoSourceService
         'auto:mindspeak_insights'         => 'Competitor Insights submissions accepted in Mind Speak',
         'auto:mindspeak_ideas'            => 'New Product Ideas accepted in Mind Speak',
         'auto:ninety_day_goals'           => '% of 90-Day Goals on track or in regular order',
+
+        // Attendance, read through AttendanceDayStatus so a KPI score can never
+        // disagree with what the attendance registry itself shows for the day.
+        'auto:attendance_percent'         => 'Days attended as a % of the working days in the period',
     ];
 
     /** Null = this KPI is not auto-sourced, or the figure cannot be derived. */
@@ -108,14 +112,30 @@ class KpiAutoSourceService
             'auto:mindspeak_ideas'          => self::mindSpeakAccepted($a->user_id, $start, $end, 'Idea'),
             'auto:ninety_day_goals'         => self::ninetyDayGoals($a->user_id, $start, $end),
 
+            'auto:attendance_percent'       => self::attendancePercent($a->user_id, $start, $end),
+
             default => null,
         };
     }
 
     /**
-     * The customers a person is measured on: theirs as salesperson, as New Biz
-     * rep, or as CCare rep. A New Biz executive owns rows through new_biz_id
-     * rather than salesperson_id, so all three have to count.
+     * The customers a person is measured on.
+     *
+     * There are FIVE ways somebody is attached to a customer, and this used to
+     * check only three -- salesperson_id, new_biz_id, ccare_id -- silently
+     * dropping new_biz_2_id and every row tagged through
+     * sales_pipeline_extra_reps. The Sales Report and the Kingo/Bingo
+     * scorecard both count all five, so a KPI built on the short list reported
+     * less revenue than the screens the same person is looking at.
+     *
+     * Measured on September 2026: ten of fifty KPI holders were short, by
+     * ₹24.78 lakh in total. DIPALI SHARMA's Kingo Achievement read 23.32%
+     * against the 22.99 lakh her own Sales Report showed (35.37%), and PRAPTI
+     * KAPOOR scored 2.38% on a month where she had in fact made 102% of her
+     * target -- nearly all of her revenue arrived through extra-rep tagging.
+     *
+     * Booked business is booked business whoever tagged it, which is the rule
+     * the Kingo/Bingo actuals already follow.
      */
     private static function book(int $userId)
     {
@@ -124,8 +144,111 @@ class KpiAutoSourceService
             ->where(function ($q) use ($userId) {
                 $q->where('salesperson_id', $userId)
                   ->orWhere('new_biz_id', $userId)
-                  ->orWhere('ccare_id', $userId);
+                  ->orWhere('new_biz_2_id', $userId)
+                  ->orWhere('ccare_id', $userId)
+                  ->orWhereExists(function ($e) use ($userId) {
+                      $e->selectRaw('1')
+                        ->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $userId);
+                  });
             });
+    }
+
+    /**
+     * Days attended as a percentage of the working days in the period.
+     *
+     * Resolved one day at a time through AttendanceDayStatus rather than by
+     * counting attendance rows, so this figure can never disagree with what
+     * the registry shows: the same rules for miss-punches, Sunday/holiday
+     * working, part-day holidays and off-Saturdays apply here too.
+     *
+     * What counts:
+     *   full credit  present, late, WFH, short-leave-present, SP, HP
+     *   half credit  a worked half day
+     *   no credit    absent, miss-punch, unpaid leave
+     *
+     * APPROVED PAID LEAVE COUNTS AS ATTENDED. Leave that HR has granted and
+     * already charged to the person's balance is authorised absence, and
+     * scoring it as a miss would dock marks for taking earned leave -- an
+     * incentive to come in sick rather than an attendance measure. Unpaid
+     * leave gets no credit, because there was no entitlement behind it.
+     *
+     * Returns a 0-100 figure, so the KPI carries target_value = 100.
+     */
+    private static function attendancePercent(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $user = \App\Models\User::find($userId);
+        if (!$user) {
+            return null;
+        }
+
+        // Never score a period that has not finished happening: counting the
+        // rest of the month as absence would show everyone failing mid-month.
+        $last = $end->copy()->min(Carbon::today());
+        if ($last->lt($start)) {
+            return null;
+        }
+
+        $rows = \App\Models\Attendance::where('user_id', $userId)
+            ->whereBetween('check_in_time', [$start->copy()->startOfDay(), $last->copy()->endOfDay()])
+            ->get()
+            ->keyBy(fn ($a) => $a->check_in_time->toDateString());
+
+        $leaves = \App\Models\LeaveRequest::with('leaveType')
+            ->where('user_id', $userId)
+            ->where('status', 'approved')
+            ->whereDate('from_date', '<=', $last->toDateString())
+            ->whereDate('to_date', '>=', $start->toDateString())
+            ->get();
+
+        $working = 0.0;
+        $attended = 0.0;
+
+        for ($d = $start->copy(); $d->lte($last); $d->addDay()) {
+            $holiday = \App\Models\Holiday::where('status', 1)->whereDate('date', $d->toDateString())->first();
+
+            // Sundays, weekly offs and full holidays are not working days, so
+            // they belong in neither side of the fraction.
+            if (!LeavePolicyService::isWorkingDay($user, $d) && !($holiday && $holiday->isFullDay())) {
+                if (!$rows->has($d->toDateString())) {
+                    continue;
+                }
+            }
+
+            $attendance = $rows->get($d->toDateString());
+            $leave = $leaves->first(fn ($l) => $l->from_date->lte($d) && $l->to_date->gte($d));
+
+            $result = AttendanceDayStatus::resolve($user, $d->copy(), $attendance, $leave, $holiday);
+            $code = $result['code'];
+
+            // Off days only enter the count when they were actually worked,
+            // where they can add credit but must not add to the denominator.
+            if (in_array($code, ['weekly_off', 'holiday', 'scheduled', 'today', 'missing'], true)) {
+                continue;
+            }
+            if (in_array($code, ['sp', 'hp'], true)) {
+                $attended += 1.0;
+                continue;
+            }
+
+            $working += 1.0;
+
+            if (in_array($code, ['half-day', 'half-day-paid'], true)) {
+                $attended += 0.5;
+            } elseif (in_array($code, AttendanceDayStatus::PRESENT_LIKE_CODES, true)) {
+                $attended += 1.0;
+            } elseif ($code === 'paid_leave') {
+                $attended += 1.0;   // authorised, and already paid for from the balance
+            }
+            // absent / miss-punch / unpaid_leave earn nothing.
+        }
+
+        if ($working <= 0) {
+            return null;
+        }
+
+        return round(min(100, $attended / $working * 100), 2);
     }
 
     /** Month keys (YYYY-MM) the period covers. */
@@ -193,6 +316,23 @@ class KpiAutoSourceService
         }
 
         return round(self::revenue($userId, $start, $end) / $potential * 100, 2);
+    }
+
+    /**
+     * The pipeline someone is carrying, in ₹ lakh.
+     *
+     * Not the same figure as totalPipeline() above, which is revenue expressed
+     * as a PERCENTAGE of this. The scorecard card wants the value itself.
+     */
+    public static function totalPipelineValue(int $userId): float
+    {
+        return round((float) self::book($userId)->sum('total_business_potential'), 2);
+    }
+
+    /** Public door to the attendance figure, for the scorecard's headline card. */
+    public static function attendancePercentFor(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        return self::attendancePercent($userId, $start, $end);
     }
 
     /** Customers whose FIRST ever recorded sale falls inside the period. */
@@ -277,12 +417,22 @@ class KpiAutoSourceService
             return null;
         }
 
+        // Same five attribution routes as book(). Counting only three made this
+        // disagree with the Sales Report the salesperson reads their own number
+        // off -- see book()'s note for the measured effect.
         $actual = (float) DB::table('sales_pipeline_months as m')
             ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
             ->where(function ($q) use ($userId) {
                 $q->where('sp.salesperson_id', $userId)
                   ->orWhere('sp.new_biz_id', $userId)
-                  ->orWhere('sp.ccare_id', $userId);
+                  ->orWhere('sp.new_biz_2_id', $userId)
+                  ->orWhere('sp.ccare_id', $userId)
+                  ->orWhereExists(function ($e) use ($userId) {
+                      $e->selectRaw('1')
+                        ->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sp.id')
+                        ->where('er.user_id', $userId);
+                  });
             })
             ->where('sp.is_locked', true)
             ->whereNull('sp.deleted_at')
