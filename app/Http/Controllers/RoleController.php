@@ -91,7 +91,40 @@ class RoleController extends Controller
       'totalPermissionsCount' => array_sum(array_map('count', $groupedPermissions)),
       'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
       'rolePresets' => config('role_presets', []),
+      'reachability' => $this->computeRoleReachability($role),
     ];
+  }
+
+  /**
+   * What this role can ACTUALLY reach, computed live from the real route
+   * middleware and menu rules (App\Support\Nav) - the answer this page
+   * leads with now, because it's automatic and can't drift from reality
+   * the way a manually-ticked checkbox could. Same temp-user-in-a-rolled-
+   * back-transaction technique as previewAccessAjax's role branch:
+   * Spatie's hasRole()/can() need a real persisted row, and this is a
+   * role viewed in the abstract, not a specific person.
+   */
+  private function computeRoleReachability(Role $role): array
+  {
+    \Illuminate\Support\Facades\DB::beginTransaction();
+    try {
+      $temp = User::create([
+        'first_name' => 'Preview', 'last_name' => ucfirst($role->name),
+        'email' => 'preview-' . uniqid() . '@example.invalid',
+        'code' => 'PREVIEW-' . uniqid(),
+        'password' => bcrypt(bin2hex(random_bytes(8))),
+        'status' => 'active',
+      ]);
+      $temp->assignRole($role->name);
+      $temp->load('department', 'roles');
+
+      $tree = \App\Support\Nav::previewMenuFor($temp);
+      $visibleCount = collect($tree)->where('visible', true)->count();
+
+      return ['tree' => $tree, 'visibleCount' => $visibleCount, 'totalCount' => count($tree)];
+    } finally {
+      \Illuminate\Support\Facades\DB::rollBack();
+    }
   }
 
   /**

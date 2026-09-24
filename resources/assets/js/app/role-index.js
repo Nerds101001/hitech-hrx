@@ -67,6 +67,12 @@ document.addEventListener('DOMContentLoaded', function (e) {
     if (id !== currentRoleId) loadRolePanel(id);
   });
 
+  // ── Advanced (manual permission) section: collapsed by default ───────
+  $(document).on('click', '#rpAdvancedToggle', function () {
+    $(this).toggleClass('rp-advanced-open');
+    $('#rpAdvancedSection').toggleClass('d-none');
+  });
+
   // A switch's ON/OFF look normally comes from the browser's own
   // `:checked + label` CSS matching. That's fine for an ordinary saved
   // setting, but #rpGrantAll isn't one - it's a value CLIENT-COMPUTED from

@@ -45,39 +45,51 @@
     </div>
   </div>
 
-  {{-- Why this grid looks sparse for some roles: baseline page access for
-       several roles is decided by role NAME, not by anything below - being
-       explicit about that here beats a checkbox grid that just looks broken. --}}
-  @php
-    $adminAreaRoles = \App\Http\Middleware\AdminRoleGuard::ADMIN_ROLES;
-    $isAdminAreaRole = in_array($role->name, $adminAreaRoles);
-    $isBlockedEmployeeRole = in_array($role->name, ['employee', 'office_employee']);
-  @endphp
-  @if($isAdminAreaRole)
-    <div class="rp-truth-banner rp-truth-banner-info">
-      <i class="bx bx-key"></i>
+  {{-- PRIMARY: what this role can actually reach, computed live from the
+       real route/menu rules - not a manually-ticked list, so it can never
+       drift from reality. This is the answer to "what can this role do",
+       full stop; the granular checkboxes further down are a different,
+       narrower thing (see the section below). --}}
+  <div class="rp-reach-section">
+    <div class="rp-reach-head">
       <div>
-        <strong>@lang('Gets full admin-area access by role name alone.')</strong>
-        @lang('AdminRoleGuard grants every :roles role the whole admin dashboard directly - independent of any checkbox below. This matrix only controls the extra, specific capabilities layered on top (approvals, exports, management actions), not whether this role can reach admin pages at all.', ['roles' => implode(' / ', array_map('ucfirst', $adminAreaRoles))])
+        <h6 class="rp-reach-title">@lang('What :role Can Actually Reach', ['role' => $role->display_name])</h6>
+        <p class="rp-reach-sub">@lang('Computed live from the real route and menu rules for this role — not a manual list, so it can\'t go out of sync.')</p>
+      </div>
+      <div class="rp-reach-stat">
+        <div class="rp-reach-stat-value">{{ $reachability['visibleCount'] }} / {{ $reachability['totalCount'] }}</div>
+        <div class="rp-reach-stat-label">@lang('sections reachable')</div>
       </div>
     </div>
-  @elseif($isBlockedEmployeeRole)
-    <div class="rp-truth-banner rp-truth-banner-warn">
-      <i class="bx bx-block"></i>
-      <div>
-        <strong>@lang('Blocked from admin-area pages by role name, regardless of what\'s checked below.')</strong>
-        @lang('AdminRoleGuard always redirects this role away from admin pages unless one of a specific 7-permission allowlist is granted. Its baseline access (own dashboard, own attendance, self-service pages) is also role-based, not controlled by anything in this matrix - a plain employee legitimately holds few or none of these by default.')
-      </div>
-    </div>
-  @endif
-  <div class="rp-truth-banner rp-truth-banner-muted">
-    <i class="bx bx-info-circle"></i>
-    <div>
-      @lang('This shows only permissions that can be individually granted or revoked - not this role\'s full reachable page list, which depends on role name too.')
-      <button type="button" class="btn btn-link p-0 rp-preview-link" data-role="{{ $role->name }}">@lang('See everything this role can actually reach →')</button>
+    <div class="rp-reach-grid">
+      @foreach($reachability['tree'] as $item)
+        <div class="pmt-item rp-reach-item {{ $item['visible'] ? 'pmt-visible' : 'pmt-hidden' }}">
+          <div class="pmt-row">
+            <div class="pmt-icon"><i class="{{ $item['icon'] ?? 'bx bx-square' }}"></i></div>
+            <div class="pmt-name">{{ $item['name'] }}</div>
+            <span class="pmt-badge {{ $item['visible'] ? 'pmt-badge-on' : 'pmt-badge-off' }}">{{ $item['visible'] ? 'VISIBLE' : 'HIDDEN' }}</span>
+          </div>
+          @if(!$item['visible'] && $item['reason'])
+            <div class="pmt-reason">{{ $item['reason'] }}</div>
+          @endif
+        </div>
+      @endforeach
     </div>
   </div>
 
+  {{-- SECONDARY: manual permission overrides. Deliberately demoted and
+       collapsed - these are individual action-level grants (approve this,
+       export that, manage the other) within pages the role can already
+       open per the section above; they never control whether a page opens
+       at all. Easy to mistake for the same thing as the reachability
+       list above if it isn't visually clear these are different questions. --}}
+  <button type="button" class="rp-advanced-toggle" id="rpAdvancedToggle">
+    <i class="bx bx-chevron-right"></i>
+    @lang('Advanced: Granular Action Permissions')
+    <span class="text-muted fw-normal">— @lang('individual actions within pages this role can already open, not page access itself')</span>
+  </button>
+
+  <div id="rpAdvancedSection" class="d-none">
   {{-- Tabs --}}
   <div class="rp-tabs">
     <div class="rp-tab rp-tab-active" data-tab="modules">@lang('Module / Feature Permissions')</div>
@@ -303,4 +315,5 @@
       </button>
     </div>
   </div>
+  </div>{{-- /rpAdvancedSection --}}
 </form>

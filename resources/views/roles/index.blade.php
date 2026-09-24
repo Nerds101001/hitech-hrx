@@ -100,6 +100,28 @@
 .rp-truth-banner-muted i { color: #94a3b8; }
 .rp-preview-link { font-size: .8rem; font-weight: 700; color: #127464 !important; text-decoration: underline; vertical-align: baseline; }
 
+/* Primary: live reachability (computed, not manually ticked) */
+.rp-reach-section { padding-top: 1.25rem; }
+.rp-reach-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.rp-reach-title { font-size: .98rem; font-weight: 800; color: #1e293b; margin: 0 0 .2rem; }
+.rp-reach-sub { font-size: .78rem; color: #64748b; margin: 0; max-width: 480px; }
+.rp-reach-stat { text-align: right; flex-shrink: 0; }
+.rp-reach-stat-value { font-size: 1.4rem; font-weight: 800; color: #127464; line-height: 1; }
+.rp-reach-stat-label { font-size: .65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+.rp-reach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.rp-reach-item.pmt-item { margin-bottom: 0; }
+
+/* Advanced section toggle - deliberately quiet until opened */
+.rp-advanced-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; margin-top: 1.75rem;
+  padding: .85rem 1rem; background: #f8fafc; border: 1px dashed #e2e8f0; border-radius: 12px;
+  font-size: .82rem; font-weight: 700; color: #475569; cursor: pointer; transition: all .15s;
+}
+.rp-advanced-toggle:hover { background: #f1f5f9; border-color: #cbd5e1; }
+.rp-advanced-toggle i { font-size: 1rem; color: #94a3b8; transition: transform .15s; flex-shrink: 0; }
+.rp-advanced-toggle.rp-advanced-open i { transform: rotate(90deg); }
+#rpAdvancedSection { margin-top: 1rem; }
+
 /* Tabs */
 .rp-tabs { display: flex; gap: 1.5rem; margin-top: 1.1rem; border-bottom: 1px solid var(--hitech-border); }
 .rp-tab { padding: 10px 2px; font-size: .84rem; font-weight: 700; color: #94a3b8; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; }
