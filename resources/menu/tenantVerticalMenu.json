@@ -103,7 +103,6 @@
                 "admin",
                 "hr"
             ],
-            "addon": "DisabledModule",
             "submenu": [
                 {
                     "url": "/liveLocation",
