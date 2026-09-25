@@ -188,6 +188,11 @@
 .rp-chip-unwired .rp-chip-label { color: #94a3b8; }
 .rp-unwired-dot { color: #f5a623; font-size: .78rem; cursor: help; }
 .rp-hidden-by-search { display: none !important; }
+.rp-locked, .rp-locked input { cursor: not-allowed; }
+.rp-locked .checkmark, .rp-locked .chip-box { opacity: .6; }
+.rp-lock-icon { color: #94a3b8; font-size: .72rem; }
+.rp-locked-note { display: flex; align-items: center; gap: 8px; margin: 0 0 .9rem; padding: .55rem .9rem; border-radius: 10px; background: rgba(18,116,100,.06); border: 1px solid rgba(18,116,100,.15); font-size: .76rem; color: #475569; }
+.rp-locked-note .bx { color: #127464; font-size: .95rem; }
 
 /* Access Channels (Advanced tab) */
 .rp-channels-card { border: 1px solid var(--hitech-border) !important; }

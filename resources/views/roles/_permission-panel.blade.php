@@ -1,6 +1,9 @@
 @php
   $isBuiltIn = in_array($selectedRole->name, Constants::BuiltInRoles);
   $role = $selectedRole;
+  $lockedReason = $isSuperRole
+    ? __('Admin has full access to everything - this can\'t be removed.')
+    : __('Built into the :role role - it has this access by role, so it can\'t be unticked here.', ['role' => $role->display_name]);
 @endphp
 
 <form id="rpForm" onsubmit="return false" autocomplete="off">
@@ -137,7 +140,7 @@
 
         <label class="rp-admin-toggle" for="rpGrantAll">
           <div class="hitech-toggle-wrapper">
-            <input type="checkbox" class="hitech-switch-input" id="rpGrantAll" autocomplete="off">
+            <input type="checkbox" class="hitech-switch-input" id="rpGrantAll" autocomplete="off" {{ $isSuperRole ? 'disabled' : '' }}>
             <label class="hitech-switch-label" for="rpGrantAll"></label>
           </div>
           @lang('Grant Full Administrative Access')
@@ -146,6 +149,17 @@
         <p id="rpPresetHint" class="mb-0"></p>
       </div>
     </div>
+
+    @if(count($lockedPermissionNames))
+      <div class="rp-locked-note">
+        <i class="bx bx-lock-alt"></i>
+        @if($isSuperRole)
+          @lang('Admin has full access to everything, so every box is ticked and locked.')
+        @else
+          @lang(':count boxes are locked: the :role role has that access by role in the code, so unticking them wouldn\'t remove it. The rest can be ticked or unticked as normal.', ['count' => count($lockedPermissionNames), 'role' => $role->display_name])
+        @endif
+      </div>
+    @endif
 
     <div class="rp-matrix-wrap">
       <div class="table-responsive">
@@ -173,14 +187,16 @@
                 @foreach(['view','create','edit','delete'] as $verb)
                   <td class="rp-crud-cell">
                     @if($m['crud'][$verb])
-                      <label class="hitech-checkbox rp-crud-check justify-content-center m-0"
-                             data-bs-toggle="tooltip" title="{{ $m['crud'][$verb]['label'] }}">
+                      @php $isLocked = in_array($m['crud'][$verb]['name'], $lockedPermissionNames); @endphp
+                      <label class="hitech-checkbox rp-crud-check justify-content-center m-0 {{ $isLocked ? 'rp-locked' : '' }}"
+                             data-bs-toggle="tooltip" title="{{ $m['crud'][$verb]['label'] }}{{ $isLocked ? ' — ' . $lockedReason : '' }}">
                         <input type="checkbox"
                                class="rp-permission-checkbox {{ $m['slug'] }}-checkbox"
                                data-module="{{ $m['slug'] }}"
                                name="permissions[]"
                                value="{{ $m['crud'][$verb]['name'] }}"
-                               {{ in_array($m['crud'][$verb]['name'], $rolePermissionNames) ? 'checked' : '' }}>
+                               {{ in_array($m['crud'][$verb]['name'], $rolePermissionNames) ? 'checked' : '' }}
+                               {{ $isLocked ? 'disabled' : '' }}>
                         <span class="checkmark"></span>
                       </label>
                     @else
@@ -198,15 +214,19 @@
                   @if(count($m['other']))
                     <div class="rp-other-chips">
                       @foreach($m['other'] as $permName => $label)
-                        <label class="rp-chip {{ !($wiredPermissions[$permName] ?? true) ? 'rp-chip-unwired' : '' }}" data-search="{{ strtolower($label) }}">
+                        @php $isLocked = in_array($permName, $lockedPermissionNames); @endphp
+                        <label class="rp-chip {{ !($wiredPermissions[$permName] ?? true) ? 'rp-chip-unwired' : '' }} {{ $isLocked ? 'rp-locked' : '' }}" data-search="{{ strtolower($label) }}"
+                               @if($isLocked) data-bs-toggle="tooltip" data-bs-placement="top" title="{{ $lockedReason }}" @endif>
                           <input type="checkbox"
                                  class="rp-permission-checkbox {{ $m['slug'] }}-checkbox"
                                  data-module="{{ $m['slug'] }}"
                                  name="permissions[]"
                                  value="{{ $permName }}"
-                                 {{ in_array($permName, $rolePermissionNames) ? 'checked' : '' }}>
+                                 {{ in_array($permName, $rolePermissionNames) ? 'checked' : '' }}
+                                 {{ $isLocked ? 'disabled' : '' }}>
                           <span class="chip-box"></span>
                           <span class="rp-chip-label">{{ $label }}</span>
+                          @if($isLocked)<i class="bx bx-lock-alt rp-lock-icon"></i>@endif
                           @unless($wiredPermissions[$permName] ?? true)
                             <i class="bx bx-info-circle rp-unwired-dot" data-bs-toggle="tooltip" data-bs-placement="top"
                                title="@lang('Not checked anywhere in the app yet — granting this currently has no effect.')"></i>

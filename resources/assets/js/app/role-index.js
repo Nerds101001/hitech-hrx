@@ -136,6 +136,8 @@ document.addEventListener('DOMContentLoaded', function (e) {
       if ($selectAll.length) {
         $selectAll.prop('checked', all > 0 && checked === all);
         $selectAll[0].indeterminate = checked > 0 && checked < all;
+        // Nothing left to toggle when every box in the row is locked.
+        $selectAll.prop('disabled', all > 0 && boxes.filter(':disabled').length === all);
       }
     });
 
@@ -164,12 +166,12 @@ document.addEventListener('DOMContentLoaded', function (e) {
 
   $(document).on('change', '.rp-module-select-all', function () {
     var slug = $(this).data('module');
-    $('.' + slug + '-checkbox').prop('checked', $(this).is(':checked'));
+    $('.' + slug + '-checkbox:not(:disabled)').prop('checked', $(this).is(':checked'));
     recomputeCounts();
   });
 
   $(document).on('change', '#rpGrantAll', function () {
-    $('#rpPanel .rp-permission-checkbox').prop('checked', $(this).is(':checked'));
+    $('#rpPanel .rp-permission-checkbox:not(:disabled)').prop('checked', $(this).is(':checked'));
     recomputeCounts();
   });
 
@@ -213,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function (e) {
     var $hint = $('#rpPresetHint');
     if (!this.value) { $hint.text(''); return; }
     var perms = (opt.getAttribute('data-permissions') || '').split(',').filter(Boolean);
-    $('#rpPanel .rp-permission-checkbox').prop('checked', false);
+    $('#rpPanel .rp-permission-checkbox:not(:disabled)').prop('checked', false);
     perms.forEach(function (p) {
       $('#rpPanel .rp-permission-checkbox[value="' + p + '"]').prop('checked', true);
     });
@@ -228,10 +230,11 @@ document.addEventListener('DOMContentLoaded', function (e) {
     var $select = $(this);
     $.get(`${baseUrl}roles/${sourceId}/getRolePermissionsAjax`, function (res) {
       if (!res || res.status !== 'success') return;
-      $('#rpPanel .rp-permission-checkbox').prop('checked', false);
+      $('#rpPanel .rp-permission-checkbox:not(:disabled)').prop('checked', false);
       res.data.forEach(function (name) {
         $('#rpPanel .rp-permission-checkbox[value="' + name + '"]').prop('checked', true);
       });
+      // Locked boxes stay ticked whatever the source role had.
       recomputeCounts();
       showSuccessToast('Copied ' + res.data.length + ' permissions — remember to Save');
       $select.val('');

@@ -67,7 +67,7 @@ class RoleController extends Controller
     if (!$role) {
       return Error::response('Role not found');
     }
-    return Success::response($role->permissions->pluck('name'));
+    return Success::response($role->permissions->pluck('name')->merge($this->lockedPermissionsFor($role))->unique()->values());
   }
 
   /**
@@ -83,16 +83,42 @@ class RoleController extends Controller
   private function rolePanelData(Role $role): array
   {
     $groupedPermissions = config('permissions_registry');
+    $lockedPermissionNames = $this->lockedPermissionsFor($role);
 
     return [
       'role' => $role,
-      'rolePermissionNames' => $role->permissions->pluck('name')->toArray(),
+      'rolePermissionNames' => array_values(array_unique(array_merge($role->permissions->pluck('name')->toArray(), $lockedPermissionNames))),
+      'lockedPermissionNames' => $lockedPermissionNames,
+      'isSuperRole' => $this->isSuperRole($role),
       'permissionMatrix' => $this->buildPermissionMatrix($groupedPermissions),
       'totalPermissionsCount' => array_sum(array_map('count', $groupedPermissions)),
       'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
       'rolePresets' => config('role_presets', []),
       'reachability' => $this->computeRoleReachability($role),
     ];
+  }
+
+  /**
+   * Roles Gate::before (AppServiceProvider) passes on every ability - there
+   * is no permission it could be missing, so its matrix is all locked-on.
+   */
+  private function isSuperRole(Role $role): bool
+  {
+    return in_array($role->name, ['admin', 'Admin', 'super_admin'], true);
+  }
+
+  /**
+   * Permissions this role holds by NAME in code, whatever its stored rows
+   * say - shown ticked and locked, and never stripped on save, since
+   * unticking them wouldn't take the access away. See
+   * config/role_builtin_permissions.php for how that list is derived.
+   */
+  private function lockedPermissionsFor(Role $role): array
+  {
+    if ($this->isSuperRole($role)) {
+      return collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->values()->all();
+    }
+    return config('role_builtin_permissions.' . $role->name, []);
   }
 
   /**
@@ -384,8 +410,17 @@ class RoleController extends Controller
       }
       $role->update($roleData);
 
-      // Sync Permissions (Filter valid names only to avoid crash)
-      $requestedPermissions = $request->permissions ?? [];
+      // admin's boxes are all locked (Gate::before already grants it
+      // everything), so the form sends none of them - syncing that would
+      // wipe its stored rows for nothing. Leave them exactly as they are.
+      if ($this->isSuperRole($role)) {
+        return Success::response('Role updated successfully');
+      }
+
+      // Sync Permissions (Filter valid names only to avoid crash). Locked
+      // boxes are disabled, so they never arrive in the request - merge
+      // them back in rather than let the save strip them.
+      $requestedPermissions = array_merge($request->permissions ?? [], $this->lockedPermissionsFor($role));
       $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
 
       // SAFETY: the permissions UI only ever renders a checkbox for keys in
