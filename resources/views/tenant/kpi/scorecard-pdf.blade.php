@@ -24,6 +24,21 @@
   .dense .notes td { height: 15px; }
   .dense .sign { margin-top: 12px; }
 
+  /* A 19-row scorecard still has to fit. */
+  .tight { font-size: 6.6pt; }
+  .tight .grid td { padding: 1px 5px; }
+  .tight .grid th { padding: 2px 5px; }
+  .tight .info td { padding: 2px 6px; }
+  .tight .band { padding: 6px 12px 5px; }
+  .tight .band h1 { font-size: 12pt; }
+  .tight .tiles td { padding: 3px 3px; }
+  .tight .tiles .n { font-size: 10pt; }
+  .tight .section { margin-top: 5px; }
+  .tight .verdict { margin-top: 4px; padding: 4px 8px; font-size: 6.8pt; }
+  .tight .notes td { height: 13px; }
+  .tight .sign { margin-top: 8px; }
+  .tight .foot { margin-top: 5px; }
+
   .band { background: #005a5a; color: #fff; padding: 8px 14px 7px; border-bottom: 3px solid #007a7a; }
   .band .kicker { font-size: 6.4pt; letter-spacing: 1px; color: #cfe6e5; text-transform: uppercase; }
   .band h1 { font-size: 13.5pt; margin: 2px 0 1px; letter-spacing: .4px; }
@@ -97,10 +112,12 @@
     $attendance = $card->attendance ?? null;
     $ytd = $card->ytd ?? [];
     $attention = $card->attention ?? [];
-    // Everything competes for one page, so a long scorecard tightens earlier.
-    $dense = $rows->count() > 10;
+    // Everything competes for one page, so a long scorecard tightens, and a
+    // very long one tightens twice. Thresholds come from the real spread:
+    // cards run to 11, 12, 15 and 19 rows.
+    $fit = $rows->count() > 16 ? 'dense tight' : ($rows->count() > 10 ? 'dense' : '');
   @endphp
-  <div class="{{ $dense ? 'dense' : '' }}" @if(!$loop->last) style="page-break-after: always" @endif>
+  <div class="{{ $fit }}" @if(!$loop->last) style="page-break-after: always" @endif>
     <div class="band">
       <div class="kicker">{{ $company !== '' ? $company . '  |  ' : '' }}Monthly Performance Review  |  {{ $month->format('F Y') }}</div>
       <h1>MONTHLY KPI SCORECARD</h1>

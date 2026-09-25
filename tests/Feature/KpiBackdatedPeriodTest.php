@@ -194,6 +194,17 @@ class KpiBackdatedPeriodTest extends TestCase
         ]);
         $a->forceFill(['created_at' => Carbon::today()->startOfMonth()])->save();
 
+        // Something for the source to measure this month -- with no attendance
+        // rows at all it returns null (the person is not tracked) and no check
+        // would be written for any period, which would pass this test blindly.
+        \Illuminate\Support\Facades\DB::table('attendances')->insert([
+            'user_id' => $this->rep->id,
+            'status' => 'present',
+            'check_in_time' => Carbon::today()->startOfMonth()->setTime(9, 30),
+            'check_out_time' => Carbon::today()->startOfMonth()->setTime(18, 30),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         $this->artisan('kpi:auto-score', [
             '--user' => $this->rep->id,
             '--months' => 6,
@@ -236,6 +247,40 @@ class KpiBackdatedPeriodTest extends TestCase
         $this->assertEquals(40.72, (float) $yearly->achieved_value,
             'one month\'s figure overwrote the year-to-date total');
         $this->assertEquals(8.0, (float) $yearly->score, 'the year-to-date score was rewritten');
+    }
+
+    /**
+     * Somebody nobody is recording reads as absent every day. Four people on
+     * production scored 0 of 10 for September with not one attendance row and
+     * not one leave day between them -- that is missing paperwork, not a month
+     * of absence, and the KPI cannot tell the two apart. So it declines to say.
+     */
+    public function test_attendance_is_not_scored_for_someone_with_no_records_at_all(): void
+    {
+        $a = $this->assignment([
+            'data_source' => 'auto:attendance_percent',
+            'target_value' => 100,
+            'max_marks' => 10,
+        ]);
+        $from = Carbon::today()->startOfMonth();
+        $to = Carbon::today()->endOfMonth();
+
+        $this->assertNull(
+            \App\Services\KpiAutoSourceService::compute($a, $from, $to),
+            'a person with no attendance and no leave was scored as if absent'
+        );
+
+        \Illuminate\Support\Facades\DB::table('attendances')->insert([
+            'user_id' => $this->rep->id, 'status' => 'present',
+            'check_in_time' => $from->copy()->setTime(9, 30),
+            'check_out_time' => $from->copy()->setTime(18, 30),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->assertNotNull(
+            \App\Services\KpiAutoSourceService::compute($a, $from, $to),
+            'one attendance row is enough to measure the month'
+        );
     }
 
     /** --dry changes nothing. */

@@ -248,6 +248,13 @@ class KpiAutoSourceService
             return null;
         }
 
+        // No attendance row and no leave for the whole period: this person is not
+        // being tracked, which is not the same as never having come in. Scoring
+        // it would dock ten marks for somebody else's missing paperwork.
+        if ($rows->isEmpty() && $leaves->isEmpty()) {
+            return null;
+        }
+
         return round(min(100, $attended / $working * 100), 2);
     }
 
