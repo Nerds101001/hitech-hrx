@@ -41,6 +41,15 @@ class BackfillBuiltInRolePermissionsSeeder extends Seeder
             return;
         }
 
+        // Every checkbox on the Roles page needs its Permission row, or ticking
+        // it saves nothing (the save keeps only names that exist). Production
+        // was missing 49 of them. A row nobody holds grants nothing.
+        $created = 0;
+        foreach (collect(config('permissions_registry', []))->flatMap(fn($perms) => array_keys($perms)) as $name) {
+            $created += Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web'])->wasRecentlyCreated ? 1 : 0;
+        }
+        $this->command?->info("permission rows created: {$created}");
+
         foreach ($builtIn as $roleName => $permissionNames) {
             $role = Role::where('name', $roleName)->first();
             if (!$role) {
