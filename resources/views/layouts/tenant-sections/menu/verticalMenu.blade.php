@@ -127,7 +127,10 @@
                 if (!$menuUser) return false;
                 $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $m->roles);
-                if (empty(array_intersect($ur, $rr))) return false;
+                // Role not listed - still shown if a permission ticked on the
+                // Roles page opens this item's page (see Nav::grantedByPermission).
+                if (empty(array_intersect($ur, $rr))
+                    && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($m), $menuUser)) return false;
             }
             if (isset($m->permission) && !$isAdminUser) {
                 if (!$hasAnyPermission($menuUser, $m->permission)) return false;
@@ -179,11 +182,17 @@
           $user = auth()->user();
           $isAdmin = $user ? $user->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr']) : false;
           
+          // True when this group is shown only because of a granted
+          // permission - its children then need their own permission too.
+          $viaPermission = false;
           if(isset($menu->roles)) {
               if (!$user) continue;
               $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
               $requiredRoles = array_map('strtolower', (array) $menu->roles);
-              if (empty(array_intersect($userRoles, $requiredRoles))) continue;
+              if (empty(array_intersect($userRoles, $requiredRoles))) {
+                  if (!\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)) continue;
+                  $viaPermission = true;
+              }
           }
 
           if(isset($menu->permission) && !$isAdmin) {
@@ -261,7 +270,10 @@
                            if (!$user) continue;
                            $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
                            $requiredRoles = array_map('strtolower', (array) $submenu->roles);
-                           if (empty(array_intersect($userRoles, $requiredRoles))) continue;
+                           if (empty(array_intersect($userRoles, $requiredRoles))
+                               && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) continue;
+                       } elseif ($viaPermission && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) {
+                           continue;
                        }
 
                        if(isset($submenu->permission) && !$isAdmin) {

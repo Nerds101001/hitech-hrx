@@ -46,6 +46,132 @@ class Nav
     public static function flush(): void
     {
         self::$cache = [];
+        self::$permissionCache = [];
+        self::$grantedCache = [];
+    }
+
+    /** Per-request memo of the permission names each path's route accepts. */
+    private static array $permissionCache = [];
+
+    /**
+     * The permission names the page at $url accepts - the dotted tokens of
+     * its role_or_permission: / permission: middleware. Role names and
+     * can: gates are left out; those aren't something a checkbox grants.
+     */
+    public static function permissionsFor(string $url): array
+    {
+        $path = '/' . ltrim(parse_url($url, PHP_URL_PATH) ?? '/', '/');
+
+        return self::$permissionCache[$path] ??= (function () use ($path) {
+            try {
+                $route = RouteFacade::getRoutes()->match(Request::create($path, 'GET'));
+            } catch (\Throwable $e) {
+                return [];
+            }
+            $perms = [];
+            foreach ($route->gatherMiddleware() as $m) {
+                if (!is_string($m)) {
+                    continue;
+                }
+                foreach (['role_or_permission:', 'permission:'] as $prefix) {
+                    if (str_starts_with($m, $prefix)) {
+                        foreach (explode('|', substr($m, strlen($prefix))) as $token) {
+                            if (str_contains($token, '.')) {
+                                $perms[] = trim($token);
+                            }
+                        }
+                    }
+                }
+            }
+            return array_values(array_unique($perms));
+        })();
+    }
+
+    /**
+     * Sidebar "roles" lists are hand-kept, so a permission ticked on the
+     * Roles & Permissions page never showed its link. A role-gated item is
+     * also shown when the person holds a permission the item's own page
+     * accepts AND that page would really open for them (allows() - so a
+     * stricter outer gate still hides it). $urls is the item's url, or its
+     * children's urls for a group header.
+     */
+    public static function grantedByPermission(array $urls, $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+        $granted = self::grantedPermissionNames($user);
+        foreach ($urls as $url) {
+            if (!$url) {
+                continue;
+            }
+            $perms = self::permissionsFor($url);
+            if ($perms && array_intersect($perms, $granted) && self::allows($url, $user)
+                && self::passesAdminGuard($url, $user)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * allows() only reads role/permission middleware; admin.guard sits on
+     * top and turns away employee/office_employee (and anyone without an
+     * admin-type role) unless they hold an ELEVATED permission. Mirrors
+     * AdminRoleGuard::handle() so a granted permission never draws a link
+     * that guard would bounce.
+     */
+    private static function passesAdminGuard(string $url, $user): bool
+    {
+        $path = '/' . ltrim(parse_url($url, PHP_URL_PATH) ?? '/', '/');
+        try {
+            $route = RouteFacade::getRoutes()->match(Request::create($path, 'GET'));
+        } catch (\Throwable $e) {
+            return false;
+        }
+        if (!in_array('admin.guard', $route->gatherMiddleware(), true)) {
+            return true;
+        }
+        $guard = \App\Http\Middleware\AdminRoleGuard::class;
+        $override = $user->getAllPermissions()->pluck('name')->intersect($guard::ELEVATED_PERMISSIONS)->isNotEmpty();
+        if ($user->hasRole(['employee', 'office_employee'])) {
+            return $override;
+        }
+        return $user->hasAnyRole($guard::ADMIN_ROLES) || $override;
+    }
+
+    /** Per-request memo for grantedPermissionNames(). */
+    private static array $grantedCache = [];
+
+    /**
+     * Permissions someone was actually granted on the Roles / Special
+     * Permissions pages - everything they hold, minus the rows stored only
+     * so the matrix shows what their role already has by name
+     * (config/role_builtin_permissions.php). Those mirror route access the
+     * sidebar deliberately doesn't advertise; counting them would add links
+     * for every manager/accounts user nobody chose to grant.
+     */
+    private static function grantedPermissionNames($user): array
+    {
+        return self::$grantedCache[$user->id] ??= (function () use ($user) {
+            $builtIn = [];
+            foreach ($user->roles->pluck('name') as $role) {
+                $builtIn = array_merge($builtIn, config('role_builtin_permissions.' . $role, []));
+            }
+            $direct = $user->getDirectPermissions()->pluck('name')->all();
+            $all = $user->getAllPermissions()->pluck('name')->all();
+            return array_values(array_diff($all, array_diff($builtIn, $direct)));
+        })();
+    }
+
+    /** A menu JSON item's own url, or its children's when it's a group. */
+    public static function menuUrls($item): array
+    {
+        $item = (object) $item;
+        if (!empty($item->url)) {
+            return [$item->url];
+        }
+        return array_values(array_filter(array_map(fn($s) => ((object) $s)->url ?? null, (array) ($item->submenu ?? []))));
     }
 
     /** Filter a list of ['url' => ...] rows down to what the user can open. */
@@ -190,8 +316,15 @@ class Nav
             if (isset($item->roles)) {
                 $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $item->roles);
-                if (empty(array_intersect($ur, $rr))) {
-                    return ['text' => 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list.', 'grantable' => []];
+                if (empty(array_intersect($ur, $rr))
+                    && !self::grantedByPermission(self::menuUrls($item), $user)) {
+                    // Any permission this item's page(s) accept will show it -
+                    // same rule as the live sidebar.
+                    $options = array_values(array_unique(array_filter(
+                        array_merge(...array_map(fn($u) => self::permissionsFor($u), self::menuUrls($item) ?: [''])),
+                        fn($p) => isset($registryKeys[$p]) && !$user->can($p)
+                    )));
+                    return ['text' => 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list' . ($options ? ' (or grant a permission its page accepts)' : '') . '.', 'grantable' => $options];
                 }
             }
             if (isset($item->permission) && !$isAdminUser) {
@@ -234,8 +367,15 @@ class Nav
             if (isset($item->submenu)) {
                 $children = [];
                 $anyChildVisible = false;
+                // Group shown only through a granted permission: a child with
+                // no roles of its own then needs one too (as the live sidebar).
+                $viaPermission = isset($item->roles) && !$user->hasRole((array) $item->roles);
                 foreach ($item->submenu as $sub) {
                     $childGate = $gateReason($sub);
+                    if ($childGate === null && $viaPermission && !isset($sub->roles)
+                        && !self::grantedByPermission([$sub->url ?? null], $user)) {
+                        $childGate = ['text' => 'Its group is shown only through a granted permission, and this page accepts none this role holds.', 'grantable' => []];
+                    }
                     $urlOk = $childGate === null && (!isset($sub->url) || self::allows(url($sub->url), $user));
                     $anyChildVisible = $anyChildVisible || $urlOk;
                     $children[] = [
