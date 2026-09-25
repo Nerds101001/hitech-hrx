@@ -157,5 +157,7 @@ class Constants
       'purchase_link' => 'https://hitechhrx.com/net-saas-addons/',
     ],
   ];
-  public const BuiltInRoles = ['admin', 'hr', 'employee', 'office_employee', 'manager'];
+  // accounts included: code grants it access by this exact name
+  // (hasRole / role_or_permission), so a rename or delete would silently drop it.
+  public const BuiltInRoles = ['admin', 'hr', 'employee', 'office_employee', 'manager', 'accounts'];
 }

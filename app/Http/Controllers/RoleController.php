@@ -408,6 +408,11 @@ class RoleController extends Controller
       if (!$role) {
         return Error::response('Role not found');
       }
+      // The name box is read-only for system roles, but that's only the
+      // browser - access throughout the code is keyed on these exact names.
+      if (in_array($role->name, Constants::BuiltInRoles) && $request->name !== $role->name) {
+        return Error::response('System role names can\'t be changed.');
+      }
       $role->update($roleData);
 
       // admin's boxes are all locked (Gate::before already grants it
