@@ -23,7 +23,7 @@ class KpiAutoSourceService
         'auto:revenue'             => 'Revenue booked in the period (₹ lakh)',
         'auto:target_achievement'  => 'Revenue as a % of the salesperson target',
         'auto:customer_health'     => '% of the book that ordered at least once',
-        'auto:total_pipeline'      => 'Revenue as a % of pipeline potential',
+        'auto:total_pipeline'      => 'The month\'s sale as a % of the month\'s forecast',
         'auto:customers_added'     => 'Customers whose first ever order falls in the period',
         'auto:customers_retained'  => '% of customers first seen 6+ months ago still ordering',
 
@@ -56,7 +56,7 @@ class KpiAutoSourceService
 
         // Sales Assessment rule book. Each returns the raw figure the rule book's tiers are
         // written against (a % or a count), to be scored with bands.
-        'auto:pipeline_vs_target'         => 'Pipeline potential as a % of the Bingo target',
+        'auto:pipeline_vs_target'         => 'The month\'s forecast as a % of the month\'s Bingo target',
         'auto:yoy_growth'                 => 'Revenue growth % against the same period a year earlier',
         'auto:new_customer_revenue_pct'   => '% of revenue from customers whose first ever order falls in the period',
         'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
@@ -103,7 +103,7 @@ class KpiAutoSourceService
 
             'auto:learn_hitech_sessions' => self::learnHitechCount($a->user_id, $start, $end),
 
-            'auto:pipeline_vs_target'       => self::pipelineVsTarget($a->user_id),
+            'auto:pipeline_vs_target'       => self::pipelineVsTarget($a->user_id, $start, $end),
             'auto:yoy_growth'               => self::yoyGrowth($a->user_id, $start, $end),
             'auto:new_customer_revenue_pct' => self::newCustomerRevenuePct($a->user_id, $start, $end),
             'auto:customer_attrition'       => self::customerAttrition($a->user_id, $start, $end),
@@ -314,26 +314,51 @@ class KpiAutoSourceService
         return round($ordered / $ids->count() * 100, 2);
     }
 
-    /** Revenue against the book's total potential, as a percentage. */
+    /**
+     * The period's sale against the period's forecast, as a percentage: did
+     * they sell what they said they would?
+     *
+     * The pipeline IS the forecast -- the business's own definition. This used
+     * to divide by the book's total_business_potential, which counts prospects
+     * who have never ordered (about half of a New Biz book) and is a lifetime
+     * figure set against one month's sale: the best anyone ever reached was 73%
+     * of a 100% threshold. A forecast is dated, belongs to the month, and is the
+     * salesperson's own number.
+     */
     public static function totalPipeline(int $userId, Carbon $start, Carbon $end): ?float
     {
-        $potential = (float) self::book($userId)->sum('total_business_potential');
-        if ($potential <= 0) {
-            return null;
+        $forecast = self::forecast($userId, $start, $end);
+        if ($forecast <= 0) {
+            return null;   // nothing was forecast, so there is nothing to have delivered against
         }
 
-        return round(self::revenue($userId, $start, $end) / $potential * 100, 2);
+        return round(self::revenue($userId, $start, $end) / $forecast * 100, 2);
     }
 
     /**
-     * The pipeline someone is carrying, in ₹ lakh.
-     *
-     * Not the same figure as totalPipeline() above, which is revenue expressed
-     * as a PERCENTAGE of this. The scorecard card wants the value itself.
+     * Forecast for the period's months, in ₹ lakh (forecast_amount is stored in
+     * lakh, like sale_amount). Recorded from August 2026 onward; earlier months
+     * have none.
      */
-    public static function totalPipelineValue(int $userId): float
+    public static function forecast(int $userId, Carbon $start, Carbon $end): float
     {
-        return round((float) self::book($userId)->sum('total_business_potential'), 2);
+        return (float) DB::table('sales_pipeline_months as m')
+            ->whereIn('m.sales_pipeline_id', self::book($userId)->select('id'))
+            ->whereIn('m.month_year', self::monthKeys($start, $end))
+            ->sum('m.forecast_amount');
+    }
+
+    /**
+     * The pipeline someone is carrying, in ₹ lakh, for the scorecard's headline
+     * card: the month's forecast (this month unless told otherwise), which is
+     * what the Total Pipeline KPI now measures sale against.
+     */
+    public static function totalPipelineValue(int $userId, ?Carbon $start = null, ?Carbon $end = null): float
+    {
+        $start ??= Carbon::today()->startOfMonth();
+        $end ??= Carbon::today()->endOfMonth();
+
+        return round(self::forecast($userId, $start, $end), 2);
     }
 
     /** Public door to the attendance figure, for the scorecard's headline card. */
@@ -508,30 +533,26 @@ class KpiAutoSourceService
     }
 
     /**
-     * Total business potential of the book against the annual Bingo target, as a
-     * percentage (the rule book's "Pipeline ÷ Target"). Potential is not dated, so
-     * this reads the book as it stands; the target is the current fiscal year's.
+     * The period's forecast against the period's Bingo target, as a percentage
+     * (the rule book's "Pipeline ÷ Target"), read month on month.
+     *
+     * It used to divide the book's undated total potential by the whole fiscal
+     * year's Bingo target, so it printed the same number for every month -- one
+     * person read 16.07% in April, June, August and September alike -- and a
+     * small target against a large book of prospects produced 849%. A forecast
+     * is dated, so the figure now belongs to the month it is printed for.
      */
-    public static function pipelineVsTarget(int $userId): ?float
+    public static function pipelineVsTarget(int $userId, Carbon $start, Carbon $end): ?float
     {
         $target = (float) DB::table('salesperson_targets')
             ->where('salesperson_id', $userId)
-            ->whereIn('month_year', self::currentFiscalKeys())
+            ->whereIn('month_year', self::monthKeys($start, $end))
             ->sum('bingo_target');
         if ($target <= 0) {
             return null;
         }
 
-        return round((float) self::book($userId)->sum('total_business_potential') / $target * 100, 2);
-    }
-
-    /** The current fiscal year's month keys (Apr to Mar), for the undated figure above. */
-    private static function currentFiscalKeys(): array
-    {
-        $today = Carbon::today();
-        $start = $today->month >= 4 ? Carbon::create($today->year, 4, 1) : Carbon::create($today->year - 1, 4, 1);
-
-        return self::monthKeys($start, $start->copy()->addMonths(11));
+        return round(self::forecast($userId, $start, $end) / $target * 100, 2);
     }
 
     /**

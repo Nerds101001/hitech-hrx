@@ -62,13 +62,13 @@ class KpiAutoSourceTest extends TestCase
         ]);
     }
 
-    private function sale(int $customerId, string $month, float $amount): void
+    private function sale(int $customerId, string $month, float $amount, float $forecast = 0): void
     {
         DB::table('sales_pipeline_months')->insert([
             'sales_pipeline_id' => $customerId,
             'month_year'        => $month,
             'sale_amount'       => $amount,
-            'forecast_amount'   => 0,
+            'forecast_amount'   => $forecast,
             'pending_amount'    => 0,
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -199,24 +199,48 @@ class KpiAutoSourceTest extends TestCase
 
     // ── pipeline ─────────────────────────────────────────────────────────
 
-    public function test_total_pipeline_is_revenue_against_the_books_potential(): void
+    public function test_total_pipeline_is_the_sale_against_the_forecast(): void
     {
-        $customer = $this->customer('salesperson_id', 200);
-        $this->sale($customer, self::APR, 50);
+        // A huge potential must play no part: the pipeline is the forecast.
+        $customer = $this->customer('salesperson_id', 5000);
+        $this->sale($customer, self::APR, 30, 40);
+        $this->sale($this->customer('new_biz_id', 0), self::APR, 15, 20);
 
-        [$start, $end] = $this->period();
+        [$start, $end] = $this->period(self::APR, self::APR);
+
+        // 45 sold of 60 forecast.
+        $this->assertSame(75.0, KpiAutoSourceService::totalPipeline($this->rep->id, $start, $end));
+    }
+
+    public function test_total_pipeline_reads_only_the_months_asked_for(): void
+    {
+        $customer = $this->customer('salesperson_id', 0);
+        $this->sale($customer, self::APR, 50, 50);
+        $this->sale($customer, self::MAY, 10, 40);
+
+        [$start, $end] = $this->period(self::MAY, self::MAY);
 
         $this->assertSame(25.0, KpiAutoSourceService::totalPipeline($this->rep->id, $start, $end));
     }
 
-    public function test_total_pipeline_is_null_when_no_potential_is_recorded(): void
+    public function test_total_pipeline_is_null_when_nothing_was_forecast(): void
     {
-        $customer = $this->customer('salesperson_id', 0);
-        $this->sale($customer, self::APR, 50);
+        $customer = $this->customer('salesperson_id', 200);
+        $this->sale($customer, self::APR, 50, 0);
 
         [$start, $end] = $this->period();
 
         $this->assertNull(KpiAutoSourceService::totalPipeline($this->rep->id, $start, $end));
+    }
+
+    public function test_the_headline_pipeline_card_is_the_months_forecast(): void
+    {
+        $this->sale($this->customer('salesperson_id', 900), self::APR, 5, 42.18);
+        $this->sale($this->customer('salesperson_id', 0), self::MAY, 5, 99);
+
+        [$start, $end] = $this->period(self::APR, self::APR);
+
+        $this->assertSame(42.18, KpiAutoSourceService::totalPipelineValue($this->rep->id, $start, $end));
     }
 
     // ── new customers ────────────────────────────────────────────────────

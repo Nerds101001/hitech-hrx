@@ -59,10 +59,10 @@ class SalesRuleBookSourcesTest extends TestCase
         ]);
     }
 
-    private function sale(int $customer, string $month, float $lakh): void
+    private function sale(int $customer, string $month, float $lakh, float $forecast = 0): void
     {
         DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $customer, 'month_year' => $month, 'sale_amount' => $lakh,
-            'forecast_amount' => 0, 'pending_amount' => 0, 'created_at' => now(), 'updated_at' => now()]);
+            'forecast_amount' => $forecast, 'pending_amount' => 0, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     private function currentFiscalStart(): Carbon
@@ -73,21 +73,51 @@ class SalesRuleBookSourcesTest extends TestCase
 
     // ── pipeline ÷ target ────────────────────────────────────────────────
 
-    public function test_pipeline_strength_is_potential_over_the_bingo_target(): void
+    private function bingo(string $month, float $lakh): void
     {
-        $this->customer(60);
-        $this->customer(30);
-        DB::table('salesperson_targets')->insert(['salesperson_id' => $this->rep->id, 'month_year' => $this->currentFiscalStart()->format('Y-m'),
-            'bingo_target' => 100, 'kingo_target' => 0, 'super_kingo_target' => 0, 'created_at' => now(), 'updated_at' => now()]);
-
-        $this->assertSame(90.0, Src::pipelineVsTarget($this->rep->id));
+        DB::table('salesperson_targets')->insert(['salesperson_id' => $this->rep->id, 'month_year' => $month,
+            'bingo_target' => $lakh, 'kingo_target' => 0, 'super_kingo_target' => 0, 'created_at' => now(), 'updated_at' => now()]);
     }
 
-    public function test_pipeline_strength_is_null_without_a_target(): void
+    private function monthOf(string $ym): array
     {
-        $this->customer(60);
+        $m = Carbon::createFromFormat('!Y-m', $ym);
 
-        $this->assertNull(Src::pipelineVsTarget($this->rep->id));
+        return [$m->copy()->startOfMonth(), $m->copy()->endOfMonth()];
+    }
+
+    public function test_pipeline_strength_is_the_months_forecast_over_the_months_bingo_target(): void
+    {
+        // Potential is deliberately enormous: it must no longer count.
+        $this->sale($this->customer(9000), '2026-08', 0, 60);
+        $this->sale($this->customer(9000), '2026-08', 0, 30);
+        $this->bingo('2026-08', 100);
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertSame(90.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+    }
+
+    public function test_pipeline_strength_differs_month_to_month(): void
+    {
+        $c = $this->customer(0);
+        $this->sale($c, '2026-08', 0, 80);
+        $this->sale($c, '2026-09', 0, 50);
+        $this->bingo('2026-08', 100);
+        $this->bingo('2026-09', 100);
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertSame(80.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+        [$s, $e] = $this->monthOf('2026-09');
+        $this->assertSame(50.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+    }
+
+    public function test_pipeline_strength_is_null_without_a_target_that_month(): void
+    {
+        $this->sale($this->customer(60), '2026-08', 0, 60);
+        $this->bingo('2026-09', 100);   // a target, but for another month
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertNull(Src::pipelineVsTarget($this->rep->id, $s, $e));
     }
 
     // ── growth ───────────────────────────────────────────────────────────
