@@ -248,13 +248,13 @@ class KpiAutoSourceService
             return null;
         }
 
-        // No attendance row and no leave for the whole period: this person is not
-        // being tracked, which is not the same as never having come in. Scoring
-        // it would dock ten marks for somebody else's missing paperwork.
-        if ($rows->isEmpty() && $leaves->isEmpty()) {
-            return null;
-        }
-
+        // A person with no attendance row and no leave for the whole period
+        // scores zero, the same as somebody who was marked absent every day.
+        // Asked for deliberately: the business treats an unrecorded month as an
+        // unattended one, and the four accounts it currently applies to are
+        // regional logins and a new joiner who should be on the registry. The
+        // KPI cannot distinguish missing paperwork from absence, and this is
+        // the side of that it errs on.
         return round(min(100, $attended / $working * 100), 2);
     }
 

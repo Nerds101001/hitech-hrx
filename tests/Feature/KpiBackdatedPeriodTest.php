@@ -250,12 +250,15 @@ class KpiBackdatedPeriodTest extends TestCase
     }
 
     /**
-     * Somebody nobody is recording reads as absent every day. Four people on
-     * production scored 0 of 10 for September with not one attendance row and
-     * not one leave day between them -- that is missing paperwork, not a month
-     * of absence, and the KPI cannot tell the two apart. So it declines to say.
+     * No attendance record at all scores zero, not "unmeasured".
+     *
+     * The KPI cannot tell missing paperwork from a month of absence, and this
+     * is the side it was asked to err on: an unrecorded month counts as an
+     * unattended one. Pinned in a test because it is a policy choice rather
+     * than an obvious one -- the rest of this service returns null when it has
+     * nothing to measure.
      */
-    public function test_attendance_is_not_scored_for_someone_with_no_records_at_all(): void
+    public function test_no_attendance_record_at_all_scores_zero(): void
     {
         $a = $this->assignment([
             'data_source' => 'auto:attendance_percent',
@@ -265,9 +268,10 @@ class KpiBackdatedPeriodTest extends TestCase
         $from = Carbon::today()->startOfMonth();
         $to = Carbon::today()->endOfMonth();
 
-        $this->assertNull(
+        $this->assertSame(
+            0.0,
             \App\Services\KpiAutoSourceService::compute($a, $from, $to),
-            'a person with no attendance and no leave was scored as if absent'
+            'a month with no attendance record must score zero'
         );
 
         \Illuminate\Support\Facades\DB::table('attendances')->insert([
@@ -277,9 +281,10 @@ class KpiBackdatedPeriodTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $this->assertNotNull(
+        $this->assertGreaterThan(
+            0.0,
             \App\Services\KpiAutoSourceService::compute($a, $from, $to),
-            'one attendance row is enough to measure the month'
+            'a day attended must lift the figure off zero'
         );
     }
 
