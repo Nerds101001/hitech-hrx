@@ -57,14 +57,23 @@ class CcAttendanceController extends Controller
             ->get()
             ->keyBy('user_id');
 
+        // Leave applied for or approved on this date, shown on each row. A
+        // part-day leave (short leave, half day, WFH) leaves the rest of the
+        // day for CCare to confirm; a full-day leave keeps the row read-only.
+        $dayLeaves = $this->leaveClaimsByUser($salespeople->pluck('id')->map(fn ($i) => (int) $i)->all(), $date);
+
         // ── Summary over the WHOLE register, before any filter is applied, so
         //    the cards keep telling the truth while you narrow the list down.
         // 'Present', 'Sunday working' and 'Holiday working' all save as the
         // identical status='present' + 09:30-18:30 punches (alignWithDecisionMatrix) —
         // the actual comp-off-earning distinction is date-derived, not stored, so
         // PS/HP must be derived here from the date the same way, not from $att->status.
-        $shortFor = function ($att, $person) {
+        $shortFor = function ($att, $person) use ($dayLeaves) {
             if (!$att) return null;
+            // The row the leave module writes for a part-day leave (00:00, no
+            // punches) is not a mark: nobody has said whether the rest of the
+            // day was worked. It waits for CCare like an empty row.
+            if ($this->isUnconfirmedLeaveRow($att, $dayLeaves->get($person->id))) return null;
             $s = strtolower(str_replace('_', '-', (string) $att->status));
             if ($s === 'absent') return 'A';
             if (str_contains($s, 'half')) return 'HD';
@@ -137,7 +146,7 @@ class CcAttendanceController extends Controller
 
         $canSeeReport = $this->canSeeReport($user);
 
-        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'user',
+        return view('tenant.cc_attendance.index', compact('salespeople', 'date', 'attendances', 'dayLeaves', 'user',
             'isLocked', 'lockDeadline', 'minDate', 'openWindow', 'canSeeReport',
             'summary', 'ccOptions', 'desigOptions', 'fSearch', 'fCc', 'fDesig', 'fStatus', 'sort', 'dir'));
     }
@@ -173,14 +182,115 @@ class CcAttendanceController extends Controller
             return collect();
         }
 
-        return \App\Models\LeaveRequest::whereIn('user_id', $userIds)
+        return \App\Models\LeaveRequest::with('leaveType')
+            ->whereIn('user_id', $userIds)
             ->whereIn('status', ['pending', 'approved'])
             ->whereNull('deleted_at')
             ->whereDate('from_date', '<=', $date)
             ->whereDate('to_date', '>=', $date)
             ->get()
-            ->keyBy('user_id')
-            ->map(fn ($r) => $r->status->value ?? $r->status);
+            ->keyBy('user_id');
+    }
+
+    /** 'pending' or 'approved'. */
+    public static function leaveState($leave): string
+    {
+        return (string) ($leave->status->value ?? $leave->status);
+    }
+
+    /**
+     * What part of the day a leave takes: 'short', 'half', 'wfh' or 'full'.
+     * Only 'full' takes the whole day away from CCare -- for the others the
+     * salesperson is meant to work the rest of the day (or work from home),
+     * and whether they did is exactly what CCare reports on.
+     */
+    public static function leaveKind($leave): string
+    {
+        if (!$leave) return 'full';
+        $type = $leave->leaveType;
+        if (strtoupper((string) ($type->code ?? '')) === 'WFH') return 'wfh';
+        if ($leave->is_short_leave || ($type->is_short_leave ?? false)) return 'short';
+        if ($leave->is_half_day || ($type->is_half_day ?? false)) return 'half';
+        return 'full';
+    }
+
+    /** One line for the register: "Short Leave 10:00 AM - 12:00 PM (2h) - approved". */
+    public static function leaveLabel($leave): string
+    {
+        $kind = self::leaveKind($leave);
+        $bits = [$leave->leaveType->name ?? 'Leave'];
+        if ($kind === 'short' && $leave->start_time && $leave->end_time) {
+            $bits[] = Carbon::parse($leave->start_time)->format('h:i A') . ' - ' . Carbon::parse($leave->end_time)->format('h:i A');
+        }
+        if ($kind === 'short' && $leave->duration_hours) {
+            $bits[] = '(' . rtrim(rtrim(number_format((float) $leave->duration_hours, 2), '0'), '.') . 'h)';
+        }
+        if (in_array($kind, ['half', 'wfh'], true) && $leave->is_half_day) {
+            $bits[] = $leave->half_day_session === 'second_half' ? '(2nd half)' : '(1st half)';
+        }
+        return implode(' ', $bits) . ' - ' . (self::leaveState($leave) === 'pending' ? 'awaiting approval' : 'approved');
+    }
+
+    /**
+     * The placeholder row the leave module writes for a part-day leave --
+     * 00:00 check-in, no check-out, never touched by CCare -- is not a mark.
+     */
+    public function isUnconfirmedLeaveRow($att, $leave): bool
+    {
+        if (!$att || !$att->leave_request_id || $att->check_out_time) return false;
+        if (!$att->check_in_time || $att->check_in_time->format('H:i') !== '00:00') return false;
+        if ($att->updated_by_id) return false;
+        $leave = $leave && $leave->id === $att->leave_request_id ? $leave : $att->leaveRequest;
+        return $leave && self::leaveKind($leave) !== 'full';
+    }
+
+    /**
+     * CCare's mark on a part-day-leave day, turned into what is stored.
+     *
+     * Returns [status, checkIn, checkOut, adminReason] like
+     * alignWithDecisionMatrix(), or null to fall back to it. The admin
+     * reason is left empty on purpose so the day-status matrix does the
+     * sum itself with the leave in view: a short leave plus 6h+ worked is
+     * 'short-leave-present', a half-day leave plus the other half worked is
+     * 'half-day-paid', an approved WFH is 'work_from_home'.
+     */
+    private function markAroundLeave(string $status, $leave, string $date): ?array
+    {
+        $kind = self::leaveKind($leave);
+        $day = fn (string $t) => Carbon::parse($date . ' ' . $t);
+
+        if ($kind === 'short' && $status === 'Present') {
+            // The part of the 09:30-18:30 day the short leave does not cover.
+            [$in, $out] = [$day('09:30:00'), $day('18:30:00')];
+            if ($leave->start_time && $leave->end_time) {
+                $ls = $day(Carbon::parse($leave->start_time)->format('H:i:s'));
+                $le = $day(Carbon::parse($leave->end_time)->format('H:i:s'));
+                if ($ls->lessThanOrEqualTo($day('11:00:00'))) {
+                    $in = $le->max($in);          // came in after the leave
+                } else {
+                    $out = $ls->min($out);        // left when the leave began
+                }
+            }
+            // Reporting "present" means the rest of the day was worked: never
+            // record less than six hours for it, whatever the leave times say.
+            if ($out->lessThanOrEqualTo($in) || $in->diffInMinutes($out) < 360) {
+                [$in, $out] = [$day('09:30:00'), $day('15:30:00')];
+            }
+            return ['present', $in, $out, ''];
+        }
+
+        if ($kind === 'half' && in_array($status, ['Present', 'Half day'], true)) {
+            // Worked the half the leave does not cover.
+            return $leave->half_day_session === 'second_half'
+                ? ['half-day', $day('09:30:00'), $day('14:00:00'), '']
+                : ['half-day', $day('14:00:00'), $day('18:30:00'), ''];
+        }
+
+        if ($kind === 'wfh' && in_array($status, ['Present', 'Work from home'], true)) {
+            return ['work_from_home', $day('09:30:00'), $day('18:30:00'), ''];
+        }
+
+        return null;
     }
 
     /**
@@ -267,7 +377,7 @@ class CcAttendanceController extends Controller
         $from = $request->input('from', Carbon::now()->startOfMonth()->toDateString());
         $to   = $request->input('to', Carbon::today()->toDateString());
 
-        $q = Attendance::with(['user.designation', 'createdBy', 'updatedBy'])
+        $q = Attendance::with(['user.designation', 'createdBy', 'updatedBy', 'leaveRequest.leaveType'])
             ->whereDate('check_in_time', '>=', $from)
             ->whereDate('check_in_time', '<=', $to);
 
@@ -434,6 +544,11 @@ class CcAttendanceController extends Controller
         // person's note is filled. WFH also needs the approval snapshot.
         $missingNotes = [];
         $missingProof = [];
+        // Who has a leave request over this date, applied or approved.
+        $leaveClaims = $this->leaveClaimsByUser(
+            array_map('intval', array_keys($request->attendance)),
+            $date
+        );
         foreach ($request->attendance as $userId => $status) {
             if (empty($status) || $status === '__clear') continue;
             if (trim((string) ($request->notes[$userId] ?? '')) === '') {
@@ -441,7 +556,11 @@ class CcAttendanceController extends Controller
             }
             // Work from home has to be backed by the approval snapshot, unless
             // the row already carries one from an earlier submission.
+            // An approved WFH leave is the approval -- no snapshot needed.
+            $wfhLeave = $leaveClaims->get((int) $userId);
+            $wfhApproved = $wfhLeave && self::leaveKind($wfhLeave) === 'wfh' && self::leaveState($wfhLeave) === 'approved';
             if ($status === 'Work from home'
+                && !$wfhApproved
                 && !$request->hasFile("wfh_proof.$userId")
                 && !$this->existingProof($userId, $date)) {
                 $missingProof[] = $userId;
@@ -474,31 +593,33 @@ class CcAttendanceController extends Controller
         // nothing at all was written.
         $cleared = 0; $saved = 0; $onLeave = 0; $onPending = 0;
 
-        // Who has a leave request over this date, applied or approved.
-        $leaveClaims = $this->leaveClaimsByUser(
-            array_map('intval', array_keys($request->attendance)),
-            $date
-        );
-
         foreach ($request->attendance as $userId => $status) {
             if (empty($status)) continue;
 
             $attendance = $existingAttendances->get($userId);
+            $claim = $leaveClaims->get((int) $userId);
+            $partDay = $claim && self::leaveKind($claim) !== 'full';
 
             // Previous submissions can be corrected while the date is open (the
             // window check above already blocked locked dates; Admin/HR always
-            // pass). Approved leave is owned by the leave module.
-            if ($attendance && $this->isLeaveStatus($attendance->status)) {
+            // pass). Approved leave is owned by the leave module -- except a
+            // part-day leave, where CCare reports the rest of the day.
+            if ($attendance && $this->isLeaveStatus($attendance->status) && !$partDay) {
                 $onLeave++;
                 continue;
             }
 
-            // The day belongs to the leave module from the moment leave is
-            // applied for, not from the moment it is approved. Clearing stays
-            // allowed so a wrongly-marked day can still be removed.
-            $claim = $leaveClaims->get((int) $userId);
-            if ($claim && $status !== '__clear') {
-                $claim === 'pending' ? $onPending++ : $onLeave++;
+            // A full-day leave takes the day from the moment it is applied for,
+            // not from the moment it is approved. Clearing stays allowed so a
+            // wrongly-marked day can still be removed.
+            if ($claim && !$partDay && $status !== '__clear') {
+                self::leaveState($claim) === 'pending' ? $onPending++ : $onLeave++;
+                continue;
+            }
+
+            // The leave module's own placeholder row for a part-day leave is not
+            // CCare's to delete -- clearing it would drop the leave link.
+            if ($status === '__clear' && $partDay && $this->isUnconfirmedLeaveRow($attendance, $claim)) {
                 continue;
             }
 
@@ -516,9 +637,18 @@ class CcAttendanceController extends Controller
             $dbStatus = $status;
             $note = $request->notes[$userId] ?? null;
 
-            $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
-            [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $date);
-            $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
+            $around = $partDay ? $this->markAroundLeave($dbStatus, $claim, $date) : null;
+            if ($around) {
+                [$dbStatus, $checkIn, $checkOut, $adminReason] = $around;
+                $adminReason = $adminReason ?: null;
+            } else {
+                $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
+                [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $date);
+                $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
+            }
+            // Keep the day tied to its approved leave, so the matrix and the
+            // report see "short leave + worked" rather than a bare mark.
+            $leaveLink = ($partDay && self::leaveState($claim) === 'approved') ? $claim->id : null;
 
             // Private disk. These used to land on the public disk and were served
             // at /storage/wfh_approvals/<name> with no authentication at all —
@@ -539,6 +669,9 @@ class CcAttendanceController extends Controller
                 if ($proofPath) {
                     $updateData['attachment'] = $proofPath;
                 }
+                if ($leaveLink) {
+                    $updateData['leave_request_id'] = $leaveLink;
+                }
                 // Keep real biometric punches if the row already has them
                 $hasRealPunch = $attendance->check_in_time && $attendance->check_in_time->format('H:i') !== '00:00';
                 if (!$hasRealPunch) {
@@ -557,6 +690,7 @@ class CcAttendanceController extends Controller
                     'notes' => $note,
                     'admin_reason' => $adminReason,
                     'attachment' => $proofPath,
+                    'leave_request_id' => $leaveLink,
                     'created_by_id' => $authId
                 ]);
                 $saved++;
@@ -757,9 +891,12 @@ class CcAttendanceController extends Controller
                 // Allowed statuses
                 if (!in_array($status, ['Present', 'Absent', 'Half day', 'Work from home', 'Sunday working', 'Holiday working'])) continue;
 
-                // Applied-for or approved leave takes the day out of CCare's
-                // hands, same rule as the daily register.
-                if (isset($claimsByDate[$dateStr]) && $claimsByDate[$dateStr]->has((int) $userId)) {
+                // A full-day leave, applied for or approved, takes the day out
+                // of CCare's hands, same rule as the daily register. A part-day
+                // leave (short, half day, WFH) leaves the rest for CCare.
+                $claim = isset($claimsByDate[$dateStr]) ? $claimsByDate[$dateStr]->get((int) $userId) : null;
+                $partDay = $claim && self::leaveKind($claim) !== 'full';
+                if ($claim && !$partDay) {
                     $skippedForLeave++;
                     continue;
                 }
@@ -770,7 +907,7 @@ class CcAttendanceController extends Controller
 
                 // Corrections allowed while the date is open; approved leave is
                 // owned by the leave module and never overwritten here.
-                if ($existing && $this->isLeaveStatus($existing->status)) {
+                if ($existing && $this->isLeaveStatus($existing->status) && !$partDay) {
                     $skippedForLeave++;
                     continue;
                 }
@@ -778,9 +915,16 @@ class CcAttendanceController extends Controller
                 $dbStatus = $status;
                 $note = $request->notes[$userId][$dateStr] ?? null;
 
-                $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
-                [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $dateStr);
-                $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
+                $around = $partDay ? $this->markAroundLeave($dbStatus, $claim, $dateStr) : null;
+                if ($around) {
+                    [$dbStatus, $checkIn, $checkOut, $adminReason] = $around;
+                    $adminReason = $adminReason ?: null;
+                } else {
+                    $compOffReason = $this->processCompOffLogic($userId, $tenantId, $dbStatus);
+                    [$dbStatus, $checkIn, $checkOut, $ccReason] = $this->alignWithDecisionMatrix($dbStatus, $dateStr);
+                    $adminReason = trim(($compOffReason ? $compOffReason . ' | ' : '') . $ccReason) ?: null;
+                }
+                $leaveLink = ($partDay && self::leaveState($claim) === 'approved') ? $claim->id : null;
 
                 if ($existing) {
                     $updateData = [
@@ -789,6 +933,9 @@ class CcAttendanceController extends Controller
                         'admin_reason' => $adminReason,
                         'updated_by_id' => $authId
                     ];
+                    if ($leaveLink) {
+                        $updateData['leave_request_id'] = $leaveLink;
+                    }
                     // Keep real biometric punches if the row already has them
                     $hasRealPunch = $existing->check_in_time && $existing->check_in_time->format('H:i') !== '00:00';
                     if (!$hasRealPunch) {
@@ -805,6 +952,7 @@ class CcAttendanceController extends Controller
                         'status' => $dbStatus,
                         'notes' => $note,
                         'admin_reason' => $adminReason,
+                        'leave_request_id' => $leaveLink,
                         'created_by_id' => $authId
                     ]);
                 }

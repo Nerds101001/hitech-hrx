@@ -268,6 +268,18 @@
                                 @foreach($salespeople as $emp)
                                     @php
                                         $record = $attendances->get($emp->id);
+                                        // Leave over this date. A part-day leave (short / half day /
+                                        // WFH) is shown and the rest of the day is marked here; a
+                                        // full-day leave makes the row read-only.
+                                        $dayLeave  = $dayLeaves->get($emp->id);
+                                        $leaveKind = $dayLeave ? \App\Http\Controllers\tenant\CcAttendanceController::leaveKind($dayLeave) : null;
+                                        $partDay   = $dayLeave && $leaveKind !== 'full';
+                                        $fullLeave = $dayLeave && $leaveKind === 'full';
+                                        // The leave module's placeholder row is not a mark yet.
+                                        if ($partDay && $record && app(\App\Http\Controllers\tenant\CcAttendanceController::class)->isUnconfirmedLeaveRow($record, $dayLeave)) {
+                                            $record = null;
+                                        }
+                                        $wfhApproved = $leaveKind === 'wfh' && \App\Http\Controllers\tenant\CcAttendanceController::leaveState($dayLeave) === 'approved';
                                         $currentStatus = $record ? $record->status : null;
                                         
                                         // Standardize status
@@ -279,7 +291,8 @@
                                         // approved leave. Listing it here locked those rows as "Not
                                         // Editable" even though the server would have accepted the
                                         // change. Kept in step with isLeaveStatus() in the controller.
-                                        $isLeave = in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave']);
+                                        $isLeave = (in_array($currentStatus, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave']) && !$partDay)
+                                            || ($fullLeave && !$record);
 
                                         // Previous submissions can be corrected while the date is open
                                         // (Admin/HR always). Approved-leave rows stay read-only.
@@ -328,7 +341,27 @@
                                         </td>
                                         <td>{{ $emp->designation->name ?? 'N/A' }}</td>
                                         <td>
-                                            @if($currentStatus && !$canEditRow)
+                                            @if($dayLeave)
+                                                <div class="mb-2">
+                                                    <span class="badge {{ $partDay ? 'bg-label-info' : 'bg-label-warning' }} px-2 py-1" style="white-space:normal;text-align:left;">
+                                                        <i class="ti ti-calendar-event me-1"></i>{{ \App\Http\Controllers\tenant\CcAttendanceController::leaveLabel($dayLeave) }}
+                                                    </span>
+                                                    @if($partDay && !$record && empty($isLocked))
+                                                        <div class="text-muted small mt-1">
+                                                            @if($leaveKind === 'short')
+                                                                Did they work the rest of the day? <b>P</b> = worked the remaining hours (recorded as 6h+, counts as Present with the short leave), <b>HD</b> = half day, <b>A</b> = absent.
+                                                            @elseif($leaveKind === 'half')
+                                                                Did they work the other half? <b>P</b> or <b>HD</b> = worked the other half (half day leave + half day worked), <b>A</b> = absent.
+                                                            @else
+                                                                Did they work from home? <b>WFH</b> or <b>P</b> = worked, <b>A</b> = absent.{{ $wfhApproved ? ' No snapshot needed - the WFH leave is approved.' : '' }}
+                                                            @endif
+                                                        </div>
+                                                    @endif
+                                                </div>
+                                            @endif
+                                            @if($fullLeave && !$record)
+                                                <small class="text-muted fst-italic">On leave - managed by the Leave module</small>
+                                            @elseif($currentStatus && !$canEditRow)
                                                 <div class="opacity-50 pointer-events-none d-flex flex-column gap-2">
                                                     <div class="d-flex align-items-center gap-2">
                                                         @if($isLeave)
@@ -399,6 +432,9 @@
                                                         <input type="text" id="note_{{ $emp->id }}" name="notes[{{ $emp->id }}]" class="form-control form-control-sm cc-note-input" value="{{ $record->notes ?? '' }}" placeholder="e.g. companies visited">
                                                     </div>
                                                     {{-- Work from home must carry the approval snapshot. --}}
+                                                    @if($wfhApproved)
+                                                    <div class="cc-wfh-box" id="wfhbox_{{ $emp->id }}" data-approved="1" style="display:none;"></div>
+                                                    @else
                                                     <div class="cc-wfh-box" id="wfhbox_{{ $emp->id }}" style="display:{{ $sel === 'Work from home' ? 'block' : 'none' }};">
                                                         <label class="form-label small fw-semibold mb-1 text-primary">
                                                             <i class="ti ti-paperclip"></i> WFH approval snapshot <span class="text-danger">*</span>
@@ -413,6 +449,7 @@
                                                             <div class="text-muted" style="font-size:.7rem;">Required — screenshot of the approval from the reporting manager.</div>
                                                         @endif
                                                     </div>
+                                                    @endif
                                                 </div>
                                             @endif
                                         </td>
@@ -438,7 +475,7 @@
 // the moment WFH is picked, without depending on listener binding order.
 function ccToggleWfh(uid, value) {
     const box = document.getElementById('wfhbox_' + uid);
-    if (box) box.style.display = (value === 'Work from home') ? 'block' : 'none';
+    if (box && !box.dataset.approved) box.style.display = (value === 'Work from home') ? 'block' : 'none';
 }
 </script>
 <script>
@@ -460,7 +497,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (r.value === 'Work from home') {
                 const file = form.querySelector('input[name="wfh_proof[' + m[1] + ']"]');
                 const box  = document.getElementById('wfhbox_' + m[1]);
-                const already = box && box.querySelector('a');   // snapshot already on file
+                const already = box && (box.querySelector('a') || box.dataset.approved);   // snapshot on file, or WFH leave approved
                 if (file && !file.files.length && !already) noProof.push(file);
             }
         });

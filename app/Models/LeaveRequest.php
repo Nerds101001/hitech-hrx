@@ -40,7 +40,13 @@ class LeaveRequest extends Model implements AuditableContract
     'cancel_reason',
     'cancelled_at',
     'is_half_day',
-    'half_day_session'
+    'half_day_session',
+    // Sent by Api\LeaveController::createLeaveRequest(); without them a
+    // short leave from the app lost its flag and times on the way in.
+    'is_short_leave',
+    'duration_hours',
+    'start_time',
+    'end_time'
   ];
 
   protected $casts = [
@@ -214,6 +220,14 @@ class LeaveRequest extends Model implements AuditableContract
                           'leave_request_id' => $leaveRequest->id,
                           'status'           => ($isRealPunch && !$absenceLike) ? $attendance->status : $attendanceStatus,
                       ]);
+                  } elseif (($leaveRequest->is_short_leave || $leaveRequest->leaveType->is_short_leave)
+                      && \App\Models\CcSalespersonMap::where('role', 'ccare')->where('sales_user_id', $leaveRequest->user_id)->exists()) {
+                      // A salesperson on the CCare register does not punch, so
+                      // this placeholder was the only row for the day -- and its
+                      // 'present' made an approved short leave a full Present
+                      // day on its own, however long it ran. Their day is left
+                      // for CCare, who sees the short leave on the register and
+                      // reports whether the rest of the day was worked.
                   } else {
                       Attendance::create([
                           'user_id'          => $leaveRequest->user_id,
