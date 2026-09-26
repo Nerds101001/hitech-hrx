@@ -313,6 +313,10 @@ class Nav
                 && !in_array($item->standardAddon, $settings->available_modules ?? [])) {
                 return ['text' => "The \"{$item->standardAddon}\" module is switched off site-wide - not specific to this person or role.", 'grantable' => []];
             }
+            if (isset($item->hideForRoles)
+                && array_intersect(array_map('strtolower', $user->roles->pluck('name')->toArray()), array_map('strtolower', (array) $item->hideForRoles))) {
+                return ['text' => 'Not shown to: ' . implode(', ', (array) $item->hideForRoles) . ' - this link is for another audience.', 'grantable' => []];
+            }
             if (isset($item->roles)) {
                 $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $item->roles);

@@ -819,49 +819,44 @@
                     "url": "/performance/ninety-day-goals/my-dashboard",
                     "name": "My Dashboard",
                     "icon": "menu-icon bx bx-grid-alt",
-                    "slug": "performance.ninety-day-goals.my-dashboard"
+                    "slug": "performance.ninety-day-goals.my-dashboard",
+                    "department": "Sales",
+                    "hideForRoles": ["admin","hr"]
                 },
                 {
                     "url": "/performance/ninety-day-goals",
                     "name": "My Goals",
                     "icon": "menu-icon bx bx-target-lock",
-                    "slug": "performance.ninety-day-goals.index"
+                    "slug": "performance.ninety-day-goals.index",
+                    "department": "Sales",
+                    "hideForRoles": ["admin","hr"]
                 },
                 {
                     "url": "/performance/ninety-day-goals/program-dashboard",
                     "name": "Dashboard",
                     "icon": "menu-icon bx bx-grid-alt",
-                    "slug": "performance.ninety-day-goals.program-dashboard"
+                    "slug": "performance.ninety-day-goals.program-dashboard",
+                    "permission": ["goals.manage","scorecards.manage"]
                 },
                 {
-                    "url": "/performance/ninety-day-goals/my-program",
-                    "name": "My Programs",
-                    "icon": "menu-icon bx bx-briefcase",
-                    "slug": "performance.ninety-day-goals.round"
+                    "url": "/performance/ninety-day-goals/programs/create",
+                    "name": "New Program",
+                    "icon": "menu-icon bx bx-plus-circle",
+                    "slug": "performance.ninety-day-goals.programs.create",
+                    "permission": ["goals.manage","scorecards.manage"]
                 },
                 {
-                    "url": "/performance/ninety-day-goals/program-dashboard#tracking",
-                    "name": "All Programs",
-                    "icon": "menu-icon bx bx-list-ul",
-                    "slug": "performance.ninety-day-goals.program-dashboard"
+                    "url": "/performance/ninety-day-goals?view=overview",
+                    "name": "Goals Overview",
+                    "icon": "menu-icon bx bx-table",
+                    "slug": "performance.ninety-day-goals.index",
+                    "permission": ["goals.manage","scorecards.manage"]
                 },
                 {
-                    "url": "/performance/ninety-day-goals/program-dashboard#people",
-                    "name": "Participants",
-                    "icon": "menu-icon bx bx-group",
-                    "slug": "performance.ninety-day-goals.program-dashboard"
-                },
-                {
-                    "url": "/performance/ninety-day-goals/program-dashboard#tracking",
-                    "name": "Customer Tracking",
-                    "icon": "menu-icon bx bx-search-alt",
-                    "slug": "performance.ninety-day-goals.program-dashboard"
-                },
-                {
-                    "url": "/performance/ninety-day-goals/program-dashboard#reports",
-                    "name": "Reports",
-                    "icon": "menu-icon bx bx-download",
-                    "slug": "performance.ninety-day-goals.program-dashboard"
+                    "url": "/performance/ninety-day-goals/past",
+                    "name": "Past Rounds",
+                    "icon": "menu-icon bx bx-history",
+                    "slug": "performance.ninety-day-goals.past"
                 }
             ]
         },

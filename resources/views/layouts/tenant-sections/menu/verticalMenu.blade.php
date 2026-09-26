@@ -114,7 +114,15 @@
         };
 
         $menuUser = auth()->user();
-        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission) {
+        // "hideForRoles": links meant for one audience only (e.g. a salesperson's own pages),
+        // hidden from these roles even though they pass every other gate.
+        $hiddenForUser = function ($m) use ($menuUser) {
+            if (!isset($m->hideForRoles) || !$menuUser) return false;
+            $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
+            return (bool) array_intersect($ur, array_map('strtolower', (array) $m->hideForRoles));
+        };
+        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission, $hiddenForUser) {
+            if ($hiddenForUser($m)) return false;
             if (isset($m->addon) && !$addonService->isAddonEnabled($m->addon)) return false;
             if (isset($m->standardAddon)
                 && !in_array($m->standardAddon, $settings->available_modules ?? [])) return false;
@@ -279,6 +287,12 @@
                        if(isset($submenu->permission) && !$isAdmin) {
                          if (!$hasAnyPermission($user, $submenu->permission)) continue;
                      }
+
+                       // Audience-only links, and a child's own department gate (admin/HR pass
+                       // department gates, as on the parent).
+                       if ($hiddenForUser($submenu)) continue;
+                       if (isset($submenu->department) && !$isAdmin
+                           && (!$user->department || stripos($user->department->name, $submenu->department) === false)) continue;
 
                        // Same gate as the parent: never draw a child the user
                        // would only get a 403 from.

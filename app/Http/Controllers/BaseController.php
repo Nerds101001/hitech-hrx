@@ -106,6 +106,11 @@ class BaseController extends Controller
         return false;
       };
       $passesGate = function (array $item) use ($user, $isAdminUser, $hasAnyPermission) {
+        // Audience-only links (same "hideForRoles" rule as the sidebar).
+        if (isset($item['hideForRoles'])
+            && array_intersect(array_map('strtolower', $user->roles->pluck('name')->toArray()), array_map('strtolower', (array) $item['hideForRoles']))) {
+          return false;
+        }
         if (isset($item['roles'])) {
           $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
           $rr = array_map('strtolower', (array) $item['roles']);
