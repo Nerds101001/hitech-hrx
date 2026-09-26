@@ -814,16 +814,39 @@ class CcAttendanceController extends Controller
             ->whereBetween('check_in_time', [$startOfMonth, $endOfMonth])
             ->get();
 
-        // Organize attendances: $attendances[$userId][$dateStr] = $attendance
+        // Leave applied for or approved in the month, per person per day, so
+        // each cell can show it: $monthLeaves[$userId][$dateStr] = LeaveRequest.
+        $monthLeaves = [];
+        $leavesDb = \App\Models\LeaveRequest::with('leaveType')
+            ->whereIn('user_id', $salespeople->pluck('id'))
+            ->whereIn('status', ['pending', 'approved'])
+            ->whereNull('deleted_at')
+            ->whereDate('from_date', '<=', $endOfMonth->toDateString())
+            ->whereDate('to_date', '>=', $startOfMonth->toDateString())
+            ->get();
+        foreach ($leavesDb as $lv) {
+            $d = $lv->from_date->copy()->max($startOfMonth);
+            $last = $lv->to_date->copy()->min($endOfMonth);
+            for (; $d->lte($last); $d->addDay()) {
+                $monthLeaves[$lv->user_id][$d->format('Y-m-d')] = $lv;
+            }
+        }
+
+        // Organize attendances: $attendances[$userId][$dateStr] = $attendance.
+        // The leave module's placeholder row for a part-day leave is left out:
+        // it is not a mark, so the cell stays open for CCare, as on the daily page.
         $attendances = [];
         foreach ($attendancesDb as $att) {
             $d = $att->check_in_time->format('Y-m-d');
+            if ($this->isUnconfirmedLeaveRow($att, $monthLeaves[$att->user_id][$d] ?? null)) {
+                continue;
+            }
             $attendances[$att->user_id][$d] = $att;
         }
 
         $canSeeReport = $this->canSeeReport($user);
 
-        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'user', 'canSeeReport'));
+        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'monthLeaves', 'user', 'canSeeReport'));
     }
 
     /**
