@@ -12,6 +12,22 @@ use App\Models\User;
 
 class RoleController extends Controller
 {
+  /**
+   * Statuses that mean the person no longer uses the app: left (the
+   * Employees page's RELIEVED/TERMINATED/RETIRED set) or switched off.
+   * Kept out of every list and user count on the permission pages.
+   */
+  private const NOT_CURRENT_STATUSES = [
+    'relieved', 'terminated', 'retired', 'inactive', 'suspended',
+    'blocked', 'rejected', 'deleted', 'probation_failed',
+  ];
+
+  /** Query constraint: current employees only. */
+  private static function currentOnly($query)
+  {
+    return $query->where(fn($q) => $q->whereNull('users.status')->orWhereNotIn('users.status', self::NOT_CURRENT_STATUSES));
+  }
+
   /** Permission-registry module => the sidebar section its pages sit under. */
   private const MODULE_SECTION = [
     'Dashboard' => 'Dashboard',
@@ -50,8 +66,9 @@ class RoleController extends Controller
    */
   public function index(Request $request)
   {
-    $roles = Role::withCount('users')->with(['permissions', 'users'])->orderBy('name')->get();
-    $users = User::all(); // special-permissions summary + preview access picker
+    $current = fn($q) => self::currentOnly($q);
+    $roles = Role::withCount(['users' => $current])->with(['permissions', 'users' => $current])->orderBy('name')->get();
+    $users = self::currentOnly(User::query())->get(); // special-permissions summary + preview access picker
 
     $selectedRole = $request->filled('role')
       ? $roles->firstWhere('id', (int) $request->query('role'))
@@ -75,7 +92,8 @@ class RoleController extends Controller
    */
   public function panelAjax($id)
   {
-    $role = Role::withCount('users')->with(['permissions', 'users'])->find($id);
+    $current = fn($q) => self::currentOnly($q);
+    $role = Role::withCount(['users' => $current])->with(['permissions', 'users' => $current])->find($id);
     if (!$role) {
       return Error::response('Role not found');
     }
@@ -124,7 +142,11 @@ class RoleController extends Controller
       'totalPermissionsCount' => array_sum(array_map('count', $groupedPermissions)),
       'wiredPermissions' => \App\Support\PermissionWiringAudit::wiredMap(),
       'rolePresets' => config('role_presets', []),
-      'reachability' => $this->computeRoleReachability($role),
+      'reachability' => $reach = $this->computeRoleReachability($role),
+      // Page access per module row: which sidebar section it lives under
+      // and whether that section opens for this role.
+      'moduleSection' => self::MODULE_SECTION,
+      'openSections' => collect($reach['tree'])->where('visible', true)->pluck('name')->flip()->all(),
     ];
   }
 
@@ -254,17 +276,8 @@ class RoleController extends Controller
    */
   public function specialPermissionsPage()
   {
-    // Only people who can actually use access: nobody who has left (same
-    // RELIEVED/TERMINATED/RETIRED set as the Employees page) or is inactive.
-    $gone = [
-      \App\Enums\UserAccountStatus::RELIEVED, \App\Enums\UserAccountStatus::TERMINATED,
-      \App\Enums\UserAccountStatus::RETIRED, \App\Enums\UserAccountStatus::INACTIVE,
-      \App\Enums\UserAccountStatus::SUSPENDED, \App\Enums\UserAccountStatus::BLOCKED,
-      \App\Enums\UserAccountStatus::REJECTED, \App\Enums\UserAccountStatus::DELETED,
-      \App\Enums\UserAccountStatus::PROBATION_FAILED,
-    ];
-    $employees = User::with('roles')->withCount('permissions')
-      ->where(fn($q) => $q->whereNull('status')->orWhereNotIn('status', array_map(fn($s) => $s->value, $gone)))
+    // Only people who can actually use access - see NOT_CURRENT_STATUSES.
+    $employees = self::currentOnly(User::with('roles')->withCount('permissions'))
       ->orderBy('first_name')->get();
     $groupedPermissions = config('permissions_registry');
 

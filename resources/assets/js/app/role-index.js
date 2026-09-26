@@ -120,6 +120,19 @@ document.addEventListener('DOMContentLoaded', function (e) {
   }
 
   // ── Panel: live permission counters ─────────────────────────────────
+  // ✓ Yes / ■ "3 of 7" / ✓ Page access / ✗ No for one module row.
+  // "Page access" = none of the module's action permissions, but its
+  // sidebar section still opens for this role.
+  function markHtml(checked, all, sectionOpen) {
+    var kind, label;
+    if (all > 0 && checked === all) { kind = 'yes'; label = 'Yes'; }
+    else if (checked > 0) { kind = 'partial'; label = checked + ' of ' + all; }
+    else if (sectionOpen) { kind = 'view'; label = 'Page access'; }
+    else { kind = 'no'; label = 'No'; }
+    var icon = { yes: 'bx-check', view: 'bx-check', partial: 'bx-minus', no: 'bx-x' }[kind];
+    return '<span class="rp-mark"><span class="rp-mark-box rp-mark-' + kind + '"><i class="bx ' + icon + '"></i></span>' + label + '</span>';
+  }
+
   function recomputeCounts() {
     var totalChecked = 0;
     var totalAll = 0;
@@ -131,6 +144,7 @@ document.addEventListener('DOMContentLoaded', function (e) {
       var all = boxes.length;
       totalChecked += checked;
       totalAll += all;
+      $(this).find('.rp-mod-mark').html(markHtml(checked, all, String($(this).data('section-open')) === '1'));
 
       var $selectAll = $('.rp-module-select-all[data-module="' + slug + '"]');
       if ($selectAll.length) {
@@ -142,6 +156,7 @@ document.addEventListener('DOMContentLoaded', function (e) {
     });
 
     $('#rpSaveCount').text(totalChecked);
+    $('#rpHeadPerms').text(totalChecked);
     syncSwitchVisual($('#rpGrantAll'), totalAll > 0 && totalChecked === totalAll);
   }
 
@@ -189,23 +204,34 @@ document.addEventListener('DOMContentLoaded', function (e) {
     $('#rpTabUsers').toggleClass('d-none', tab !== 'users');
   });
 
-  // ── Panel: search across modules + permission labels ────────────────
+  // ── Panel: module rows open/close to their permission checkboxes ─────
+  function setModuleOpen($row, open) {
+    $row.toggleClass('rp-mod-open', open);
+    $('#rpPanel tr[data-detail-for="' + $row.data('module') + '"]').toggleClass('d-none', !open);
+  }
+
+  $(document).on('click', '#rpPanel .rp-mod-row', function (e) {
+    if ($(e.target).closest('label, input').length) return; // the Select All box
+    setModuleOpen($(this), !$(this).hasClass('rp-mod-open'));
+  });
+
+  $(document).on('click', '#rpExpandAll, #rpCollapseAll', function () {
+    var open = this.id === 'rpExpandAll';
+    $('#rpPanel .rp-mod-row:not(.rp-hidden-by-search)').each(function () { setModuleOpen($(this), open); });
+  });
+
+  // ── Panel: search module names and permission labels ────────────────
+  // A match inside a module opens it so the matching box is visible.
   $(document).on('keyup', '#rpSearch', function () {
     var q = $.trim($(this).val()).toLowerCase();
-    if (!q) {
-      $('#rpPanel [data-search]').removeClass('rp-hidden-by-search');
-      return;
-    }
-    $('#rpPanel tr[data-module]').each(function () {
+    $('#rpPanel .rp-mod-row').each(function () {
       var $row = $(this);
-      var moduleMatches = ($row.data('search') || '').toString().indexOf(q) !== -1;
-      var anyChipMatch = false;
-      $row.find('.rp-chip').each(function () {
-        var chipMatches = moduleMatches || ($(this).data('search') || '').toString().indexOf(q) !== -1;
-        $(this).toggleClass('rp-hidden-by-search', !chipMatches);
-        if (chipMatches) anyChipMatch = true;
-      });
-      $row.toggleClass('rp-hidden-by-search', !(moduleMatches || anyChipMatch));
+      var $detail = $('#rpPanel tr[data-detail-for="' + $row.data('module') + '"]');
+      var inName = !q || ($row.data('search') || '').toString().indexOf(q) !== -1;
+      var inPerms = !!q && ($detail.data('search') || '').toString().indexOf(q) !== -1;
+      $row.toggleClass('rp-hidden-by-search', !(inName || inPerms));
+      $detail.toggleClass('rp-hidden-by-search', !(inName || inPerms));
+      if (inPerms) setModuleOpen($row, true);
     });
   });
 

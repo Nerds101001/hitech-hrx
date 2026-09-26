@@ -48,58 +48,23 @@
     </div>
   </div>
 
-  {{-- PRIMARY: what this role can actually reach, computed live from the
-       real route/menu rules - not a manually-ticked list, so it can never
-       drift from reality. This is the answer to "what can this role do",
-       full stop; the granular checkboxes further down are a different,
-       narrower thing (see the section below). --}}
-  <div class="rp-reach-section">
-    <div class="rp-reach-head">
-      <div>
-        <h6 class="rp-reach-title">@lang('What :role Can Actually Reach', ['role' => $role->display_name])</h6>
-        <p class="rp-reach-sub">@lang('Computed live from the real route and menu rules for this role — not a manual list, so it can\'t go out of sync.')</p>
-      </div>
-      <div class="rp-reach-stat">
-        <div class="rp-reach-stat-value">{{ $reachability['visibleCount'] }} / {{ $reachability['totalCount'] }}</div>
-        <div class="rp-reach-stat-label">@lang('sections reachable')</div>
-      </div>
+  {{-- The two questions this page answers, labelled side by side, so a 0
+       in one never reads as contradicting the other. Pages come from the
+       live route/menu rules for this role; action permissions are the
+       boxes in the table below and update as you tick. --}}
+  <div class="rp-headline">
+    <div class="rp-headline-item">
+      <div class="rp-headline-value">{{ $reachability['visibleCount'] }} of {{ $reachability['totalCount'] }}</div>
+      <div class="rp-headline-label">@lang('Pages this role can open')</div>
+      <div class="rp-headline-sub">@lang('Sidebar sections — includes pages open to every signed-in person')</div>
     </div>
-    <div class="rp-reach-grid">
-      @foreach($reachability['tree'] as $item)
-        <div class="pmt-item rp-reach-item {{ $item['visible'] ? 'pmt-visible' : 'pmt-hidden' }}">
-          <div class="pmt-row">
-            <div class="pmt-icon"><i class="{{ $item['icon'] ?? 'bx bx-square' }}"></i></div>
-            <div class="pmt-name">{{ $item['name'] }}</div>
-            <span class="pmt-badge {{ $item['visible'] ? 'pmt-badge-on' : 'pmt-badge-off' }}">{{ $item['visible'] ? 'VISIBLE' : 'HIDDEN' }}</span>
-          </div>
-          @if(!$item['visible'] && $item['reason'])
-            <div class="pmt-reason">
-              {{ $item['reason'] }}
-              @if(!empty($item['grantable']))
-                <button type="button" class="rp-grant-btn" data-permissions="{{ implode(',', $item['grantable']) }}" data-section="{{ $item['name'] }}">
-                  <i class="bx bx-plus-circle"></i> @lang('Grant')
-                </button>
-              @endif
-            </div>
-          @endif
-        </div>
-      @endforeach
+    <div class="rp-headline-item">
+      <div class="rp-headline-value"><span id="rpHeadPerms"></span> of {{ $totalPermissionsCount }}</div>
+      <div class="rp-headline-label">@lang('Action permissions')</div>
+      <div class="rp-headline-sub">@lang('Approve, export, manage… — the boxes in the table below')</div>
     </div>
   </div>
 
-  {{-- SECONDARY: manual permission overrides. Deliberately demoted and
-       collapsed - these are individual action-level grants (approve this,
-       export that, manage the other) within pages the role can already
-       open per the section above; they never control whether a page opens
-       at all. Easy to mistake for the same thing as the reachability
-       list above if it isn't visually clear these are different questions. --}}
-  <button type="button" class="rp-advanced-toggle" id="rpAdvancedToggle">
-    <i class="bx bx-chevron-right"></i>
-    @lang('Advanced: Granular Action Permissions')
-    <span class="text-muted fw-normal">— @lang('individual actions within pages this role can already open, not page access itself')</span>
-  </button>
-
-  <div id="rpAdvancedSection" class="d-none">
   {{-- Tabs --}}
   <div class="rp-tabs">
     <div class="rp-tab rp-tab-active" data-tab="modules">@lang('Module / Feature Permissions')</div>
@@ -130,10 +95,14 @@
         </div>
         @endif
 
+        <button type="button" class="btn btn-sm btn-outline-secondary rp-tool-btn" id="rpExpandAll"><i class="bx bx-expand-alt me-1"></i>@lang('Expand All')</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary rp-tool-btn" id="rpCollapseAll"><i class="bx bx-collapse-alt me-1"></i>@lang('Collapse All')</button>
+
         <div class="rp-legend">
-          <span class="rp-legend-item"><span class="rp-legend-swatch rp-legend-granted"></span> @lang('Granted')</span>
-          <span class="rp-legend-item"><span class="rp-legend-swatch"></span> @lang('Not granted')</span>
-          <span class="rp-legend-item"><span class="rp-legend-swatch rp-legend-partial"></span> @lang('Partial')</span>
+          <span class="rp-legend-item"><span class="rp-mark-box rp-mark-yes"><i class="bx bx-check"></i></span>@lang('Granted')</span>
+          <span class="rp-legend-item"><span class="rp-mark-box rp-mark-view"><i class="bx bx-check"></i></span>@lang('Page access')</span>
+          <span class="rp-legend-item"><span class="rp-mark-box rp-mark-partial"><i class="bx bx-minus"></i></span>@lang('Partial')</span>
+          <span class="rp-legend-item"><span class="rp-mark-box rp-mark-no"><i class="bx bx-x"></i></span>@lang('Not granted')</span>
         </div>
 
         <div class="rp-toolbar-divider"></div>
@@ -161,82 +130,94 @@
       </div>
     @endif
 
+    @php
+      // Module -> [boxicon, colour], same as the User Special Permissions page.
+      $moduleIcons = [
+        'Dashboard' => ['bxs-home', '#2563eb'], 'Announcements' => ['bxs-megaphone', '#9333ea'],
+        'Employees' => ['bxs-user-detail', '#0d9488'], 'Attendance' => ['bxs-time-five', '#2563eb'],
+        'Leaves' => ['bxs-calendar-minus', '#f59e0b'], 'Travel & Expense' => ['bxs-plane-alt', '#f97316'],
+        'Payroll' => ['bxs-wallet', '#9333ea'], 'Recruitment & Onboarding' => ['bxs-user-plus', '#2563eb'],
+        'Job Postings' => ['bxs-briefcase', '#0d9488'], 'Job Applications' => ['bxs-file', '#6366f1'],
+        'Job Categories & Stages' => ['bxs-layer', '#8b5cf6'], 'Interview & Screening' => ['bxs-chat', '#06b6d4'],
+        'Hierarchy & Probation' => ['bx-git-branch', '#64748b'], 'Sales Field Ops' => ['bxs-map', '#e11d48'],
+        'Telephony' => ['bxs-phone-call', '#16a34a'], 'CCare Attendance' => ['bxs-headphone', '#0ea5e9'],
+        'Intelligent Vault' => ['bxs-lock-alt', '#475569'], 'Asset Management' => ['bxs-box', '#ca8a04'],
+        'Monitoring' => ['bxs-map-pin', '#dc2626'], 'Kingo Bingo' => ['bxs-trophy', '#f59e0b'],
+        'Performance' => ['bx-line-chart', '#2563eb'], 'Loans & Advances' => ['bxs-bank', '#0d9488'],
+        'Reports' => ['bxs-report', '#f97316'], 'Settings & Administration' => ['bxs-cog', '#475569'],
+        'Configuration Masters' => ['bxs-data', '#6366f1'], 'Operations' => ['bxs-wrench', '#64748b'],
+        'System Utilities' => ['bxs-server', '#475569'], 'Training' => ['bxs-graduation', '#9333ea'],
+      ];
+    @endphp
+
+    <p class="rp-table-note"><i class="bx bx-info-circle"></i>@lang('Open a module to tick or untick its permissions, then Save. Greyed boxes are built into this role and can\'t be removed here.')</p>
+
     <div class="rp-matrix-wrap">
       <div class="table-responsive">
-        <table class="rp-matrix-table">
+        <table class="rp-mod-table">
           <thead>
             <tr>
               <th>@lang('Module / Feature')</th>
-              <th class="text-center">@lang('View')</th>
-              <th class="text-center">@lang('Create')</th>
-              <th class="text-center">@lang('Edit')</th>
-              <th class="text-center">@lang('Delete')</th>
-              <th class="text-center">@lang('All')</th>
-              <th>@lang('Other Permissions')</th>
+              <th>@lang('Role Permission')</th>
+              <th class="text-center">@lang('Select All')</th>
             </tr>
           </thead>
           <tbody>
             @foreach($permissionMatrix as $moduleName => $m)
-              <tr data-module="{{ $m['slug'] }}" data-search="{{ strtolower($moduleName) }}">
+              @php
+                $cells = [];
+                foreach (['view', 'create', 'edit', 'delete'] as $verb) {
+                  if ($m['crud'][$verb]) $cells[$m['crud'][$verb]['name']] = $m['crud'][$verb]['label'];
+                }
+                $cells += $m['other'];
+                $section = $moduleSection[$moduleName] ?? null;
+                $icon = $moduleIcons[$moduleName] ?? ['bxs-folder', '#64748b'];
+              @endphp
+              <tr class="rp-mod-row" data-module="{{ $m['slug'] }}" data-search="{{ strtolower($moduleName) }}"
+                  data-section="{{ $section }}" data-section-open="{{ ($section && isset($openSections[$section])) ? 1 : 0 }}">
                 <td>
-                  <div class="rp-matrix-module">
-                    <span class="stat-icon-wrap icon-teal rp-module-icon"><i class="bx bx-folder"></i></span>
-                    <span class="rp-module-title">{{ $moduleName }}</span>
+                  <div class="rp-mod-name">
+                    <span class="rp-mod-icon" style="background: {{ $icon[1] }}1a; color: {{ $icon[1] }};"><i class="bx {{ $icon[0] }}"></i></span>
+                    <span class="rp-mod-title">{{ $moduleName }}</span>
+                    <i class="bx bx-chevron-down rp-mod-chev"></i>
                   </div>
                 </td>
-                @foreach(['view','create','edit','delete'] as $verb)
-                  <td class="rp-crud-cell">
-                    @if($m['crud'][$verb])
-                      @php $isLocked = in_array($m['crud'][$verb]['name'], $lockedPermissionNames); @endphp
-                      <label class="hitech-checkbox rp-crud-check justify-content-center m-0 {{ $isLocked ? 'rp-locked' : '' }}"
-                             data-bs-toggle="tooltip" title="{{ $m['crud'][$verb]['label'] }}{{ $isLocked ? ' — ' . $lockedReason : '' }}">
-                        <input type="checkbox"
-                               class="rp-permission-checkbox {{ $m['slug'] }}-checkbox"
-                               data-module="{{ $m['slug'] }}"
-                               name="permissions[]"
-                               value="{{ $m['crud'][$verb]['name'] }}"
-                               {{ in_array($m['crud'][$verb]['name'], $rolePermissionNames) ? 'checked' : '' }}
-                               {{ $isLocked ? 'disabled' : '' }}>
-                        <span class="checkmark"></span>
-                      </label>
-                    @else
-                      <span class="rp-matrix-na">—</span>
-                    @endif
-                  </td>
-                @endforeach
-                <td class="rp-crud-cell">
-                  <label class="hitech-checkbox rp-crud-check justify-content-center m-0">
+                <td class="rp-mod-mark"></td>
+                <td class="text-center">
+                  <label class="hitech-checkbox rp-crud-check justify-content-center m-0" title="@lang('Tick every permission in this module')">
                     <input type="checkbox" class="rp-module-select-all" data-module="{{ $m['slug'] }}">
                     <span class="checkmark"></span>
                   </label>
                 </td>
-                <td class="rp-other-cell">
-                  @if(count($m['other']))
-                    <div class="rp-other-chips">
-                      @foreach($m['other'] as $permName => $label)
-                        @php $isLocked = in_array($permName, $lockedPermissionNames); @endphp
-                        <label class="rp-chip {{ !($wiredPermissions[$permName] ?? true) ? 'rp-chip-unwired' : '' }} {{ $isLocked ? 'rp-locked' : '' }}" data-search="{{ strtolower($label) }}"
-                               @if($isLocked) data-bs-toggle="tooltip" data-bs-placement="top" title="{{ $lockedReason }}" @endif>
-                          <input type="checkbox"
-                                 class="rp-permission-checkbox {{ $m['slug'] }}-checkbox"
-                                 data-module="{{ $m['slug'] }}"
-                                 name="permissions[]"
-                                 value="{{ $permName }}"
-                                 {{ in_array($permName, $rolePermissionNames) ? 'checked' : '' }}
-                                 {{ $isLocked ? 'disabled' : '' }}>
-                          <span class="chip-box"></span>
-                          <span class="rp-chip-label">{{ $label }}</span>
-                          @if($isLocked)<i class="bx bx-lock-alt rp-lock-icon"></i>@endif
-                          @unless($wiredPermissions[$permName] ?? true)
-                            <i class="bx bx-info-circle rp-unwired-dot" data-bs-toggle="tooltip" data-bs-placement="top"
-                               title="@lang('Not checked anywhere in the app yet — granting this currently has no effect.')"></i>
-                          @endunless
-                        </label>
-                      @endforeach
-                    </div>
-                  @else
-                    <span class="rp-matrix-na">—</span>
-                  @endif
+              </tr>
+              <tr class="rp-mod-detail d-none" data-detail-for="{{ $m['slug'] }}" data-search="{{ strtolower(implode(' ', $cells)) }}">
+                <td colspan="3">
+                  <div class="rp-perm-grid">
+                    @foreach($cells as $permName => $label)
+                      @php
+                        $isLocked = in_array($permName, $lockedPermissionNames);
+                        $isUnwired = !($wiredPermissions[$permName] ?? true);
+                      @endphp
+                      <label class="rp-perm-item {{ $isLocked ? 'rp-locked' : '' }}" @if($isLocked) title="{{ $lockedReason }}" @endif>
+                        <input type="checkbox"
+                               class="rp-permission-checkbox {{ $m['slug'] }}-checkbox"
+                               data-module="{{ $m['slug'] }}"
+                               name="permissions[]"
+                               value="{{ $permName }}"
+                               {{ in_array($permName, $rolePermissionNames) ? 'checked' : '' }}
+                               {{ $isLocked ? 'disabled' : '' }}>
+                        <span class="rp-perm-text">
+                          <span class="rp-perm-name">{{ $label }}</span>
+                          <span class="rp-perm-meta">
+                            @if($isLocked) @lang('Built into this role')
+                            @elseif($isUnwired) @lang('No effect yet — nothing in the app checks this')
+                            @endif
+                          </span>
+                        </span>
+                        @if($isLocked)<i class="bx bx-lock-alt rp-lock-icon"></i>@endif
+                      </label>
+                    @endforeach
+                  </div>
                 </td>
               </tr>
             @endforeach
@@ -342,5 +323,4 @@
       </button>
     </div>
   </div>
-  </div>{{-- /rpAdvancedSection --}}
 </form>
