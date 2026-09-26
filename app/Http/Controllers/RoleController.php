@@ -12,6 +12,36 @@ use App\Models\User;
 
 class RoleController extends Controller
 {
+  /** Permission-registry module => the sidebar section its pages sit under. */
+  private const MODULE_SECTION = [
+    'Dashboard' => 'Dashboard',
+    'Announcements' => 'Announcements',
+    'Employees' => 'People',
+    'Hierarchy & Probation' => 'People',
+    'Attendance' => 'Time & Attendance',
+    'Leaves' => 'Time & Attendance',
+    'Configuration Masters' => 'Time & Attendance',
+    'Travel & Expense' => 'Travel & Expense',
+    'Payroll' => 'Payroll',
+    'Loans & Advances' => 'Payroll',
+    'Recruitment & Onboarding' => 'Recruitment & Onboarding',
+    'Job Postings' => 'Recruitment & Onboarding',
+    'Job Applications' => 'Recruitment & Onboarding',
+    'Job Categories & Stages' => 'Recruitment & Onboarding',
+    'Interview & Screening' => 'Recruitment & Onboarding',
+    'Training' => 'Recruitment & Onboarding',
+    'Sales Field Ops' => 'Sales Field Ops',
+    'CCare Attendance' => 'Sales Field Ops',
+    'Kingo Bingo' => 'Sales Field Ops',
+    'Telephony' => 'Telephony',
+    'Intelligent Vault' => 'Intelligent Vault',
+    'Asset Management' => 'Asset Management',
+    'Monitoring' => 'Monitoring',
+    'Performance' => 'Performance',
+    'Reports' => 'Reports',
+    'Settings & Administration' => 'System Settings',
+  ];
+
   /**
    * One page: a role list on the left, the selected role's full permission
    * panel on the right - switching roles re-fetches the panel via AJAX
@@ -275,7 +305,22 @@ class RoleController extends Controller
       ->where('l.user_id', $user->id)->orderByDesc('l.id')
       ->first(['l.action', 'l.permission', 'l.created_at', 'a.first_name', 'a.last_name']);
 
+    // Page access per module: which sidebar section a module's pages live
+    // under, and whether it opens for this person. A module with 0 action
+    // permissions can still open (Dashboard, My Tasks... are open to every
+    // signed-in person), and a bare "No" there read as "can't open it".
+    $reach = \App\Support\Nav::previewMenuFor($user);
+    $sectionOpen = collect($reach)->mapWithKeys(fn($i) => [$i['name'] => (bool) $i['visible']]);
+    foreach ($reconciled['modules'] as &$mod) {
+      $section = self::MODULE_SECTION[$mod['name']] ?? null;
+      $mod['section'] = $section;
+      $mod['sectionOpen'] = $section !== null && ($sectionOpen[$section] ?? false);
+    }
+    unset($mod);
+    $wired = \App\Support\PermissionWiringAudit::wiredMap();
+
     return Success::response([
+      'unwired' => array_keys(array_filter($wired, fn($w) => !$w)),
       'user' => [
         'id' => $user->id,
         'name' => $user->getFullName(),
@@ -302,7 +347,7 @@ class RoleController extends Controller
       'isSuper' => $user->roles->contains(fn($r) => $this->isSuperRole($r)),
       'isSelf' => (int) auth()->id() === (int) $user->id,
       'guardWarning' => $this->adminGuardWarning($user),
-      'reach' => \App\Support\Nav::previewMenuFor($user),
+      'reach' => $reach,
       'grantLog' => $grantLog,
       'lastChange' => $lastChange ? [
         'text' => ucfirst($lastChange->action) . ' "' . $lastChange->permission . '"',

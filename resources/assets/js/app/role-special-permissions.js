@@ -48,8 +48,14 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="usp-mark"><span class="usp-mark-box usp-mark-' + kind + '"><i class="bx ' + icon + '"></i></span>' + label + '</span>';
   }
 
-  // Role / Final column: Yes, View Only, "3 of 7", or No.
+  // Role / Final column: Yes, View Only, "3 of 7", Page access, or No.
+  // "Page access" = no action permissions here, but the module's sidebar
+  // section still opens for them (e.g. every employee's Dashboard).
   function accessCell(m, key, count) {
+    var pageOnly = m.sectionOpen && (key === 'final' || m.specialCount === 0);
+    if (count === 0 && pageOnly) {
+      return '<span title="Can open the ' + escapeHtml(m.section) + ' section; no extra actions in it">' + mark('view', 'Page access') + '</span>';
+    }
     if (count === 0) return mark('no', 'No');
     if (count === m.total) return mark('yes', 'Yes');
     if (count === 1 && m.columns.view && m.columns.view[key]) return mark('view', 'View Only');
@@ -62,7 +68,8 @@ document.addEventListener('DOMContentLoaded', function () {
     return mark('yes', m.specialCount === 1 ? '1 added' : m.specialCount + ' added');
   }
 
-  function sourceBadge(source) {
+  function sourceBadge(source, m) {
+    if (source === 'none' && m && m.sectionOpen) return '<span class="usp-src">Role</span>';
     if (source === 'none') return '<span class="usp-mark-dash">—</span>';
     return '<span class="usp-src usp-src-' + source + '">' + SOURCE_LABEL[source] + '</span>';
   }
@@ -85,7 +92,7 @@ document.addEventListener('DOMContentLoaded', function () {
       meta = log[c.name] ? 'Added by ' + escapeHtml(log[c.name].by) + ' · ' + escapeHtml(log[c.name].at) : 'Untick to remove';
     } else {
       badge = '<span class="usp-eff-badge usp-eff-badge-none">Not granted</span>';
-      meta = 'Tick to allow';
+      meta = unwired[c.name] ? 'No effect yet — nothing in the app checks this' : 'Tick to allow';
     }
     return '<label class="usp-eff-item' + (c.role ? ' usp-eff-locked' : '') + '"' + (c.role ? ' title="Their role already gives this — it can’t be removed per person"' : '') + '>' +
       '<input type="checkbox" class="usp-perm-check" value="' + escapeHtml(c.name) + '"' + attrs + '>' +
@@ -93,8 +100,12 @@ document.addEventListener('DOMContentLoaded', function () {
       '<span class="usp-eff-meta d-block">' + meta + '</span></span>' + badge + '</label>';
   }
 
+  var unwired = {};
+
   function renderTable(payload) {
     var log = payload.grantLog || {};
+    unwired = {};
+    (payload.unwired || []).forEach(function (n) { unwired[n] = true; });
     var rows = '';
     payload.modules.forEach(function (m, idx) {
       var rowId = 'usp-row-' + idx;
@@ -105,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
       rows += '  <td>' + accessCell(m, 'role', m.roleCount) + '</td>';
       rows += '  <td>' + specialCell(m) + '</td>';
       rows += '  <td>' + accessCell(m, 'final', m.finalCount) + '</td>';
-      rows += '  <td class="text-center">' + sourceBadge(m.source) + '</td>';
+      rows += '  <td class="text-center">' + sourceBadge(m.source, m) + '</td>';
       rows += '</tr>';
       rows += '<tr class="usp-detail-row' + (open ? '' : ' d-none') + '" id="' + rowId + '" data-search="' + escapeHtml(cells.map(function (c) { return c.label.toLowerCase(); }).join(' ')) + '">';
       rows += '  <td colspan="5"><div class="usp-detail-grid">' + cells.map(function (c) { return permissionItem(c, log); }).join('') + '</div></td>';
