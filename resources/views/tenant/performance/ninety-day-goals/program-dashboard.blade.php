@@ -420,7 +420,7 @@
           <div class="card-body p-3 d-flex flex-column gap-2">
             <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
             <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>
-            <a href="{{ route('performance.ninety-day-goals.admin-view.export', request()->query()) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
+            <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
             <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="people"><i class="bx bx-group"></i> Manage Participants</button>
             <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-bar-chart-alt-2"></i> View Sales Report</a>
           </div>
@@ -625,7 +625,7 @@
     <div class="hitech-card mb-6">
       <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Export</div><div class="small text-muted">Downloads the complete filtered set above, not just the page on screen.</div></div>
       <div class="card-body p-4">
-        <a href="{{ route('performance.ninety-day-goals.admin-view.export', request()->query()) }}" class="btn-hitech rounded-pill px-5 d-inline-flex align-items-center gap-2">
+        <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn-hitech rounded-pill px-5 d-inline-flex align-items-center gap-2">
           <i class="bx bx-download fs-5"></i><span class="fw-bold">Export to Excel (CSV)</span>
         </a>
         <div class="small text-muted mt-3">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('row', $allRowsCount) }} match the current filters.</div>

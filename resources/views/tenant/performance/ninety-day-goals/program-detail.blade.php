@@ -115,8 +115,9 @@
       <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
         <div class="fw-bold text-dark">Weekly Submission Progress (Team)</div>
         <div class="d-flex align-items-center gap-3">
-          <div class="small text-muted">Current week: W{{ $currentWeek }} · {{ $weekDue->format('d M Y') }}</div>
-          <button type="button" id="ndgPrRemindBtn" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.78rem" data-week="{{ $selectedWeek }}">
+          <div class="small text-muted">Current week: W{{ $currentWeek }} · {{ $program->starts_on->copy()->addDays(7 * $currentWeek)->format('d M Y') }}</div>
+          {{-- A future week has no check-ins yet, so remind for the selected week only up to the current one. --}}
+          <button type="button" id="ndgPrRemindBtn" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.78rem" data-week="{{ min($selectedWeek, $currentWeek) }}">
             <i class="bx bx-bell"></i> Send Reminder
           </button>
         </div>

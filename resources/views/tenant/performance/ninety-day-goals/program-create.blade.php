@@ -136,7 +136,9 @@
   function addDays(dateStr, days) {
     var d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    // Local date parts - toISOString() converts to UTC, which in IST is the previous day.
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   }
   startEl.addEventListener('change', function () {
     if (startEl.value && !endTouched) { endEl.value = addDays(startEl.value, ROUND_SPAN_DAYS); }

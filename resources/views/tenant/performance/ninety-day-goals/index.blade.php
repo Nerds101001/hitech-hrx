@@ -425,7 +425,7 @@
             <td class="text-end fw-semibold ndg-p-potential" data-v="{{ (float) $g->monthly_potential }}">{{ $fmtL($g->monthly_potential) }}</td>
             @for($w = 0; $w < $weeks; $w++)
               @php $ck = $cks->get($w); @endphp
-              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today, $g, $isAdmin) !!}</td>
+              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today, $g, $isAdmin && optional($g->round)->status === 'active') !!}</td>
               <td class="ndg-cm" data-v="{{ strtolower(optional($ck)->comment . ' ' . optional($ck)->notes?->pluck('body')->implode(' ')) }}">{!! $noteCell($g, $ck) !!}</td>
             @endfor
           </tr>
@@ -572,6 +572,10 @@
   .ndg-grid td.ndg-cm { white-space: normal; min-width: 200px; max-width: 260px; font-size: .78rem; line-height: 1.35; color: #334155; overflow-wrap: anywhere; white-space: pre-line; }
   .ndg-date { font-weight: 400; color: #94a3b8; font-size: .68rem; }
   .ndg-now { background: #f0f7f6; }
+  /* The theme's late ".table thead th" rule forces background/colour/size with !important,
+     which silently cancelled the current-week highlight and the small sub-headers. */
+  .table thead th.ndg-now { background: #e3f2ef !important; color: #0b5b48 !important; }
+  .table thead tr.ndg-sub th { font-size: .62rem !important; text-transform: uppercase !important; color: #64748b !important; }
   .ndg-chip { display: inline-block; position: relative; padding: 3px 9px; border-radius: 6px; font-size: .68rem; font-weight: 700; line-height: 1.25; }
   .ndg-chip.ndg-missing { background: #fff; color: #b42318; border: 1px dashed #f0a5a0; font-weight: 600; }
   .ndg-chip.ndg-editable { cursor: pointer; box-shadow: 0 0 0 1px rgba(255,255,255,.001); transition: transform .1s; }

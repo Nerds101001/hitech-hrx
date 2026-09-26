@@ -114,6 +114,8 @@ class NinetyDayGoalController extends Controller
             'thisWeekDone'  => $trueActive->filter(fn ($g) => optional($g->checkins->firstWhere('week_no', $weekOfGoal($g)))->status !== null)->count(),
             'thisWeekTotal' => $trueActive->filter(fn ($g) => $g->checkins->firstWhere('week_no', $weekOfGoal($g)) !== null)->count(),
             'overdue'  => $scoped->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
+            // How many customers are at each status right now (their latest reported one).
+            'byStatus' => $scoped->map(fn ($g) => Goals::latestStatus($g))->filter()->countBy()->all(),
         ];
 
         // Rounds in view can be different lengths (an admin-created program can run longer or
@@ -294,6 +296,8 @@ class NinetyDayGoalController extends Controller
             'week'       => $request->input('week') !== null && $request->input('week') !== '' ? (int) $request->input('week') : null,
             'brand'      => $request->input('brand') ?: null,
             'round'      => in_array($request->input('round'), ['all', 'current'], true) ? $request->input('round') : $defaultRound,
+            // One specific round (the round page's own export) - takes precedence over 'round'.
+            'round_id'   => $request->integer('round_id') ?: null,
         ];
     }
 

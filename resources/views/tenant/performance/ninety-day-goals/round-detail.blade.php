@@ -153,7 +153,7 @@
                   <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
                   <td>
                     @php $curStage = $g->goal ?: 'Order'; @endphp
-                    <select class="form-select form-select-hitech ndg-wk-expected" {{ $canEdit && $isActive ? '' : 'disabled' }}>
+                    <select class="form-select form-select-hitech ndg-wk-expected" data-orig="{{ $curStage }}" {{ $canEdit && $isActive ? '' : 'disabled' }}>
                       @foreach($stageChoices($curStage) as $stage)
                         <option value="{{ $stage }}" {{ $curStage === $stage ? 'selected' : '' }}>{{ $stage }}</option>
                       @endforeach
@@ -184,7 +184,6 @@
           <div class="card-body pt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
             <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" id="ndgWkPrev"><i class="bx bx-chevron-left"></i> Previous Week</button>
             <div class="d-flex gap-2">
-              <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" id="ndgSaveDraft">Save Draft</button>
               <button type="button" class="btn-hitech rounded-pill px-5" id="ndgSubmitAllBottom"><i class="bx bx-send"></i> Submit All Updates</button>
             </div>
           </div>
@@ -269,7 +268,9 @@
           @if($canEdit && $isActive)
           <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
           @endif
-          <a href="{{ route('performance.ninety-day-goals.admin-view.export', ['user_id' => $round->user_id, 'program_id' => optional($round->program)->id]) }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export</a>
+          @if($isAdmin)
+          <a href="{{ route('performance.ninety-day-goals.admin-view.export', ['user_id' => $round->user_id, 'round_id' => $round->id]) }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export</a>
+          @endif
         </div>
       </div>
     </div>
@@ -531,7 +532,7 @@
   </div>
 </div>
 
-@if($canEdit)
+@if($canEdit && $isActive)
   {{-- Add Customer: same source of truth as the Goals page — only the round owner's own
        Sales Pipeline, nobody types a customer in. --}}
   <div class="modal fade" id="ndgRdAddModal" tabindex="-1">
@@ -675,27 +676,43 @@
       expected_stage: expected ? expected.value : null,
     };
   }
-  // Expected Stage lives on the goal itself (the same "goal" field Add Customer's own dropdown
+  // Expected Stage lives on the goal itself (the same "goal" field the add-customers dropdown
   // sets), not the weekly checkin, so it saves through the existing per-goal update endpoint —
   // a small extra call alongside the checkin save.
-  function saveExpectedStages(entries) {
-    entries.forEach(function (e) {
-      if (!e.expected_stage) { return; }
-      post(URLS.update + '/' + e.goal_id, 'PUT', { goal: e.expected_stage });
-    });
+  // Only stages actually changed since the page loaded, on any row (with or without a status).
+  function changedStages(rows) {
+    return rows.map(function (row) {
+      var ex = row.querySelector('.ndg-wk-expected');
+      return ex && !ex.disabled && ex.value !== ex.dataset.orig ? { goal_id: parseInt(row.dataset.goal, 10), stage: ex.value, el: ex } : null;
+    }).filter(Boolean);
   }
-  function saveEntries(entries, btn) {
-    if (!entries.length) { return; }
+  // Resolves to the names of customers whose stage did NOT save.
+  function saveExpectedStages(rows) {
+    return Promise.all(changedStages(rows).map(function (c) {
+      return post(URLS.update + '/' + c.goal_id, 'PUT', { goal: c.stage }).then(function (j) {
+        if (j.success) { c.el.dataset.orig = c.stage; return null; }
+        return c.el.closest('.ndg-wk-row').querySelector('td:nth-child(2)').textContent.trim();
+      }).catch(function () { return c.el.closest('.ndg-wk-row').querySelector('td:nth-child(2)').textContent.trim(); });
+    })).then(function (failed) { return failed.filter(Boolean); });
+  }
+  function saveEntries(entries, btn, rows) {
+    rows = rows || [];
+    var stageChanges = changedStages(rows).length;
+    if (!entries.length && !stageChanges) { return; }
     if (btn) { btn.disabled = true; }
     wkMsg.textContent = 'Saving…'; wkMsg.className = 'small text-muted';
-    saveExpectedStages(entries);
-    post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: entries }).then(function (j) {
+    var statusSave = entries.length
+      ? post(URLS.checkin, 'POST', { user_id: ROUND_USER_ID, week_no: SELECTED_WEEK, entries: entries })
+      : Promise.resolve({ success: true, message: 'Expected stage saved.' });
+    Promise.all([saveExpectedStages(rows), statusSave]).then(function (res) {
+      var failedStages = res[0], j = res[1];
       if (btn) { btn.disabled = false; }
+      var stageNote = failedStages.length ? ' Expected stage NOT saved for: ' + failedStages.join(', ') + '.' : '';
       if (j.success) {
-        wkMsg.textContent = j.message || 'Saved.'; wkMsg.className = 'small text-success';
-        if (typeof window.showSuccessSwal === 'function' && entries.length > 1) { window.showSuccessSwal(j.message); }
+        wkMsg.textContent = (j.message || 'Saved.') + stageNote; wkMsg.className = failedStages.length ? 'small text-warning' : 'small text-success';
+        if (typeof window.showSuccessSwal === 'function' && entries.length > 1 && !failedStages.length) { window.showSuccessSwal(j.message); }
       } else {
-        wkMsg.textContent = j.message || (j.errors ? j.errors.join(' ') : 'Nothing saved — check the statuses above.'); wkMsg.className = 'small text-danger';
+        wkMsg.textContent = (j.message || (j.errors ? j.errors.join(' ') : 'Nothing saved — check the statuses above.')) + stageNote; wkMsg.className = 'small text-danger';
       }
     }).catch(function () {
       if (btn) { btn.disabled = false; }
@@ -703,7 +720,10 @@
     });
   }
   document.querySelectorAll('.ndg-wk-save').forEach(function (btn) {
-    btn.addEventListener('click', function () { saveEntries([readRow(btn.closest('.ndg-wk-row'))], btn); });
+    btn.addEventListener('click', function () {
+      var row = btn.closest('.ndg-wk-row'), e = readRow(row);
+      saveEntries(e.status ? [e] : [], btn, [row]);
+    });
   });
   // Marking a customer Trial Order / Regular Order for the week is exactly the moment the
   // Expected Stage is worth being specific — nudge to pick the real one (New Order, Repeat
@@ -718,21 +738,16 @@
       if (needsStage) { expected.focus(); wkMsg.textContent = 'Set the expected stage for ' + row.querySelector('td:nth-child(2)').textContent.trim() + ' — still just "Order".'; wkMsg.className = 'small text-warning'; }
     });
   });
-  function allRows() { return Array.prototype.map.call(document.querySelectorAll('.ndg-wk-row'), readRow).filter(function (e) { return e.status; }); }
+  function rowEls() { return Array.prototype.slice.call(document.querySelectorAll('.ndg-wk-row')); }
+  function allRows() { return rowEls().map(readRow).filter(function (e) { return e.status; }); }
   ['ndgSubmitAllTop', 'ndgSubmitAllBottom'].forEach(function (id) {
     var btn = document.getElementById(id);
     if (btn) { btn.addEventListener('click', function () {
       var entries = allRows();
-      if (!entries.length) { wkMsg.textContent = 'Pick a status for at least one customer first.'; wkMsg.className = 'small text-danger'; return; }
-      saveEntries(entries, btn);
+      if (!entries.length && !changedStages(rowEls()).length) { wkMsg.textContent = 'Pick a status for at least one customer first.'; wkMsg.className = 'small text-danger'; return; }
+      saveEntries(entries, btn, rowEls());
     }); }
   });
-  var draftBtn = document.getElementById('ndgSaveDraft');
-  if (draftBtn) { draftBtn.addEventListener('click', function () {
-    var entries = allRows();
-    if (!entries.length) { wkMsg.textContent = 'Nothing filled in yet.'; wkMsg.className = 'small text-muted'; return; }
-    saveEntries(entries, draftBtn);
-  }); }
   var prevBtn = document.getElementById('ndgWkPrev');
   if (prevBtn) { prevBtn.addEventListener('click', function () {
     var w = Math.max(0, SELECTED_WEEK - 1);
