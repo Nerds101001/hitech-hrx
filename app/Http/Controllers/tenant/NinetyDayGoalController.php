@@ -203,88 +203,21 @@ class NinetyDayGoalController extends Controller
     }
 
     /**
-     * Everything about the current round lives here as one dashboard, in sections — the summary
-     * cards, top customers/brands and per-person achievement (already here), then the team as
-     * tiles, the week-by-week matrix, the trial-order funnel, and who needs attention. These are
-     * all facets of the same round, not separate destinations to click through to.
+     * Retired: the old 90-Day Dashboard (the first design). Its sections live on in the current
+     * pages - admin/HR and team managers get the Program Dashboard (every section, scoped to the
+     * manager's team), a salesperson gets My Dashboard. Old links and bookmarks land there.
      */
     public function dashboard(Request $request)
     {
-        [$user, $scope, $redirect] = $this->scopeOrRedirect();
-        if ($redirect) {
-            return $redirect;
+        $user = Auth::user();
+        $scope = Goals::visibleUserIds($user);
+        if (Goals::seesEveryone($user) || count($scope ?? []) > 1) {
+            return redirect()->route('performance.ninety-day-goals.program-dashboard', $request->query());
         }
-        $today = Carbon::today();
 
-        $f = [
-            'round'      => $request->input('round') === 'all' ? 'all' : 'current',
-            'user_id'    => $request->integer('user_id') ?: null,
-            'brand'      => $request->input('brand') ?: null,
-            'program_id' => $request->integer('program_id') ?: null,
-        ];
-        $people = $this->peopleIn($scope);
-        if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
-            $f['user_id'] = null;
-        }
-        // Only programs that actually reach someone in scope — a manager filtering by program
-        // should never see a program that has none of their own people in it.
-        $programs = NinetyDayProgram::whereHas('rounds', fn ($r) => $r->when($scope !== null, fn ($rr) => $rr->whereIn('user_id', $scope)))
-            ->orderByDesc('id')->get();
-        if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
-            $f['program_id'] = null;
-        }
-        $d = Goals::dashboard($scope, $f);
-
-        // The current round specifically, regardless of the filter above — the team tiles, the
-        // matrix, the funnel and the attention list are all inherently about right now.
-        $current = Goals::dashboard($scope, ['round' => 'current']);
-        $byId = $current['users']->keyBy('id');
-        $team = $people->map(function ($p) use ($byId) {
-            return $byId->get($p->id, ['id' => $p->id, 'name' => trim($p->first_name . ' ' . $p->last_name), 'department' => optional($p->department)->name,
-                'goals' => 0, 'potential' => 0.0, 'achieved' => 0.0, 'pct' => null, 'converted' => 0, 'missing' => 0]);
-        })->sortByDesc(fn ($p) => [$p['pct'] ?? -1, $p['achieved']])->values();
-
-        $weeklyGoals = NinetyDayGoal::with(['user.department', 'round', 'checkins'])
-            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
-            ->whereHas('round', fn ($r) => $r->where('status', 'active'))
-            ->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)))->values();
-        // Rounds here can be different lengths (an admin-created program can run longer or
-        // shorter than 90 days) — the matrix spans the longest one so nothing is cut off.
-        $weeklyGoalsSpan = $weeklyGoals->isEmpty() ? Goals::WEEKS : $weeklyGoals->max(fn ($g) => Goals::weeksOf($g->round));
-
-        $trialing = $current['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values();
-        $attention = $this->attentionRows($current['rows'], $today);
-
-        $activePrograms = $programs->filter(fn ($p) => $today->between($p->starts_on, $p->ends_on))->count();
-
-        // Tasks & Alerts: the real "add your customers" / "submit W<n> status" tasks this app
-        // already creates, for people in scope, nearest due date first — not a separate feed.
-        $tasksAlerts = Task::where('title', 'like', '90-Day Goals:%')
-            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
-            ->whereNotIn('status', Task::CLOSED_STATUSES)
-            ->with('user')->orderBy('due_date')->limit(8)->get();
-
-        return view('tenant.performance.ninety-day-goals.dashboard', [
-            'tab'      => 'dashboard',
-            'canSwitch' => Goals::isSalesStaff($user),
-            'seesMany' => $scope === null || count($scope) > 1,
-            'isAdmin'  => Goals::seesEveryone($user),
-            'd'        => $d,
-            'filters'  => $f,
-            'people'   => $people,
-            'programs' => $programs,
-            'activePrograms' => $activePrograms,
-            'tasksAlerts' => $tasksAlerts,
-            'today'    => $today,
-            'brands'   => array_merge(array_keys(Goals::BRANDS), ['Other']),
-            'weeks'    => $weeklyGoalsSpan,
-            'team'      => $team,
-            'weeklyGoals' => $weeklyGoals,
-            'statuses'  => $current['statuses'],
-            'trialing'  => $trialing,
-            'currentTotal' => $current['cards']['goals'],
-            'attention' => $attention,
-        ]);
+        return Goals::isSalesStaff($user)
+            ? redirect()->route('performance.ninety-day-goals.my-dashboard')
+            : redirect()->route('tenant.dashboard');
     }
 
     /** Every filter this page takes, read the same way in adminView(), programDashboard() and adminViewExport(). */
@@ -336,21 +269,24 @@ class NinetyDayGoalController extends Controller
      * team's own words), and each page's own controller method adds whatever is specific to it
      * (programDashboard() adds the real trend deltas its KPI cards show).
      */
-    private function buildAdminOverviewData(Request $request, string $defaultRound = 'current'): array
+    /** $scope: null = everyone (admin/HR); a manager's team ids otherwise. */
+    private function buildAdminOverviewData(Request $request, string $defaultRound = 'current', ?array $scope = null): array
     {
         $today = Carbon::today();
         $f = $this->adminViewFilters($request, $defaultRound);
 
-        $programs = NinetyDayProgram::withCount('rounds')->orderByDesc('id')->get();
+        $programs = NinetyDayProgram::withCount('rounds')
+            ->when($scope !== null, fn ($q) => $q->whereHas('rounds', fn ($r) => $r->whereIn('user_id', $scope)))
+            ->orderByDesc('id')->get();
         if ($f['program_id'] && !$programs->contains('id', $f['program_id'])) {
             $f['program_id'] = null;
         }
-        $people = Goals::salesStaff();
+        $people = Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->values();
         if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
             $f['user_id'] = null;
         }
 
-        $d = Goals::dashboard(null, $f);
+        $d = Goals::dashboard($scope, $f);
         $rows = $this->adminViewRows($d, $f, $today);
         // Rounds here can be different lengths (an admin-created program can run longer or
         // shorter than 90 days) — the table spans the longest one in the filtered set, not just
@@ -476,6 +412,8 @@ class NinetyDayGoalController extends Controller
             'statusCounts' => $d['statuses'],
             'orderStatus' => $d['orderStatus'],
             'orderResults' => $d['orderResults'],
+            // Customers whose latest status is Trial Order (from the retired old Dashboard's watchlist).
+            'trialing'   => $d['rows']->where('status', 'Trial Order')->sortByDesc('potential')->values(),
             'compliance' => $compliance,
             'salespeople' => $salespeople,
             'programSummary' => $programSummary,
@@ -490,20 +428,13 @@ class NinetyDayGoalController extends Controller
     }
 
     /**
-     * The "Admin View" page: every program, every salesperson, every customer, in one place —
-     * Program Overview / Salesperson Performance / Customer Tracking / Weekly Submissions /
-     * Orders & Results / At Risk / Reports, as sections of one page (never separate URLs — the
-     * team asked for that explicitly), switched client-side.
+     * Retired: the old "Admin View" page. The Program Dashboard has every one of its sections
+     * (Program Overview, Salesperson Performance, Customer Tracking, Weekly Submissions, Orders &
+     * Results, At Risk, Reports) in the current design. Old links and bookmarks land there.
      */
     public function adminView(Request $request)
     {
-        $user = Auth::user();
-        if (!Goals::seesEveryone($user)) {
-            return redirect()->route('tenant.dashboard')->with('error', 'Admin View is for admin/HR.');
-        }
-
-        return view('tenant.performance.ninety-day-goals.admin-view',
-            $this->buildAdminOverviewData($request, 'current') + ['tab' => 'admin', 'isAdmin' => true]);
+        return redirect()->route('performance.ninety-day-goals.program-dashboard', $request->query());
     }
 
     /**
@@ -515,22 +446,34 @@ class NinetyDayGoalController extends Controller
     public function programDashboard(Request $request)
     {
         $user = Auth::user();
-        if (!Goals::seesEveryone($user)) {
-            return redirect()->route('tenant.dashboard')->with('error', 'This page is for admin/HR.');
+        // The one 90-Day dashboard: admin/HR see everyone; a manager sees their own team (this
+        // replaced the old /dashboard page, which was the only place a manager had team figures).
+        $isAdmin = Goals::seesEveryone($user);
+        $scope = $isAdmin ? null : (Goals::canOpenPage($user) ? Goals::visibleUserIds($user) : []);
+        if (!$isAdmin && count($scope ?? []) <= 1) {
+            return Goals::isSalesStaff($user)
+                ? redirect()->route('performance.ninety-day-goals.my-dashboard')
+                : redirect()->route('tenant.dashboard')->with('error', 'This page is for admin/HR and team managers.');
         }
-        $data = $this->buildAdminOverviewData($request, 'all');
+        $data = $this->buildAdminOverviewData($request, 'all', $scope);
 
         // Real trend deltas only — "new in the last 30 days", never a fabricated percentage.
         // Left blank (shown as "—") wherever there is no honest way to compute one.
         $since = Carbon::today()->subDays(30);
+        $teamPipelineIds = $scope === null ? null
+            : NinetyDayGoal::whereIn('user_id', $scope)->whereNotNull('sales_pipeline_id')->pluck('sales_pipeline_id')->unique()->all();
         $data['trends'] = [
-            'activePrograms' => NinetyDayProgram::where('created_at', '>=', $since)->count(),
-            'participants'   => NinetyDayRound::where('created_at', '>=', $since)->distinct('user_id')->count('user_id'),
-            'customers'      => NinetyDayGoal::where('created_at', '>=', $since)->count(),
-            'ordersThisMonth' => DB::table('sales_pipeline_months')->where('month_year', Carbon::today()->format('Y-m'))->where('sale_amount', '>', 0)->count(),
+            'activePrograms' => NinetyDayProgram::where('created_at', '>=', $since)
+                ->when($scope !== null, fn ($q) => $q->whereHas('rounds', fn ($r) => $r->whereIn('user_id', $scope)))->count(),
+            'participants'   => NinetyDayRound::where('created_at', '>=', $since)
+                ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))->distinct('user_id')->count('user_id'),
+            'customers'      => NinetyDayGoal::where('created_at', '>=', $since)
+                ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))->count(),
+            'ordersThisMonth' => DB::table('sales_pipeline_months')->where('month_year', Carbon::today()->format('Y-m'))->where('sale_amount', '>', 0)
+                ->when($teamPipelineIds !== null, fn ($q) => $q->whereIn('sales_pipeline_id', $teamPipelineIds ?: [0]))->count(),
         ];
 
-        return view('tenant.performance.ninety-day-goals.program-dashboard', $data + ['tab' => 'admin', 'isAdmin' => true]);
+        return view('tenant.performance.ninety-day-goals.program-dashboard', $data + ['tab' => 'admin', 'isAdmin' => $isAdmin]);
     }
 
     /** Reports tab's "Export to Excel": the same filtered rows as the table, not just the visible page. */

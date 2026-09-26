@@ -79,7 +79,6 @@ class RouteMenuValidator extends Command
             'visits' => ['visits.index', 'tenant.visits.index', 'user.visits.index'],
             'devices' => ['devices.index', 'tenant.device.index'],
             'sos' => ['sos.index', 'tenant.sos.index', 'user.sos.index'],
-            'permissions' => ['permissions.index', 'tenant.permission.index'],
             'tenants' => ['tenant.index'],
             'accounts' => ['account.index'],
             'roles' => ['roles.index'],

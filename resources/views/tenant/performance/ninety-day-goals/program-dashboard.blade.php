@@ -34,12 +34,14 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
       <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> Admin View</nav>
-      <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">90-Day Sales Goals <span class="badge bg-label-success rounded-pill fw-bold" style="font-size:.62rem">Admin View</span></h3>
+      <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">90-Day Sales Goals <span class="badge bg-label-success rounded-pill fw-bold" style="font-size:.62rem">{{ $isAdmin ? 'Admin View' : 'My Team' }}</span></h3>
       <p class="text-muted mb-0 small">Monitor all programs, participants, customer updates and results in real time. Drive accountability. Close more business.</p>
     </div>
+    @if($isAdmin)
     <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
       <i class="bx bx-calendar-plus fs-5"></i><span class="fw-bold">Create New Program</span>
     </a>
+    @endif
   </div>
 
   <div class="px-4">
@@ -218,7 +220,7 @@
                   <td class="text-end">{{ $fmtL($r->achieved) }} L</td>
                   <td class="text-end" style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
                   <td><span class="badge rounded-pill" style="background:{{ $pActive ? '#d7f3ee' : '#e2e8f0' }};color:{{ $pActive ? '#0b5b48' : '#475569' }}">{{ $pActive ? 'Active' : ($today->lt($r->program->starts_on) ? 'Upcoming' : 'Ended') }}</span></td>
-                  <td class="pe-3"><a href="{{ route('performance.ninety-day-goals.program', $r->program->id) }}" class="btn btn-sm btn-hitech-cancel rounded-pill">View</a></td>
+                  <td class="pe-3">@if($isAdmin)<a href="{{ route('performance.ninety-day-goals.program', $r->program->id) }}" class="btn btn-sm btn-hitech-cancel rounded-pill">View</a>@else<span class="text-muted">—</span>@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="13" class="text-center text-muted p-4">No programs yet.</td></tr>
@@ -418,9 +420,13 @@
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Quick Actions</div></div>
           <div class="card-body p-3 d-flex flex-column gap-2">
+    @if($isAdmin)
             <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
+    @endif
             <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>
+    @if($isAdmin)
             <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
+    @endif
             <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="people"><i class="bx bx-group"></i> Manage Participants</button>
             <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-bar-chart-alt-2"></i> View Sales Report</a>
           </div>
@@ -582,6 +588,47 @@
         </div>
       </div>
     </div>
+
+    {{-- Order status split and the Trial Order watchlist (both from the retired old Dashboard). --}}
+    <div class="row g-4 mb-6">
+      <div class="col-xl-4">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Order Status</div><div class="small text-muted">From real sales vs target; Cancelled = marked Dropped</div></div>
+          <div class="card-body p-4">
+            @php $osTotal = max(1, array_sum($orderStatus)); $osColors = ['Full Order' => '#0b5b48', 'Partial Order' => '#f5a623', 'Cancelled' => '#b42318', 'Pending' => '#94a3b8']; @endphp
+            @foreach($orderStatus as $lbl => $n)
+              <div class="mb-3">
+                <div class="d-flex justify-content-between small mb-1"><span class="fw-semibold text-dark">{{ $lbl }}</span><span class="text-muted">{{ $n }}</span></div>
+                <div class="progress" style="height:6px"><div class="progress-bar" style="width:{{ round($n / $osTotal * 100) }}%;background:{{ $osColors[$lbl] ?? '#94a3b8' }}"></div></div>
+              </div>
+            @endforeach
+          </div>
+        </div>
+      </div>
+      <div class="col-xl-8">
+        <div class="hitech-card h-100">
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">At Trial Order right now</div><div class="small text-muted">{{ $trialing->count() }} customer{{ $trialing->count() === 1 ? '' : 's' }} trialing — the ones to convert to regular orders</div></div>
+          <div class="card-body p-0 table-responsive" style="max-height:360px;overflow-y:auto">
+            <table class="table align-middle mb-0">
+              <thead><tr><th class="ps-4">Customer</th><th>Salesperson</th><th>Brand</th><th class="text-end">Monthly ₹L</th><th class="text-end pe-4">Sold ₹L</th></tr></thead>
+              <tbody>
+              @forelse($trialing as $r)
+                <tr>
+                  <td class="ps-4 fw-semibold">{{ $r->goal->client_name }}</td>
+                  <td class="small text-muted">{{ $name($r->user) }}</td>
+                  <td class="small text-muted">{{ $r->brand }}</td>
+                  <td class="text-end">{{ $fmtL($r->potential) }}</td>
+                  <td class="text-end pe-4 fw-semibold">{{ $fmtL($r->achieved) }}</td>
+                </tr>
+              @empty
+                <tr><td colspan="5" class="text-center text-muted p-4">Nobody is at Trial Order right now.</td></tr>
+              @endforelse
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   {{-- ═══════════════════ At Risk ═══════════════════ --}}
@@ -625,9 +672,11 @@
     <div class="hitech-card mb-6">
       <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Export</div><div class="small text-muted">Downloads the complete filtered set above, not just the page on screen.</div></div>
       <div class="card-body p-4">
+    @if($isAdmin)
         <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn-hitech rounded-pill px-5 d-inline-flex align-items-center gap-2">
           <i class="bx bx-download fs-5"></i><span class="fw-bold">Export to Excel (CSV)</span>
         </a>
+    @endif
         <div class="small text-muted mt-3">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('row', $allRowsCount) }} match the current filters.</div>
       </div>
     </div>

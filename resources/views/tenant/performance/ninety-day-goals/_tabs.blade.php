@@ -1,14 +1,13 @@
-{{-- Goals | Dashboard | Past | Comments. Dashboard carries every current-round report as its own section. --}}
+{{-- Goals | Dashboard | Past | Comments. "Dashboard" is the current one for this person:
+     the Program Dashboard for admin/HR and team managers, My Dashboard for a salesperson. --}}
 @php
   $tabs = [
       'goals'     => ['Goals', 'bx-target-lock', route('performance.ninety-day-goals.index', ['view' => ($seesMany ?? false) ? 'overview' : 'mine'])],
-      'dashboard' => ['Dashboard', 'bx-bar-chart-alt-2', route('performance.ninety-day-goals.dashboard')],
+      'dashboard' => ['Dashboard', 'bx-bar-chart-alt-2', route((($isAdmin ?? false) || ($seesMany ?? false))
+          ? 'performance.ninety-day-goals.program-dashboard' : 'performance.ninety-day-goals.my-dashboard')],
       'past'      => ['Past rounds', 'bx-history', route('performance.ninety-day-goals.past')],
       'comments'  => ['Comments', 'bx-comment-detail', route('performance.ninety-day-goals.comments')],
   ];
-  if ($isAdmin ?? false) {
-      $tabs['admin'] = ['Admin View', 'bx-shield-quarter', route('performance.ninety-day-goals.admin-view')];
-  }
 @endphp
 <div class="d-flex gap-2 flex-wrap mb-6 mx-4 ndg-tabs">
   @foreach($tabs as $key => [$label, $icon, $href])

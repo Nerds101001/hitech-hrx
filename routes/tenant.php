@@ -40,7 +40,6 @@ use App\Http\Controllers\tenant\UniformRequestController;
 use App\Http\Controllers\tenant\OrganisationHierarchyController;
 use App\Http\Controllers\tenant\PayrollController;
 use App\Http\Controllers\tenant\SalaryImportController;
-use App\Http\Controllers\tenant\PermissionController;
 use App\Http\Controllers\tenant\DigitalLibraryController;
 use App\Http\Controllers\tenant\ProbationController;
 use App\Http\Controllers\tenant\QrGroupController;
@@ -1386,23 +1385,14 @@ Route::middleware([
 // roles.manage-only holder before this middleware ever runs.
 Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.manage'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
-    // A brand-new, never-before-visited URL serving the exact same
-    // controller/view as /roles - a clean way to rule out any lingering
-    // browser/CDN cache confusion once and for all, byte-for-byte identical
-    // to the real page.
-    Route::get('roles-fresh', [RoleController::class, 'index'])->name('roles.fresh');
-    Route::get('roles/{id}/permissions', [RoleController::class, 'editPermissions'])->name('roles.editPermissions');
     Route::get('roles/{id}/panelAjax', [RoleController::class, 'panelAjax'])->name('roles.panelAjax');
     Route::get('roles/{id}/getRolePermissionsAjax', [RoleController::class, 'getRolePermissionsAjax'])->name('roles.getRolePermissionsAjax');
     Route::post('roles/addOrUpdateAjax', [RoleController::class, 'addOrUpdateAjax'])->name('roles.addOrUpdateAjax');
     Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
-    Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
 
     // User-specific special permissions
     Route::get('roles/special-permissions', [RoleController::class, 'specialPermissionsPage'])->name('roles.specialPermissions');
     Route::get('roles/specialPermissionsDataAjax/{userId}', [RoleController::class, 'specialPermissionsDataAjax'])->name('roles.specialPermissionsDataAjax');
-    Route::get('roles/getUserPermissionsAjax/{userId}', [RoleController::class, 'getUserPermissionsAjax'])->name('roles.getUserPermissionsAjax');
-    Route::post('roles/syncUserPermissionsAjax', [RoleController::class, 'syncUserPermissionsAjax'])->name('roles.syncUserPermissionsAjax');
     Route::post('roles/toggleUserPermissionAjax', [RoleController::class, 'toggleUserPermissionAjax'])->name('roles.toggleUserPermissionAjax');
     Route::post('roles/previewAccessAjax', [RoleController::class, 'previewAccessAjax'])->name('roles.previewAccessAjax');
 });

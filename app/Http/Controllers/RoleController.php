@@ -118,16 +118,6 @@ class RoleController extends Controller
     return Success::response($role->permissions->pluck('name')->merge($this->lockedPermissionsFor($role))->unique()->values());
   }
 
-  /**
-   * Superseded by the master-detail /roles page - kept as a thin redirect
-   * so any existing link (e.g. the post-create handoff) still lands
-   * somewhere useful, with that role pre-selected.
-   */
-  public function editPermissions($id)
-  {
-    return redirect()->route('roles.index', ['role' => $id]);
-  }
-
   private function rolePanelData(Role $role): array
   {
     $groupedPermissions = config('permissions_registry');
@@ -359,7 +349,7 @@ class RoleController extends Controller
       'role' => $role ? [
         'name' => $role->display_name,
         'description' => $role->description,
-        'url' => route('roles.editPermissions', $role->id),
+        'url' => route('roles.index', ['role' => $role->id]),
         'multiCheckIn' => (bool) $role->is_multiple_check_in_enabled,
         'mobileApp' => (bool) $role->is_mobile_app_access_enabled,
         'webLogin' => (bool) $role->is_web_access_enabled,
@@ -653,15 +643,6 @@ class RoleController extends Controller
     }
   }
 
-  public function getUserPermissionsAjax($userId)
-  {
-    $user = User::with('permissions')->find($userId);
-    if (!$user) {
-        return Error::response('User not found');
-    }
-    return Success::response($user->permissions);
-  }
-
   /**
    * SECURITY (H-1): a non-admin actor may not assign an admin-tier permission
    * (one that grants admin.guard passage) to anyone, nor edit their OWN
@@ -742,36 +723,6 @@ class RoleController extends Controller
       \Illuminate\Support\Facades\Cache::forget("global_search_data_{$userId}_hr");
       \Illuminate\Support\Facades\Cache::forget("global_search_data_{$userId}_other");
     }
-  }
-
-  public function syncUserPermissionsAjax(Request $request)
-  {
-    $userId = $request->user_id;
-    $user = User::with('permissions')->find($userId);
-    if (!$user) {
-        return Error::response('User not found');
-    }
-
-    $requestedPermissions = $request->has('permissions') ? ($request->permissions ?? []) : [];
-    $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
-
-    // SECURITY (H-1): block self-escalation / assigning admin-tier permissions.
-    if ($guard = $this->guardPrivilegeEscalation($existingPermissions, $userId)) {
-        return $guard;
-    }
-
-    // SAFETY: same reasoning as the role save above - this form only ever
-    // shows a checkbox for a registry key, so it must never be the thing
-    // that silently deletes a pre-registry direct permission it was never
-    // able to display in the first place.
-    $registryKeys = collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->all();
-    $before = $user->permissions->pluck('name');
-    $outsideRegistry = $before->diff($registryKeys)->values()->all();
-    $after = array_values(array_unique(array_merge($existingPermissions, $outsideRegistry)));
-    $user->syncPermissions($after);
-    $this->logGrantChanges($user->id, array_diff($after, $before->all()), $before->diff($after)->all());
-
-    return Success::response('User-specific permissions updated successfully');
   }
 
   public function deleteAjax($id)

@@ -809,10 +809,9 @@
             ]
         },
         {
-            "url": "/performance/ninety-day-goals",
             "name": "90-Day Goals",
             "icon": "menu-icon bx bx-target-lock",
-            "slug": "performance.ninety-day-goals.index",
+            "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program"],
             "department": "Sales",
             "submenu": [
                 {
@@ -824,11 +823,19 @@
                     "hideForRoles": ["admin","hr"]
                 },
                 {
-                    "url": "/performance/ninety-day-goals",
+                    "url": "/performance/ninety-day-goals/my-program",
                     "name": "My Goals",
                     "icon": "menu-icon bx bx-target-lock",
-                    "slug": "performance.ninety-day-goals.index",
+                    "slug": "performance.ninety-day-goals.round",
                     "department": "Sales",
+                    "hideForRoles": ["admin","hr"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard",
+                    "name": "Team Dashboard",
+                    "icon": "menu-icon bx bx-group",
+                    "slug": "performance.ninety-day-goals.program-dashboard",
+                    "roles": ["manager"],
                     "hideForRoles": ["admin","hr"]
                 },
                 {
@@ -844,19 +851,6 @@
                     "icon": "menu-icon bx bx-plus-circle",
                     "slug": "performance.ninety-day-goals.programs.create",
                     "permission": ["goals.manage","scorecards.manage"]
-                },
-                {
-                    "url": "/performance/ninety-day-goals?view=overview",
-                    "name": "Goals Overview",
-                    "icon": "menu-icon bx bx-table",
-                    "slug": "performance.ninety-day-goals.index",
-                    "permission": ["goals.manage","scorecards.manage"]
-                },
-                {
-                    "url": "/performance/ninety-day-goals/past",
-                    "name": "Past Rounds",
-                    "icon": "menu-icon bx bx-history",
-                    "slug": "performance.ninety-day-goals.past"
                 }
             ]
         },
