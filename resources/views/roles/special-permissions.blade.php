@@ -238,7 +238,9 @@
           @php $empRole = optional($emp->roles->first())->display_name ?? 'No Role'; @endphp
           <div class="usp-emp-row" data-id="{{ $emp->id }}" data-name="{{ strtolower($emp->getFullName()) }}">
             @if($emp->profile_picture)
-              <img class="usp-emp-avatar" src="{{ $emp->getProfilePicture() }}" alt="">
+              {{-- lazy: each photo is a PHP request that decrypts the file;
+                   loading all ~240 at once made this page crawl on prod. --}}
+              <img class="usp-emp-avatar" src="{{ $emp->getProfilePicture() }}" alt="" loading="lazy" decoding="async" width="34" height="34">
             @else
               <span class="usp-emp-avatar-fallback">{{ $emp->getInitials() }}</span>
             @endif

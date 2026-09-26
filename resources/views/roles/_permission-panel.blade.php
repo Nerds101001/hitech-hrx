@@ -300,7 +300,7 @@
             <div class="d-flex align-items-center p-2 rounded" style="background: #fff; border: 1px solid #f1f5f9;">
               <div class="avatar avatar-sm me-3">
                 @if($u->profile_picture)
-                  <img class="rounded-circle" src="{{ $u->getProfilePicture() }}" alt="">
+                  <img class="rounded-circle" src="{{ $u->getProfilePicture() }}" alt="" loading="lazy" decoding="async">
                 @else
                   <span class="avatar-initial rounded-circle bg-label-primary">{{ $u->getInitials() }}</span>
                 @endif
