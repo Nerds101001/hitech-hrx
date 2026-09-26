@@ -254,7 +254,18 @@ class RoleController extends Controller
    */
   public function specialPermissionsPage()
   {
-    $employees = User::with('roles')->withCount('permissions')->orderBy('first_name')->get();
+    // Only people who can actually use access: nobody who has left (same
+    // RELIEVED/TERMINATED/RETIRED set as the Employees page) or is inactive.
+    $gone = [
+      \App\Enums\UserAccountStatus::RELIEVED, \App\Enums\UserAccountStatus::TERMINATED,
+      \App\Enums\UserAccountStatus::RETIRED, \App\Enums\UserAccountStatus::INACTIVE,
+      \App\Enums\UserAccountStatus::SUSPENDED, \App\Enums\UserAccountStatus::BLOCKED,
+      \App\Enums\UserAccountStatus::REJECTED, \App\Enums\UserAccountStatus::DELETED,
+      \App\Enums\UserAccountStatus::PROBATION_FAILED,
+    ];
+    $employees = User::with('roles')->withCount('permissions')
+      ->where(fn($q) => $q->whereNull('status')->orWhereNotIn('status', array_map(fn($s) => $s->value, $gone)))
+      ->orderBy('first_name')->get();
     $groupedPermissions = config('permissions_registry');
 
     return view('roles.special-permissions', [
