@@ -259,6 +259,22 @@ class RoleController extends Controller
     $reconciled = $this->reconcilePermissionsForUser($user, $matrix);
     $role = $user->roles->first();
 
+    // Who added each current special permission, and when (latest grant).
+    $grantLog = \Illuminate\Support\Facades\DB::table('permission_grant_logs as l')
+      ->leftJoin('users as a', 'a.id', '=', 'l.actor_id')
+      ->where('l.user_id', $user->id)->where('l.action', 'granted')
+      ->orderBy('l.id')
+      ->get(['l.permission', 'l.created_at', 'a.first_name', 'a.last_name'])
+      ->keyBy('permission')
+      ->map(fn($r) => [
+        'by' => trim(($r->first_name ?? '') . ' ' . ($r->last_name ?? '')) ?: 'Unknown',
+        'at' => \Illuminate\Support\Carbon::parse($r->created_at)->format('d M Y'),
+      ]);
+    $lastChange = \Illuminate\Support\Facades\DB::table('permission_grant_logs as l')
+      ->leftJoin('users as a', 'a.id', '=', 'l.actor_id')
+      ->where('l.user_id', $user->id)->orderByDesc('l.id')
+      ->first(['l.action', 'l.permission', 'l.created_at', 'a.first_name', 'a.last_name']);
+
     return Success::response([
       'user' => [
         'id' => $user->id,
@@ -283,7 +299,39 @@ class RoleController extends Controller
       'specialCount' => $user->permissions->count(),
       'summary' => $reconciled['summary'],
       'modules' => $reconciled['modules'],
+      'isSuper' => $user->roles->contains(fn($r) => $this->isSuperRole($r)),
+      'isSelf' => (int) auth()->id() === (int) $user->id,
+      'guardWarning' => $this->adminGuardWarning($user),
+      'reach' => \App\Support\Nav::previewMenuFor($user),
+      'grantLog' => $grantLog,
+      'lastChange' => $lastChange ? [
+        'text' => ucfirst($lastChange->action) . ' "' . $lastChange->permission . '"',
+        'by' => trim(($lastChange->first_name ?? '') . ' ' . ($lastChange->last_name ?? '')) ?: 'Unknown',
+        'at' => \Illuminate\Support\Carbon::parse($lastChange->created_at)->format('d M Y, h:i A'),
+      ] : null,
     ]);
+  }
+
+  /**
+   * admin.guard turns away employee/office_employee - and anyone without an
+   * admin-type role - from the whole admin area unless they hold one of a
+   * few ELEVATED permissions. A special permission for such a person saves
+   * fine and then opens nothing, so say so on the page instead of letting
+   * it look like it worked.
+   */
+  private function adminGuardWarning(User $user): ?string
+  {
+    $guard = \App\Http\Middleware\AdminRoleGuard::class;
+    $hasElevated = $user->getAllPermissions()->pluck('name')->intersect($guard::ELEVATED_PERMISSIONS)->isNotEmpty();
+    if ($hasElevated) {
+      return null;
+    }
+    $roleLabel = $user->roles->pluck('name')->implode(', ') ?: 'no role';
+    if ($user->hasRole(['employee', 'office_employee']) || !$user->hasAnyRole($guard::ADMIN_ROLES)) {
+      return "This person's role ({$roleLabel}) keeps them out of the admin area, so most special permissions here won't open anything for them - only these let them past: "
+        . implode(', ', $guard::ELEVATED_PERMISSIONS) . '. Their own self-service pages are unaffected.';
+    }
+    return null;
   }
 
   /**
@@ -295,7 +343,12 @@ class RoleController extends Controller
    */
   private function reconcilePermissionsForUser(User $user, array $matrix): array
   {
-    $roleNames = $user->getPermissionsViaRoles()->pluck('name')->flip();
+    // What the role gives: its stored rows PLUS what it has by name in code
+    // (admin: everything via Gate::before) - the same locked set the role
+    // editor shows, so the two pages never disagree.
+    $roleNames = $user->getPermissionsViaRoles()->pluck('name')
+      ->merge($user->roles->flatMap(fn($r) => $this->lockedPermissionsFor($r)))
+      ->unique()->flip();
     $specialNames = $user->permissions->pluck('name')->flip();
 
     $cellFor = function ($permName, $label) use ($roleNames, $specialNames) {
@@ -550,6 +603,65 @@ class RoleController extends Controller
     return null;
   }
 
+  /**
+   * Grant or remove ONE special (direct) permission for one person - the
+   * checkboxes in the page's Effective Permissions panel and its Grant
+   * buttons. Same H-1 guard as the full save. Only registry permissions,
+   * and never one the person's role already gives (nothing to add, and
+   * removing it here wouldn't take the role's access away).
+   */
+  public function toggleUserPermissionAjax(Request $request)
+  {
+    $request->validate([
+      'user_id' => 'required|integer|exists:users,id',
+      'permission' => 'required|string',
+      'grant' => 'required|boolean',
+    ]);
+    $user = User::with('permissions', 'roles')->find($request->user_id);
+    $perm = $request->permission;
+
+    $registryKeys = collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->all();
+    if (!in_array($perm, $registryKeys, true) || !Permission::where('name', $perm)->exists()) {
+      return Error::response('Unknown permission.');
+    }
+    if ($guard = $this->guardPrivilegeEscalation($request->boolean('grant') ? [$perm] : [], $user->id)) {
+      return $guard;
+    }
+    $fromRole = $user->getPermissionsViaRoles()->pluck('name')
+      ->merge($user->roles->flatMap(fn($r) => $this->lockedPermissionsFor($r)))->contains($perm);
+    if ($fromRole) {
+      return Error::response('Their role already gives this - it can\'t be added or removed per person.');
+    }
+
+    $has = $user->permissions->contains('name', $perm);
+    if ($request->boolean('grant') && !$has) {
+      $user->givePermissionTo($perm);
+      $this->logGrantChanges($user->id, [$perm], []);
+    } elseif (!$request->boolean('grant') && $has) {
+      $user->revokePermissionTo($perm);
+      $this->logGrantChanges($user->id, [], [$perm]);
+    }
+
+    return Success::response(($request->boolean('grant') ? 'Granted' : 'Removed') . ' "' . $perm . '" for ' . $user->getFullName() . '.');
+  }
+
+  /** Append who changed a person's special permissions; also drops their stale search cache. */
+  private function logGrantChanges(int $userId, array $granted, array $revoked): void
+  {
+    $rows = [];
+    foreach ([['granted', $granted], ['revoked', $revoked]] as [$action, $names]) {
+      foreach ($names as $name) {
+        $rows[] = ['user_id' => $userId, 'permission' => $name, 'action' => $action, 'actor_id' => auth()->id(), 'created_at' => now()];
+      }
+    }
+    if ($rows) {
+      \Illuminate\Support\Facades\DB::table('permission_grant_logs')->insert($rows);
+      // Global search caches each person's page list for an hour.
+      \Illuminate\Support\Facades\Cache::forget("global_search_data_{$userId}_hr");
+      \Illuminate\Support\Facades\Cache::forget("global_search_data_{$userId}_other");
+    }
+  }
+
   public function syncUserPermissionsAjax(Request $request)
   {
     $userId = $request->user_id;
@@ -571,8 +683,11 @@ class RoleController extends Controller
     // that silently deletes a pre-registry direct permission it was never
     // able to display in the first place.
     $registryKeys = collect(config('permissions_registry'))->flatMap(fn($perms) => array_keys($perms))->all();
-    $outsideRegistry = $user->permissions->pluck('name')->diff($registryKeys)->values()->all();
-    $user->syncPermissions(array_values(array_unique(array_merge($existingPermissions, $outsideRegistry))));
+    $before = $user->permissions->pluck('name');
+    $outsideRegistry = $before->diff($registryKeys)->values()->all();
+    $after = array_values(array_unique(array_merge($existingPermissions, $outsideRegistry)));
+    $user->syncPermissions($after);
+    $this->logGrantChanges($user->id, array_diff($after, $before->all()), $before->diff($after)->all());
 
     return Success::response('User-specific permissions updated successfully');
   }

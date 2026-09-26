@@ -1403,5 +1403,6 @@ Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.man
     Route::get('roles/specialPermissionsDataAjax/{userId}', [RoleController::class, 'specialPermissionsDataAjax'])->name('roles.specialPermissionsDataAjax');
     Route::get('roles/getUserPermissionsAjax/{userId}', [RoleController::class, 'getUserPermissionsAjax'])->name('roles.getUserPermissionsAjax');
     Route::post('roles/syncUserPermissionsAjax', [RoleController::class, 'syncUserPermissionsAjax'])->name('roles.syncUserPermissionsAjax');
+    Route::post('roles/toggleUserPermissionAjax', [RoleController::class, 'toggleUserPermissionAjax'])->name('roles.toggleUserPermissionAjax');
     Route::post('roles/previewAccessAjax', [RoleController::class, 'previewAccessAjax'])->name('roles.previewAccessAjax');
 });
