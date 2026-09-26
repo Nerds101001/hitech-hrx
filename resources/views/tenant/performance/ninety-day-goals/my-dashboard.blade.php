@@ -17,22 +17,8 @@
   $name = fn ($u) => trim(optional($u)->first_name . ' ' . optional($u)->last_name);
   $pctText = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format($v, 1), '0'), '.') . '%';
   $pctColor = fn ($v) => $v === null ? '#94a3b8' : ($v >= 66 ? '#007a7a' : ($v >= 33 ? '#f5a623' : '#ef4444'));
-  // Indian digit grouping (50,00,000, not 5,000,000) — this page shows real rupees, not lakhs,
-  // to match the reference design; every other 90-Day Goals page keeps its own ₹L convention.
-  $fmtINR = function ($v) {
-    $n = (int) round((float) $v);
-    $neg = $n < 0; $n = abs($n);
-    $s = (string) $n;
-    if (strlen($s) <= 3) { return ($neg ? '-' : '') . $s; }
-    $last3 = substr($s, -3);
-    $rest = substr($s, 0, -3);
-    $parts = [];
-    while (strlen($rest) > 2) { $parts[] = substr($rest, -2); $rest = substr($rest, 0, -2); }
-    if ($rest !== '') { $parts[] = $rest; }
-    return ($neg ? '-' : '') . implode(',', array_reverse($parts)) . ',' . $last3;
-  };
-  $rupeeTarget = (float) $cards['target'] * 100000 / 100;
-  $rupeeAchieved = (float) $cards['achieved'] * 100000 / 100;
+  // Amounts are stored in lakh; shown as ₹ … L like every other 90-Day Goals page.
+  $fmtL = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.') ?: '0';
   // Every round always has a real label, whether or not an admin program is behind it.
   $roundLabel = fn ($r) => optional($r->program)->name ?: ('My 90-Day Goals · Round ' . $r->round_no);
   $selectedLabel = $selectedRound ? $roundLabel($selectedRound) : null;
@@ -126,7 +112,7 @@
         <div class="ndg-kpi3-icon" style="background:#ede9fe;color:#5b21b6"><i class="bx bx-bar-chart-alt-2"></i></div>
         <div>
           <div class="small text-muted fw-semibold">My Target @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 14) }}@else (All Programs)@endif</div>
-          <div class="ndg-kpi3-v">₹{{ $fmtINR($rupeeTarget) }}</div>
+          <div class="ndg-kpi3-v">₹{{ $fmtL($cards['target']) }} L</div>
         </div>
       </div>
     </div>
@@ -135,7 +121,7 @@
         <div class="ndg-kpi3-icon" style="background:#dcfce7;color:#166534"><i class="bx bx-rupee"></i></div>
         <div class="flex-grow-1">
           <div class="small text-muted fw-semibold">My Achieved @if($selectedLabel)— {{ \Illuminate\Support\Str::limit($selectedLabel, 14) }}@else (All Programs)@endif</div>
-          <div class="ndg-kpi3-v">₹{{ $fmtINR($rupeeAchieved) }}</div>
+          <div class="ndg-kpi3-v">₹{{ $fmtL($cards['achieved']) }} L</div>
           <div class="d-flex align-items-center gap-2 mt-1">
             <div class="ndg-track flex-grow-1" style="height:6px"><div class="ndg-fill" style="width:{{ $cards['pct'] === null ? 0 : min(100, $cards['pct']) }}%;background:{{ $pctColor($cards['pct']) }}"></div></div>
             <b class="small" style="color:{{ $pctColor($cards['pct']) }}">{{ $pctText($cards['pct']) }}</b>
@@ -194,9 +180,9 @@
         <thead><tr>
           <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th>
           @if(!$selectedRoundId)<th>Program</th>@endif
-          <th>Target ₹</th><th>Expected</th>
+          <th>Target ₹L</th><th>Expected</th>
           @for($w = 0; $w < $G::WEEKS; $w++)<th>W{{ $w }}</th>@endfor
-          <th>Actual ₹</th><th>Ach.%</th><th>Status</th><th>Next Action</th><th></th>
+          <th>Actual ₹L</th><th>Ach.%</th><th>Status</th><th>Next Action</th><th></th>
         </tr></thead>
         <tbody>
         @forelse($rows as $i => $r)
@@ -206,7 +192,7 @@
             <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
             <td>{{ $r->goal->product }}</td>
             @if(!$selectedRoundId)<td class="small text-muted">{{ optional($r->program)->name ?? 'No program' }}</td>@endif
-            <td>{{ $fmtINR($r->goal->monthly_potential * 100000 / 100) }}</td>
+            <td>{{ $fmtL($r->goal->monthly_potential) }}</td>
             <td class="small text-muted">{{ $r->goal->expected_order_date ? $r->goal->expected_order_date->format('d M Y') : '—' }}</td>
             @for($w = 0; $w < $G::WEEKS; $w++)
               @php
@@ -216,7 +202,7 @@
               @endphp
               <td class="text-center">@if($st)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $st }}</span>@else<span class="ndg-none">-</span>@endif</td>
             @endfor
-            <td class="fw-semibold">{{ $fmtINR($r->achieved * 100000 / 100) }}</td>
+            <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
             <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
             <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
             <td class="small text-muted">{{ $nextAction($r->status) }}</td>
@@ -351,7 +337,7 @@ document.addEventListener('DOMContentLoaded', function () {
       chart: { type: 'area', height: 260, toolbar: { show: false }, fontFamily: 'inherit' },
       series: [{ name: 'Target (Cumulative)', data: wp.target }, { name: 'Achieved (Cumulative)', data: wp.achieved }],
       xaxis: { categories: wp.labels, labels: { style: { colors: muted, fontSize: '9px' }, rotate: -45 } },
-      yaxis: { labels: { style: { colors: muted }, formatter: function (v) { return '₹' + Math.round(v / 1000) + 'K'; } } },
+      yaxis: { labels: { style: { colors: muted }, formatter: function (v) { return '₹' + (Math.round(v * 100) / 100) + ' L'; } } },
       colors: ['#94c9c9', teal],
       stroke: { curve: 'smooth', width: 2 },
       fill: { type: 'gradient', gradient: { opacityFrom: 0.25, opacityTo: 0.02 } },

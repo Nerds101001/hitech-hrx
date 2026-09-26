@@ -167,10 +167,10 @@
           </div>
           <div class="card-body p-0 table-responsive">
             <table class="table table-sm align-middle mb-0">
-              <thead><tr><th class="ps-3">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end pe-3">Ach. ₹</th></tr></thead>
+              <thead><tr><th class="ps-3">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end pe-3">Ach. ₹L</th></tr></thead>
               <tbody>
               @forelse($salespeople->take(5) as $i => $u)
-                <tr><td class="ps-3 text-muted">{{ $i + 1 }}</td><td class="fw-semibold">{{ $u['name'] }}</td><td class="text-end">{{ $u['goals'] }}</td><td class="text-end pe-3">{{ number_format($u['achieved'] * 100000 / 100, 0) }}</td></tr>
+                <tr><td class="ps-3 text-muted">{{ $i + 1 }}</td><td class="fw-semibold">{{ $u['name'] }}</td><td class="text-end">{{ $u['goals'] }}</td><td class="text-end pe-3">{{ $fmtL($u['achieved']) }}</td></tr>
               @empty
                 <tr><td colspan="4" class="text-center text-muted p-4">No participants yet.</td></tr>
               @endforelse

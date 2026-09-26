@@ -1,3 +1,7 @@
+@php
+  // Amounts are stored in lakh (the including page usually defines this too).
+  $fmtL = $fmtL ?? fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.') ?: '0';
+@endphp
 {{-- Filters + the full weekly-status grid. @include'd from both Overview and Customers — same
      $paged/$filters/$weeks the parent view already built, so it always matches the tab it's
      rendered into. --}}
@@ -45,9 +49,9 @@
   <div class="card-body p-0 ndg-mx-scroll">
     <table class="ndg-mx" style="font-size:.74rem">
       <thead><tr>
-        <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹</th><th>Expected</th>
+        <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹L</th><th>Expected</th>
         @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
-        <th>Actual ₹</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
+        <th>Actual ₹L</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
       </tr></thead>
       <tbody>
       @forelse($paged as $i => $r)
@@ -60,7 +64,7 @@
           <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
           <td>{{ $r->goal->product }}</td>
           <td class="small text-muted">{{ $name($r->user) }}</td>
-          <td>{{ number_format($r->goal->monthly_potential * 100000 / 100, 0) }}</td>
+          <td>{{ $fmtL($r->goal->monthly_potential) }}</td>
           <td class="small text-muted">{{ $r->goal->expected_order_date ? $r->goal->expected_order_date->format('d M Y') : '—' }}</td>
           @for($w = 0; $w < $weeks; $w++)
             @php
@@ -70,7 +74,7 @@
             @endphp
             <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $st ?: '—' }}"></td>
           @endfor
-          <td class="fw-semibold">{{ number_format($r->achieved * 100000 / 100, 0) }}</td>
+          <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
           <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
           <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
           <td class="small text-muted" style="max-width:160px;white-space:normal">{{ $lastComment ? $lastComment->comment : '—' }}</td>

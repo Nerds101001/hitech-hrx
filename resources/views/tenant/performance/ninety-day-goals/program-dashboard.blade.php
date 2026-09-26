@@ -200,7 +200,7 @@
             <table class="table table-sm align-middle mb-0">
               <thead><tr>
                 <th class="ps-3">#</th><th>Program Name</th><th>Code</th><th>Start Date</th><th>End Date</th><th>Duration</th>
-                <th class="text-end">Participants</th><th class="text-end">Customers</th><th class="text-end">Target (₹)</th><th class="text-end">Achieved (₹)</th><th class="text-end">Ach. %</th><th>Status</th><th class="pe-3"></th>
+                <th class="text-end">Participants</th><th class="text-end">Customers</th><th class="text-end">Target (₹ L)</th><th class="text-end">Achieved (₹ L)</th><th class="text-end">Ach. %</th><th>Status</th><th class="pe-3"></th>
               </tr></thead>
               <tbody>
               @forelse($programSummary as $i => $r)
@@ -271,9 +271,9 @@
           <div class="card-body p-0 ndg-mx-scroll">
             <table class="ndg-mx" style="font-size:.74rem">
               <thead><tr>
-                <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹</th>
+                <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹L</th>
                 @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
-                <th>Actual ₹</th><th>Ach.%</th><th>Status</th>
+                <th>Actual ₹L</th><th>Ach.%</th><th>Status</th>
               </tr></thead>
               <tbody>
               @forelse($rows as $i => $r)
@@ -283,7 +283,7 @@
                   <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
                   <td>{{ $r->goal->product }}</td>
                   <td class="small text-muted">{{ $name($r->user) }}</td>
-                  <td>{{ number_format($r->goal->monthly_potential * 100000 / 100, 0) }}</td>
+                  <td>{{ $fmtL($r->goal->monthly_potential) }}</td>
                   @for($w = 0; $w < $weeks; $w++)
                     @php
                       $ck = $cks->get($w);
@@ -292,7 +292,7 @@
                     @endphp
                     <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $st ?: '—' }}"></td>
                   @endfor
-                  <td class="fw-semibold">{{ number_format($r->achieved * 100000 / 100, 0) }}</td>
+                  <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
                   <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
                   <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
                 </tr>
@@ -479,7 +479,7 @@
           <thead>
             <tr>
               <th class="ndg-mx-l" style="left:0" rowspan="2">Program</th><th class="ndg-mx-l" style="left:110px" rowspan="2">Salesperson</th><th class="ndg-mx-l" style="left:220px" rowspan="2">Customer</th>
-              <th rowspan="2">Product</th><th rowspan="2">Goal ₹</th>
+              <th rowspan="2">Product</th><th rowspan="2">Goal ₹L</th>
               @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center">W{{ $w }}</th>@endfor
               <th rowspan="2">Actual ₹L</th><th rowspan="2">Achv %</th><th rowspan="2">Status</th>
             </tr>

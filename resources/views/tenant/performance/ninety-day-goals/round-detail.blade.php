@@ -15,7 +15,6 @@
 @php
   $G = \App\Services\NinetyDayGoalService::class;
   $fmtL = fn ($v) => rtrim(rtrim(number_format((float) $v, 2), '0'), '.') ?: '0';
-  $fmtRs = fn ($v) => '₹' . number_format((float) $v, 0);
   $pctText = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format($v, 1), '0'), '.') . '%';
   $pctColor = fn ($v) => $v === null ? '#cbd5e1' : ($v >= 66 ? '#007a7a' : ($v >= 33 ? '#f5a623' : '#ef4444'));
   $rowsByGoal = $d['rows']->keyBy(fn ($r) => $r->goal->id);
@@ -64,11 +63,11 @@
       <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#e0f2fe;color:#0369a1"><i class="bx bx-group"></i></div><div><div class="small text-muted fw-semibold">My Customers</div><div class="ndg-kpi3-v">{{ $counts['total'] }}</div></div></div>
     </div>
     <div class="col-6 col-lg">
-      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fff7ed;color:#c2540c"><i class="bx bx-rupee"></i></div><div><div class="small text-muted fw-semibold">My Target</div><div class="ndg-kpi3-v">{{ $fmtRs($target * 100000 / 100) }}</div></div></div>
+      <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#fff7ed;color:#c2540c"><i class="bx bx-rupee"></i></div><div><div class="small text-muted fw-semibold">My Target</div><div class="ndg-kpi3-v">{{ '₹' . $fmtL($target) . ' L' }}</div></div></div>
     </div>
     <div class="col-6 col-lg">
       <div class="ndg-kpi3"><div class="ndg-kpi3-icon" style="background:#dcfce7;color:#166534"><i class="bx bx-bar-chart-alt-2"></i></div>
-        <div class="flex-grow-1"><div class="small text-muted fw-semibold">My Achieved</div><div class="ndg-kpi3-v">{{ $fmtRs($achieved * 100000 / 100) }}</div>
+        <div class="flex-grow-1"><div class="small text-muted fw-semibold">My Achieved</div><div class="ndg-kpi3-v">{{ '₹' . $fmtL($achieved) . ' L' }}</div>
           <div class="d-flex align-items-center gap-2 mt-1"><div class="ndg-track flex-grow-1" style="height:6px"><div class="ndg-fill" style="width:{{ $pct === null ? 0 : min(100, $pct) }}%;background:{{ $pctColor($pct) }}"></div></div><b class="small" style="color:{{ $pctColor($pct) }}">{{ $pctText($pct) }}</b></div>
         </div>
       </div>
@@ -140,7 +139,7 @@
             <table class="table align-middle mb-0" id="ndgWeeklyTable" style="min-width:1100px">
               <thead class="small text-uppercase text-muted">
                 <tr>
-                  <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹)</th><th style="min-width:150px">Expected Stage</th>
+                  <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹ L)</th><th style="min-width:150px">Expected Stage</th>
                   <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th style="min-width:150px">Next Follow-up Date</th><th class="pe-3"></th>
                 </tr>
               </thead>
@@ -151,7 +150,7 @@
                   <td class="ps-3 text-muted">{{ $i + 1 }}</td>
                   <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
                   <td class="small text-muted">{{ $g->product }}</td>
-                  <td class="text-end">{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</td>
+                  <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
                   <td>
                     @php $curStage = $g->goal ?: 'Order'; @endphp
                     <select class="form-select form-select-hitech ndg-wk-expected" {{ $canEdit && $isActive ? '' : 'disabled' }}>
@@ -283,9 +282,9 @@
           <thead>
             <tr class="small text-uppercase text-muted">
               <th style="width:30px"></th>
-              <th class="ps-3">#</th><th>Customer</th><th>Product</th><th class="text-end">Goal (₹)</th><th>Expected Order</th>
+              <th class="ps-3">#</th><th>Customer</th><th>Product</th><th class="text-end">Goal (₹ L)</th><th>Expected Order</th>
               @for($w = 0; $w < $weeks; $w++)<th class="text-center">W{{ $w }}</th>@endfor
-              <th class="text-end">Actual Order (₹)</th><th>Status</th><th class="pe-3"></th>
+              <th class="text-end">Actual Order (₹ L)</th><th>Status</th><th class="pe-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -303,7 +302,7 @@
               <td class="text-muted">{{ $i + 1 }}</td>
               <td class="fw-semibold text-dark">{{ $g->client_name }}</td>
               <td class="small text-muted">{{ $g->product }}</td>
-              <td class="text-end">{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</td>
+              <td class="text-end">{{ $fmtL($g->monthly_potential) }}</td>
               <td class="small text-muted">{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</td>
               @for($w = 0; $w < $weeks; $w++)
                 @php
@@ -316,7 +315,7 @@
                   @else<span class="ndg-none">-</span>@endif
                 </td>
               @endfor
-              <td class="text-end fw-semibold">{{ $r ? number_format($r->achieved * 100000 / 100, 0) : 0 }}</td>
+              <td class="text-end fw-semibold">{{ $r ? $fmtL($r->achieved) : 0 }}</td>
               <td><span class="ndg-chip" style="background:{{ $bucketColor[0] }};color:{{ $bucketColor[1] }}">{{ $bucketLabel }}</span></td>
               <td class="pe-3 text-end">
                 <div class="dropdown">
@@ -381,7 +380,7 @@
                   <div class="card-body p-4">
                     <div class="fw-bold text-dark mb-3"><i class="bx bx-target-lock" style="color:#007a7a"></i> Target Details</div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Product</span><b>{{ $g->product }}</b></div>
-                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Goal Amount</span><b>{{ number_format($g->monthly_potential * 100000 / 100, 0) }}</b></div>
+                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Goal Amount</span><b>₹{{ $fmtL($g->monthly_potential) }} L</b></div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Expected Order Date</span><b>{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</b></div>
                     <div class="d-flex justify-content-between small py-1"><span class="text-muted">Current Status</span>
                       @if(optional($r)->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif
