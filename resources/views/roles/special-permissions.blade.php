@@ -70,7 +70,25 @@
 .usp-main { flex: 1; min-width: 0; }
 .usp-empty { text-align: center; padding: 5rem 1rem; color: #94a3b8; }
 
-.usp-profile-card { display: flex; align-items: center; gap: 1rem; padding: 1.4rem 1.6rem; flex-wrap: wrap; }
+.usp-person-card { padding: 1.3rem 1.5rem; }
+.usp-profile-card { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.usp-sep { color: #cbd5e1; margin: 0 6px; }
+
+/* Base role + special permissions strip */
+.usp-role-strip { display: flex; align-items: stretch; gap: .75rem; margin-top: 1.1rem; }
+.usp-role-box {
+  flex: 1; display: flex; align-items: center; gap: 12px; padding: .85rem 1rem;
+  background: #f8fafc; border: 1px solid #eef2f6; border-radius: 12px; min-width: 0;
+}
+.usp-role-icon { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0; }
+.usp-role-icon-blue { background: rgba(77,108,240,.1); color: #4d6cf0; }
+.usp-role-icon-purple { background: rgba(147,51,234,.1); color: #9333ea; }
+.usp-role-text { flex: 1; min-width: 0; }
+.usp-role-kicker { font-size: .68rem; font-weight: 600; color: #64748b; }
+.usp-role-value { font-size: .92rem; font-weight: 800; color: #1e293b; }
+.usp-role-value-green { color: #127464; }
+.usp-role-sub { font-size: .68rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.usp-role-plus { display: flex; align-items: center; color: #94a3b8; font-size: 1.2rem; }
 .usp-profile-avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
 .usp-profile-avatar-fallback {
   width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center;
@@ -81,24 +99,35 @@
 .usp-profile-sub { font-size: .78rem; color: #64748b; margin-top: 2px; }
 .usp-profile-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 
-.usp-summary-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.1rem; }
-.usp-info-card { padding: 1.1rem 1.3rem; }
-.usp-info-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
-.usp-info-card-title { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
-.usp-info-card-value { font-size: .95rem; font-weight: 800; color: #1e293b; }
-.usp-info-card-sub { font-size: .76rem; color: #64748b; margin-top: 2px; }
 
-.usp-tabs { display: flex; gap: 6px; margin-top: 1.25rem; border-bottom: 1px solid var(--hitech-border); }
+/* Pill tabs */
+.usp-tabs { display: inline-flex; gap: 0; margin-top: 1.25rem; background: #fff; border: 1px solid var(--hitech-border); border-radius: 10px; overflow: hidden; }
 .usp-tab {
-  padding: 10px 4px; margin-right: 1.5rem; font-size: .82rem; font-weight: 700; color: #94a3b8;
-  cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+  padding: 9px 18px; font-size: .78rem; font-weight: 600; color: #475569;
+  cursor: pointer; border-right: 1px solid var(--hitech-border); transition: all .15s;
 }
-.usp-tab.usp-tab-active { color: #127464; border-bottom-color: #127464; }
+.usp-tab:last-child { border-right: none; }
+.usp-tab:hover { background: #f8fafc; }
+.usp-tab.usp-tab-active { background: #127464; color: #fff; }
 
-.usp-toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin: 1.1rem 0; }
-.usp-search { flex: 1 1 220px; max-width: 300px; }
+.usp-toolbar { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 1.1rem 0; }
+.usp-search { flex: 1 1 220px; max-width: 280px; }
+.usp-tool-btn { font-size: .74rem; font-weight: 600; border-radius: 8px; }
 .usp-legend { display: flex; gap: 1rem; flex-wrap: wrap; }
-.usp-legend-item { display: flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 700; color: #64748b; white-space: nowrap; }
+.usp-legend-item { display: flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 600; color: #64748b; white-space: nowrap; }
+
+/* ✓ / ■ / ✗ marks - the design's checkbox-style states */
+.usp-mark { display: inline-flex; align-items: center; gap: 7px; font-size: .76rem; font-weight: 600; color: #334155; white-space: nowrap; }
+.usp-mark-box { width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: .8rem; flex-shrink: 0; }
+.usp-mark-yes { background: #16a34a; }
+.usp-mark-view { background: #3b82f6; }
+.usp-mark-partial { background: #f59e0b; }
+.usp-mark-no { background: #ef4444; }
+.usp-mark-dash { color: #cbd5e1; font-weight: 700; }
+.usp-src { font-size: .66rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; background: #f1f5f9; color: #64748b; }
+.usp-src-special { background: rgba(18,116,100,.1); color: #127464; }
+.usp-src-both { background: rgba(147,51,234,.1); color: #7e22ce; }
+.usp-mod-icon { width: 26px; height: 26px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
 .usp-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 .usp-dot-full { background: #127464; }
 .usp-dot-view { background: #4d6cf0; }
@@ -107,16 +136,20 @@
 
 .usp-recon-table { width: 100%; border-collapse: collapse; }
 .usp-recon-table thead th {
-  background: rgba(18,116,100,.03); padding: 10px 14px; color: #127464; font-weight: 700;
-  font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; text-align: left;
+  background: #f8fafc; padding: 11px 14px; color: #334155; font-weight: 700;
+  font-size: .72rem; text-align: left; border-bottom: 1px solid #eef2f6;
 }
+.usp-recon-table thead th + th { border-left: 1px solid #eef2f6; }
 .usp-recon-table thead th.text-center { text-align: center; }
 .usp-recon-row { border-top: 1px solid #f1f5f9; cursor: pointer; }
 .usp-recon-row:hover { background: #fbfdfd; }
-.usp-recon-row td { padding: 11px 14px; vertical-align: middle; }
-.usp-recon-module { display: flex; align-items: center; gap: 9px; font-size: .82rem; font-weight: 700; color: #1e293b; }
-.usp-recon-module i.bx-chevron-right { transition: transform .15s; color: #94a3b8; }
-.usp-recon-row.usp-expanded i.bx-chevron-right { transform: rotate(90deg); }
+.usp-recon-row.usp-expanded { background: rgba(18,116,100,.04); }
+.usp-recon-row td { padding: 9px 14px; vertical-align: middle; }
+.usp-recon-row td + td { border-left: 1px solid #f1f5f9; }
+.usp-recon-module { display: flex; align-items: center; gap: 10px; font-size: .8rem; font-weight: 700; color: #1e293b; }
+.usp-recon-module .usp-mod-name { flex: 1; }
+.usp-recon-module i.usp-chev { transition: transform .15s; color: #64748b; font-size: 1.1rem; }
+.usp-recon-row.usp-expanded i.usp-chev { transform: rotate(180deg); }
 .usp-state-pill { display: inline-flex; align-items: center; gap: 5px; font-size: .7rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
 .usp-state-full { background: #dcfce7; color: #166534; }
 .usp-state-view_only { background: #dbeafe; color: #1e40af; }
@@ -168,7 +201,9 @@
 
 @media (max-width: 992px) {
   .usp-emp-col { display: none; }
-  .usp-summary-row, .usp-headline { grid-template-columns: 1fr; }
+  .usp-headline { grid-template-columns: 1fr; }
+  .usp-role-strip { flex-direction: column; }
+  .usp-role-plus { justify-content: center; }
 }
 </style>
 
@@ -227,33 +262,40 @@
       </div>
 
       <div id="uspDetail" class="d-none">
-        <div class="hitech-card usp-profile-card">
-          <div id="uspAvatarWrap"></div>
-          <div class="usp-profile-meta">
-            <div class="usp-profile-name"><span id="uspName"></span> <span id="uspStatusBadge" class="badge bg-label-success rounded-pill"></span></div>
-            <div class="usp-profile-sub"><span id="uspRoleLabel"></span> &nbsp;•&nbsp; <span id="uspEmail"></span> &nbsp;•&nbsp; <span id="uspPhone"></span></div>
+        <div class="hitech-card usp-person-card">
+          <div class="usp-profile-card">
+            <div id="uspAvatarWrap"></div>
+            <div class="usp-profile-meta">
+              <div class="usp-profile-name"><span id="uspName"></span> <span id="uspStatusBadge" class="badge bg-label-success rounded-pill"></span></div>
+              <div class="usp-profile-sub"><span id="uspRoleLabel"></span> <span class="usp-sep">|</span> <span id="uspEmail"></span> <span class="usp-sep">|</span> <span id="uspPhone"></span></div>
+            </div>
+            <div class="usp-profile-actions">
+              <a id="uspProfileLink" href="#" target="_blank" class="btn btn-outline-secondary btn-sm">@lang('View Full Employee Profile')</a>
+              <button type="button" id="uspPreviewBtn" class="btn btn-outline-primary btn-sm"><i class="bx bx-show-alt me-1"></i>@lang('Preview Access')</button>
+            </div>
           </div>
-          <div class="usp-profile-actions">
-            <a id="uspProfileLink" href="#" target="_blank" class="btn btn-label-secondary btn-sm"><i class="bx bx-id-card me-1"></i>@lang('View Full Employee Profile')</a>
-            <button type="button" id="uspPreviewBtn" class="btn btn-label-primary btn-sm"><i class="bx bx-show-alt me-1"></i>@lang('Preview Access')</button>
-          </div>
-        </div>
 
-        <div class="usp-summary-row">
-          <div class="hitech-card usp-info-card">
-            <div class="usp-info-card-head">
-              <span class="usp-info-card-title">@lang('Base Role')</span>
-              <a id="uspRoleUrl" href="#" class="btn btn-icon btn-label-primary btn-sm"><i class="bx bx-link-external"></i></a>
+          {{-- Base role + special permissions, the way the design reads:
+               what the role gives, plus what this person gets on top. --}}
+          <div class="usp-role-strip">
+            <div class="usp-role-box">
+              <span class="usp-role-icon usp-role-icon-blue"><i class="bx bx-user"></i></span>
+              <div class="usp-role-text">
+                <div class="usp-role-kicker">@lang('Base Role')</div>
+                <div class="usp-role-value" id="uspRoleName"></div>
+                <div class="usp-role-sub" id="uspRoleDesc"></div>
+              </div>
+              <a id="uspRoleUrl" href="#" class="btn btn-sm btn-outline-secondary">@lang('View Role')</a>
             </div>
-            <div class="usp-info-card-value" id="uspRoleName"></div>
-            <div class="usp-info-card-sub" id="uspRoleDesc"></div>
-          </div>
-          <div class="hitech-card usp-info-card">
-            <div class="usp-info-card-head">
-              <span class="usp-info-card-title">@lang('Special Permissions')</span>
+            <div class="usp-role-plus"><i class="bx bx-plus"></i></div>
+            <div class="usp-role-box">
+              <span class="usp-role-icon usp-role-icon-purple"><i class="bx bx-shield-plus"></i></span>
+              <div class="usp-role-text">
+                <div class="usp-role-kicker">@lang('Special Permissions')</div>
+                <div class="usp-role-value usp-role-value-green"><span id="uspSpecialCount"></span> @lang('Extra Permissions')</div>
+                <div class="usp-role-sub" id="uspLastChange">@lang('Given to this person only, on top of the role')</div>
+              </div>
             </div>
-            <div class="usp-info-card-value"><span id="uspSpecialCount"></span> @lang('Extra Permissions')</div>
-            <div class="usp-info-card-sub" id="uspLastChange">@lang('Given to this person only, on top of the role')</div>
           </div>
         </div>
 
@@ -288,8 +330,14 @@
               <i class='bx bx-search ms-2 text-muted'></i>
               <input type="text" id="uspTableSearch" class="form-control border-0 shadow-none" placeholder="@lang('Search modules or permissions…')">
             </div>
-            <button type="button" id="uspExpandAll" class="btn btn-sm btn-label-secondary"><i class="bx bx-expand-vertical me-1"></i>@lang('Expand all')</button>
-            <button type="button" id="uspCollapseAll" class="btn btn-sm btn-label-secondary"><i class="bx bx-collapse-vertical me-1"></i>@lang('Collapse all')</button>
+            <button type="button" id="uspExpandAll" class="btn btn-sm btn-outline-secondary usp-tool-btn"><i class="bx bx-expand-alt me-1"></i>@lang('Expand All')</button>
+            <button type="button" id="uspCollapseAll" class="btn btn-sm btn-outline-secondary usp-tool-btn"><i class="bx bx-collapse-alt me-1"></i>@lang('Collapse All')</button>
+            <div class="usp-legend ms-auto">
+              <span class="usp-legend-item"><span class="usp-mark-box usp-mark-yes"><i class="bx bx-check"></i></span>@lang('Granted')</span>
+              <span class="usp-legend-item"><span class="usp-mark-box usp-mark-view"><i class="bx bx-check"></i></span>@lang('View Only')</span>
+              <span class="usp-legend-item"><span class="usp-mark-box usp-mark-partial"><i class="bx bx-minus"></i></span>@lang('Partial')</span>
+              <span class="usp-legend-item"><span class="usp-mark-box usp-mark-no"><i class="bx bx-x"></i></span>@lang('Not Granted')</span>
+            </div>
           </div>
           <p class="usp-table-note"><i class="bx bx-info-circle"></i>@lang('Open a module to change it. Tick a box to allow it for this person; untick a Special one to remove it. Greyed boxes come from their role and can\'t be changed here. Saves instantly.')</p>
 
@@ -299,9 +347,9 @@
                 <thead>
                   <tr>
                     <th>@lang('Module / Feature')</th>
-                    <th class="text-center">@lang('From Role')</th>
-                    <th class="text-center">@lang('Special (Extra)')</th>
-                    <th class="text-center">@lang('Total')</th>
+                    <th>@lang('Role Permission')</th>
+                    <th>@lang('Special Permission')</th>
+                    <th>@lang('Final Access')</th>
                     <th class="text-center">@lang('Source')</th>
                   </tr>
                 </thead>

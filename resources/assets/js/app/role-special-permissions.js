@@ -21,10 +21,50 @@ document.addEventListener('DOMContentLoaded', function () {
     return $('<div>').text(str == null ? '' : str).html();
   }
 
-  // "3 / 5" - action permissions held out of those in the module.
-  function countPill(n, total) {
-    var state = n === 0 ? 'none' : (n === total ? 'full' : 'partial');
-    return '<span class="usp-count usp-state-' + state + '">' + n + ' / ' + total + '</span>';
+  // Module -> [boxicon, colour]; anything unlisted gets a neutral folder.
+  var MODULE_ICON = {
+    'Dashboard': ['bxs-home', '#2563eb'], 'Announcements': ['bxs-megaphone', '#9333ea'],
+    'Employees': ['bxs-user-detail', '#0d9488'], 'Attendance': ['bxs-time-five', '#2563eb'],
+    'Leaves': ['bxs-calendar-minus', '#f59e0b'], 'Travel & Expense': ['bxs-plane-alt', '#f97316'],
+    'Payroll': ['bxs-wallet', '#9333ea'], 'Recruitment & Onboarding': ['bxs-user-plus', '#2563eb'],
+    'Job Postings': ['bxs-briefcase', '#0d9488'], 'Job Applications': ['bxs-file', '#6366f1'],
+    'Job Categories & Stages': ['bxs-layer', '#8b5cf6'], 'Interview & Screening': ['bxs-chat', '#06b6d4'],
+    'Hierarchy & Probation': ['bx-git-branch', '#64748b'], 'Sales Field Ops': ['bxs-map', '#e11d48'],
+    'Telephony': ['bxs-phone-call', '#16a34a'], 'CCare Attendance': ['bxs-headphone', '#0ea5e9'],
+    'Intelligent Vault': ['bxs-lock-alt', '#475569'], 'Asset Management': ['bxs-box', '#ca8a04'],
+    'Monitoring': ['bxs-map-pin', '#dc2626'], 'Kingo Bingo': ['bxs-trophy', '#f59e0b'],
+    'Performance': ['bx-line-chart', '#2563eb'], 'Loans & Advances': ['bxs-bank', '#0d9488'],
+    'Reports': ['bxs-report', '#f97316'], 'Settings & Administration': ['bxs-cog', '#475569'],
+    'Configuration Masters': ['bxs-data', '#6366f1'], 'Operations': ['bxs-wrench', '#64748b'],
+    'System Utilities': ['bxs-server', '#475569'], 'Training': ['bxs-graduation', '#9333ea']
+  };
+  function moduleIcon(name) {
+    var ic = MODULE_ICON[name] || ['bxs-folder', '#64748b'];
+    return '<span class="usp-mod-icon" style="background:' + ic[1] + '1a;color:' + ic[1] + '"><i class="bx ' + ic[0] + '"></i></span>';
+  }
+
+  function mark(kind, label) {
+    var icon = { yes: 'bx-check', view: 'bx-check', partial: 'bx-minus', no: 'bx-x' }[kind];
+    return '<span class="usp-mark"><span class="usp-mark-box usp-mark-' + kind + '"><i class="bx ' + icon + '"></i></span>' + label + '</span>';
+  }
+
+  // Role / Final column: Yes, View Only, "3 of 7", or No.
+  function accessCell(m, key, count) {
+    if (count === 0) return mark('no', 'No');
+    if (count === m.total) return mark('yes', 'Yes');
+    if (count === 1 && m.columns.view && m.columns.view[key]) return mark('view', 'View Only');
+    return mark('partial', count + ' of ' + m.total);
+  }
+
+  // Special column: nothing extra reads as a dash, not a red "No".
+  function specialCell(m) {
+    if (m.specialCount === 0) return '<span class="usp-mark-dash">—</span>';
+    return mark('yes', m.specialCount === 1 ? '1 added' : m.specialCount + ' added');
+  }
+
+  function sourceBadge(source) {
+    if (source === 'none') return '<span class="usp-mark-dash">—</span>';
+    return '<span class="usp-src usp-src-' + source + '">' + SOURCE_LABEL[source] + '</span>';
   }
 
   // Every permission cell of one module, CRUD columns first.
@@ -61,11 +101,11 @@ document.addEventListener('DOMContentLoaded', function () {
       var open = !!expanded[m.name];
       var cells = moduleCells(m);
       rows += '<tr class="usp-recon-row' + (open ? ' usp-expanded' : '') + '" data-module="' + escapeHtml(m.name) + '" data-target="' + rowId + '" data-search="' + escapeHtml(m.name.toLowerCase()) + '">';
-      rows += '  <td><div class="usp-recon-module"><i class="bx bx-chevron-right"></i><i class="bx bx-folder text-primary"></i>' + escapeHtml(m.name) + '</div></td>';
-      rows += '  <td class="text-center">' + countPill(m.roleCount, m.total) + '</td>';
-      rows += '  <td class="text-center">' + countPill(m.specialCount, m.total) + '</td>';
-      rows += '  <td class="text-center">' + countPill(m.finalCount, m.total) + '</td>';
-      rows += '  <td class="text-center"><span class="usp-source-badge">' + SOURCE_LABEL[m.source] + '</span></td>';
+      rows += '  <td><div class="usp-recon-module">' + moduleIcon(m.name) + '<span class="usp-mod-name">' + escapeHtml(m.name) + '</span><i class="bx bx-chevron-down usp-chev"></i></div></td>';
+      rows += '  <td>' + accessCell(m, 'role', m.roleCount) + '</td>';
+      rows += '  <td>' + specialCell(m) + '</td>';
+      rows += '  <td>' + accessCell(m, 'final', m.finalCount) + '</td>';
+      rows += '  <td class="text-center">' + sourceBadge(m.source) + '</td>';
       rows += '</tr>';
       rows += '<tr class="usp-detail-row' + (open ? '' : ' d-none') + '" id="' + rowId + '" data-search="' + escapeHtml(cells.map(function (c) { return c.label.toLowerCase(); }).join(' ')) + '">';
       rows += '  <td colspan="5"><div class="usp-detail-grid">' + cells.map(function (c) { return permissionItem(c, log); }).join('') + '</div></td>';
