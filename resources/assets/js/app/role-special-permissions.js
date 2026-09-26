@@ -1,8 +1,8 @@
 /**
  * User Special Permissions — dedicated page JS.
- * Owns: employee picker, the role/special/final reconciliation table, and
- * the edit modal (moved here from role-index.js — this page is the only
- * place that modal is triggered from now).
+ * One table is the whole page: each module row expands to its permissions,
+ * each with a checkbox. From the role = ticked + locked; special = ticked,
+ * untick to remove; not granted = tick to allow. No side panel, no popup.
  */
 
 'use strict';
@@ -12,17 +12,13 @@ document.addEventListener('DOMContentLoaded', function () {
     headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') }
   });
 
-  var STATE_LABEL = { full: 'Full Access', view_only: 'View Only', partial: 'Partial', none: 'Not Granted' };
   var SOURCE_LABEL = { role: 'Role', special: 'Special', both: 'Role + Special', none: '—' };
   var currentUserId = null;
   var currentPayload = null;
+  var expanded = {}; // module name -> open, kept across reloads of the same person
 
   function escapeHtml(str) {
     return $('<div>').text(str == null ? '' : str).html();
-  }
-
-  function statePill(state) {
-    return '<span class="usp-state-pill usp-state-' + state + '">' + STATE_LABEL[state] + '</span>';
   }
 
   // "3 / 5" - action permissions held out of those in the module.
@@ -31,114 +27,51 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="usp-count usp-state-' + state + '">' + n + ' / ' + total + '</span>';
   }
 
-  function tag(has, label) {
-    return '<span class="usp-tag ' + (has ? 'usp-tag-' + label.toLowerCase() : 'usp-tag-none') + '">' + (has ? label : '—') + '</span>';
+  // Every permission cell of one module, CRUD columns first.
+  function moduleCells(m) {
+    return ['view', 'create', 'edit', 'delete'].map(function (v) { return m.columns[v]; }).filter(Boolean).concat(m.other);
   }
 
-  function renderDetailRow(cell) {
-    if (!cell) return '';
-    return '<div class="usp-detail-item">' +
-      '<span class="usp-detail-label">' + escapeHtml(cell.label) + '</span>' +
-      '<span class="usp-detail-tags">' + tag(cell.role, 'Role') + tag(cell.special, 'Special') + '</span>' +
-      '</div>';
+  // One permission, with the only control this page has: its checkbox.
+  function permissionItem(c, log) {
+    var badge, meta = '', attrs = '';
+    if (c.role) {
+      badge = '<span class="usp-eff-badge usp-eff-badge-role">Role</span>';
+      attrs = ' checked disabled';
+      meta = 'From their role';
+    } else if (c.special) {
+      badge = '<span class="usp-eff-badge usp-eff-badge-special">Special</span>';
+      attrs = ' checked';
+      meta = log[c.name] ? 'Added by ' + escapeHtml(log[c.name].by) + ' · ' + escapeHtml(log[c.name].at) : 'Untick to remove';
+    } else {
+      badge = '<span class="usp-eff-badge usp-eff-badge-none">Not granted</span>';
+      meta = 'Tick to allow';
+    }
+    return '<label class="usp-eff-item' + (c.role ? ' usp-eff-locked' : '') + '"' + (c.role ? ' title="Their role already gives this — it can’t be removed per person"' : '') + '>' +
+      '<input type="checkbox" class="usp-perm-check" value="' + escapeHtml(c.name) + '"' + attrs + '>' +
+      '<span class="usp-eff-text"><span class="usp-eff-name">' + escapeHtml(c.label) + '</span>' +
+      '<span class="usp-eff-meta d-block">' + meta + '</span></span>' + badge + '</label>';
   }
 
-  function renderReconciliation(payload) {
+  function renderTable(payload) {
+    var log = payload.grantLog || {};
     var rows = '';
     payload.modules.forEach(function (m, idx) {
       var rowId = 'usp-row-' + idx;
-      rows += '<tr class="usp-recon-row" data-idx="' + idx + '" data-target="' + rowId + '" data-search="' + escapeHtml(m.name.toLowerCase()) + '">';
+      var open = !!expanded[m.name];
+      var cells = moduleCells(m);
+      rows += '<tr class="usp-recon-row' + (open ? ' usp-expanded' : '') + '" data-module="' + escapeHtml(m.name) + '" data-target="' + rowId + '" data-search="' + escapeHtml(m.name.toLowerCase()) + '">';
       rows += '  <td><div class="usp-recon-module"><i class="bx bx-chevron-right"></i><i class="bx bx-folder text-primary"></i>' + escapeHtml(m.name) + '</div></td>';
       rows += '  <td class="text-center">' + countPill(m.roleCount, m.total) + '</td>';
       rows += '  <td class="text-center">' + countPill(m.specialCount, m.total) + '</td>';
       rows += '  <td class="text-center">' + countPill(m.finalCount, m.total) + '</td>';
       rows += '  <td class="text-center"><span class="usp-source-badge">' + SOURCE_LABEL[m.source] + '</span></td>';
       rows += '</tr>';
-
-      var detailCells = ['view', 'create', 'edit', 'delete'].map(function (v) { return m.columns[v]; }).filter(Boolean);
-      detailCells = detailCells.concat(m.other);
-      var searchBits = detailCells.map(function (c) { return c.label.toLowerCase(); }).join(' ');
-
-      rows += '<tr class="usp-detail-row d-none" id="' + rowId + '" data-search="' + escapeHtml(searchBits) + '">';
-      rows += '  <td colspan="5"><div class="usp-detail-grid">' + detailCells.map(renderDetailRow).join('') + '</div></td>';
+      rows += '<tr class="usp-detail-row' + (open ? '' : ' d-none') + '" id="' + rowId + '" data-search="' + escapeHtml(cells.map(function (c) { return c.label.toLowerCase(); }).join(' ')) + '">';
+      rows += '  <td colspan="5"><div class="usp-detail-grid">' + cells.map(function (c) { return permissionItem(c, log); }).join('') + '</div></td>';
       rows += '</tr>';
     });
     $('#uspReconBody').html(rows);
-  }
-
-  // Every permission cell of one module, CRUD columns first.
-  function moduleCells(m) {
-    return ['view', 'create', 'edit', 'delete'].map(function (v) { return m.columns[v]; }).filter(Boolean).concat(m.other);
-  }
-
-  // ── Effective Permissions panel: one module, tick to grant/remove ─────
-  var currentModuleIdx = null;
-
-  function renderEffPanel(idx) {
-    var payload = currentPayload;
-    if (!payload || !payload.modules[idx]) return;
-    currentModuleIdx = idx;
-    $('#uspEffModule').val(String(idx));
-    $('.usp-recon-row').removeClass('usp-row-selected');
-    $('.usp-recon-row[data-idx="' + idx + '"]').addClass('usp-row-selected');
-
-    var log = payload.grantLog || {};
-    var html = moduleCells(payload.modules[idx]).map(function (c) {
-      var badge, meta = '', attrs = '';
-      if (c.role) {
-        badge = '<span class="usp-eff-badge usp-eff-badge-role">Role</span>';
-        attrs = ' checked disabled title="Their role already gives this"';
-        meta = 'From their role — can’t be changed per person';
-      } else if (c.special) {
-        badge = '<span class="usp-eff-badge usp-eff-badge-special">Special</span>';
-        attrs = ' checked';
-        meta = log[c.name] ? 'Added by ' + escapeHtml(log[c.name].by) + ' · ' + escapeHtml(log[c.name].at) : 'Added before change logging began';
-      } else {
-        badge = '<span class="usp-eff-badge usp-eff-badge-none">Not Granted</span>';
-      }
-      return '<label class="usp-eff-item">' +
-        '<input type="checkbox" class="usp-eff-check" value="' + escapeHtml(c.name) + '"' + attrs + '>' +
-        '<span class="usp-eff-text"><span class="usp-eff-name">' + escapeHtml(c.label) + '</span>' +
-        (meta ? '<span class="usp-eff-meta d-block">' + meta + '</span>' : '') + '</span>' +
-        badge + '</label>';
-    }).join('');
-    $('#uspEffList').html(html || '<p class="text-muted small mb-0">No permissions in this module.</p>');
-  }
-
-  function renderEffSelect(payload) {
-    var opts = payload.modules.map(function (m, i) {
-      return '<option value="' + i + '">' + escapeHtml(m.name) + '</option>';
-    }).join('');
-    $('#uspEffModule').html(opts);
-    // Keep the module the admin was on across reloads; else the first with a special grant.
-    var idx = currentModuleIdx;
-    if (idx === null || !payload.modules[idx]) {
-      idx = payload.modules.findIndex(function (m) { return m.specialState !== 'none'; });
-      if (idx < 0) idx = 0;
-    }
-    renderEffPanel(idx);
-  }
-
-  // ── What this person can actually reach ──────────────────────────────
-  function renderReach(payload) {
-    var tree = payload.reach || [];
-    var visible = tree.filter(function (i) { return i.visible; }).length;
-    $('#uspReachStat').text(visible + ' / ' + tree.length);
-    var html = tree.map(function (item) {
-      var reason = '';
-      if (!item.visible && item.reason) {
-        var btn = (item.grantable && item.grantable.length)
-          ? '<button type="button" class="usp-grant-btn" data-permissions="' + escapeHtml(item.grantable.join(',')) + '" data-section="' + escapeHtml(item.name) + '"><i class="bx bx-plus-circle"></i> Grant</button>'
-          : '';
-        reason = '<div class="pmt-reason">' + escapeHtml(item.reason) + btn + '</div>';
-      }
-      return '<div class="pmt-item ' + (item.visible ? 'pmt-visible' : 'pmt-hidden') + '">' +
-        '<div class="pmt-row"><div class="pmt-icon"><i class="' + escapeHtml(item.icon || 'bx bx-square') + '"></i></div>' +
-        '<div class="pmt-name">' + escapeHtml(item.name) + '</div>' +
-        '<span class="pmt-badge ' + (item.visible ? 'pmt-badge-on' : 'pmt-badge-off') + '">' + (item.visible ? 'VISIBLE' : 'HIDDEN') + '</span></div>' +
-        reason + '</div>';
-    }).join('');
-    $('#uspReachGrid').html(html);
   }
 
   // One special permission on/off for the current person.
@@ -160,37 +93,11 @@ document.addEventListener('DOMContentLoaded', function () {
       });
   }
 
-  $(document).on('change', '#uspEffModule', function () {
-    renderEffPanel(parseInt($(this).val(), 10));
-  });
-
-  $(document).on('change', '.usp-eff-check', function () {
+  $(document).on('change', '.usp-perm-check', function () {
     var $cb = $(this);
     var grant = $cb.is(':checked');
     $cb.prop('disabled', true);
     togglePermission($cb.val(), grant, function () { $cb.prop('checked', !grant).prop('disabled', false); });
-  });
-
-  // Grant on a hidden section: pick which of its accepted permissions to give.
-  $(document).on('click', '.usp-grant-btn', function () {
-    var perms = ($(this).data('permissions') || '').toString().split(',').filter(Boolean);
-    var section = $(this).data('section');
-    if (!perms.length) return;
-    var options = {};
-    perms.forEach(function (p) { options[p] = p; });
-    Swal.fire({
-      title: 'Grant access to ' + section,
-      text: 'Any one of these opens it. Pick the narrowest that fits.',
-      input: 'select',
-      inputOptions: options,
-      inputValue: perms[0],
-      showCancelButton: true,
-      confirmButtonText: 'Grant',
-      customClass: { confirmButton: 'btn btn-primary me-3', cancelButton: 'btn btn-label-secondary' },
-      buttonsStyling: false
-    }).then(function (result) {
-      if (result.isConfirmed && result.value) togglePermission(result.value, true);
-    });
   });
 
   function renderAdvanced(role) {
@@ -214,7 +121,6 @@ document.addEventListener('DOMContentLoaded', function () {
     currentPayload = payload;
     $('#uspEmpty').addClass('d-none');
     $('#uspDetail').removeClass('d-none');
-    $('#uspSummaryCard').show();
 
     var u = payload.user;
     $('#uspAvatarWrap').html(u.avatar
@@ -236,37 +142,27 @@ document.addEventListener('DOMContentLoaded', function () {
       $('#uspRoleDesc').text('');
       $('#uspRoleUrl').attr('href', '#').addClass('disabled');
     }
-    $('#uspSpecialCount').text(payload.specialCount);
+    $('#uspSpecialCount').text(payload.summary.specialOnly);
     $('#uspLastChange').text(payload.lastChange
       ? 'Last change: ' + payload.lastChange.text + ' by ' + payload.lastChange.by + ', ' + payload.lastChange.at
-      : 'Added directly, on top of the role');
-    $('.usp-reach-name').text(u.name);
+      : 'Given to this person only, on top of the role');
     $('#uspGuardWarning').toggleClass('d-none', !payload.guardWarning);
     $('#uspGuardWarningText').text(payload.guardWarning || '');
-    $('#uspEffCard').show();
 
     var s = payload.summary;
-    $('#sumTotal').text(s.totalPermissions);
-    $('#sumRole').text(s.fromRole);
-    $('#sumSpecial').text(s.specialOnly);
-    $('#sumFinal').text(s.finalPermissions);
-    $('#sumNone').text(s.totalPermissions - s.finalPermissions);
-
     var reach = payload.reach || [];
     $('#uspHeadPages').text(reach.filter(function (i) { return i.visible; }).length + ' of ' + reach.length);
     $('#uspHeadPerms').text(s.finalPermissions + ' of ' + s.totalPermissions);
     $('#uspHeadPermsSub').text(payload.isSuper
       ? 'Admin — everything, by role'
-      : s.fromRole + ' from their role + ' + s.specialOnly + ' special (extra)');
+      : s.fromRole + ' from their role + ' + s.specialOnly + ' special');
 
-    renderReconciliation(payload);
+    renderTable(payload);
     renderAdvanced(payload.role);
-    renderReach(payload);
-    renderEffSelect(payload);
   }
 
   function loadEmployee(userId) {
-    if (userId !== currentUserId) currentModuleIdx = null; // a new person starts on their own first module
+    if (userId !== currentUserId) expanded = {}; // a new person starts collapsed
     currentUserId = userId;
     $('.usp-emp-row').removeClass('usp-emp-active');
     $('.usp-emp-row[data-id="' + userId + '"]').addClass('usp-emp-active');
@@ -298,25 +194,34 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#uspTabAdvanced').toggleClass('d-none', tab !== 'advanced');
   });
 
-  // Reconciliation table: expand a module row for per-permission detail
-  // ...and show that module in the Effective Permissions panel, where it can be changed.
+  // Module row: open/close its permissions.
   $(document).on('click', '.usp-recon-row', function () {
-    $(this).toggleClass('usp-expanded');
-    $('#' + $(this).data('target')).toggleClass('d-none');
-    renderEffPanel(parseInt($(this).data('idx'), 10));
+    var name = $(this).data('module');
+    expanded[name] = !expanded[name];
+    $(this).toggleClass('usp-expanded', expanded[name]);
+    $('#' + $(this).data('target')).toggleClass('d-none', !expanded[name]);
   });
 
-  // Reconciliation table: search
+  $(document).on('click', '#uspExpandAll, #uspCollapseAll', function () {
+    var open = this.id === 'uspExpandAll';
+    $('.usp-recon-row:not(.usp-hidden-by-search)').each(function () {
+      expanded[$(this).data('module')] = open;
+      $(this).toggleClass('usp-expanded', open);
+      $('#' + $(this).data('target')).toggleClass('d-none', !open);
+    });
+  });
+
+  // Search modules and permission names; a permission match opens its module.
   $('#uspTableSearch').on('keyup', function () {
     var q = $.trim($(this).val()).toLowerCase();
     $('.usp-recon-row').each(function () {
       var $row = $(this);
       var $detail = $('#' + $row.data('target'));
-      var matches = !q
-        || ($row.data('search') || '').toString().indexOf(q) !== -1
-        || ($detail.data('search') || '').toString().indexOf(q) !== -1;
-      $row.toggleClass('usp-hidden-by-search', !matches);
-      if (!matches) $detail.addClass('d-none').removeClass('usp-hidden-by-search-open');
+      var inName = !q || ($row.data('search') || '').toString().indexOf(q) !== -1;
+      var inPerms = !!q && ($detail.data('search') || '').toString().indexOf(q) !== -1;
+      $row.toggleClass('usp-hidden-by-search', !(inName || inPerms));
+      $detail.toggleClass('usp-hidden-by-search', !(inName || inPerms));
+      if (inPerms) { $row.addClass('usp-expanded'); $detail.removeClass('d-none'); }
     });
   });
 
@@ -326,85 +231,6 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#previewTarget').val('user:' + currentUserId);
     $('#previewAccessModal').modal('show');
     $('#runPreview').trigger('click');
-  });
-
-  // ── Edit Special Permissions modal (moved from role-index.js) ──────────
-  var userPermModal = $('#addOrUpdateUserPermissionModal');
-  var userPermForm = $('#addUserPermissionForm');
-
-  // The popup shows the SAME picture as the table and side panel: what the
-  // role gives is ticked and locked (it's not a per-person extra, and
-  // unticking couldn't remove it); the person's own extras are ticked and
-  // editable. Before, it showed only the extras - so a manager looked empty.
-  function applyToModal(payload) {
-    $('.user-permission-checkbox').prop('checked', false).prop('disabled', false)
-      .closest('label').removeClass('usp-role-locked').removeAttr('title');
-    $('.user-row-select-all, #selectAllUser').prop('checked', false);
-    payload.modules.forEach(function (m) {
-      moduleCells(m).forEach(function (c) {
-        var $cb = $('.user-permission-checkbox[value="' + c.name + '"]');
-        if (c.special) {
-          $cb.prop('checked', true);
-        } else if (c.role) {
-          $cb.prop('checked', true).prop('disabled', true)
-            .closest('label').addClass('usp-role-locked').attr('title', 'From their role — not a per-person setting');
-        }
-      });
-    });
-    $('.user-row-select-all').each(function () {
-      var mod = $(this).data('module');
-      var $boxes = $('.user-permission-checkbox.' + mod + '-checkbox:not(:disabled)');
-      $(this).prop('checked', $boxes.length > 0 && $boxes.filter(':not(:checked)').length === 0);
-    });
-  }
-
-  function loadUserPermissionsIntoModal(userId) {
-    if (currentPayload && String(userId) === String(currentUserId)) {
-      applyToModal(currentPayload);
-      return;
-    }
-    $.get(`${baseUrl}roles/specialPermissionsDataAjax/${userId}`, function (res) {
-      if (res && res.status === 'success') applyToModal(res.data);
-    });
-  }
-
-  $('#user_id').on('change', function () {
-    var userId = $(this).val();
-    if (!userId) return;
-    loadUserPermissionsIntoModal(userId);
-  });
-
-  $('#uspEditBtn').on('click', function () {
-    if (!currentUserId) return;
-    $('#user_id').val(currentUserId);
-    loadUserPermissionsIntoModal(currentUserId);
-    userPermModal.modal('show');
-  });
-
-  $(document).on('change', '.user-row-select-all', function () {
-    var mod = $(this).data('module');
-    $(`.${mod}-checkbox:not(:disabled)`).prop('checked', $(this).is(':checked'));
-  });
-
-  $('#selectAllUser').on('change', function () {
-    $('.user-permission-checkbox:not(:disabled), .user-row-select-all').prop('checked', $(this).is(':checked'));
-  });
-
-  userPermForm.on('submit', function (e) {
-    e.preventDefault();
-    $.ajax({
-      url: `${baseUrl}roles/syncUserPermissionsAjax`,
-      type: 'POST',
-      data: $(this).serialize(),
-      success: function (res) {
-        userPermModal.modal('hide');
-        showSuccessToast(res.data);
-        if (currentUserId) loadEmployee(currentUserId);
-      },
-      error: function (err) {
-        Swal.fire({ icon: 'error', title: 'Error', text: err.responseJSON.data });
-      }
-    });
   });
 
   // Land on the first employee so the page is never an empty shell.

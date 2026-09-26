@@ -124,7 +124,7 @@
 .usp-state-none { background: #f1f5f9; color: #94a3b8; }
 .usp-source-badge { font-size: .68rem; font-weight: 700; color: #64748b; }
 .usp-detail-row td { padding: 0 14px 14px 40px; background: #fbfdfd; border-top: none; }
-.usp-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; padding-top: 8px; }
+.usp-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding-top: 8px; }
 .usp-detail-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; background: #fff; border: 1px solid #f1f5f9; border-radius: 8px; }
 .usp-detail-label { font-size: .74rem; font-weight: 600; color: #475569; }
 .usp-detail-tags { display: flex; gap: 4px; flex-shrink: 0; }
@@ -133,13 +133,6 @@
 .usp-tag-special { background: rgba(18,116,100,.12); color: #127464; }
 .usp-tag-none { background: #f1f5f9; color: #cbd5e1; }
 .usp-hidden-by-search { display: none !important; }
-
-/* Right: summary */
-.usp-summary-col { width: 300px; flex-shrink: 0; }
-.usp-summary-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f1f5f9; }
-.usp-summary-item:last-child { border-bottom: none; }
-.usp-summary-label { font-size: .78rem; font-weight: 600; color: #64748b; display: flex; align-items: center; gap: 8px; }
-.usp-summary-value { font-size: .95rem; font-weight: 800; color: #1e293b; }
 
 /* Headline: the two questions, side by side */
 .usp-headline { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
@@ -158,27 +151,11 @@
 }
 .usp-warning .bx { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
 
-/* Reach card */
-.usp-reach-card { padding: 1.3rem 1.4rem; margin-top: 1rem; }
-.usp-reach-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-.usp-reach-title { font-size: .95rem; font-weight: 800; color: #1e293b; margin: 0 0 .2rem; }
-.usp-reach-sub { font-size: .76rem; color: #64748b; margin: 0; max-width: 460px; }
-.usp-reach-stat { font-size: 1.35rem; font-weight: 800; color: #127464; line-height: 1; }
-.usp-reach-stat-label { font-size: .62rem; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
-.usp-reach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
-.usp-reach-grid .pmt-item { margin-bottom: 0; }
-.usp-grant-btn {
-  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 2px 10px;
-  background: #127464; color: #fff; border: none; border-radius: 20px;
-  font-size: .64rem; font-weight: 700; cursor: pointer; vertical-align: middle;
-}
-.usp-grant-btn:hover { background: #0d5c50; }
-
-/* Effective permissions panel */
-.usp-eff-sub { font-size: .74rem; color: #64748b; }
-.usp-eff-label { font-size: .66rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin-bottom: 4px; }
-.usp-eff-item { display: flex; align-items: flex-start; gap: 9px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
-.usp-eff-item:last-child { border-bottom: none; }
+/* One permission inside an opened module */
+.usp-eff-item { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; margin: 0; background: #fff; border: 1px solid #f1f5f9; border-radius: 8px; cursor: pointer; }
+.usp-eff-item:hover { border-color: rgba(18,116,100,.3); }
+.usp-eff-locked { cursor: not-allowed; background: #fafbfc; }
+.usp-eff-locked:hover { border-color: #f1f5f9; }
 .usp-eff-item input { margin-top: 3px; accent-color: #127464; width: 15px; height: 15px; flex-shrink: 0; cursor: pointer; }
 .usp-eff-item input:disabled { cursor: not-allowed; opacity: .6; }
 .usp-eff-text { flex: 1; min-width: 0; }
@@ -188,14 +165,7 @@
 .usp-eff-badge-role { background: rgba(77,108,240,.12); color: #4d6cf0; }
 .usp-eff-badge-special { background: rgba(18,116,100,.12); color: #127464; }
 .usp-eff-badge-none { background: #f1f5f9; color: #94a3b8; }
-.usp-eff-note { display: flex; gap: 8px; margin-top: .9rem; padding: .65rem .8rem; border-radius: 10px; background: rgba(77,108,240,.06); font-size: .7rem; color: #475569; }
-.usp-eff-note .bx { color: #4d6cf0; font-size: .95rem; flex-shrink: 0; }
-.usp-recon-row.usp-row-selected { background: rgba(18,116,100,.05); }
 
-@media (max-width: 1200px) {
-  .usp-body { flex-wrap: wrap; }
-  .usp-summary-col { width: 100%; }
-}
 @media (max-width: 992px) {
   .usp-emp-col { display: none; }
   .usp-summary-row, .usp-headline { grid-template-columns: 1fr; }
@@ -281,10 +251,9 @@
           <div class="hitech-card usp-info-card">
             <div class="usp-info-card-head">
               <span class="usp-info-card-title">@lang('Special Permissions')</span>
-              <button type="button" id="uspEditBtn" class="btn btn-icon btn-label-warning btn-sm"><i class="bx bx-edit-alt"></i></button>
             </div>
             <div class="usp-info-card-value"><span id="uspSpecialCount"></span> @lang('Extra Permissions')</div>
-            <div class="usp-info-card-sub" id="uspLastChange">@lang('Added directly, on top of the role')</div>
+            <div class="usp-info-card-sub" id="uspLastChange">@lang('Given to this person only, on top of the role')</div>
           </div>
         </div>
 
@@ -319,13 +288,10 @@
               <i class='bx bx-search ms-2 text-muted'></i>
               <input type="text" id="uspTableSearch" class="form-control border-0 shadow-none" placeholder="@lang('Search modules or permissions…')">
             </div>
-            <div class="usp-legend">
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-full"></span> @lang('All')</span>
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-partial"></span> @lang('Some')</span>
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-none"></span> @lang('None')</span>
-            </div>
+            <button type="button" id="uspExpandAll" class="btn btn-sm btn-label-secondary"><i class="bx bx-expand-vertical me-1"></i>@lang('Expand all')</button>
+            <button type="button" id="uspCollapseAll" class="btn btn-sm btn-label-secondary"><i class="bx bx-collapse-vertical me-1"></i>@lang('Collapse all')</button>
           </div>
-          <p class="usp-table-note"><i class="bx bx-info-circle"></i>@lang('Counts are action permissions inside each module (approve, export, manage…) — not whether the page opens. Page access is in "Pages they can open" above and the card below the table.')</p>
+          <p class="usp-table-note"><i class="bx bx-info-circle"></i>@lang('Open a module to change it. Tick a box to allow it for this person; untick a Special one to remove it. Greyed boxes come from their role and can\'t be changed here. Saves instantly.')</p>
 
           <div class="hitech-card">
             <div class="table-responsive">
@@ -343,22 +309,6 @@
               </table>
             </div>
           </div>
-
-          {{-- What this one person can actually reach - the same live
-               route/menu check as the role editor's, run for them. --}}
-          <div class="hitech-card usp-reach-card">
-            <div class="usp-reach-head">
-              <div>
-                <h6 class="usp-reach-title">@lang('What') <span class="usp-reach-name"></span> @lang('Can Actually Reach')</h6>
-                <p class="usp-reach-sub">@lang('Computed live from the real route and menu rules for this person — role and special permissions together.')</p>
-              </div>
-              <div class="text-end">
-                <div class="usp-reach-stat" id="uspReachStat"></div>
-                <div class="usp-reach-stat-label">@lang('sections reachable')</div>
-              </div>
-            </div>
-            <div class="usp-reach-grid" id="uspReachGrid"></div>
-          </div>
         </div>
 
         <div id="uspTabAdvanced" class="d-none">
@@ -369,33 +319,8 @@
         </div>
       </div>
     </main>
-
-    {{-- Effective permissions for one module - tick to grant this person
-         a special permission, untick to remove it. Role-given ones are
-         locked: nothing to add, and unticking wouldn't remove them. --}}
-    <aside class="usp-summary-col">
-      <div class="hitech-card p-4 mb-3" id="uspEffCard" style="display: none;">
-        <h6 class="fw-bold text-heading mb-1">@lang('Effective Permissions')</h6>
-        <p class="usp-eff-sub mb-3">@lang('Final access for') <span class="usp-reach-name"></span>. @lang('Tick to grant, untick to remove.')</p>
-        <label class="usp-eff-label" for="uspEffModule">@lang('Select Module')</label>
-        <select id="uspEffModule" class="form-select form-select-sm mb-3"></select>
-        <div id="uspEffList"></div>
-        <div class="usp-eff-note"><i class="bx bx-info-circle"></i>@lang('Special permissions only add access. They never remove what the role already gives.')</div>
-      </div>
-
-      <div class="hitech-card p-4" id="uspSummaryCard" style="display: none;">
-        <h6 class="fw-bold text-heading mb-1">@lang('Action Permissions')</h6>
-        <p class="usp-eff-sub mb-2">@lang('Same numbers as the table and the edit popup.')</p>
-        <div class="usp-summary-item"><span class="usp-summary-label">@lang('Total available')</span><span class="usp-summary-value" id="sumTotal"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-view"></span>@lang('From role')</span><span class="usp-summary-value" id="sumRole"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-full"></span>@lang('Special (extra)')</span><span class="usp-summary-value" id="sumSpecial"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-partial"></span>@lang('Has in total')</span><span class="usp-summary-value" id="sumFinal"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-none"></span>@lang('Not granted')</span><span class="usp-summary-value" id="sumNone"></span></div>
-      </div>
-    </aside>
   </div>
 </div>
 
-@include('_partials._modals.role.addOrUpdate-user-permission', ['groupedPermissions' => $groupedPermissions, 'permissionMatrix' => $permissionMatrix, 'wiredPermissions' => $wiredPermissions, 'users' => $users])
 @include('_partials._modals.role.preview-access', ['roles' => $roles, 'users' => $users])
 @endsection
