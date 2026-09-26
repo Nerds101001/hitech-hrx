@@ -394,6 +394,16 @@ class CcAttendanceController extends Controller
                 ->pluck('sales_user_id')->unique()->values();
         }
 
+        // Only what someone else reported for the salesperson. A row the
+        // salesperson created for themselves (their own short leave, their
+        // own app entry) is not a CCare submission, unless someone else has
+        // since marked it. Biometric/system rows (no creator) stay.
+        $q->where(function ($w) {
+            $w->whereNull('created_by_id')
+              ->orWhereColumn('created_by_id', '!=', 'user_id')
+              ->orWhere(fn ($x) => $x->whereNotNull('updated_by_id')->whereColumn('updated_by_id', '!=', 'user_id'));
+        });
+
         if ($request->filled('sp'))     $q->where('user_id', $request->sp);
         if ($request->filled('status')) $q->where('status', $request->status);
         if ($request->filled('cc')) {
@@ -433,9 +443,12 @@ class CcAttendanceController extends Controller
         $rows = $q->orderByDesc('check_in_time')->paginate(100)->withQueryString();
 
         $salesList = \App\Models\User::whereIn('id', $spPool)->orderBy('first_name')->get();
+        // Salespeople marking their own day are not "markers" for this report.
         $markerIds = Attendance::whereIn('user_id', $spPool)->whereNotNull('created_by_id')
+            ->whereColumn('created_by_id', '!=', 'user_id')
             ->distinct()->pluck('created_by_id')
-            ->merge(Attendance::whereIn('user_id', $spPool)->whereNotNull('updated_by_id')->distinct()->pluck('updated_by_id'))
+            ->merge(Attendance::whereIn('user_id', $spPool)->whereNotNull('updated_by_id')
+                ->whereColumn('updated_by_id', '!=', 'user_id')->distinct()->pluck('updated_by_id'))
             ->unique()->values();
         $markers = \App\Models\User::whereIn('id', $markerIds)->orderBy('first_name')->get();
 
