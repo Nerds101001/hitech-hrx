@@ -1419,7 +1419,8 @@ class NinetyDayGoalsTest extends TestCase
     {
         $this->at(self::MONDAY);
         $admin = $this->person(null, 'admin');
-        $existing = Goals::roundFor($this->rep);   // rep already has an active round
+        $existing = Goals::roundFor($this->rep);   // rep already has an active round...
+        $this->goal($this->rep, $existing);        // ...with a customer in it: genuinely mid-round
 
         $result = Goals::createProgram($admin, 'Overlap Test', Carbon::parse('2027-01-04'), Carbon::parse('2027-04-05'), [$this->rep->id, $this->rep2->id]);
 
@@ -1427,6 +1428,46 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertCount(1, $result['skipped']);
         $this->assertSame($this->rep->id, $result['skipped'][0]->id);
         $this->assertSame($existing->id, Goals::activeRound($this->rep)->id, 'their existing round is untouched');
+    }
+
+    public function test_an_empty_self_started_round_is_replaced_by_the_program(): void
+    {
+        // The Monday job starts a round for every salesperson, so "has an active round" alone
+        // would skip nearly everyone. An empty one (no program, no customers) gives way.
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $empty = Goals::roundFor($this->rep);
+
+        $result = Goals::createProgram($admin, 'Takeover', Carbon::parse('2027-01-04'), Carbon::parse('2027-04-05'), [$this->rep->id]);
+
+        $this->assertCount(1, $result['enrolled']);
+        $this->assertCount(0, $result['skipped']);
+        $this->assertNull(NinetyDayRound::find($empty->id), 'the empty self-started round is gone');
+        $this->assertSame($result['program']->id, Goals::activeRound($this->rep)->program_id);
+    }
+
+    public function test_a_program_nobody_can_join_is_not_left_behind(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        $this->goal($this->rep, Goals::roundFor($this->rep));   // busy mid-round
+
+        $before = NinetyDayProgram::count();
+        $result = Goals::createProgram($admin, 'Nobody', Carbon::parse('2027-01-04'), Carbon::parse('2027-04-05'), [$this->rep->id]);
+
+        $this->assertNull($result['program']);
+        $this->assertSame($before, NinetyDayProgram::count());
+    }
+
+    public function test_a_non_monday_program_start_snaps_back_to_that_weeks_monday(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+
+        $result = Goals::createProgram($admin, 'Wednesday', Carbon::parse('2027-01-06'), Carbon::parse('2027-04-06'), [$this->rep->id]);
+
+        $this->assertSame('2027-01-04', $result['program']->starts_on->toDateString());
+        $this->assertSame('2027-04-04', $result['program']->ends_on->toDateString(), 'the chosen length is kept');
     }
 
     public function test_two_programs_can_run_at_once_with_different_dates(): void
@@ -1461,7 +1502,7 @@ class NinetyDayGoalsTest extends TestCase
         Notification::fake();
         $this->at(self::MONDAY);
         $admin = $this->person(null, 'admin');
-        Goals::roundFor($this->rep2);   // already mid-round, will be skipped
+        $this->goal($this->rep2, Goals::roundFor($this->rep2));   // already mid-round (has a customer), will be skipped
 
         $res = app(NinetyDayGoalController::class)->programStore($this->ask($admin, 'POST', '/x', [
             'name' => 'Notify Test', 'starts_on' => '2027-01-04', 'ends_on' => '2027-04-05', 'user_ids' => [$this->rep->id, $this->rep2->id],

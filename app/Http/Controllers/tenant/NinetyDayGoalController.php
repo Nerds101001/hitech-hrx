@@ -820,7 +820,9 @@ class NinetyDayGoalController extends Controller
     private function myWeeklyProgress(User $user, NinetyDayRound $round): array
     {
         $goals = NinetyDayGoal::where('round_id', $round->id)->where('user_id', $user->id)->get();
-        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * Goals::ROUND_MONTHS);
+        // Same rule as Goals::dashboard(): the months that END inside the round, once each.
+        $roundMonths = Goals::roundMonths($round);
+        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * max(1, count($roundMonths)));
         $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
 
         $monthlySales = [];
@@ -841,8 +843,11 @@ class NinetyDayGoalController extends Controller
             $labels[] = 'W' . $w . ' ' . $due->format('d M');
             $target[] = round($targetPerWeek * ($w + 1), 2);
             $cum = 0.0;
-            for ($m = Carbon::parse($round->starts_on)->copy()->startOfMonth(); $m->lte($due); $m->addMonth()) {
-                $cum += $monthlySales[$m->format('Y-m')] ?? 0.0;
+            foreach ($roundMonths as $ym) {
+                if (Carbon::createFromFormat('Y-m-d', $ym . '-01')->gt($due)) {
+                    break;
+                }
+                $cum += $monthlySales[$ym] ?? 0.0;
             }
             $achieved[] = round($cum, 2);
         }
@@ -1156,7 +1161,19 @@ class NinetyDayGoalController extends Controller
             'user_ids.*'    => 'integer|exists:users,id',
         ]);
 
+        if (Carbon::parse($data['starts_on'])->diffInDays(Carbon::parse($data['ends_on'])) > 366) {
+            return response()->json(['success' => false, 'message' => 'A program can run at most one year.'], 422);
+        }
+
         $result = Goals::createProgram($admin, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']), $data['user_ids']);
+
+        if (!$result['program']) {
+            return response()->json(['success' => false, 'message' => 'Nobody could be added - everyone chosen is already in a program or has customers in their current round'
+                . ($result['skipped'] ? ': ' . collect($result['skipped'])->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name))->implode(', ') : '') . '.'], 422);
+        }
+        $movedToMonday = $result['starts_on']->toDateString() !== Carbon::parse($data['starts_on'])->toDateString()
+            ? ' Weeks run Monday to Monday, so it starts on Monday ' . $result['starts_on']->format('d M') . ' and ends ' . $result['ends_on']->format('d M Y') . '.'
+            : '';
 
         // No email: Goals::createProgram() already gives everyone enrolled a "add your target
         // customers" task in the existing Task Management module (due 3 days after the start
@@ -1182,8 +1199,8 @@ class NinetyDayGoalController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => count($result['enrolled']) . ' salesperson(s) added to "' . $result['program']->name . '".'
-                . ($result['skipped'] ? ' ' . count($result['skipped']) . ' already had an active round and were skipped: '
+            'message' => count($result['enrolled']) . ' salesperson(s) added to "' . $result['program']->name . '".' . $movedToMonday
+                . ($result['skipped'] ? ' ' . count($result['skipped']) . ' skipped - already in a program or with customers in their current round: '
                     . collect($result['skipped'])->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name))->implode(', ') . '.' : ''),
             'program_id' => $result['program']->id,
             'enrolled'   => count($result['enrolled']),

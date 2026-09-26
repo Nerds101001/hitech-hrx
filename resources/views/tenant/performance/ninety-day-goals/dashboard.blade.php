@@ -112,7 +112,7 @@
       $cards = array_merge($cards, [
         ['bx-target-lock', 'Customers tracked', $c['goals'], ($seesMany ? $c['people'] . ' salespeople' : 'in your rounds')],
         ['bx-rupee', 'Monthly potential', $fmtL($c['potential']), '₹ lakh a month'],
-        ['bx-flag', 'Round target', $fmtL($c['target']), 'potential × ' . $G::ROUND_MONTHS . ' months'],
+        ['bx-flag', 'Round target', $fmtL($c['target']), 'potential × months in the round'],
         ['bx-trending-up', 'Sold so far', $fmtL($c['achieved']), 'in the Sales Report'],
         ['bx-pie-chart-alt-2', 'Achievement', $pctText($c['pct']), 'sold ÷ round target'],
         ['bx-cart-download', 'Turned into orders', $c['converted'], 'Trial or Regular order'],

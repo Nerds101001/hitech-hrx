@@ -73,10 +73,22 @@ class NinetyDayGoalService
 
     // ── who ──────────────────────────────────────────────────────────────
 
-    /** Active people in a department with "Sales" in its name. */
+    /**
+     * Statuses that mean someone no longer works here or can't use the app. notTerminated()
+     * only excluded "terminated", so relieved/retired/inactive people still got rounds and tasks.
+     */
+    public const NOT_CURRENT_STATUSES = ['relieved', 'terminated', 'retired', 'inactive', 'suspended', 'blocked', 'rejected', 'deleted', 'probation_failed'];
+
+    /** Constrain a users query to current employees. */
+    public static function current($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('users.status')->orWhereNotIn('users.status', self::NOT_CURRENT_STATUSES));
+    }
+
+    /** Current employees in a department with "Sales" in its name. */
     public static function salesStaff(): Collection
     {
-        return User::notTerminated()
+        return self::current(User::query())->with('department')
             ->whereHas('department', fn ($d) => $d->where('name', 'like', '%sales%'))
             ->orderBy('first_name')->get();
     }
@@ -109,7 +121,7 @@ class NinetyDayGoalService
             return null;
         }
         if ($viewer->hasRole(['manager', 'Manager'])) {
-            return User::where('reporting_to_id', $viewer->id)->pluck('id')->push($viewer->id)->all();
+            return self::current(User::where('reporting_to_id', $viewer->id))->pluck('id')->push($viewer->id)->all();
         }
 
         return [$viewer->id];
@@ -125,6 +137,19 @@ class NinetyDayGoalService
     public static function activeRound(User $user): ?NinetyDayRound
     {
         return NinetyDayRound::where('user_id', $user->id)->where('status', 'active')->orderByDesc('starts_on')->first();
+    }
+
+    /**
+     * Run $fn while holding a row lock on the user, so two requests (a page load and the
+     * Monday job, a double-click...) can't both see "no active round" and each start one.
+     */
+    public static function lockedFor(User $user, callable $fn)
+    {
+        return DB::transaction(function () use ($user, $fn) {
+            User::whereKey($user->id)->lockForUpdate()->first();
+
+            return $fn();
+        });
     }
 
     public static function startRound(User $user, Carbon $monday): NinetyDayRound
@@ -155,22 +180,45 @@ class NinetyDayGoalService
     {
         $startsOn = $startsOn->copy()->startOfDay();
         $endsOn = $endsOn->copy()->startOfDay();
-
-        $program = NinetyDayProgram::create([
-            'tenant_id' => $admin->tenant_id, 'name' => trim($name),
-            'starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString(),
-            'created_by_id' => $admin->id,
-        ]);
+        // Weeks are Mondays: the weekly task, "late" and every week column count from starts_on,
+        // so a Tuesday start made each week due the day after the Monday job ran (no task ever).
+        // Snap a non-Monday start back to that week's Monday - the same rule a self-started round
+        // uses - and keep the chosen length. Nobody is late for it: a customer added mid-week
+        // starts from the next Monday (firstWeek()).
+        if (!$startsOn->isMonday()) {
+            $shift = self::mondayOf($startsOn)->diffInDays($startsOn);
+            $startsOn->subDays($shift);
+            $endsOn->subDays($shift);
+        }
 
         $targets = self::salesStaff()->whereIn('id', $userIds)->values();
         $enrolled = [];
         $skipped = [];
+        $program = null;
 
-        DB::transaction(function () use ($targets, $program, $admin, $startsOn, $endsOn, $name, &$enrolled, &$skipped) {
+        DB::transaction(function () use ($targets, $admin, $startsOn, $endsOn, $name, &$program, &$enrolled, &$skipped) {
+            $program = NinetyDayProgram::create([
+                'tenant_id' => $admin->tenant_id, 'name' => trim($name),
+                'starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString(),
+                'created_by_id' => $admin->id,
+            ]);
+
             foreach ($targets as $user) {
-                if (self::activeRound($user)) {
-                    $skipped[] = $user;
-                    continue;
+                User::whereKey($user->id)->lockForUpdate()->first();
+                $active = self::activeRound($user);
+                if ($active) {
+                    // The Monday job starts a round for every salesperson, so almost everyone has
+                    // one. An empty self-started round (no program, no customers yet) is replaced
+                    // by the program's; a program round or one with customers is left alone.
+                    $inUse = $active->program_id || NinetyDayGoal::where('round_id', $active->id)->exists();
+                    if ($inUse) {
+                        $skipped[] = $user;
+                        continue;
+                    }
+                    Task::where('user_id', $user->id)->where('title', self::addCustomersTitle($active))
+                        ->whereNotIn('status', Task::CLOSED_STATUSES)->delete();
+                    NinetyDayGoalCheckin::where('round_id', $active->id)->delete();
+                    $active->delete();
                 }
 
                 $round = NinetyDayRound::create([
@@ -185,20 +233,28 @@ class NinetyDayGoalService
                     'title'   => self::addCustomersTitle($round),
                     'description' => 'You have been added to the "' . $name . '" 90-Day Goals program. Open 90-Day Goals and add your target customers within 3 days.',
                     'type' => 'open', 'status' => 'new', 'priority' => 'medium',
-                    'for_date' => $startsOn, 'due_date' => $startsOn->copy()->addDays(3)->toDateString(), 'tenant_id' => $user->tenant_id,
+                    // 3 days from the start, or from today if the start was snapped back into the past.
+                    'for_date' => $startsOn, 'due_date' => $startsOn->copy()->max(Carbon::today())->addDays(3)->toDateString(), 'tenant_id' => $user->tenant_id,
                 ]);
 
                 $enrolled[] = ['user' => $user, 'round' => $round, 'task' => $task];
             }
+
+            // Nobody could be enrolled: don't leave an empty program behind.
+            if (!$enrolled) {
+                $program->delete();
+                $program = null;
+            }
         });
 
-        return ['program' => $program, 'enrolled' => $enrolled, 'skipped' => $skipped];
+        return ['program' => $program, 'enrolled' => $enrolled, 'skipped' => $skipped, 'starts_on' => $startsOn, 'ends_on' => $endsOn];
     }
 
     /** The user's active round, starting one this week if they have none. */
     public static function roundFor(User $user, ?Carbon $today = null): NinetyDayRound
     {
-        return self::activeRound($user) ?? self::startRound($user, $today ?: Carbon::today());
+        return self::activeRound($user)
+            ?? self::lockedFor($user, fn () => self::activeRound($user) ?? self::startRound($user, $today ?: Carbon::today()));
     }
 
     /**
@@ -221,6 +277,29 @@ class NinetyDayGoalService
         $days = Carbon::parse($round->starts_on)->startOfDay()->diffInDays($today, false);
 
         return max(0, min(self::weeksOf($round) - 1, intdiv((int) $days, 7)));
+    }
+
+    /**
+     * The months ("Y-m") whose sales count for this round: every month that ENDS inside it.
+     * Sales are only known per month, and a 90-day round touches four calendar months, so
+     * counting every month it touched overstated achievement against a three-month target and
+     * counted a boundary month in two consecutive rounds. With "the month belongs to the round
+     * it ends in", each month counts exactly once and a 90-day round usually covers three.
+     */
+    public static function roundMonths(NinetyDayRound $round): array
+    {
+        $starts = Carbon::parse($round->starts_on)->startOfDay();
+        $ends = Carbon::parse($round->ends_on)->startOfDay();
+        $out = [];
+        for ($m = $starts->copy()->startOfMonth(); $m->lte($ends); $m->addMonth()) {
+            $monthEnd = $m->copy()->endOfMonth()->startOfDay();
+            if ($monthEnd->gte($starts) && $monthEnd->lte($ends)) {
+                $out[] = $m->format('Y-m');
+            }
+        }
+
+        // A short program inside one month has no month-end in it: use the month it runs in.
+        return $out ?: [$starts->format('Y-m')];
     }
 
     public static function dueOn(NinetyDayRound $round, int $week): Carbon
@@ -248,17 +327,6 @@ class NinetyDayGoalService
         $week = intdiv((int) $days, 7);
 
         return $added->isMonday() ? $week : $week + 1;
-    }
-
-    /** Real Sales Report sale amount per "Y-m" for this goal's own pipeline customer. */
-    private static function salesByMonth(NinetyDayGoal $goal): array
-    {
-        if (!$goal->sales_pipeline_id) {
-            return [];
-        }
-
-        return DB::table('sales_pipeline_months')->where('sales_pipeline_id', $goal->sales_pipeline_id)
-            ->pluck('sale_amount', 'month_year')->map(fn ($v) => (float) $v)->all();
     }
 
     /**
@@ -294,22 +362,60 @@ class NinetyDayGoalService
     {
         $current = self::weekOf($round, $today);
         $made = 0;
-        foreach (NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->get() as $goal) {
-            $sales = self::salesByMonth($goal);
+        $goals = NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->get();
+        if ($goals->isEmpty()) {
+            return 0;
+        }
+
+        // One query each for every goal's sales and existing rows (this runs on page views too).
+        $salesByPipeline = [];
+        $pids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
+        if ($pids) {
+            foreach (DB::table('sales_pipeline_months')->whereIn('sales_pipeline_id', $pids)
+                ->selectRaw('sales_pipeline_id, month_year, SUM(sale_amount) s')->groupBy('sales_pipeline_id', 'month_year')->get() as $r) {
+                $salesByPipeline[$r->sales_pipeline_id][$r->month_year] = (float) $r->s;
+            }
+        }
+        $existing = NinetyDayGoalCheckin::whereIn('goal_id', $goals->pluck('id'))->get()->groupBy('goal_id');
+        $autoFill = fn () => [
+            'status' => 'Regular Order', 'comment' => 'Auto-detected from the Sales Report — a real order was found for this month.',
+            'submitted_at' => Carbon::now(), 'is_late' => false, 'auto_filled' => true,
+        ];
+
+        foreach ($goals as $goal) {
+            $rows = ($existing[$goal->id] ?? collect())->keyBy('week_no');
+            $sales = $salesByPipeline[$goal->sales_pipeline_id] ?? [];
             for ($w = self::firstWeek($goal, $round); $w <= $current; $w++) {
                 $due = self::dueOn($round, $w);
                 [$hasSale, $isFirst] = self::orderSignal($round, $sales, $due);
-                $attrs = ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString()];
+                $row = $rows->get($w);
+
+                if ($row) {
+                    // Sales Report entries arrive late (until ~the 5th of next month), so a week
+                    // that is still pending re-checks for a sale instead of staying frozen at
+                    // whatever was known the day its row was made. A declined upsell stays declined.
+                    if ($row->status === null && $hasSale) {
+                        if ($isFirst) {
+                            $row->update($autoFill());
+                        } elseif (!$row->needs_upsell_confirm && $row->upsell_confirmed === null) {
+                            $row->update(['needs_upsell_confirm' => true]);
+                        }
+                    }
+                    continue;
+                }
+
+                $attrs = ['goal_id' => $goal->id, 'week_no' => $w, 'round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString()];
                 if ($hasSale && $isFirst) {
-                    $attrs += [
-                        'status' => 'Regular Order', 'comment' => 'Auto-detected from the Sales Report — a real order was found for this month.',
-                        'submitted_at' => Carbon::now(), 'is_late' => false, 'auto_filled' => true,
-                    ];
+                    $attrs += $autoFill();
                 } elseif ($hasSale) {
                     $attrs += ['needs_upsell_confirm' => true];
                 }
-                $row = NinetyDayGoalCheckin::firstOrCreate(['goal_id' => $goal->id, 'week_no' => $w], $attrs);
-                $made += $row->wasRecentlyCreated ? 1 : 0;
+                try {
+                    NinetyDayGoalCheckin::create($attrs);
+                    $made++;
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    // Another request made this week's row a moment ago - fine.
+                }
             }
         }
 
@@ -335,6 +441,16 @@ class NinetyDayGoalService
                 'needs_upsell_confirm' => false,
                 'upsell_confirmed'     => true,
             ]);
+            // Same follow-through as any other status: legacy week column, and the weekly
+            // task closes if this was the last one missing.
+            $goal = $checkin->goal;
+            if ($goal) {
+                self::writeLegacyWeek($goal, (int) $checkin->week_no, 'Regular Order');
+                $round = $checkin->round_id ? NinetyDayRound::find($checkin->round_id) : null;
+                if ($round && $goal->user) {
+                    self::completeTaskIfDone($goal->user, $round, (int) $checkin->week_no);
+                }
+            }
         } else {
             $checkin->update(['needs_upsell_confirm' => false, 'upsell_confirmed' => false]);
         }
@@ -424,13 +540,14 @@ class NinetyDayGoalService
                         // First time: this is when/who/how-late it was actually reported, and that never changes
                         // again. Editing later only updates the content and appends who touched it and when.
                         'submitted_at'   => $isFirst ? $now : $existing->submitted_at,
-                        'submitted_by_id' => $isFirst ? $user->id : $existing->submitted_by_id,
+                        // Who actually entered it (an admin on someone's behalf is recorded as the admin).
+                        'submitted_by_id' => $isFirst ? $actor->id : $existing->submitted_by_id,
                         'is_late'        => $isFirst ? $late : $existing->is_late,
                         'edited_at'      => $isFirst ? null : $now,
                         'edited_by_id'   => $isFirst ? null : $actor->id,
                     ]
                 );
-                $goal->forceFill(["w{$week}" => $status])->save();   // the older columns the scorecard code still reads
+                self::writeLegacyWeek($goal, $week, $status);
                 $saved++;
             });
         }
@@ -438,6 +555,18 @@ class NinetyDayGoalService
         self::completeTaskIfDone($user, $round, $week);
 
         return [$saved, $errors];
+    }
+
+    /**
+     * Mirror a week's status into the older w0..w12 columns the scorecard code still reads.
+     * Only 13 exist; a program longer than 13 weeks keeps later weeks in the check-in rows
+     * only (writing w13 was an "unknown column" error that rolled the whole submit back).
+     */
+    private static function writeLegacyWeek(NinetyDayGoal $goal, int $week, string $status): void
+    {
+        if ($week >= 0 && $week < self::WEEKS) {
+            $goal->forceFill(["w{$week}" => $status])->save();
+        }
     }
 
     // ── the Monday task ──────────────────────────────────────────────────
@@ -528,32 +657,46 @@ class NinetyDayGoalService
     public static function runWeekly(?Carbon $today = null): array
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
-        $out = ['closed' => 0, 'started' => 0, 'checkins' => 0, 'tasks' => 0];
+        $out = ['closed' => 0, 'started' => 0, 'checkins' => 0, 'tasks' => 0, 'errors' => 0];
 
-        foreach (NinetyDayRound::where('status', 'active')->whereDate('ends_on', '<', $today->toDateString())->get() as $round) {
+        $close = function (NinetyDayRound $round) use (&$out) {
             NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->update(['closed_at' => now()]);
             $round->update(['status' => 'closed', 'closed_at' => now()]);
             $out['closed']++;
+        };
+        foreach (NinetyDayRound::where('status', 'active')->whereDate('ends_on', '<', $today->toDateString())->get() as $round) {
+            $close($round);
+        }
+        // Someone who has left keeps no running round (it kept them in "current" lists).
+        foreach (NinetyDayRound::where('status', 'active')
+            ->whereHas('user', fn ($u) => $u->whereIn('status', self::NOT_CURRENT_STATUSES))->get() as $round) {
+            $close($round);
         }
 
         foreach (self::salesStaff() as $user) {
-            $round = self::activeRound($user);
-            if (!$round) {
-                $round = self::startRound($user, $today);
-                $out['started']++;
-            }
-            $week = self::weekOf($round, $today);
-            $out['checkins'] += self::ensureCheckins($round, $today);
-
-            $hasGoals = NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->exists();
-            if (!$hasGoals) {
-                if ($week === 0) {
-                    $out['tasks'] += self::ensureTask($user, self::addCustomersTitle($round), $today)->wasRecentlyCreated ? 1 : 0;
+            // One person's bad data must not stop everyone after them.
+            try {
+                $round = self::activeRound($user);
+                if (!$round) {
+                    $round = self::lockedFor($user, fn () => self::activeRound($user) ?? self::startRound($user, $today));
+                    $out['started'] += $round->wasRecentlyCreated ? 1 : 0;
                 }
-                continue;
-            }
-            if (self::pending($round, $today)->where('week_no', $week)->isNotEmpty()) {
-                $out['tasks'] += self::ensureTask($user, self::weekTaskTitle($week, self::dueOn($round, $week)), self::dueOn($round, $week))->wasRecentlyCreated ? 1 : 0;
+                $week = self::weekOf($round, $today);
+                $out['checkins'] += self::ensureCheckins($round, $today);
+
+                $hasGoals = NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->exists();
+                if (!$hasGoals) {
+                    if ($week === 0) {
+                        $out['tasks'] += self::ensureTask($user, self::addCustomersTitle($round), $today)->wasRecentlyCreated ? 1 : 0;
+                    }
+                    continue;
+                }
+                if (self::pending($round, $today)->where('week_no', $week)->isNotEmpty()) {
+                    $out['tasks'] += self::ensureTask($user, self::weekTaskTitle($week, self::dueOn($round, $week)), self::dueOn($round, $week))->wasRecentlyCreated ? 1 : 0;
+                }
+            } catch (\Throwable $e) {
+                $out['errors']++;
+                \Illuminate\Support\Facades\Log::error("90-Day Goals weekly run failed for user {$user->id}: " . $e->getMessage());
             }
         }
 
@@ -579,7 +722,9 @@ class NinetyDayGoalService
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
 
-        $q = NinetyDayGoal::with(['user.department', 'round.program', 'checkins.notes.author'])->whereNotNull('round_id');
+        // whereHas('user'): a goal whose owner was removed (soft-deleted) had a null user and
+        // crashed every admin page that reads $row->user->id.
+        $q = NinetyDayGoal::with(['user.department', 'round.program', 'checkins.notes.author'])->whereNotNull('round_id')->whereHas('user');
         if ($scope !== null) {
             $q->whereIn('user_id', $scope);
         }
@@ -617,19 +762,21 @@ class NinetyDayGoalService
         }
 
         $rows = $goals->map(function (NinetyDayGoal $g) use ($sales, $today) {
-            $from = Carbon::parse($g->round->starts_on)->startOfMonth();
-            $to = Carbon::parse($g->round->ends_on)->min($today->copy())->startOfMonth();
+            $months = self::roundMonths($g->round);
             $achieved = 0.0;
             $monthsWithSale = 0;
-            for ($m = $from->copy(); $m->lte($to); $m->addMonth()) {
-                $inMonth = $sales[$g->sales_pipeline_id][$m->format('Y-m')] ?? 0.0;
+            foreach ($months as $ym) {
+                if (Carbon::createFromFormat('Y-m-d', $ym . '-01')->gt($today)) {
+                    break;   // months that haven't started yet
+                }
+                $inMonth = $sales[$g->sales_pipeline_id][$ym] ?? 0.0;
                 $achieved += $inMonth;
                 if ($inMonth > 0) {
                     $monthsWithSale++;
                 }
             }
             $potential = (float) $g->monthly_potential;
-            $target = $potential * self::ROUND_MONTHS;
+            $target = $potential * max(1, count($months));
 
             return (object) [
                 'goal'      => $g,
