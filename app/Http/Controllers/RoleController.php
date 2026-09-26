@@ -402,6 +402,7 @@ class RoleController extends Controller
         default => $summary['notGranted']++,
       };
 
+      $count = fn(string $key) => count(array_filter($allCells, fn($c) => $c[$key]));
       $modules[] = [
         'name' => $moduleName,
         'slug' => $m['slug'],
@@ -411,8 +412,20 @@ class RoleController extends Controller
         'source' => $source,
         'columns' => $columns,
         'other' => $other,
+        // "3 / 5" reads unambiguously as action permissions - a bare
+        // "Not Granted" was read as "can't open this at all".
+        'total' => count($allCells),
+        'roleCount' => $count('role'),
+        'specialCount' => $count('special'),
+        'finalCount' => $count('final'),
       ];
     }
+
+    // Permission-level totals - the same unit as the table and the popup.
+    $summary['totalPermissions'] = array_sum(array_column($modules, 'total'));
+    $summary['fromRole'] = array_sum(array_column($modules, 'roleCount'));
+    $summary['finalPermissions'] = array_sum(array_column($modules, 'finalCount'));
+    $summary['specialOnly'] = $summary['finalPermissions'] - $summary['fromRole'];
 
     return ['modules' => $modules, 'summary' => $summary];
   }

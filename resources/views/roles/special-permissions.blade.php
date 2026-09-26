@@ -141,6 +141,16 @@
 .usp-summary-label { font-size: .78rem; font-weight: 600; color: #64748b; display: flex; align-items: center; gap: 8px; }
 .usp-summary-value { font-size: .95rem; font-weight: 800; color: #1e293b; }
 
+/* Headline: the two questions, side by side */
+.usp-headline { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+.usp-headline-item { background: #fff; border: 1px solid var(--hitech-border); border-radius: 14px; padding: .9rem 1.2rem; }
+.usp-headline-value { font-size: 1.35rem; font-weight: 800; color: #127464; line-height: 1.1; }
+.usp-headline-label { font-size: .74rem; font-weight: 800; color: #1e293b; margin-top: 2px; }
+.usp-headline-sub { font-size: .68rem; color: #94a3b8; margin-top: 1px; }
+.usp-table-note { display: flex; gap: 7px; align-items: flex-start; font-size: .72rem; color: #64748b; margin: -.4rem 0 .8rem; }
+.usp-table-note .bx { color: #4d6cf0; font-size: .9rem; margin-top: 1px; flex-shrink: 0; }
+.usp-count { font-size: .7rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+
 /* Guard warning */
 .usp-warning {
   display: flex; align-items: flex-start; gap: 10px; margin-top: 1rem; padding: .8rem 1rem; border-radius: 12px;
@@ -188,7 +198,7 @@
 }
 @media (max-width: 992px) {
   .usp-emp-col { display: none; }
-  .usp-summary-row { grid-template-columns: 1fr; }
+  .usp-summary-row, .usp-headline { grid-template-columns: 1fr; }
 }
 </style>
 
@@ -278,6 +288,21 @@
           </div>
         </div>
 
+        {{-- The two different questions this page answers, side by side and
+             labelled, so a 0 in one never reads as contradicting the other. --}}
+        <div class="usp-headline">
+          <div class="usp-headline-item">
+            <div class="usp-headline-value" id="uspHeadPages"></div>
+            <div class="usp-headline-label">@lang('Pages they can open')</div>
+            <div class="usp-headline-sub">@lang('Sidebar sections — includes pages open to every signed-in person')</div>
+          </div>
+          <div class="usp-headline-item">
+            <div class="usp-headline-value" id="uspHeadPerms"></div>
+            <div class="usp-headline-label">@lang('Action permissions')</div>
+            <div class="usp-headline-sub" id="uspHeadPermsSub"></div>
+          </div>
+        </div>
+
         <div id="uspGuardWarning" class="usp-warning d-none">
           <i class="bx bx-error-circle"></i>
           <span id="uspGuardWarningText"></span>
@@ -295,12 +320,12 @@
               <input type="text" id="uspTableSearch" class="form-control border-0 shadow-none" placeholder="@lang('Search modules or permissions…')">
             </div>
             <div class="usp-legend">
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-full"></span> @lang('Full Access')</span>
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-view"></span> @lang('View Only')</span>
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-partial"></span> @lang('Partial')</span>
-              <span class="usp-legend-item"><span class="usp-dot usp-dot-none"></span> @lang('Not Granted')</span>
+              <span class="usp-legend-item"><span class="usp-dot usp-dot-full"></span> @lang('All')</span>
+              <span class="usp-legend-item"><span class="usp-dot usp-dot-partial"></span> @lang('Some')</span>
+              <span class="usp-legend-item"><span class="usp-dot usp-dot-none"></span> @lang('None')</span>
             </div>
           </div>
+          <p class="usp-table-note"><i class="bx bx-info-circle"></i>@lang('Counts are action permissions inside each module (approve, export, manage…) — not whether the page opens. Page access is in "Pages they can open" above and the card below the table.')</p>
 
           <div class="hitech-card">
             <div class="table-responsive">
@@ -308,9 +333,9 @@
                 <thead>
                   <tr>
                     <th>@lang('Module / Feature')</th>
-                    <th class="text-center">@lang('Role Permission')</th>
-                    <th class="text-center">@lang('Special Permission')</th>
-                    <th class="text-center">@lang('Final Access')</th>
+                    <th class="text-center">@lang('From Role')</th>
+                    <th class="text-center">@lang('Special (Extra)')</th>
+                    <th class="text-center">@lang('Total')</th>
                     <th class="text-center">@lang('Source')</th>
                   </tr>
                 </thead>
@@ -359,13 +384,13 @@
       </div>
 
       <div class="hitech-card p-4" id="uspSummaryCard" style="display: none;">
-        <h6 class="fw-bold text-heading mb-3">@lang('Permission Summary')</h6>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-full"></span>@lang('Total Modules')</span><span class="usp-summary-value" id="sumTotal"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-full"></span>@lang('Full Access')</span><span class="usp-summary-value" id="sumFull"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-view"></span>@lang('View Only')</span><span class="usp-summary-value" id="sumView"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-partial"></span>@lang('Partial Access')</span><span class="usp-summary-value" id="sumPartial"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-none"></span>@lang('Not Granted')</span><span class="usp-summary-value" id="sumNone"></span></div>
-        <div class="usp-summary-item"><span class="usp-summary-label">@lang('Special Permissions')</span><span class="usp-summary-value" id="sumSpecial"></span></div>
+        <h6 class="fw-bold text-heading mb-1">@lang('Action Permissions')</h6>
+        <p class="usp-eff-sub mb-2">@lang('Same numbers as the table and the edit popup.')</p>
+        <div class="usp-summary-item"><span class="usp-summary-label">@lang('Total available')</span><span class="usp-summary-value" id="sumTotal"></span></div>
+        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-view"></span>@lang('From role')</span><span class="usp-summary-value" id="sumRole"></span></div>
+        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-full"></span>@lang('Special (extra)')</span><span class="usp-summary-value" id="sumSpecial"></span></div>
+        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-partial"></span>@lang('Has in total')</span><span class="usp-summary-value" id="sumFinal"></span></div>
+        <div class="usp-summary-item"><span class="usp-summary-label"><span class="usp-dot usp-dot-none"></span>@lang('Not granted')</span><span class="usp-summary-value" id="sumNone"></span></div>
       </div>
     </aside>
   </div>

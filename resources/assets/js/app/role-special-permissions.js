@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', function () {
     return '<span class="usp-state-pill usp-state-' + state + '">' + STATE_LABEL[state] + '</span>';
   }
 
+  // "3 / 5" - action permissions held out of those in the module.
+  function countPill(n, total) {
+    var state = n === 0 ? 'none' : (n === total ? 'full' : 'partial');
+    return '<span class="usp-count usp-state-' + state + '">' + n + ' / ' + total + '</span>';
+  }
+
   function tag(has, label) {
     return '<span class="usp-tag ' + (has ? 'usp-tag-' + label.toLowerCase() : 'usp-tag-none') + '">' + (has ? label : '—') + '</span>';
   }
@@ -43,9 +49,9 @@ document.addEventListener('DOMContentLoaded', function () {
       var rowId = 'usp-row-' + idx;
       rows += '<tr class="usp-recon-row" data-idx="' + idx + '" data-target="' + rowId + '" data-search="' + escapeHtml(m.name.toLowerCase()) + '">';
       rows += '  <td><div class="usp-recon-module"><i class="bx bx-chevron-right"></i><i class="bx bx-folder text-primary"></i>' + escapeHtml(m.name) + '</div></td>';
-      rows += '  <td class="text-center">' + statePill(m.roleState) + '</td>';
-      rows += '  <td class="text-center">' + statePill(m.specialState) + '</td>';
-      rows += '  <td class="text-center">' + statePill(m.finalState) + '</td>';
+      rows += '  <td class="text-center">' + countPill(m.roleCount, m.total) + '</td>';
+      rows += '  <td class="text-center">' + countPill(m.specialCount, m.total) + '</td>';
+      rows += '  <td class="text-center">' + countPill(m.finalCount, m.total) + '</td>';
       rows += '  <td class="text-center"><span class="usp-source-badge">' + SOURCE_LABEL[m.source] + '</span></td>';
       rows += '</tr>';
 
@@ -240,12 +246,18 @@ document.addEventListener('DOMContentLoaded', function () {
     $('#uspEffCard').show();
 
     var s = payload.summary;
-    $('#sumTotal').text(s.totalModules);
-    $('#sumFull').text(s.fullAccess);
-    $('#sumView').text(s.viewOnly);
-    $('#sumPartial').text(s.partial);
-    $('#sumNone').text(s.notGranted);
-    $('#sumSpecial').text(payload.specialCount);
+    $('#sumTotal').text(s.totalPermissions);
+    $('#sumRole').text(s.fromRole);
+    $('#sumSpecial').text(s.specialOnly);
+    $('#sumFinal').text(s.finalPermissions);
+    $('#sumNone').text(s.totalPermissions - s.finalPermissions);
+
+    var reach = payload.reach || [];
+    $('#uspHeadPages').text(reach.filter(function (i) { return i.visible; }).length + ' of ' + reach.length);
+    $('#uspHeadPerms').text(s.finalPermissions + ' of ' + s.totalPermissions);
+    $('#uspHeadPermsSub').text(payload.isSuper
+      ? 'Admin — everything, by role'
+      : s.fromRole + ' from their role + ' + s.specialOnly + ' special (extra)');
 
     renderReconciliation(payload);
     renderAdvanced(payload.role);
@@ -320,19 +332,39 @@ document.addEventListener('DOMContentLoaded', function () {
   var userPermModal = $('#addOrUpdateUserPermissionModal');
   var userPermForm = $('#addUserPermissionForm');
 
+  // The popup shows the SAME picture as the table and side panel: what the
+  // role gives is ticked and locked (it's not a per-person extra, and
+  // unticking couldn't remove it); the person's own extras are ticked and
+  // editable. Before, it showed only the extras - so a manager looked empty.
+  function applyToModal(payload) {
+    $('.user-permission-checkbox').prop('checked', false).prop('disabled', false)
+      .closest('label').removeClass('usp-role-locked').removeAttr('title');
+    $('.user-row-select-all, #selectAllUser').prop('checked', false);
+    payload.modules.forEach(function (m) {
+      moduleCells(m).forEach(function (c) {
+        var $cb = $('.user-permission-checkbox[value="' + c.name + '"]');
+        if (c.special) {
+          $cb.prop('checked', true);
+        } else if (c.role) {
+          $cb.prop('checked', true).prop('disabled', true)
+            .closest('label').addClass('usp-role-locked').attr('title', 'From their role — not a per-person setting');
+        }
+      });
+    });
+    $('.user-row-select-all').each(function () {
+      var mod = $(this).data('module');
+      var $boxes = $('.user-permission-checkbox.' + mod + '-checkbox:not(:disabled)');
+      $(this).prop('checked', $boxes.length > 0 && $boxes.filter(':not(:checked)').length === 0);
+    });
+  }
+
   function loadUserPermissionsIntoModal(userId) {
-    $.get(`${baseUrl}roles/getUserPermissionsAjax/${userId}`, function (res) {
-      $('.user-permission-checkbox, .user-row-select-all, #selectAllUser').prop('checked', false);
-      if (res.data) {
-        res.data.forEach(function (p) {
-          $(`.user-permission-checkbox[value="${p.name}"]`).prop('checked', true);
-        });
-        $('.user-row-select-all').each(function () {
-          var mod = $(this).data('module');
-          var all = $(`.user-permission-checkbox.${mod}-checkbox:not(:checked)`).length === 0 && $(`.user-permission-checkbox.${mod}-checkbox`).length > 0;
-          $(this).prop('checked', all);
-        });
-      }
+    if (currentPayload && String(userId) === String(currentUserId)) {
+      applyToModal(currentPayload);
+      return;
+    }
+    $.get(`${baseUrl}roles/specialPermissionsDataAjax/${userId}`, function (res) {
+      if (res && res.status === 'success') applyToModal(res.data);
     });
   }
 
@@ -351,11 +383,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
   $(document).on('change', '.user-row-select-all', function () {
     var mod = $(this).data('module');
-    $(`.${mod}-checkbox`).prop('checked', $(this).is(':checked'));
+    $(`.${mod}-checkbox:not(:disabled)`).prop('checked', $(this).is(':checked'));
   });
 
   $('#selectAllUser').on('change', function () {
-    $('.user-permission-checkbox, .user-row-select-all').prop('checked', $(this).is(':checked'));
+    $('.user-permission-checkbox:not(:disabled), .user-row-select-all').prop('checked', $(this).is(':checked'));
   });
 
   userPermForm.on('submit', function (e) {

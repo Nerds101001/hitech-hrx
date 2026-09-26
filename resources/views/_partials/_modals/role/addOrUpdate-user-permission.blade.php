@@ -33,6 +33,8 @@
 .rp-chip-label { font-size: .76rem; font-weight: 600; color: #475569; }
 .rp-chip-unwired .rp-chip-label { color: #94a3b8; }
 .rp-unwired-dot { color: #f5a623; font-size: .8rem; cursor: help; }
+.usp-role-locked, .usp-role-locked input { cursor: not-allowed; }
+.usp-role-locked .checkmark, .usp-role-locked .chip-box { opacity: .55; }
 </style>
 <div class="modal fade" id="addOrUpdateUserPermissionModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -79,7 +81,7 @@
                     </div>
                 </div>
             </div>
-            <p class="text-muted small mb-0 mt-3 ms-1"><i class="bx bx-info-circle me-1"></i>@lang('These are additional to the role — they never remove access the role already grants.')</p>
+            <p class="text-muted small mb-0 mt-3 ms-1"><i class="bx bx-info-circle me-1"></i>@lang('Ticked and greyed = their role already gives it. Tick anything else to add it for this person only — it never removes what the role gives.')</p>
           </div>
 
           {{-- Permissions Matrix (same shape as the role editor) --}}
