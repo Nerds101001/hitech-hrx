@@ -1430,6 +1430,76 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame($existing->id, Goals::activeRound($this->rep)->id, 'their existing round is untouched');
     }
 
+    public function test_a_customer_added_midweek_on_the_page_is_not_overdue(): void
+    {
+        $this->at('2026-10-07');   // a Wednesday in the round that starts Monday 5 Oct
+        $round = Goals::roundFor($this->rep);
+        $pid = $this->pipeline($this->rep, 'Midweek Co');
+
+        app(NinetyDayGoalController::class)->store($this->ask($this->rep, 'POST', '/x', ['customers' => [
+            ['sales_pipeline_id' => $pid, 'goal' => 'Order', 'monthly_potential' => 2],
+        ]]));
+
+        $this->assertCount(0, Goals::pending($round), 'nothing is due for a customer added after this Monday');
+        $g = NinetyDayGoal::where('round_id', $round->id)->firstOrFail();
+        $row = NinetyDayGoalCheckin::where('goal_id', $g->id)->firstOrFail();
+        $this->assertSame(1, (int) $row->week_no, 'its first row is next Monday\'s');
+        $this->assertNotNull($row->next_follow_up_date, 'the default follow-up date is still set');
+    }
+
+    public function test_the_owner_cannot_move_the_target_once_reported_but_admin_can(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $g = $this->goal($this->rep, $round);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track']]);
+        $admin = $this->person(null, 'admin');
+
+        $res = app(NinetyDayGoalController::class)->update($this->ask($this->rep, 'PUT', '/x', ['monthly_potential' => 0.5]), $g->id);
+        $this->assertSame(422, $res->getStatusCode());
+        $this->assertEquals(2.5, $g->fresh()->monthly_potential);
+
+        $ok = app(NinetyDayGoalController::class)->update($this->ask($this->rep, 'PUT', '/x', ['goal' => 'Repeat Order']), $g->id);
+        $this->assertTrue($this->body($ok)['success'], 'other fields can still be edited');
+
+        $byAdmin = app(NinetyDayGoalController::class)->update($this->ask($admin, 'PUT', '/x', ['monthly_potential' => 4]), $g->id);
+        $this->assertTrue($this->body($byAdmin)['success']);
+        $this->assertEquals(4.0, $g->fresh()->monthly_potential);
+    }
+
+    public function test_week_13_and_later_of_a_long_program_can_be_submitted(): void
+    {
+        $this->at(self::MONDAY);
+        $admin = $this->person(null, 'admin');
+        Goals::createProgram($admin, 'Long drive', Carbon::parse('2027-01-04'), Carbon::parse('2027-05-10'), [$this->rep->id]);   // 18 weeks
+        $round = Goals::activeRound($this->rep);
+        $g = $this->goal($this->rep, $round);
+        $g->forceFill(['created_at' => '2027-01-04 09:00:00'])->save();
+
+        $this->at('2027-04-12');   // week 14
+        [$saved, $errors] = Goals::submit($this->rep, 14, [$g->id => ['status' => 'On Track']]);
+
+        $this->assertSame(1, $saved, implode(' ', $errors));
+        $this->assertSame('On Track', NinetyDayGoalCheckin::where('goal_id', $g->id)->where('week_no', 14)->value('status'));
+    }
+
+    public function test_past_page_round_figures_match_each_rounds_own_report(): void
+    {
+        $this->at(self::MONDAY);
+        $g = $this->soldGoal($this->rep, 'Closed Co', 2.0, 'KIF', 3.0);
+        $g->round->update(['status' => 'closed']);
+        $admin = $this->person(null, 'admin');
+
+        Auth::setUser($admin);
+        $view = app(NinetyDayGoalController::class)->past($this->ask($admin, 'GET', '/x'));
+        $round = collect($view->getData()['rounds'])->firstWhere('id', $g->round_id);
+        $own = Goals::dashboard([$this->rep->id], ['round_id' => $g->round_id])['cards'];
+
+        foreach (['goals', 'potential', 'achieved', 'pct'] as $k) {
+            $this->assertEquals($own[$k], $round->stats[$k], $k);
+        }
+    }
+
     public function test_an_empty_self_started_round_is_replaced_by_the_program(): void
     {
         // The Monday job starts a round for every salesperson, so "has an active round" alone

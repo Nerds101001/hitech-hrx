@@ -41,7 +41,9 @@ class NinetyDayGoalController extends Controller
         if ($view === 'mine' && !$isSales) {
             $view = 'overview';
         }
-        if ($view === 'overview' && !$seesMany) {
+        // Only a salesperson has goals of their own. A manager outside Sales with no team stays on
+        // the overview; "mine" would start a round (and a weekly task) for them just for looking.
+        if ($view === 'overview' && !$seesMany && $isSales) {
             $view = 'mine';
         }
 
@@ -617,12 +619,12 @@ class NinetyDayGoalController extends Controller
             ->where('status', 'closed')
             ->orderByDesc('starts_on')->orderBy('user_id')->get();
 
-        $rounds->each(function (NinetyDayRound $r) {
-            $r->stats = Goals::dashboard([$r->user_id], ['round_id' => $r->id])['cards'];
-        });
         $seesMany = $scope === null || count($scope) > 1;
         // Every closed round in scope, added together: the top-line picture before the per-person breakdown.
         $closed = Goals::dashboard($scope, ['round' => 'closed']);
+        // Per-round figures from that same pass (was one full dashboard() per round - thousands
+        // of queries for an admin once there are many closed rounds).
+        $this->attachRoundStats($rounds, $closed['rows']);
 
         return view('tenant.performance.ninety-day-goals.past', [
             'tab'      => 'past',
@@ -678,9 +680,9 @@ class NinetyDayGoalController extends Controller
         }
 
         $rounds = NinetyDayRound::where('user_id', $target->id)->orderByDesc('starts_on')->get();
-        $rounds->each(function (NinetyDayRound $r) {
-            $r->stats = Goals::dashboard([$r->user_id], ['round_id' => $r->id])['cards'];
-        });
+        // Every round this person has ever had, added together — their whole record, not just what's closed.
+        $career = Goals::dashboard([$target->id], ['round' => 'all']);
+        $this->attachRoundStats($rounds, $career['rows']);
         $active = $rounds->firstWhere('status', 'active');
 
         return view('tenant.performance.ninety-day-goals.person', [
@@ -690,9 +692,30 @@ class NinetyDayGoalController extends Controller
             'target'   => $target,
             'rounds'   => $rounds,
             'active'   => $active,
-            // Every round this person has ever had, added together — their whole record, not just what's closed.
-            'career'   => Goals::dashboard([$target->id], ['round' => 'all']),
+            'career'   => $career,
         ]);
+    }
+
+    /**
+     * $round->stats (goals, potential, target, achieved, pct, converted) for each round, from
+     * dashboard() rows already loaded - the same figures dashboard()'s own cards give, without
+     * running it once per round.
+     */
+    private function attachRoundStats($rounds, $rows): void
+    {
+        $byRound = collect($rows)->groupBy(fn ($r) => $r->goal->round_id);
+        foreach ($rounds as $r) {
+            $c = $byRound->get($r->id, collect());
+            $target = (float) $c->sum('target');
+            $r->stats = [
+                'goals'     => $c->count(),
+                'potential' => round((float) $c->sum('potential'), 2),
+                'target'    => round($target, 2),
+                'achieved'  => round((float) $c->sum('achieved'), 2),
+                'pct'       => $target > 0 ? round($c->sum('achieved') / $target * 100, 1) : null,
+                'converted' => $c->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
+            ];
+        }
     }
 
     /**
@@ -785,7 +808,8 @@ class NinetyDayGoalController extends Controller
         // Team performance, summary only: target/achieved/% for the rest of this person's own
         // department, current round — reuses dashboard()'s own per-user rollup, never exposes a
         // teammate's customer names (the page itself says so, same restriction as the reference).
-        $peerIds = Goals::salesStaff()->pluck('id')->reject(fn ($id) => (int) $id === (int) $user->id)->values()->all();
+        $peerIds = Goals::salesStaff()->where('department_id', $user->department_id)
+            ->pluck('id')->reject(fn ($id) => (int) $id === (int) $user->id)->values()->all();
         $team = $peerIds ? Goals::dashboard($peerIds, ['round' => 'current'])['users']->take(5)->values() : collect();
 
         return view('tenant.performance.ninety-day-goals.my-dashboard', [
@@ -1248,11 +1272,14 @@ class NinetyDayGoalController extends Controller
 
         $round = Goals::roundFor($target);
         $mine = Goals::pipelineCustomers($target)->keyBy('id');
-        $have = NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->pluck('sales_pipeline_id')->filter()->all();
 
         $added = 0;
         $skipped = [];
         $newGoalIds = [];
+        // Under a lock on the person: the "already in this round" check and the insert happen
+        // together, so a double-click or two tabs can't add the same customer twice.
+        Goals::lockedFor($target, function () use ($data, $round, $mine, $target, $user, &$added, &$skipped, &$newGoalIds) {
+        $have = NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->pluck('sales_pipeline_id')->filter()->all();
         foreach ($data['customers'] as $row) {
             $pid = (int) $row['sales_pipeline_id'];
             $c = $mine->get($pid);
@@ -1283,23 +1310,25 @@ class NinetyDayGoalController extends Controller
             $newGoalIds[] = $goal->id;
             $added++;
         }
+        });
         Goals::ensureCheckins($round);
 
-        // A brand new customer's current-week row gets a sensible default next-follow-up date —
-        // one real week out from today — rather than leaving it blank until the salesperson has
-        // even had a chance to talk to them. ensureCheckins() above only creates a checkin row
-        // from the goal's own first Monday onward (never for a week that was already over when
-        // the goal was added), so a goal added mid-week has no row yet for the current week —
-        // this creates just that one row for it, without touching the "late" rules that gate
-        // real status submissions.
+        // A brand new customer gets a sensible default next-follow-up date - one week out - on
+        // its FIRST answerable week's row: this Monday's if it was added on a Monday, otherwise
+        // next Monday's (firstWeek()). It used to go on the current week's row even mid-week,
+        // whose Monday had already passed - so the customer showed as overdue the moment it was
+        // added, and its first status counted as late. A row for next week is not due yet, so
+        // it is neither pending nor late until that Monday arrives.
         if ($newGoalIds) {
-            $currentWeek = Goals::weekOf($round);
-            $due = Goals::dueOn($round, $currentWeek);
             $followUp = Carbon::today()->addDays(7)->toDateString();
             foreach (NinetyDayGoal::whereIn('id', $newGoalIds)->get() as $goal) {
+                $week = Goals::firstWeek($goal, $round);
+                if ($week >= Goals::weeksOf($round)) {
+                    continue;   // added in the round's last week: nothing left to report
+                }
                 NinetyDayGoalCheckin::firstOrCreate(
-                    ['goal_id' => $goal->id, 'week_no' => $currentWeek],
-                    ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(), 'next_follow_up_date' => $followUp]
+                    ['goal_id' => $goal->id, 'week_no' => $week],
+                    ['round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => Goals::dueOn($round, $week)->toDateString(), 'next_follow_up_date' => $followUp]
                 );
             }
         }
@@ -1358,6 +1387,18 @@ class NinetyDayGoalController extends Controller
             'monthly_potential' => 'nullable|numeric|min:0|max:100000',
             'expected_order_date' => 'nullable|date',
         ]);
+
+        // The monthly potential IS the target (x months) that achievement % and the rankings are
+        // measured against, so the salesperson can't move it once it has been reported on or the
+        // round is over - lowering it after the fact inflated their achievement. Admin/HR still can.
+        if (isset($data['monthly_potential']) && (float) $data['monthly_potential'] !== (float) $goal->monthly_potential
+            && !Goals::seesEveryone(Auth::user())) {
+            $closed = $goal->closed_at || optional($goal->round)->status !== 'active';
+            $reported = NinetyDayGoalCheckin::where('goal_id', $goal->id)->whereNotNull('status')->exists();
+            if ($closed || $reported) {
+                return response()->json(['success' => false, 'message' => 'The monthly potential is this customer\'s target and is fixed once you have reported on it or the round has ended. Ask an admin if it has to change.'], 422);
+            }
+        }
         $goal->update(array_filter($data, fn ($v) => $v !== null));
 
         return response()->json(['success' => true, 'message' => 'Goal updated.']);

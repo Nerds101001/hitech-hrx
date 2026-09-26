@@ -59,10 +59,12 @@ return Application::configure(basePath: dirname(__DIR__))
        Scoring a month once on the 1st froze half-entered numbers into
        people's appraisals. */
     $schedule->command('kpi:auto-score --months=2')->dailyAt('05:00')->withoutOverlapping();
-    /* 90-Day Goals: every Monday morning, close rounds that have ended, start a
-       round for anyone in Sales without one, open the week's check-ins and put
-       the "submit your status" task on each person's list. Idempotent. */
-    $schedule->command('goals:weekly')->weeklyOn(1, '06:00')->withoutOverlapping();
+    /* 90-Day Goals: every morning, close rounds that have ended, start a round
+       for anyone in Sales without one, open the week's check-ins, pick up Sales
+       Report orders entered late, and put the "submit your status" task on each
+       person's list on its due day. Idempotent, so daily is safe; Monday-only
+       missed rounds that start on other weekdays. */
+    $schedule->command('goals:weekly')->dailyAt('06:00')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);
