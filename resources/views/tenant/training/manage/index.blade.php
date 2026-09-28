@@ -358,7 +358,7 @@
                     @elseif($module->content_type === 'policy')
                         <div class="mc-preview-placeholder">
                             <i class="ti ti-file-text" style="color:#1e88e5;opacity:0.5;font-size:1.8rem;"></i>
-                            <span>Policy Document</span>
+                            <span>Text Document</span>
                         </div>
                     @else
                         <div class="mc-preview-placeholder">
@@ -375,7 +375,10 @@
                             @if($module->content_type==='video') bg-label-warning
                             @elseif($module->content_type==='policy') bg-label-info
                             @else bg-label-success @endif">
-                            {{ $module->content_type }}
+                            {{-- Same wording as the Content Type picker. The card
+                                 printed the raw column, so it read "policy" and
+                                 "catalog" beside a dropdown now saying Text and PDF. --}}
+                            {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? $module->content_type }}
                         </div>
                         <div class="mc-title text-truncate">{{ $module->title }}</div>
                     </div>
@@ -474,10 +477,14 @@
                         </div>
                         <div class="col-md-5 mb-3">
                             <label class="form-label fw-semibold">Content Type</label>
+                            {{-- Labels only. The values stay policy/catalog/video:
+                                 every module already stored, and the content_type
+                                 branches across the manage page, portal, reader and
+                                 activity views, key off those exact strings. --}}
                             <select name="content_type" id="module_type" class="form-select" onchange="toggleContentFields()">
-                                <option value="policy">Interactive Policy</option>
-                                <option value="catalog">Product Catalog (PDF)</option>
-                                <option value="video">Training Video</option>
+                                <option value="policy">Text</option>
+                                <option value="catalog">PDF</option>
+                                <option value="video">Video</option>
                             </select>
                         </div>
                     </div>
@@ -491,11 +498,11 @@
                     <label class="form-label fw-semibold d-flex justify-content-between">
                         Content Body <small class="text-muted">Double enter = new page/step</small>
                     </label>
-                    <textarea name="content_body" id="module_body" class="form-control" rows="10" placeholder="Paste your policy text here..."></textarea>
+                    <textarea name="content_body" id="module_body" class="form-control" rows="10" placeholder="Paste your text here..."></textarea>
                 </div>
 
                 <div id="pdf_content_area" class="form-panel" style="display:none;">
-                    <label class="form-label fw-semibold">Upload Product Catalog (PDF)</label>
+                    <label class="form-label fw-semibold">Upload PDF</label>
                     <input type="file" name="pdf_file" class="form-control" accept=".pdf">
                     <div id="pdf_current_file" class="mt-2" style="display:none;">
                         <a href="#" target="_blank" class="badge bg-label-info text-decoration-none">View Current PDF</a>
