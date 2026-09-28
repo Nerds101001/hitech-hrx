@@ -391,6 +391,13 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
     position: relative;
 }
 .video-player video, .video-player iframe, .video-player > div { width: 100%; height: 100%; border: none; }
+/* Swallows clicks on YouTube's own title bar, which is a link out to
+   youtube.com that no player parameter can disable. Height covers the title
+   strip only, so the controls underneath stay usable. */
+#yt-title-shield {
+    position: absolute; top: 0; left: 0; right: 0; height: 64px;
+    background: transparent; cursor: default; z-index: 5;
+}
 .video-time-overlay {
     position: absolute; bottom: 16px; right: 16px;
     background: rgba(0,0,0,0.6); color: white;
@@ -819,7 +826,12 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
 
             {{-- ══ VIDEO ══ --}}
             @elseif($module->content_type === 'video')
-            <div class="video-wrap">
+            {{-- Right-click is where "Copy video URL" and "Save video as" live.
+                 Blocking it on the wrapper covers the local <video> and the
+                 area around the YouTube iframe alike. It does not reach inside
+                 a cross-origin iframe - nothing in the page can - so the title
+                 shield above handles YouTube's own click-out instead. --}}
+            <div class="video-wrap" oncontextmenu="return false;">
                 <div class="video-player" id="video-player">
                     @if(!empty($module->content_url) && (str_contains($module->content_url, 'youtube.com') || str_contains($module->content_url, 'youtu.be')))
                         <div id="yt-player"></div>
@@ -1444,8 +1456,26 @@ function getYtId(u) { const m = u.match(/(?:youtu\.be\/|v=|embed\/)([a-zA-Z0-9_-
 
 window.onYouTubeIframeAPIReady = function() {
     const vid = getYtId(CURL); if (!vid) return;
-    ytP = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:vid, playerVars:{playsinline:1,rel:0},
+    ytP = new YT.Player('yt-player', {
+        height:'100%', width:'100%', videoId:vid,
+        // Keep the session inside HRX. nocookie drops YouTube's tracking
+        // cookies, modestbranding removes the logo, rel=0 stops the grid of
+        // other channels' videos at the end, and iv_load_policy=3 hides
+        // annotation cards - every one of those is a way out of the module.
+        host: 'https://www.youtube-nocookie.com',
+        playerVars: { playsinline:1, rel:0, modestbranding:1, iv_load_policy:3, fs:0 },
         events: { onStateChange(e) { if (e.data===YT.PlayerState.PLAYING) startYT(); else stopYT(); if (e.data===YT.PlayerState.ENDED) { stopYT(); showAssessBtn(); const pb=document.getElementById('top-progress'); if(pb) pb.style.width='100%'; } } } });
+
+    // The title strip YouTube draws across the top of its own player is a
+    // link to youtube.com, and playerVars cannot turn it off. Cover it with a
+    // transparent shield that swallows the click. The shield sits above the
+    // iframe but below the controls, so play/pause and the scrubber still work.
+    const wrap = document.getElementById('video-player');
+    if (wrap && !document.getElementById('yt-title-shield')) {
+        const shield = document.createElement('div');
+        shield.id = 'yt-title-shield';
+        wrap.appendChild(shield);
+    }
 };
 function initLocalVideo() {
     const v = document.getElementById('local-video'); if (!v) return;

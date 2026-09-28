@@ -338,15 +338,20 @@
 
                 {{-- ── Preview strip ───────────────────────────── --}}
                 <div class="mc-preview">
+                    {{-- Watch stays inside HRX. These used to be
+                         target="_blank" links straight to the source URL, so
+                         clicking a module handed the viewer youtube.com - with
+                         its share sheet, its copy-link, its related videos and
+                         a route away from the training entirely. --}}
                     @if($module->content_type === 'video' && $ytId)
                         <img src="https://img.youtube.com/vi/{{ $ytId }}/mqdefault.jpg" alt="{{ $module->title }}">
                         <div class="mc-preview-overlay">
-                            <a href="{{ $previewUrl }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                            <a href="javascript:void(0)" onclick="playModuleVideo('yt', @js($ytId), @js($module->title))"><i class="ti ti-player-play me-1"></i>Watch</a>
                         </div>
                     @elseif($module->content_type === 'video' && $previewUrl)
                         <video src="{{ $previewUrl }}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>
                         <div class="mc-preview-overlay">
-                            <a href="{{ $previewUrl }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                            <a href="javascript:void(0)" onclick="playModuleVideo('file', @js($previewUrl), @js($module->title))"><i class="ti ti-player-play me-1"></i>Watch</a>
                         </div>
                     @elseif($module->content_type === 'catalog' && $previewUrl)
                         <div class="mc-pdf-scaler">
@@ -567,6 +572,24 @@
     </div>
 </div>
 
+{{-- ── Video Preview Modal ──────────────────────────────────
+     Plays the module inside HRX instead of handing the viewer youtube.com.
+     Right-click is blocked here too, since that menu carries "Copy video URL"
+     and "Save video as". --}}
+<div class="modal fade tm-modal" id="videoPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title text-white fw-bold" id="videoPreviewTitle">Preview</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0" oncontextmenu="return false;">
+                <div id="videoPreviewStage" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {{-- ── Questions Modal ──────────────────────────────────── --}}
 <div class="modal fade tm-modal" id="questionsModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -708,6 +731,41 @@
         document.getElementById('url_content_area').style.display   = t === 'video'   ? 'block' : 'none';
         document.getElementById('video_settings_area').style.display= t === 'video'   ? 'block' : 'none';
     }
+
+    // Plays a module video inside HRX. Never navigates to the source.
+    let videoPreviewModal = null;
+    function playModuleVideo(kind, ref, title) {
+        const stage = document.getElementById('videoPreviewStage');
+        document.getElementById('videoPreviewTitle').textContent = title || 'Preview';
+
+        if (kind === 'yt') {
+            // nocookie + modestbranding + rel=0 + iv_load_policy=3 strip the
+            // logo, the end-screen grid and the annotation cards. The shield
+            // covers YouTube's title bar, which is a link out that no player
+            // parameter can disable.
+            stage.innerHTML =
+                '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(ref) +
+                '?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1" ' +
+                'style="width:100%;height:100%;border:0;" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+                '<div style="position:absolute;top:0;left:0;right:0;height:64px;z-index:5;"></div>';
+        } else {
+            stage.innerHTML =
+                '<video src="' + ref + '" controls controlsList="nodownload noplaybackrate" ' +
+                'disablePictureInPicture oncontextmenu="return false;" ' +
+                'style="width:100%;height:100%;background:#000;"></video>';
+        }
+
+        videoPreviewModal = videoPreviewModal || new bootstrap.Modal(document.getElementById('videoPreviewModal'));
+        videoPreviewModal.show();
+    }
+
+    // Stop playback when the dialog closes, or the audio keeps running.
+    document.addEventListener('DOMContentLoaded', function () {
+        const el = document.getElementById('videoPreviewModal');
+        if (el) el.addEventListener('hidden.bs.modal', () => {
+            document.getElementById('videoPreviewStage').innerHTML = '';
+        });
+    });
 
     const optLabels = ['A','B','C','D'];
 
