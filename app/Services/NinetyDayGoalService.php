@@ -835,7 +835,10 @@ class NinetyDayGoalService
             ->when(empty($f['program_id']), fn ($q) => $q->where('status', 'active'))
             ->distinct('user_id')->count('user_id');
 
-        $cards = $sum($rows) + [
+        // array_merge, not `+`: the union operator keeps the LEFT value on a duplicate key, so
+        // $sum($rows)'s own 'people' silently won and every override here was discarded. That
+        // went unnoticed because the old override computed the same number $sum already had.
+        $cards = array_merge($sum($rows), [
             'people'     => $enrolledCount,
             'withGoals'  => $rows->pluck('user.id')->unique()->count(),
             'converted'  => $rows->whereIn('status', $converted)->count(),
@@ -843,7 +846,7 @@ class NinetyDayGoalService
             'discipline' => $discipline($due),
             'dueTotal'   => $due->count(),
             'onTimeTotal' => $onTime,
-        ];
+        ]);
 
         $users = $rows->groupBy('user.id')->map(function ($c) use ($sum, $discipline, $goals, $converted) {
             $u = $c->first()->user;
