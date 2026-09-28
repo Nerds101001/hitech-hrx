@@ -794,8 +794,10 @@ Route::middleware([
     // --- RECRUITMENT MANAGEMENT ---
     // recruitment.view lets a delegate reach the module; the recruitment
     // controllers enforce their own finer-grained permission catalog
-    // ("Manage Job", "Create Job", ...) for mutations.
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|recruitment.view'])->group(function () {
+    // ("Manage Job", "Create Job", ...) for mutations. HR's module: managers
+    // and accounts were let in here too, and Interview Schedule has no check of
+    // its own, so any manager could open it by URL.
+    Route::middleware(['role_or_permission:admin|hr|recruitment.view'])->group(function () {
     Route::resource('job', JobController::class);
     Route::post('job/copy/{id}', [JobController::class, 'copyjob'])->name('job.copy');
 
@@ -819,7 +821,7 @@ Route::middleware([
     Route::resource('interview-schedule', InterviewScheduleController::class)->except(['create']);
     Route::get('interview-schedule/create/{candidate?}', [InterviewScheduleController::class, 'create'])->name('interview-schedule.create');
 
-    }); // close Recruitment role:admin|hr|accounts|manager gate
+    }); // close Recruitment role:admin|hr gate
 
     }); // Close the admin|hr|manager group starting at line 108
 

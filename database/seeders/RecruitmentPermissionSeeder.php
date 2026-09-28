@@ -54,8 +54,9 @@ class RecruitmentPermissionSeeder extends Seeder
             Permission::findOrCreate($permission, 'web');
         }
 
-        // Assign all recruitment permissions to the admin, hr, and manager role if it exists
-        $rolesToAssign = ['admin', 'hr', 'manager'];
+        // Recruitment is HR's: admin and hr only. Managers used to be given the
+        // whole catalogue here (see RemoveRecruitmentFromManagerRoleSeeder).
+        $rolesToAssign = ['admin', 'hr'];
         foreach ($rolesToAssign as $roleName) {
             $role = Role::where('name', $roleName)->first();
             if ($role) {
