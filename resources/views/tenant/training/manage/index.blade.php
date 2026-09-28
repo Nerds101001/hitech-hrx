@@ -2,6 +2,18 @@
 
 @section('title', 'Training Content Management')
 
+@section('vendor-style')
+    @vite([
+        'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss'
+    ])
+@endsection
+
+@section('vendor-script')
+    @vite([
+        'resources/assets/vendor/libs/sweetalert2/sweetalert2.js'
+    ])
+@endsection
+
 @section('page-style')
 <style>
     :root {
@@ -630,7 +642,13 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('assets/vendor/libs/sweetalert2/sweetalert2.js')}}"></script>
+{{-- SweetAlert2 now comes from the vendor-script section above, through Vite.
+     This used to be a raw asset() tag pointing at
+     public/assets/vendor/libs/sweetalert2/sweetalert2.js, which exists
+     neither here nor on production - nothing serves that directory, so the
+     tag 404'd, Swal was never defined, and AI Auto-Generate threw
+     "ReferenceError: Swal is not defined" on click. Every other page that
+     uses Swal loads it through Vite; this one was the outlier. --}}
 <script>
     function editPhase(phase) {
         document.getElementById('phase_id').value = phase.id;
