@@ -633,6 +633,19 @@ class TrainingController extends Controller
             return response()->json(['success' => false, 'message' => 'No module content or PDF text found to analyze.'], 422);
         }
 
+        // Smalot's extractor hands back the bytes as they sit in the PDF, which
+        // for plenty of real documents is not valid UTF-8. json_encode() inside
+        // the OpenAI client then refuses the whole payload with "Malformed UTF-8
+        // characters, possibly incorrectly encoded" and the request dies before
+        // it is ever sent -- which is exactly what AI Auto-Generate reported.
+        // Confirmed live on module 30; module 9 only escaped it because its bad
+        // bytes happened to fall past the 4000-character cut below.
+        //
+        // Scrub before Str::limit(), not after: truncating a string that already
+        // holds invalid sequences can slice a multi-byte character in half and
+        // manufacture fresh damage.
+        $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+
         try {
             $prompt = "Act as an HR Training Specialist. Based on the following training content, generate 3 professional multiple-choice questions for an onboarding assessment. 
             Each question should have exactly 4 options and one correct option index (0 for first, 3 for last).
