@@ -46,7 +46,8 @@ class NinetyDayGoalsMenuAccessTest extends TestCase
         Nav::flush();
         $html = $this->get('/kpi/my')->getContent();
         Nav::flush();
-        $p = strpos($html, '90-Day Goals');
+        // The section heading itself - the bare words also appear in a script comment.
+        $p = strpos($html, '<span class="hitech-menu-text">90-Day Goals</span>');
         if ($p === false) {
             return null;
         }

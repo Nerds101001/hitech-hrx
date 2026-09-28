@@ -55,8 +55,14 @@ class Nav
 
     /**
      * The permission names the page at $url accepts - the dotted tokens of
-     * its role_or_permission: / permission: middleware. Role names and
-     * can: gates are left out; those aren't something a checkbox grants.
+     * its OWN gate, the innermost role_or_permission: / permission:
+     * middleware. Role names and can: gates are left out; those aren't
+     * something a checkbox grants.
+     *
+     * Only the innermost gate: an outer group gate lists every permission of
+     * every page inside it, so reading it made "Manage 90-Day Goals" count as
+     * opening Biometric Devices for a manager (the manager role passes the
+     * page's own gate by name, the permission never did).
      */
     public static function permissionsFor(string $url): array
     {
@@ -75,6 +81,7 @@ class Nav
                 }
                 foreach (['role_or_permission:', 'permission:'] as $prefix) {
                     if (str_starts_with($m, $prefix)) {
+                        $perms = []; // a later (inner) gate replaces an outer one
                         foreach (explode('|', substr($m, strlen($prefix))) as $token) {
                             if (str_contains($token, '.')) {
                                 $perms[] = trim($token);

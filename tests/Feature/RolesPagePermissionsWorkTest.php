@@ -175,6 +175,23 @@ class RolesPagePermissionsWorkTest extends TestCase
         $this->assertOpens($this->person(['employee']), [], ['/shifts', '/employees', '/leaveRequests', '/asset-management', '/auditLogs']);
     }
 
+    // ── the sidebar counts a box only where the page's own gate names it ──
+
+    public function test_a_box_in_a_shared_group_does_not_draw_its_neighbours_links(): void
+    {
+        // A manager with "Manage 90-Day Goals": that box is on the settings
+        // shortcuts group's shared list, and the manager role passes Biometric
+        // Devices' and Asset Categories' own gates by name - but neither page
+        // checks for goals.manage, so neither link may be drawn because of it.
+        $u = $this->person(['manager'], ['goals.manage']);
+        Nav::flush();
+        $links = collect(Nav::previewMenuFor($u))->flatMap(fn ($e) => collect($e['submenu'] ?? [])
+            ->where('visible', true)->map(fn ($c) => $e['name'] . ' > ' . $c['name']))->all();
+        $this->assertNotContains('Time & Attendance > Biometric Devices', $links);
+        $this->assertNotContains('Asset Management > Asset Categories', $links);
+        $this->assertContains('90-Day Goals > Dashboard', $links, 'the box still shows its own pages');
+    }
+
     // ── who may hand out boxes ───────────────────────────────────────────
 
     public function test_a_manager_cannot_hand_out_a_box_they_do_not_hold(): void
