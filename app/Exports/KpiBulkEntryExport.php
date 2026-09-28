@@ -29,30 +29,36 @@ class KpiBulkEntryExport implements FromArray, WithTitle, ShouldAutoSize, WithEv
     private const HEADER_ROWS = 2;
     private const FIXED_COLS = 3;      // id, employee, department
 
+    /** @param array $labels template id => column header (see KpiBulkEntryController::labelsFor) */
     public function __construct(
         private $templates,
         private \Carbon\Carbon $month,
         private $rows,
+        private array $labels = [],
     ) {}
+
+    private function label($t): string
+    {
+        return $this->labels[$t->id] ?? $t->title;
+    }
 
     public function title(): string
     {
-        $t = $this->templates->count() === 1 ? $this->templates->first()->title : 'KPI Entry';
+        $t = $this->templates->count() === 1 ? $this->label($this->templates->first()) : 'KPI Entry';
 
         return mb_substr(preg_replace('/[:\\\\\/?*\[\]]/', '-', $t) ?: 'KPI', 0, 31);
     }
 
     public function array(): array
     {
-        $titles = $this->templates->pluck('title')->all();
-
         $intro = $this->month->format('F Y') . '   ·   fill the shaded columns and upload this file back'
             . '   ·   do not edit column A or the header row';
 
         $header = ['User ID (do not edit)', 'Employee', 'Department'];
         foreach ($this->templates as $t) {
-            // The header text is how the import knows which KPI a column is.
-            $header[] = $t->title;
+            // The header text is how the import knows which KPI a column is --
+            // hence the department on a title two KPIs share.
+            $header[] = $this->label($t);
         }
 
         $out = [

@@ -139,6 +139,33 @@ class KpiBulkEntryController extends Controller
             ->values();
     }
 
+    /**
+     * What each KPI is called on this page, the sheet and the preview, by template id.
+     *
+     * The title alone, unless another KPI on offer has the same title -- then
+     * the department is added ("Cost of Selling — Sales"). New Biz and Sales
+     * each have their own "Cost of Selling": with titles alone the picker
+     * showed two identical chips, and the upload, which matches sheet columns
+     * by their header, read every "Cost of Selling" column as the first one --
+     * a Sales-only sheet was rejected outright and a mixed sheet silently
+     * dropped every Sales figure.
+     */
+    public static function labelsFor($templates): array
+    {
+        $norm = fn ($s) => mb_strtolower(trim((string) $s));
+        $counts = $templates->countBy(fn ($t) => $norm($t->title));
+        $depts = Department::whereIn('id', $templates->pluck('department_id')->filter()->unique())->pluck('name', 'id');
+
+        $labels = [];
+        foreach ($templates as $t) {
+            $labels[$t->id] = $counts[$norm($t->title)] > 1
+                ? trim($t->title) . ' — ' . ($depts[$t->department_id] ?? 'All departments')
+                : trim($t->title);
+        }
+
+        return $labels;
+    }
+
     /** Template ids requested, narrowed to the ones this user may actually fill. */
     private function requestedTemplates(Request $request, $fillable): array
     {
@@ -182,9 +209,11 @@ class KpiBulkEntryController extends Controller
             ? User::where('status', 'active')->orderBy('first_name')->get(['id', 'first_name', 'last_name']) : collect();
         $departments = $this->isKpiAdmin($user) ? Department::orderBy('name')->get(['id', 'name']) : collect();
 
+        $labels = self::labelsFor($templates);
+
         return view('tenant.kpi.bulk-entry', compact(
             'templates', 'selected', 'selectedIds', 'month', 'months', 'rows',
-            'owners', 'ownerCandidates', 'departments'
+            'owners', 'ownerCandidates', 'departments', 'labels'
         ))->with('isKpiAdmin', $this->isKpiAdmin($user));
     }
 
@@ -244,12 +273,13 @@ class KpiBulkEntryController extends Controller
         $assignments = $this->assignmentsFor($user, $templateIds);
         $rows = $this->matrix($assignments, $month, $templateIds);
 
+        $labels = self::labelsFor($fillable);
         $name = $selected->count() === 1
-            ? \Illuminate\Support\Str::slug($selected->first()->title)
+            ? \Illuminate\Support\Str::slug($labels[$selected->first()->id])
             : 'kpis-' . $selected->count();
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KpiBulkEntryExport($selected, $month, $rows),
+            new \App\Exports\KpiBulkEntryExport($selected, $month, $rows, $labels),
             'kpi-' . $name . '-' . $month->format('Y-m') . '.xlsx'
         );
     }
@@ -278,21 +308,35 @@ class KpiBulkEntryController extends Controller
 
         // Row 2 is the header; its columns from D onward name the KPIs, in the
         // order the export wrote them. Match on the header text so a reordered
-        // or partially deleted sheet still lands in the right KPI.
+        // or partially deleted sheet still lands in the right KPI. The header is
+        // the page's label (title + department when two KPIs share a title); a
+        // sheet downloaded before that carries the bare title, which is accepted
+        // only while it points at exactly one of the KPIs being uploaded.
+        $norm = fn ($s) => mb_strtolower(trim((string) $s));
+        $labels = self::labelsFor($fillable);
+        $chosen = $fillable->whereIn('id', $templateIds);
         $header = $sheet[1] ?? [];
         $columnTemplate = [];
+        $preview = [];
+        $problems = [];
         foreach ($header as $i => $label) {
             if ($i < 3 || $label === null || $label === '') {
                 continue;
             }
-            $t = $fillable->first(fn ($x) => mb_strtolower(trim($x->title)) === mb_strtolower(trim((string) $label)));
-            if ($t && in_array($t->id, $templateIds, true)) {
+            $t = $chosen->first(fn ($x) => $norm($labels[$x->id]) === $norm($label));
+            if (!$t) {
+                $byTitle = $chosen->filter(fn ($x) => $norm($x->title) === $norm($label));
+                if ($byTitle->count() === 1) {
+                    $t = $byTitle->first();
+                } elseif ($byTitle->count() > 1) {
+                    $problems[] = sprintf('column "%s" could be %s -- download a fresh sheet, whose headers say which',
+                        mb_substr((string) $label, 0, 40), $byTitle->map(fn ($x) => $labels[$x->id])->implode(' or '));
+                }
+            }
+            if ($t) {
                 $columnTemplate[$i] = $t;
             }
         }
-
-        $preview = [];
-        $problems = [];
 
         foreach ($sheet as $i => $row) {
             $userId = (int) ($row[0] ?? 0);
@@ -310,7 +354,7 @@ class KpiBulkEntryController extends Controller
             foreach ($columnTemplate as $col => $t) {
                 $raw = $row[$col] ?? null;
                 if ($raw !== null && $raw !== '' && !is_numeric($raw)) {
-                    $problems[] = sprintf('row %d, %s: "%s" is not a number', $i + 1, $t->title, mb_substr((string) $raw, 0, 12));
+                    $problems[] = sprintf('row %d, %s: "%s" is not a number', $i + 1, $labels[$t->id], mb_substr((string) $raw, 0, 12));
                     continue;
                 }
                 $a = $mine[$t->id] ?? null;
@@ -369,6 +413,7 @@ class KpiBulkEntryController extends Controller
 
         return view('tenant.kpi.bulk-preview', [
             'selected' => $selected,
+            'labels' => self::labelsFor($fillable),
             'month' => $month,
             'rows' => $data['rows'],
             'problems' => $data['problems'],

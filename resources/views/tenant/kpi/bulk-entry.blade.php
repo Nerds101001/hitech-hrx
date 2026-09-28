@@ -81,7 +81,7 @@
                             <input type="checkbox" name="templates[]" value="{{ $t->id }}"
                                    {{ in_array($t->id, $selectedIds) ? 'checked' : '' }}
                                    onchange="document.getElementById('pickForm').submit()">
-                            <span>{{ $t->title }}</span>
+                            <span>{{ $labels[$t->id] ?? $t->title }}</span>
                         </label>
                     @endforeach
                 </div>
@@ -139,10 +139,16 @@
                             <th>Employee</th>
                             <th style="width:160px">Department</th>
                             @foreach($selected as $t)
-                                <th class="kpi-col">
-                                    {{ $t->title }}
-                                    @if($t->target_value)
-                                        <div style="font-weight:500;opacity:.8;font-size:10px">target {{ rtrim(rtrim(number_format((float)$t->target_value, 2), '0'), '.') }}</div>
+                                <th class="kpi-col" title="{{ $t->description }}">
+                                    {{ $labels[$t->id] ?? $t->title }}
+                                    @php
+                                        $hint = array_filter([
+                                            $t->target_value ? 'target ' . rtrim(rtrim(number_format((float) $t->target_value, 2), '0'), '.') : null,
+                                            $t->trend === 'decrease' ? 'lower is better' : null,
+                                        ]);
+                                    @endphp
+                                    @if($hint)
+                                        <div style="font-weight:500;opacity:.8;font-size:10px">{{ implode(' · ', $hint) }}</div>
                                     @endif
                                 </th>
                             @endforeach
@@ -202,7 +208,7 @@
                 <div class="col-md-4">
                     <label class="form-label small mb-1">KPI</label>
                     <select name="kpi_template_id" class="form-select form-select-sm" required>
-                        @foreach($templates as $t)<option value="{{ $t->id }}">{{ $t->title }}</option>@endforeach
+                        @foreach($templates as $t)<option value="{{ $t->id }}">{{ $labels[$t->id] ?? $t->title }}</option>@endforeach
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -230,7 +236,7 @@
                 <tbody>
                     @forelse($owners as $o)
                         <tr>
-                            <td>{{ $o->template->title ?? '—' }}</td>
+                            <td>{{ $o->template ? ($labels[$o->template->id] ?? $o->template->title) : '—' }}</td>
                             <td class="bk-emp">{{ trim(($o->user->first_name ?? '') . ' ' . ($o->user->last_name ?? '')) }}</td>
                             <td>{{ $o->department->name ?? 'All departments' }}</td>
                             <td>

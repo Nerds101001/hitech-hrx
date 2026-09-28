@@ -63,7 +63,7 @@
                         <th>Employee</th>
                         <th style="width:160px">Department</th>
                         @foreach($selected as $t)
-                            <th class="kpi-col">{{ $t->title }}</th>
+                            <th class="kpi-col">{{ $labels[$t->id] ?? $t->title }}</th>
                         @endforeach
                     </tr>
                 </thead>
