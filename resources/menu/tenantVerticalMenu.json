@@ -1503,6 +1503,15 @@
                     ]
                 },
                 {
+                    "url": "/roles/special-permissions",
+                    "name": "User Special Permissions",
+                    "slug": "roles.specialPermissions",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
                     "url": "/auditLogs",
                     "name": "Audit Logs",
                     "slug": "auditLogs.index",
