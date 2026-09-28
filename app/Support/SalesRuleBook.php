@@ -72,8 +72,10 @@ class SalesRuleBook
     }
 
     /**
-     * Create (or bring up to date) the KRA heading and its KPIs for one
-     * department, restricted to the given designations. Safe to run twice.
+     * Create the KRA heading and any of its KPIs the department does not have
+     * yet, restricted to the given designations. Safe to re-run: a KPI that
+     * already exists is returned as it is, never changed. The one exception is
+     * a RETIRED KPI, which is switched off.
      *
      * @return array<string, KpiTemplate>  KPI title => template
      */
@@ -82,7 +84,11 @@ class SalesRuleBook
         $base = ['department_id' => $departmentId, 'frequency' => 'yearly', 'check_month' => 3, 'check_day' => 31,
                  'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true];
 
-        $kra = KpiTemplate::updateOrCreate(
+        // Create only what is missing. Once a KPI exists it belongs to whoever runs
+        // the scorecards: frequency, on/off, bands and targets are changed on the
+        // site (11 of these were moved to monthly and Cross-Sell switched off after
+        // the first install), and a re-run used to put all of that back.
+        $kra = KpiTemplate::firstOrCreate(
             ['department_id' => $departmentId, 'title' => self::KRA_TITLE, 'category' => 'KRA'],
             $base + ['max_marks' => 0, 'scoring_type' => 'target', 'data_source' => 'approval', 'created_by_id' => $createdById]
         );
@@ -92,7 +98,7 @@ class SalesRuleBook
             if (isset(self::RETIRED[$title])) {
                 continue;
             }
-            $out[$title] = KpiTemplate::updateOrCreate(
+            $out[$title] = KpiTemplate::firstOrCreate(
                 ['department_id' => $departmentId, 'title' => $title, 'category' => 'KPI'],
                 $base + [
                     'description'        => $basis,

@@ -296,6 +296,32 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->assertSame(15, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 14 KPIs, no duplicates');
     }
 
+    public function test_installing_again_keeps_changes_made_on_the_site_and_only_adds_what_is_missing(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $t = SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        // What the scorecard admins did after the first install on the live site.
+        $t['Target Achievement (Bingo %)']->update(['frequency' => 'monthly', 'check_month' => null, 'check_day' => null]);
+        $t['Cross-Sell / Basket Mix']->update(['is_active' => false]);
+        $t['Market Share %']->update(['max_marks' => 12, 'description' => 'Edited on the site']);
+        $t['Pipeline Strength']->delete();
+
+        $again = SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $bingo = $t['Target Achievement (Bingo %)']->fresh();
+        $this->assertSame('monthly', $bingo->frequency, 'a KPI moved to monthly stays monthly');
+        $this->assertNull($bingo->check_month);
+        $this->assertFalse((bool) $t['Cross-Sell / Basket Mix']->fresh()->is_active, 'a KPI switched off stays off');
+        $this->assertSame(12.0, (float) $t['Market Share %']->fresh()->max_marks, 'edited marks are kept');
+        $this->assertSame('Edited on the site', $t['Market Share %']->fresh()->description);
+
+        $this->assertTrue($again['Pipeline Strength']->exists && $again['Pipeline Strength']->id !== $t['Pipeline Strength']->id,
+            'a KPI that is missing is created again');
+        $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Pipeline Strength')->count());
+        $this->assertCount(14, $again);
+    }
+
     public function test_installing_again_switches_off_a_yearly_cost_of_selling_left_by_an_earlier_install(): void
     {
         $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
