@@ -39,13 +39,27 @@ class TrainingAccountReleaseTest extends TestCase
         return $u;
     }
 
-    /** @return array{0:\Illuminate\Support\Collection,1:TrainingModule} gating modules, and the last one left undone */
+    /**
+     * Which phase gates the account is configuration, and it differs between
+     * environments - production runs phase 1 (4 modules), this machine's copy
+     * has only one module there. These tests are about the release mechanism,
+     * not about which phase is configured, so they pick a phase that actually
+     * has enough modules to exercise "all but one done" and point the config
+     * at it for the duration of the test.
+     *
+     * @return array{0:\Illuminate\Support\Collection,1:TrainingModule} gating modules, and the last one left undone
+     */
     private function gatingModules(User $user): array
     {
-        $ids = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids'))
-            ->orderBy('id')->pluck('id');
+        $phaseId = TrainingModule::selectRaw('phase_id, COUNT(*) c')
+            ->groupBy('phase_id')->orderByDesc('c')->value('phase_id');
 
-        $this->assertGreaterThan(1, $ids->count(), 'this environment needs gating modules for the test to mean anything');
+        $this->assertNotNull($phaseId, 'no training modules exist in this environment');
+        config(['training.onboarding_phase_ids' => [$phaseId]]);
+
+        $ids = TrainingModule::where('phase_id', $phaseId)->orderBy('id')->pluck('id');
+
+        $this->assertGreaterThan(1, $ids->count(), 'the chosen phase needs at least two modules for these tests to mean anything');
 
         $last = TrainingModule::find($ids->last());
 

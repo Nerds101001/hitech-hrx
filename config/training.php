@@ -16,14 +16,19 @@ return [
     | same as "Phase 2: Brand /Product Knowledge" (id 2) - so ordering cannot
     | identify a phase unambiguously. IDs can.
     |
-    |   1 = Phase 1: Culture & Integrity        (4 modules)
-    |   2 = Phase 2: Brand /Product Knowledge   (7 modules)
+    |   1 = Phase 1: Culture & Integrity        (4 modules,  23 questions)
+    |   2 = Phase 2: Brand /Product Knowledge   (7 modules, 222 questions)
+    |
+    | Phase 1 only, by decision: it is the company-wide bar - code of conduct,
+    | IT policy, asset policy, POSH. Phase 2 is 222 product-catalogue questions,
+    | which is a sales-knowledge bar and not something every joiner should be
+    | locked out of HRX over. Phase 2 stays in the portal to work through.
     |
     */
 
     'onboarding_phase_ids' => array_values(array_filter(array_map(
         'intval',
-        explode(',', env('TRAINING_ONBOARDING_PHASE_IDS', '1,2'))
+        explode(',', env('TRAINING_ONBOARDING_PHASE_IDS', '1'))
     ))),
 
     /*
