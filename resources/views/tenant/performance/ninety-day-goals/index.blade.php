@@ -31,7 +31,7 @@
       return '<span class="ndg-none">·</span>';
   };
   /** A week's comment cell: what was written with the status, then comments added later by the salesperson or an admin, then the add button. */
-  $noteCell = function ($goal, $checkin) use ($isAdmin) {
+  $noteCell = function ($goal, $checkin) use ($canManage) {
       if (!$checkin) {
           return '<span class="ndg-none">·</span>';
       }
@@ -42,7 +42,7 @@
       foreach ($checkin->notes as $n) {
           $who = trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name);
           $h .= '<div class="ndg-n" data-note="' . $n->id . '"><b>' . e($who) . '</b><span>' . $n->created_at->format('d M') . '</span>'
-              . ($isAdmin ? '<button type="button" class="ndg-note-del" data-id="' . $n->id . '" title="Remove comment">&times;</button>' : '')
+              . ($canManage ? '<button type="button" class="ndg-note-del" data-id="' . $n->id . '" title="Remove comment">&times;</button>' : '')
               . '<div>' . e($n->body) . '</div></div>';
       }
 
@@ -75,7 +75,7 @@
           <i class="bx bx-plus-circle fs-5"></i><span class="fw-bold">Add customers</span>
         </button>
       @endif
-      @if($mode === 'overview' && $isAdmin)
+      @if($mode === 'overview' && $canManage)
         <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
           <i class="bx bx-calendar-plus fs-5"></i><span class="fw-bold">New program</span>
         </a>
@@ -188,7 +188,7 @@
               @for($w = 0; $w < $weeks; $w++)
                 <th colspan="2" class="text-center ndg-wk ndg-wkhead {{ $w === $weekNo ? 'ndg-now' : '' }}">W{{ $w }} <span class="ndg-date">{{ $dates[$w]->format('d M') }}</span></th>
               @endfor
-              @if($isAdmin)<th rowspan="2"></th>@endif
+              @if($canManage)<th rowspan="2"></th>@endif
             </tr>
             <tr class="ndg-sub">
               @for($w = 0; $w < $weeks; $w++)<th class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">Status</th><th class="{{ $w === $weekNo ? 'ndg-now' : '' }}">Comment</th>@endfor
@@ -211,7 +211,7 @@
                 <td class="ndg-st {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $chip($ck, $dates[$w], $today, $g, true) !!}</td>
                 <td class="ndg-cm {{ $w === $weekNo ? 'ndg-now' : '' }}">{!! $noteCell($g, $ck) !!}</td>
               @endfor
-              @if($isAdmin)<td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>@endif
+              @if($canManage)<td class="text-end"><button type="button" class="btn btn-sm btn-icon icon-sophisticated text-danger ndg-remove" data-id="{{ $g->id }}" title="Remove"><i class="bx bx-trash"></i></button></td>@endif
             </tr>
           @endforeach
           </tbody>
@@ -413,7 +413,7 @@
               @endif
             </td>
             <td class="fw-semibold" data-v="{{ strtolower($g->client_name) }}">{{ $g->client_name }}
-              @if($isAdmin)
+              @if($canManage)
                 <button type="button" class="ndg-edit-goal" title="Edit product, brand, goal or potential"
                   data-id="{{ $g->id }}" data-product="{{ e($g->product) }}" data-brand="{{ e($g->brand) }}" data-goal="{{ e($g->goal ?: $g->goal_type) }}" data-potential="{{ $g->monthly_potential }}"
                   data-title="{{ e($g->client_name) }}"><i class="bx bx-pencil"></i></button>
@@ -425,7 +425,7 @@
             <td class="text-end fw-semibold ndg-p-potential" data-v="{{ (float) $g->monthly_potential }}">{{ $fmtL($g->monthly_potential) }}</td>
             @for($w = 0; $w < $weeks; $w++)
               @php $ck = $cks->get($w); @endphp
-              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today, $g, $isAdmin && optional($g->round)->status === 'active') !!}</td>
+              <td class="ndg-st" data-v="{{ optional($ck)->status }}">{!! $chip($ck, null, $today, $g, $canManage && optional($g->round)->status === 'active') !!}</td>
               <td class="ndg-cm" data-v="{{ strtolower(optional($ck)->comment . ' ' . optional($ck)->notes?->pluck('body')->implode(' ')) }}">{!! $noteCell($g, $ck) !!}</td>
             @endfor
           </tr>

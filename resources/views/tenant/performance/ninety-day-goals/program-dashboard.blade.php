@@ -37,7 +37,7 @@
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">90-Day Sales Goals <span class="badge bg-label-success rounded-pill fw-bold" style="font-size:.62rem">{{ $isAdmin ? 'Admin View' : 'My Team' }}</span></h3>
       <p class="text-muted mb-0 small">Monitor all programs, participants, customer updates and results in real time. Drive accountability. Close more business.</p>
     </div>
-    @if($isAdmin)
+    @if($canManage)
     <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn-hitech shadow-sm rounded-pill px-5 d-flex align-items-center gap-2">
       <i class="bx bx-calendar-plus fs-5"></i><span class="fw-bold">Create New Program</span>
     </a>
@@ -420,7 +420,7 @@
         <div class="hitech-card h-100">
           <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Quick Actions</div></div>
           <div class="card-body p-3 d-flex flex-column gap-2">
-    @if($isAdmin)
+    @if($canManage)
             <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
     @endif
             <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>

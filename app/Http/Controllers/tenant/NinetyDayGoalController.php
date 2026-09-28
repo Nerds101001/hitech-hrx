@@ -68,6 +68,7 @@ class NinetyDayGoalController extends Controller
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'      => 'mine',
             'isAdmin'   => Goals::seesEveryone($user),
+            'canManage' => Goals::managesEveryone($user),
             'canSwitch' => Goals::visibleUserIds($user) !== [$user->id],
             'round'     => $round,
             'week'      => Goals::weekOf($round, $today),
@@ -146,6 +147,7 @@ class NinetyDayGoalController extends Controller
 
         return view('tenant.performance.ninety-day-goals.index', [
             'mode'       => 'overview',
+            'canManage'  => Goals::managesEveryone($viewer),
             'canSwitch'  => $isSales,
             'goals'      => $goals,
             'summary'    => $summary,
@@ -473,7 +475,7 @@ class NinetyDayGoalController extends Controller
                 ->when($teamPipelineIds !== null, fn ($q) => $q->whereIn('sales_pipeline_id', $teamPipelineIds ?: [0]))->count(),
         ];
 
-        return view('tenant.performance.ninety-day-goals.program-dashboard', $data + ['tab' => 'admin', 'isAdmin' => $isAdmin]);
+        return view('tenant.performance.ninety-day-goals.program-dashboard', $data + ['tab' => 'admin', 'isAdmin' => $isAdmin, 'canManage' => Goals::managesEveryone($user)]);
     }
 
     /** Reports tab's "Export to Excel": the same filtered rows as the table, not just the visible page. */
@@ -913,7 +915,7 @@ class NinetyDayGoalController extends Controller
             'tab'      => null,
             'canSwitch' => Goals::isSalesStaff($user),
             'isAdmin'  => Goals::seesEveryone($user),
-            'canEdit'  => Goals::seesEveryone($user) || (int) $round->user_id === (int) $user->id,
+            'canEdit'  => Goals::managesEveryone($user) || (int) $round->user_id === (int) $user->id,
             'round'    => $round,
             'goals'    => $goals,
             'd'        => $d,
@@ -1018,6 +1020,7 @@ class NinetyDayGoalController extends Controller
         return view('tenant.performance.ninety-day-goals.program-detail', [
             'tab'        => null,
             'isAdmin'    => true,
+            'canManage'  => Goals::managesEveryone($user),
             'program'    => $program,
             'filters'    => $f,
             'people'     => $people,
@@ -1046,7 +1049,7 @@ class NinetyDayGoalController extends Controller
     public function programSendReminder(Request $request, $id)
     {
         $admin = Auth::user();
-        if (!Goals::seesEveryone($admin)) {
+        if (!Goals::managesEveryone($admin)) {
             return response()->json(['success' => false, 'message' => 'Only admin/HR can send reminders.'], 403);
         }
         $program = NinetyDayProgram::findOrFail($id);
@@ -1100,7 +1103,7 @@ class NinetyDayGoalController extends Controller
     public function programCreate()
     {
         $user = Auth::user();
-        if (!Goals::seesEveryone($user)) {
+        if (!Goals::managesEveryone($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'Only admin/HR can start a new 90-Day Goals program.');
         }
 
@@ -1117,7 +1120,7 @@ class NinetyDayGoalController extends Controller
     public function programStore(Request $request)
     {
         $admin = Auth::user();
-        if (!Goals::seesEveryone($admin)) {
+        if (!Goals::managesEveryone($admin)) {
             return response()->json(['success' => false, 'message' => 'Only admin/HR can start a new 90-Day Goals program.'], 403);
         }
         $data = $request->validate([
@@ -1335,7 +1338,7 @@ class NinetyDayGoalController extends Controller
         // measured against, so the salesperson can't move it once it has been reported on or the
         // round is over - lowering it after the fact inflated their achievement. Admin/HR still can.
         if (isset($data['monthly_potential']) && (float) $data['monthly_potential'] !== (float) $goal->monthly_potential
-            && !Goals::seesEveryone(Auth::user())) {
+            && !Goals::managesEveryone(Auth::user())) {
             $closed = $goal->closed_at || optional($goal->round)->status !== 'active';
             $reported = NinetyDayGoalCheckin::where('goal_id', $goal->id)->whereNotNull('status')->exists();
             if ($closed || $reported) {
@@ -1351,7 +1354,7 @@ class NinetyDayGoalController extends Controller
     {
         // Once a customer is added, the sales team cannot remove it: the history stays on record.
         // Only admin/HR can delete, and the check-ins and comments go with it.
-        if (!Goals::seesEveryone(Auth::user())) {
+        if (!Goals::managesEveryone(Auth::user())) {
             return response()->json(['success' => false, 'message' => 'Once a customer is added it stays on record. Ask an admin if one has to be removed.'], 403);
         }
         $goal = NinetyDayGoal::findOrFail($id);
@@ -1387,7 +1390,7 @@ class NinetyDayGoalController extends Controller
 
         return response()->json(['success' => true, 'note' => [
             'id' => $note->id, 'by' => trim($user->first_name . ' ' . $user->last_name), 'body' => $note->body,
-            'at' => $note->created_at->format('d M'), 'can_delete' => Goals::seesEveryone($user),
+            'at' => $note->created_at->format('d M'), 'can_delete' => Goals::managesEveryone($user),
         ]]);
     }
 
@@ -1420,7 +1423,7 @@ class NinetyDayGoalController extends Controller
     /** Only admin/HR remove a comment. */
     public function destroyNote($id)
     {
-        if (!Goals::seesEveryone(Auth::user())) {
+        if (!Goals::managesEveryone(Auth::user())) {
             return response()->json(['success' => false, 'message' => 'Comments stay on record.'], 403);
         }
         NinetyDayGoalNote::findOrFail($id)->delete();
@@ -1434,7 +1437,7 @@ class NinetyDayGoalController extends Controller
     private function targetUser(Request $request, User $user): ?User
     {
         if ($request->filled('user_id') && (int) $request->input('user_id') !== $user->id) {
-            if (!Goals::seesEveryone($user)) {
+            if (!Goals::managesEveryone($user)) {
                 return null;
             }
             $other = User::notTerminated()->find((int) $request->input('user_id'));
@@ -1449,6 +1452,6 @@ class NinetyDayGoalController extends Controller
     {
         $user = Auth::user();
 
-        return Goals::seesEveryone($user) || (int) $goal->user_id === (int) $user->id;
+        return Goals::managesEveryone($user) || (int) $goal->user_id === (int) $user->id;
     }
 }

@@ -117,9 +117,11 @@
         <div class="d-flex align-items-center gap-3">
           <div class="small text-muted">Current week: W{{ $currentWeek }} · {{ $program->starts_on->copy()->addDays(7 * $currentWeek)->format('d M Y') }}</div>
           {{-- A future week has no check-ins yet, so remind for the selected week only up to the current one. --}}
+          @if($canManage ?? false)
           <button type="button" id="ndgPrRemindBtn" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.78rem" data-week="{{ min($selectedWeek, $currentWeek) }}">
             <i class="bx bx-bell"></i> Send Reminder
           </button>
+          @endif
         </div>
       </div>
       <div class="card-body p-3 d-flex gap-2 ndg-week-strip" id="ndgPrWeekStrip">

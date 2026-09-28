@@ -188,6 +188,7 @@ return [
 
     'Performance' => [
         'goals.manage' => 'Manage 90-Day Goals',
+        'goals.view' => 'View 90-Day Goals (read-only)',
         'scorecards.manage' => 'Generate / Review Scorecards',
         'kpi.manage' => 'Manage KPI / KRA (DWM)',
     ],

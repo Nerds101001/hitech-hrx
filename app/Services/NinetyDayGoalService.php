@@ -102,8 +102,23 @@ class NinetyDayGoalService
         return str_contains(strtolower((string) optional($user->department)->name), 'sales');
     }
 
-    /** Admin, HR, or anyone delegated goals.manage / scorecards.manage sees everyone. */
+    /**
+     * Who sees every salesperson's goals: anyone who may manage them, plus anyone
+     * given goals.view -- the read-only grant. Use this for what a page SHOWS.
+     */
     public static function seesEveryone(?User $user): bool
+    {
+        return $user && (self::managesEveryone($user) || $user->can('goals.view'));
+    }
+
+    /**
+     * Who may CHANGE anyone's goals: create programs, send reminders, edit or
+     * remove goals, remove comments, act for a named person. Admin, HR, or
+     * goals.manage / scorecards.manage -- never goals.view, which exists so
+     * someone can see everything and alter nothing. Use this for what a page
+     * lets you DO.
+     */
+    public static function managesEveryone(?User $user): bool
     {
         return $user && ($user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])
             || $user->can('goals.manage') || $user->can('scorecards.manage'));
@@ -485,7 +500,7 @@ class NinetyDayGoalService
         $errors = [];
         $saved = 0;
 
-        if ($actor->id !== $target->id && !self::seesEveryone($actor)) {
+        if ($actor->id !== $target->id && !self::managesEveryone($actor)) {
             return [0, ['You cannot fill this in for someone else.']];
         }
         if (!$round) {
@@ -911,9 +926,16 @@ class NinetyDayGoalService
     /** The salesperson themselves, and whoever oversees them (admin, HR, their manager), may comment on a goal's week. */
     public static function canNote(User $user, NinetyDayGoal $goal): bool
     {
-        $scope = self::visibleUserIds($user);
+        if (self::managesEveryone($user)) {
+            return true;
+        }
+        // Adding a comment changes a goal, so seeing everyone (goals.view) is not
+        // enough: outside the managers, it's your own goals or your own team's.
+        $scope = $user->hasRole(['manager', 'Manager'])
+            ? self::current(User::where('reporting_to_id', $user->id))->pluck('id')->push($user->id)->all()
+            : [$user->id];
 
-        return $scope === null || in_array((int) $goal->user_id, array_map('intval', $scope), true);
+        return in_array((int) $goal->user_id, array_map('intval', $scope), true);
     }
 
     /** Add a comment to a week. The week must already exist (it does from its Monday onward). */
