@@ -822,7 +822,11 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                         <div class="mod-meta">
                             <span class="mod-meta-chip"><i class="ti ti-clock" style="font-size:0.72rem;"></i> {{ $module->estimated_time_minutes }}m</span>
                             <span class="mod-meta-chip" style="text-transform:capitalize;">
-                                {{ ucfirst($module->content_type ?? 'reading') }}
+                                {{-- Same wording the admin Content Type picker uses.
+                                     This printed the raw column, so staff saw
+                                     "Policy" and "Catalog" for what admins now
+                                     create as Text and PDF. --}}
+                                {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? ucfirst($module->content_type ?? 'reading') }}
                             </span>
                             @if($module->is_assessment_required ?? true)
                             <span class="mod-meta-chip"><i class="ti ti-clipboard-check" style="font-size:0.72rem;"></i> Quiz</span>
