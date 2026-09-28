@@ -654,7 +654,7 @@
                                             <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Primary Information</h6>
                                         </div>
                                         <button class="btn btn-hitech px-4 rounded-pill shadow-sm" data-bs-toggle="modal"
-                                            data-bs-target="#offcanvasEditBasicInfo" onclick="loadUserOnboardingData()">
+                                            data-bs-target="#offcanvasEditBasicInfo">
                                             <i class="bx bx-edit-alt me-1"></i> Update Details
                                         </button>
                                     </div>
@@ -4115,6 +4115,46 @@
                     }
                 });
             }
+
+            // This whole script is a module, so a plain function declaration is
+            // private to it: the inline onclick="moveToOnboarding(...)" and
+            // onclick="navigateTabs(...)" buttons threw "is not defined" and did
+            // nothing. They are exported the same way as the page's other
+            // onclick handlers.
+            window.moveToOnboarding = moveToOnboarding;
+            window.navigateTabs = navigateTabs;
+
+            // Clicking an existing payroll adjustment opens the same form as "Add
+            // Item". editAdjustment() was never defined on this page (only on
+            // Settings), so the form opened EMPTY with no id and saving it
+            // created a duplicate adjustment instead of editing the one clicked.
+            const adjustmentForm = {
+                showCategory(category) {
+                    // The amount/percentage columns, found from their own inputs.
+                    $('#adjustmentAmount').closest('.col-md-6').toggle(category !== 'percentage');
+                    $('#adjustmentPercentage').closest('.col-md-6').toggle(category === 'percentage');
+                },
+                fill(a) {
+                    $('#adjustmentId').val(a ? a.id : '');
+                    $('#adjustmentName').val(a ? a.name : '');
+                    $('#adjustmentCode').val(a ? a.code : '');
+                    $('#adjustmentType').val(a ? a.type : 'benefit');
+                    const category = a && !(parseFloat(a.amount) > 0) && a.percentage ? 'percentage' : 'fixed';
+                    $('#adjustmentCategory').val(category);
+                    $('#adjustmentAmount').val(a && category === 'fixed' ? a.amount : '');
+                    $('#adjustmentPercentage').val(a && category === 'percentage' ? a.percentage : '');
+                    $('#adjustmentNotes').val(a ? (a.notes || '') : '');
+                    $('#adjustmentSubmitBtn').text(a ? 'Update Adjustment' : 'Save Adjustment');
+                    this.showCategory(category);
+                },
+            };
+            window.editAdjustment = (adjustment) => adjustmentForm.fill(adjustment);
+            $(document).on('click', '#addPayrollAdjustment', () => adjustmentForm.fill(null));
+            $(document).on('change', '#adjustmentCategory', function () {
+                adjustmentForm.showCategory(this.value);
+                // Only one of the two may be sent: clear the hidden one.
+                $(this.value === 'percentage' ? '#adjustmentAmount' : '#adjustmentPercentage').val('');
+            });
 
             // Move an employee (back) into onboarding. This re-issues their
             // password and emails a fresh invite, so it asks twice when the
