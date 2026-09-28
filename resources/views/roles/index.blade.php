@@ -279,6 +279,10 @@
             data-bs-target="#previewAccessModal" data-bs-toggle="modal">
         <i class="bx bx-show-alt me-1"></i> @lang('Preview Access')
     </button>
+    <a href="{{ route('roles.specialPermissions') }}"
+       class="btn btn-outline-primary rounded-pill fw-bold shadow-sm d-flex align-items-center px-3">
+        <i class="bx bx-user-check me-1"></i> @lang('Special Permissions to User')
+    </a>
     <button data-bs-target="#addOrUpdateRoleModal" data-bs-toggle="modal" class="btn btn-primary btn-hitech-glow add-new-role">
       <i class="bx bx-plus me-1"></i> @lang('Create New Role')
     </button>
