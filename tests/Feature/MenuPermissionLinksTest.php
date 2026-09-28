@@ -119,7 +119,8 @@ class MenuPermissionLinksTest extends TestCase
 
     public function test_view_all_sales_data_shows_the_viewing_pages(): void
     {
-        $this->assertSection(['All Visits', 'Client Master', 'Sales Report', 'Sales Pipeline', 'Kingo Bingo'],
+        // Client Master checks "View Client Master" itself, so it is not among them.
+        $this->assertSection(['All Visits', 'Sales Report', 'Sales Pipeline', 'Kingo Bingo'],
             $this->person('employee', ['sales_ops.view_all']), 'Sales Field Ops');
     }
 

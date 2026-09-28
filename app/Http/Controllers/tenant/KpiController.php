@@ -55,7 +55,7 @@ class KpiController extends Controller
     public function manage(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
 
@@ -97,7 +97,7 @@ class KpiController extends Controller
     public function store(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
 
@@ -133,7 +133,7 @@ class KpiController extends Controller
     public function update(Request $request, $id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
 
@@ -159,7 +159,7 @@ class KpiController extends Controller
     public function destroy($id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         KpiAssignment::where('id', $id)->update(['is_active' => false]);
@@ -174,7 +174,7 @@ class KpiController extends Controller
     public function assignFromRoutine(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         $data = $request->validate([
@@ -230,7 +230,7 @@ class KpiController extends Controller
     public function evaluate(Request $request, $id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         $data = $request->validate([
@@ -587,7 +587,7 @@ class KpiController extends Controller
 
     private function assertCanManageTemplates(): ?string
     {
-        return Auth::user()->hasRole(['admin', 'hr']) ? null : 'Unauthorized.';
+        return (Auth::user()->hasRole(['admin', 'hr']) || Auth::user()->can('kpi.manage')) ? null : 'Unauthorized.';
     }
 
     public function templates(Request $request)

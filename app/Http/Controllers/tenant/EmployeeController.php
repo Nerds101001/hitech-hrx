@@ -574,7 +574,7 @@ class EmployeeController extends Controller
     $user->save();
     
     // Role Synchronization
-    $user->syncRoles([$validated['role']]);
+    $user->syncRoles(\App\Support\RoleAssignment::rolesFor($validated['role']));
 
     // CCARE / New Biz Agent Assignment.
     // Both selections are saved together as one union: a person in the combined
@@ -1878,7 +1878,7 @@ class EmployeeController extends Controller
       $user->created_by_id = auth()->id();
       $user->save();
 
-      $user->assignRole($request->input('role'));
+      $user->assignRole(\App\Support\RoleAssignment::rolesFor($request->input('role')));
 
       // CC / New Biz Agent Assignment — union of both lists, deduped: a
       // combined-department person may be selected in both dropdowns but only
@@ -2754,7 +2754,7 @@ class EmployeeController extends Controller
         if (!\Spatie\Permission\Models\Role::where('name', $roleToAssign)->exists()) {
           $roleToAssign = 'employee'; // Final fallback
         }
-        $user->assignRole($roleToAssign);
+        $user->assignRole(\App\Support\RoleAssignment::rolesFor($roleToAssign));
         $user->notify(new OnboardingInvite($user, $plainPassword));
         $count++;
 

@@ -258,7 +258,7 @@ Route::middleware([
     Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage|holidays.manage|leave.create_type|leave.create_policy|expense.manage_types|document_types.manage|ipgroup.manage|geofencegroup.manage|qrgroup.manage|units.manage|setu.manage'])->group(function () {
 
     // Shifts
-    Route::prefix('shifts')->name('shifts.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage'])->prefix('shifts')->name('shifts.')->group(function () {
       Route::get('/', [ShiftController::class, 'index'])->name('index');
       Route::get('/list', [ShiftController::class, 'listAjax'])->name('listAjax');
       Route::post('/', [ShiftController::class, 'store'])->name('store');
@@ -270,7 +270,7 @@ Route::middleware([
     });
 
     // Holidays
-    Route::prefix('holidays')->name('holidays.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|holidays.manage'])->prefix('holidays')->name('holidays.')->group(function () {
       Route::get('', [HolidayController::class, 'index'])->name('index');
       Route::get('dashboard', [HolidayController::class, 'dashboard'])->name('dashboard');
       Route::get('dashboardAjax', [HolidayController::class, 'dashboardAjax'])->name('dashboardAjax');
@@ -282,7 +282,7 @@ Route::middleware([
     });
 
     // Leave Types
-    Route::prefix('leaveTypes')->name('leaveTypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|leave.create_type'])->prefix('leaveTypes')->name('leaveTypes.')->group(function () {
       Route::get('', [LeaveTypeController::class, 'index'])->name('index');
       Route::get('getLeaveTypesAjax', [LeaveTypeController::class, 'getLeaveTypesAjax'])->name('getLeaveTypesAjax');
       Route::post('addOrUpdateLeaveTypeAjax', [LeaveTypeController::class, 'addOrUpdateLeaveTypeAjax'])->name('addOrUpdateLeaveTypeAjax');
@@ -304,7 +304,7 @@ Route::middleware([
     });
 
     // Expense Types
-    Route::prefix('expenseTypes')->name('expenseTypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|expense.manage_types'])->prefix('expenseTypes')->name('expenseTypes.')->group(function () {
       Route::get('', [ExpenseTypeController::class, 'index'])->name('index');
       Route::get('getExpenseTypesListAjax', [ExpenseTypeController::class, 'getExpenseTypesListAjax'])->name('getExpenseTypesListAjax');
       Route::post('addOrUpdateExpenseTypeAjax', [ExpenseTypeController::class, 'addOrUpdateExpenseTypeAjax'])->name('addOrUpdateExpenseTypeAjax');
@@ -319,7 +319,7 @@ Route::middleware([
     });
 
     // Document Types
-    Route::prefix('documenttypes')->name('documenttypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|document_types.manage'])->prefix('documenttypes')->name('documenttypes.')->group(function () {
       Route::get('', [DocumentTypeController::class, 'index'])->name('index');
       Route::get('getDocumentTypesAjax', [DocumentTypeController::class, 'getDocumentTypesAjax'])->name('getDocumentTypesAjax');
       Route::post('addOrUpdateDocumentTypeAjax', [DocumentTypeController::class, 'addOrUpdateDocumentTypeAjax'])->name('addOrUpdateDocumentTypeAjax');
@@ -353,7 +353,7 @@ Route::middleware([
     // Report rows and how many CRM companies are cached to match against;
     // the actual sync/resolve POSTs reuse sales-visits.pipeline.sync-crm-
     // mapping / resolve-crm-mapping (already built and routed).
-    Route::prefix('crm-mapping-sync')->name('crm-mapping-sync.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|crm_clients.manage'])->prefix('crm-mapping-sync')->name('crm-mapping-sync.')->group(function () {
       Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
@@ -381,19 +381,19 @@ Route::middleware([
     });
 
     // IP Groups
-    Route::prefix('ipgroup')->name('ipgroup.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|ipgroup.manage'])->prefix('ipgroup')->name('ipgroup.')->group(function () {
       Route::get('', [IpGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [IpGroupController::class, 'indexAjax'])->name('indexAjax');
     });
 
     // Geofence Groups
-    Route::prefix('geofencegroup')->name('geofencegroup.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|geofencegroup.manage'])->prefix('geofencegroup')->name('geofencegroup.')->group(function () {
       Route::get('', [GeofenceGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [GeofenceGroupController::class, 'indexAjax'])->name('indexAjax');
     });
 
     // QR Code Groups
-    Route::prefix('qrcode')->name('qrcode.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|qrgroup.manage'])->prefix('qrcode')->name('qrcode.')->group(function () {
       Route::get('', [QrGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [QrGroupController::class, 'indexAjax'])->name('indexAjax');
     });
@@ -421,10 +421,10 @@ Route::middleware([
 
 
     // --- OPERATIONS & REQUESTS ---
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import|visits.manage|leave.approve|leave.view_all|outdoor_duty.approve'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import|visits.manage|leave.approve|leave.approve.team|leave.approve.all|leave.view_all|outdoor_duty.approve'])->group(function () {
 
     // Attendance
-    Route::prefix('attendance')->name('attendance.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import'])->prefix('attendance')->name('attendance.')->group(function () {
       Route::get('', [AttendanceController::class, 'index'])->name('index');
       Route::get('indexAjax', [AttendanceController::class, 'indexAjax'])->name('indexAjax');
       Route::get('registryAjax', [AttendanceController::class, 'registryAjax'])->name('registryAjax');
@@ -444,7 +444,7 @@ Route::middleware([
     });
 
     // Visits
-    Route::prefix('visits')->name('visits.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|visits.manage'])->prefix('visits')->name('visits.')->group(function () {
       Route::get('', [VisitController::class, 'index'])->name('index');
       Route::get('getListAjax', [VisitController::class, 'getListAjax'])->name('getListAjax');
       Route::delete('deleteVisitAjax/{id}', [VisitController::class, 'deleteVisitAjax'])->name('deleteVisitAjax');
@@ -452,7 +452,7 @@ Route::middleware([
     });
 
     // Leave Requests
-    Route::prefix('leaveRequests')->name('leaveRequests.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|leave.approve|leave.approve.team|leave.approve.all|leave.view_all|outdoor_duty.approve'])->prefix('leaveRequests')->name('leaveRequests.')->group(function () {
       Route::get('', [LeaveController::class, 'index'])->name('index');
       Route::get('getListAjax', [LeaveController::class, 'getListAjax'])->name('getListAjax');
       Route::post('actionAjax', [LeaveController::class, 'actionAjax'])->name('actionAjax');
@@ -730,7 +730,7 @@ Route::middleware([
     Route::middleware(['role_or_permission:admin|hr|departments.manage|designations.manage|teams.manage'])->group(function () {
 
     // Departments
-    Route::prefix('departments')->name('departments.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|departments.manage'])->prefix('departments')->name('departments.')->group(function () {
       Route::get('', [DepartmentsController::class, 'index'])->name('index');
       Route::get('indexAjax', [DepartmentsController::class, 'indexAjax'])->name('indexAjax');
       Route::post('addOrUpdateDepartmentAjax', [DepartmentsController::class, 'addOrUpdateDepartmentAjax'])->name('addOrUpdateDepartmentAjax');
@@ -743,7 +743,7 @@ Route::middleware([
     });
 
     // Designations
-    Route::prefix('designations')->name('designations.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|designations.manage'])->prefix('designations')->name('designations.')->group(function () {
       Route::get('', [DesignationController::class, 'index'])->name('index');
       Route::get('indexAjax', [DesignationController::class, 'indexAjax'])->name('indexAjax');
       Route::get('getDesignationListAjax', [DesignationController::class, 'getDesignationListAjax'])->name('getDesignationListAjax');
@@ -755,7 +755,7 @@ Route::middleware([
     });
 
     // Teams
-    Route::prefix('teams')->name('teams.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|teams.manage'])->prefix('teams')->name('teams.')->group(function () {
       Route::get('', [TeamController::class, 'index'])->name('index');
       Route::get('getTeamsListAjax', [TeamController::class, 'getTeamsListAjax'])->name('getTeamsListAjax');
       Route::post('addOrUpdateTeamAjax', [TeamController::class, 'addOrUpdateTeamAjax'])->name('addOrUpdateTeamAjax');
@@ -1080,8 +1080,11 @@ Route::middleware([
             Route::delete('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroy'])->name('destroy');
             
             // Admin/HR specific
+            // The claims dashboard is where verifiers, approvers and payers all
+            // work; each action keeps its own gate.
+            Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard')
+                ->middleware('role_or_permission:admin|hr|travel_claim.verify|travel_claim.approve|travel_claim.pay');
             Route::middleware(['role_or_permission:admin|hr|travel_claim.verify'])->group(function() {
-                Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard');
                 Route::post('/{id}/verify', [\App\Http\Controllers\tenant\TravelClaimController::class, 'verify'])->name('verify');
                 Route::post('/{id}/reject', [\App\Http\Controllers\tenant\TravelClaimController::class, 'reject'])->name('reject');
                 Route::post('/{id}/objection', [\App\Http\Controllers\tenant\TravelClaimController::class, 'objection'])->name('objection');
@@ -1271,7 +1274,9 @@ Route::middleware([
     Route::middleware([
       'web',
       'auth',
-      'role_or_permission:admin|hr|manager|device.manage|biometric.manage|account.manage'
+      // Every page in this group has its own gate below; this outer list only
+      // has to let each of their boxes in.
+      'role_or_permission:admin|hr|manager|device.manage|biometric.manage|account.manage|assets.manage_categories|sos.manage|chat.access|goals.manage|scorecards.manage'
     ])->group(function () {
 
 
@@ -1309,14 +1314,14 @@ Route::middleware([
     });
 
     // Device Status & Biometric Devices
-    Route::prefix('device')->name('device.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|manager|device.manage|account.manage'])->prefix('device')->name('device.')->group(function () {
       Route::get('', [DeviceController::class, 'index'])->name('index');
       Route::get('indexAjax', [DeviceController::class, 'indexAjax'])->name('indexAjax');
       Route::get('getByIdAjax/{id}', [DeviceController::class, 'getByIdAjax'])->name('getByIdAjax');
       Route::delete('deleteAjax/{id}', [DeviceController::class, 'deleteAjax'])->name('deleteAjax');
     });
 
-    Route::prefix('biometric')->name('biometric.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|manager|biometric.manage'])->prefix('biometric')->name('biometric.')->group(function () {
       Route::get('', [BiometricDeviceController::class, 'index'])->name('index');
       Route::get('create', [BiometricDeviceController::class, 'create'])->name('create');
       Route::post('store', [BiometricDeviceController::class, 'store'])->name('store');

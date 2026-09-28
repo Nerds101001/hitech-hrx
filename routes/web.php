@@ -195,7 +195,7 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
 
     //Audit Logs — admin/HR only (the log shows every user's changes). This
     //duplicate registration overrides the tenant.php one, so gate it here too.
-    Route::middleware('role:admin|hr')->group(function () {
+    Route::middleware('role_or_permission:admin|hr|audit.view')->group(function () {
         Route::get('auditLogs', [AuditLogController::class, 'index'])->name('auditLogs.index');
         Route::get('auditLogs/show/{id}', [AuditLogController::class, 'show'])->name('auditLogs.show');
     });

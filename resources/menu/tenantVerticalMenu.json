@@ -171,7 +171,8 @@
                         "admin",
                         "hr",
                         "accounts"
-                    ]
+                    ],
+                    "permission": ["employee.view"]
                 },
                 {
                     "url": "/employees/celebrations",
@@ -309,7 +310,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job"]
                 },
                 {
                     "url": "/job-application",
@@ -318,7 +320,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Application"]
                 },
                 {
                     "url": "/job-application/candidate",
@@ -327,7 +330,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job OnBoard"]
                 },
                 {
                     "url": "/custom-question",
@@ -336,7 +340,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Custom Question"]
                 },
                 {
                     "url": "/interview-schedule",
@@ -354,7 +359,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Category"]
                 },
                 {
                     "url": "/job-stage",
@@ -363,7 +369,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Stage"]
                 },
                 {
                     "url": "/training",
@@ -983,13 +990,13 @@
                 "sales-visits.index",
                 "sales-visits.clients.index"
             ],
-            "permission": ["access-sales-ops", "cc_attendance.manage", "sales_ops.view_all", "sales_visits.view", "sales_visits.create", "sales_visits.manage", "sales_visits.verify", "client_master.view", "client_master.manage", "sales_report.view", "sales_report.manage", "sales_report.import", "sales_pipeline.view", "sales_analytics.view", "kingo_bingo.play"],
+            "permission": ["access-sales-ops", "cc_attendance.manage", "sales_ops.view_all", "sales_visits.view", "sales_visits.create", "client_master.view", "sales_report.view", "sales_pipeline.view", "sales_analytics.view", "kingo_bingo.play"],
             "submenu": [
                 {
                     "url": "/sales-visits",
                     "name": "All Visits",
                     "slug": "sales-visits.index",
-                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_visits.view", "sales_visits.manage", "sales_visits.verify"]
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_visits.view"]
                 },
                 {
                     "url": "/sales-visits/create",
@@ -1013,7 +1020,7 @@
                     "url": "/sales-visits/clients",
                     "name": "Client Master",
                     "slug": "sales-visits.clients.index",
-                    "permission": ["access-sales-ops", "sales_ops.view_all", "client_master.view", "client_master.manage"]
+                    "permission": ["access-sales-ops", "client_master.view"]
                 },
                 {
                     "url": "/sales-visits/delete-requests",
@@ -1037,7 +1044,7 @@
                     "url": "/sales-visits/pipeline",
                     "name": "Sales Report",
                     "slug": "sales-visits.pipeline.index",
-                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_report.view", "sales_report.manage", "sales_report.import"]
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_report.view"]
                 },
                 {
                     "url": "/sales-visits/sales-pipeline",

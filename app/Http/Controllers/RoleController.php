@@ -183,7 +183,7 @@ class RoleController extends Controller
         'password' => bcrypt(bin2hex(random_bytes(8))),
         'status' => 'active',
       ]);
-      $temp->assignRole($role->name);
+      $temp->assignRole(\App\Support\RoleAssignment::rolesFor($role->name));
       $temp->load('department', 'roles');
 
       $tree = \App\Support\Nav::previewMenuFor($temp);
@@ -522,7 +522,8 @@ class RoleController extends Controller
     // could then have assigned to themselves).
     $requestedPermissions = $request->permissions ?? [];
     $existingPermissions = Permission::whereIn('name', $requestedPermissions)->pluck('name')->toArray();
-    if ($guard = $this->guardPrivilegeEscalation($existingPermissions)) {
+    $roleNow = $request->id ? Role::find($request->id) : null;
+    if ($guard = $this->guardPrivilegeEscalation($existingPermissions, null, $roleNow ? $roleNow->permissions->pluck('name')->all() : [])) {
       return $guard;
     }
 
@@ -631,7 +632,7 @@ class RoleController extends Controller
         'password' => bcrypt(bin2hex(random_bytes(8))),
         'status' => 'active',
       ]);
-      $temp->assignRole($role);
+      $temp->assignRole(\App\Support\RoleAssignment::rolesFor($role));
       $temp->load('department', 'roles');
 
       $tree = \App\Support\Nav::previewMenuFor($temp);
@@ -650,7 +651,7 @@ class RoleController extends Controller
    * ordinary permissions while blocking self-escalation to admin. Admins are
    * unrestricted. Returns an Error response to abort, or null to proceed.
    */
-  private function guardPrivilegeEscalation(array $requestedPermissionNames, $targetUserId = null): ?\Illuminate\Http\JsonResponse
+  private function guardPrivilegeEscalation(array $requestedPermissionNames, $targetUserId = null, array $alreadyThere = []): ?\Illuminate\Http\JsonResponse
   {
     $actor = auth()->user();
     if ($actor && $actor->hasRole('admin')) {
@@ -662,6 +663,19 @@ class RoleController extends Controller
     $elevated = array_values(array_intersect($requestedPermissionNames, \App\Http\Middleware\AdminRoleGuard::ELEVATED_PERMISSIONS));
     if (!empty($elevated)) {
       return Error::response('You are not allowed to assign administrative permissions: ' . implode(', ', $elevated));
+    }
+    // A ticked box opens its pages for every role (AdminRoleGuard::
+    // permissionOpens), so someone who is neither admin nor HR - a manager,
+    // or a "Manage Roles & Permissions" delegate - may only hand out boxes
+    // they hold themselves. Otherwise they could give any role, their own
+    // included, pages they cannot open. Boxes already there are not "handed
+    // out" and are left alone.
+    if ($actor && !$actor->hasRole(['hr', 'HR'])) {
+      $held = $actor->getAllPermissions()->pluck('name')->all();
+      $beyond = array_values(array_diff($requestedPermissionNames, $alreadyThere, $held));
+      if (!empty($beyond)) {
+        return Error::response('You can only give permissions you have yourself. Not allowed: ' . implode(', ', $beyond));
+      }
     }
     return null;
   }

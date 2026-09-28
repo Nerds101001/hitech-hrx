@@ -133,7 +133,8 @@ class Nav
             return true;
         }
         $guard = \App\Http\Middleware\AdminRoleGuard::class;
-        $override = $user->getAllPermissions()->pluck('name')->intersect($guard::ELEVATED_PERMISSIONS)->isNotEmpty();
+        $override = $user->getAllPermissions()->pluck('name')->intersect($guard::ELEVATED_PERMISSIONS)->isNotEmpty()
+            || $guard::permissionOpens($route, $user);
         if ($user->hasRole(['employee', 'office_employee'])) {
             return $override;
         }

@@ -4,7 +4,7 @@
     use App\Services\AddonService\IAddonService;
     use Carbon\Carbon;
     use App\Helpers\StaticDataHelpers;
-    $role = $user->roles()->first()?->name ?? '';
+    $role = \App\Support\RoleAssignment::primaryRole($user) ?? '';
     $addonService = app(IAddonService::class);
     // Banking, salary, payslips and payroll adjustments are confidential
     // financial data — only admin/hr/accounts or a holder of the explicit
@@ -913,7 +913,7 @@
                                                         <p class="mb-0 text-muted small fw-bold text-uppercase"
                                                             style="font-size: 0.65rem; letter-spacing: 0.05em;">System Role</p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
-                                                            {{ $user->getRoleNames()->first() ?? 'Employee' }}</p>
+                                                            {{ \App\Support\RoleAssignment::primaryRole($user) ?? 'Employee' }}</p>
                                                     </div>
                                                 </div>
                                             </div>
