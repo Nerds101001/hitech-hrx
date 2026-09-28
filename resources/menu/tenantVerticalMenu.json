@@ -540,6 +540,15 @@
                     ]
                 },
                 {
+                    "url": "/leave-unlocks",
+                    "name": "Leave Unlock Windows",
+                    "slug": "leave-unlocks.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
                     "url": "/biometric",
                     "name": "Biometric Devices",
                     "slug": "biometric.index",

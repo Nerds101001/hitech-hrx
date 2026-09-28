@@ -681,7 +681,7 @@ class UserDashboardController extends Controller
         }
 
         // 3. Backdated Check (Limit: 1 week - see LeaveBackdate)
-        if ($backdateError = \App\Support\LeaveBackdate::error($validated['from_date'])) {
+        if ($backdateError = \App\Support\LeaveBackdate::error($validated['from_date'], $validated['to_date'], auth()->id())) {
             return redirect()->back()->withErrors(['from_date' => $backdateError])->withInput();
         }
 

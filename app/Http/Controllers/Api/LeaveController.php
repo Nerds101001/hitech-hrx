@@ -161,7 +161,7 @@ class LeaveController extends Controller
     }
 
     // Same one-week back-dating limit as the web form (the app had none).
-    if ($backdateError = \App\Support\LeaveBackdate::error($finalFromDate)) {
+    if ($backdateError = \App\Support\LeaveBackdate::error($finalFromDate, $finalToDate, auth()->id())) {
       return Error::response($backdateError);
     }
 

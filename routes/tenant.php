@@ -472,6 +472,16 @@ Route::middleware([
     // instead of one shared OR-alternation (that used to mean granting
     // ANY one of these four permissions unlocked all three modules below).
     // Expense Requests
+    // Leave Unlock Windows (Admin/HR): let people apply for leave further back
+    // than the one-week limit (App\Support\LeaveBackdate) for chosen dates -
+    // like the attendance unlock windows under Sales Field Ops.
+    Route::middleware(['role:admin|hr'])->prefix('leave-unlocks')->name('leave-unlocks.')->group(function () {
+      Route::get('', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'index'])->name('index');
+      Route::post('', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'store'])->name('store');
+      Route::post('{id}/toggle', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'toggle'])->name('toggle');
+      Route::delete('{id}', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'destroy'])->name('destroy');
+    });
+
     Route::middleware(['role_or_permission:admin|hr|expense.approve'])->prefix('expenseRequests')->name('expenseRequests.')->group(function () {
       Route::get('', [ExpenseController::class, 'index'])->name('index');
       Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');

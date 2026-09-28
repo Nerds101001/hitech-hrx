@@ -882,7 +882,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // The earliest date comes from the server (LeaveBackdate), the same rule the
     // form is checked against - worked out in the browser it was a UTC date, a
     // day behind in India before 5:30 am.
-    const minDate = @json(\App\Support\LeaveBackdate::earliest());
+    const minDate = @json(\App\Support\LeaveBackdate::earliestFor(auth()->id()));
     
     fromDateInput.setAttribute('min', minDate);
     toDateInput.setAttribute('min', minDate);
