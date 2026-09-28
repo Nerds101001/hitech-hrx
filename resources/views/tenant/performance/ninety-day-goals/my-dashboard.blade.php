@@ -45,19 +45,40 @@
 
   <div class="px-4">
 
-  {{-- A program an admin (or the person themselves) started that has zero customers yet —
-       surfaced right here so a freshly-invited person doesn't have to go hunting for it. --}}
-  @foreach($needsEnrollment as $r)
-    <div class="hitech-card mb-4" style="border-color:#f5a623;background:#fffbeb">
+  {{-- Any active round still short of the minimum, with the deadline to fix it. Replaces the
+       older "no customers yet" banner: stopping at four is just as much a round that will not
+       be counted as stopping at zero, and neither said when the chance to fix it runs out. --}}
+  @foreach($windowAlerts as $w)
+    @php $r = $w['round']; @endphp
+    <div class="hitech-card mb-4" style="border-color:{{ $w['open'] ? '#f5a623' : '#dc3545' }};background:{{ $w['open'] ? '#fffbeb' : '#fef2f2' }}">
       <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div class="d-flex align-items-center gap-3">
-          <i class="bx bx-user-plus fs-2" style="color:#f5a623"></i>
+          <i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }} fs-2" style="color:{{ $w['open'] ? '#f5a623' : '#dc3545' }}"></i>
           <div>
-            <div class="fw-bold text-dark">You're enrolled in "{{ $roundLabel($r) }}" — add your target customers to get started</div>
-            <div class="small text-muted">{{ $r->starts_on->format('d M Y') }} – {{ $r->ends_on->format('d M Y') }} · no customers added yet</div>
+            @if($w['open'])
+              <div class="fw-bold text-dark">
+                "{{ $roundLabel($r) }}" — add {{ $w['short_by'] }} more target customer{{ $w['short_by'] === 1 ? '' : 's' }} to reach the minimum of {{ $w['min'] }}
+              </div>
+              <div class="small text-muted">
+                {{ $w['count'] }} of {{ $w['min'] }} added ·
+                closes {{ $w['closes_at']->format('d M Y, H:i') }}
+                ({{ $w['hours_left'] }} hour{{ $w['hours_left'] === 1 ? '' : 's' }} left) ·
+                a round below {{ $w['min'] }} is not counted
+              </div>
+            @else
+              <div class="fw-bold text-dark">
+                "{{ $roundLabel($r) }}" — the window to add customers has closed
+              </div>
+              <div class="small text-muted">
+                {{ $w['count'] }} of {{ $w['min'] }} added · closed {{ $w['closes_at']->format('d M Y, H:i') }} ·
+                this round will not be counted. Ask admin or HR if something still needs to go in.
+              </div>
+            @endif
           </div>
         </div>
-        <a href="{{ route('performance.ninety-day-goals.round', $r->id) }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-search-alt"></i> Search &amp; Add Customers</a>
+        @if($w['open'])
+          <a href="{{ route('performance.ninety-day-goals.round', $r->id) }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-search-alt"></i> Search &amp; Add Customers</a>
+        @endif
       </div>
     </div>
   @endforeach

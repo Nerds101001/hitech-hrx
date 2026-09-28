@@ -710,6 +710,16 @@ class NinetyDayGoalController extends Controller
         // here instead of having to go find the task or the program on their own.
         $needsEnrollment = $myRounds->filter(fn ($r) => $r->status === 'active' && $r->goals_count === 0)->values();
 
+        // Every active round that is still short of the minimum, with how long is left to fix
+        // it. Drives the banner: zero customers is not the only state worth warning about -
+        // stopping at four is just as much of a round that will not be counted.
+        $windowAlerts = $myRounds
+            ->filter(fn ($r) => $r->status === 'active')
+            ->map(fn ($r) => ['round' => $r] + Goals::windowState($r))
+            ->reject(fn ($w) => $w['meets_min'] && $w['open'] === false)
+            ->reject(fn ($w) => $w['meets_min'])
+            ->values();
+
         $weeklyProgress = $focusRound ? $this->myWeeklyProgress($user, $focusRound) : ['labels' => [], 'target' => [], 'achieved' => []];
         $weekStrip = collect();
         $currentWeek = 0;
@@ -764,6 +774,7 @@ class NinetyDayGoalController extends Controller
             'selectedRoundId' => $roundId,
             'selectedRound'   => $roundId ? $myRounds->firstWhere('id', $roundId) : null,
             'needsEnrollment' => $needsEnrollment,
+            'windowAlerts'    => $windowAlerts,
             'cards'      => $d['cards'],
             'statusCounts' => $d['statuses'],
             'focusRound' => $focusRound,
@@ -1217,6 +1228,19 @@ class NinetyDayGoalController extends Controller
         ]);
 
         $round = Goals::roundFor($target);
+
+        // The window shuts 48 hours after enrolment. Admin/HR keep adding after that, because
+        // somebody has to be able to correct a mistake once the deadline has passed.
+        if (!Goals::customerWindowOpen($round) && !Goals::managesEveryone($user)) {
+            $closed = Goals::customerWindowClosesAt($round);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'The window for adding target customers closed on '
+                    . $closed->format('d M Y, H:i') . '. Ask admin or HR if something still needs to go in.',
+            ], 422);
+        }
+
         $mine = Goals::pipelineCustomers($target)->keyBy('id');
 
         $added = 0;
@@ -1279,7 +1303,28 @@ class NinetyDayGoalController extends Controller
             }
         }
 
-        return response()->json(['success' => true, 'added' => $added, 'skipped' => $skipped]);
+        // Tell the caller where they now stand against the minimum and the deadline, so the
+        // page can keep nudging without a second request.
+        $state = Goals::windowState($round->fresh());
+
+        return response()->json([
+            'success' => true,
+            'added'   => $added,
+            'skipped' => $skipped,
+            'window'  => [
+                'count'     => $state['count'],
+                'min'       => $state['min'],
+                'short_by'  => $state['short_by'],
+                'meets_min' => $state['meets_min'],
+                'open'      => $state['open'],
+                'closes_at' => $state['closes_at']->toIso8601String(),
+            ],
+            'message' => $state['meets_min']
+                ? $added . ' customer(s) added. You now have ' . $state['count'] . ' — the minimum of ' . $state['min'] . ' is met.'
+                : $added . ' customer(s) added. You have ' . $state['count'] . ' of ' . $state['min']
+                    . ' — add ' . $state['short_by'] . ' more before ' . $state['closes_at']->format('d M, H:i')
+                    . ' or this round will not be counted.',
+        ]);
     }
 
     // ── the weekly status ────────────────────────────────────────────────

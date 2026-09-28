@@ -265,6 +265,69 @@ class NinetyDayGoalService
         return ['program' => $program, 'enrolled' => $enrolled, 'skipped' => $skipped, 'starts_on' => $startsOn, 'ends_on' => $endsOn];
     }
 
+    /**
+     * When this round stops accepting new target customers.
+     *
+     * Counted from enrolment, not from the round's start date: the round can be back-dated to
+     * its Monday, and someone enrolled on a Wednesday would otherwise find the window already
+     * gone before they were told about it.
+     *
+     * Rounds created before config('ninety_day.window_rule_from') are measured from that moment
+     * instead, so introducing the rule does not retroactively shut a window on people who were
+     * enrolled under the old one.
+     */
+    public static function customerWindowClosesAt(NinetyDayRound $round): Carbon
+    {
+        $from = Carbon::parse($round->created_at ?: $round->starts_on);
+        $ruleFrom = config('ninety_day.window_rule_from');
+
+        if ($ruleFrom && $from->lt(Carbon::parse($ruleFrom))) {
+            $from = Carbon::parse($ruleFrom);
+        }
+
+        return $from->copy()->addHours((int) config('ninety_day.customer_window_hours', 48));
+    }
+
+    /** Whether this round can still take new customers. Admin/HR bypass this to fix mistakes. */
+    public static function customerWindowOpen(NinetyDayRound $round, ?Carbon $now = null): bool
+    {
+        return ($now ?: Carbon::now())->lt(self::customerWindowClosesAt($round));
+    }
+
+    /** Customers on this round that still count - a closed one is no longer part of the set. */
+    public static function customerCount(NinetyDayRound $round): int
+    {
+        return NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->count();
+    }
+
+    /**
+     * A round counts once it holds at least the minimum number of customers. Judged on the
+     * round's running total, so adding four now and six later is fine.
+     */
+    public static function meetsMinimum(NinetyDayRound $round): bool
+    {
+        return self::customerCount($round) >= (int) config('ninety_day.min_customers', 10);
+    }
+
+    /** Everything a page needs to show the window and the minimum, in one call. */
+    public static function windowState(NinetyDayRound $round, ?Carbon $now = null): array
+    {
+        $now = $now ?: Carbon::now();
+        $closesAt = self::customerWindowClosesAt($round);
+        $count = self::customerCount($round);
+        $min = (int) config('ninety_day.min_customers', 10);
+
+        return [
+            'closes_at'   => $closesAt,
+            'open'        => $now->lt($closesAt),
+            'hours_left'  => $now->lt($closesAt) ? $now->diffInHours($closesAt) : 0,
+            'count'       => $count,
+            'min'         => $min,
+            'short_by'    => max(0, $min - $count),
+            'meets_min'   => $count >= $min,
+        ];
+    }
+
     /** The user's active round, starting one this week if they have none. */
     public static function roundFor(User $user, ?Carbon $today = null): NinetyDayRound
     {
