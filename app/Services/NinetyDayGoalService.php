@@ -320,7 +320,10 @@ class NinetyDayGoalService
         return [
             'closes_at'   => $closesAt,
             'open'        => $now->lt($closesAt),
-            'hours_left'  => $now->lt($closesAt) ? $now->diffInHours($closesAt) : 0,
+            // floor, and cast: Carbon returns a float here, so the banner printed
+            // "47.9360405225 hours left". Rounding down is also the honest direction - with
+            // 47.9 hours to go you have 47 whole hours, not 48.
+            'hours_left'  => $now->lt($closesAt) ? (int) floor($now->diffInHours($closesAt)) : 0,
             'count'       => $count,
             'min'         => $min,
             'short_by'    => max(0, $min - $count),
