@@ -824,8 +824,20 @@ class NinetyDayGoalService
         $discipline = fn ($c) => $c->count() > 0 ? round($c->filter(fn ($x) => $x->status !== null && !$x->is_late)->count() / $c->count() * 100) : null;
 
         $converted = ['Trial Order', 'Regular Order'];
+
+        // "Total Participants" means people enrolled, not people who have already nominated
+        // customers. It counted distinct owners of goal rows, so a brand-new program read 0
+        // participants right up until someone added their first customer - while the table
+        // below it listed names. Count the rounds instead, which is what enrolment actually is.
+        $enrolledCount = NinetyDayRound::query()
+            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
+            ->when(!empty($f['program_id']), fn ($q) => $q->where('program_id', (int) $f['program_id']))
+            ->when(empty($f['program_id']), fn ($q) => $q->where('status', 'active'))
+            ->distinct('user_id')->count('user_id');
+
         $cards = $sum($rows) + [
-            'people'     => $rows->pluck('user.id')->unique()->count(),
+            'people'     => $enrolledCount,
+            'withGoals'  => $rows->pluck('user.id')->unique()->count(),
             'converted'  => $rows->whereIn('status', $converted)->count(),
             'onTrack'    => $rows->where('status', 'On Track')->count(),
             'discipline' => $discipline($due),
@@ -849,8 +861,18 @@ class NinetyDayGoalService
         });
 
         // Every salesperson in scope, including anyone with no customers added yet (all zeros).
+        //
+        // When a program is selected this must be the program's OWN participants, not every
+        // salesperson. The program filter above only reaches $goals, so picking a program used
+        // to leave the customer figures correctly filtered while this list still padded the
+        // table with all 63 sales staff - a 3-person program rendered 63 rows of zeros.
+        $enrolledIds = !empty($f['program_id'])
+            ? NinetyDayRound::where('program_id', (int) $f['program_id'])->pluck('user_id')->unique()->all()
+            : null;
+
         $withRow = $users->keys();
         $idle = self::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))
+            ->when($enrolledIds !== null, fn ($c) => $c->whereIn('id', $enrolledIds))
             ->reject(fn ($u) => $withRow->contains($u->id))
             ->mapWithKeys(fn ($u) => [$u->id => [
                 'id' => $u->id, 'name' => trim($u->first_name . ' ' . $u->last_name), 'department' => optional($u->department)->name,

@@ -442,7 +442,7 @@
       <div class="card-body p-0 table-responsive">
         <table class="table align-middle mb-0">
           <thead><tr>
-            <th class="ps-4">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th>
+            <th class="ps-4">#</th><th>Salesperson</th><th>Customers added</th><th class="text-end">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th>
             <th style="min-width:160px">Achievement</th><th class="text-end">Orders</th><th class="text-end">This week</th><th class="text-end pe-4">Pending</th>
           </tr></thead>
           <tbody>
@@ -450,6 +450,16 @@
             <tr>
               <td class="ps-4 text-muted">{{ $i + 1 }}</td>
               <td><a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a><div class="small text-muted">{{ $u['department'] }}</div></td>
+              {{-- Who has actually nominated their target customers. Everyone starts on zero,
+                   and the number alone did not say whether that meant "not done yet" or
+                   "nothing to show" - which is the first thing to chase after enrolment. --}}
+              <td>
+                @if(($u['goals'] ?? 0) > 0)
+                  <span class="badge bg-label-success"><i class="bx bx-check me-1"></i>Added</span>
+                @else
+                  <span class="badge bg-label-warning"><i class="bx bx-time-five me-1"></i>Not added</span>
+                @endif
+              </td>
               <td class="text-end">{{ $u['goals'] }}</td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>
               <td class="text-end">{{ $fmtL($u['achieved']) }}</td>
