@@ -143,7 +143,8 @@
             if (isset($m->permission) && !$isAdminUser) {
                 if (!$hasAnyPermission($menuUser, $m->permission)) return false;
             }
-            if (isset($m->department) && !$isAdminUser) {
+            if (isset($m->department) && !$isAdminUser
+                && !(isset($m->departmentOrPermission) && $hasAnyPermission($menuUser, $m->departmentOrPermission))) {
                 if (!$menuUser || !$menuUser->department
                     || stripos($menuUser->department->name, $m->department) === false) return false;
             }
@@ -209,8 +210,12 @@
 
           if(isset($menu->department)) {
               if (!$user || !$user->department || stripos($user->department->name, $menu->department) === false) {
-                  // Only skip if they aren't admin/hr and don't match the department
-                  if (!$isAdmin) continue;
+                  // Only skip if they aren't admin/hr, don't match the department, and
+                  // don't hold a permission the entry accepts instead
+                  // (departmentOrPermission). Someone outside Sales given goals.manage
+                  // still needs the 90-Day Goals section to reach its admin pages.
+                  if (!$isAdmin && !(isset($menu->departmentOrPermission) && $user
+                      && $hasAnyPermission($user, $menu->departmentOrPermission))) continue;
               }
           }
 

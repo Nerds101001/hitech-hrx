@@ -813,6 +813,7 @@
             "icon": "menu-icon bx bx-target-lock",
             "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program", "performance.ninety-day-goals.past"],
             "department": "Sales",
+            "departmentOrPermission": ["goals.manage", "scorecards.manage"],
             "submenu": [
                 {
                     "url": "/performance/ninety-day-goals/my-dashboard",
@@ -835,6 +836,7 @@
                     "name": "Team Dashboard",
                     "icon": "menu-icon bx bx-group",
                     "slug": "performance.ninety-day-goals.program-dashboard",
+                    "department": "Sales",
                     "roles": ["manager"],
                     "hideForRoles": ["admin","hr"]
                 },

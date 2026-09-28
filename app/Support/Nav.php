@@ -337,7 +337,10 @@ class Nav
                     return ['text' => 'Requires permission: ' . implode(' or ', (array) $item->permission) . ', which this role doesn\'t hold.', 'grantable' => $options];
                 }
             }
-            if (isset($item->department) && !$isAdminUser) {
+            // departmentOrPermission: holding one of these lets a person through the
+            // department gate, exactly as the live sidebar does.
+            if (isset($item->department) && !$isAdminUser
+                && !(isset($item->departmentOrPermission) && $hasAnyPermission($item->departmentOrPermission))) {
                 if (!$user->department || stripos($user->department->name, $item->department) === false) {
                     return ['text' => "Limited to the \"{$item->department}\" department" . ($user->department ? " - this person is in \"{$user->department->name}\"." : ' - this person has no department set.'), 'grantable' => []];
                 }
