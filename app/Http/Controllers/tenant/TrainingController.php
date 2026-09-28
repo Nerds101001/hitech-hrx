@@ -11,6 +11,8 @@ use App\Models\TrainingQuestion;
 use App\Models\UserTrainingProgress;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 
 use OpenAI\Laravel\Facades\OpenAI;
@@ -272,6 +274,10 @@ class TrainingController extends Controller
 
             // Unlock next module
             $this->unlockNextModule($module);
+
+            // That pass may have been the last one standing between this
+            // person and a working account.
+            $this->releaseAccountIfTrainingDone($user);
         } else {
             $progress->update([
                 'status' => 'failed',
@@ -288,6 +294,96 @@ class TrainingController extends Controller
             'total_marks' => $totalPossibleMarks,
             'passing_percentage' => $module->passing_percentage ?? 80
         ]);
+    }
+
+    /**
+     * Opens the account once every gating module has been passed.
+     *
+     * New joiners are parked in onboarding_submitted, which allows the
+     * training portal and nothing else - no attendance, no leave, no tasks.
+     * Passing the last gating module is what ends that, with no HR step in
+     * between, so this runs on the pass itself rather than on an approval.
+     *
+     * Only the phases in config('training.onboarding_phase_ids') count. The
+     * CRM and Learn @ Hi Tech phases stay available in the portal but never
+     * hold an account shut.
+     *
+     * Safe to call after every pass: it returns early unless this pass was
+     * the one that finished the set, and again if the account is already
+     * released, so no one is unlocked - or emailed - twice.
+     */
+    private function releaseAccountIfTrainingDone(User $user): void
+    {
+        if ($user->training_status === 'completed') {
+            return; // already released
+        }
+
+        $phaseIds = config('training.onboarding_phase_ids', [1, 2]);
+        $requiredIds = TrainingModule::whereIn('phase_id', $phaseIds)->pluck('id');
+
+        // A misconfigured phase list would otherwise read as "nothing left to
+        // do" and release everyone on their first pass.
+        if ($requiredIds->isEmpty()) {
+            Log::warning('TRAINING_RELEASE: no modules found for gating phases, skipping', ['phases' => $phaseIds]);
+            return;
+        }
+
+        $completed = UserTrainingProgress::where('user_id', $user->id)
+            ->whereIn('module_id', $requiredIds)
+            ->where('status', 'completed')
+            ->distinct('module_id')
+            ->count('module_id');
+
+        if ($completed < $requiredIds->count()) {
+            return; // still work to do
+        }
+
+        $wasHeld = in_array($user->status instanceof \UnitEnum ? $user->status->value : $user->status, [
+            \App\Enums\UserAccountStatus::ONBOARDING->value,
+            \App\Enums\UserAccountStatus::ONBOARDING_REQUESTED->value,
+            \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED->value,
+        ], true);
+
+        $user->training_status      = 'completed';
+        $user->is_training_required = false;
+
+        // Only lift an account that training was actually holding. Someone
+        // suspended or relieved who happens to finish a module must not be
+        // activated by it.
+        if ($wasHeld) {
+            $user->status = \App\Enums\UserAccountStatus::ACTIVE->value;
+        }
+
+        $user->save();
+
+        $avg = UserTrainingProgress::where('user_id', $user->id)
+            ->whereIn('module_id', $requiredIds)
+            ->avg('assessment_score');
+
+        Log::info('TRAINING_RELEASE: ' . $user->id . ' completed gating training', [
+            'activated' => $wasHeld,
+            'modules'   => $requiredIds->count(),
+            'avg_score' => $avg ? round($avg, 2) : null,
+        ]);
+
+        $recipients = array_filter((array) config('training.completion_notify', []));
+
+        if (empty($recipients)) {
+            return;
+        }
+
+        try {
+            Mail::to($recipients)->send(new \App\Mail\TrainingCompleted(
+                $user,
+                $requiredIds->count(),
+                $avg ? round($avg, 2) : null,
+                $wasHeld
+            ));
+        } catch (\Throwable $e) {
+            // The account is already open; a mail failure must not undo that
+            // or bubble up into the employee's assessment result.
+            Log::error('TRAINING_RELEASE_MAIL_FAILED for user ' . $user->id . ': ' . $e->getMessage());
+        }
     }
 
     /**
@@ -325,6 +421,20 @@ class TrainingController extends Controller
 
         if ($nextModules->isNotEmpty()) {
             foreach ($nextModules as $nm) {
+                // Unlocking must never un-complete. updateOrCreate wrote
+                // 'available' unconditionally, so finishing one module could
+                // reset a module the person had ALREADY passed - real on
+                // production, where phase 2 has two pairs of modules sharing
+                // an order value (2 and 7, 4 and 9). Passing one of a pair
+                // reset the other, and the completed count went backwards.
+                $existing = UserTrainingProgress::where('user_id', $user->id)
+                    ->where('module_id', $nm->id)
+                    ->first();
+
+                if ($existing && $existing->status === 'completed') {
+                    continue;
+                }
+
                 UserTrainingProgress::updateOrCreate(
                     ['user_id' => $user->id, 'module_id' => $nm->id],
                     ['status' => 'available', 'tenant_id' => $user->tenant_id]

@@ -1,0 +1,158 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Enums\UserAccountStatus;
+use App\Mail\TrainingCompleted;
+use App\Models\TrainingModule;
+use App\Models\TrainingQuestion;
+use App\Models\User;
+use App\Models\UserTrainingProgress;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Tests\TestCase;
+
+/**
+ * New joiners are parked in onboarding_submitted, which allows the training
+ * portal and nothing else. Passing the last gating module is what ends that -
+ * there is no HR approval step in between - so the release has to happen on
+ * the pass itself, exactly once, and only for accounts training was actually
+ * holding.
+ */
+class TrainingAccountReleaseTest extends TestCase
+{
+    use DatabaseTransactions;
+
+    private function heldUser(): User
+    {
+        $u = User::create([
+            'first_name' => 'QA', 'last_name' => 'Joiner',
+            'email'      => 'qajoiner' . uniqid() . '@example.test',
+            'code'       => 'QAJ' . random_int(100000, 999999),
+            'password'   => Hash::make('secret-not-used'),
+            'status'     => UserAccountStatus::ONBOARDING_SUBMITTED->value,
+        ]);
+        $u->forceFill(['is_training_required' => true, 'training_status' => 'not_started'])->save();
+        $u->assignRole('employee');
+
+        return $u;
+    }
+
+    /** @return array{0:\Illuminate\Support\Collection,1:TrainingModule} gating modules, and the last one left undone */
+    private function gatingModules(User $user): array
+    {
+        $ids = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids'))
+            ->orderBy('id')->pluck('id');
+
+        $this->assertGreaterThan(1, $ids->count(), 'this environment needs gating modules for the test to mean anything');
+
+        $last = TrainingModule::find($ids->last());
+
+        // Everything except the last one is already passed.
+        foreach ($ids->slice(0, -1) as $mid) {
+            UserTrainingProgress::create([
+                'user_id' => $user->id, 'module_id' => $mid,
+                'status' => 'completed', 'assessment_score' => 90, 'completed_at' => now(),
+            ]);
+        }
+        UserTrainingProgress::create([
+            'user_id' => $user->id, 'module_id' => $last->id, 'status' => 'available',
+        ]);
+
+        return [$ids, $last];
+    }
+
+    /** Answers that score 100% on the given module. */
+    private function perfectAnswers(TrainingModule $m): array
+    {
+        $answers = [];
+        foreach (TrainingQuestion::where('module_id', $m->id)->get() as $q) {
+            $answers[$q->id] = $q->correct_option_index;
+        }
+        $this->assertNotEmpty($answers, 'the final gating module needs questions for this test');
+
+        return $answers;
+    }
+
+    public function test_passing_the_last_gating_module_activates_the_account_and_notifies(): void
+    {
+        Mail::fake();
+        $user = $this->heldUser();
+        [$ids, $last] = $this->gatingModules($user);
+
+        $this->actingAs($user)
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->assertOk()
+            ->assertJson(['success' => true, 'passed' => true]);
+
+        $user->refresh();
+        $this->assertSame(UserAccountStatus::ACTIVE->value, $user->status instanceof \UnitEnum ? $user->status->value : $user->status);
+        $this->assertFalse((bool) $user->is_training_required, 'the training gate must be lifted');
+        $this->assertSame('completed', $user->training_status);
+
+        Mail::assertSent(TrainingCompleted::class, function ($mail) {
+            foreach (config('training.completion_notify') as $to) {
+                if (!$mail->hasTo($to)) return false;
+            }
+            return true;
+        });
+    }
+
+    /** The gate must not lift while any gating module is still outstanding. */
+    public function test_an_unfinished_set_leaves_the_account_held_and_sends_nothing(): void
+    {
+        Mail::fake();
+        $user = $this->heldUser();
+        [$ids, $last] = $this->gatingModules($user);
+
+        // Undo one of the already-passed modules, so finishing $last still leaves a gap.
+        UserTrainingProgress::where('user_id', $user->id)
+            ->where('module_id', $ids->first())
+            ->update(['status' => 'available', 'completed_at' => null]);
+
+        $this->actingAs($user)
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->assertOk()
+            ->assertJson(['passed' => true]);
+
+        $user->refresh();
+        $this->assertSame(UserAccountStatus::ONBOARDING_SUBMITTED->value, $user->status instanceof \UnitEnum ? $user->status->value : $user->status);
+        $this->assertTrue((bool) $user->is_training_required, 'one module short must not open the account');
+        Mail::assertNotSent(TrainingCompleted::class);
+    }
+
+    /**
+     * Someone suspended who happens to finish a module must not be activated
+     * by it - training was not what was holding that account shut.
+     */
+    public function test_a_suspended_account_is_not_activated_by_finishing_training(): void
+    {
+        Mail::fake();
+        $user = $this->heldUser();
+        $user->forceFill(['status' => UserAccountStatus::SUSPENDED->value])->save();
+        [$ids, $last] = $this->gatingModules($user);
+
+        $this->actingAs($user)
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->assertOk();
+
+        $user->refresh();
+        $this->assertSame(UserAccountStatus::SUSPENDED->value, $user->status instanceof \UnitEnum ? $user->status->value : $user->status);
+        $this->assertSame('completed', $user->training_status, 'training itself is still recorded as done');
+    }
+
+    /** Re-passing a module later must not fire a second release or a second email. */
+    public function test_release_and_notification_happen_only_once(): void
+    {
+        Mail::fake();
+        $user = $this->heldUser();
+        [$ids, $last] = $this->gatingModules($user);
+        $answers = $this->perfectAnswers($last);
+
+        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $answers])->assertOk();
+        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $answers])->assertOk();
+
+        Mail::assertSent(TrainingCompleted::class, 1);
+    }
+}
