@@ -9,7 +9,7 @@ use Illuminate\Notifications\Notification;
 
 class CancelLeaveRequest extends Notification
 {
-  use Queueable;
+  use Queueable, RespectsLeaveMute;
 
   private LeaveRequest $request;
   private string $title;
@@ -32,6 +32,11 @@ class CancelLeaveRequest extends Notification
    */
   public function via(object $notifiable): array
   {
+    // Same switch as a new request: muted means nothing, unless it is theirs to approve.
+    if (!$this->isApproverOf($notifiable, $this->request->user) && $this->leaveMutedFor($notifiable)) {
+        return [];
+    }
+
     return ['database', FirebaseChannel::class];
   }
 

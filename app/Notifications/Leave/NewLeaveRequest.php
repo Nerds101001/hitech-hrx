@@ -11,7 +11,7 @@ use App\Models\User;
 
 class NewLeaveRequest extends Notification
 {
-  use Queueable;
+  use Queueable, RespectsLeaveMute;
 
   private LeaveRequest $leaveRequest;
 
@@ -33,6 +33,12 @@ class NewLeaveRequest extends Notification
     $employee = $this->leaveRequest->user;
     $reportingToId = $employee ? $employee->reporting_to_id : null;
 
+    // Someone who has switched the leave broadcast off gets nothing -- unless
+    // this request is waiting on them as the employee's manager.
+    if (!$this->isApproverOf($notifiable, $employee) && $this->leaveMutedFor($notifiable)) {
+        return [];
+    }
+
     if ($reportingToId) {
         // Send the email to the direct manager — and, when the manager is a
         // vacant-position placeholder account, to its acting delegate too.
@@ -52,16 +58,20 @@ class NewLeaveRequest extends Notification
                             str_contains($address, 'jamalpur');
 
         // Determine which HR email should receive the main "To" email
-        $mainHrEmail = $isTargetLocation ? 'hr@rustx.com' : 'priyal@rustx.com';
+        // Everyone outside those sites used to go to priyal@; she has switched
+        // the leave broadcast off, and these now go to Suchita.
+        $mainHrEmail = $isTargetLocation ? 'hr@rustx.com' : 'suchita@rustx.com';
 
         // Find the user with this email
         $mainHr = User::where('email', $mainHrEmail)->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
 
         // Fallback to any active HR if not found
+        // (skipping anyone who has muted leave, or the email would go nowhere)
         if (!$mainHr) {
             $mainHr = User::whereHas('roles', function ($query) {
                 $query->where('name', 'hr');
-            })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->first();
+            })->where('status', \App\Enums\UserAccountStatus::ACTIVE)->get()
+              ->first(fn ($u) => !$this->leaveMutedFor($u));
         }
 
         // If the main HR is the current notifiable, send the mail
