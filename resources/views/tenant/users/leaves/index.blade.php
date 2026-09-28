@@ -477,7 +477,7 @@
                                     <span class="fw-bold text-dark small text-uppercase">Back-dated Leave Notice</span>
                                 </div>
                                 <div class="small text-dark opacity-75">
-                                    You are applying for a past date. Please ensure your reason/remarks are detailed and accurate.
+                                    You are applying for a past date (allowed up to {{ \App\Support\LeaveBackdate::MAX_DAYS }} days back). Please ensure your reason/remarks are detailed and accurate.
                                 </div>
                             </div>
                         </div>
@@ -878,11 +878,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 3. Past Date Validation & Range Restriction (Allowed up to 30 days back)
-    const todayDate = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(todayDate.getDate() - 30);
-    const minDate = thirtyDaysAgo.toISOString().split('T')[0];
+    // 3. Past Date Validation & Range Restriction (Allowed up to 1 week back).
+    // The earliest date comes from the server (LeaveBackdate), the same rule the
+    // form is checked against - worked out in the browser it was a UTC date, a
+    // day behind in India before 5:30 am.
+    const minDate = @json(\App\Support\LeaveBackdate::earliest());
     
     fromDateInput.setAttribute('min', minDate);
     toDateInput.setAttribute('min', minDate);

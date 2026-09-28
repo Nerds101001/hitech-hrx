@@ -680,14 +680,9 @@ class UserDashboardController extends Controller
             return redirect()->back()->withErrors(['document' => 'Proof/Evidence document is required for this leave type.'])->withInput();
         }
 
-        // 3. Backdated Check (Limit: 30 Days)
-        $fromDateObj = \Carbon\Carbon::parse($validated['from_date']);
-        $todayObj = \Carbon\Carbon::today();
-        if ($fromDateObj->lt($todayObj)) {
-            $daysBack = $fromDateObj->diffInDays($todayObj);
-            if ($daysBack > 30) {
-                return redirect()->back()->withErrors(['from_date' => 'You cannot apply for leave more than 30 days in the past.'])->withInput();
-            }
+        // 3. Backdated Check (Limit: 1 week - see LeaveBackdate)
+        if ($backdateError = \App\Support\LeaveBackdate::error($validated['from_date'])) {
+            return redirect()->back()->withErrors(['from_date' => $backdateError])->withInput();
         }
 
         // Unit leave policy enforcement

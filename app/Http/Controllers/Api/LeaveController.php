@@ -160,6 +160,11 @@ class LeaveController extends Controller
       return Error::response('From date cannot be greater than to date');
     }
 
+    // Same one-week back-dating limit as the web form (the app had none).
+    if ($backdateError = \App\Support\LeaveBackdate::error($finalFromDate)) {
+      return Error::response($backdateError);
+    }
+
     $user = auth()->user();
 
     $hours     = $request->duration_hours;
