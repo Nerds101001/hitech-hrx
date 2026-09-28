@@ -21,9 +21,23 @@ use App\Models\KpiTemplate;
  *    their minimums are that converted number, worked out from the sheet's limits
  *    (a cost of selling of 4 % is 25 when the target is 1). Minimums such as
  *    30.0001 stand for a strict "more than 30".
+ *
+ * definitions() is the sheet as written. install() leaves out anything in
+ * RETIRED, so re-running it can never bring a replaced KPI back.
  */
 class SalesRuleBook
 {
+    /**
+     * Rows of the sheet that are no longer installed, with where they went.
+     *
+     * Cost of Selling became a monthly KPI typed in through Bulk KPI Entry for
+     * everyone in Sales and New Biz (2026-09-28). Installing the yearly
+     * automatic one next to it would count cost of selling twice.
+     */
+    public const RETIRED = [
+        'Cost of Selling (COS%)' => 'Replaced by the monthly "Cost of Selling" KPI filled in Bulk KPI Entry',
+    ];
+
     public const KRA_TITLE = 'Sales Assessment';
 
     /** title, basis (shown on the scorecard), source, trend, weight, target, tiers [[min, points], ...] */
@@ -75,6 +89,9 @@ class SalesRuleBook
 
         $out = [];
         foreach (self::definitions() as [$title, $basis, $source, $trend, $weight, $target, $tiers]) {
+            if (isset(self::RETIRED[$title])) {
+                continue;
+            }
             $out[$title] = KpiTemplate::updateOrCreate(
                 ['department_id' => $departmentId, 'title' => $title, 'category' => 'KPI'],
                 $base + [
@@ -94,6 +111,25 @@ class SalesRuleBook
             );
         }
 
+        self::retire($departmentId);
+
         return $out;
+    }
+
+    /**
+     * Switch off retired KPIs an earlier install left in the department, and
+     * their assignments. Nothing is deleted: scores already recorded stay.
+     */
+    private static function retire(int $departmentId): void
+    {
+        $old = KpiTemplate::where('department_id', $departmentId)
+            ->where('category', 'KPI')
+            ->whereIn('title', array_keys(self::RETIRED))
+            ->get();
+
+        foreach ($old as $t) {
+            $t->forceFill(['is_active' => false])->save();
+            \App\Models\KpiAssignment::where('kpi_template_id', $t->id)->update(['is_active' => false]);
+        }
     }
 }

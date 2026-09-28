@@ -330,10 +330,12 @@ class KpiScorecardPdfTest extends TestCase
         }
 
         // The points from the annual report the rule book came from: 63 in total.
+        // Cost of Selling's 5 are carried on Market Share (10 -> 15, a real band)
+        // since COS left the rule book for the monthly Bulk KPI Entry KPI.
         $points = ['Target Achievement (Bingo %)' => 8, 'Pipeline Strength' => 5, 'YoY Revenue Growth' => 0, 'Trial Activity / Demos' => 8,
             'New Customer Wins (%)' => 15, '90-Day Goals' => 3, 'Sales Pitch Score' => 0, 'Learn@HiTech' => 0, 'Seminars / Presentations' => 0,
-            'Competitor Insights' => 7, 'New Product Ideas' => 7, 'Cost of Selling (COS%)' => 5, 'Cross-Sell / Basket Mix' => 0,
-            'Market Share %' => 10, 'Attrition Penalty' => -5];
+            'Competitor Insights' => 7, 'New Product Ideas' => 7, 'Cross-Sell / Basket Mix' => 0,
+            'Market Share %' => 15, 'Attrition Penalty' => -5];
         $fy = $this->month->month >= 4 ? Carbon::create($this->month->year, 4, 1) : Carbon::create($this->month->year - 1, 4, 1);
         foreach ($points as $title => $score) {
             $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();

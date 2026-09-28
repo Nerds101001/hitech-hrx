@@ -283,14 +283,37 @@ class SalesRuleBookSourcesTest extends TestCase
             \App\Services\KpiTemplateService::apply($t);
         }
 
-        $this->assertCount(15, $templates);
-        $this->assertSame(15, KpiAssignment::where('user_id', $mine->id)->count());
+        // 14 parameters + the attrition penalty, less Cost of Selling (retired: it is
+        // a monthly Bulk KPI Entry KPI now).
+        $this->assertCount(14, $templates);
+        $this->assertArrayNotHasKey('Cost of Selling (COS%)', $templates);
+        $this->assertSame(14, KpiAssignment::where('user_id', $mine->id)->count());
         $this->assertSame(0, KpiAssignment::where('user_id', $boss->id)->count(), 'the other designation gets nothing');
         $this->assertSame(0, KpiAssignment::where('user_id', $mine->id)->where('category', 'KRA')->count(), 'a heading is never assigned');
 
         // Running it again changes nothing.
         SalesRuleBook::install($this->dept->id, [$manager->id]);
-        $this->assertSame(16, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 15 KPIs, no duplicates');
+        $this->assertSame(15, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 14 KPIs, no duplicates');
+    }
+
+    public function test_installing_again_switches_off_a_yearly_cost_of_selling_left_by_an_earlier_install(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $mine = $this->person(['designation_id' => $manager->id]);
+
+        // What an install before the retirement left behind.
+        $old = \App\Models\KpiTemplate::create(['department_id' => $this->dept->id, 'title' => 'Cost of Selling (COS%)', 'category' => 'KPI',
+            'frequency' => 'yearly', 'scoring_type' => 'banded', 'data_source' => 'auto:cost_of_selling', 'trend' => 'decrease',
+            'max_marks' => 3, 'target_value' => 1, 'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true]);
+        \App\Services\KpiTemplateService::apply($old);
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count());
+
+        SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $this->assertFalse((bool) $old->fresh()->is_active, 'the yearly COS% template is switched off');
+        $this->assertSame(0, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count(), 'and its assignment');
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->count(), 'switched off, not deleted');
+        $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Cost of Selling (COS%)')->count(), 'not re-created');
     }
 
     public function test_the_nightly_run_scores_a_yearly_bingo_kpi_from_the_data(): void
