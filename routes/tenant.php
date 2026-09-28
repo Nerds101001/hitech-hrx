@@ -330,7 +330,10 @@ Route::middleware([
 
     // Setu Salesperson Mappings — Tally ledger name -> HRX user, reviewed
     // and corrected here instead of via the one-off CSV export/import loop.
-    Route::prefix('setu-mappings')->name('setu-mappings.')->group(function () {
+    // Admin/HR only (or setu.manage): the group around these admits every
+    // manager, accounts user and any one config permission, so "Manage
+    // Expense Types" alone used to open the Setu pages.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('setu-mappings')->name('setu-mappings.')->group(function () {
       Route::get('', [SetuMappingController::class, 'index'])->name('index');
       Route::get('getListAjax', [SetuMappingController::class, 'getListAjax'])->name('getListAjax');
       Route::get('getByIdAjax/{id}', [SetuMappingController::class, 'getByIdAjax'])->name('getByIdAjax');
@@ -340,7 +343,8 @@ Route::middleware([
     // Setu Sales Sync — trigger a sync for any confirmed salesperson directly
     // (the actual sync POST reuses sales-visits.pipeline.sync-setu; this is
     // only the listing page).
-    Route::prefix('setu-sync')->name('setu-sync.')->group(function () {
+    // Same admin/HR-only gate as Setu Salesperson Mappings above.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('setu-sync')->name('setu-sync.')->group(function () {
       Route::get('', [SetuSyncController::class, 'index'])->name('index');
     });
 
