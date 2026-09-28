@@ -136,8 +136,11 @@
                 $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $m->roles);
                 // Role not listed - still shown if a permission ticked on the
-                // Roles page opens this item's page (see Nav::grantedByPermission).
+                // Roles page opens this item's page (see Nav::grantedByPermission),
+                // or is one the item names itself (rolesOrPermission: pages that
+                // check the permission in the controller, not the route).
                 if (empty(array_intersect($ur, $rr))
+                    && !(isset($m->rolesOrPermission) && $hasAnyPermission($menuUser, $m->rolesOrPermission))
                     && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($m), $menuUser)) return false;
             }
             if (isset($m->permission) && !$isAdminUser) {
@@ -199,7 +202,8 @@
               $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
               $requiredRoles = array_map('strtolower', (array) $menu->roles);
               if (empty(array_intersect($userRoles, $requiredRoles))) {
-                  if (!\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)) continue;
+                  if (!(isset($menu->rolesOrPermission) && $hasAnyPermission($user, $menu->rolesOrPermission))
+                      && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)) continue;
                   $viaPermission = true;
               }
           }
@@ -284,6 +288,7 @@
                            $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
                            $requiredRoles = array_map('strtolower', (array) $submenu->roles);
                            if (empty(array_intersect($userRoles, $requiredRoles))
+                               && !(isset($submenu->rolesOrPermission) && $hasAnyPermission($user, $submenu->rolesOrPermission))
                                && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) continue;
                        } elseif ($viaPermission && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) {
                            continue;

@@ -321,11 +321,12 @@ class Nav
                 $ur = array_map('strtolower', $user->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $item->roles);
                 if (empty(array_intersect($ur, $rr))
+                    && !(isset($item->rolesOrPermission) && $hasAnyPermission($item->rolesOrPermission))
                     && !self::grantedByPermission(self::menuUrls($item), $user)) {
                     // Any permission this item's page(s) accept will show it -
                     // same rule as the live sidebar.
                     $options = array_values(array_unique(array_filter(
-                        array_merge(...array_map(fn($u) => self::permissionsFor($u), self::menuUrls($item) ?: [''])),
+                        array_merge((array) ($item->rolesOrPermission ?? []), ...array_map(fn($u) => self::permissionsFor($u), self::menuUrls($item) ?: [''])),
                         fn($p) => isset($registryKeys[$p]) && !$user->can($p)
                     )));
                     return ['text' => 'Menu limited to: ' . implode(', ', (array) $item->roles) . ' - this role isn\'t on that list' . ($options ? ' (or grant a permission its page accepts)' : '') . '.', 'grantable' => $options];

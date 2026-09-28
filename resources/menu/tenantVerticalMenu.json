@@ -281,7 +281,7 @@
                 "employees.onboarding.review_center",
                 "employees.onboarding.review"
             ],
-            "permission": "recruitment.view",
+            "permission": ["recruitment.view", "onboarding.manage", "training.manage"],
             "roles": [
                 "admin",
                 "hr",
@@ -378,7 +378,8 @@
                         "admin",
                         "hr",
                         "manager"
-                    ]
+                    ],
+                    "rolesOrPermission": ["training.manage"]
                 }
             ]
         },
@@ -982,22 +983,19 @@
                 "sales-visits.index",
                 "sales-visits.clients.index"
             ],
-            "permission": [
-                "access-sales-ops",
-                "cc_attendance.manage"
-            ],
+            "permission": ["access-sales-ops", "cc_attendance.manage", "sales_ops.view_all", "sales_visits.view", "sales_visits.create", "sales_visits.manage", "sales_visits.verify", "client_master.view", "client_master.manage", "sales_report.view", "sales_report.manage", "sales_report.import", "sales_pipeline.view", "sales_analytics.view", "kingo_bingo.play"],
             "submenu": [
                 {
                     "url": "/sales-visits",
                     "name": "All Visits",
                     "slug": "sales-visits.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_visits.view", "sales_visits.manage", "sales_visits.verify"]
                 },
                 {
                     "url": "/sales-visits/create",
                     "name": "Book a Visit",
                     "slug": "sales-visits.create",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_visits.create"]
                 },
                 {
                     "url": "/sales-visits/reports",
@@ -1008,13 +1006,14 @@
                         "hr",
                         "manager",
                         "accounts"
-                    ]
+                    ],
+                    "rolesOrPermission": ["sales_analytics.view"]
                 },
                 {
                     "url": "/sales-visits/clients",
                     "name": "Client Master",
                     "slug": "sales-visits.clients.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "client_master.view", "client_master.manage"]
                 },
                 {
                     "url": "/sales-visits/delete-requests",
@@ -1038,19 +1037,19 @@
                     "url": "/sales-visits/pipeline",
                     "name": "Sales Report",
                     "slug": "sales-visits.pipeline.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_report.view", "sales_report.manage", "sales_report.import"]
                 },
                 {
                     "url": "/sales-visits/sales-pipeline",
                     "name": "Sales Pipeline",
                     "slug": "sales-visits.actual-pipeline.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_pipeline.view"]
                 },
                 {
                     "url": "/sales-visits/kingo-bingo",
                     "name": "Kingo Bingo",
                     "slug": "sales-visits.kingo-bingo.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "kingo_bingo.play"]
                 },
                 {
                     "url": "/sales-visits/kingo-bingo/fill-targets",
@@ -1243,7 +1242,7 @@
         {
             "name": "Asset Management",
             "icon": "menu-icon bx bx-archive",
-            "permission": "assets.view",
+            "permission": ["assets.view", "assets.create", "assets.edit", "assets.delete", "assets.assign", "assets.manage_categories"],
             "roles": [
                 "admin",
                 "hr"
