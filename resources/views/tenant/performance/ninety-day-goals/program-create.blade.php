@@ -3,6 +3,14 @@
 
 @section('title', '90-Day Goals — New Program')
 
+
+@section('vendor-style')
+  @vite(['resources/assets/vendor/libs/sweetalert2/sweetalert2.scss'])
+@endsection
+
+@section('vendor-script')
+  @vite(['resources/assets/vendor/libs/sweetalert2/sweetalert2.js'])
+@endsection
 @section('content')
 <div class="layout-full-width animate__animated animate__fadeIn">
 

@@ -4,11 +4,17 @@
 @section('title', '90-Day Goals — ' . (optional($round->program)->name ?? 'My Program'))
 
 @section('vendor-style')
-  @vite(['resources/assets/vendor/libs/apex-charts/apex-charts.scss'])
+  @vite([
+    'resources/assets/vendor/libs/apex-charts/apex-charts.scss',
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss',
+  ])
 @endsection
 
 @section('vendor-script')
-  @vite(['resources/assets/vendor/libs/apex-charts/apexcharts.js'])
+  @vite([
+    'resources/assets/vendor/libs/sweetalert2/sweetalert2.js',
+    'resources/assets/vendor/libs/apex-charts/apexcharts.js',
+  ])
 @endsection
 
 @section('content')
