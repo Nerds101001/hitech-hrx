@@ -778,17 +778,84 @@
         document.getElementById('q_opt_radio_0').checked = true;
     }
 
+    const AI_ENDPOINT = moduleId => `{{ url('training/manage/module') }}/${moduleId}/generate-ai-questions`;
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    // Renders the proposed set the same way the Active Questions list above
+    // renders saved ones, so what you approve looks like what you will get.
+    function buildAIPreview(questions) {
+        return questions.map((q, i) => {
+            const opts = q.options.map((opt, oi) => {
+                const isC = oi === q.correct_option_index;
+                return `<div class="q-opt-pill ${isC ? 'correct' : ''}">
+                            <div class="q-opt-dot ${isC ? 'correct' : ''}">${isC ? '&#10003;' : (optLabels[oi] || String.fromCharCode(65 + oi))}</div>
+                            <span>${escapeHtml(opt)}</span>
+                        </div>`;
+            }).join('');
+            return `<div class="question-item" style="text-align:left;margin-bottom:10px;">
+                        <span style="font-size:0.7rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Q${i + 1}</span>
+                        <div style="font-size:0.875rem;font-weight:600;color:#1e293b;line-height:1.4;margin:2px 0 8px;">${escapeHtml(q.question)}</div>
+                        <div class="d-flex flex-column gap-1">${opts}</div>
+                    </div>`;
+        }).join('');
+    }
+
     async function generateAIQuestions() {
         const moduleId = document.getElementById('q_module_id').value;
+
         Swal.fire({ title:'Generating...', text:'Nerds AI is analysing the module content.', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+
+        let data;
         try {
-            const res = await fetch(`{{ url('training/manage/module') }}/${moduleId}/generate-ai-questions`, {
+            const res = await fetch(AI_ENDPOINT(moduleId), {
                 method:'POST', headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}'}
             });
-            const data = await res.json();
-            if (data.success) Swal.fire('Done!', `Generated ${data.count} questions.`, 'success').then(()=>location.reload());
-            else Swal.fire('Error', data.message || 'Failed.', 'error');
-        } catch(e) { Swal.fire('Error','An unexpected error occurred.','error'); }
+            data = await res.json();
+        } catch(e) {
+            Swal.fire('Error','An unexpected error occurred.','error');
+            return;
+        }
+
+        if (!data.success || !Array.isArray(data.questions) || !data.questions.length) {
+            Swal.fire('Error', data.message || 'Failed.', 'error');
+            return;
+        }
+
+        // Nothing has been saved at this point - the reviewer decides.
+        const choice = await Swal.fire({
+            title: 'Review generated questions',
+            html: `<p style="font-size:0.82rem;color:#64748b;margin-bottom:12px;text-align:left;">
+                       ${data.questions.length} question(s) proposed. The ticked option is the answer that will be marked correct.
+                       Nothing is saved until you add them.
+                   </p>${buildAIPreview(data.questions)}`,
+            width: 760,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'Add to Test',
+            denyButtonText: 'Regenerate',
+            cancelButtonText: 'Discard',
+            customClass: { popup: 'tm-ai-preview' }
+        });
+
+        if (choice.isDenied) { generateAIQuestions(); return; }   // ask again, save nothing
+        if (!choice.isConfirmed) return;                          // discarded
+
+        Swal.fire({ title:'Saving...', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+        try {
+            const res = await fetch(AI_ENDPOINT(moduleId), {
+                method:'POST',
+                headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}','Content-Type':'application/json'},
+                body: JSON.stringify({ save: 1, questions: data.questions })
+            });
+            const saved = await res.json();
+            if (saved.success) Swal.fire('Added', `${saved.count} question(s) added to the test.`, 'success').then(()=>location.reload());
+            else Swal.fire('Error', saved.message || 'Could not save.', 'error');
+        } catch(e) { Swal.fire('Error','An unexpected error occurred while saving.','error'); }
     }
 </script>
 @endsection

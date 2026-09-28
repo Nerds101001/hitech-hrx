@@ -602,7 +602,17 @@ class TrainingController extends Controller
     /**
      * AI Auto-Generation of Assessment Questions
      */
-    public function generateAIQuestions($id)
+    /**
+     * Two steps behind one route, so no route file has to change:
+     *
+     *  - POST with no "save" flag  -> ask the AI and RETURN the questions for
+     *                                 review. Nothing is written.
+     *  - POST with save=1          -> persist the set the reviewer approved.
+     *
+     * It used to generate and write in a single pass, so whatever the model
+     * produced went straight onto the assessment with nobody having read it.
+     */
+    public function generateAIQuestions(Request $request, $id)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
         if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
@@ -610,6 +620,37 @@ class TrainingController extends Controller
         }
 
         $module = TrainingModule::findOrFail($id);
+
+        // --- STEP 2: save the reviewed set ---
+        if ($request->boolean('save')) {
+            $validated = $request->validate([
+                'questions'                         => 'required|array|min:1',
+                'questions.*.question'              => 'required|string|max:1000',
+                'questions.*.options'               => 'required|array|min:2|max:6',
+                'questions.*.options.*'             => 'required|string|max:500',
+                'questions.*.correct_option_index'  => 'required|integer|min:0',
+            ]);
+
+            $saved = 0;
+            foreach ($validated['questions'] as $q) {
+                // A correct index pointing past the end of its own options
+                // would render as a question with no right answer.
+                if ($q['correct_option_index'] >= count($q['options'])) {
+                    continue;
+                }
+                TrainingQuestion::create([
+                    'module_id'            => $module->id,
+                    'question'             => $q['question'],
+                    'options'              => array_values($q['options']),
+                    'correct_option_index' => $q['correct_option_index'],
+                ]);
+                $saved++;
+            }
+
+            return response()->json(['success' => true, 'count' => $saved]);
+        }
+
+        // --- STEP 1: generate for review ---
         $content = $module->content_body;
 
         // --- PDF TEXT EXTRACTION FOR AI ---
@@ -676,16 +717,34 @@ class TrainingController extends Controller
                 throw new \Exception("The AI returned an invalid format. Please try again.");
             }
 
+            // Drop anything malformed before it reaches the reviewer. The old
+            // code indexed $q['question'] straight away, so one missing key in
+            // the model's reply was a 500 rather than a skipped item.
+            $clean = [];
             foreach ($questions as $q) {
-                TrainingQuestion::create([
-                    'module_id' => $module->id,
-                    'question' => $q['question'],
-                    'options' => $q['options'],
-                    'correct_option_index' => $q['correct_option_index']
-                ]);
+                if (!is_array($q) || !isset($q['question'], $q['options'], $q['correct_option_index'])) {
+                    continue;
+                }
+                if (!is_array($q['options']) || count($q['options']) < 2) {
+                    continue;
+                }
+                $idx = (int) $q['correct_option_index'];
+                if ($idx < 0 || $idx >= count($q['options'])) {
+                    continue;
+                }
+                $clean[] = [
+                    'question'             => (string) $q['question'],
+                    'options'              => array_values(array_map('strval', $q['options'])),
+                    'correct_option_index' => $idx,
+                ];
             }
 
-            return response()->json(['success' => true, 'count' => count($questions)]);
+            if (empty($clean)) {
+                throw new \Exception("The AI returned no usable questions. Please try again.");
+            }
+
+            // Nothing is written here - the reviewer confirms first.
+            return response()->json(['success' => true, 'questions' => $clean]);
 
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'AI Error: ' . $e->getMessage()], 500);
