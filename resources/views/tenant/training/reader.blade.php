@@ -275,6 +275,13 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
     pointer-events: none;
 }
 
+/* Pages of the flip book (HTML mode: each page is a real <img>) */
+.book-page { background: #ffffff; overflow: hidden; }
+.book-page img {
+    display: block; width: 100%; height: 100%; object-fit: contain;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+}
+
 /* Book controls bar */
 .book-controls {
     background: #0e0802;
@@ -1249,6 +1256,17 @@ async function initPdf() {
         const rScale   = Math.min(availW / nv.width, stageH / nv.height, 1.8); // cap at 1.8×
         const PW = Math.round(nv.width  * rScale);
         const PH = Math.round(nv.height * rScale);
+        // PW x PH is the on-screen (CSS pixel) size. Pages used to be drawn at
+        // exactly that size, so on any scaled display (125-200%, most laptops
+        // and phones) the browser stretched them and the text blurred - and the
+        // zoom buttons / fullscreen stretched them further. Draw them sharper:
+        // the screen's pixel density with headroom for zoom, 2x-3x, capped at
+        // ~6 megapixels a page so long catalogues stay light enough to load.
+        const DPR   = window.devicePixelRatio || 1;
+        let   SHARP = Math.min(3, Math.max(2, DPR * 1.5));
+        SHARP       = Math.min(SHARP, Math.sqrt(6e6 / (PW * PH)));
+        const RW = Math.round(PW * SHARP), RH = Math.round(PH * SHARP);
+        const canvasToUrl = (cv, q) => new Promise(res => cv.toBlob(b => res(URL.createObjectURL(b)), 'image/jpeg', q));
 
         // ── 3. Render all pages → JPEG ──────────────────
         // For proper book layout: total images must be EVEN (cover + inner pairs + back cover)
@@ -1265,15 +1283,18 @@ async function initPdf() {
                 const bx = bc.getContext('2d');
                 bx.fillStyle = '#f5f0e8';
                 bx.fillRect(0, 0, PW, PH);
-                images.push(bc.toDataURL('image/jpeg', 0.5));
+                images.push(await canvasToUrl(bc, 0.5));
                 bc.width = 0;
             }
             const page = await doc.getPage(i);
-            const vp   = page.getViewport({scale: rScale});
+            const vp   = page.getViewport({scale: rScale * SHARP});
             const cv   = document.createElement('canvas');
-            cv.width = PW; cv.height = PH;
-            await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
-            images.push(cv.toDataURL('image/jpeg', 0.82));
+            cv.width = RW; cv.height = RH;
+            const cx = cv.getContext('2d');
+            cx.fillStyle = '#ffffff';            // JPEG has no transparency: white, not black, behind the page
+            cx.fillRect(0, 0, RW, RH);
+            await page.render({canvasContext: cx, viewport: vp}).promise;
+            images.push(await canvasToUrl(cv, 0.92));
             cv.width = 0; cv.height = 0;
             setProgress(35 + (i / pdfTotal) * 63);
         }
@@ -1301,7 +1322,20 @@ async function initPdf() {
             startZIndex:         0,
             maxShadowOpacity:    0.5,
         });
-        flipBook.loadFromImages(images);
+        // Pages as real <img> elements (HTML mode). loadFromImages() paints them
+        // onto a canvas the size of the book in CSS pixels, with no allowance for
+        // the screen's pixel density - blurry on any scaled display however
+        // sharp the images are. An <img> is drawn by the browser at full detail,
+        // zoomed or not.
+        const pageEls = images.map(src => {
+            const el = document.createElement('div');
+            el.className = 'book-page';
+            const img = document.createElement('img');
+            img.src = src; img.alt = ''; img.draggable = false;
+            el.appendChild(img);
+            return el;
+        });
+        flipBook.loadFromHTML(pageEls);
 
         // ── 5. Events ────────────────────────────────────
         function syncControls(idx) {
