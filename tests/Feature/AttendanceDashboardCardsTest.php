@@ -58,7 +58,14 @@ class AttendanceDashboardCardsTest extends TestCase
         return json_decode($response->getContent(), true);
     }
 
-    public function test_index_absent_card_counts_an_uncorrected_miss_punch_not_present(): void
+    /**
+     * Updated 2026-09-29. This test was written on 1 Sep, when a check-in with
+     * no check-out today was treated as a miss-punch (Absent). On 4 Sep
+     * (3528d6e7d) AttendanceDayStatus deliberately changed that: a day still
+     * running is not a missed punch, the person is at work. A missed punch is
+     * only a PAST day with no check-out.
+     */
+    public function test_index_counts_someone_checked_in_today_and_not_yet_out_as_present(): void
     {
         // Delta-based: this local database carries real synced attendance
         // data, so today's absolute counts aren't a clean baseline - only
@@ -75,8 +82,8 @@ class AttendanceDashboardCardsTest extends TestCase
 
         $after = $this->callIndex();
 
-        $this->assertEquals($before['todayAbsentCount'] + 1, $after['todayAbsentCount'], 'an uncorrected miss-punch must count toward Absent');
-        $this->assertEquals($before['todayPresentCount'], $after['todayPresentCount'], 'it must not also inflate Present');
+        $this->assertEquals($before['todayPresentCount'] + 1, $after['todayPresentCount'], 'still at work today counts as Present');
+        $this->assertEquals($before['todayAbsentCount'], $after['todayAbsentCount'], 'and not as Absent');
     }
 
     public function test_index_present_card_counts_a_worked_off_saturday(): void

@@ -111,7 +111,10 @@ class TravelClaimExportTest extends TestCase
         $path = sys_get_temp_dir() . '/tce_' . uniqid() . '.xlsx';
         Excel::store(new TravelClaimExport($claim), basename($path), null, \Maatwebsite\Excel\Excel::XLSX);
         $stored = storage_path('app/' . basename($path));
-        return IOFactory::load($stored)->getActiveSheet();
+        $sheet = IOFactory::load($stored)->getActiveSheet();
+        @unlink($stored); // every run used to leave its workbook behind in storage/app
+
+        return $sheet;
     }
 
     private function totalRow($sheet): int
@@ -218,6 +221,27 @@ class TravelClaimExportTest extends TestCase
      * REGRESSION — a 0.00 was written as an empty cell, which reads as "no
      * figure given" and breaks any SUM the verifier applies.
      */
+    public function test_fields_the_form_no_longer_collects_stay_off_an_ordinary_claim(): void
+    {
+        // Auto/Taxi, Transport, Bills, Freight and Additional Food were trimmed
+        // from the sheet (054f6a157) because the form stopped collecting them.
+        // They only come back when a claim actually carries an amount in one.
+        $claim = $this->claimWithEveryAmount();
+        foreach ($claim->items as $item) {
+            $item->forceFill(['auto_taxi_amount' => 0, 'transport_amount' => 0, 'bills_amount' => 0, 'freight_amount' => 0, 'additional_food_amount' => 0])->save();
+        }
+        $gross = $claim->items->sum(fn ($i) => $i->conveyance_amount + $i->food_allowance + $i->lodging_amount + $i->courier_amount
+            + $i->toll_amount + $i->special_approval_amount + $i->other_amount);
+        $claim->forceFill(['total_amount' => $gross])->save();
+
+        $sheet = $this->sheetFor($claim->fresh('items'));
+        $headings = $sheet->rangeToArray('A8:' . $sheet->getHighestColumn() . '8')[0];
+        foreach (['Auto/Taxi', 'Transport', 'Bills', 'Freight', 'Additional Food'] as $gone) {
+            $this->assertNotContains($gone, $headings);
+        }
+        $this->assertEquals($gross, (float) $sheet->getCell($this->colOf($sheet, 'Row Total') . $this->totalRow($sheet))->getCalculatedValue());
+    }
+
     public function test_zero_amounts_are_written_as_numeric_zero_not_blank(): void
     {
         $claim = $this->claimWithEveryAmount(1);
