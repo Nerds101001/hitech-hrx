@@ -289,14 +289,14 @@
                                 <div class="tab-pane fade show active modal-body-content" id="desc_{{ $job->id }}">
                                     <div class="content-section">
                                         <h4 class="content-section-title">Position Description</h4>
-                                        {!! $job->description !!}
+                                        {!! \App\Support\SafeHtml::clean($job->description) !!}
                                     </div>
                                 </div>
                                 <div class="tab-pane fade modal-body-content" id="benefits_{{ $job->id }}">
                                     <div class="content-section">
                                         <h4 class="content-section-title">Employee Benefits</h4>
                                         @if($job->benefits)
-                                            {!! $job->benefits !!}
+                                            {!! \App\Support\SafeHtml::clean($job->benefits) !!}
                                         @else
                                             <p>We offer a comprehensive benefits package including health insurance, retirement plans, and paid time off. Details will be provided during the interview process.</p>
                                         @endif
@@ -305,7 +305,7 @@
                                 <div class="tab-pane fade modal-body-content" id="reqs_{{ $job->id }}">
                                     <div class="content-section">
                                         <h4 class="content-section-title">Job Requirements</h4>
-                                        {!! $job->requirement !!}
+                                        {!! \App\Support\SafeHtml::clean($job->requirement) !!}
                                     </div>
                                 </div>
                             </div>
