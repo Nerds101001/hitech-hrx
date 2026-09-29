@@ -244,6 +244,38 @@ class KpiTemplateControllerTest extends TestCase
     }
 
     /**
+     * REGRESSION. Calls Discipline was changed from 100 to 48 hours in the KPI
+     * section, and 17 of 18 people went on being scored against 100: the target
+     * is seeded once, and the edit never reached anyone already holding the KPI.
+     * Everyone still on the old target now follows; a personalised target stays.
+     */
+    public function test_changing_the_target_moves_everyone_still_on_the_old_one_and_rescores_them(): void
+    {
+        Auth::login($this->userWithRole('admin'));
+        $onOld = $this->userWithRole(null);
+        $personal = $this->userWithRole(null);
+
+        $created = KpiTemplate::find(json_decode(
+            $this->controller->storeTemplate($this->payload(['target_value' => 100]))->getContent(), true
+        )['id']);
+        $this->controller->applyTemplate($this->payload(), $created->id);
+        KpiAssignment::where('kpi_template_id', $created->id)->where('user_id', $personal->id)->update(['target_value' => 13]);
+
+        // 24 hours reported this month by the person on the old target.
+        $a = KpiAssignment::where('kpi_template_id', $created->id)->where('user_id', $onOld->id)->first();
+        \App\Services\KpiEntryService::fillForTeam($a, 24, auth()->id());
+        $this->assertEquals(2.4, (float) \App\Models\KpiCheck::where('kpi_assignment_id', $a->id)->latest('id')->value('score'), '24 of 100 = 2.4 of 10');
+
+        $response = $this->controller->updateTemplate($this->payload(['target_value' => 48]), $created->id);
+
+        $this->assertEquals(48.0, (float) $a->fresh()->target_value, 'still on the old target, so it follows the KPI section');
+        $this->assertEquals(13.0, (float) KpiAssignment::where('kpi_template_id', $created->id)->where('user_id', $personal->id)->value('target_value'),
+            'a personalised target is kept');
+        $this->assertEquals(5.0, (float) \App\Models\KpiCheck::where('kpi_assignment_id', $a->id)->latest('id')->value('score'), 'rescored: 24 of 48 = 5 of 10');
+        $this->assertStringContainsString('moved to the new target', json_decode($response->getContent(), true)['message']);
+    }
+
+    /**
      * Retiring must never delete: kpi_checks hold scores people have already
      * been measured against, and appraisal history cannot be rewritten.
      */

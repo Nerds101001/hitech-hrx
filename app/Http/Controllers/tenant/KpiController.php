@@ -735,15 +735,20 @@ class KpiController extends Controller
             $data['parent_template_id'] = null;
         }
 
+        $oldTarget = $t->target_value;
         $t->update($data);
 
         // Existing assignments follow the edit, so a weight change does not
         // leave half the department scored on the old number.
         $res = KpiTemplateService::apply($t, true);
+        // The target too, for everyone who was still on the old one -- a
+        // personalised target stays the person's own.
+        $retargeted = KpiTemplateService::followTargetChange($t->fresh(), $oldTarget);
 
         return response()->json([
             'status' => 'success',
-            'message' => "Saved. {$res['updated']} existing assignment(s) refreshed, {$res['created']} added.",
+            'message' => "Saved. {$res['updated']} existing assignment(s) refreshed, {$res['created']} added"
+                . ($retargeted ? ", {$retargeted} moved to the new target." : '.'),
         ]);
     }
 
