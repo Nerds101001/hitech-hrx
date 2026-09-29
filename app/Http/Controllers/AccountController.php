@@ -32,6 +32,10 @@ class AccountController extends Controller
 
   public function customerIndex()
   {
+    // Lists every customer account with their contact details. Its routes sit
+    // outside web.php's admin|hr group, so any logged-in employee could open it.
+    abort_unless(auth()->user()?->hasRole(['admin', 'hr']), 403);
+
     $users = User::where('is_customer', true)->get();
 
     $userCount = $users->count();
@@ -58,6 +62,8 @@ class AccountController extends Controller
 
   public function customerIndexAjax(Request $request)
   {
+    abort_unless(auth()->user()?->hasRole(['admin', 'hr']), 403);
+
     try {
       $columns = [
         1 => 'id',

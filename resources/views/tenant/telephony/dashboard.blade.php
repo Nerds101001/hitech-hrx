@@ -247,9 +247,17 @@
     el('dialerSimulateBtn').disabled = isDone;
     el('dialerDispositionRow').classList.toggle('d-none', !isDone);
 
-    if (call.recording_url) {
-      el('dialerRecordingRow').classList.remove('d-none');
-      el('dialerRecordingRow').innerHTML = 'Recording: <a href="' + call.recording_url + '" target="_blank" rel="noopener">' + call.recording_url + '</a>';
+    // The URL comes from the telephony provider's callback: only a real
+    // http(s) link is shown, and it is set as text/href, never parsed as HTML
+    // (a javascript: URL or markup in it used to run on click / on render).
+    if (call.recording_url && /^https?:\/\//i.test(call.recording_url)) {
+      var row = el('dialerRecordingRow');
+      row.classList.remove('d-none');
+      row.textContent = 'Recording: ';
+      var a = document.createElement('a');
+      a.href = call.recording_url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = call.recording_url;
+      row.appendChild(a);
     } else {
       el('dialerRecordingRow').classList.add('d-none');
     }

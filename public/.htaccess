@@ -6,6 +6,14 @@
     Require all denied
 </FilesMatch>
 
+# Backups, dumps and scripts are never meant to be downloaded, wherever they
+# land under public/ (a stray db.sql or config.bak would otherwise be served
+# as-is). .json/.txt/.zip are left alone: robots.txt and the build manifest
+# are legitimately served.
+<FilesMatch "\.(sql|bak|old|orig|swp|log|sh|ps1|bat|py|env|ini|dist|sqlite|dump)$">
+    Require all denied
+</FilesMatch>
+
 # The service worker must always be revalidated -- the host's default
 # static-asset caching (7 days, no query-string busting possible for a file
 # a browser fetches by a fixed path) can otherwise leave an already-visited

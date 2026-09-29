@@ -63,6 +63,7 @@ class UtilitiesController extends Controller
 
   public function deleteBackup($fileName)
   {
+    $fileName = basename($fileName); // SECURITY (C-2): strip any path component, as download/restore do
     $file = config('backup.backup.name') . '/' . $fileName;
     $disk = Storage::disk(config('backup.backup.destination.disks')[0]);
 
