@@ -59,13 +59,47 @@ class TrainingController extends Controller
 
     // ── Learn @ Hi Tech: Digital Library videos inside training ──────────
 
-    /** The Digital Library videos the Learn @ Hi Tech phase lists, newest session first. */
+    /**
+     * The Digital Library videos the Learn @ Hi Tech phase lists: in the order an
+     * admin arranged them on Training Content Management, then any not yet
+     * placed (a session added to the library since), newest first.
+     */
     public static function libraryVideos()
     {
+        $positions = \Illuminate\Support\Facades\Schema::hasTable('training_library_video_positions')
+            ? DB::table('training_library_video_positions')->pluck('position', 'library_file_id')
+            : collect();
+
         return \App\Models\LibraryFile::where('category', 'Video')
             ->where('sub_category', config('training.library_video_subcategory', 'Learn @ Hi Tech'))
             ->orderByDesc('session_date')->orderBy('title')
-            ->get();
+            ->get()
+            ->sortBy(fn ($f) => $positions->has($f->id) ? $positions[$f->id] : PHP_INT_MAX, SORT_NUMERIC)
+            ->values();
+    }
+
+    /** Save the order of the Learn @ Hi Tech videos (drag and drop on the manage page). */
+    public function saveLibraryVideoOrder(Request $request)
+    {
+        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+            abort(403);
+        }
+        $ids = (array) $request->validate(['ids' => 'required|array', 'ids.*' => 'string|max:36'])['ids'];
+
+        // Only videos that are really in the phase; anything else is ignored.
+        $known = self::libraryVideos()->pluck('id')->all();
+        $ids = array_values(array_intersect($ids, $known));
+
+        DB::transaction(function () use ($ids) {
+            foreach ($ids as $i => $id) {
+                DB::table('training_library_video_positions')->updateOrInsert(
+                    ['library_file_id' => $id],
+                    ['position' => $i + 1, 'updated_at' => now(), 'created_at' => now()]
+                );
+            }
+        });
+
+        return response()->json(['success' => true, 'saved' => count($ids), 'message' => 'Order saved. Trainees now see the videos in this order.']);
     }
 
     /** How many of those videos this person has watched to the end of the minimum time. */
@@ -826,7 +860,13 @@ class TrainingController extends Controller
         }
 
         $phases = TrainingPhase::with('modules.questions')->orderBy('order')->get();
-        return view('tenant.training.manage.index', compact('phases'));
+        // The Learn @ Hi Tech phase has no modules of its own: it shows the
+        // Digital Library's session videos, so list them here too - otherwise
+        // the phase looks empty to admins while trainees see every session.
+        $libraryVideos = self::libraryVideos();
+        $libraryPhaseIds = config('training.library_video_phase_ids', []);
+
+        return view('tenant.training.manage.index', compact('phases', 'libraryVideos', 'libraryPhaseIds'));
     }
 
     /**

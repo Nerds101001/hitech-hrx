@@ -420,11 +420,59 @@
             </div>
             @endforeach
 
+            @if(in_array($phase->id, $libraryPhaseIds ?? [], true))
+                {{-- Learn at Hi Tech: the Digital Library's session videos, live.
+                     Drag a card to change the order trainees see; it saves on drop. --}}
+                <div class="lv-hint" style="grid-column:1/-1;font-size:0.76rem;color:var(--tm-muted);display:flex;align-items:center;gap:6px;">
+                    <i class="ti ti-arrows-move"></i> Drag the videos into the order trainees should see them - it saves as soon as you drop one.
+                    <span id="lvOrderStatus" style="font-weight:600;"></span>
+                </div>
+                @foreach($libraryVideos as $video)
+                @php
+                    $driveId = preg_match('~drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)~', (string) $video->youtube_url, $dm) ? $dm[1] : null;
+                @endphp
+                <div class="module-card lv-drag" draggable="true" data-id="{{ $video->id }}" style="cursor:grab;position:relative;">
+                    <span class="lv-pos" style="position:absolute;top:8px;left:8px;z-index:3;background:#005f6b;color:#fff;font-size:0.7rem;font-weight:700;border-radius:999px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;padding:0 6px;box-shadow:0 2px 6px rgba(0,0,0,0.2);">{{ $loop->iteration }}</span>
+                    <div class="mc-preview">
+                        @if($driveId)
+                            <img src="https://drive.google.com/thumbnail?id={{ $driveId }}&sz=w400" alt="{{ $video->title }}" onerror="this.style.display='none'">
+                        @else
+                            <div class="mc-preview-placeholder"><i class="ti ti-video" style="color:#f59e0b;opacity:0.6;font-size:1.8rem;"></i><span>Video</span></div>
+                        @endif
+                        <div class="mc-preview-overlay">
+                            <a href="{{ route('training.library-video.show', $video->id) }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                        </div>
+                    </div>
+                    <div class="mc-header">
+                        <div style="min-width:0;flex:1;">
+                            <div class="mc-type-tag bg-label-warning">From Digital Library</div>
+                            <div class="mc-title text-truncate" title="{{ $video->title }}">{{ $video->title }}</div>
+                        </div>
+                    </div>
+                    <div class="mc-body">
+                        <p class="mc-desc">{{ $video->session_date ? 'Session of ' . \Carbon\Carbon::parse($video->session_date)->format('d M Y') : 'Learn at Hi Tech session' }}</p>
+                        <div class="mc-stats">
+                            <span class="stat-chip"><i class="ti ti-clock"></i> {{ config('training.library_video_min_minutes', 20) }}m to watch</span>
+                        </div>
+                    </div>
+                </div>
+                @endforeach
+
+                {{-- Sessions are added and edited in the Digital Library, not here. --}}
+                <a class="add-module-card" href="{{ url('/digital-library?category=Video') }}" style="text-decoration:none;">
+                    <div class="add-icon">+</div>
+                    <span style="font-size:0.82rem;font-weight:600;text-align:center;padding:0 12px;">Add a session in the Digital Library</span>
+                    <span style="font-size:0.7rem;color:var(--tm-muted);text-align:center;padding:4px 12px 0;">
+                        {{ $libraryVideos->count() }} sessions · trainees complete this phase after any {{ config('training.library_videos_required', 3) }}
+                    </span>
+                </a>
+            @else
             {{-- Add Module tile --}}
             <div class="add-module-card" onclick="addModule({{ $phase->id }})">
                 <div class="add-icon">+</div>
                 <span style="font-size:0.82rem;font-weight:600;">Add Module</span>
             </div>
+            @endif
         </div>
     </div>
     @endforeach
@@ -680,6 +728,59 @@
      "ReferenceError: Swal is not defined" on click. Every other page that
      uses Swal loads it through Vite; this one was the outlier. --}}
 <script>
+    // ── Learn @ Hi Tech: drag the library video cards into order ──────────
+    (function () {
+        const cards = () => Array.from(document.querySelectorAll('.lv-drag'));
+        if (!cards().length) return;
+        const status = document.getElementById('lvOrderStatus');
+        let dragged = null;
+
+        function renumber() {
+            cards().forEach((c, i) => { const b = c.querySelector('.lv-pos'); if (b) b.textContent = i + 1; });
+        }
+        async function save() {
+            if (status) { status.textContent = 'Saving...'; status.style.color = 'var(--tm-muted)'; }
+            try {
+                const r = await fetch(@json(route('training.manage.library-videos.order')), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+                    body: JSON.stringify({ ids: cards().map(c => c.dataset.id) }),
+                });
+                const d = await r.json();
+                if (status) { status.textContent = d.success ? 'Order saved.' : 'Could not save the order.'; status.style.color = d.success ? '#16a34a' : '#ef4444'; }
+            } catch (e) {
+                if (status) { status.textContent = 'Could not save - check your connection.'; status.style.color = '#ef4444'; }
+            }
+        }
+
+        const order = () => cards().map(c => c.dataset.id).join(',');
+        let before = '';
+
+        cards().forEach(card => {
+            card.addEventListener('dragstart', e => {
+                dragged = card; before = order(); card.style.opacity = '0.45';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', card.dataset.id);
+            });
+            // Saved when the drag ends, whether it was dropped on a card, on
+            // itself or between cards - the drop event alone misses some of those.
+            card.addEventListener('dragend', () => {
+                card.style.opacity = ''; dragged = null;
+                if (order() !== before) { renumber(); save(); }
+            });
+            card.addEventListener('dragover', e => {
+                if (!dragged) return;
+                e.preventDefault();
+                if (dragged === card) return;
+                const r = card.getBoundingClientRect();
+                // Before or after this card, depending on which half the pointer is over.
+                const after = (e.clientY - r.top) / r.height > 0.5 || ((e.clientX - r.left) / r.width > 0.5 && Math.abs(e.clientY - (r.top + r.height / 2)) < r.height / 2);
+                card.parentNode.insertBefore(dragged, after ? card.nextSibling : card);
+            });
+            card.addEventListener('drop', e => e.preventDefault());
+        });
+    })();
+
     function editPhase(phase) {
         document.getElementById('phase_id').value = phase.id;
         document.getElementById('phase_title').value = phase.title;

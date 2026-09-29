@@ -126,4 +126,35 @@ class TrainingLibraryVideosTest extends TestCase
 
         $this->actingAs($this->user)->get(route('training.library-video.show', $other->id))->assertNotFound();
     }
+
+    public function test_an_admin_can_put_the_videos_in_any_order_and_trainees_see_that_order(): void
+    {
+        $admin = User::create([
+            'first_name' => 'QA', 'last_name' => 'Admin', 'email' => 'qaadm' . uniqid() . '@example.test',
+            'code' => 'QA' . random_int(100000, 999999), 'password' => Hash::make('secret-not-used'), 'status' => UserAccountStatus::ACTIVE->value,
+        ]);
+        $admin->assignRole('admin');
+
+        // Oldest first, and one id that is not a Learn video (ignored).
+        $wanted = [$this->videos[3]->id, $this->videos[1]->id, $this->videos[0]->id, $this->videos[2]->id];
+        $this->actingAs($admin)->postJson(route('training.manage.library-videos.order'), ['ids' => array_merge($wanted, ['not-a-video'])])
+            ->assertOk()->assertJson(['success' => true, 'saved' => 4]);
+
+        $this->assertSame($wanted, \App\Http\Controllers\tenant\TrainingController::libraryVideos()->pluck('id')->all());
+
+        $html = $this->actingAs($this->user)->get(route('training.portal'))->getContent();
+        $at = fn ($v) => strpos($html, route('training.library-video.show', $v->id));
+        $this->assertTrue($at($this->videos[3]) < $at($this->videos[1]) && $at($this->videos[1]) < $at($this->videos[0]) && $at($this->videos[0]) < $at($this->videos[2]),
+            'the portal lists them in the saved order');
+
+        // A session added later goes after the arranged ones.
+        $new = $this->video(['title' => 'ZZ Later', 'sub_category' => $this->sub, 'youtube_url' => 'https://drive.google.com/file/d/ZZlater/view']);
+        $this->assertSame($new->id, \App\Http\Controllers\tenant\TrainingController::libraryVideos()->last()->id);
+    }
+
+    public function test_an_ordinary_employee_cannot_change_the_order(): void
+    {
+        $this->actingAs($this->user)->postJson(route('training.manage.library-videos.order'), ['ids' => [$this->videos[0]->id]])
+            ->assertStatus(403);
+    }
 }

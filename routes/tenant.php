@@ -128,6 +128,7 @@ Route::middleware(['web'])->group(function () {
       Route::delete('/manage/phase/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyPhase'])->name('manage.phase.destroy');
       Route::post('/manage/module', [\App\Http\Controllers\tenant\TrainingController::class, 'storeModule'])->name('manage.module.store');
       Route::delete('/manage/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyModule'])->name('manage.module.destroy');
+      Route::post('/manage/library-videos/order', [\App\Http\Controllers\tenant\TrainingController::class, 'saveLibraryVideoOrder'])->name('manage.library-videos.order');
       Route::post('/manage/module/{id}/generate-ai-questions', [\App\Http\Controllers\tenant\TrainingController::class, 'generateAIQuestions'])->name('manage.module.ai-questions');
       Route::post('/manage/question', [\App\Http\Controllers\tenant\TrainingController::class, 'storeQuestion'])->name('manage.question.store');
       Route::delete('/manage/question/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyQuestion'])->name('manage.question.destroy');
