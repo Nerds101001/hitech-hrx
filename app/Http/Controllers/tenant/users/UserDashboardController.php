@@ -64,7 +64,8 @@ class UserDashboardController extends Controller
      *  - header hub: a vacant-position account whose access_delegate_id
      *    points at me (privileged accounts are always off limits);
      *  - Employee Directory: a super delegate (config/access.php) entering
-     *    ANY active account in one click, for support/debugging.
+     *    ANY active or still-onboarding account in one click, for
+     *    support/debugging.
      * The original user id is kept in the session so Exit can restore it.
      */
     public function switchToDelegate($id)
@@ -80,7 +81,13 @@ class UserDashboardController extends Controller
             return redirect()->back()->with('error', 'That is already your own account.');
         }
 
-        $query = User::where('id', $id)->where('status', UserAccountStatus::ACTIVE);
+        // A super delegate may also enter an account still in onboarding - to
+        // see what a new joiner sees (onboarding form, training portal) and to
+        // help them through it. Everyone else: active accounts only.
+        $statuses = $isSuper
+            ? [UserAccountStatus::ACTIVE, UserAccountStatus::ONBOARDING, UserAccountStatus::ONBOARDING_REQUESTED, UserAccountStatus::ONBOARDING_SUBMITTED]
+            : [UserAccountStatus::ACTIVE];
+        $query = User::where('id', $id)->whereIn('status', $statuses);
 
         // Super delegates skip the pointer requirement; everyone else may only
         // enter accounts explicitly delegated to them.
@@ -92,7 +99,7 @@ class UserDashboardController extends Controller
 
         if (!$target) {
             return redirect()->back()->with('error', $isSuper
-                ? 'That account was not found or is not active.'
+                ? 'That account was not found, or it is not active or in onboarding.'
                 : 'This account is not delegated to you.');
         }
 
