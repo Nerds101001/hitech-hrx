@@ -270,6 +270,82 @@ class KpiAutoSourceService
         return $keys;
     }
 
+    /**
+     * Sales history before FY2026-27 was imported as YEARLY figures, not months:
+     * per salesperson in salesperson_annual_sales.fy_YY_YY and per customer in
+     * sales_pipelines.yoy_YY_YY (FY2022-23 to FY2025-26, lakh). From FY2026-27
+     * on, sales are kept month by month and the month rows answer instead.
+     */
+    private static function fySuffix(Carbon $inYear): string
+    {
+        $y = $inYear->month >= 4 ? $inYear->year : $inYear->year - 1;
+
+        return sprintf('%02d_%02d', $y % 100, ($y + 1) % 100);
+    }
+
+    /** customer id => imported yearly sale (lakh) for the financial year containing $inYear. */
+    private static function importedCustomerYear(int $userId, Carbon $inYear): \Illuminate\Support\Collection
+    {
+        $col = 'yoy_' . self::fySuffix($inYear);
+        if (!DB::getSchemaBuilder()->hasColumn('sales_pipelines', $col)) {
+            return collect();
+        }
+
+        return self::book($userId)->where($col, '>', 0)->pluck($col, 'id')->map(fn ($v) => (float) $v);
+    }
+
+    /** The person's imported yearly total: their own row, else the sum over their customers. */
+    private static function importedYearTotal(int $userId, Carbon $inYear): float
+    {
+        $col = 'fy_' . self::fySuffix($inYear);
+        $own = DB::getSchemaBuilder()->hasColumn('salesperson_annual_sales', $col)
+            ? (float) DB::table('salesperson_annual_sales')->where('user_id', $userId)->value($col)
+            : 0.0;
+
+        return $own > 0 ? $own : (float) self::importedCustomerYear($userId, $inYear)->sum();
+    }
+
+    /**
+     * Whether the imported per-customer figures say WHO bought that year, not just
+     * how much: spread over at least 3 customers, and adding up to at least 90% of
+     * the person's yearly total. Most people's imported year is one lump parked on
+     * a single customer row (e.g. a whole 1,599 L on one party with no sales this
+     * year) - read as a customer list, that made everyone "100% new" and "100%
+     * lost" at once. A lump says how much, never who.
+     */
+    private static function customerHistoryCovers(int $userId, Carbon $inYear): bool
+    {
+        $rows = self::importedCustomerYear($userId, $inYear);
+        if ($rows->count() < 3) {
+            return false;
+        }
+        $customers = (float) $rows->sum();
+        $col = 'fy_' . self::fySuffix($inYear);
+        $total = DB::getSchemaBuilder()->hasColumn('salesperson_annual_sales', $col)
+            ? (float) DB::table('salesperson_annual_sales')->where('user_id', $userId)->value($col)
+            : 0.0;
+
+        return $total <= 0 || $customers >= 0.9 * $total;
+    }
+
+    /** Customers in the book with an imported sale in any earlier year. */
+    private static function customersWithImportedSales(int $userId): \Illuminate\Support\Collection
+    {
+        $cols = array_values(array_filter(
+            ['yoy_22_23', 'yoy_23_24', 'yoy_24_25', 'yoy_25_26'],
+            fn ($c) => DB::getSchemaBuilder()->hasColumn('sales_pipelines', $c)
+        ));
+        if (!$cols) {
+            return collect();
+        }
+
+        return self::book($userId)->where(function ($q) use ($cols) {
+            foreach ($cols as $c) {
+                $q->orWhere($c, '>', 0);
+            }
+        })->pluck('id');
+    }
+
     /** Revenue in ₹ lakh — sale_amount is stored in lakh. */
     public static function revenue(int $userId, Carbon $start, Carbon $end): float
     {
@@ -566,6 +642,15 @@ class KpiAutoSourceService
         $now  = self::revenue($userId, $start, $to);
         $then = self::revenue($userId, $start->copy()->subYear(), $to->copy()->subYear());
         if ($then <= 0) {
+            // Last year was imported as a yearly total, not month by month:
+            // compare with the same share of it (April-September = 6/12).
+            $annual = self::importedYearTotal($userId, $start->copy()->subYear());
+            $months = count(self::monthKeys($start, $to));
+            if ($annual > 0 && $months > 0) {
+                $then = $annual * min(12, $months) / 12;
+            }
+        }
+        if ($then <= 0) {
             return null;
         }
 
@@ -587,8 +672,11 @@ class KpiAutoSourceService
         }
 
         // Without the year before on record, every customer looks new and everybody
-        // would be handed full marks. No history, no figure.
-        if (self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) <= 0) {
+        // would be handed full marks. No history, no figure. The year before may
+        // be on record month by month, or as imported yearly figures per customer
+        // - the latter only counts where they add up to the person's yearly total.
+        $monthHistory = self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) > 0;
+        if (!$monthHistory && !self::customerHistoryCovers($userId, $start->copy()->subYear())) {
             return null;
         }
 
@@ -598,6 +686,9 @@ class KpiAutoSourceService
             ->selectRaw('sales_pipeline_id, MIN(month_year) first_month')
             ->groupBy('sales_pipeline_id');
         $newIds = DB::query()->fromSub($firstSale, 'f')->whereIn('f.first_month', $keys)->pluck('f.sales_pipeline_id');
+        // A customer with imported sales in any earlier year was not new, whatever
+        // month their first MONTHLY row happens to fall in.
+        $newIds = $newIds->diff(self::customersWithImportedSales($userId));
         if ($newIds->isEmpty()) {
             return 0.0;
         }
@@ -622,6 +713,11 @@ class KpiAutoSourceService
             ->whereIn('month_year', $lastYear)
             ->where('sale_amount', '>', 0)
             ->distinct()->pluck('sales_pipeline_id');
+        // Last year's buyers imported as yearly figures count too - where those
+        // figures account for the person's yearly total.
+        if (self::customerHistoryCovers($userId, $start->copy()->subYear())) {
+            $base = $base->merge(self::importedCustomerYear($userId, $start->copy()->subYear())->keys())->unique()->values();
+        }
         if ($base->isEmpty()) {
             return null;
         }
