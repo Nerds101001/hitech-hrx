@@ -224,7 +224,8 @@ return [
     |
     */
     'value_binder'       => [
-        'default' => Maatwebsite\Excel\DefaultValueBinder::class,
+        // Writes text that starts with "=" as text, not a live formula (see the class).
+        'default' => App\Excel\SafeValueBinder::class,
     ],
 
     'cache'        => [

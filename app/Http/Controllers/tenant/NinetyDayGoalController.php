@@ -505,17 +505,20 @@ class NinetyDayGoalController extends Controller
                 array_map(fn ($w) => 'W' . $w, range(0, $weeksSpan - 1)),
                 ['Actual (₹L)', 'Achievement %', 'Current Status']
             ));
+            // Customer/product are typed by salespeople: a cell starting with
+            // = + - @ would run as a formula in Excel, so it is forced to text.
+            $text = fn ($v) => is_string($v) && $v !== '' && strpbrk($v[0], "=+-@\t\r") !== false ? "'" . $v : $v;
             foreach ($rows as $r) {
                 $weekCells = [];
                 for ($w = 0; $w < $weeksSpan; $w++) {
                     $ck = $r->goal->checkins->firstWhere('week_no', $w);
                     $weekCells[] = $ck && $ck->status ? $ck->status : '';
                 }
-                fputcsv($out, array_merge([
+                fputcsv($out, array_map($text, array_merge([
                     optional($r->program)->name ?? 'No program',
                     trim(optional($r->user)->first_name . ' ' . optional($r->user)->last_name),
                     $r->goal->client_name, $r->goal->product, $r->brand, $r->potential,
-                ], $weekCells, [$r->achieved, $r->pct, $r->status]));
+                ], $weekCells, [$r->achieved, $r->pct, $r->status])));
             }
             fclose($out);
         }, $filename, $headers);
