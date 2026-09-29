@@ -1258,7 +1258,14 @@ class EmployeeController extends Controller
       if ($user->hasRole(['admin', 'hr', 'Admin', 'HR', 'manager', 'accounts'])) {
           return null; // All
       }
-      
+      // "View Employee List" (employee.view) given on the Roles page or as a
+      // special permission is what opens this page for anyone else -- index()
+      // checks exactly that -- so it must also show them the list. It used to
+      // open the directory and then fill it with the viewer's own row only.
+      if ($user->can('employee.view')) {
+          return null;
+      }
+
       return [$user->id]; // Default to self
   }
 
