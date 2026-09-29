@@ -755,7 +755,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
             {{-- Assessment button --}}
             <button class="assess-btn" id="assess-btn" onclick="openQuiz()">
                 <i class="ti ti-clipboard-check" style="font-size:0.88rem;"></i>
-                <span class="d-none d-sm-inline">Take Quiz</span>
+                <span class="d-none d-sm-inline">{{ \App\Http\Controllers\tenant\TrainingController::needsQuiz($module) ? 'Take Quiz' : 'Mark as complete' }}</span>
             </button>
         </div>
     </div>
@@ -1539,6 +1539,19 @@ async function loadQuiz() {
         const r = await fetch(ASSESS_URL); const d = await r.json();
         if (!d.success && d.message) {
             Swal.fire({title:'Not yet!',text:d.message,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'}); closeQuiz(); return;
+        }
+        // No quiz for this module: watching/reading it is what completes it.
+        if (d.no_quiz) {
+            closeQuiz();
+            const r2 = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},body:JSON.stringify({answers:{}})});
+            const d2 = await r2.json();
+            if (d2.success) {
+                Swal.fire({title:'Completed!',text:'This module is marked as complete.',icon:'success',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#238636'})
+                    .then(() => location.reload());
+            } else {
+                Swal.fire({title:'Not yet!',text:d2.message || 'Could not mark it complete.',icon:'info',background:'#161b22',color:'#e6edf3'});
+            }
+            return;
         }
         if (!d.success || !d.questions.length) {
             Swal.fire({title:'No questions',text:'No assessment questions found.',icon:'info',background:'#161b22',color:'#e6edf3'}); closeQuiz(); return;

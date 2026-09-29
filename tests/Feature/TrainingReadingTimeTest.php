@@ -96,6 +96,41 @@ class TrainingReadingTimeTest extends TestCase
         $this->assertSame($first->toDateTimeString(), $p->started_at->toDateTimeString(), 'reading time still counts from the first opening');
     }
 
+    // ── modules without a quiz ───────────────────────────────────────────
+
+    /**
+     * REGRESSION. CRM Dashboard required a quiz and had no questions, so it
+     * could never be completed. A module with no questions is completed by
+     * watching it - still only after its minimum time.
+     */
+    public function test_a_module_without_questions_is_completed_once_watched(): void
+    {
+        $video = TrainingModule::create(['phase_id' => $this->module->phase_id, 'title' => 'ZZ No-quiz video ' . uniqid(),
+            'content_type' => 'video', 'content_url' => 'https://youtu.be/abcdefghijk', 'estimated_time_minutes' => 10, 'order' => 999]);
+        UserTrainingProgress::create(['user_id' => $this->user->id, 'module_id' => $video->id, 'status' => 'in_progress', 'started_at' => now()->subMinutes(3)]);
+
+        // Too early: refused like any other module.
+        $this->actingAs($this->user)->postJson(route('training.assessment.submit', $video->id), ['answers' => []])->assertStatus(403);
+
+        UserTrainingProgress::where('user_id', $this->user->id)->where('module_id', $video->id)->update(['started_at' => now()->subMinutes(11)]);
+
+        $this->actingAs($this->user)->getJson(route('training.assessment.get', $video->id))
+            ->assertOk()->assertJson(['success' => true, 'no_quiz' => true]);
+        $this->actingAs($this->user)->postJson(route('training.assessment.submit', $video->id), ['answers' => []])
+            ->assertOk()->assertJson(['success' => true, 'passed' => true, 'no_quiz' => true]);
+
+        $this->assertSame('completed', UserTrainingProgress::where('user_id', $this->user->id)->where('module_id', $video->id)->value('status'));
+    }
+
+    public function test_a_module_with_questions_still_needs_its_quiz(): void
+    {
+        $this->opened(now()->subHour());
+
+        $this->actingAs($this->user)->postJson(route('training.assessment.submit', $this->module->id), ['answers' => []])
+            ->assertStatus(409);   // no served test: a blank submission is not a pass
+        $this->assertNotSame('completed', UserTrainingProgress::where('user_id', $this->user->id)->value('status'));
+    }
+
     // ── what is scored ───────────────────────────────────────────────────
 
     /** Load the test, then submit $answers built from the questions actually served. */

@@ -379,6 +379,12 @@ class TrainingController extends Controller
             return $refusal;
         }
 
+        // Nothing to answer: the module is completed by watching/reading it.
+        if (!self::needsQuiz($module)) {
+            return response()->json(['success' => true, 'no_quiz' => true, 'questions' => [],
+                'message' => 'No quiz for this module - it is complete once watched.']);
+        }
+
         // When a module's question bank is segmented into categories (e.g. the
         // Rust-X catalogue: VCI/SMP, corrosion control, films & papers, oils &
         // coatings, commercial, compliance), draw a few random questions from
@@ -473,6 +479,16 @@ class TrainingController extends Controller
         return null;
     }
 
+    /**
+     * Does passing this module take a quiz? Not when its quiz is switched off,
+     * and not when it has no questions - otherwise such a module (CRM Dashboard)
+     * could never be completed and held everyone after it.
+     */
+    public static function needsQuiz(TrainingModule $module): bool
+    {
+        return (bool) ($module->is_assessment_required ?? true) && $module->questions()->exists();
+    }
+
     /** Session key prefix holding the question ids last served for a module. */
     private const SERVED_KEY = 'training_quiz_served.';
 
@@ -526,6 +542,25 @@ class TrainingController extends Controller
         if ($refusal = $this->readingTimeRefusal($module)) {
             return $refusal;
         }
+
+        // A module with no quiz (CRM Dashboard has no questions) is completed by
+        // watching it: the minimum time is already enforced just above.
+        if (!self::needsQuiz($module)) {
+            $progress = UserTrainingProgress::where('user_id', $user->id)->where('module_id', $module->id)->first();
+            if ($progress && $progress->status !== 'completed') {
+                $progress->update([
+                    'status'       => 'completed',
+                    'attempts'     => ($progress->attempts ?? 0) + 1,
+                    'completed_at' => now(),
+                ]);
+                $this->unlockNextModule($module);
+                $this->releaseAccountIfTrainingDone($user);
+            }
+
+            return response()->json(['success' => true, 'passed' => true, 'no_quiz' => true,
+                'message' => 'Marked as complete.']);
+        }
+
         $answers = (array) $request->input('answers', []); // Format: [question_id => selected_index]
 
         // Score only the questions this person was actually served, and only
