@@ -5,6 +5,23 @@
 let registryModal = null;
 let summaryModal = null;
 
+// Everything on this page that comes from an employee record (name, code,
+// department, biometric ID, adjustment reason, editor) is text the employee
+// or an importer typed. It used to be pasted into HTML and into onclick="..."
+// strings as-is, with only ' escaped - so a name or biometric ID carrying
+// markup ran as script for the admin/HR viewing the register.
+function escHtml(v) {
+    return String(v === null || v === undefined ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+// A value as one argument inside onclick="fn(...)": a JSON string literal,
+// then HTML-escaped for the attribute. The browser decodes the attribute back
+// to the literal, so the function receives exactly the original text.
+function jsArg(v) {
+    return escHtml(JSON.stringify(String(v === null || v === undefined ? '' : v)));
+}
+
 $(function () {
   console.log('Attendance Index');
 
@@ -335,16 +352,15 @@ function renderRegistry() {
             html += '<th class="text-center bg-light" title="Present">P</th><th class="text-center bg-light" title="Absent">A</th><th class="text-center bg-light" title="OFF / Holiday">OFF</th><th class="text-center bg-light" title="Late Arrivals">LATE</th><th class="text-center bg-light" title="Paid Leave Days">LEAVE</th><th class="text-center bg-light" title="Non-Paid Leave">NPL</th><th class="text-center bg-light" title="Total Payable Days (Present + OFF + Paid Leave)">PAYABLE</th></tr></thead><tbody>';
 
             rows.forEach((row, rowIndex) => {
-                const safeName = row.employee.replace(/'/g, "\\'");
                 const periodStr = moment().month(resp.month - 1).year(resp.year).format('MMMM YYYY');
-                const summaryClick = `onclick="showEmployeeSummary('${safeName}', '${row.code}', '${row.presents}', '${row.absents}', '${row.lates}', '${row.leaves}', '${periodStr}')"`;
+                const summaryClick = `onclick="showEmployeeSummary(${jsArg(row.employee)}, ${jsArg(row.code)}, ${jsArg(row.presents)}, ${jsArg(row.absents)}, ${jsArg(row.lates)}, ${jsArg(row.leaves)}, ${jsArg(periodStr)})"`;
 
                 html += '<tr>' +
                         '<td class="sticky-col bg-white fw-bold shadow-sm" style="left:0; z-index:5;">' +
                           '<div class="d-flex flex-column cursor-pointer" ' + summaryClick + '>' +
-                            '<span class="text-teal hover-teal" style="text-decoration: underline dotted;">' + row.employee + '</span>' +
-                            '<small class="text-muted">' + (row.department || '—') + '</small>' +
-                            '<small class="text-muted" style="font-size:0.65rem;">' + (row.biometric_id ? ('Biometric: ' + row.biometric_id) : 'No biometric ID') + '</small>' +
+                            '<span class="text-teal hover-teal" style="text-decoration: underline dotted;">' + escHtml(row.employee) + '</span>' +
+                            '<small class="text-muted">' + (row.department ? escHtml(row.department) : '—') + '</small>' +
+                            '<small class="text-muted" style="font-size:0.65rem;">' + (row.biometric_id ? ('Biometric: ' + escHtml(row.biometric_id)) : 'No biometric ID') + '</small>' +
                           '</div>' +
                         '</td>';
                 
@@ -353,7 +369,7 @@ function renderRegistry() {
 
                     const day = row['day_'+i];
                     // Pass 24h format if needed or original
-                    const clickAttr = `onclick="showDayDetails('${day.status}', '${day.in}', '${day.out}', '${day.hours}', '${safeName}', '${i} ${moment().month(resp.month - 1).format('MMM')}', ${day.id || 'null'}, ${day.is_edited || false}, '${day.editor_name || ''}', '${(day.admin_reason || '').replace(/'/g, "\\'")}', '${day.attachment || ''}', ${day.user_id || 'null'}, '${day.full_date || ''}')"`;
+                    const clickAttr = `onclick="showDayDetails(${jsArg(day.status)}, ${jsArg(day.in)}, ${jsArg(day.out)}, ${jsArg(day.hours)}, ${jsArg(row.employee)}, ${jsArg(i + ' ' + moment().month(resp.month - 1).format('MMM'))}, ${parseInt(day.id, 10) || 'null'}, ${day.is_edited ? 'true' : 'false'}, ${jsArg(day.editor_name || '')}, ${jsArg(day.admin_reason || '')}, ${jsArg(day.attachment || '')}, ${parseInt(day.user_id, 10) || 'null'}, ${jsArg(day.full_date || '')})"`;
                     
                     let inner = '<small class="text-muted" style="font-size:0.6rem;">--</small>';
                     if(day.status === 'Present') inner = '<i class="bx bx-check text-white"></i>';
@@ -363,7 +379,7 @@ function renderRegistry() {
                     if(day.status === 'Holiday') inner = '<small class="fw-bold text-info" style="font-size:0.55rem;">HOL</small>';
                     if(day.status === 'OFF') inner = '<small class="fw-bold text-muted" style="font-size:0.55rem;">OFF</small>';
                     if(day.status && day.status.startsWith('SP')) inner = '<small class="fw-bold text-white" style="font-size:0.55rem;">SP</small>';
-                    if(day.status === 'Leave' || day.status === 'Paid Leave' || day.status === 'Unpaid Leave') inner = `<small class="fw-bold text-white" style="font-size:0.45rem;">${day.hours}</small>`;
+                    if(day.status === 'Leave' || day.status === 'Paid Leave' || day.status === 'Unpaid Leave') inner = `<small class="fw-bold text-white" style="font-size:0.45rem;">${escHtml(day.hours)}</small>`;
                     if(day.status === 'WFH') inner = '<small class="fw-bold text-white" style="font-size:0.45rem;">WFH</small>';
                     if(day.status === 'Scheduled') inner = '<i class="bx bx-calendar-event opacity-25"></i>';
                     if(day.status === 'Today') inner = '<span class="animate__animated animate__pulse animate__infinite" style="font-size:0.5rem; font-weight:900;">TODAY</span>';
@@ -372,7 +388,7 @@ function renderRegistry() {
                     if(day.is_short_leave) inner += '<i class="bx bxs-time-five text-white opacity-75 position-absolute top-0 start-0 p-1" style="font-size:0.55rem;" title="Short Leave Applied"></i>';
 
                     html += `<td class="text-center p-1" style="border: 1px solid #f1f3f5;">
-                                <div class="attendance-box ${day.class} rounded-2 cursor-pointer d-flex align-items-center justify-content-center shadow-sm position-relative" data-status="${day.status}" 
+                                <div class="attendance-box ${escHtml(day.class)} rounded-2 cursor-pointer d-flex align-items-center justify-content-center shadow-sm position-relative" data-status="${escHtml(day.status)}"
                                      style="height:32px; min-width:32px;" 
                                      ${clickAttr}>
                                     ${inner}
@@ -416,7 +432,8 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
         $('#auditBy').text(editorName);
         $('#auditReason').text('"' + adminReason + '"');
         
-        if (attachment) {
+        // Only a real web or site-relative link; never a javascript: URL.
+        if (attachment && /^(https?:\/\/|\/)/i.test(attachment)) {
             $('#auditAttachmentWrapper').removeClass('d-none');
             $('#auditAttachmentLink').attr('href', attachment);
         } else {
@@ -438,7 +455,7 @@ window.showDayDetails = function(status, checkIn, checkOut, hours, name, date, i
     if(status === 'Leave' || status === 'Unpaid Leave') badgeClass = 'purple-vibrant';
     if(status === 'WFH') badgeClass = 'indigo-vibrant';
     
-    $('#detailStatus').html(`<span class="badge bg-label-${badgeClass} px-4 py-2 rounded-pill fw-black text-uppercase ls-1">${status}</span>`);
+    $('#detailStatus').html(`<span class="badge bg-label-${badgeClass} px-4 py-2 rounded-pill fw-black text-uppercase ls-1">${escHtml(status)}</span>`);
     
     const isSpecial = ['Holiday', 'OFF', 'Leave', 'Paid Leave', 'Unpaid Leave', 'Absent'].includes(status);
     
