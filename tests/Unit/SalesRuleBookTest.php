@@ -53,8 +53,8 @@ class SalesRuleBookTest extends TestCase
             ['New Customer Wins (%)', 30, 13], ['New Customer Wins (%)', 30.1, 15], ['New Customer Wins (%)', 55.1, 15],
             // 90-day goals: >=70 = 8 | 50-70 = 5 | 40-50 = 3 | <40 = 0
             ['90-Day Goals', 39, 0], ['90-Day Goals', 40, 3], ['90-Day Goals', 50, 5], ['90-Day Goals', 70, 8],
-            // Sales pitch (out of 20): 20 = 5 | 15-19 = 2 | <15 = 0
-            ['Sales Pitch Score', 14, 0], ['Sales Pitch Score', 15, 2], ['Sales Pitch Score', 19, 2], ['Sales Pitch Score', 20, 5],
+            // Sales pitch (2026-09-29: pitches submitted in Mind Speak, not a reviewer's score): 1+ = 2 | none = 0
+            ['Sales Pitch Score', 0, 0], ['Sales Pitch Score', 1, 2], ['Sales Pitch Score', 5, 2],
             // Learn@HiTech: 2+ = 5 | 1 = 2 | none = 0
             ['Learn@HiTech', 0, 0], ['Learn@HiTech', 1, 2], ['Learn@HiTech', 2, 5], ['Learn@HiTech', 6, 5],
             // Seminars: >=12 = 5 | 8-11 = 2 | <8 = 0

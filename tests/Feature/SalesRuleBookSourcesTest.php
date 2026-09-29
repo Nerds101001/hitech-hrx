@@ -284,16 +284,19 @@ class SalesRuleBookSourcesTest extends TestCase
         }
 
         // 14 parameters + the attrition penalty, less Cost of Selling (retired: it is
-        // a monthly Bulk KPI Entry KPI now).
-        $this->assertCount(14, $templates);
+        // a monthly Bulk KPI Entry KPI now) and Trial Activity / Demos (removed
+        // 2026-09-29: demos are not recorded in HRX).
+        $this->assertCount(13, $templates);
         $this->assertArrayNotHasKey('Cost of Selling (COS%)', $templates);
-        $this->assertSame(14, KpiAssignment::where('user_id', $mine->id)->count());
+        $this->assertArrayNotHasKey('Trial Activity / Demos', $templates);
+        $this->assertSame('auto:sales_pitch_submitted', $templates['Sales Pitch Score']->data_source, 'sales pitch is counted, not typed in');
+        $this->assertSame(13, KpiAssignment::where('user_id', $mine->id)->count());
         $this->assertSame(0, KpiAssignment::where('user_id', $boss->id)->count(), 'the other designation gets nothing');
         $this->assertSame(0, KpiAssignment::where('user_id', $mine->id)->where('category', 'KRA')->count(), 'a heading is never assigned');
 
         // Running it again changes nothing.
         SalesRuleBook::install($this->dept->id, [$manager->id]);
-        $this->assertSame(15, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 14 KPIs, no duplicates');
+        $this->assertSame(14, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 13 KPIs, no duplicates');
     }
 
     public function test_installing_again_keeps_changes_made_on_the_site_and_only_adds_what_is_missing(): void
@@ -319,7 +322,7 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->assertTrue($again['Pipeline Strength']->exists && $again['Pipeline Strength']->id !== $t['Pipeline Strength']->id,
             'a KPI that is missing is created again');
         $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Pipeline Strength')->count());
-        $this->assertCount(14, $again);
+        $this->assertCount(13, $again);
     }
 
     public function test_installing_again_switches_off_a_yearly_cost_of_selling_left_by_an_earlier_install(): void
@@ -340,6 +343,37 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->assertSame(0, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count(), 'and its assignment');
         $this->assertSame(1, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->count(), 'switched off, not deleted');
         $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Cost of Selling (COS%)')->count(), 'not re-created');
+    }
+
+    public function test_installing_again_switches_off_demos_left_by_an_earlier_install(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $mine = $this->person(['designation_id' => $manager->id]);
+        $old = \App\Models\KpiTemplate::create(['department_id' => $this->dept->id, 'title' => 'Trial Activity / Demos', 'category' => 'KPI',
+            'frequency' => 'monthly', 'scoring_type' => 'banded', 'data_source' => 'auto:trial_demo_visits', 'trend' => 'increase',
+            'max_marks' => 5, 'target_value' => 100, 'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true]);
+        \App\Services\KpiTemplateService::apply($old);
+
+        SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $this->assertFalse((bool) $old->fresh()->is_active, 'Demos is switched off');
+        $this->assertSame(0, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count());
+    }
+
+    public function test_sales_pitch_counts_what_was_submitted_whatever_its_review_status_but_not_rejected(): void
+    {
+        $add = fn (string $status, string $on, $deleted = null) => DB::table('mind_speaks')->insert([
+            'user_id' => $this->rep->id, 'category' => 'Sales Pitch', 'content' => 'x', 'status' => $status,
+            'created_at' => $on, 'updated_at' => $on, 'deleted_at' => $deleted]);
+        $add('pending', '2024-06-01');        // the usual state - nobody has reviewed it yet
+        $add('approved', '2024-07-01');
+        $add('acknowledged', '2024-08-01');
+        $add('rejected', '2024-08-02');       // turned down: does not count
+        $add('pending', '2024-08-03', '2024-08-04');   // deleted
+        $add('pending', '2023-06-01');        // last year
+
+        $this->assertSame(3.0, Src::mindSpeakSubmitted($this->rep->id, $this->start, $this->end, 'Sales Pitch'));
+        $this->assertSame(0.0, Src::mindSpeakCount($this->rep->id, $this->start, Carbon::create(2024, 6, 30), 'Sales Pitch'), 'the approved-only count missed the pending pitch');
     }
 
     public function test_the_nightly_run_scores_a_yearly_bingo_kpi_from_the_data(): void

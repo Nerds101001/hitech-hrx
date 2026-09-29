@@ -36,6 +36,9 @@ class SalesRuleBook
      */
     public const RETIRED = [
         'Cost of Selling (COS%)' => 'Replaced by the monthly "Cost of Selling" KPI filled in Bulk KPI Entry',
+        // No demos or product trials are logged in HRX (sales_visits is empty), so it
+        // scored everyone 0. Taken out of the rule book on 2026-09-29.
+        'Trial Activity / Demos' => 'Removed: demos are not recorded in HRX',
     ];
 
     public const KRA_TITLE = 'Sales Assessment';
@@ -53,7 +56,9 @@ class SalesRuleBook
             ['Trial Activity / Demos',       'Product-trial visits completed',                  'auto:trial_demo_visits',        'increase', 5,  100, [[0, 0], [8, 2], [12, 3], [20, 5], [30.0001, 8]]],
             ['New Customer Wins (%)',        'Revenue from customers new this year, %',         'auto:new_customer_revenue_pct', 'increase', 13, 100, [[0, 0], [15, 5], [20, 8], [25, 13], [30.0001, 15]]],
             ['90-Day Goals',                 'Goals on track or in regular order, %',           'auto:ninety_day_goals',         'increase', 5,  100, [[0, 0], [40, 3], [50, 5], [70, 8]]],
-            ['Sales Pitch Score',            "Reviewer's score out of 20",                      'approval',                      'increase', 2,  100, [[0, 0], [15, 2], [20, 5]]],
+            // Counted from Mind Speak, not typed in: one Sales Pitch submitted in the
+            // month earns the marks (2026-09-29; was a reviewer's score out of 20).
+            ['Sales Pitch Score',            'Sales Pitch submitted in Mind Speak',             'auto:sales_pitch_submitted',    'increase', 2,  100, [[0, 0], [1, 2]]],
             ['Learn@HiTech',                 'Programs presented',                              'auto:learn_hitech_sessions',    'increase', 2,  100, [[0, 0], [1, 2], [2, 5]]],
             ['Seminars / Presentations',     'Seminars conducted',                              'auto:seminars_conducted',       'increase', 2,  100, [[0, 0], [8, 2], [12, 5]]],
             ['Competitor Insights',          '1 point per insight, up to 8',                    'auto:mindspeak_insights',       'increase', 3,  100, $upTo8],

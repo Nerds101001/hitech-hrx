@@ -48,6 +48,7 @@ class KpiAutoSourceService
         // Mind Speak — only APPROVED submissions count, so an unreviewed or
         // rejected entry can't inflate a score before a reviewer has seen it.
         'auto:sales_pitches'      => 'Approved Sales Pitch submissions (Mind Speak)',
+        'auto:sales_pitch_submitted' => 'Sales Pitch submissions in Mind Speak (any not rejected)',
         'auto:seminars_conducted' => 'Approved Seminar submissions (Mind Speak)',
 
         // Digital Library — videos presented under the "Learn @ Hi Tech"
@@ -99,6 +100,7 @@ class KpiAutoSourceService
             'auto:trial_demo_visits'         => self::visitTypeCount($a->user_id, $start, $end, 'product_trial'),
 
             'auto:sales_pitches'      => self::mindSpeakCount($a->user_id, $start, $end, 'Sales Pitch'),
+            'auto:sales_pitch_submitted' => self::mindSpeakSubmitted($a->user_id, $start, $end, 'Sales Pitch'),
             'auto:seminars_conducted' => self::mindSpeakCount($a->user_id, $start, $end, 'Seminar'),
 
             'auto:learn_hitech_sessions' => self::learnHitechCount($a->user_id, $start, $end),
@@ -577,6 +579,23 @@ class KpiAutoSourceService
      * 'approved' counts — pending or rejected entries can't inflate a score
      * before a reviewer has actually signed off on them.
      */
+    /**
+     * Mind Speak entries of a category the person SUBMITTED in the period - pending,
+     * approved or acknowledged, anything a reviewer has not rejected. Sales Pitch is
+     * counted this way (2026-09-29): all nine on record were still pending, so an
+     * approved-only count gave everyone 0 however many they had sent in.
+     */
+    public static function mindSpeakSubmitted(int $userId, Carbon $start, Carbon $end, string $category): float
+    {
+        return (float) DB::table('mind_speaks')
+            ->where('user_id', $userId)
+            ->where('category', $category)
+            ->where('status', '!=', 'rejected')
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->count();
+    }
+
     public static function mindSpeakCount(int $userId, Carbon $start, Carbon $end, string $category): float
     {
         return (float) DB::table('mind_speaks')
