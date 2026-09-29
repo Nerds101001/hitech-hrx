@@ -119,6 +119,30 @@ class TrainingAccountReleaseTest extends TestCase
         });
     }
 
+    /**
+     * Only the compulsory phases count: finishing them reads 100% and activates
+     * the account, whatever is left in the optional ones (CRM, Learn @ Hi Tech).
+     */
+    public function test_progress_counts_only_the_compulsory_phases(): void
+    {
+        Mail::fake();
+        $user = $this->heldUser();
+        [$ids, $last] = $this->gatingModules($user);
+
+        // An optional phase with a module nobody has done.
+        $optional = \App\Models\TrainingPhase::create(['title' => 'ZZ Optional ' . uniqid(), 'order' => 50]);
+        TrainingModule::create(['phase_id' => $optional->id, 'title' => 'ZZ optional mod', 'content_type' => 'video',
+            'estimated_time_minutes' => 1, 'order' => 1]);
+
+        $this->actingAs($user)
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])
+            ->assertOk()->assertJson(['passed' => true]);
+
+        $user->refresh();
+        $this->assertSame(100.0, (float) $user->getTrainingProgressPercentage(), 'compulsory set done = 100%, the optional module does not count');
+        $this->assertSame(UserAccountStatus::ACTIVE->value, $user->status instanceof \UnitEnum ? $user->status->value : $user->status);
+    }
+
     /** The gate must not lift while any gating module is still outstanding. */
     public function test_an_unfinished_set_leaves_the_account_held_and_sends_nothing(): void
     {

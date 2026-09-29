@@ -249,9 +249,12 @@ class TrainingController extends Controller
             $q->where('user_id', $userId);
         }])->get();
 
+        // Compulsory modules only (phases 1 and 2) - the optional CRM and
+        // Learn @ Hi Tech phases do not count against anyone.
+        $requiredIds = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
         $summary = [
-            'total_modules' => TrainingModule::count(),
-            'completed_modules' => $progress->where('status', 'completed')->count(),
+            'total_modules' => $requiredIds->count(),
+            'completed_modules' => $progress->where('status', 'completed')->whereIn('module_id', $requiredIds)->unique('module_id')->count(),
             'average_score' => $progress->where('status', 'completed')->avg('assessment_score') ?? 0,
             'is_finished' => $user->training_status === 'completed'
         ];
@@ -844,10 +847,13 @@ class TrainingController extends Controller
             ];
         });
 
-        // Per-user summary row
-        $userStats = $users->map(function ($user) use ($phases, $totalModules) {
+        // Per-user summary row. Completion counts the compulsory modules only
+        // (phases 1 and 2); optional phases (CRM, Learn @ Hi Tech) do not.
+        $requiredIds  = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
+        $totalModules = $requiredIds->count();
+        $userStats = $users->map(function ($user) use ($phases, $totalModules, $requiredIds) {
             $progress       = $user->trainingProgress;
-            $completedCount = $progress->where('status', 'completed')->count();
+            $completedCount = $progress->where('status', 'completed')->whereIn('module_id', $requiredIds)->unique('module_id')->count();
             $avgScore       = round($progress->where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
             $lastActivity   = $progress->sortByDesc('updated_at')->first()?->updated_at;
 

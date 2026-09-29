@@ -742,7 +742,11 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     @endif
                 </div>
                 <div class="phase-info">
-                    <div class="phase-label">Phase {{ $phase->order }}</div>
+                    <div class="phase-label">Phase {{ $phase->order }}
+                        @unless(in_array($phase->id, config('training.onboarding_phase_ids', [1, 2]), true))
+                            <span style="margin-left:6px;padding:1px 8px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:0.62rem;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">Optional</span>
+                        @endunless
+                    </div>
                     <div class="phase-name">{{ $phase->title }}</div>
                     @if($phase->description)
                     <div class="phase-desc">{{ $phase->description }}</div>

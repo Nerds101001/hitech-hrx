@@ -828,13 +828,20 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->hasMany(UserTrainingProgress::class, 'user_id');
   }
 
+    /**
+     * Progress through the COMPULSORY training: the phases in
+     * config('training.onboarding_phase_ids') (1 and 2), the same set whose
+     * completion activates the account. Optional phases (CRM, Learn @ Hi Tech)
+     * are not counted, so finishing the compulsory set reads 100%.
+     */
     public function getTrainingProgressPercentage()
     {
-      $totalModules = TrainingModule::count();
-      if ($totalModules === 0) return 0;
-      
-      $completedModules = $this->trainingProgress()->where('status', 'completed')->count();
-      return round(($completedModules / $totalModules) * 100);
+      $required = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
+      if ($required->isEmpty()) return 0;
+
+      $completedModules = $this->trainingProgress()->whereIn('module_id', $required)->where('status', 'completed')
+          ->distinct('module_id')->count('module_id');
+      return round(($completedModules / $required->count()) * 100);
     }
 
     public function hrPolicyAcknowledgments()
