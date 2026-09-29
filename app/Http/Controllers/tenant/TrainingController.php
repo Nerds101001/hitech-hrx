@@ -138,7 +138,9 @@ class TrainingController extends Controller
         if ($progress->status === 'available' || $progress->status === 'failed') {
             $progress->update([
                 'status' => 'in_progress',
-                'started_at' => now()
+                // Reading time counts from the FIRST time the module was opened:
+                // coming back after a failed attempt does not start it over.
+                'started_at' => $progress->started_at ?? now(),
             ]);
         }
 
@@ -186,6 +188,9 @@ class TrainingController extends Controller
     public function getAssessment($id)
     {
         $module = TrainingModule::findOrFail($id);
+        if ($refusal = $this->readingTimeRefusal($module)) {
+            return $refusal;
+        }
 
         // When a module's question bank is segmented into categories (e.g. the
         // Rust-X catalogue: VCI/SMP, corrosion control, films & papers, oils &
@@ -236,12 +241,57 @@ class TrainingController extends Controller
     }
 
     /**
+     * The minimum reading time, enforced here rather than only by the reader's
+     * countdown. The countdown ran in the browser alone -- and jumping to the
+     * last page of a PDF switched it off -- so the server served and accepted a
+     * test the moment it was asked: 30-minute product catalogues were passed two
+     * minutes apart. No questions and no submission until the module's
+     * estimated time has passed since the person first opened it.
+     *
+     * Admin and HR are exempt (they check modules, as with the progression
+     * rule in showModule), and so is a module already passed.
+     */
+    private function readingTimeRefusal(TrainingModule $module): ?\Illuminate\Http\JsonResponse
+    {
+        $user = Auth::user();
+        if ($user->hasRole(['admin', 'hr'])) {
+            return null;
+        }
+
+        $progress = UserTrainingProgress::where('user_id', $user->id)
+            ->where('module_id', $module->id)
+            ->first();
+        if ($progress && $progress->status === 'completed') {
+            return null;
+        }
+
+        $required = max(0, (int) ($module->estimated_time_minutes ?? 5)) * 60;
+        $elapsed = ($progress && $progress->started_at) ? $progress->started_at->diffInSeconds(now()) : 0;
+        $left = (int) ceil($required - $elapsed);
+        if (!$progress || !$progress->started_at || $left > 0) {
+            $left = max($left, 1);
+            return response()->json([
+                'success' => false,
+                'reading_time_left' => $left,
+                'message' => 'Please finish reading first. The test opens after the minimum reading time of '
+                    . ($module->estimated_time_minutes ?? 5) . ' minutes - '
+                    . ($left >= 60 ? ceil($left / 60) . ' more minute(s)' : $left . ' more second(s)') . ' to go.',
+            ], 403);
+        }
+
+        return null;
+    }
+
+    /**
      * Submit assessment results.
      */
     public function submitAssessment(Request $request, $id)
     {
         $user = Auth::user();
         $module = TrainingModule::findOrFail($id);
+        if ($refusal = $this->readingTimeRefusal($module)) {
+            return $refusal;
+        }
         $answers = $request->input('answers'); // Format: [question_id => selected_index]
         
         $questions = $module->questions()->whereIn('id', array_keys($answers))->get();

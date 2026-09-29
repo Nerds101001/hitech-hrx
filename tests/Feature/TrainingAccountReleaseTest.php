@@ -70,8 +70,10 @@ class TrainingAccountReleaseTest extends TestCase
                 'status' => 'completed', 'assessment_score' => 90, 'completed_at' => now(),
             ]);
         }
+        // Opened two hours ago, so the minimum reading time has passed.
         UserTrainingProgress::create([
-            'user_id' => $user->id, 'module_id' => $last->id, 'status' => 'available',
+            'user_id' => $user->id, 'module_id' => $last->id, 'status' => 'in_progress',
+            'started_at' => now()->subHours(2),
         ]);
 
         return [$ids, $last];

@@ -1368,19 +1368,11 @@ function toggleFullscreen() {
     });
 });
 
+// Reaching the last page no longer ends the reading time: jumping straight to
+// it skipped the whole catalogue. The test opens when the timer runs out (the
+// server enforces the same rule).
 function checkCatalogReady() {
-    if (pdfReached) {
-        timerDone = true;
-        if (timerInterval) clearInterval(timerInterval);
-        timerElapsed = timerSecs;
-        const disp = document.getElementById('timer-display');
-        if (disp) disp.textContent = 'Done!';
-        const chip = document.getElementById('timer-chip');
-        if (chip) { chip.classList.remove('active','warning'); chip.classList.add('done'); }
-        const icon = document.getElementById('timer-icon');
-        if (icon) icon.className = 'ti ti-check';
-    }
-    if (IS_COMPLETED || pdfReached || timerDone) showAssessBtn();
+    if (IS_COMPLETED || timerDone) showAssessBtn();
 }
 
 /* ── Checkpoint Popup ── */
@@ -1497,8 +1489,8 @@ function initLocalVideo() {
 let qList=[], qIdx=0, qAnswers={}, showAll=false, passPct=80;
 
 function openQuiz() {
-    if (CTYPE !== 'video' && !timerDone && !pdfReached) {
-        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) or reach the last page first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
+    if (CTYPE !== 'video' && !timerDone && !IS_COMPLETED) {
+        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
         return;
     }
     const ov = document.getElementById('quiz-overlay'); ov.style.display = 'block'; ov.scrollTop = 0;
@@ -1511,6 +1503,9 @@ async function loadQuiz() {
     const sub = document.getElementById('quiz-sub'); if (sub) sub.textContent = 'Loading...';
     try {
         const r = await fetch(ASSESS_URL); const d = await r.json();
+        if (!d.success && d.message) {
+            Swal.fire({title:'Not yet!',text:d.message,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'}); closeQuiz(); return;
+        }
         if (!d.success || !d.questions.length) {
             Swal.fire({title:'No questions',text:'No assessment questions found.',icon:'info',background:'#161b22',color:'#e6edf3'}); closeQuiz(); return;
         }
@@ -1581,7 +1576,7 @@ async function submitQuiz() {
         const r = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF},body:JSON.stringify({answers:qAnswers})});
         const d = await r.json(); Swal.close();
         if (d.success) showResult(d);
-        else Swal.fire({title:'Error',text:'Submission failed.',icon:'error',background:'#161b22',color:'#e6edf3'});
+        else Swal.fire({title: d.message ? 'Not yet!' : 'Error',text: d.message || 'Submission failed.',icon: d.message ? 'info' : 'error',background:'#161b22',color:'#e6edf3'});
     } catch { Swal.close(); Swal.fire({title:'Network error',text:'Please try again.',icon:'error',background:'#161b22',color:'#e6edf3'}); }
 }
 function showResult(d) {
