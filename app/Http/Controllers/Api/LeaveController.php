@@ -172,7 +172,7 @@ class LeaveController extends Controller
     $endTime   = $request->end_time;
 
     // Unit leave policy enforcement
-    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours, $isHalfDay, $startTime, $endTime);
+    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours, $isHalfDay, $startTime, $endTime, $isHalfDay ? ($halfDaySession ?? 'first_half') : null);
     if ($policyError) {
       return Error::response($policyError);
     }

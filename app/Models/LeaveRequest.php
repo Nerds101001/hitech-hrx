@@ -76,6 +76,59 @@ class LeaveRequest extends Model implements AuditableContract
     return $this->belongsTo(LeaveType::class, 'leave_type_id');
   }
 
+  /**
+   * The approved half-day leave for the OTHER half of this same single date
+   * (this is the first half, that the second - or the reverse). Someone may
+   * take one half and later the other; together the two make a full day, and
+   * attendance, payroll and CCare must read them as one day off, not two
+   * separate half days each half-worked.
+   */
+  public function otherHalf(array $statuses = [LeaveRequestStatus::APPROVED]): ?self
+  {
+    if (!$this->is_half_day || !in_array($this->half_day_session, ['first_half', 'second_half'], true)
+        || !$this->from_date || !$this->to_date || !$this->from_date->isSameDay($this->to_date)) {
+      return null;
+    }
+
+    return static::where('user_id', $this->user_id)
+      ->where('id', '!=', $this->id)
+      ->whereIn('status', $statuses)
+      ->where('is_half_day', true)
+      ->where('half_day_session', $this->half_day_session === 'first_half' ? 'second_half' : 'first_half')
+      ->whereDate('from_date', $this->from_date->toDateString())
+      ->whereDate('to_date', $this->to_date->toDateString())
+      ->with('leaveType')
+      ->first();
+  }
+
+  /** Whether this half-day is paid: WFH is a worked (paid) half; otherwise a paid type not turned into LWP. */
+  public function halfIsPaid(): bool
+  {
+    if (strtoupper((string) ($this->leaveType->code ?? '')) === 'WFH') {
+      return true;
+    }
+
+    return (bool) ($this->leaveType->is_paid ?? false) && !($this->is_lwp && (float) $this->lwp_days >= 0.5);
+  }
+
+  /** The attendance label for a day both halves of which are on leave, from whether each half is paid. */
+  public static function bothHalvesStatus(bool $aPaid, bool $bPaid): string
+  {
+    $paid = (int) $aPaid + (int) $bPaid;
+
+    return $paid === 2 ? 'leave' : ($paid === 0 ? 'unpaid_leave' : 'half-Day');
+  }
+
+  /** The attendance label a single approved half-day leave writes (as processApproval does). */
+  public function ownHalfStatus(): string
+  {
+    if (strtoupper((string) ($this->leaveType->code ?? '')) === 'WFH') {
+      return 'work_from_home';
+    }
+
+    return $this->halfIsPaid() || !($this->leaveType->is_paid ?? false) ? 'half-Day' : 'unpaid_leave';
+  }
+
   protected static function booted()
   {
       $processApproval = function ($leaveRequest) {
@@ -216,6 +269,18 @@ class LeaveRequest extends Model implements AuditableContract
                           && $attendance->check_in_time->format('H:i') !== '00:00';
                       $absenceLike = in_array($existingStatus, ['absent', 'miss-punch', 'miss_punch'], true);
 
+                      // The other half of this date already on leave: the day is
+                      // now wholly off, so label it for both halves instead of
+                      // overwriting the first half's label with this one's.
+                      $otherHalf = $leaveRequest->is_half_day ? $leaveRequest->otherHalf() : null;
+                      if ($otherHalf && !($isRealPunch && !$absenceLike)) {
+                          // This half's own lwp flag is only saved after this loop,
+                          // so its paid-ness is read off the label just worked out.
+                          $thisPaid = $attendanceStatus === 'work_from_home'
+                              || ($isPaidType && $attendanceStatus !== 'unpaid_leave');
+                          $attendanceStatus = self::bothHalvesStatus($thisPaid, $otherHalf->halfIsPaid());
+                      }
+
                       $attendance->update([
                           'leave_request_id' => $leaveRequest->id,
                           'status'           => ($isRealPunch && !$absenceLike) ? $attendance->status : $attendanceStatus,
@@ -311,6 +376,22 @@ class LeaveRequest extends Model implements AuditableContract
                       $balance->used = max(0, $balance->used - $paidDaysToRefund);
                       $balance->save();
                   }
+              }
+
+              // The other half of this date still approved: the day is still half
+              // on leave. Hand its row back to that half (with that half's own
+              // label) instead of deleting it, which dropped the surviving half.
+              $otherHalf = $leaveRequest->is_half_day ? $leaveRequest->otherHalf() : null;
+              if ($otherHalf) {
+                  foreach (Attendance::where('user_id', $leaveRequest->user_id)
+                      ->whereDate('check_in_time', $leaveRequest->from_date->toDateString())->get() as $row) {
+                      $isPlaceholder = !$row->check_in_time || $row->check_in_time->format('H:i') === '00:00';
+                      $row->update([
+                          'leave_request_id' => $otherHalf->id,
+                          'status'           => $isPlaceholder ? $otherHalf->ownHalfStatus() : $row->status,
+                      ]);
+                  }
+                  return;
               }
 
               // Delete auto-created attendance records for those dates

@@ -138,6 +138,15 @@ class AttendanceDayStatus
         return false;
     }
 
+    /**
+     * Not cached: a long-running worker would keep a "no other half" answer
+     * after the other half is approved. It only runs on half-day leave days.
+     */
+    private static function otherHalfOf(LeaveRequest $leave): ?LeaveRequest
+    {
+        return $leave->otherHalf();
+    }
+
     /** Working days the leave actually spans, counted the way approval counts them. */
     private static function leaveSpanDays(User $user, LeaveRequest $leave): float
     {
@@ -199,6 +208,16 @@ class AttendanceDayStatus
         $isPaid = self::leaveDayIsPaid($user, $leaveReq, $attendance, $date);
         $isWfh = $leaveReq && strtoupper($leaveReq->leaveType->code ?? '') === 'WFH';
 
+        // First half and second half taken as two requests: the whole day is
+        // off. Paid for both halves -> paid leave, neither -> unpaid leave,
+        // one of each -> half paid / half unpaid.
+        $bothHalvesCode = null;
+        if ($isHalfDay && !$isShort && $leaveReq && ($otherHalf = self::otherHalfOf($leaveReq))) {
+            $paidHalves = (int) $leaveReq->halfIsPaid() + (int) $otherHalf->halfIsPaid();
+            $bothHalvesCode = $paidHalves === 2 ? 'paid_leave' : ($paidHalves === 0 ? 'unpaid_leave' : 'half-day');
+            $isPaid = $paidHalves > 0;
+        }
+
         $result = [
             'code' => 'missing',
             'workMins' => $workMins,
@@ -220,7 +239,9 @@ class AttendanceDayStatus
             } elseif ($isFullHoliday) {
                 $result['code'] = $workMins >= self::OFFDAY_CREDIT_MINUTES ? 'hp' : 'holiday';
             } elseif (empty($attendance->admin_reason)) {
-                if ($isWfh) {
+                if ($bothHalvesCode && $workMins < $reqMins) {
+                    $result['code'] = $bothHalvesCode;
+                } elseif ($isWfh) {
                     $result['code'] = 'work_from_home';
                 } elseif ($isShort) {
                     if ($workMins >= self::SHORT_LEAVE_PRESENT_MINUTES) {
@@ -298,6 +319,9 @@ class AttendanceDayStatus
 
             if ($isShortLeave) {
                 $result['code'] = 'absent';
+            } elseif ($bothHalvesCode) {
+                $result['code'] = $bothHalvesCode;
+                $isPaidLeave = $bothHalvesCode !== 'unpaid_leave';
             } elseif ($isHalfDayLeave) {
                 $result['code'] = $isPaidLeave ? 'paid_leave' : 'half-day';
             } else {

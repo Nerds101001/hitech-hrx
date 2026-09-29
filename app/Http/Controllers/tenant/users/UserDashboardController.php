@@ -699,7 +699,8 @@ class UserDashboardController extends Controller
             $isShort ? ($request->input('duration_hours') ?? 2.0) : null,
             $isHalfDay,
             $isShort ? $request->input('start_time') : null,
-            $isShort ? $request->input('end_time') : null
+            $isShort ? $request->input('end_time') : null,
+            $isHalfDay ? ($validated['half_day_session'] ?? 'first_half') : null
         );
         if ($error) {
             return redirect()->back()->withErrors(['policy' => $error])->withInput();

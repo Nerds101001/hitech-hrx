@@ -210,7 +210,15 @@ class CcAttendanceController extends Controller
         $type = $leave->leaveType;
         if (strtoupper((string) ($type->code ?? '')) === 'WFH') return 'wfh';
         if ($leave->is_short_leave || ($type->is_short_leave ?? false)) return 'short';
-        if ($leave->is_half_day || ($type->is_half_day ?? false)) return 'half';
+        if ($leave->is_half_day || ($type->is_half_day ?? false)) {
+            // First half and second half both taken (as two requests): the
+            // whole day is off, nothing left for CCare to mark as worked.
+            if ($leave instanceof \App\Models\LeaveRequest
+                && $leave->otherHalf([\App\Enums\LeaveRequestStatus::PENDING, \App\Enums\LeaveRequestStatus::APPROVED])) {
+                return 'full';
+            }
+            return 'half';
+        }
         return 'full';
     }
 

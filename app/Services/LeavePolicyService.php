@@ -56,7 +56,14 @@ class LeavePolicyService
         return $values ? max($values) : null;
     }
 
-    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null, bool $isHalfDay = false, ?string $startTime = null, ?string $endTime = null): ?string
+    /** A one-date half-day request that names its half (first_half / second_half). */
+    private static function isSingleHalfDay(bool $isHalfDay, string $fromDate, string $toDate, ?string $session): bool
+    {
+        return $isHalfDay && in_array($session, ['first_half', 'second_half'], true)
+            && Carbon::parse($fromDate)->isSameDay(Carbon::parse($toDate));
+    }
+
+    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null, bool $isHalfDay = false, ?string $startTime = null, ?string $endTime = null, ?string $halfDaySession = null): ?string
     {
         $from = Carbon::parse($fromDate);
         $to   = Carbon::parse($toDate);
@@ -72,10 +79,18 @@ class LeavePolicyService
         }
 
         // --- 2. Overlap Check ---
+        // A half day may sit beside the OTHER half of the same date (first half
+        // taken, now the second half too): together they make a full day. Any
+        // other overlap - a full day, a longer span, the same half again - blocks.
         $overlap = LeaveRequest::where('user_id', $user->id)
             ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
             ->where('from_date', '<=', $toDate)
             ->where('to_date', '>=', $fromDate)
+            ->when(self::isSingleHalfDay($isHalfDay, $fromDate, $toDate, $halfDaySession), fn ($q) => $q->where(fn ($w) => $w
+                ->where('is_half_day', false)
+                ->orWhereNull('half_day_session')
+                ->orWhere('half_day_session', $halfDaySession)
+                ->orWhereColumn('from_date', '!=', 'to_date')))
             ->exists();
 
         if ($overlap) {
