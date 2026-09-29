@@ -124,8 +124,10 @@ class SalesTargetImportController extends Controller
             }
         }
 
-        // Store file path in session for the next step
+        // Store file path in session for the next step - storeImport() accepts
+        // only this file, not whatever path the form sends back.
         $path = $file->store('temp_imports');
+        session(['sales_target_import_temp' => $path]);
 
         return view('tenant.sales-targets.import-preview', [
             'headers' => $validHeaders,
@@ -154,20 +156,23 @@ class SalesTargetImportController extends Controller
             'mapping.month_year' => 'required|numeric',
         ]);
 
-        $rawFilePath = $request->file_path;
-        if (!str_starts_with($rawFilePath, 'temp_imports/')) {
-            return redirect()->route('sales-targets.import')->with('error', 'Invalid file reference.');
+        // Only the file this user's own preview saved: a 'temp_imports/' prefix
+        // alone let 'temp_imports/../../<anything>' through.
+        $rawFilePath = (string) $request->file_path;
+        if ($rawFilePath === '' || $rawFilePath !== session('sales_target_import_temp')
+            || !preg_match('~^temp_imports/[A-Za-z0-9]+\.[A-Za-z0-9]+$~', $rawFilePath)) {
+            return redirect()->route('sales-visits.sales-targets.import')->with('error', 'Invalid file reference.');
         }
         $filePath = storage_path('app/' . $rawFilePath);
 
         if (!file_exists($filePath)) {
-            return redirect()->route('sales-targets.import')->with('error', 'Uploaded file was lost. Please try uploading again.');
+            return redirect()->route('sales-visits.sales-targets.import')->with('error', 'Uploaded file was lost. Please try uploading again.');
         }
 
         try {
             $data = Excel::toArray(new \stdClass(), $filePath)[0];
         } catch (\Exception $e) {
-            return redirect()->route('sales-targets.import')->with('error', 'Error reading file during import.');
+            return redirect()->route('sales-visits.sales-targets.import')->with('error', 'Error reading file during import.');
         }
 
         $headers = array_shift($data); // Remove headers
@@ -245,10 +250,10 @@ class SalesTargetImportController extends Controller
         $msg = "Successfully imported {$successCount} targets.";
         if ($errorCount > 0) {
             $msg .= " Failed to import {$errorCount} targets.";
-            return redirect()->route('sales-targets.import')->with('warning', $msg)->with('import_errors', $errors);
+            return redirect()->route('sales-visits.sales-targets.import')->with('warning', $msg)->with('import_errors', $errors);
         }
 
-        return redirect()->route('sales-targets.import')->with('success', $msg);
+        return redirect()->route('sales-visits.sales-targets.import')->with('success', $msg);
     }
 
     /**
