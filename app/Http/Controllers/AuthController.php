@@ -29,6 +29,11 @@ class AuthController extends Controller
 {
   protected $redirectTo = RouteServiceProvider::HOME;
 
+  /** One reply for a wrong password and an unknown login alike - see loginPost(). */
+  private const BAD_LOGIN = 'The login details are incorrect. After 3 failed attempts the account is locked for 40 minutes.';
+  private const LOCKED_MSG = 'Your account has been locked for 40 minutes due to 3 failed attempts. You can request an unlock link by email.';
+  private const UNLOCK_SENT = 'If that account is locked, an unlock link has been sent to its email address. It is valid for 15 minutes.';
+
   public function rootRedirect()
   {
     return redirect()->route('login');
@@ -175,14 +180,24 @@ class AuthController extends Controller
                 Log::error("Audit Log Creation Failed: " . $e->getMessage());
             }
 
-            return redirect()->back()->with('error', "Your account has been locked for $lockTime minutes due to 3 failed attempts. You can request an unlock link by email.");
+            return redirect()->back()->with('error', self::LOCKED_MSG);
           }
 
-          $remaining = 3 - $user->login_attempts;
-          return redirect()->back()->with('error', "Invalid password. You have $remaining attempts left before account lock.");
+          // Same words as an unknown login (below), so the reply never tells
+          // anyone whether an account exists. It used to say "Invalid password.
+          // You have N attempts left" here and "User not found." there.
+          return redirect()->back()->with('error', self::BAD_LOGIN);
         }
       } else {
-        return redirect()->back()->with('error', __('User not found.'));
+        // An unknown login gets the same three tries and the same lock message
+        // as a real account, or the lock itself would give the account away.
+        $key = 'login_fail:' . sha1(strtolower(trim((string) $request->email)));
+        $tries = (int) \Illuminate\Support\Facades\Cache::get($key, 0) + 1;
+        \Illuminate\Support\Facades\Cache::put($key, $tries, now()->addMinutes(40));
+        if ($tries >= 3) {
+          return redirect()->back()->with('error', self::LOCKED_MSG);
+        }
+        return redirect()->back()->with('error', self::BAD_LOGIN);
       }
     } catch (\Illuminate\Validation\ValidationException $e) {
         throw $e;
@@ -347,22 +362,19 @@ class AuthController extends Controller
               ['user' => $user->id]
           );
 
-          // Email it too (best effort) — but the on-screen link below is the
-          // primary path so the flow works even when mail is unavailable.
-          // Unlocking only clears the temporary lockout; it does not log the
-          // user in or change their password, so showing the link is safe.
+          // Email only. It used to be shown on screen as well, to anyone who
+          // typed the email - so a guesser could lock an account, unlock it
+          // straight away and carry on guessing, and the lockout protected
+          // nothing. Only the account's own inbox gets the link now.
           try {
               $user->notify(new \App\Notifications\Auth\UnlockAccountNotification($unlockUrl));
           } catch (\Throwable $e) {
               \Illuminate\Support\Facades\Log::warning('Unlock email failed: ' . $e->getMessage());
           }
-
-          return redirect()->back()
-              ->with('success', 'Your unlock link is ready. Click the button below to unlock your account.')
-              ->with('unlock_link', $unlockUrl);
       }
 
-      return redirect()->back()->with('error', 'This account is not locked, or the email was not found.');
+      // The same reply whether or not the account exists or is locked.
+      return redirect()->back()->with('success', self::UNLOCK_SENT);
   }
 
   public function unlockAccount(Request $request, $userId)
@@ -580,11 +592,13 @@ class AuthController extends Controller
   {
     $request->validate(['email' => 'required|email']);
     $status = Password::sendResetLink($request->only('email'));
-    // On success, send the user to the login page with an alert (instead of
-    // staying on the forgot-password form).
-    return $status === Password::RESET_LINK_SENT
-      ? redirect()->route('login')->with('success', 'We have emailed your password reset link. Please check your email.')
-      : back()->withErrors(['email' => __($status)]);
+    // The same reply whether or not the email belongs to an account: the stock
+    // "We can't find a user with that email address." told anyone which emails
+    // are real. (A repeat request inside the throttle window gets it too.)
+    if (in_array($status, [Password::RESET_LINK_SENT, Password::INVALID_USER, Password::RESET_THROTTLED], true)) {
+      return redirect()->route('login')->with('success', 'If that email belongs to an account, a password reset link has been sent to it. Please check your email.');
+    }
+    return back()->withErrors(['email' => __($status)]);
   }
 
   public function resetPassword(string $token)
