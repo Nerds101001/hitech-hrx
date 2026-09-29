@@ -79,13 +79,17 @@ class TrainingAccountReleaseTest extends TestCase
         return [$ids, $last];
     }
 
-    /** Answers that score 100% on the given module. */
-    private function perfectAnswers(TrainingModule $m): array
+    /**
+     * Answers that score 100% on the given module: the test is loaded first, as
+     * the reader does, because only the questions actually served are scored.
+     */
+    private function perfectAnswers(TrainingModule $m, ?User $as = null): array
     {
-        $answers = [];
-        foreach (TrainingQuestion::where('module_id', $m->id)->get() as $q) {
-            $answers[$q->id] = $q->correct_option_index;
+        if ($as) {
+            $this->actingAs($as);
         }
+        $served = $this->getJson(route('training.assessment.get', $m->id))->assertOk()->json('questions');
+        $answers = TrainingQuestion::whereIn('id', array_column($served, 'id'))->pluck('correct_option_index', 'id')->all();
         $this->assertNotEmpty($answers, 'the final gating module needs questions for this test');
 
         return $answers;
@@ -98,7 +102,7 @@ class TrainingAccountReleaseTest extends TestCase
         [$ids, $last] = $this->gatingModules($user);
 
         $this->actingAs($user)
-            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])
             ->assertOk()
             ->assertJson(['success' => true, 'passed' => true]);
 
@@ -128,7 +132,7 @@ class TrainingAccountReleaseTest extends TestCase
             ->update(['status' => 'available', 'completed_at' => null]);
 
         $this->actingAs($user)
-            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])
             ->assertOk()
             ->assertJson(['passed' => true]);
 
@@ -150,7 +154,7 @@ class TrainingAccountReleaseTest extends TestCase
         [$ids, $last] = $this->gatingModules($user);
 
         $this->actingAs($user)
-            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last)])
+            ->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])
             ->assertOk();
 
         $user->refresh();
@@ -164,10 +168,8 @@ class TrainingAccountReleaseTest extends TestCase
         Mail::fake();
         $user = $this->heldUser();
         [$ids, $last] = $this->gatingModules($user);
-        $answers = $this->perfectAnswers($last);
-
-        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $answers])->assertOk();
-        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $answers])->assertOk();
+        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])->assertOk();
+        $this->actingAs($user)->postJson(route('training.assessment.submit', $last->id), ['answers' => $this->perfectAnswers($last, $user)])->assertOk();
 
         Mail::assertSent(TrainingCompleted::class, 1);
     }

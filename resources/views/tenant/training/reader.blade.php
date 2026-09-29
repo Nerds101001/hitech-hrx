@@ -1632,7 +1632,9 @@ function showResult(d) {
         }
     }
 }
-function retakeQuiz() { qAnswers={}; qIdx=0; document.getElementById('quiz-result').style.display='none'; document.getElementById('quiz-card').style.display='block'; buildDots(); if(showAll){renderAll();}else{renderQ();} }
+// A retake asks the server for a fresh set: each served set can be submitted
+// once, and the server applies the retry limit here.
+function retakeQuiz() { qAnswers={}; qIdx=0; document.getElementById('quiz-result').style.display='none'; loadQuiz(); }
 
 /* ══════════════════════════════════════════
    BOOT

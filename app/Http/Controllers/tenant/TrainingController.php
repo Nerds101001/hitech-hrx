@@ -135,13 +135,17 @@ class TrainingController extends Controller
             return redirect()->route('training.portal')->with('error', 'This module is currently locked.');
         }
 
-        if ($progress->status === 'available' || $progress->status === 'failed') {
+        // Reading time counts from the FIRST time the module was opened. A failed
+        // module stays 'failed' when reopened (it can still be read and retaken):
+        // its last-updated time is when the last attempt failed, which is what
+        // the retry cooldown measures from.
+        if ($progress->status === 'available') {
             $progress->update([
                 'status' => 'in_progress',
-                // Reading time counts from the FIRST time the module was opened:
-                // coming back after a failed attempt does not start it over.
                 'started_at' => $progress->started_at ?? now(),
             ]);
+        } elseif ($progress->status === 'failed' && !$progress->started_at) {
+            $progress->update(['started_at' => now()]);
         }
 
         // PDF text-caching fallback
@@ -188,7 +192,7 @@ class TrainingController extends Controller
     public function getAssessment($id)
     {
         $module = TrainingModule::findOrFail($id);
-        if ($refusal = $this->readingTimeRefusal($module)) {
+        if ($refusal = $this->readingTimeRefusal($module) ?? $this->retryRefusal($module)) {
             return $refusal;
         }
 
@@ -221,6 +225,10 @@ class TrainingController extends Controller
                 ->limit(20)
                 ->get();
         }
+
+        // Remember exactly what was served. submitAssessment() scores against
+        // this set and nothing else, once.
+        session([self::SERVED_KEY . $module->id => $questions->pluck('id')->map(fn ($i) => (int) $i)->all()]);
 
         $questions = $questions
             ->map(function($q) {
@@ -282,6 +290,49 @@ class TrainingController extends Controller
         return null;
     }
 
+    /** Session key prefix holding the question ids last served for a module. */
+    private const SERVED_KEY = 'training_quiz_served.';
+
+    /**
+     * After max_failed_attempts failures in a row, the next attempt waits
+     * retry_cooldown_minutes from the last failure. Retries were unlimited and
+     * instant, so a small question bank could be learnt by trial and error
+     * (21 attempts on one catalogue, 19 on a one-page policy). Every retry
+     * already draws a fresh random set.
+     *
+     * Admin/HR and already-passed modules are exempt.
+     */
+    private function retryRefusal(TrainingModule $module): ?\Illuminate\Http\JsonResponse
+    {
+        $user = Auth::user();
+        if ($user->hasRole(['admin', 'hr'])) {
+            return null;
+        }
+
+        $progress = UserTrainingProgress::where('user_id', $user->id)->where('module_id', $module->id)->first();
+        $max = max(1, (int) config('training.max_failed_attempts', 3));
+        $cooldown = max(0, (int) config('training.retry_cooldown_minutes', 30));
+
+        if (!$progress || $progress->status !== 'failed' || $cooldown === 0
+            || (int) $progress->attempts < $max || (int) $progress->attempts % $max !== 0) {
+            return null;
+        }
+
+        $opensAt = $progress->updated_at->copy()->addMinutes($cooldown);
+        if (now()->greaterThanOrEqualTo($opensAt)) {
+            return null;
+        }
+
+        $left = (int) ceil(now()->diffInSeconds($opensAt));
+
+        return response()->json([
+            'success' => false,
+            'retry_in' => $left,
+            'message' => "That was {$max} failed attempts in a row. Take time to go through the material again - "
+                . 'the test can be retaken in ' . max(1, (int) ceil($left / 60)) . ' minute(s).',
+        ], 429);
+    }
+
     /**
      * Submit assessment results.
      */
@@ -292,20 +343,44 @@ class TrainingController extends Controller
         if ($refusal = $this->readingTimeRefusal($module)) {
             return $refusal;
         }
-        $answers = $request->input('answers'); // Format: [question_id => selected_index]
-        
-        $questions = $module->questions()->whereIn('id', array_keys($answers))->get();
+        $answers = (array) $request->input('answers', []); // Format: [question_id => selected_index]
+
+        // Score only the questions this person was actually served, and only
+        // when every one of them is answered. The score used to be taken over
+        // whatever question ids came back: no answers at all meant 0 possible
+        // marks, which scored 100% - a pass - and one known answer was 100% too.
+        // Each served set can be submitted once.
+        $served = session()->pull(self::SERVED_KEY . $module->id);
+        if (!$served) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This test was not loaded (or was already submitted). Please open the test again.',
+            ], 409);
+        }
+        $given = array_map('intval', array_keys($answers));
+        sort($given);
+        $expected = $served;
+        sort($expected);
+        if ($given !== $expected || in_array(null, $answers, true) || in_array('', $answers, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Every question in the test must be answered, and only those questions. Please open the test again.',
+            ], 422);
+        }
+
+        $questions = $module->questions()->whereIn('id', $served)->get();
         $earnedMarks = 0;
         $totalPossibleMarks = 0;
 
         foreach ($questions as $q) {
             $totalPossibleMarks += $q->marks;
-            if (isset($answers[$q->id]) && $answers[$q->id] == $q->correct_option_index) {
+            if (isset($answers[$q->id]) && (string) $answers[$q->id] === (string) $q->correct_option_index) {
                 $earnedMarks += $q->marks;
             }
         }
 
-        $score = ($totalPossibleMarks > 0) ? ($earnedMarks / $totalPossibleMarks) * 100 : 100;
+        // Nothing to score (e.g. every served question since deleted) is not a pass.
+        $score = ($totalPossibleMarks > 0) ? ($earnedMarks / $totalPossibleMarks) * 100 : 0;
         $passed = $score >= ($module->passing_percentage ?? 80);
 
         $progress = UserTrainingProgress::where('user_id', $user->id)

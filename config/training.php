@@ -43,6 +43,21 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Retry limit
+    |--------------------------------------------------------------------------
+    |
+    | After this many failed attempts in a row on a module, the next attempt
+    | waits retry_cooldown_minutes. Unlimited instant retries let people learn a
+    | small question bank by trial and error (21 attempts on one catalogue).
+    |
+    */
+
+    'max_failed_attempts' => (int) env('TRAINING_MAX_FAILED_ATTEMPTS', 3),
+
+    'retry_cooldown_minutes' => (int) env('TRAINING_RETRY_COOLDOWN_MINUTES', 30),
+
     'completion_notify' => array_values(array_filter(array_map(
         'trim',
         explode(',', env(

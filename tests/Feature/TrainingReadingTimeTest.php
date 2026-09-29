@@ -92,7 +92,73 @@ class TrainingReadingTimeTest extends TestCase
         $this->actingAs($this->user)->get(route('training.module.show', $this->module->id));
 
         $p = UserTrainingProgress::where('user_id', $this->user->id)->where('module_id', $this->module->id)->first();
-        $this->assertSame('in_progress', $p->status);
+        $this->assertSame('failed', $p->status, 'stays failed (still retakeable) so the retry cooldown can see when it failed');
         $this->assertSame($first->toDateTimeString(), $p->started_at->toDateTimeString(), 'reading time still counts from the first opening');
+    }
+
+    // ── what is scored ───────────────────────────────────────────────────
+
+    /** Load the test, then submit $answers built from the questions actually served. */
+    private function serveAndSubmit(callable $build)
+    {
+        $served = $this->actingAs($this->user)->getJson(route('training.assessment.get', $this->module->id))->assertOk()->json('questions');
+        $correct = TrainingQuestion::whereIn('id', array_column($served, 'id'))->pluck('correct_option_index', 'id')->all();
+
+        return $this->actingAs($this->user)->postJson(route('training.assessment.submit', $this->module->id), ['answers' => $build($correct)]);
+    }
+
+    public function test_submitting_no_answers_is_not_a_pass(): void
+    {
+        $this->opened(now()->subHour());
+
+        $this->serveAndSubmit(fn ($c) => [])->assertStatus(422);
+        $this->assertNotSame('completed', UserTrainingProgress::where('user_id', $this->user->id)->value('status'));
+    }
+
+    public function test_answering_only_some_of_the_served_questions_is_refused(): void
+    {
+        $this->opened(now()->subHour());
+
+        $this->serveAndSubmit(fn ($c) => array_slice($c, 0, 1, true))->assertStatus(422);
+    }
+
+    public function test_answers_for_questions_that_were_not_served_are_refused(): void
+    {
+        $this->opened(now()->subHour());
+
+        $this->actingAs($this->user)->postJson(route('training.assessment.submit', $this->module->id), [
+            'answers' => TrainingQuestion::where('module_id', $this->module->id)->limit(1)->pluck('correct_option_index', 'id')->all(),
+        ])->assertStatus(409);
+    }
+
+    public function test_a_served_set_can_be_submitted_once_and_a_full_correct_set_passes(): void
+    {
+        $this->opened(now()->subHour());
+
+        $answers = null;
+        $this->serveAndSubmit(function ($c) use (&$answers) { return $answers = $c; })->assertOk()->assertJson(['passed' => true]);
+        $this->actingAs($this->user)->postJson(route('training.assessment.submit', $this->module->id), ['answers' => $answers])
+            ->assertStatus(409);
+    }
+
+    // ── retries ──────────────────────────────────────────────────────────
+
+    public function test_three_failures_in_a_row_mean_a_30_minute_wait(): void
+    {
+        config(['training.max_failed_attempts' => 3, 'training.retry_cooldown_minutes' => 30]);
+        $this->opened(now()->subHour());
+        $wrong = fn ($c) => array_map(fn ($v) => (int) $v + 1, $c);
+
+        $this->serveAndSubmit($wrong)->assertOk()->assertJson(['passed' => false]);
+        $this->serveAndSubmit($wrong)->assertOk()->assertJson(['passed' => false]);
+        $this->serveAndSubmit($wrong)->assertOk()->assertJson(['passed' => false]);
+
+        $this->actingAs($this->user)->getJson(route('training.assessment.get', $this->module->id))
+            ->assertStatus(429)->assertJsonPath('retry_in', fn ($s) => $s > 29 * 60);
+
+        // 31 minutes later it opens again.
+        UserTrainingProgress::where('user_id', $this->user->id)->where('module_id', $this->module->id)
+            ->update(['updated_at' => now()->subMinutes(31)]);
+        $this->actingAs($this->user)->getJson(route('training.assessment.get', $this->module->id))->assertOk();
     }
 }
