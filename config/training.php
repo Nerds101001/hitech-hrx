@@ -58,6 +58,30 @@ return [
 
     'retry_cooldown_minutes' => (int) env('TRAINING_RETRY_COOLDOWN_MINUTES', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Learn @ Hi Tech: videos straight from the Digital Library
+    |--------------------------------------------------------------------------
+    |
+    | These training phases list the Digital Library's videos of the given
+    | sub-category live, instead of modules of their own: a recording added to
+    | the library shows up in training with nothing copied. A video counts as
+    | watched after library_video_min_minutes on it; the phase is complete once
+    | library_videos_required of them are watched - any of them, not all.
+    |
+    */
+
+    'library_video_phase_ids' => array_values(array_filter(array_map(
+        'intval',
+        explode(',', env('TRAINING_LIBRARY_VIDEO_PHASE_IDS', '3'))
+    ))),
+
+    'library_video_subcategory' => env('TRAINING_LIBRARY_VIDEO_SUBCATEGORY', 'Learn @ Hi Tech'),
+
+    'library_videos_required' => (int) env('TRAINING_LIBRARY_VIDEOS_REQUIRED', 3),
+
+    'library_video_min_minutes' => (int) env('TRAINING_LIBRARY_VIDEO_MIN_MINUTES', 20),
+
     'completion_notify' => array_values(array_filter(array_map(
         'trim',
         explode(',', env(

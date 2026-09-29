@@ -111,6 +111,8 @@ Route::middleware(['web'])->group(function () {
       Route::get('/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showModule'])->name('module.show');
       Route::get('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'getAssessment'])->name('assessment.get');
       Route::post('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'submitAssessment'])->name('assessment.submit');
+      Route::get('/video/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showLibraryVideo'])->name('library-video.show');
+      Route::post('/video/{id}/watched', [\App\Http\Controllers\tenant\TrainingController::class, 'markLibraryVideoWatched'])->name('library-video.watched');
       Route::post('/module/{id}/chat', [\App\Http\Controllers\tenant\TrainingController::class, 'chatWithDocument'])->name('module.chat');
       
       // HR/Admin Activity Dashboard

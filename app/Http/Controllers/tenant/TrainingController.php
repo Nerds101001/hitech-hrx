@@ -46,8 +46,150 @@ class TrainingController extends Controller
 
         $progressPercentage = $user->getTrainingProgressPercentage();
 
+        // Learn @ Hi Tech: these phases list Digital Library videos live.
+        $libraryVideos = self::libraryVideos();
+        $videoViews = \App\Models\TrainingVideoView::where('user_id', $user->id)->get()->keyBy('library_file_id');
+        $libraryPhaseIds = config('training.library_video_phase_ids', []);
+        $videosRequired = max(1, (int) config('training.library_videos_required', 3));
+
         // If it's an HR viewing, we might want a different view or the same journey view
-        return view('tenant.training.portal', compact('phases', 'user', 'progressPercentage'));
+        return view('tenant.training.portal', compact('phases', 'user', 'progressPercentage',
+            'libraryVideos', 'videoViews', 'libraryPhaseIds', 'videosRequired'));
+    }
+
+    // ── Learn @ Hi Tech: Digital Library videos inside training ──────────
+
+    /** The Digital Library videos the Learn @ Hi Tech phase lists, newest session first. */
+    public static function libraryVideos()
+    {
+        return \App\Models\LibraryFile::where('category', 'Video')
+            ->where('sub_category', config('training.library_video_subcategory', 'Learn @ Hi Tech'))
+            ->orderByDesc('session_date')->orderBy('title')
+            ->get();
+    }
+
+    /** How many of those videos this person has watched to the end of the minimum time. */
+    public static function libraryVideosWatched(int $userId): int
+    {
+        $ids = self::libraryVideos()->pluck('id');
+
+        return \App\Models\TrainingVideoView::where('user_id', $userId)
+            ->whereIn('library_file_id', $ids)->whereNotNull('completed_at')->count();
+    }
+
+    /** The library-video phase, and a refusal if its earlier phases are not finished yet. */
+    private function libraryPhaseGate(User $user): ?string
+    {
+        if ($user->hasRole(['admin', 'hr'])) {
+            return null;
+        }
+        $phase = TrainingPhase::whereIn('id', config('training.library_video_phase_ids', []))->orderBy('order')->first();
+        if (!$phase) {
+            return 'The Learn @ Hi Tech phase is not set up.';
+        }
+        // Same rule as a module: everything in the earlier phases passed first.
+        $undone = TrainingModule::whereHas('phase', fn ($q) => $q->where('order', '<', $phase->order))
+            ->whereDoesntHave('userProgress', fn ($q) => $q->where('user_id', $user->id)->where('status', 'completed'))
+            ->with('phase')->first();
+
+        return $undone ? 'Please complete ' . $undone->phase->title . ': ' . $undone->title . ' first.' : null;
+    }
+
+    /** Where a library video can be played from: an embeddable URL, and whether it is a <video> file. */
+    public static function libraryVideoSource(\App\Models\LibraryFile $file): array
+    {
+        $url = (string) $file->youtube_url;
+        if ($url !== '') {
+            if (preg_match('~drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)~', $url, $m)) {
+                return ['https://drive.google.com/file/d/' . $m[1] . '/preview', false];
+            }
+            if (preg_match('~(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{6,})~', $url, $m)) {
+                return ['https://www.youtube-nocookie.com/embed/' . $m[1] . '?rel=0', false];
+            }
+            return [null, false];
+        }
+        if ($file->file_path) {
+            try {
+                return [\Illuminate\Support\Facades\Storage::disk('r2')->temporaryUrl($file->file_path, now()->addHours(3)), true];
+            } catch (\Throwable $e) {
+                return [null, true];
+            }
+        }
+
+        return [null, false];
+    }
+
+    /** Play one Learn @ Hi Tech video; the first opening starts its watch timer. */
+    public function showLibraryVideo($id)
+    {
+        $user = Auth::user();
+        $file = self::libraryVideos()->firstWhere('id', $id);
+        abort_unless($file, 404);
+
+        if ($why = $this->libraryPhaseGate($user)) {
+            return redirect()->route('training.portal')->with('error', $why);
+        }
+
+        $view = \App\Models\TrainingVideoView::firstOrCreate(
+            ['user_id' => $user->id, 'library_file_id' => $file->id],
+            ['started_at' => now(), 'tenant_id' => $user->tenant_id]
+        );
+        [$src, $isFile] = self::libraryVideoSource($file);
+        $minSecs = max(0, (int) config('training.library_video_min_minutes', 20)) * 60;
+
+        return view('tenant.training.library-video', [
+            'file'      => $file,
+            'view'      => $view,
+            'src'       => $src,
+            'isFile'    => $isFile,
+            'secsLeft'  => $view->completed_at ? 0 : max(0, $minSecs - (int) $view->started_at->diffInSeconds(now())),
+            'minMins'   => (int) config('training.library_video_min_minutes', 20),
+            'watched'   => self::libraryVideosWatched($user->id),
+            'required'  => max(1, (int) config('training.library_videos_required', 3)),
+        ]);
+    }
+
+    /**
+     * "Mark as watched" - accepted only once the minimum watch time has passed
+     * since the video was first opened, enforced here, not just by the page's
+     * countdown (the reading-time lesson).
+     */
+    public function markLibraryVideoWatched($id)
+    {
+        $user = Auth::user();
+        $file = self::libraryVideos()->firstWhere('id', $id);
+        abort_unless($file, 404);
+        if ($why = $this->libraryPhaseGate($user)) {
+            return response()->json(['success' => false, 'message' => $why], 403);
+        }
+
+        $view = \App\Models\TrainingVideoView::where('user_id', $user->id)->where('library_file_id', $file->id)->first();
+        $minSecs = max(0, (int) config('training.library_video_min_minutes', 20)) * 60;
+        $left = $view && $view->started_at ? $minSecs - (int) $view->started_at->diffInSeconds(now()) : $minSecs;
+
+        if (!$view || (!$view->completed_at && $left > 0 && !$user->hasRole(['admin', 'hr']))) {
+            return response()->json([
+                'success' => false,
+                'seconds_left' => max(1, $left),
+                'message' => 'Please keep watching - this counts as watched after ' . ($minSecs / 60) . ' minutes ('
+                    . max(1, (int) ceil($left / 60)) . ' more minute(s)).',
+            ], 403);
+        }
+
+        if (!$view->completed_at) {
+            $view->update(['completed_at' => now()]);
+        }
+        $watched = self::libraryVideosWatched($user->id);
+        $required = max(1, (int) config('training.library_videos_required', 3));
+
+        return response()->json([
+            'success'  => true,
+            'watched'  => $watched,
+            'required' => $required,
+            'message'  => $watched >= $required
+                ? "Watched. That completes the Learn @ Hi Tech phase ({$watched} videos watched)."
+                : "Watched. {$watched} of {$required} done - " . ($required - $watched) . ' more to complete this phase.',
+        ]);
     }
 
     /**
