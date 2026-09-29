@@ -46,6 +46,7 @@ class TrainingLibraryVideosTest extends TestCase
             'training.library_video_subcategory' => $this->sub,
             'training.library_videos_required' => 3,
             'training.library_video_min_minutes' => 20,
+            'training.library_video_prerequisite_phase_ids' => [],
         ]);
 
         foreach (range(1, 4) as $i) {
@@ -150,6 +151,29 @@ class TrainingLibraryVideosTest extends TestCase
         // A session added later goes after the arranged ones.
         $new = $this->video(['title' => 'ZZ Later', 'sub_category' => $this->sub, 'youtube_url' => 'https://drive.google.com/file/d/ZZlater/view']);
         $this->assertSame($new->id, \App\Http\Controllers\tenant\TrainingController::libraryVideos()->last()->id);
+    }
+
+    public function test_only_the_prerequisite_phases_must_be_finished_not_every_earlier_one(): void
+    {
+        // Two earlier phases, each with a module: only the first is a prerequisite.
+        $pre = TrainingPhase::create(['title' => 'ZZ Pre ' . uniqid(), 'order' => -300]);
+        $other = TrainingPhase::create(['title' => 'ZZ Other ' . uniqid(), 'order' => -200]);
+        $mk = fn ($ph) => \App\Models\TrainingModule::create(['phase_id' => $ph->id, 'title' => 'ZZ mod ' . uniqid(),
+            'content_type' => 'policy', 'estimated_time_minutes' => 1, 'order' => 1]);
+        $preMod = $mk($pre);
+        $mk($other);   // like the CRM module: never passed
+        config(['training.library_video_prerequisite_phase_ids' => [$pre->id]]);
+
+        // Prerequisite not done: the video is refused and the portal shows it locked.
+        $this->actingAs($this->user)->get(route('training.library-video.show', $this->videos[0]->id))
+            ->assertRedirect(route('training.portal'));
+        $this->assertStringContainsString('to unlock these videos', $this->actingAs($this->user)->get(route('training.portal'))->getContent());
+
+        // Prerequisite passed, the other earlier phase still not: open.
+        \App\Models\UserTrainingProgress::create(['user_id' => $this->user->id, 'module_id' => $preMod->id, 'status' => 'completed', 'completed_at' => now()]);
+        $this->actingAs($this->user)->get(route('training.library-video.show', $this->videos[0]->id))->assertOk();
+        $this->assertStringContainsString(route('training.library-video.show', $this->videos[0]->id),
+            $this->actingAs($this->user)->get(route('training.portal'))->getContent());
     }
 
     public function test_an_ordinary_employee_cannot_change_the_order(): void

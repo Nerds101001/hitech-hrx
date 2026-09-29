@@ -117,16 +117,23 @@ class TrainingController extends Controller
         if ($user->hasRole(['admin', 'hr'])) {
             return null;
         }
-        $phase = TrainingPhase::whereIn('id', config('training.library_video_phase_ids', []))->orderBy('order')->first();
-        if (!$phase) {
-            return 'The Learn @ Hi Tech phase is not set up.';
-        }
-        // Same rule as a module: everything in the earlier phases passed first.
-        $undone = TrainingModule::whereHas('phase', fn ($q) => $q->where('order', '<', $phase->order))
-            ->whereDoesntHave('userProgress', fn ($q) => $q->where('user_id', $user->id)->where('status', 'completed'))
-            ->with('phase')->first();
+        $undone = self::libraryPrerequisiteUndone($user->id);
 
         return $undone ? 'Please complete ' . $undone->phase->title . ': ' . $undone->title . ' first.' : null;
+    }
+
+    /**
+     * The first module still standing between this person and the Learn @ Hi
+     * Tech videos, or null. Only the phases in
+     * training.library_video_prerequisite_phase_ids count (1 and 2) - not every
+     * earlier phase: the CRM phase's module has no quiz questions yet, so no one
+     * could pass it, and requiring it kept the videos shut for everyone.
+     */
+    public static function libraryPrerequisiteUndone(int $userId): ?TrainingModule
+    {
+        return TrainingModule::whereIn('phase_id', config('training.library_video_prerequisite_phase_ids', []))
+            ->whereDoesntHave('userProgress', fn ($q) => $q->where('user_id', $userId)->where('status', 'completed'))
+            ->with('phase')->orderBy('phase_id')->orderBy('order')->first();
     }
 
     /** Where a library video can be played from: an embeddable URL, and whether it is a <video> file. */

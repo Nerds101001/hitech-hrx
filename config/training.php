@@ -78,6 +78,14 @@ return [
 
     'library_video_subcategory' => env('TRAINING_LIBRARY_VIDEO_SUBCATEGORY', 'Learn @ Hi Tech'),
 
+    // Phases (by id) that must be finished before the Learn @ Hi Tech videos
+    // open - not every earlier phase. Phase 1 (Culture & Integrity) and 2
+    // (Product Knowledge); the CRM phase does not hold it back.
+    'library_video_prerequisite_phase_ids' => array_values(array_filter(array_map(
+        'intval',
+        explode(',', env('TRAINING_LIBRARY_VIDEO_PREREQUISITE_PHASE_IDS', '1,2'))
+    ))),
+
     'library_videos_required' => (int) env('TRAINING_LIBRARY_VIDEOS_REQUIRED', 3),
 
     'library_video_min_minutes' => (int) env('TRAINING_LIBRARY_VIDEO_MIN_MINUTES', 20),

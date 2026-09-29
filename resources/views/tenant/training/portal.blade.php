@@ -702,9 +702,14 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
             $pPct       = $pTotalMods > 0 ? round($pDoneMods / $pTotalMods * 100) : 0;
             $ci         = (($phase->order - 1) % 5) + 1;
 
-            // Phase accessibility: all previous phases must be 100%
+            // Phase accessibility: all previous phases must be 100% - except the
+            // Learn @ Hi Tech videos, which open once the prerequisite phases
+            // (1 and 2) are done, whatever sits between.
             $isAccessible = true;
-            if ($phaseIdx > 0) {
+            $libraryBlocker = $isLibraryPhase ? \App\Http\Controllers\tenant\TrainingController::libraryPrerequisiteUndone($user->id) : null;
+            if ($isLibraryPhase) {
+                $isAccessible = $libraryBlocker === null;
+            } elseif ($phaseIdx > 0) {
                 $prevPhase = $phases[$phaseIdx - 1];
                 $prevDone  = $prevPhase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
                 if ($prevPhase->modules->count() > 0 && $prevDone < $prevPhase->modules->count()) {
@@ -768,7 +773,11 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     <div class="locked-icon-wrap">
                         <i class="ti ti-lock" style="color:#94a3b8;font-size:1.1rem;"></i>
                     </div>
+                    @if($isLibraryPhase && $libraryBlocker)
+                    <p>Complete <strong>{{ $libraryBlocker->phase->title }}</strong> to unlock these videos.</p>
+                    @else
                     <p>Complete <strong>Phase {{ $phase->order - 1 }}</strong> to unlock this phase.</p>
+                    @endif
                 </div>
                 @elseif($isLibraryPhase)
                 <div style="padding:10px 18px 4px;color:#64748b;font-size:0.8rem;">
