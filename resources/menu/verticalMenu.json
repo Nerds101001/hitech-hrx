@@ -7,12 +7,6 @@
       "slug": "superAdmin.dashboard"
     },
     {
-      "url": "/account/customerIndex",
-      "icon": "menu-icon tf-icons bx bx-user",
-      "name": "Customers",
-      "slug": "account.customerIndex"
-    },
-    {
       "url": "/domainRequests",
       "icon": "menu-icon tf-icons bx bx-globe",
       "name": "Domain Requests",

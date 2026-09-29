@@ -183,9 +183,9 @@ Route::get('/', [DashboardController::class, 'index'])->name('home');
       // Route::post('account/updateUserStatusAjax/{id}', [AccountController::class, 'updateUserStatusAjax'])->name('account.updateUserStatusAjax');
       Route::post('account/changeUserStatusAjax/{id}', [AccountController::class, 'changeUserStatusAjax'])->name('account.changeUserStatusAjax');
     });
-    //Account Customer
-    Route::get('account/customerIndex', [AccountController::class, 'customerIndex'])->name('account.customerIndex');
-    Route::get('account/customerIndexAjax', [AccountController::class, 'customerIndexAjax'])->name('account.customerIndexAjax');
+    // Account Customer (account/customerIndex) removed 2026-09-29: an unused page of the
+    // dormant customer-subscription layer, open to any logged-in user and broken
+    // on prod (it queries a users.is_customer column that does not exist).
 
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('notifications/myNotifications', [NotificationController::class, 'myNotifications'])->name('notifications.myNotifications');

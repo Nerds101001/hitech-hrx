@@ -6,13 +6,15 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Route;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * REGRESSION (security re-audit L2): account/customerIndex(+Ajax) sit outside
- * web.php's admin|hr group, so any logged-in employee could list every
- * customer account and its contact details.
+ * REGRESSION (security re-audit L2). account/customerIndex(+Ajax) listed every
+ * customer account to any logged-in employee. It was first gated to admin/HR,
+ * then removed (2026-09-29): an unused page of the dormant customer-
+ * subscription layer, broken on prod anyway (no users.is_customer column).
  */
 class AccountCustomerIndexAccessTest extends TestCase
 {
@@ -30,20 +32,21 @@ class AccountCustomerIndexAccessTest extends TestCase
         return $u;
     }
 
-    public function test_an_employee_cannot_list_customer_accounts(): void
+    public function test_the_customers_page_no_longer_exists(): void
     {
-        $emp = $this->person('employee');
+        $this->assertFalse(Route::has('account.customerIndex'));
+        $this->assertFalse(Route::has('account.customerIndexAjax'));
 
-        $this->actingAs($emp)->get(route('account.customerIndex'))->assertForbidden();
-        $this->actingAs($emp)->getJson(route('account.customerIndexAjax'))->assertForbidden();
+        foreach (['employee', 'admin'] as $role) {
+            $this->actingAs($this->person($role))->get('/account/customerIndex')->assertNotFound();
+            $this->actingAs($this->person($role))->getJson('/account/customerIndexAjax')->assertNotFound();
+        }
     }
 
-    public function test_admin_is_not_blocked_by_the_gate(): void
+    public function test_the_super_admin_menu_no_longer_links_to_it(): void
     {
-        // The Ajax body belongs to a dormant customer-subscription layer and
-        // answers 400 for its own reasons; the point here is only that the new
-        // gate lets admin through.
-        $status = $this->actingAs($this->person('admin'))->getJson(route('account.customerIndexAjax', ['draw' => 1, 'start' => 0, 'length' => 5]))->status();
-        $this->assertNotSame(403, $status);
+        $menu = file_get_contents(base_path('resources/menu/verticalMenu.json'));
+        $this->assertStringNotContainsString('customerIndex', $menu);
+        $this->assertNotNull(json_decode($menu), 'the menu is still valid JSON');
     }
 }
