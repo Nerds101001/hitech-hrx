@@ -665,16 +665,13 @@ class LeaveController extends Controller
 
       $duty->load('user');
 
-      // Notify manager + HR
-      $approvers = User::where(function ($q) use ($duty) {
-        $q->whereHas('roles', fn($r) => $r->whereIn('name', ['hr', 'admin']))
-          ->orWhere('id', optional($duty->user->reportingTo)->id);
-      })->where('status', 'active')->get();
-
-      foreach ($approvers as $approver) {
-        try {
-          // Outdoor duty notification logic pending NewOutdoorDuty notification class
-        } catch (Exception $e) { /* non-fatal */ }
+      // Alert HR and the manager (bell + push), the same people a leave request
+      // reaches. Nothing was sent before, so a request sat unseen until someone
+      // opened Leave Approvals. A failed alert must not fail the request.
+      try {
+        \App\Helpers\NotificationHelper::notifyAdminHR(new \App\Notifications\Leave\NewOutdoorDuty($duty));
+      } catch (Exception $e) {
+        Log::error('OutdoorDuty notify error: ' . $e->getMessage());
       }
 
       return response()->json(['status' => 'success', 'message' => 'Outdoor duty request submitted successfully.']);
@@ -687,8 +684,10 @@ class LeaveController extends Controller
   public function outdoorDutyActionAjax(Request $request)
   {
     $user = auth()->user();
+    // Refusals are 403, not 200: the pages treat any 200 as done, so a refused
+    // approval used to show "Success" and drop off the dashboard card.
     if (!$user->hasRole(['admin', 'hr', 'manager'])) {
-      return response()->json(['status' => 'error', 'message' => 'Unauthorized.']);
+      return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
     }
 
     $validated = $request->validate([
@@ -701,7 +700,11 @@ class LeaveController extends Controller
       $duty = OutdoorDuty::findOrFail($validated['id']);
       
       if ($duty->user_id === $user->id && in_array($validated['status'], ['approved', 'rejected'])) {
-          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own outdoor duty request.']);
+          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own outdoor duty request.'], 403);
+      }
+      // The same team limit leave approval has: a manager acts on their reports only.
+      if (in_array($validated['status'], ['approved', 'rejected']) && !$this->canApproveFor($user, (int) $duty->user_id)) {
+          return response()->json(['status' => 'error', 'message' => 'You can only approve outdoor duty for your own team.'], 403);
       }
 
       $duty->status        = $validated['status'];

@@ -264,7 +264,9 @@ class UserDashboardController extends Controller
         $presentUsersCount = Attendance::whereDate('created_at', now())->count();
         
         // Pending Requests (All for now, could be scoped to team for manager)
-        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
+        // Outdoor duty is approved on the Leave page too, so it counts as pending leave.
+        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count()
+            + \App\Models\OutdoorDuty::where('status', 'pending')->count();
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
         // 1. HR/Admin Dashboard (First Priority)
@@ -346,7 +348,9 @@ class UserDashboardController extends Controller
         $presentUsersCount = Attendance::whereDate('created_at', now())->count();
         
         // Pending Requests (All for now, could be scoped to team for manager)
-        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
+        // Outdoor duty is approved on the Leave page too, so it counts as pending leave.
+        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count()
+            + \App\Models\OutdoorDuty::where('status', 'pending')->count();
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
         // 2. Manager Dashboard
@@ -365,7 +369,8 @@ class UserDashboardController extends Controller
             // Scoped Pending Requests
             $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
                 ->where('status', 'pending')
-                ->count();
+                ->count()
+                + \App\Models\OutdoorDuty::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
             $pendingExpenseRequests = ExpenseRequest::whereIn('user_id', $teamMemberIds)
                 ->where('status', 'pending')
                 ->count();

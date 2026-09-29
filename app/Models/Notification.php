@@ -25,7 +25,7 @@ class Notification extends Model implements AuditableContract
   public function getTypeString(): string
   {
     return match ($this->type) {
-      'App\Notifications\Leave\NewLeaveRequest', 'App\Notifications\Leave\CancelLeaveRequest', 'App\Notifications\Expense\CancelExpenseRequest', 'App\Notifications\Expense\NewExpenseRequest' => 'Approvals',
+      'App\Notifications\Leave\NewLeaveRequest', 'App\Notifications\Leave\NewOutdoorDuty', 'App\Notifications\Leave\CancelLeaveRequest', 'App\Notifications\Expense\CancelExpenseRequest', 'App\Notifications\Expense\NewExpenseRequest' => 'Approvals',
       'App\Notifications\Alerts\BreakAlert', 'App\Notifications\NewVisit' => 'Alerts',
       'App\Notifications\Chat\NewChatMessage' => 'Chat',
       'App\Notifications\Attendance\CheckInOut' => 'Attendance',
