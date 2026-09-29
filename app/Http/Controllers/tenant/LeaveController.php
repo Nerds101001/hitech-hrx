@@ -56,7 +56,15 @@ class LeaveController extends Controller
       ->where('status', 'active')
       ->orderBy('first_name')
       ->get();
-    $leaveTypes = LeaveType::all();
+    // Every type someone can apply for, plus retired types that still have
+    // requests on record (so those stay findable), active ones first. Outdoor
+    // Duty is added as its own option in the view.
+    $usedTypeIds = LeaveRequest::query()->distinct()->pluck('leave_type_id')->all();
+    $leaveTypes = LeaveType::withTrashed()
+      ->where(fn ($q) => $q->where('status', 'active')->orWhereIn('id', $usedTypeIds))
+      ->get()
+      ->sortBy(fn ($t) => [($t->status->value ?? $t->status) === 'active' && !$t->deleted_at ? 0 : 1, $t->name])
+      ->values();
 
     return view('tenant.leave.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
@@ -95,7 +103,10 @@ class LeaveController extends Controller
         $leaveQuery->where('user_id', $request->employeeFilter);
         $odQuery->where('user_id', $request->employeeFilter);
       }
-      if ($request->filled('leaveTypeFilter')) {
+      if ($request->input('leaveTypeFilter') === 'outdoor') {
+        // "Outdoor Duty" in the type filter: outdoor duty requests only.
+        $leaveQuery->whereRaw('1 = 0');
+      } elseif ($request->filled('leaveTypeFilter')) {
         $leaveQuery->where('leave_type_id', $request->leaveTypeFilter);
         // Outdoor duties have no leave type, so we return empty if a specific leave type is selected
         $odQuery->whereRaw('1 = 0'); 
