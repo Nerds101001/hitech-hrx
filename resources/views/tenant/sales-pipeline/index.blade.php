@@ -1386,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(() => {
                     c.dataset.cc = kind === 'cc' ? uid : '';
                     c.dataset.nb = kind === 'nb' ? uid : '';
-                    c.innerHTML = name; c.title = name + ' (click to change)';
+                    c.textContent = name; c.title = name + ' (click to change)'; // a name is text, not markup
                     c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
                     const cat = tr.querySelector('select[data-field="category"]');
                     if (cat) cat.value = kind === 'nb' ? 'New Biz' : (kind === 'cc' ? 'CCare' : '');
@@ -1400,7 +1400,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tr = c.closest('tr');
             putRow(tr.dataset.id, { salesperson_id: uid || null }).then(() => {
                 c.dataset.sp = uid;
-                c.innerHTML = name; c.title = name + ' (click to change)';
+                c.textContent = name; c.title = name + ' (click to change)'; // a name is text, not markup
                 c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
             });
         });
@@ -1434,7 +1434,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const s = document.createElement('span');
                     s.className = 'badge extra-tag ' + ((cell.dataset.type === 'service') ? 'bg-label-info' : 'bg-label-secondary');
                     s.dataset.uid = uid; s.style.fontSize = '0.62rem';
-                    s.innerHTML = name + ' <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>';
+                    // The name as text, then the remove icon - a name is never parsed as markup.
+                    s.textContent = name + ' ';
+                    const x = document.createElement('i');
+                    x.className = 'bx bx-x remove-extra'; x.style.cursor = 'pointer';
+                    s.appendChild(x);
                     cell.appendChild(s);
                     cell.style.backgroundColor = '#e8f5e9'; setTimeout(() => cell.style.backgroundColor = '', 600);
                 }

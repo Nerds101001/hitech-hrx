@@ -65,4 +65,19 @@ class LeaveApprovalsTypeFilterTest extends TestCase
         $this->assertSame(['outdoor_' . $od->id], $ids($this->list($admin, ['leaveTypeFilter' => 'outdoor'])), 'Outdoor Duty shows outdoor only');
         $this->assertSame(['leave_' . $leave->id], $ids($this->list($admin, ['leaveTypeFilter' => $alp->id])), 'a leave type shows that type only');
     }
+
+    public function test_a_leave_type_name_is_shown_as_text_not_markup(): void
+    {
+        // REGRESSION (security re-audit M5): the Type column is sent as raw HTML
+        // for its badges, and the type name went into it unescaped.
+        $admin = $this->person('admin');
+        $emp = $this->person('employee');
+        $type = LeaveType::create(['name' => '<img src=x onerror=alert(1)>', 'code' => 'QX' . random_int(1000, 9999), 'status' => 'active', 'is_paid' => false]);
+        LeaveRequest::create(['user_id' => $emp->id, 'leave_type_id' => $type->id, 'from_date' => now()->addDays(5)->toDateString(),
+            'to_date' => now()->addDays(5)->toDateString(), 'status' => 'pending', 'user_notes' => 'QA']);
+
+        $row = collect($this->list($admin, []))->firstWhere('user_id', $emp->id);
+        $this->assertStringNotContainsString('<img src=x', $row['request_type']);
+        $this->assertStringContainsString('&lt;img src=x onerror=alert(1)&gt;', $row['request_type']);
+    }
 }

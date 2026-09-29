@@ -611,7 +611,9 @@ $(document).ready(function() {
     $('#crmClientSelect').on('select2:select', function(e) {
         const d = e.params.data;
         $('#clientPreview').show();
-        $('#clientPreviewText').html(`<b>${d.text}</b> &nbsp;|&nbsp; ${d.city || ''}${d.city && d.state ? ', ' : ''}${d.state || ''} &nbsp;|&nbsp; Stage: <b>${d.stage || 'N/A'}</b>`);
+        // CRM fields are data from outside: escaped, never parsed as markup.
+        const esc = v => $('<div>').text(v == null ? '' : String(v)).html();
+        $('#clientPreviewText').html(`<b>${esc(d.text)}</b> &nbsp;|&nbsp; ${esc(d.city || '')}${d.city && d.state ? ', ' : ''}${esc(d.state || '')} &nbsp;|&nbsp; Stage: <b>${esc(d.stage || 'N/A')}</b>`);
     });
 
     // Table filter

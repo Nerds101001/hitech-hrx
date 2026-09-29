@@ -153,7 +153,8 @@ class LeaveController extends Controller
           $isShortItem = $item->is_short_leave || ($item->leaveType->is_short_leave ?? false);
 
           if ($item->leaveType) {
-              $name = $item->leaveType->name;
+              // Escaped: this column is sent as raw HTML (for the badges below).
+              $name = e($item->leaveType->name);
           } else {
               $name = $isShortItem ? 'Short Leave' : 'N/A';
           }
