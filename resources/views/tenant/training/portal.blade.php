@@ -480,17 +480,23 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                 <div class="lms-nav-pct-fill" style="width:{{ $progressPercentage }}%"></div>
             </div>
         </div>
-        @if(!auth()->user()->hasRole(['admin','hr','manager','accounts']) || request()->has('user_id'))
+        {{-- Your own results; your team's (manager) or everyone's (admin/HR). --}}
+        @if($user->id === auth()->id())
+        <a href="{{ route('training.report-card', auth()->id()) }}" class="lms-nav-back" title="Your assessment results">
+            <i class="ti ti-certificate" style="font-size:0.8rem;"></i>
+            <span class="d-none d-sm-inline">My Results</span>
+        </a>
+        @endif
+        @if($resultsLink ?? null)
+        <a href="{{ route('training.activity') }}" class="lms-nav-back">
+            <i class="ti ti-chart-bar" style="font-size:0.8rem;"></i>
+            <span class="d-none d-sm-inline">{{ $resultsLink }}</span>
+        </a>
+        @endif
         <a href="{{ url('/') }}" class="lms-nav-back">
             <i class="ti ti-layout-dashboard" style="font-size:0.8rem;"></i>
             <span class="d-none d-sm-inline">Dashboard</span>
         </a>
-        @else
-        <a href="{{ route('training.activity') }}" class="lms-nav-back">
-            <i class="ti ti-chart-bar" style="font-size:0.8rem;"></i>
-            <span class="d-none d-sm-inline">Activity</span>
-        </a>
-        @endif
         <div class="dropdown">
             <div class="nav-avatar" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;" title="Account options">
                 {{ strtoupper(substr($user->first_name ?? $user->name, 0, 2)) }}

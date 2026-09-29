@@ -194,10 +194,12 @@
                 </p>
             </div>
             <div class="d-flex gap-2 flex-wrap">
+                @if($canManage ?? false)
                 <a href="{{ route('training.manage.index') }}"
                     style="border:none;background:rgba(255,255,255,0.18);color:white;font-size:0.78rem;font-weight:600;border-radius:999px;padding:8px 18px;text-decoration:none;border:1px solid rgba(255,255,255,0.3);">
                     Manage Content
                 </a>
+                @endif
             </div>
         </div>
     </div>

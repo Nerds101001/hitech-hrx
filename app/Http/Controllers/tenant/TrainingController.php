@@ -25,16 +25,22 @@ class TrainingController extends Controller
      */
     public function index(Request $request)
     {
-        // Admin/HR with no specific user_id → send to activity dashboard
-        if (!$request->has('user_id') && auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts'])) {
+        $me = auth()->user();
+
+        // Admin/HR (or "Manage Training Portal") who are not in training
+        // themselves land on the activity dashboard. Everyone else - managers
+        // and accounts included - takes their own training here: managers used
+        // to be sent to the dashboard too, so they never got their tests, and
+        // a manager held for training could never finish it.
+        if (!$request->has('user_id') && self::managesTraining($me) && !$me->is_training_required) {
             return redirect()->route('training.activity');
         }
 
         $userId = $request->query('user_id', auth()->id());
         $user = User::findOrFail($userId);
 
-        // Security: Employees can only view their own portal
-        if (auth()->user()->hasRole('employee') && !auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && $user->id !== auth()->id()) {
+        // Someone else's portal: admin/HR anyone's, a manager their team's.
+        if (!self::maySeeResultsOf($me, $user)) {
             abort(403, 'Unauthorized access.');
         }
 
@@ -52,9 +58,49 @@ class TrainingController extends Controller
         $libraryPhaseIds = config('training.library_video_phase_ids', []);
         $videosRequired = max(1, (int) config('training.library_videos_required', 3));
 
-        // If it's an HR viewing, we might want a different view or the same journey view
+        // The results link in the portal's top bar: everyone's for admin/HR,
+        // the team's for a manager, none for anyone else (they get My Results).
+        $resultsLink = self::managesTraining($me) ? 'Activity'
+            : ($me->hasRole('manager') || !empty(self::resultsScope($me)) ? 'Team Results' : null);
+
         return view('tenant.training.portal', compact('phases', 'user', 'progressPercentage',
-            'libraryVideos', 'videoViews', 'libraryPhaseIds', 'videosRequired'));
+            'libraryVideos', 'videoViews', 'libraryPhaseIds', 'videosRequired', 'resultsLink'));
+    }
+
+    // ── Who may see results / change content ─────────────────────────────
+
+    /** Admin, HR, or "Manage Training Portal": every result, and the content. */
+    private static function managesTraining(User $u): bool
+    {
+        return $u->hasRole(['admin', 'hr']) || $u->can('training.manage');
+    }
+
+    /**
+     * Whose results $viewer may see besides their own: null = everyone
+     * (managesTraining); otherwise their direct reports, and those of any
+     * vacant position delegated to them.
+     */
+    private static function resultsScope(User $viewer): ?array
+    {
+        return self::managesTraining($viewer)
+            ? null
+            : User::whereIn('reporting_to_id', $viewer->managerIdentityIds())->pluck('id')->all();
+    }
+
+    private static function maySeeResultsOf(User $viewer, User $target): bool
+    {
+        if ((int) $viewer->id === (int) $target->id) {
+            return true;
+        }
+        $scope = self::resultsScope($viewer);
+
+        return $scope === null || in_array((int) $target->id, array_map('intval', $scope), true);
+    }
+
+    /** Finalising someone's training (releasing a held account): admin/HR, or their own manager. */
+    private static function mayApprove(User $viewer, User $target): bool
+    {
+        return (int) $viewer->id !== (int) $target->id && self::maySeeResultsOf($viewer, $target);
     }
 
     // ── Learn @ Hi Tech: Digital Library videos inside training ──────────
@@ -81,7 +127,7 @@ class TrainingController extends Controller
     /** Save the order of the Learn @ Hi Tech videos (drag and drop on the manage page). */
     public function saveLibraryVideoOrder(Request $request)
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
         $ids = (array) $request->validate(['ids' => 'required|array', 'ids.*' => 'string|max:36'])['ids'];
@@ -240,9 +286,11 @@ class TrainingController extends Controller
     {
         $user = User::with(['trainingProgress.module.phase'])->findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        // Your own results, your team's (manager), or anyone's (admin/HR).
+        if (!self::maySeeResultsOf(auth()->user(), $user)) {
             abort(403);
         }
+        $canApprove = self::mayApprove(auth()->user(), $user);
 
         $progress = $user->trainingProgress;
         $phases = TrainingPhase::with(['modules.userProgress' => function($q) use ($userId) {
@@ -259,7 +307,7 @@ class TrainingController extends Controller
             'is_finished' => $user->training_status === 'completed'
         ];
 
-        return view('tenant.training.report_card', compact('user', 'phases', 'summary'));
+        return view('tenant.training.report_card', compact('user', 'phases', 'summary', 'canApprove'));
     }
 
     /**
@@ -269,7 +317,8 @@ class TrainingController extends Controller
     {
         $user = User::findOrFail($userId);
 
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        // Was any manager or accounts user, for anyone in the company.
+        if (!self::mayApprove(auth()->user(), $user)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
         }
 
@@ -803,9 +852,14 @@ class TrainingController extends Controller
      */
     public function activityDashboard()
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        // Admin/HR see everyone; a manager sees their own team (direct reports).
+        // It used to show every manager the whole company.
+        $me = auth()->user();
+        $scope = self::resultsScope($me);
+        if ($scope !== null && empty($scope) && !$me->hasRole('manager')) {
             abort(403);
         }
+        $canManage = self::managesTraining($me);
 
         $phases = TrainingPhase::with(['modules'])->orderBy('order')->get();
         $totalModules = TrainingModule::count();
@@ -815,13 +869,15 @@ class TrainingController extends Controller
                 $q->whereHas('trainingProgress')
                   ->orWhere('is_training_required', true);
             })
+            ->when($scope !== null, fn ($q) => $q->whereIn('id', $scope))
             ->with(['trainingProgress.module.phase'])
             ->get();
 
         $totalEnrolled  = $users->count();
         $totalCompleted = $users->where('training_status', 'completed')->count();
         $inProgress     = $users->filter(fn($u) => $u->trainingProgress->count() > 0 && $u->training_status !== 'completed')->count();
-        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
+        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')
+            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))->avg('assessment_score') ?? 0, 1);
 
         // Phase-wise completion (how many users finished ALL modules in each phase)
         $phaseStats = $phases->map(function ($phase) use ($users) {
@@ -883,9 +939,9 @@ class TrainingController extends Controller
         // Top 5 hardest modules (most failures)
         $moduleStats = TrainingModule::with('phase')
             ->withCount([
-                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed']),
-                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed'),
-                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed'),
+                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed'])->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
+                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed')->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
+                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed')->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
             ])
             ->having('total_attempts', '>', 0)
             ->orderByDesc('fail_count')
@@ -894,7 +950,7 @@ class TrainingController extends Controller
 
         return view('tenant.training.activity', compact(
             'phases', 'totalEnrolled', 'totalCompleted', 'inProgress',
-            'avgScore', 'phaseStats', 'userStats', 'moduleStats', 'totalModules'
+            'avgScore', 'phaseStats', 'userStats', 'moduleStats', 'totalModules', 'canManage'
         ));
     }
 
@@ -903,7 +959,7 @@ class TrainingController extends Controller
      */
     public function managementIndex()
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -923,7 +979,7 @@ class TrainingController extends Controller
     public function storePhase(Request $request)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -952,7 +1008,7 @@ class TrainingController extends Controller
     public function storeModule(Request $request)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -1028,7 +1084,7 @@ class TrainingController extends Controller
     public function storeQuestion(Request $request)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -1055,7 +1111,7 @@ class TrainingController extends Controller
     public function destroyQuestion($id)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -1080,7 +1136,7 @@ class TrainingController extends Controller
     public function generateAIQuestions(Request $request, $id)
     {
         // SECURITY (M-4): guard curriculum writes like the sibling manage methods.
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -1346,7 +1402,7 @@ class TrainingController extends Controller
      */
     public function destroyPhase($id)
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 
@@ -1366,7 +1422,7 @@ class TrainingController extends Controller
      */
     public function destroyModule($id)
     {
-        if (!auth()->user()->hasRole(['admin', 'hr', 'manager', 'accounts']) && !auth()->user()->can('training.manage')) {
+        if (!self::managesTraining(auth()->user())) {
             abort(403);
         }
 

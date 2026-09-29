@@ -383,8 +383,7 @@
                     "slug": "training.manage.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
+                        "hr"
                     ],
                     "rolesOrPermission": ["training.manage"]
                 }
@@ -771,6 +770,27 @@
                 "employee",
                 "accounts",
                 "office_employee"
+            ]
+        },
+        {
+            "name": "Training",
+            "icon": "menu-icon bx bx-book-reader",
+            "slug": ["training.portal", "training.activity", "training.report-card"],
+            "roles": ["admin", "hr", "manager", "employee", "accounts", "office_employee"],
+            "submenu": [
+                {
+                    "url": "/training",
+                    "name": "My Training",
+                    "slug": "training.portal",
+                    "hideForRoles": ["admin", "hr"]
+                },
+                {
+                    "url": "/training/activity",
+                    "name": "Training Results",
+                    "slug": "training.activity",
+                    "roles": ["admin", "hr", "manager"],
+                    "rolesOrPermission": ["training.manage"]
+                }
             ]
         },
         {
