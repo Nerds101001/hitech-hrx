@@ -52,7 +52,9 @@ class UpdateSidUser extends Command
                 $user->first_name = 'Sid';
                 $user->last_name = 'Rustx';
                 $user->name = 'Sid Rustx';
-                $user->password = Hash::make('Hitech@2026!'); // Default password
+                // Random and never shown: a fixed password in the code is a known way into
+                // an admin account. Set a real one through Forgot Password.
+                $user->password = Hash::make(\Illuminate\Support\Str::password(32));
             }
 
             // Find Admin department

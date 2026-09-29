@@ -25,7 +25,7 @@ echo "  Email: {$user->email}\n";
 echo "  Status: " . ($user->status instanceof \UnitEnum ? $user->status->value : $user->status) . "\n";
 
 // Generate a temporary password
-$tempPassword = 'Hitech@' . rand(1000, 9999);
+$tempPassword = \App\Support\TempPassword::make();
 
 // Update password
 $user->password = bcrypt($tempPassword);
