@@ -93,6 +93,21 @@ class KpiController extends Controller
         return view('tenant.kpi.manage', compact('employees', 'selected', 'routines', 'assignments'));
     }
 
+    /**
+     * The same limit manage() puts on the employee list: a manager (who is not
+     * also admin/HR) works only on their direct reports. The write actions used
+     * to check the role alone, so a manager could add, change, retire or score
+     * any employee's KPIs by posting another id.
+     */
+    private function mayManageKpisOf($user, $targetUserId): bool
+    {
+        if (!$user->hasRole('manager') || $user->hasRole(['admin', 'hr'])) {
+            return true;
+        }
+
+        return User::where('id', $targetUserId)->where('reporting_to_id', $user->id)->exists();
+    }
+
     /** Create a KPI/KRA assignment (optionally from a DWM routine). */
     public function store(Request $request)
     {
@@ -119,6 +134,10 @@ class KpiController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Target value is required for target-based scoring.'], 422);
         }
 
+        if (!$this->mayManageKpisOf($user, $data['user_id'])) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
+
         $target = User::find($data['user_id']);
         $data['tenant_id'] = $target->tenant_id;
         $data['late_score'] = $data['late_score'] ?? 0;
@@ -138,6 +157,9 @@ class KpiController extends Controller
         }
 
         $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'required|in:KPI,KRA',
@@ -162,7 +184,11 @@ class KpiController extends Controller
         if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
-        KpiAssignment::where('id', $id)->update(['is_active' => false]);
+        $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
+        $assignment->update(['is_active' => false]);
         return response()->json(['status' => 'success', 'message' => 'KPI/KRA deactivated.']);
     }
 
@@ -183,6 +209,10 @@ class KpiController extends Controller
             'category' => 'required|in:KRA,KPI,none',
             'check_date' => 'nullable|date',
         ]);
+
+        if (!$this->mayManageKpisOf($user, $data['user_id'])) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
 
         $routine = WorkControlRoutine::findOrFail($data['work_control_routine_id']);
 
@@ -238,6 +268,9 @@ class KpiController extends Controller
             'remarks' => 'nullable|string|max:255',
         ]);
         $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
         $check = KpiPeriodService::recordAchievement($assignment, (float)$data['achieved_value'], $user->id, $data['remarks'] ?? null);
 
         return response()->json(['status' => 'success', 'message' => 'Achievement recorded.', 'score' => $check->score]);
