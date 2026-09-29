@@ -716,6 +716,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // In half-day / short-leave mode End Date is hidden and simply mirrors the
+    // date. Its min must move with it: a min left over from an earlier full-day
+    // pick (say 29 Sep) made a hidden 23 Sep invalid, and the browser then
+    // refused to submit without showing anything - the form just sat there.
+    function syncHiddenEndDate() {
+        toDateInput.setAttribute('min', fromDateInput.value || fromDateInput.getAttribute('min') || '');
+        toDateInput.value = fromDateInput.value;
+    }
+
     function handleHalfDayToggle() {
         const typeId = typeSelect.value;
         const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
@@ -738,7 +747,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fromLabel = document.querySelector("label[for='from_date']");
             if (fromLabel) fromLabel.innerText = 'Date';
             
-            toDateInput.value = fromDateInput.value;
+            syncHiddenEndDate();
         } else if (isHalfDaySelected()) {
             if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
             if (startTimeEl) startTimeEl.removeAttribute('required');
@@ -751,7 +760,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fromLabel = document.querySelector("label[for='from_date']");
             if (fromLabel) fromLabel.innerText = 'Date';
             
-            toDateInput.value = fromDateInput.value;
+            syncHiddenEndDate();
             checkAttendance();
         } else {
             if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
@@ -914,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isSHL = selectedType && selectedType.code.toUpperCase() === 'SHL';
 
             if (isHalfDaySelected() || isSHL) {
-                toDateInput.value = this.value;
+                syncHiddenEndDate();
                 if (!isSHL) {
                     checkAttendance();
                 }
