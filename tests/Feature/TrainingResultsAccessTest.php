@@ -15,18 +15,19 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Managers take training too, and results are visible beyond admin/HR:
+ * Managers take training too; results stay HR's and admin's:
  *
  *  - opening the Training Portal sent every manager (and accounts) to the
  *    company-wide Activity Dashboard, so they never got their own tests - and
  *    a manager held for training could never finish it;
- *  - results: everyone sees their own, a manager their direct reports', admin/HR
- *    everyone's (a manager used to see the whole company, an employee not even
- *    their own);
+ *  - results: everyone sees their own; only admin/HR (or "Manage Training
+ *    Portal") see anyone else's - not a manager's team (a manager used to see
+ *    the whole company, an employee not even their own);
  *  - training content (modules, questions and answers) is admin/HR or "Manage
  *    Training Portal" only - a manager who now takes the tests must not be
  *    able to open the answer keys;
- *  - a Training section in the sidebar: My Training, Training Results.
+ *  - a Training section in the sidebar: My Training for everyone, Training
+ *    Results for admin/HR.
  */
 class TrainingResultsAccessTest extends TestCase
 {
@@ -82,7 +83,8 @@ class TrainingResultsAccessTest extends TestCase
     {
         $html = $this->actingAs($this->manager)->get('/training')->assertOk()->getContent();
         $this->assertStringContainsString('My Results', $html);
-        $this->assertStringContainsString('Team Results', $html);
+        $this->assertStringNotContainsString('Team Results', $html);
+        $this->assertStringNotContainsString(route('training.activity'), $html, 'no link to the results dashboard');
     }
 
     public function test_admin_hr_still_land_on_the_activity_dashboard(): void
@@ -92,12 +94,9 @@ class TrainingResultsAccessTest extends TestCase
 
     // ── who sees whose results ───────────────────────────────────────────
 
-    public function test_a_manager_sees_only_their_team_on_the_dashboard(): void
+    public function test_a_manager_does_not_get_the_results_dashboard_not_even_for_their_team(): void
     {
-        $html = $this->actingAs($this->manager)->get('/training/activity')->assertOk()->getContent();
-        $this->assertStringContainsString($this->report->first_name, $html);
-        $this->assertStringNotContainsString($this->stranger->first_name, $html);
-        $this->assertStringNotContainsString('Manage Content', $html);
+        $this->actingAs($this->manager)->get('/training/activity')->assertForbidden();
     }
 
     public function test_hr_sees_everyone_and_can_manage_content(): void
@@ -110,8 +109,9 @@ class TrainingResultsAccessTest extends TestCase
 
     public function test_report_cards_follow_the_same_rule(): void
     {
-        $this->actingAs($this->manager)->get('/training/report-card/' . $this->report->id)->assertOk();
-        $this->actingAs($this->manager)->get('/training/report-card/' . $this->stranger->id)->assertForbidden();
+        $this->actingAs($this->manager)->get('/training/report-card/' . $this->manager->id)->assertOk();
+        $this->actingAs($this->manager)->get('/training/report-card/' . $this->report->id)->assertForbidden();
+        $this->actingAs($this->manager)->get('/training?user_id=' . $this->report->id)->assertForbidden();
         $this->actingAs($this->hr)->get('/training/report-card/' . $this->stranger->id)->assertOk();
     }
 
@@ -124,11 +124,11 @@ class TrainingResultsAccessTest extends TestCase
         $this->actingAs($this->report)->get('/training?user_id=' . $this->stranger->id)->assertForbidden();
     }
 
-    public function test_approving_training_is_admin_hr_or_their_own_manager(): void
+    public function test_approving_training_is_admin_hr_only(): void
     {
-        $this->actingAs($this->manager)->postJson('/training/approve/' . $this->stranger->id)->assertForbidden();
+        $this->actingAs($this->manager)->postJson('/training/approve/' . $this->report->id)->assertForbidden();
         $this->actingAs($this->report)->postJson('/training/approve/' . $this->report->id)->assertForbidden();
-        $this->actingAs($this->manager)->postJson('/training/approve/' . $this->report->id)->assertOk();
+        $this->actingAs($this->hr)->postJson('/training/approve/' . $this->report->id)->assertOk();
         $this->assertSame('completed', $this->report->fresh()->training_status);
     }
 
@@ -151,7 +151,7 @@ class TrainingResultsAccessTest extends TestCase
 
         $mgr = $this->links($this->manager);
         $this->assertContains('Training > My Training', $mgr);
-        $this->assertContains('Training > Training Results', $mgr);
+        $this->assertNotContains('Training > Training Results', $mgr);
         $this->assertNotContains('Recruitment & Onboarding > Manage Training', $mgr);
 
         $hr = $this->links($this->hr);

@@ -480,7 +480,7 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                 <div class="lms-nav-pct-fill" style="width:{{ $progressPercentage }}%"></div>
             </div>
         </div>
-        {{-- Your own results; your team's (manager) or everyone's (admin/HR). --}}
+        {{-- Your own results; the results dashboard is admin/HR only. --}}
         @if($user->id === auth()->id())
         <a href="{{ route('training.report-card', auth()->id()) }}" class="lms-nav-back" title="Your assessment results">
             <i class="ti ti-certificate" style="font-size:0.8rem;"></i>

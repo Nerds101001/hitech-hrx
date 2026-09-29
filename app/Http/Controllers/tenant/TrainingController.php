@@ -58,10 +58,8 @@ class TrainingController extends Controller
         $libraryPhaseIds = config('training.library_video_phase_ids', []);
         $videosRequired = max(1, (int) config('training.library_videos_required', 3));
 
-        // The results link in the portal's top bar: everyone's for admin/HR,
-        // the team's for a manager, none for anyone else (they get My Results).
-        $resultsLink = self::managesTraining($me) ? 'Activity'
-            : ($me->hasRole('manager') || !empty(self::resultsScope($me)) ? 'Team Results' : null);
+        // The results dashboard link in the portal's top bar: admin/HR only.
+        $resultsLink = self::managesTraining($me) ? 'Activity' : null;
 
         return view('tenant.training.portal', compact('phases', 'user', 'progressPercentage',
             'libraryVideos', 'videoViews', 'libraryPhaseIds', 'videosRequired', 'resultsLink'));
@@ -76,31 +74,19 @@ class TrainingController extends Controller
     }
 
     /**
-     * Whose results $viewer may see besides their own: null = everyone
-     * (managesTraining); otherwise their direct reports, and those of any
-     * vacant position delegated to them.
+     * Training results are HR's and admin's: everyone sees their own, and
+     * only admin/HR (or "Manage Training Portal") see anyone else's - not a
+     * manager's team, not accounts.
      */
-    private static function resultsScope(User $viewer): ?array
-    {
-        return self::managesTraining($viewer)
-            ? null
-            : User::whereIn('reporting_to_id', $viewer->managerIdentityIds())->pluck('id')->all();
-    }
-
     private static function maySeeResultsOf(User $viewer, User $target): bool
     {
-        if ((int) $viewer->id === (int) $target->id) {
-            return true;
-        }
-        $scope = self::resultsScope($viewer);
-
-        return $scope === null || in_array((int) $target->id, array_map('intval', $scope), true);
+        return (int) $viewer->id === (int) $target->id || self::managesTraining($viewer);
     }
 
-    /** Finalising someone's training (releasing a held account): admin/HR, or their own manager. */
+    /** Finalising someone's training (releasing a held account): admin/HR only, never yourself. */
     private static function mayApprove(User $viewer, User $target): bool
     {
-        return (int) $viewer->id !== (int) $target->id && self::maySeeResultsOf($viewer, $target);
+        return (int) $viewer->id !== (int) $target->id && self::managesTraining($viewer);
     }
 
     // ── Learn @ Hi Tech: Digital Library videos inside training ──────────
@@ -852,14 +838,13 @@ class TrainingController extends Controller
      */
     public function activityDashboard()
     {
-        // Admin/HR see everyone; a manager sees their own team (direct reports).
-        // It used to show every manager the whole company.
+        // Everyone's results: admin/HR (or "Manage Training Portal") only. It
+        // used to open for every manager and accounts user as well.
         $me = auth()->user();
-        $scope = self::resultsScope($me);
-        if ($scope !== null && empty($scope) && !$me->hasRole('manager')) {
+        if (!self::managesTraining($me)) {
             abort(403);
         }
-        $canManage = self::managesTraining($me);
+        $canManage = true;
 
         $phases = TrainingPhase::with(['modules'])->orderBy('order')->get();
         $totalModules = TrainingModule::count();
@@ -869,15 +854,13 @@ class TrainingController extends Controller
                 $q->whereHas('trainingProgress')
                   ->orWhere('is_training_required', true);
             })
-            ->when($scope !== null, fn ($q) => $q->whereIn('id', $scope))
             ->with(['trainingProgress.module.phase'])
             ->get();
 
         $totalEnrolled  = $users->count();
         $totalCompleted = $users->where('training_status', 'completed')->count();
         $inProgress     = $users->filter(fn($u) => $u->trainingProgress->count() > 0 && $u->training_status !== 'completed')->count();
-        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')
-            ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))->avg('assessment_score') ?? 0, 1);
+        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
 
         // Phase-wise completion (how many users finished ALL modules in each phase)
         $phaseStats = $phases->map(function ($phase) use ($users) {
@@ -939,9 +922,9 @@ class TrainingController extends Controller
         // Top 5 hardest modules (most failures)
         $moduleStats = TrainingModule::with('phase')
             ->withCount([
-                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed'])->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
-                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed')->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
-                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed')->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope)),
+                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed']),
+                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed'),
+                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed'),
             ])
             ->having('total_attempts', '>', 0)
             ->orderByDesc('fail_count')
