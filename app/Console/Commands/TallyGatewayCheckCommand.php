@@ -70,10 +70,14 @@ class TallyGatewayCheckCommand extends Command
                 return self::FAILURE;
             }
 
-            $this->line('3. Pulling sales vouchers, one day per request:');
-            $vouchers = $gateway->salesVouchers($start, $end, function ($day, $n, $ms) {
-                $this->line(sprintf('     %s  %3d voucher(s)  %5.0f ms', $day->format('D d M Y'), $n, $ms));
+            $this->line('3. Pulling the Day Book, one day per request (the same safe method hrx:tally-push uses -- never the filtered Voucher collection, which is proven to strain a real company):');
+            $result = $gateway->dayBookRange($start, $end, function ($day, $new, $secs) {
+                $this->line(sprintf('     %s  %3d voucher(s)  %5.0f ms', $day->format('D d M Y'), $new, $secs * 1000));
             });
+            $vouchers = $result['vouchers'];
+            if ($result['stoppedAt'] !== null) {
+                $this->warn("Stopped early at {$result['stoppedAt']} (a day took too long) -- summary below covers only what was pulled before that.");
+            }
         } catch (TallyGatewayException $e) {
             $this->error($e->getMessage());
             return self::FAILURE;

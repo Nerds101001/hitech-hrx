@@ -52,6 +52,7 @@ class SalesAnalyticsController extends Controller
             'tab' => 'analytics',
             'charts' => true,
             'lastImport' => TallyImport::latestGood(),
+            'lastSync' => TallyImport::latestSync(),
             'pageConfigs' => ['contentLayout' => 'wide'],
             'filters' => $filters,
             // Embedded so the first paint needs no second request (cached per import, so this is normally a few milliseconds).

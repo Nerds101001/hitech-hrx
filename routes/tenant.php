@@ -368,6 +368,7 @@ Route::middleware([
       $c = \App\Http\Controllers\tenant\SalesSourcesController::class;
       $an = \App\Http\Controllers\tenant\SalesAnalyticsController::class;
       Route::get('', [$c, 'compare'])->name('index');
+      Route::get('company', [$c, 'company'])->name('company');
       // Tally analytics dashboard (replaces the older Tally Customers / Tally Invoices pages, which now redirect here)
       Route::get('analytics', [$an, 'index'])->name('analytics');
       Route::get('analytics/data', [$an, 'data'])->name('analytics.data');
@@ -380,6 +381,11 @@ Route::middleware([
       Route::get('tally/outstanding', [$c, 'outstanding'])->name('outstanding');
       Route::get('tally/outstanding-bills', [$c, 'outstandingBills'])->name('outstanding-bills');
       Route::get('tally/orders', [$c, 'orders'])->name('orders');
+      Route::get('tally/orders/dispatch', [$c, 'orderDispatch'])->name('orders.dispatch');
+      Route::get('unmapped', [$c, 'unmapped'])->name('unmapped');
+      Route::get('parties', [$c, 'parties'])->name('parties');
+      Route::get('team', [$c, 'team'])->name('team');
+      Route::get('finance', [$c, 'finance'])->name('finance');
       Route::get('setu', [$c, 'setu'])->name('setu');
     });
 
@@ -1043,6 +1049,7 @@ Route::middleware([
             Route::prefix('{mapping}/profile')->group(function () {
                 Route::get('/', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'show'])->name('profile');
                 Route::get('/sales-trend', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'salesTrend'])->name('profile.sales-trend');
+                Route::get('/invoice', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'invoice'])->name('profile.invoice');
                 Route::post('/log-call', [\App\Http\Controllers\tenant\CustomerProfileController::class, 'logCall'])->name('profile.log-call');
             });
 

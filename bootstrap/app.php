@@ -93,6 +93,7 @@ return Application::configure(basePath: dirname(__DIR__))
       'sales.guard' => \App\Http\Middleware\SalesAccessGuard::class,
       'telephony.signed' => \App\Http\Middleware\VerifyTelephonySignature::class,
       'telephony.restricted' => \App\Http\Middleware\RestrictTelephonyAccess::class,
+      'tally_push.signed' => \App\Http\Middleware\VerifyTallyPushSignature::class,
     ]);
   })
   ->withExceptions(function (Exceptions $exceptions) {

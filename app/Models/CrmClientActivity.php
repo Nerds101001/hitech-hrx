@@ -26,6 +26,8 @@ class CrmClientActivity extends Model implements AuditableContract
         'type',
         'body',
         'telephony_call_id',
+        'customer_contact_id',
+        'our_user_id',
         'needs_follow_up',
         'follow_up_due_at',
         'follow_up_assigned_to_id',
@@ -59,6 +61,18 @@ class CrmClientActivity extends Model implements AuditableContract
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_id');
+    }
+
+    /** The customer contact a hand-logged call was with (kept even if that contact is later deleted, so history still names them). */
+    public function customerContact()
+    {
+        return $this->belongsTo(CrmClientContact::class, 'customer_contact_id')->withTrashed();
+    }
+
+    /** The person from our team who made or took a hand-logged call. */
+    public function ourUser()
+    {
+        return $this->belongsTo(User::class, 'our_user_id');
     }
 
     /**
