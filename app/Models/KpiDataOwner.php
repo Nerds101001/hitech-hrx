@@ -42,6 +42,17 @@ class KpiDataOwner extends Model implements AuditableContract
     }
 
     /** The KPI template ids this user may fill for other people. */
+    /**
+     * Whether Bulk KPI Entry has anything for this person: a KPI admin (admin,
+     * HR, kpi.manage) or a named data owner of at least one KPI. The same rule
+     * KpiBulkEntryController::index() enforces - anyone else gets a 403 there,
+     * so the sidebar must not draw the link for them.
+     */
+    public static function canOpenBulkEntry(User $user): bool
+    {
+        return $user->hasRole(['admin', 'hr']) || $user->can('kpi.manage') || static::where('user_id', $user->id)->exists();
+    }
+
     public static function templateIdsFor(User $user): array
     {
         return static::where('user_id', $user->id)->pluck('kpi_template_id')->unique()->values()->all();
