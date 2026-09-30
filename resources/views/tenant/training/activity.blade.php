@@ -165,6 +165,7 @@
     .ta-filter label { font-size: 0.72rem; font-weight: 700; color: var(--ta-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
     .ta-filter .form-control, .ta-filter .form-select { font-size: 0.82rem; border-color: var(--ta-border); }
     .ta-filter .form-control:focus, .ta-filter .form-select:focus { border-color: var(--ta-secondary); box-shadow: none; }
+    .ta-filter .btn { height: 46px; border-radius: 15px; font-weight: 600; } /* same height and corners as the fields */
     .ta-filter-summary { font-size: 0.78rem; color: var(--ta-muted); }
     .ta-filter-summary a { color: var(--ta-primary); font-weight: 600; }
     .emp-table th a.ta-sort { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
