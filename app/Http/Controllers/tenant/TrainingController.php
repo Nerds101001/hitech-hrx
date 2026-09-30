@@ -833,10 +833,18 @@ class TrainingController extends Controller
             }
         }
     }
+    /** Columns the results table can be sorted by. */
+    private const ACTIVITY_SORTS = ['name', 'department', 'completed', 'pct', 'avg_score', 'failed', 'last_activity', 'state'];
+
     /**
-     * Admin/HR Training Activity Dashboard
+     * Admin/HR Training Activity Dashboard (Training Results).
+     *
+     * Filters - search (name, email, employee code), department, status and
+     * current phase - narrow the whole page, not just the table: the cards,
+     * the phase funnel and "Modules with Most Failures" are all worked out
+     * for the people shown. Sorting by any column, both ways.
      */
-    public function activityDashboard()
+    public function activityDashboard(Request $request)
     {
         // Everyone's results: admin/HR (or "Manage Training Portal") only. It
         // used to open for every manager and accounts user as well.
@@ -847,20 +855,82 @@ class TrainingController extends Controller
         $canManage = true;
 
         $phases = TrainingPhase::with(['modules'])->orderBy('order')->get();
-        $totalModules = TrainingModule::count();
 
-        // All users with any training activity or who require training
-        $users = User::where(function($q) {
+        // Completion counts the compulsory modules only (phases 1 and 2);
+        // optional phases (CRM, Learn @ Hi Tech) do not.
+        $requiredIds  = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
+        $totalModules = $requiredIds->count();
+
+        // Everyone enrolled: any training activity, or training required.
+        $enrolled = User::where(function ($q) {
                 $q->whereHas('trainingProgress')
                   ->orWhere('is_training_required', true);
             })
-            ->with(['trainingProgress.module.phase'])
+            ->with(['trainingProgress.module.phase', 'department'])
             ->get();
+
+        $filters = [
+            'q'          => trim((string) $request->query('q', '')),
+            'department' => (string) $request->query('department', ''),
+            'status'     => (string) $request->query('status', ''),
+            'phase'      => (string) $request->query('phase', ''),
+        ];
+        $sort = in_array($request->query('sort'), self::ACTIVITY_SORTS, true) ? $request->query('sort') : 'pct';
+        $dir  = $request->query('dir') === 'asc' ? 'asc' : 'desc';
+
+        $rows = $enrolled->map(fn ($user) => self::trainingRow($user, $phases, $requiredIds, $totalModules));
+
+        $userStats = $rows->filter(function ($row) use ($filters) {
+            $u = $row['user'];
+            if ($filters['q'] !== '') {
+                $hay = strtolower($u->first_name . ' ' . $u->last_name . ' ' . $u->email . ' ' . $u->code);
+                if (!str_contains($hay, strtolower($filters['q']))) {
+                    return false;
+                }
+            }
+            if ($filters['department'] === 'none' && $u->department_id) {
+                return false;
+            }
+            if ($filters['department'] !== '' && $filters['department'] !== 'none' && (string) $u->department_id !== $filters['department']) {
+                return false;
+            }
+            if ($filters['status'] === 'held' && !$row['held']) {
+                return false;
+            }
+            if (in_array($filters['status'], ['completed', 'in_progress', 'not_started'], true) && $row['state'] !== $filters['status']) {
+                return false;
+            }
+            if ($filters['phase'] === 'none' && $row['current_phase']) {
+                return false;
+            }
+            if ($filters['phase'] !== '' && $filters['phase'] !== 'none' && (string) optional($row['current_phase'])->id !== $filters['phase']) {
+                return false;
+            }
+            return true;
+        });
+
+        $stateOrder = ['not_started' => 0, 'in_progress' => 1, 'completed' => 2];
+        $key = fn ($row) => match ($sort) {
+            'name'          => strtolower($row['user']->first_name . ' ' . $row['user']->last_name),
+            'department'    => strtolower(optional($row['user']->department)->name ?? 'zzz'),
+            'completed'     => $row['completed'],
+            'avg_score'     => $row['avg_score'],
+            'failed'        => $row['failed_count'],
+            'last_activity' => $row['last_activity'] ? $row['last_activity']->timestamp : 0,
+            'state'         => $stateOrder[$row['state']] ?? 0,
+            default         => $row['pct'],
+        };
+        $userStats = ($dir === 'asc' ? $userStats->sortBy($key) : $userStats->sortByDesc($key))->values();
+
+        // The cards, funnel and failure list describe the people shown.
+        $users = $userStats->pluck('user');
+        $ids   = $users->pluck('id')->all();
 
         $totalEnrolled  = $users->count();
         $totalCompleted = $users->where('training_status', 'completed')->count();
-        $inProgress     = $users->filter(fn($u) => $u->trainingProgress->count() > 0 && $u->training_status !== 'completed')->count();
-        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
+        $inProgress     = $users->filter(fn ($u) => $u->trainingProgress->count() > 0 && $u->training_status !== 'completed')->count();
+        $avgScore       = round(UserTrainingProgress::where('status', 'completed')->whereNotNull('assessment_score')
+            ->whereIn('user_id', $ids)->avg('assessment_score') ?? 0, 1);
 
         // Phase-wise completion (how many users finished ALL modules in each phase)
         $phaseStats = $phases->map(function ($phase) use ($users) {
@@ -886,55 +956,66 @@ class TrainingController extends Controller
             ];
         });
 
-        // Per-user summary row. Completion counts the compulsory modules only
-        // (phases 1 and 2); optional phases (CRM, Learn @ Hi Tech) do not.
-        $requiredIds  = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
-        $totalModules = $requiredIds->count();
-        $userStats = $users->map(function ($user) use ($phases, $totalModules, $requiredIds) {
-            $progress       = $user->trainingProgress;
-            $completedCount = $progress->where('status', 'completed')->whereIn('module_id', $requiredIds)->unique('module_id')->count();
-            $avgScore       = round($progress->where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
-            $lastActivity   = $progress->sortByDesc('updated_at')->first()?->updated_at;
-
-            // Highest phase with any activity
-            $currentPhase = null;
-            foreach ($phases->sortByDesc('order') as $phase) {
-                $ids = $phase->modules->pluck('id')->toArray();
-                if ($progress->whereIn('module_id', $ids)->isNotEmpty()) {
-                    $currentPhase = $phase;
-                    break;
-                }
-            }
-
-            return [
-                'user'          => $user,
-                'completed'     => $completedCount,
-                'total'         => $totalModules,
-                'pct'           => $totalModules > 0 ? round($completedCount / $totalModules * 100) : 0,
-                'avg_score'     => $avgScore,
-                'last_activity' => $lastActivity,
-                'current_phase' => $currentPhase,
-                'status'        => $user->training_status ?? 'in_progress',
-                'failed_count'  => $progress->where('status', 'failed')->count(),
-            ];
-        })->sortByDesc('pct')->values();
-
-        // Top 5 hardest modules (most failures)
+        // Top 6 hardest modules (most failures) among the people shown
         $moduleStats = TrainingModule::with('phase')
             ->withCount([
-                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed']),
-                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed'),
-                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed'),
+                'userProgress as total_attempts' => fn($q) => $q->whereIn('status', ['completed','failed'])->whereIn('user_id', $ids),
+                'userProgress as fail_count'      => fn($q) => $q->where('status', 'failed')->whereIn('user_id', $ids),
+                'userProgress as pass_count'      => fn($q) => $q->where('status', 'completed')->whereIn('user_id', $ids),
             ])
             ->having('total_attempts', '>', 0)
             ->orderByDesc('fail_count')
             ->limit(6)
             ->get();
 
+        // Filter choices: every department that has someone enrolled.
+        $departments = $enrolled->pluck('department')->filter()->unique('id')->sortBy('name')->values();
+        $totalAll = $enrolled->count();
+        $filtered = $filters['q'] !== '' || $filters['department'] !== '' || $filters['status'] !== '' || $filters['phase'] !== '';
+
         return view('tenant.training.activity', compact(
             'phases', 'totalEnrolled', 'totalCompleted', 'inProgress',
-            'avgScore', 'phaseStats', 'userStats', 'moduleStats', 'totalModules', 'canManage'
+            'avgScore', 'phaseStats', 'userStats', 'moduleStats', 'totalModules', 'canManage',
+            'filters', 'sort', 'dir', 'departments', 'totalAll', 'filtered'
         ));
+    }
+
+    /** One person's line on the results dashboard. */
+    private static function trainingRow(User $user, $phases, $requiredIds, int $totalModules): array
+    {
+        $progress       = $user->trainingProgress;
+        $completedCount = $progress->where('status', 'completed')->whereIn('module_id', $requiredIds)->unique('module_id')->count();
+        $avgScore       = round($progress->where('status', 'completed')->whereNotNull('assessment_score')->avg('assessment_score') ?? 0, 1);
+        $lastActivity   = $progress->sortByDesc('updated_at')->first()?->updated_at;
+
+        // Highest phase with any activity
+        $currentPhase = null;
+        foreach ($phases->sortByDesc('order') as $phase) {
+            $ids = $phase->modules->pluck('id')->toArray();
+            if ($progress->whereIn('module_id', $ids)->isNotEmpty()) {
+                $currentPhase = $phase;
+                break;
+            }
+        }
+
+        $status = $user->status instanceof \UnitEnum ? $user->status->value : $user->status;
+
+        return [
+            'user'          => $user,
+            'completed'     => $completedCount,
+            'total'         => $totalModules,
+            'pct'           => $totalModules > 0 ? round($completedCount / $totalModules * 100) : 0,
+            'avg_score'     => $avgScore,
+            'last_activity' => $lastActivity,
+            'current_phase' => $currentPhase,
+            'status'        => $user->training_status ?? 'in_progress',
+            // One classification for the pill, the filter and the sort.
+            'state'         => $user->training_status === 'completed' ? 'completed' : ($completedCount > 0 ? 'in_progress' : 'not_started'),
+            // Account locked until training is passed (TrainingLock).
+            'held'          => $status === \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED->value
+                               && $user->is_training_required && $user->training_status !== 'completed',
+            'failed_count'  => $progress->where('status', 'failed')->count(),
+        ];
     }
 
     /**

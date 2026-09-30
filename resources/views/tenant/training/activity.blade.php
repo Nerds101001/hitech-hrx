@@ -161,6 +161,24 @@
     }
     #empSearch:focus { border-color: var(--ta-secondary); }
 
+    /* ── Filters, sorting, export ────────────────────── */
+    .ta-filter label { font-size: 0.72rem; font-weight: 700; color: var(--ta-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+    .ta-filter .form-control, .ta-filter .form-select { font-size: 0.82rem; border-color: var(--ta-border); }
+    .ta-filter .form-control:focus, .ta-filter .form-select:focus { border-color: var(--ta-secondary); box-shadow: none; }
+    .ta-filter-summary { font-size: 0.78rem; color: var(--ta-muted); }
+    .ta-filter-summary a { color: var(--ta-primary); font-weight: 600; }
+    .emp-table th a.ta-sort { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+    .emp-table th a.ta-sort:hover { color: var(--ta-primary); }
+    .emp-table th a.ta-sort.active { color: var(--ta-primary); }
+    .ta-sort-arrow { font-size: 0.7rem; opacity: 0.45; }
+    .ta-sort.active .ta-sort-arrow { opacity: 1; }
+    .ta-locked { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 20px; font-size: 0.64rem; font-weight: 700; background: #fee2e2; color: #991b1b; white-space: nowrap; }
+    .ta-btn { border: none; font-size: 0.72rem; font-weight: 600; border-radius: 999px; padding: 5px 12px; text-decoration: none; white-space: nowrap; display: inline-block; }
+    .ta-btn-primary { background: #005f6b; color: #fff; }
+    .ta-btn-outline { background: #fff; color: #005f6b; border: 1px solid #005f6b; }
+    .ta-btn-primary:hover { color: #fff; opacity: 0.9; }
+    .ta-btn-outline:hover { background: var(--ta-soft); color: #005f6b; }
+
     /* ── Phase colors ────────────────────────────────── */
     .pc-1{background:linear-gradient(135deg,#005f6b,#0097a7);}
     .pc-2{background:linear-gradient(135deg,#1565c0,#42a5f5);}
@@ -190,7 +208,7 @@
             <div>
                 <h2 class="fw-bold text-white mb-1" style="font-size:1.4rem;">Training Activity Dashboard</h2>
                 <p class="mb-0" style="color:rgba(255,255,255,0.78);font-size:0.86rem;">
-                    Monitor employee progress, assessment scores, and phase completion across your team.
+                    Monitor employee progress, assessment scores and phase completion. Filter by department, status or phase; click a column heading to sort.
                 </p>
             </div>
             <div class="d-flex gap-2 flex-wrap">
@@ -203,6 +221,57 @@
             </div>
         </div>
     </div>
+
+    {{-- ── Filters: they narrow the whole page (cards, funnel, failures, table) ── --}}
+    <form method="GET" action="{{ route('training.activity') }}" id="taFilters" class="ta-card ta-filter mb-4">
+        <div class="ta-card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="taQ">Search</label>
+                    <input type="search" id="taQ" name="q" value="{{ $filters['q'] }}" class="form-control form-control-sm" placeholder="Name, email or employee code">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label for="taDept">Department</label>
+                    <select id="taDept" name="department" class="form-select form-select-sm ta-auto">
+                        <option value="">All departments</option>
+                        @foreach($departments as $d)
+                            <option value="{{ $d->id }}" @selected($filters['department'] === (string) $d->id)>{{ $d->name }}</option>
+                        @endforeach
+                        <option value="none" @selected($filters['department'] === 'none')>No department</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-2">
+                    <label for="taStatus">Status</label>
+                    <select id="taStatus" name="status" class="form-select form-select-sm ta-auto">
+                        <option value="">All</option>
+                        <option value="completed" @selected($filters['status'] === 'completed')>Completed</option>
+                        <option value="in_progress" @selected($filters['status'] === 'in_progress')>In progress</option>
+                        <option value="not_started" @selected($filters['status'] === 'not_started')>Not started</option>
+                        <option value="held" @selected($filters['status'] === 'held')>Account locked (training)</option>
+                    </select>
+                </div>
+                <div class="col-8 col-md-2">
+                    <label for="taPhase">Current phase</label>
+                    <select id="taPhase" name="phase" class="form-select form-select-sm ta-auto">
+                        <option value="">Any</option>
+                        <option value="none" @selected($filters['phase'] === 'none')>Not started</option>
+                        @foreach($phases as $ph)
+                            <option value="{{ $ph->id }}" @selected($filters['phase'] === (string) $ph->id)>Phase {{ $ph->order }}: {{ $ph->title }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-4 col-md-1">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                </div>
+            </div>
+            <input type="hidden" name="sort" value="{{ $sort }}">
+            <input type="hidden" name="dir" value="{{ $dir }}">
+            <div class="ta-filter-summary mt-2">
+                Showing <strong>{{ $userStats->count() }}</strong> of {{ $totalAll }} enrolled
+                @if($filtered) &middot; <a href="{{ route('training.activity') }}">Clear filters</a> @endif
+            </div>
+        </div>
+    </form>
 
     {{-- ── Stat Cards ──────────────────────────────────── --}}
     <div class="row g-4 mb-4">
@@ -326,21 +395,33 @@
     {{-- ── Employee Activity Table ─────────────────────── --}}
     <div class="ta-card">
         <div class="ta-card-header">
-            <h6 class="ta-card-title">Employee Progress Tracker</h6>
-            <input type="text" id="empSearch" placeholder="Search employee..." oninput="filterTable()">
+            <h6 class="ta-card-title">Employee Progress Tracker <span style="font-weight:500;color:var(--ta-muted);font-size:0.8rem;">({{ $userStats->count() }})</span></h6>
+            <button type="button" class="ta-btn ta-btn-outline" id="taExport" @disabled($userStats->isEmpty())>
+                <i class="ti ti-download"></i> Export to Excel (CSV)
+            </button>
         </div>
         <div style="overflow-x:auto;">
             <table class="emp-table" id="empTable">
                 <thead>
+                    @php
+                        $th = function (string $key, string $label) use ($sort, $dir) {
+                            $active = $sort === $key;
+                            $next = $active && $dir === 'desc' ? 'asc' : 'desc';
+                            $arrow = $active ? ($dir === 'asc' ? '&#9650;' : '&#9660;') : '&#8693;';
+                            return '<a class="ta-sort' . ($active ? ' active' : '') . '" href="' . e(request()->fullUrlWithQuery(['sort' => $key, 'dir' => $next])) . '">'
+                                . e($label) . ' <span class="ta-sort-arrow">' . $arrow . '</span></a>';
+                        };
+                    @endphp
                     <tr>
-                        <th>Employee</th>
+                        <th>{!! $th('name', 'Employee') !!}</th>
+                        <th>{!! $th('department', 'Department') !!}</th>
                         <th>Current Phase</th>
-                        <th>Modules Done</th>
-                        <th>Overall Progress</th>
-                        <th>Avg Score</th>
-                        <th>Failed Attempts</th>
-                        <th>Last Activity</th>
-                        <th>Status</th>
+                        <th>{!! $th('completed', 'Modules Done') !!}</th>
+                        <th>{!! $th('pct', 'Overall Progress') !!}</th>
+                        <th>{!! $th('avg_score', 'Avg Score') !!}</th>
+                        <th>{!! $th('failed', 'Failed Attempts') !!}</th>
+                        <th>{!! $th('last_activity', 'Last Activity') !!}</th>
+                        <th>{!! $th('state', 'Status') !!}</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -354,16 +435,29 @@
                         $scoreClass = $row['avg_score'] >= 80 ? 'score-high' : ($row['avg_score'] >= 50 ? 'score-mid' : ($row['avg_score'] > 0 ? 'score-low' : 'score-none'));
                         $barColor = $row['pct'] >= 80 ? '#22c55e' : ($row['pct'] >= 40 ? '#f59e0b' : '#94a3b8');
                     @endphp
-                    <tr data-name="{{ strtolower($u->first_name . ' ' . $u->last_name) }}">
+                    @php
+                        $stateLabel = ['completed' => 'Completed', 'in_progress' => 'In Progress', 'not_started' => 'Not Started'][$row['state']];
+                        $csv = [
+                            'name' => trim($u->first_name . ' ' . $u->last_name), 'code' => $u->code, 'email' => $u->email,
+                            'department' => optional($u->department)->name,
+                            'phase' => $row['current_phase'] ? 'Phase ' . $row['current_phase']->order . ': ' . $row['current_phase']->title : 'Not started',
+                            'done' => $row['completed'] . '/' . $row['total'], 'pct' => $row['pct'] . '%',
+                            'avg' => $row['avg_score'] > 0 ? $row['avg_score'] . '%' : '', 'failed' => $row['failed_count'],
+                            'last' => $row['last_activity'] ? $row['last_activity']->format('d M Y H:i') : '',
+                            'status' => $stateLabel, 'locked' => $row['held'] ? 'Yes' : 'No',
+                        ];
+                    @endphp
+                    <tr data-row="{{ json_encode($csv) }}">
                         <td>
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <div class="emp-avatar" style="background:{{ $avatarColor }};">{{ $initials }}</div>
                                 <div>
                                     <div style="font-weight:600;font-size:0.84rem;">{{ $u->first_name }} {{ $u->last_name }}</div>
-                                    <div style="font-size:0.72rem;color:var(--ta-muted);">{{ $u->email }}</div>
+                                    <div style="font-size:0.72rem;color:var(--ta-muted);">{{ $u->code ? $u->code . ' · ' : '' }}{{ $u->email }}</div>
                                 </div>
                             </div>
                         </td>
+                        <td style="font-size:0.8rem;">{{ optional($u->department)->name ?? '—' }}</td>
                         <td>
                             @if($row['current_phase'])
                                 @php $ci = (($row['current_phase']->order - 1) % 5) + 1; @endphp
@@ -403,25 +497,32 @@
                             {{ $row['last_activity'] ? $row['last_activity']->diffForHumans() : '—' }}
                         </td>
                         <td>
-                            @if($row['status'] === 'completed')
+                            @if($row['state'] === 'completed')
                                 <span class="status-pill sp-completed">Completed</span>
-                            @elseif($row['completed'] > 0)
+                            @elseif($row['state'] === 'in_progress')
                                 <span class="status-pill sp-progress">In Progress</span>
                             @else
                                 <span class="status-pill sp-not_started">Not Started</span>
                             @endif
+                            @if($row['held'])
+                                <div><span class="ta-locked" title="Account locked until the compulsory training is passed">Account locked</span></div>
+                            @endif
                         </td>
                         <td>
-                            <a href="{{ route('training.portal') }}?user_id={{ $u->id }}"
-                                style="border:none;background:#005f6b;color:white;font-size:0.72rem;font-weight:600;border-radius:999px;padding:5px 12px;text-decoration:none;white-space:nowrap;">
-                                View Journey
-                            </a>
+                            <div style="display:flex;gap:6px;">
+                                <a href="{{ route('training.portal') }}?user_id={{ $u->id }}" class="ta-btn ta-btn-primary">View Journey</a>
+                                <a href="{{ route('training.report-card', $u->id) }}" class="ta-btn ta-btn-outline">Results</a>
+                            </div>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="9" style="text-align:center;padding:40px;color:var(--ta-muted);font-size:0.86rem;">
-                            No employees have started training yet.
+                        <td colspan="10" style="text-align:center;padding:40px;color:var(--ta-muted);font-size:0.86rem;">
+                            @if($filtered)
+                                No one matches these filters. <a href="{{ route('training.activity') }}" style="color:#005f6b;font-weight:600;">Clear filters</a>
+                            @else
+                                No employees have started training yet.
+                            @endif
                         </td>
                     </tr>
                     @endforelse
@@ -435,12 +536,31 @@
 
 @section('page-script')
 <script>
-    function filterTable() {
-        const q = document.getElementById('empSearch').value.toLowerCase();
-        document.querySelectorAll('#empTable tbody tr').forEach(row => {
-            const name = row.dataset.name || '';
-            row.style.display = name.includes(q) ? '' : 'none';
+    // Plain JS on purpose: jQuery/bootstrap load deferred.
+    (function () {
+        var form = document.getElementById('taFilters');
+        document.querySelectorAll('#taFilters .ta-auto').forEach(function (el) {
+            el.addEventListener('change', function () { form.submit(); });
         });
-    }
+
+        // Export exactly the rows shown (filters and sort applied) as a CSV Excel opens.
+        var btn = document.getElementById('taExport');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var head = ['Employee', 'Employee code', 'Email', 'Department', 'Current phase', 'Modules done', 'Progress', 'Avg score', 'Failed attempts', 'Last activity', 'Status', 'Account locked'];
+            var keys = ['name', 'code', 'email', 'department', 'phase', 'done', 'pct', 'avg', 'failed', 'last', 'status', 'locked'];
+            var cell = function (v) { v = (v === null || v === undefined) ? '' : String(v); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+            var lines = [head.map(cell).join(',')];
+            document.querySelectorAll('#empTable tbody tr[data-row]').forEach(function (tr) {
+                var r = JSON.parse(tr.dataset.row);
+                lines.push(keys.map(function (k) { return cell(r[k]); }).join(','));
+            });
+            var blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'training-results-' + new Date().toISOString().slice(0, 10) + '.csv';
+            document.body.appendChild(a); a.click(); a.remove();
+        });
+    })();
 </script>
 @endsection
