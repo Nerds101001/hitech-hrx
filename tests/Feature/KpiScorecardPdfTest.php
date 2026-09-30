@@ -394,6 +394,32 @@ class KpiScorecardPdfTest extends TestCase
         $this->assertStringContainsString('Not measurable', $html);
     }
 
+    public function test_a_figure_stored_for_august_under_the_old_rule_is_ignored(): void
+    {
+        $desig = \App\Models\Designation::create(['name' => 'ZZ Mgr ' . uniqid(), 'code' => 'ZZR' . random_int(10000, 99999)]);
+        $rep = $this->person();
+        $rep->update(['designation_id' => $desig->id]);
+        foreach (\App\Support\SalesRuleBook::install($this->dept->id, [$desig->id]) as $t) {
+            KpiTemplateService::apply($t);
+        }
+        KpiAssignment::where('user_id', $rep->id)->update(['created_at' => '2026-07-01']);
+        foreach (['Target Achievement (Bingo %)' => [1, 15], 'New Customer Wins (%)' => [100, 13]] as $title => [$achieved, $score]) {
+            $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
+            KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $rep->id, 'period_start' => '2026-08-01',
+                'period_end' => '2026-08-31', 'due_date' => '2026-08-31', 'status' => 'completed_on_time',
+                'achieved_value' => $achieved, 'score' => $score]);
+        }
+
+        $card = KpiScorecardService::forMonth(collect([$rep]), Carbon::create(2026, 8, 1))->first();
+        $row = collect($card->rows)->firstWhere('title', 'New Customer Wins (%)');
+
+        $this->assertSame('Not measurable', $row->status);
+        $this->assertNull($row->achieved);
+        $this->assertSame(0.0, $row->score);
+        $this->assertSame(15.0, $card->earned, 'the stale 13 marks are not counted');
+        $this->assertSame(87.0, $card->possible);
+    }
+
     public function test_other_scorecards_are_still_graded_on_their_own_marks(): void
     {
         $this->check($this->alice, 'ZZ Volume', 90, 54.0);

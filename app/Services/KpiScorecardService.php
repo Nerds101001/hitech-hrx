@@ -210,9 +210,14 @@ class KpiScorecardService
                 }
 
                 // Nothing to measure it by yet (New Customer Wins before the Sales
-                // Report existed): no marks either way - graded on the rest.
-                $na = $achieved === null && $mine->isNotEmpty()
+                // Report existed): no marks either way - graded on the rest. Any
+                // figure stored for that month is from an older rule and is ignored.
+                $na = $mine->isNotEmpty()
                     && \App\Services\KpiAutoSourceService::notMeasurable($a, Carbon::parse($mine->last()->period_end));
+                if ($na) {
+                    $achieved = null;
+                    $score = 0.0;
+                }
 
                 $rows[] = (object) [
                     'kra'      => $a->kra_group ?: 'Other',
