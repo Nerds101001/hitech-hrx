@@ -36,12 +36,17 @@
     .ta-hero-btn:hover { background: rgba(255,255,255,.22); color: #fff; }
 
     /* ── Cards / panels ─────────────────────────────── */
-    .ta-panel { background: #fff; border: 1px solid var(--ta-border); border-radius: 14px; box-shadow: 0 2px 10px rgba(15, 23, 42, .04); height: 100%; }
+    .ta-panel { background: #fff; border: 1px solid var(--ta-border); border-radius: 14px; box-shadow: 0 2px 10px rgba(15, 23, 42, .04); height: 100%; display: flex; flex-direction: column; }
     .ta-panel-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px 6px; }
     .ta-panel-title { font-size: 1rem; font-weight: 800; color: var(--ta-ink); margin: 0; }
     .ta-panel-link { font-size: .76rem; font-weight: 600; color: var(--ta-primary); text-decoration: none; white-space: nowrap; }
     .ta-panel-link:hover { color: var(--ta-primary-dark); }
-    .ta-panel-body { padding: 8px 18px 16px; }
+    .ta-panel-body { padding: 8px 18px 16px; flex: 1; }
+    /* a body that fills the card and scrolls inside it, instead of setting the row height */
+    .ta-fill { position: relative; min-height: 210px; padding: 0; }
+    .ta-fill > .ta-scroll { position: absolute; inset: 0; overflow-y: auto; padding: 0 18px 12px; }
+    .ta-center { display: flex; align-items: center; }
+    .ta-center > * { flex: 1; }
 
     /* ── Filter bar ─────────────────────────────────── */
     .ta-filter { padding: 14px 18px; margin-bottom: 18px; }
@@ -56,22 +61,22 @@
     .ta-summary { font-size: .76rem; color: var(--ta-muted); margin-top: 8px; }
 
     /* ── KPI cards ──────────────────────────────────── */
-    .ta-kpi { display: flex; gap: 12px; align-items: flex-start; padding: 16px; position: relative; }
+    .ta-kpi { display: flex; flex-direction: row; gap: 12px; align-items: flex-start; padding: 16px; }
     .ta-kpi-icon { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
     .ta-kpi-value { font-size: 1.45rem; font-weight: 800; color: var(--ta-ink); line-height: 1.1; }
     .ta-kpi-label { font-size: .8rem; color: var(--ta-ink); font-weight: 500; }
     .ta-kpi-sub { font-size: .7rem; color: var(--ta-muted); margin-top: 2px; }
-    .ta-trend { position: absolute; top: 14px; right: 14px; font-size: .7rem; font-weight: 700; color: var(--ta-green); white-space: nowrap; }
-    .ta-trend.down { color: var(--ta-red); }
+    .ta-trend { display: inline-block; margin-top: 5px; font-size: .68rem; font-weight: 700; color: var(--ta-green); background: #f0fdf4; border-radius: 6px; padding: 1px 6px; }
+    .ta-trend.down { color: var(--ta-red); background: #fef2f2; }
     .ti-bg-teal { background: #e0f2f1; color: #0b6b73; } .ti-bg-green { background: #dcfce7; color: #16a34a; }
     .ti-bg-orange { background: #fef3c7; color: #d97706; } .ti-bg-red { background: #fee2e2; color: #dc2626; }
     .ti-bg-rose { background: #ffe4e6; color: #e11d48; } .ti-bg-purple { background: #ede9fe; color: #7c3aed; }
     .ti-bg-blue { background: #dbeafe; color: #2563eb; }
 
     /* ── Funnel ─────────────────────────────────────── */
-    .ta-funnel { display: flex; flex-direction: column; gap: 6px; }
+    .ta-funnel { display: flex; flex-direction: column; justify-content: space-around; gap: 8px; height: 100%; min-height: 220px; }
     .ta-funnel-row { display: flex; align-items: center; gap: 14px; }
-    .ta-funnel-bar { height: 40px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 1.05rem; }
+    .ta-funnel-bar { height: 46px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 1.05rem; }
     .ta-funnel-cap { font-size: .72rem; color: var(--ta-muted); line-height: 1.2; border-bottom: 1px dashed var(--ta-border); padding-bottom: 6px; flex: 1; }
     .ta-funnel-cap b { display: block; font-size: .95rem; color: var(--ta-ink); }
 
@@ -139,6 +144,11 @@
     .ta-pages button:disabled { opacity: .45; }
     .ta-page .ta-perpage { width: 110px; }
 
+    /* on its own line (below xl) the department card has no neighbour to match: grow with the rows */
+    @media (max-width: 1199.98px) {
+        .ta-fill { min-height: 0; }
+        .ta-fill > .ta-scroll { position: static; max-height: 360px; }
+    }
     @media (max-width: 767.98px) {
         .ta-hero { padding: 20px; } .ta-hero h1 { font-size: 1.35rem; }
         .ta-toolbar .sel { flex: 1 1 45%; }
@@ -161,7 +171,7 @@
             <p>Track employee training progress, completion, assessment scores and pending actions.</p>
         </div>
         @if($canManage ?? false)
-            <a href="{{ route('training.manage.index') }}" class="ta-hero-btn"><i class="ti ti-book-2"></i> Manage Programs</a>
+            <a href="{{ route('training.manage.index') }}" class="ta-hero-btn"><i class="bx bx-book-open"></i> Manage Programs</a>
         @endif
     </div>
 
@@ -170,7 +180,7 @@
         <div class="row g-2 align-items-end">
             <div class="col-6 col-lg">
                 <label for="taProgram">Training Program</label>
-                <div class="ta-iconsel"><i class="ti ti-school"></i>
+                <div class="ta-iconsel"><i class="bx bx-book-reader"></i>
                     <select id="taProgram" name="program" class="form-select" data-mirror="program">
                         <option value="">All Training Programs</option>
                         <option value="compulsory" @selected($filters['program'] === 'compulsory')>Compulsory onboarding (Phase 1 &amp; 2)</option>
@@ -180,7 +190,7 @@
             </div>
             <div class="col-6 col-lg">
                 <label for="taPhase">Phase</label>
-                <div class="ta-iconsel"><i class="ti ti-stack-2"></i>
+                <div class="ta-iconsel"><i class="bx bx-layer"></i>
                     <select id="taPhase" name="phase" class="form-select" data-mirror="phase">
                         <option value="">All Phases</option>
                         <option value="none" @selected($filters['phase'] === 'none')>Not started</option>
@@ -192,7 +202,7 @@
             </div>
             <div class="col-6 col-lg">
                 <label for="taDept">Department</label>
-                <div class="ta-iconsel"><i class="ti ti-building"></i>
+                <div class="ta-iconsel"><i class="bx bx-buildings"></i>
                     <select id="taDept" name="department" class="form-select" data-mirror="department">
                         <option value="">All Departments</option>
                         @foreach($departments as $d)
@@ -204,7 +214,7 @@
             </div>
             <div class="col-6 col-lg">
                 <label for="taStatus">Status</label>
-                <div class="ta-iconsel"><i class="ti ti-flag"></i>
+                <div class="ta-iconsel"><i class="bx bx-flag"></i>
                     <select id="taStatus" name="status" class="form-select" data-mirror="status">
                         <option value="">All Status</option>
                         <option value="completed" @selected($filters['status'] === 'completed')>Completed</option>
@@ -220,7 +230,7 @@
                 <button type="submit" class="btn btn-primary ta-apply">Apply</button>
             </div>
             <div class="col-auto">
-                <a href="{{ route('training.activity') }}" class="ta-reset"><i class="ti ti-refresh"></i> Reset Filters</a>
+                <a href="{{ route('training.activity') }}" class="ta-reset"><i class="bx bx-refresh"></i> Reset Filters</a>
             </div>
         </div>
         <input type="hidden" name="sort" value="{{ $sort }}">
@@ -235,14 +245,14 @@
     <div class="row g-3 mb-3">
         @php
             $kpis = [
-                ['icon' => 'ti ti-users', 'bg' => 'ti-bg-teal', 'value' => $cards['enrolled'], 'label' => 'Total Enrolled', 'sub' => null,
+                ['icon' => 'bx bx-group', 'bg' => 'ti-bg-teal', 'value' => $cards['enrolled'], 'label' => 'Total Enrolled', 'sub' => null,
                  'trend' => $trends['started'] > 0 ? '+' . $trends['started'] . ' this month' : null],
-                ['icon' => 'ti ti-circle-check', 'bg' => 'ti-bg-green', 'value' => $cards['completed'], 'label' => 'Completed', 'sub' => $cards['completed_pct'] . '% of enrolled',
+                ['icon' => 'bx bx-check-circle', 'bg' => 'ti-bg-green', 'value' => $cards['completed'], 'label' => 'Completed', 'sub' => $cards['completed_pct'] . '% of enrolled',
                  'trend' => $trends['completed'] > 0 ? '+' . $trends['completed'] . ' this month' : null],
-                ['icon' => 'ti ti-player-play', 'bg' => 'ti-bg-orange', 'value' => $cards['in_progress'], 'label' => 'In Progress', 'sub' => $cards['in_progress_pct'] . '% of enrolled', 'trend' => null],
-                ['icon' => 'ti ti-clock', 'bg' => 'ti-bg-rose', 'value' => $cards['not_started'], 'label' => 'Not Started', 'sub' => $cards['not_started_pct'] . '% of enrolled', 'trend' => null],
-                ['icon' => 'ti ti-lock', 'bg' => 'ti-bg-red', 'value' => $cards['locked'], 'label' => 'Account Locked', 'sub' => $cards['locked_pct'] . '% of enrolled', 'trend' => null],
-                ['icon' => 'ti ti-chart-bar', 'bg' => 'ti-bg-purple', 'value' => $cards['avg_score'] . '%', 'label' => 'Average Assessment Score', 'sub' => null,
+                ['icon' => 'bx bx-play-circle', 'bg' => 'ti-bg-orange', 'value' => $cards['in_progress'], 'label' => 'In Progress', 'sub' => $cards['in_progress_pct'] . '% of enrolled', 'trend' => null],
+                ['icon' => 'bx bx-time-five', 'bg' => 'ti-bg-rose', 'value' => $cards['not_started'], 'label' => 'Not Started', 'sub' => $cards['not_started_pct'] . '% of enrolled', 'trend' => null],
+                ['icon' => 'bx bx-lock-alt', 'bg' => 'ti-bg-red', 'value' => $cards['locked'], 'label' => 'Account Locked', 'sub' => $cards['locked_pct'] . '% of enrolled', 'trend' => null],
+                ['icon' => 'bx bx-bar-chart-alt-2', 'bg' => 'ti-bg-purple', 'value' => $cards['avg_score'] . '%', 'label' => 'Average Assessment Score', 'sub' => null,
                  'trend' => $trends['score'] !== null && $trends['score'] != 0 ? ($trends['score'] > 0 ? '+' : '') . $trends['score'] . ' pts vs last month' : null,
                  'down' => ($trends['score'] ?? 0) < 0],
             ];
@@ -255,10 +265,10 @@
                         <div class="ta-kpi-value">{{ $k['value'] }}</div>
                         <div class="ta-kpi-label">{{ $k['label'] }}</div>
                         @if($k['sub'])<div class="ta-kpi-sub">{{ $k['sub'] }}</div>@endif
+                        @if($k['trend'])
+                            <span class="ta-trend {{ ($k['down'] ?? false) ? 'down' : '' }}">{{ ($k['down'] ?? false) ? '↓' : '↑' }} {{ $k['trend'] }}</span>
+                        @endif
                     </div>
-                    @if($k['trend'])
-                        <span class="ta-trend {{ ($k['down'] ?? false) ? 'down' : '' }}">{{ ($k['down'] ?? false) ? '↓' : '↑' }} {{ $k['trend'] }}</span>
-                    @endif
                 </div>
             </div>
         @endforeach
@@ -295,7 +305,7 @@
                     <h6 class="ta-panel-title">Training Status</h6>
                     <a href="#progress" class="ta-panel-link">View Details →</a>
                 </div>
-                <div class="ta-panel-body">
+                <div class="ta-panel-body ta-center">
                     @php
                         $c1 = $pctOf($cards['completed']); $c2 = $c1 + $pctOf($cards['in_progress']);
                         $donut = $totalEnrolled > 0
@@ -323,7 +333,7 @@
                     <h6 class="ta-panel-title">Department Wise Performance</h6>
                     <a href="{{ request()->fullUrlWithQuery(['sort' => 'department', 'dir' => 'asc']) }}#progress" class="ta-panel-link">View Details →</a>
                 </div>
-                <div class="ta-panel-body" style="max-height:230px;overflow-y:auto;">
+                <div class="ta-panel-body ta-fill"><div class="ta-scroll">
                     <table class="ta-table">
                         <thead><tr><th>Department</th><th>Enrolled</th><th>Completed</th><th>In Progress</th><th style="width:26%"></th><th>Avg. Score</th></tr></thead>
                         <tbody>
@@ -348,7 +358,7 @@
                             @endforelse
                         </tbody>
                     </table>
-                </div>
+                </div></div>
             </div>
         </div>
     </div>
@@ -394,7 +404,7 @@
                         <a href="{{ request()->fullUrlWithQuery(['status' => $a['key']]) }}#progress" class="ta-attn">
                             <span class="ta-attn-icon {{ $tones[$a['tone']] }}"><i class="{{ $a['icon'] }}"></i></span>
                             <span><b>{{ $a['count'] }}</b><span class="t">{{ $a['title'] }}</span><div class="s">{{ $a['sub'] }}</div></span>
-                            <i class="ti ti-chevron-right chev"></i>
+                            <i class="bx bx-chevron-right chev"></i>
                         </a>
                     @endforeach
                 </div>
@@ -442,7 +452,7 @@
         </div>
         <div class="ta-toolbar">
             <div class="grow">
-                <div class="ta-iconsel"><i class="ti ti-search"></i>
+                <div class="ta-iconsel"><i class="bx bx-search"></i>
                     <input type="search" name="q" form="taFilters" value="{{ $filters['q'] }}" class="form-control" placeholder="Search employee, email or code...">
                 </div>
             </div>
@@ -476,12 +486,12 @@
                     <option value="held" @selected($filters['status'] === 'held')>Account Locked</option>
                 </select>
             </div>
-            <button type="button" class="ta-export" id="taExport" @disabled($userStats->isEmpty())><i class="ti ti-download"></i> Export Excel</button>
+            <button type="button" class="ta-export" id="taExport" @disabled($userStats->isEmpty())><i class="bx bx-download"></i> Export Excel</button>
             <div class="dropdown">
-                <button type="button" class="ta-kebab" data-bs-toggle="dropdown" aria-label="More"><i class="ti ti-dots-vertical"></i></button>
+                <button type="button" class="ta-kebab" data-bs-toggle="dropdown" aria-label="More"><i class="bx bx-dots-vertical-rounded"></i></button>
                 <ul class="dropdown-menu dropdown-menu-end">
-                    <li><a class="dropdown-item" href="{{ route('training.activity') }}"><i class="ti ti-refresh me-2"></i>Reset filters</a></li>
-                    @if($canManage ?? false)<li><a class="dropdown-item" href="{{ route('training.manage.index') }}"><i class="ti ti-book-2 me-2"></i>Manage programs</a></li>@endif
+                    <li><a class="dropdown-item" href="{{ route('training.activity') }}"><i class="bx bx-refresh me-2"></i>Reset filters</a></li>
+                    @if($canManage ?? false)<li><a class="dropdown-item" href="{{ route('training.manage.index') }}"><i class="bx bx-book-open me-2"></i>Manage programs</a></li>@endif
                 </ul>
             </div>
         </div>
@@ -567,7 +577,7 @@
                             </td>
                             <td style="white-space:nowrap;">
                                 <a href="{{ route('training.portal') }}?user_id={{ $u->id }}" class="ta-journey">View Journey</a>
-                                <a href="{{ route('training.report-card', $u->id) }}" class="ta-results" title="Results (report card)"><i class="ti ti-file-certificate"></i></a>
+                                <a href="{{ route('training.report-card', $u->id) }}" class="ta-results" title="Results (report card)"><i class="bx bx-certification"></i></a>
                             </td>
                         </tr>
                     @empty

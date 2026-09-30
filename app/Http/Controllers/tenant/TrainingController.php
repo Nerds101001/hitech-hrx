@@ -1049,10 +1049,10 @@ class TrainingController extends Controller
 
         // Employees needing attention - each one a filter on the table below
         $attention = [
-            ['key' => 'held',        'count' => $lockedCount, 'title' => 'Account Locked', 'sub' => 'Can\'t work until the compulsory training is passed', 'tone' => 'red',    'icon' => 'ti ti-lock'],
-            ['key' => 'failed',      'count' => $userStats->filter(fn ($r) => $r['failed_count'] > 0)->count(), 'title' => 'Failed Modules', 'sub' => 'Employees requiring reassessment', 'tone' => 'orange', 'icon' => 'ti ti-alert-triangle'],
-            ['key' => 'not_started', 'count' => $notStarted, 'title' => 'Not Started', 'sub' => 'Enrolled but haven\'t started', 'tone' => 'blue', 'icon' => 'ti ti-clock'],
-            ['key' => 'low_score',   'count' => $userStats->where('low_score', true)->count(), 'title' => 'Low Scores', 'sub' => 'Average below the ' . self::LOW_SCORE . '% pass mark', 'tone' => 'purple', 'icon' => 'ti ti-chart-arrows-vertical'],
+            ['key' => 'held',        'count' => $lockedCount, 'title' => 'Account Locked', 'sub' => 'Can\'t work until the compulsory training is passed', 'tone' => 'red',    'icon' => 'bx bx-lock-alt'],
+            ['key' => 'failed',      'count' => $userStats->filter(fn ($r) => $r['failed_count'] > 0)->count(), 'title' => 'Failed Modules', 'sub' => 'Employees requiring reassessment', 'tone' => 'orange', 'icon' => 'bx bx-error'],
+            ['key' => 'not_started', 'count' => $notStarted, 'title' => 'Not Started', 'sub' => 'Enrolled but haven\'t started', 'tone' => 'blue', 'icon' => 'bx bx-time-five'],
+            ['key' => 'low_score',   'count' => $userStats->where('low_score', true)->count(), 'title' => 'Low Scores', 'sub' => 'Average below the ' . self::LOW_SCORE . '% pass mark', 'tone' => 'purple', 'icon' => 'bx bx-trending-down'],
         ];
 
         // Recent training activity among the people shown
