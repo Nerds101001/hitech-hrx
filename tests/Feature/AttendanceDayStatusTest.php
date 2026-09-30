@@ -285,6 +285,18 @@ class AttendanceDayStatusTest extends TestCase
         $this->assertEquals('paid_leave', $this->halfDayNothingWorked(now()->toDateString())['code'], 'today: the worked half may still be recorded');
     }
 
+    public function test_an_absence_ccare_covered_from_the_balance_reads_as_paid(): void
+    {
+        $user = $this->makeUser();
+        $att = Attendance::withoutEvents(fn () => Attendance::create(['user_id' => $user->id, 'check_in_time' => '2026-09-04 00:00:00',
+            'status' => 'paid_leave', 'admin_reason' => 'Auto-adjusted against Earned Leave (Sunday Working) | Marked by CCare']));
+
+        $r = AttendanceDayStatus::resolve($user, Carbon::parse('2026-09-04'), $att->fresh(), null, null);
+
+        $this->assertEquals('paid_leave', $r['code']);
+        $this->assertTrue($r['isPaid'], 'the calendar must not call a paid day "Unpaid Leave"');
+    }
+
     public function test_full_day_paid_leave_with_a_dummy_attendance_row_is_paid_leave(): void
     {
         $user = $this->makeUser();

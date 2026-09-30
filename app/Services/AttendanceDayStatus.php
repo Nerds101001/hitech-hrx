@@ -333,6 +333,16 @@ class AttendanceDayStatus
                 // the one deliberate escape hatch from the rules above,
                 // consistent across all four original implementations.
                 $result['code'] = strtolower($attendance->status ?: 'present');
+                // The stored status IS the answer here, paid-ness included. An
+                // absence CCare's register covered from the balance is stored
+                // 'paid_leave' with no leave request behind it, so isPaid read
+                // false: payroll paid the day (it goes by the code) while the
+                // calendar called it "Unpaid Leave" (SHRI KANT 4 and 15 Sep 2026).
+                if ($result['code'] === 'paid_leave') {
+                    $result['isPaid'] = true;
+                } elseif ($result['code'] === 'unpaid_leave') {
+                    $result['isPaid'] = false;
+                }
             }
 
             // Worked minutes are 0 until the second punch lands, so anyone still at work
