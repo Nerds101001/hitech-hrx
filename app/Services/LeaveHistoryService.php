@@ -76,9 +76,14 @@ class LeaveHistoryService
             // Split the request into what came off the paid balance and what
             // was unpaid. A 13-day request against a 4-day balance is 4 paid +
             // 9 LWP — it is NOT a balance of minus nine.
+            // Working days, the way approval charges them: a leave across a
+            // Sunday or holiday is not charged for it. Calendar days made the
+            // statement disagree with Total Used for 10 people (2026-09-30) -
+            // CHANCHAL LDH's 12-18 Sep leave showed 6 days more than was taken.
             $days    = $leave->is_half_day
                 ? 0.5
-                : (Carbon::parse($leave->from_date)->diffInDays(Carbon::parse($leave->to_date)) + 1);
+                : \App\Services\LeavePolicyService::calculateWorkingDays(
+                    $user, $leave->leave_type_id, Carbon::parse($leave->from_date)->toDateString(), Carbon::parse($leave->to_date)->toDateString(), false);
             $lwpDays = (float) ($leave->lwp_days ?? 0);
             $paidDays = max(0, $days - $lwpDays);
 

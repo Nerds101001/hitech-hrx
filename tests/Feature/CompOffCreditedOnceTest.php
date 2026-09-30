@@ -58,6 +58,21 @@ class CompOffCreditedOnceTest extends TestCase
         $this->assertSame(2.0, $balance());
     }
 
+    public function test_the_statement_counts_a_leave_across_a_sunday_in_working_days(): void
+    {
+        [$user, $alp] = $this->person();
+
+        \App\Models\LeaveRequest::withoutEvents(fn () => \App\Models\LeaveRequest::create(['user_id' => $user->id, 'leave_type_id' => $alp->id,
+            'from_date' => '2026-08-14', 'to_date' => '2026-08-17', 'status' => 'approved', 'user_notes' => 'qa']));   // Fri 14 - Mon 17 Aug, Sunday 16th
+
+        $line = LeaveHistoryService::getUnifiedHistory($user)->firstWhere('type', 'Request');
+        $working = \App\Services\LeavePolicyService::calculateWorkingDays($user, $alp->id, '2026-08-14', '2026-08-17');
+
+        $this->assertLessThan(4.0, $working);
+        $this->assertSame($working, (float) $line->paid_days);
+        $this->assertSame(-$working, (float) $line->amount);
+    }
+
     public function test_the_statement_lists_an_absence_ccare_covered_from_the_balance(): void
     {
         [$user] = $this->person();
