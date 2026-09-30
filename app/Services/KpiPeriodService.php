@@ -242,7 +242,17 @@ class KpiPeriodService
                         $best = $b;
                     }
                 }
-                return $best ? round((float) ($best['marks'] ?? 0), 2) : 0.0;
+                $marks = $best ? (float) ($best['marks'] ?? 0) : 0.0;
+                // Never more than the KPI's own maximum (user decision 2026-09-30).
+                // The Sales rule book's top tiers paid past it - YoY 30 on a 25-mark
+                // KPI, New Customer Wins 15/13, Market Share 15/10 - and scorecards
+                // showed "30 / 25". A 0-mark KPI (a penalty, or a shown-only figure)
+                // is left as its bands say, so a negative penalty still applies.
+                if ((float) $a->max_marks > 0) {
+                    $marks = min($marks, (float) $a->max_marks);
+                }
+
+                return round($marks, 2);
             }
         }
 
