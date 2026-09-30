@@ -278,22 +278,22 @@ class TrainingController extends Controller
         }
         $canApprove = self::mayApprove(auth()->user(), $user);
 
-        $progress = $user->trainingProgress;
-        $phases = TrainingPhase::with(['modules.userProgress' => function($q) use ($userId) {
-            $q->where('user_id', $userId);
-        }])->get();
+        // One transcript for the page and its PDF, so they always agree. The
+        // compulsory phases (1 and 2) decide "passed"; the optional CRM and
+        // Learn @ Hi Tech phases are listed but count against no one.
+        $t = \App\Support\TrainingTranscript::for($user);
+        $companyName = optional(\App\Models\Settings::first())->company_name;
 
-        // Compulsory modules only (phases 1 and 2) - the optional CRM and
-        // Learn @ Hi Tech phases do not count against anyone.
-        $requiredIds = TrainingModule::whereIn('phase_id', config('training.onboarding_phase_ids', [1, 2]))->pluck('id');
-        $summary = [
-            'total_modules' => $requiredIds->count(),
-            'completed_modules' => $progress->where('status', 'completed')->whereIn('module_id', $requiredIds)->unique('module_id')->count(),
-            'average_score' => $progress->where('status', 'completed')->avg('assessment_score') ?? 0,
-            'is_finished' => $user->training_status === 'completed'
-        ];
+        // ?pdf=1 downloads the same sheet (same access rule as the page).
+        if (request()->filled('pdf')) {
+            $name = \Illuminate\Support\Str::slug(trim($user->first_name . ' ' . $user->last_name)) ?: 'employee';
+            return \Barryvdh\DomPDF\Facade\Pdf::loadView('tenant.training.report-card-pdf', compact('t', 'companyName'))
+                ->setPaper('a4', 'portrait')
+                ->setOption('isFontSubsettingEnabled', true)   // only the glyphs used: ~100 KB, not 1.2 MB
+                ->download('Training-Report-Card-' . $name . '-' . now()->format('Y-m-d') . '.pdf');
+        }
 
-        return view('tenant.training.report_card', compact('user', 'phases', 'summary', 'canApprove'));
+        return view('tenant.training.report_card', compact('user', 't', 'companyName', 'canApprove'));
     }
 
     /**
