@@ -101,7 +101,7 @@
   @php
     $u = $card->user;
     $rows = collect($card->rows);
-    $reported = $rows->filter(fn ($r) => $r->status !== 'Not reported')->count();
+    $reported = $rows->filter(fn ($r) => !in_array($r->status, ['Not reported', 'Not measurable'], true))->count();
     $onTime = $rows->where('status', 'On time')->count();
     $letter = $card->grade ? strtoupper(substr($card->grade, 0, 1)) : '—';
     $group = null;
@@ -190,7 +190,7 @@
           @php
             $i++;
             $earnTone = $r->max > 0 ? ($r->score >= $r->max * 0.8 ? 'good' : ($r->score >= $r->max * 0.5 ? 'warn' : 'bad')) : 'idle';
-            if (in_array($r->status, ['Not reported', 'Awaiting approval', 'In progress'], true)) { $earnTone = 'idle'; }
+            if (in_array($r->status, ['Not reported', 'Awaiting approval', 'In progress', 'Not measurable'], true)) { $earnTone = 'idle'; }
             $chip = ['On time' => 'good', 'Late' => 'warn', 'Missed' => 'bad', 'Awaiting approval' => 'warn'][$r->status] ?? 'idle';
           @endphp
           <tr class="{{ $i % 2 === 0 ? 'alt' : '' }}">
@@ -203,14 +203,15 @@
             <td class="num">{{ !empty($r->banded) ? '—' : $fmt($r->target) }}</td>
             <td class="num">{{ $fmt($r->achieved) }}</td>
             <td class="num">{{ (!empty($r->banded) || $r->result === null) ? '—' : $fmt(round($r->result, 1)) . '%' }}</td>
-            <td class="num">{{ $fmt($r->max) }}</td>
-            <td class="num {{ $earnTone }}"><b>{{ $fmt($r->score) }}</b></td>
+            {{-- Not measurable: no marks either way, and not part of the total. --}}
+            <td class="num">{{ !empty($r->na) ? '—' : $fmt($r->max) }}</td>
+            <td class="num {{ $earnTone }}"><b>{{ !empty($r->na) ? '—' : $fmt($r->score) }}</b></td>
             <td class="ctr"><span class="chip {{ $chip }}">{{ $r->status }}</span></td>
           </tr>
         @endforeach
         <tr class="total">
           <td colspan="5">TOTAL</td>
-          <td class="num">{{ $card->onPoints ? '—' : $fmt($card->possible) }}</td>
+          <td class="num">{{ ($card->onPoints && (float) $card->possible >= 100) ? '—' : $fmt($card->possible) }}</td>
           <td class="num">{{ $fmt($card->earned) }}</td>
           <td class="ctr">{{ $card->pct === null ? '' : $fmt($card->pct) . '%' }}</td>
         </tr>
@@ -219,7 +220,10 @@
 
     @if($card->grade)
       <div class="verdict">
-        @if($card->onPoints)
+        @if($card->onPoints && (float) $card->possible < 100)
+          <b>{{ $month->format('F Y') }} result:</b> {{ $fmt($card->earned) }} points out of {{ $fmt($card->possible) }} measurable ({{ $fmt($card->pct) }}%)
+          &nbsp;—&nbsp; <b>{{ $card->grade }}</b> <span class="muted">({{ \App\Services\KpiScorecardService::gradeBand($card->grade) }})</span>
+        @elseif($card->onPoints)
           <b>{{ $month->format('F Y') }} result:</b> {{ $fmt($card->earned) }} points out of 100
           &nbsp;—&nbsp; <b>{{ $card->grade }}</b> <span class="muted">({{ str_replace('%', ' points', \App\Services\KpiScorecardService::gradeBand($card->grade)) }})</span>
         @else

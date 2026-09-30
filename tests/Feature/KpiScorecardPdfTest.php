@@ -361,6 +361,39 @@ class KpiScorecardPdfTest extends TestCase
         $this->assertStringContainsString('C - Meets Expectation', $html);
     }
 
+    public function test_before_new_customers_can_be_counted_the_sales_card_is_graded_on_the_other_87_points(): void
+    {
+        $desig = \App\Models\Designation::create(['name' => 'ZZ Mgr ' . uniqid(), 'code' => 'ZZR' . random_int(10000, 99999)]);
+        $rep = $this->person();
+        $rep->update(['designation_id' => $desig->id]);
+        foreach (\App\Support\SalesRuleBook::install($this->dept->id, [$desig->id]) as $t) {
+            KpiTemplateService::apply($t);
+        }
+        KpiAssignment::where('user_id', $rep->id)->update(['created_at' => '2026-07-01']);
+
+        // August 2026: the Sales Report had just been loaded, so New Customer Wins has no figure.
+        $aug = Carbon::create(2026, 8, 1);
+        $points = ['Target Achievement (Bingo %)' => 15, 'YoY Revenue Growth' => 20, 'Market Share %' => 10, 'Pipeline Strength' => 5, 'New Customer Wins (%)' => null];
+        foreach ($points as $title => $score) {
+            $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
+            KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $rep->id, 'period_start' => '2026-08-01',
+                'period_end' => '2026-08-31', 'due_date' => '2026-08-31', 'status' => $score === null ? 'pending' : 'completed_on_time',
+                'achieved_value' => $score === null ? null : 1, 'score' => $score ?? 0]);
+        }
+
+        $card = KpiScorecardService::forMonth(collect([$rep]), $aug)->first();
+        $row = collect($card->rows)->firstWhere('title', 'New Customer Wins (%)');
+
+        $this->assertSame('Not measurable', $row->status);
+        $this->assertSame(50.0, $card->earned);
+        $this->assertSame(87.0, $card->possible, '100 less New Customer Wins\' 13');
+        $this->assertSame(57.5, $card->pct);
+
+        $html = view('tenant.kpi.scorecard-pdf', ['cards' => collect([$card]), 'month' => $aug, 'companyName' => ''])->render();
+        $this->assertStringContainsString('50 points out of 87 measurable (57.5%)', $html);
+        $this->assertStringContainsString('Not measurable', $html);
+    }
+
     public function test_other_scorecards_are_still_graded_on_their_own_marks(): void
     {
         $this->check($this->alice, 'ZZ Volume', 90, 54.0);
