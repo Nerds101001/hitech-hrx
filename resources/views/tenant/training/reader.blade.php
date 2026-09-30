@@ -1563,11 +1563,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Mouse wheel on the book: Ctrl+wheel always zooms; a plain wheel zooms at
-    // 100% and below, and once zoomed in it scrolls around the page instead.
+    // Mouse wheel on the book scrolls, never zooms - rolling the wheel to read
+    // zoomed the page by surprise. Ctrl+wheel still zooms (as in a browser's own
+    // PDF viewer), and so do the - / + buttons.
     document.getElementById('book-stage')?.addEventListener('wheel', e => {
-        if (CTYPE !== 'catalog') return;
-        if (!(e.ctrlKey || e.metaKey) && bookZoom > 1.001) return;   // native scroll
+        if (CTYPE !== 'catalog' || !(e.ctrlKey || e.metaKey)) return;   // plain wheel: native scroll
         e.preventDefault();
         adjustBookZoom(e.deltaY > 0 ? -0.1 : 0.1);
     }, { passive: false });
