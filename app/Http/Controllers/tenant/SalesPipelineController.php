@@ -607,7 +607,7 @@ class SalesPipelineController extends Controller
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
         $salespersonTargets = \App\Models\SalespersonTarget::whereIn('month_year', array_column($months, 'key'))
-            ->get(['salesperson_id', 'month_year', 'kingo_target', 'bingo_target', 'super_kingo_target']);
+            ->get(['id', 'salesperson_id', 'month_year', 'kingo_target', 'bingo_target', 'super_kingo_target', 'tally_sale']);
 
         // Per-salesperson annual (YoY) sales — scoped to the salespersons this
         // user may see, so CCare/New Biz cards reflect their own book, not the
