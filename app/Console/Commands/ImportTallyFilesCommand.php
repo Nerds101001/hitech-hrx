@@ -7,6 +7,7 @@ use App\Services\TallyAnalytics;
 use App\Support\NameMatcher;
 use App\Support\ProductGroup;
 use App\Support\TallyFileReader;
+use App\Support\TallyTotals;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -24,7 +25,15 @@ class ImportTallyFilesCommand extends Command
 {
     protected $signature = 'hrx:import-tally
                             {--dir= : Folder holding the Tally exports (default: services.tally.export_dir)}
-                            {--dry-run : Parse and validate only; write nothing}';
+                            {--dry-run : Parse and validate only; write nothing}
+                            {--force-overwrite-push-data : Replace tally_invoices/tally_invoice_lines/tally_sale_lines/tally_sale_orders even though hrx:tally-push has written to them}';
+
+    /**
+     * Tables also written by the newer API push pipeline (hrx:tally-push / TallyPushController), which upserts
+     * or replaces by key rather than by whole table. A plain full-table delete+reinsert here would silently
+     * wipe everything that pipeline has added -- see --force-overwrite-push-data below.
+     */
+    private const SHARED_WITH_PUSH = ['tally_invoices', 'tally_invoice_lines', 'tally_sale_lines', 'tally_sale_orders'];
 
     protected $description = 'Load the Tally daily exports (invoices, items, GST detail, outstanding, sale orders) for browsing and analytics';
 
@@ -91,6 +100,12 @@ class ImportTallyFilesCommand extends Command
                 continue;
             }
 
+            if (in_array($table, self::SHARED_WITH_PUSH, true) && !$this->option('force-overwrite-push-data') && $this->pushHasWrittenTo($table)) {
+                $summary[$key]['status'] = 'skipped_push_data';
+                $this->error("{$file}: SKIPPED — hrx:tally-push has written to {$table} and a plain replace would erase that. Re-run with --force-overwrite-push-data to overwrite it anyway.");
+                continue;
+            }
+
             if (!$dry) {
                 DB::transaction(function () use ($table, $records) {
                     DB::table($table)->delete();
@@ -105,7 +120,7 @@ class ImportTallyFilesCommand extends Command
 
         $status = $good === count(self::DATASETS) ? 'ok' : ($good > 0 ? 'partial' : 'failed');
         if (!$dry && $good > 0) {
-            $this->stampInvoiceTotals();
+            TallyTotals::stamp();
         }
         $import?->update(['status' => $status, 'summary' => $summary, 'finished_at' => now()]);
         $this->line("Result: {$status}");
@@ -123,23 +138,15 @@ class ImportTallyFilesCommand extends Command
     }
 
     /**
-     * Copies three facts onto each invoice so the analytics can total them with a
-     * single-table query instead of joining the line/outstanding tables every time:
-     *   taxable_total / tax_total  -- from its SaleReportCRM lines (NULL = no item/GST detail exists for it)
-     *   open_amount                -- what Tally still lists as open under the same bill number (NULL = not outstanding)
-     * Recomputed from scratch on every import, so they can never drift from the tables they summarise.
+     * Deliberately coarse: true the moment ANY hrx:tally-push run has ever succeeded, regardless of which
+     * table this particular file targets. Distinguishing "push touched THIS table" from "push touched some
+     * other table" would need a per-row source column that doesn't exist -- safer to protect all four shared
+     * tables together than to risk a false negative on one of them.
      */
-    private function stampInvoiceTotals(): void
+    private function pushHasWrittenTo(string $table): bool
     {
-        DB::transaction(function () {
-            DB::update('UPDATE tally_invoices SET taxable_total = NULL, tax_total = NULL, open_amount = NULL');
-            DB::update('UPDATE tally_invoices i
-                        JOIN (SELECT invoice_no, SUM(taxable_amount) AS t, SUM(tax_amount) AS x FROM tally_sale_lines GROUP BY invoice_no) s ON s.invoice_no = i.invoice_no
-                        SET i.taxable_total = s.t, i.tax_total = s.x');
-            DB::update("UPDATE tally_invoices i
-                        JOIN (SELECT bill_ref, SUM(amount) AS a FROM tally_outstanding WHERE ledger_group = 'Sundry Debtors' GROUP BY bill_ref) o ON o.bill_ref = i.invoice_no
-                        SET i.open_amount = o.a");
-        });
+        return \Illuminate\Support\Facades\Schema::hasTable('tally_push_runs')
+            && DB::table('tally_push_runs')->where('status', 'ok')->exists();
     }
 
     private static function str(?string $v, int $max = 255): ?string

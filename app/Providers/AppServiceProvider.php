@@ -40,6 +40,12 @@ class AppServiceProvider extends ServiceProvider
       return \Illuminate\Cache\RateLimiting\Limit::perMinute(600)->by($request->ip());
     });
 
+    /* The Tally push has exactly one legitimate caller (the local puller, run on a schedule a few times a
+       day), so this is about catching a misbehaving/looping client, not shaping real traffic. */
+    \Illuminate\Support\Facades\RateLimiter::for('tally_push', function ($request) {
+      return \Illuminate\Cache\RateLimiting\Limit::perMinute(20)->by($request->ip());
+    });
+
     /* SECURITY (H-4): cap password guessing per account. This complements the
        3-attempt account lockout so that even if the lockout is lifted (e.g. via
        the self-service unlock link) an attacker still cannot retry rapidly.

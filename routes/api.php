@@ -21,6 +21,7 @@ use Modules\Calendar\app\Http\Controllers\Api\EventApiController;
 
 require __DIR__ . '/chat.php';
 require __DIR__ . '/telephony.php';
+require __DIR__ . '/tally_push.php';
 
 Route::middleware([
   'api'

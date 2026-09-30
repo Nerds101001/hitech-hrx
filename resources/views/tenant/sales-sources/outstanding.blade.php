@@ -23,9 +23,9 @@
 </form>
 
 <div class="row g-3 mb-3">
-  <div class="col-6 col-md-3"><div class="ss-stat"><div class="lbl">Total outstanding</div><div class="val">₹{{ $inr($totals->total) }}</div><div class="ss-sub">{{ number_format($totals->bills) }} open bills</div></div></div>
-  <div class="col-6 col-md-3"><div class="ss-stat"><div class="lbl">Older than 90 days</div><div class="val text-danger">₹{{ $inr($totals->over90) }}</div><div class="ss-sub">{{ $totals->total != 0 ? round(100 * $totals->over90 / $totals->total, 1) : 0 }}% of the total</div></div></div>
-  <div class="col-6 col-md-3"><div class="ss-stat"><div class="lbl">Parties</div><div class="val">{{ number_format($totals->parties) }}</div></div></div>
+  <div class="col-12 col-sm-6 col-lg-3"><div class="ss-stat"><div class="lbl">Total outstanding</div><div class="val">₹{{ $inr($totals->total) }}</div><div class="ss-sub">{{ number_format($totals->bills) }} open bills</div></div></div>
+  <div class="col-12 col-sm-6 col-lg-3"><div class="ss-stat"><div class="lbl">Older than 90 days</div><div class="val text-danger">₹{{ $inr($totals->over90) }}</div><div class="ss-sub">{{ $totals->total != 0 ? round(100 * $totals->over90 / $totals->total, 1) : 0 }}% of the total</div></div></div>
+  <div class="col-12 col-sm-6 col-lg-3"><div class="ss-stat"><div class="lbl">Parties</div><div class="val">{{ number_format($totals->parties) }}</div></div></div>
 </div>
 
 <div class="hitech-card-white overflow-hidden mb-3">

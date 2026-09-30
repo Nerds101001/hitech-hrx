@@ -90,6 +90,11 @@ class TallyGateway
      * Sales vouchers (with item lines and GST rates) for each day from..to inclusive, normalised to plain arrays.
      * One request per day, one at a time.
      *
+     * WARNING: proven fine on the small sandbox company but NOT SAFE on a real company of any size. The filtered
+     * Voucher collection this builds has to scan every voucher in the company regardless of date (see
+     * salesVouchersRequest()'s doc comment), and on the real HI TECH company this took 30s+ and had to be
+     * abandoned (see the "Real server" notes this was proven against). Use dayBook() instead for real data.
+     *
      * @return array<int, array<string, mixed>>
      */
     public function salesVouchers(CarbonInterface $from, CarbonInterface $to, ?callable $progress = null): array
@@ -111,6 +116,62 @@ class TallyGateway
     }
 
     /**
+     * Every voucher of every type Tally recorded on ONE day (what staff see as the Day Book), normalised to
+     * plain arrays. This is the SAFE way to pull real transaction data: Tally answers it directly from its own
+     * date index (proven at 0.1-25s per day against the live HI TECH company, even on its busiest days) instead
+     * of scanning the whole company the way salesVouchers()'s filtered collection does.
+     *
+     * The date has to be set as Tally's OWN "current date" (SVCURRENTDATE), not just SVFROMDATE/SVTODATE --
+     * those alone are silently ignored by this report and it returns whatever its current date already is.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function dayBook(CarbonInterface $date): array
+    {
+        $company = $this->assertCompany();
+        return self::parseVouchers($this->send(self::dayBookRequest($company, $date)));
+    }
+
+    /**
+     * Pulls dayBook() for each day from..to inclusive, one request at a time with a pause between them, calling
+     * $progress after each day. Stops (returning what it already has) the first time a day takes longer than
+     * $maxSecondsPerDay, so a single unusually busy day can never turn into an unattended hammering of Tally --
+     * the caller decides whether to resume from the next day later.
+     *
+     * @return array{vouchers: array<int, array<string, mixed>>, stoppedAt: ?string}
+     */
+    public function dayBookRange(CarbonInterface $from, CarbonInterface $to, ?callable $progress = null, int $maxSecondsPerDay = 45): array
+    {
+        $out = [];
+        $seen = [];
+        for ($day = $from->copy()->startOfDay(); $day->lte($to); $day = $day->copy()->addDay()) {
+            $t = microtime(true);
+            $vouchers = $this->dayBook($day);
+            $secs = microtime(true) - $t;
+            $new = 0;
+            foreach ($vouchers as $v) {
+                $key = $v['guid'] ?: ($v['type'] . '|' . $v['number'] . '|' . $v['date']);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $out[] = $v;
+                $new++;
+            }
+            if ($progress) {
+                $progress($day, $new, $secs);
+            }
+            if ($secs > $maxSecondsPerDay && $day->lt($to)) {
+                return ['vouchers' => $out, 'stoppedAt' => $day->format('Y-m-d')];
+            }
+            if ($this->pauseMs > 0 && $day->lt($to)) {
+                usleep($this->pauseMs * 1000);
+            }
+        }
+        return ['vouchers' => $out, 'stoppedAt' => null];
+    }
+
+    /**
      * The inventory master: every stock item with its group, unit, stock in hand and GST rates. One request
      * (a master list is small next to vouchers), still behind the company guard.
      *
@@ -119,6 +180,20 @@ class TallyGateway
     public function stockItems(): array
     {
         return self::parseStockItems($this->send(self::stockItemsRequest($this->assertCompany())));
+    }
+
+    /**
+     * Every ledger in the company (name, credit limit, GSTIN, PAN, contact person/mobile), unfiltered -- a
+     * CHILDOF "Sundry Debtors" filter was tried and found NOT to restrict correctly (returned ~6,000 ledgers
+     * company-wide, same as no filter at all), so this pulls everything in one request (proven ~4-5s for the
+     * whole ledger master) and leaves filtering down to real customers to the caller, e.g. by intersecting
+     * with names already seen in tally_invoices.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function ledgerMaster(): array
+    {
+        return self::parseLedgers($this->send(self::ledgerMasterRequest($this->assertCompany())));
     }
 
     /** POSTs an EXPORT request and returns the answer as clean UTF-8 text. Never sends anything that could change Tally's data. */
@@ -150,6 +225,30 @@ class TallyGateway
         return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>List of Companies</ID></HEADER>'
             . '<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>'
             . '<TDL><TDLMESSAGE><COLLECTION NAME="List of Companies" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+    }
+
+    /**
+     * Tally's Day Book report for one day. SVCURRENTDATE is what actually selects the day -- SVFROMDATE/
+     * SVTODATE are accepted but silently ignored by this particular report (proven against the real company:
+     * asking for any date without SVCURRENTDATE just returns whatever Tally's current day already is).
+     */
+    public static function dayBookRequest(string $company, CarbonInterface $date): string
+    {
+        $name = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $ymd = $date->format('Ymd');
+        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Data</TYPE><ID>Day Book</ID></HEADER><BODY><DESC>'
+            . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY>'
+            . '<SVCURRENTDATE>' . $ymd . '</SVCURRENTDATE><SVFROMDATE>' . $ymd . '</SVFROMDATE><SVTODATE>' . $ymd . '</SVTODATE>'
+            . '</STATICVARIABLES></DESC></BODY></ENVELOPE>';
+    }
+
+    public static function ledgerMasterRequest(string $company): string
+    {
+        $name = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXLedgers</ID></HEADER><BODY><DESC>'
+            . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
+            . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXLedgers" ISMODIFY="No"><TYPE>Ledger</TYPE>'
+            . '<FETCH>Name, Parent, CreditLimit, PartyGSTIN, IncomeTaxNumber, LedgerContact, LedgerMobile, MailingName</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
     }
 
     public static function stockItemsRequest(string $company): string
@@ -194,10 +293,21 @@ class TallyGateway
         return $bytes;
     }
 
-    /** Removes what XML 1.0 forbids: control characters, whether raw or written as &#4; style references. */
+    /**
+     * Removes what XML 1.0 forbids: control characters, whether raw or written as &#4; style references.
+     * Tally sometimes writes a raw control byte (e.g. \x05, seen inside an internal STATKEY field) instead of
+     * an entity, and sometimes a stray non-UTF-8 byte (e.g. a Windows-1252 soft hyphen 0xAD in a free-text
+     * field) on real (non-sandbox) data. Both are repaired rather than given up on: a full multi-megabyte
+     * export has thousands of vouchers behind one bad byte, and the Unicode-mode pass below returns null
+     * (silently, via `?? $text`) the instant the text isn't valid UTF-8, which used to leave it untouched.
+     */
     public static function cleanXml(string $text): string
     {
+        $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $text) ?? $text;
         $text = preg_replace('/&#(?:[0-8]|1[12]|1[4-9]|2[0-9]|3[01]);/', '', $text) ?? $text;
+        if (preg_match('//u', $text) !== 1) {
+            $text = mb_scrub($text, 'UTF-8');      // replaces each invalid byte with U+FFFD; everything else is untouched
+        }
         return preg_replace('/[^\x{9}\x{A}\x{D}\x{20}-\x{D7FF}\x{E000}-\x{FFFD}\x{10000}-\x{10FFFF}]/u', '', $text) ?? $text;
     }
 
@@ -250,6 +360,32 @@ class TallyGateway
      * convention, like the customer's ledger line on a sale), so the raw sign is flipped here; a negative QUANTITY is
      * stock issued beyond what was received.
      */
+    /**
+     * @return array<int, array<string, mixed>> one entry per ledger:
+     *   name, group, credit_limit (the amount a person reads, sign-flipped from Tally's debit convention --
+     *   see heldValue()), gstin, pan, contact_person, contact_mobile, mailing_name
+     */
+    public static function parseLedgers(string $xml): array
+    {
+        $s = fn($n) => trim((string) $n);
+        $na = fn($v) => in_array($v, ['', 'Not Applicable'], true) ? null : $v;
+        $out = [];
+        foreach (self::load($xml)->xpath('//LEDGER[@NAME]') ?: [] as $l) {
+            $name = $s($l['NAME']);
+            if ($name === '') {
+                continue;
+            }
+            $out[] = [
+                'name' => $name, 'group' => $na($s($l->PARENT)),
+                'credit_limit' => self::heldValue($s($l->CREDITLIMIT)),
+                'gstin' => $na($s($l->PARTYGSTIN)), 'pan' => $na($s($l->INCOMETAXNUMBER)),
+                'contact_person' => $na($s($l->LEDGERCONTACT)), 'contact_mobile' => $na($s($l->LEDGERMOBILE)),
+                'mailing_name' => $na($s($l->MAILINGNAME)),
+            ];
+        }
+        return $out;
+    }
+
     public static function parseStockItems(string $xml): array
     {
         $s = fn($n) => trim((string) $n);
@@ -301,11 +437,18 @@ class TallyGateway
     /**
      * @return array<int, array<string, mixed>> one entry per voucher:
      *   guid, alter_id, date (Y-m-d), number, type, party, party_gstin, place_of_supply, reference, cancelled, total,
-     *   lines[] {item, qty, unit, rate, rate_unit, amount, hsn, gst{head=>rate %}}, ledgers[] {name, amount}
+     *   order_no (a Delivery Note's own reference back to the Sales Order it was raised against, when present --
+     *     checked at both voucher and line level, since which one Tally uses isn't consistent),
+     *   transport {name, vehicle_number, mode, document_number, document_date, distance} (a Delivery Note's own
+     *     TRANSPORTDETAILS.LIST; every field is often blank -- whoever enters the voucher doesn't always fill it in,
+     *     same as lr_no/transporter on the file-based invoice export),
+     *   consignee {name, address, gstin} (where goods were actually sent, which can differ from the billed party),
+     *   lines[] {item, qty, unit, rate, rate_unit, amount, hsn, gst{head=>rate %}, order_no}, ledgers[] {name, amount}
      */
     public static function parseVouchers(string $xml): array
     {
         $s = fn($n) => trim((string) $n);
+        $notApplicable = fn($v) => in_array($v, ['', 'Not Applicable'], true) ? null : $v;
         $out = [];
         foreach (self::load($xml)->xpath('//VOUCHER') ?: [] as $v) {
             $number = $s($v->VOUCHERNUMBER);
@@ -324,6 +467,14 @@ class TallyGateway
                     $ledgers[] = ['name' => $name, 'amount' => TallyFileReader::amount($s($l->AMOUNT))];
                 }
             }
+
+            // A Delivery Note's own ORDERNO is buried inside each line's BATCHALLOCATIONS.LIST (confirmed on a
+            // real voucher), not a direct child of VOUCHER or of the inventory entry -- xpath at any depth
+            // rather than the exact nesting, which Tally is not consistent about. REFERENCE is a plain
+            // voucher-level field that also carries it (same real voucher: both agreed), so it's the fallback
+            // when a line has no ORDERNO of its own.
+            $lineOrderNo = fn($l) => $notApplicable($s($l->xpath('.//ORDERNO')[0] ?? ''));
+            $voucherOrderNo = $notApplicable($s($v->REFERENCE));
 
             $lines = [];
             foreach (['ALLINVENTORYENTRIES.LIST', 'INVENTORYENTRIES.LIST'] as $tag) {
@@ -344,9 +495,43 @@ class TallyGateway
                     $lines[] = [
                         'item' => $item, 'qty' => $qty, 'unit' => $unit, 'rate' => $rate, 'rate_unit' => $rateUnit,
                         'amount' => TallyFileReader::amount($s($l->AMOUNT)), 'hsn' => $s($l->GSTHSNNAME) ?: null, 'gst' => $gst,
+                        // per-line reference wins when present; a Delivery Note consolidating several orders would
+                        // otherwise wrongly attribute every line to just the voucher-level one.
+                        'order_no' => $lineOrderNo($l) ?? $voucherOrderNo,
                     ];
                 }
             }
+
+            $transport = null;
+            foreach ($v->{'TRANSPORTDETAILS.LIST'} as $t) {
+                $name = $notApplicable($s($t->TRANSPORTERNAME));
+                $vehicle = $notApplicable($s($t->VEHICLENUMBER));
+                $mode = $notApplicable($s($t->TRANSPORTMODE));
+                $docNo = $notApplicable($s($t->DOCUMENTNUMBER));
+                $docDateRaw = $s($t->DOCUMENTDATE);
+                if ($name || $vehicle || $mode || $docNo) {
+                    $transport = [
+                        'name' => $name, 'vehicle_number' => $vehicle, 'mode' => $mode,
+                        'document_number' => $docNo,
+                        // Tally writes this the same YYYYMMDD way as every other date field here.
+                        'document_date' => preg_match('/^(\d{4})(\d{2})(\d{2})$/', $docDateRaw, $dm) ? "{$dm[1]}-{$dm[2]}-{$dm[3]}" : null,
+                        'distance' => is_numeric($s($t->DISTANCE)) ? (float) $s($t->DISTANCE) : null,
+                    ];
+                }
+                break;                                 // a voucher carries at most one; the list wrapper is Tally's own convention
+            }
+
+            // CONSIGNEEADDRESS sits inside a CONSIGNEEADDRESS.LIST wrapper, not as a direct child of VOUCHER --
+            // xpath at any depth rather than chasing Tally's exact nesting, which isn't consistent voucher to
+            // voucher. A multi-line address is written as several sibling CONSIGNEEADDRESS elements (one per
+            // line, the same repeating pattern Tally uses for GST rate details elsewhere in this file) -- join
+            // ALL of them, not just the first, or everything after the street line silently goes missing.
+            $xdig = fn($node, $tag) => $notApplicable($s(($node->xpath(".//{$tag}")[0] ?? '')));
+            $consigneeName = $notApplicable($s($v->CONSIGNEEMAILINGNAME));
+            $addrLines = array_values(array_filter(array_map($s, $v->xpath('.//CONSIGNEEADDRESS.LIST/CONSIGNEEADDRESS') ?: [])));
+            $consigneeAddr = $addrLines ? implode(', ', $addrLines) : null;
+            $consigneeGstin = $notApplicable($s($v->CONSIGNEEGSTIN));
+            $consignee = ($consigneeName || $consigneeAddr) ? ['name' => $consigneeName, 'address' => $consigneeAddr, 'gstin' => $consigneeGstin] : null;
 
             $party = $s($v->PARTYLEDGERNAME);
             $total = null;
@@ -364,6 +549,7 @@ class TallyGateway
                 'party' => $party ?: null, 'party_gstin' => $s($v->PARTYGSTIN) ?: null, 'place_of_supply' => $s($v->PLACEOFSUPPLY) ?: null,
                 'reference' => $s($v->REFERENCE) ?: null, 'cancelled' => strcasecmp($s($v->ISCANCELLED), 'Yes') === 0 || strcasecmp($s($v->ISDELETED), 'Yes') === 0,
                 'total' => $total, 'lines' => $lines, 'ledgers' => $ledgers,
+                'order_no' => $voucherOrderNo, 'transport' => $transport, 'consignee' => $consignee,
             ];
         }
         return $out;
