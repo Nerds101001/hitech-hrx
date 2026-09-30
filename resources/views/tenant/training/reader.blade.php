@@ -146,7 +146,18 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
 .book-loading-label { font-size: .9rem; font-weight: 600; }
 .book-loading-track { width: 220px; height: 5px; background: rgba(255,255,255,.15); border-radius: 3px; overflow: hidden; }
 .book-loading-bar { height: 100%; width: 0; background: #5eead4; border-radius: 3px; transition: width .3s ease; }
-.book-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 8px 16px; position: relative; overflow: hidden; }
+/* Zoom makes room: the zoomer box takes the zoomed size, so the stage can scroll
+   to every part of the page instead of clipping it (margin:auto centres it
+   while it fits, and never pushes it out of reach once it does not). */
+.book-stage { flex: 1; display: flex; min-height: 0; padding: 8px 16px; position: relative; overflow: auto; }
+.book-stage::-webkit-scrollbar { width: 10px; height: 10px; }
+.book-stage::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 6px; }
+.book-zoomer { position: relative; margin: auto; flex-shrink: 0; }
+#book-container { transform-origin: 0 0; }
+/* Zoomed in: drag to move around the page (turn pages with the arrows). */
+.book-pan { position: absolute; inset: 0; z-index: 30; display: none; cursor: grab; touch-action: none; }
+.book-stage.is-zoomed .book-pan { display: block; }
+.book-pan.grabbing { cursor: grabbing; }
 .book-page { background: #fff; overflow: hidden; }
 .book-page img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .book-controls { display: flex; align-items: center; gap: 10px; }
@@ -478,7 +489,10 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
                         <div class="book-loading-track"><div class="book-loading-bar" id="book-loading-fill"></div></div>
                     </div>
                     <div class="book-stage" id="book-stage" style="display:none;">
-                        <div id="book-container"></div>
+                        <div class="book-zoomer" id="book-zoomer">
+                            <div id="book-container"></div>
+                            <div class="book-pan" id="book-pan" title="Drag to move around the page · the arrows turn pages · double-click for 100%"></div>
+                        </div>
                     </div>
                 </div>
                 <div class="rd-view-foot">
@@ -897,7 +911,7 @@ function toggleCourseNav() { cnavOpen ? closeCourseNav() : openCourseNav(); }
    BOOK READER — Realistic Page Flip
 ══════════════════════════════════════════ */
 let pdfPage = 1, pdfTotal = 0, pdfReached = false, pdfFlipBook = null;
-let bookZoom = 1.0;
+let bookZoom = 1.0, BOOK_W = 0, BOOK_H = 0;
 const CHECKPOINT_PAGES = new Set();
 
 async function initPdf() {
@@ -1002,7 +1016,13 @@ async function initPdf() {
         const toolsEl = document.getElementById('book-tools');
         if (toolsEl) toolsEl.style.display = 'flex';
 
-        const flipBook = new St.PageFlip(document.getElementById('book-container'), {
+        BOOK_W = portrait ? PW : PW * 2; BOOK_H = PH;
+        const bookBox = document.getElementById('book-container');
+        bookBox.style.width = BOOK_W + 'px'; bookBox.style.height = BOOK_H + 'px';
+        applyBookZoom();
+        initBookPan();
+
+        const flipBook = new St.PageFlip(bookBox, {
             width:               PW,
             height:              PH,
             size:                'fixed',
@@ -1071,11 +1091,39 @@ async function initPdf() {
 
 /* ── Zoom ─────────────────────────────────── */
 function adjustBookZoom(delta) {
+    const stage = document.getElementById('book-stage');
+    // Keep whatever is in the middle of the view in the middle after zooming.
+    const cx = stage && stage.scrollWidth  > stage.clientWidth  ? (stage.scrollLeft + stage.clientWidth  / 2) / stage.scrollWidth  : 0.5;
+    const cy = stage && stage.scrollHeight > stage.clientHeight ? (stage.scrollTop  + stage.clientHeight / 2) / stage.scrollHeight : 0.5;
     bookZoom = Math.min(Math.max(bookZoom + delta, 0.4), 2.5);
-    const wrap = document.getElementById('book-container');
-    if (wrap) { wrap.style.transform = `scale(${bookZoom})`; wrap.style.transformOrigin = 'center center'; }
+    applyBookZoom();
+    if (stage) { stage.scrollLeft = cx * stage.scrollWidth - stage.clientWidth / 2; stage.scrollTop = cy * stage.scrollHeight - stage.clientHeight / 2; }
+}
+function applyBookZoom() {
+    const book = document.getElementById('book-container'), zoomer = document.getElementById('book-zoomer'), stage = document.getElementById('book-stage');
+    if (book) book.style.transform = `scale(${bookZoom})`;
+    if (zoomer && BOOK_W) { zoomer.style.width = Math.round(BOOK_W * bookZoom) + 'px'; zoomer.style.height = Math.round(BOOK_H * bookZoom) + 'px'; }
+    if (stage) stage.classList.toggle('is-zoomed', bookZoom > 1.001);
     const lbl = document.getElementById('book-zoom-label');
     if (lbl) lbl.textContent = Math.round(bookZoom * 100) + '%';
+}
+// Zoomed in, a drag moves around the page (mouse, pen or finger).
+function initBookPan() {
+    const pan = document.getElementById('book-pan'), stage = document.getElementById('book-stage');
+    if (!pan || !stage || pan.dataset.ready) return;
+    pan.dataset.ready = '1';
+    let drag = null;
+    pan.addEventListener('pointerdown', e => {
+        drag = { x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
+        pan.setPointerCapture(e.pointerId); pan.classList.add('grabbing'); e.preventDefault();
+    });
+    pan.addEventListener('pointermove', e => {
+        if (!drag) return;
+        stage.scrollLeft = drag.l - (e.clientX - drag.x);
+        stage.scrollTop  = drag.t - (e.clientY - drag.y);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => pan.addEventListener(ev, () => { drag = null; pan.classList.remove('grabbing'); }));
+    pan.addEventListener('dblclick', () => { bookZoom = 1.0; applyBookZoom(); });
 }
 
 /* ── Fullscreen ───────────────────────────── */
@@ -1515,14 +1563,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Mouse-wheel zoom on the book stage (Ctrl+scroll OR plain scroll)
+    // Mouse wheel on the book: Ctrl+wheel always zooms; a plain wheel zooms at
+    // 100% and below, and once zoomed in it scrolls around the page instead.
     document.getElementById('book-stage')?.addEventListener('wheel', e => {
         if (CTYPE !== 'catalog') return;
+        if (!(e.ctrlKey || e.metaKey) && bookZoom > 1.001) return;   // native scroll
         e.preventDefault();
-        // Ctrl+scroll = zoom (standard browser convention)
-        // Plain scroll = also zoom (since page-flip handles swipe navigation)
-        const delta = e.deltaY > 0 ? -0.1 : 0.1;
-        adjustBookZoom(delta);
+        adjustBookZoom(e.deltaY > 0 ? -0.1 : 0.1);
     }, { passive: false });
 
     // Init by type
