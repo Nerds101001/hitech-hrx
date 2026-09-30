@@ -366,7 +366,17 @@ class SalesPipelineController extends Controller
             $query->where(function ($q) use ($bothId) {
                 $q->where('ccare_id', $bothId)
                   ->orWhere('new_biz_id', $bothId)
-                  ->orWhere('new_biz_2_id', $bothId);
+                  ->orWhere('new_biz_2_id', $bothId)
+                  // Extra reps count too. Without them this filter returned FEWER
+                  // rows than picking the same person under "CCare" - Poonam holds
+                  // 29 extra-rep rows, 13 of them on customers she is not the
+                  // named CCare or New Biz rep for - and a combined filter showing
+                  // less than a single-role one reads as broken.
+                  ->orWhereExists(function ($s) use ($bothId) {
+                      $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $bothId);
+                  });
             });
         }
         // Brand filter. The Brand column is the free-text `product` field, which
