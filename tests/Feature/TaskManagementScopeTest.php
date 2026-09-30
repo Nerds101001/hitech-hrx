@@ -84,10 +84,14 @@ class TaskManagementScopeTest extends TestCase
         return $r;
     }
 
-    // ══ manager cannot reach outside their own team ═══════════════════════
+    // ══ who can be assigned ═══════════════════════════════════════════════
+    // Task Management was opened to every signed-in user: anyone can assign a
+    // task to anyone (TaskManagementController::store - "No reach
+    // restriction"). What each person SEES stays scoped (scopeVisible()).
+    // These tests used to assert the earlier manager-team-only rule.
 
-    /** THE CORE BUG. A manager assigning to a whole department must not pick up someone else's report. */
-    public function test_bulk_assign_by_department_silently_drops_people_outside_the_managers_team(): void
+    /** A manager assigning to a whole department reaches everyone in it, not just their own reports. */
+    public function test_bulk_assign_by_department_reaches_everyone_in_it_even_for_a_manager(): void
     {
         $dept = Department::create(['name' => 'QA Dept ' . uniqid(), 'code' => 'QAD' . random_int(100000, 999999), 'status' => 'active']);
         $this->reportA->forceFill(['department_id' => $dept->id])->save();
@@ -101,9 +105,9 @@ class TaskManagementScopeTest extends TestCase
         $data = json_decode($response->getContent(), true);
 
         $this->assertTrue($data['success']);
-        $this->assertEquals(1, $data['assigned'], 'only reportA should have been assigned');
+        $this->assertEquals(2, $data['assigned'], 'everyone in the department');
         $this->assertTrue(Task::where('user_id', $this->reportA->id)->where('title', 'QA Bulk Task')->exists());
-        $this->assertFalse(Task::where('user_id', $this->reportB->id)->where('title', 'QA Bulk Task')->exists(), 'a task leaked to a different manager\'s report');
+        $this->assertTrue(Task::where('user_id', $this->reportB->id)->where('title', 'QA Bulk Task')->exists(), 'another manager\'s report is assigned too');
     }
 
     /** The discriminator: admin assigning to the SAME department reaches everyone. */
@@ -123,8 +127,8 @@ class TaskManagementScopeTest extends TestCase
         $this->assertEquals(2, $data['assigned']);
     }
 
-    /** Explicitly hand-picking someone outside your team is dropped the same way as a department pick. */
-    public function test_bulk_assign_by_employee_id_outside_team_is_dropped(): void
+    /** Hand-picking someone outside your team assigns them, the same as a department pick. */
+    public function test_bulk_assign_by_employee_id_outside_team_is_assigned(): void
     {
         Auth::login($this->managerA);
         $response = $this->mgmt->store($this->jsonReq([
@@ -133,8 +137,8 @@ class TaskManagementScopeTest extends TestCase
         ]));
         $data = json_decode($response->getContent(), true);
 
-        $this->assertFalse($data['success']);
-        $this->assertFalse(Task::where('user_id', $this->reportB->id)->where('title', 'QA Direct Pick')->exists());
+        $this->assertTrue($data['success']);
+        $this->assertTrue(Task::where('user_id', $this->reportB->id)->where('title', 'QA Direct Pick')->exists());
     }
 
     // ══ the legacy single-target endpoints, now with real ownership checks ═
@@ -313,12 +317,12 @@ class TaskManagementScopeTest extends TestCase
         $this->assertEquals(['Due today'], $titles);
     }
 
-    // ══ the portal itself is admin/HR only — a manager keeps the single-
-    //    target "Add Task" modal, but not this bulk portal ═══════════════
+    // ══ the portal is open to every signed-in user (it used to be admin/HR
+    //    only); what each person sees inside it is scoped ════════════════
 
-    public function test_a_manager_is_blocked_from_the_task_management_route(): void
+    public function test_a_manager_can_reach_the_task_management_route(): void
     {
-        $this->actingAs($this->managerA)->get('/task-management')->assertForbidden();
+        $this->actingAs($this->managerA)->get('/task-management')->assertOk();
     }
 
     public function test_admin_and_hr_can_reach_the_task_management_route(): void
