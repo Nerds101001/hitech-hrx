@@ -10,9 +10,20 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 
 class WorkControlExport implements FromCollection, WithHeadings, WithMapping
 {
+    /**
+     * @param int[]|null $userIds null = every user (admin/HR), otherwise only
+     *                            these users' routines. The caller decides the
+     *                            scope; see WorkControlController::visibleUserIds().
+     */
+    public function __construct(private ?array $userIds = null)
+    {
+    }
+
     public function collection()
     {
-        return WorkControlRoutine::with('user', 'user.department', 'user.designation.department')->get();
+        return WorkControlRoutine::with('user', 'user.department', 'user.designation.department')
+            ->when($this->userIds !== null, fn ($q) => $q->whereIn('user_id', $this->userIds))
+            ->get();
     }
 
     public function headings(): array

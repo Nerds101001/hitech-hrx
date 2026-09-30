@@ -84,6 +84,39 @@ class KpiTemplateService
     }
 
     /**
+     * The template's target changed from $old: everyone still on $old follows.
+     *
+     * A target is seeded once and then belongs to the person (SEEDED_ONCE), so
+     * a personalised target -- one salesperson's own revenue number -- survives
+     * a template edit. But someone still on the template's previous target was
+     * never personalised; they simply had the old number. Leaving them there
+     * meant a KPI changed from 100 to 48 in the KPI section went on scoring 17
+     * of 18 people against 100. Their current period is rescored so the
+     * scorecard shows the new comparison straight away.
+     *
+     * @return int assignments moved to the new target
+     */
+    public static function followTargetChange(KpiTemplate $t, $old): int
+    {
+        if ($old === null || $t->target_value === null || (float) $old === (float) $t->target_value) {
+            return 0;
+        }
+
+        $moved = KpiAssignment::where('kpi_template_id', $t->id)
+            ->where('target_value', $old)
+            ->get();
+
+        foreach ($moved as $a) {
+            $a->update(['target_value' => $t->target_value]);
+            if ($a->is_active) {
+                \App\Services\KpiEntryService::recalculate($a->fresh());
+            }
+        }
+
+        return $moved->count();
+    }
+
+    /**
      * Columns on kpi_assignments that reject null. A template created without
      * them holds null in memory (the default lives in the database, not the
      * model), so they are coalesced here rather than failing the insert.

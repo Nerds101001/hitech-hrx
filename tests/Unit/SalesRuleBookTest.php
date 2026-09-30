@@ -53,8 +53,8 @@ class SalesRuleBookTest extends TestCase
             ['New Customer Wins (%)', 30, 13], ['New Customer Wins (%)', 30.1, 15], ['New Customer Wins (%)', 55.1, 15],
             // 90-day goals: >=70 = 8 | 50-70 = 5 | 40-50 = 3 | <40 = 0
             ['90-Day Goals', 39, 0], ['90-Day Goals', 40, 3], ['90-Day Goals', 50, 5], ['90-Day Goals', 70, 8],
-            // Sales pitch (out of 20): 20 = 5 | 15-19 = 2 | <15 = 0
-            ['Sales Pitch Score', 14, 0], ['Sales Pitch Score', 15, 2], ['Sales Pitch Score', 19, 2], ['Sales Pitch Score', 20, 5],
+            // Sales pitch (2026-09-29: pitches submitted in Mind Speak, not a reviewer's score): 1+ = 2 | none = 0
+            ['Sales Pitch Score', 0, 0], ['Sales Pitch Score', 1, 2], ['Sales Pitch Score', 5, 2],
             // Learn@HiTech: 2+ = 5 | 1 = 2 | none = 0
             ['Learn@HiTech', 0, 0], ['Learn@HiTech', 1, 2], ['Learn@HiTech', 2, 5], ['Learn@HiTech', 6, 5],
             // Seminars: >=12 = 5 | 8-11 = 2 | <8 = 0
@@ -75,13 +75,22 @@ class SalesRuleBookTest extends TestCase
         ];
     }
 
-    /** @dataProvider tiers */
-    public function test_each_tier_boundary_gives_the_points_the_sheet_gives(string $kpi, float $figure, float $expected): void
+    /**
+     * The tiers above are the sheet as written. Since 2026-09-30 no KPI scores
+     * above its own maximum (user decision): a tier that paid past the weight -
+     * YoY 30 on 25, New Customer Wins 15 on 13, Market Share 15 on 10 - is capped
+     * at the weight. A 0-weight KPI (the attrition penalty) keeps its tiers.
+     *
+     * @dataProvider tiers
+     */
+    public function test_each_tier_boundary_gives_the_points_the_sheet_gives_capped_at_the_kpis_maximum(string $kpi, float $figure, float $expected): void
     {
-        $this->assertSame($expected, $this->points($kpi, $figure), "{$kpi} at {$figure}");
+        $weight = (float) collect(SalesRuleBook::definitions())->firstWhere(0, $kpi)[4];
+        $capped = $weight > 0 ? min($expected, $weight) : $expected;
+        $this->assertSame($capped, $this->points($kpi, $figure), "{$kpi} at {$figure}");
     }
 
-    public function test_the_sheet_is_reproduced_at_63_points(): void
+    public function test_the_sheets_report_scores_48_points_once_capped_at_each_maximum(): void
     {
         // The figures printed in the annual report the rule book was written from.
         $figures = [
@@ -107,7 +116,10 @@ class SalesRuleBookTest extends TestCase
             $total += $this->points($kpi, $figure);
         }
 
-        $this->assertSame(63.0, $total);
+        // The sheet printed 63. Capped at each KPI's maximum it is 48: Demos 8 -> 5,
+        // New Customer Wins 15 -> 13, Competitor Insights 7 -> 3, New Product Ideas 7 -> 3,
+        // Cost of Selling 5 -> 3.
+        $this->assertSame(48.0, $total);
     }
 
     public function test_the_definitions_are_complete_and_self_consistent(): void

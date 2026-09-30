@@ -2,6 +2,18 @@
 
 @section('title', 'Training Content Management')
 
+@section('vendor-style')
+    @vite([
+        'resources/assets/vendor/libs/sweetalert2/sweetalert2.scss'
+    ])
+@endsection
+
+@section('vendor-script')
+    @vite([
+        'resources/assets/vendor/libs/sweetalert2/sweetalert2.js'
+    ])
+@endsection
+
 @section('page-style')
 <style>
     :root {
@@ -326,15 +338,20 @@
 
                 {{-- ── Preview strip ───────────────────────────── --}}
                 <div class="mc-preview">
+                    {{-- Watch stays inside HRX. These used to be
+                         target="_blank" links straight to the source URL, so
+                         clicking a module handed the viewer youtube.com - with
+                         its share sheet, its copy-link, its related videos and
+                         a route away from the training entirely. --}}
                     @if($module->content_type === 'video' && $ytId)
                         <img src="https://img.youtube.com/vi/{{ $ytId }}/mqdefault.jpg" alt="{{ $module->title }}">
                         <div class="mc-preview-overlay">
-                            <a href="{{ $previewUrl }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                            <a href="javascript:void(0)" onclick="playModuleVideo('yt', @js($ytId), @js($module->title))"><i class="ti ti-player-play me-1"></i>Watch</a>
                         </div>
                     @elseif($module->content_type === 'video' && $previewUrl)
                         <video src="{{ $previewUrl }}" muted preload="metadata" style="width:100%;height:100%;object-fit:cover;"></video>
                         <div class="mc-preview-overlay">
-                            <a href="{{ $previewUrl }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                            <a href="javascript:void(0)" onclick="playModuleVideo('file', @js($previewUrl), @js($module->title))"><i class="ti ti-player-play me-1"></i>Watch</a>
                         </div>
                     @elseif($module->content_type === 'catalog' && $previewUrl)
                         <div class="mc-pdf-scaler">
@@ -346,7 +363,7 @@
                     @elseif($module->content_type === 'policy')
                         <div class="mc-preview-placeholder">
                             <i class="ti ti-file-text" style="color:#1e88e5;opacity:0.5;font-size:1.8rem;"></i>
-                            <span>Policy Document</span>
+                            <span>Text Document</span>
                         </div>
                     @else
                         <div class="mc-preview-placeholder">
@@ -363,7 +380,10 @@
                             @if($module->content_type==='video') bg-label-warning
                             @elseif($module->content_type==='policy') bg-label-info
                             @else bg-label-success @endif">
-                            {{ $module->content_type }}
+                            {{-- Same wording as the Content Type picker. The card
+                                 printed the raw column, so it read "policy" and
+                                 "catalog" beside a dropdown now saying Text and PDF. --}}
+                            {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? $module->content_type }}
                         </div>
                         <div class="mc-title text-truncate">{{ $module->title }}</div>
                     </div>
@@ -400,11 +420,59 @@
             </div>
             @endforeach
 
+            @if(in_array($phase->id, $libraryPhaseIds ?? [], true))
+                {{-- Learn at Hi Tech: the Digital Library's session videos, live.
+                     Drag a card to change the order trainees see; it saves on drop. --}}
+                <div class="lv-hint" style="grid-column:1/-1;font-size:0.76rem;color:var(--tm-muted);display:flex;align-items:center;gap:6px;">
+                    <i class="ti ti-arrows-move"></i> Drag the videos into the order trainees should see them - it saves as soon as you drop one.
+                    <span id="lvOrderStatus" style="font-weight:600;"></span>
+                </div>
+                @foreach($libraryVideos as $video)
+                @php
+                    $driveId = preg_match('~drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_-]+)~', (string) $video->youtube_url, $dm) ? $dm[1] : null;
+                @endphp
+                <div class="module-card lv-drag" draggable="true" data-id="{{ $video->id }}" style="cursor:grab;position:relative;">
+                    <span class="lv-pos" style="position:absolute;top:8px;left:8px;z-index:3;background:#005f6b;color:#fff;font-size:0.7rem;font-weight:700;border-radius:999px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;padding:0 6px;box-shadow:0 2px 6px rgba(0,0,0,0.2);">{{ $loop->iteration }}</span>
+                    <div class="mc-preview">
+                        @if($driveId)
+                            <img src="https://drive.google.com/thumbnail?id={{ $driveId }}&sz=w400" alt="{{ $video->title }}" onerror="this.style.display='none'">
+                        @else
+                            <div class="mc-preview-placeholder"><i class="ti ti-video" style="color:#f59e0b;opacity:0.6;font-size:1.8rem;"></i><span>Video</span></div>
+                        @endif
+                        <div class="mc-preview-overlay">
+                            <a href="{{ route('training.library-video.show', $video->id) }}" target="_blank"><i class="ti ti-player-play me-1"></i>Watch</a>
+                        </div>
+                    </div>
+                    <div class="mc-header">
+                        <div style="min-width:0;flex:1;">
+                            <div class="mc-type-tag bg-label-warning">From Digital Library</div>
+                            <div class="mc-title text-truncate" title="{{ $video->title }}">{{ $video->title }}</div>
+                        </div>
+                    </div>
+                    <div class="mc-body">
+                        <p class="mc-desc">{{ $video->session_date ? 'Session of ' . \Carbon\Carbon::parse($video->session_date)->format('d M Y') : 'Learn at Hi Tech session' }}</p>
+                        <div class="mc-stats">
+                            <span class="stat-chip"><i class="ti ti-clock"></i> {{ config('training.library_video_min_minutes', 20) }}m to watch</span>
+                        </div>
+                    </div>
+                </div>
+                @endforeach
+
+                {{-- Sessions are added and edited in the Digital Library, not here. --}}
+                <a class="add-module-card" href="{{ url('/digital-library?category=Video') }}" style="text-decoration:none;">
+                    <div class="add-icon">+</div>
+                    <span style="font-size:0.82rem;font-weight:600;text-align:center;padding:0 12px;">Add a session in the Digital Library</span>
+                    <span style="font-size:0.7rem;color:var(--tm-muted);text-align:center;padding:4px 12px 0;">
+                        {{ $libraryVideos->count() }} sessions · trainees complete this phase after any {{ config('training.library_videos_required', 3) }}
+                    </span>
+                </a>
+            @else
             {{-- Add Module tile --}}
             <div class="add-module-card" onclick="addModule({{ $phase->id }})">
                 <div class="add-icon">+</div>
                 <span style="font-size:0.82rem;font-weight:600;">Add Module</span>
             </div>
+            @endif
         </div>
     </div>
     @endforeach
@@ -462,10 +530,14 @@
                         </div>
                         <div class="col-md-5 mb-3">
                             <label class="form-label fw-semibold">Content Type</label>
+                            {{-- Labels only. The values stay policy/catalog/video:
+                                 every module already stored, and the content_type
+                                 branches across the manage page, portal, reader and
+                                 activity views, key off those exact strings. --}}
                             <select name="content_type" id="module_type" class="form-select" onchange="toggleContentFields()">
-                                <option value="policy">Interactive Policy</option>
-                                <option value="catalog">Product Catalog (PDF)</option>
-                                <option value="video">Training Video</option>
+                                <option value="policy">Text</option>
+                                <option value="catalog">PDF</option>
+                                <option value="video">Video</option>
                             </select>
                         </div>
                     </div>
@@ -479,11 +551,11 @@
                     <label class="form-label fw-semibold d-flex justify-content-between">
                         Content Body <small class="text-muted">Double enter = new page/step</small>
                     </label>
-                    <textarea name="content_body" id="module_body" class="form-control" rows="10" placeholder="Paste your policy text here..."></textarea>
+                    <textarea name="content_body" id="module_body" class="form-control" rows="10" placeholder="Paste your text here..."></textarea>
                 </div>
 
                 <div id="pdf_content_area" class="form-panel" style="display:none;">
-                    <label class="form-label fw-semibold">Upload Product Catalog (PDF)</label>
+                    <label class="form-label fw-semibold">Upload PDF</label>
                     <input type="file" name="pdf_file" class="form-control" accept=".pdf">
                     <div id="pdf_current_file" class="mt-2" style="display:none;">
                         <a href="#" target="_blank" class="badge bg-label-info text-decoration-none">View Current PDF</a>
@@ -545,6 +617,24 @@
                 <button type="submit" class="btn btn-teal rounded-pill px-4">Publish Module</button>
             </div>
         </form>
+    </div>
+</div>
+
+{{-- ── Video Preview Modal ──────────────────────────────────
+     Plays the module inside HRX instead of handing the viewer youtube.com.
+     Right-click is blocked here too, since that menu carries "Copy video URL"
+     and "Save video as". --}}
+<div class="modal fade tm-modal" id="videoPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+            <div class="modal-header">
+                <h5 class="modal-title text-white fw-bold" id="videoPreviewTitle">Preview</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0" oncontextmenu="return false;">
+                <div id="videoPreviewStage" style="position:relative;width:100%;aspect-ratio:16/9;background:#000;"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -630,8 +720,67 @@
 @endsection
 
 @section('page-script')
-<script src="{{asset('assets/vendor/libs/sweetalert2/sweetalert2.js')}}"></script>
+{{-- SweetAlert2 now comes from the vendor-script section above, through Vite.
+     This used to be a raw asset() tag pointing at
+     public/assets/vendor/libs/sweetalert2/sweetalert2.js, which exists
+     neither here nor on production - nothing serves that directory, so the
+     tag 404'd, Swal was never defined, and AI Auto-Generate threw
+     "ReferenceError: Swal is not defined" on click. Every other page that
+     uses Swal loads it through Vite; this one was the outlier. --}}
 <script>
+    // ── Learn @ Hi Tech: drag the library video cards into order ──────────
+    (function () {
+        const cards = () => Array.from(document.querySelectorAll('.lv-drag'));
+        if (!cards().length) return;
+        const status = document.getElementById('lvOrderStatus');
+        let dragged = null;
+
+        function renumber() {
+            cards().forEach((c, i) => { const b = c.querySelector('.lv-pos'); if (b) b.textContent = i + 1; });
+        }
+        async function save() {
+            if (status) { status.textContent = 'Saving...'; status.style.color = 'var(--tm-muted)'; }
+            try {
+                const r = await fetch(@json(route('training.manage.library-videos.order')), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token()) },
+                    body: JSON.stringify({ ids: cards().map(c => c.dataset.id) }),
+                });
+                const d = await r.json();
+                if (status) { status.textContent = d.success ? 'Order saved.' : 'Could not save the order.'; status.style.color = d.success ? '#16a34a' : '#ef4444'; }
+            } catch (e) {
+                if (status) { status.textContent = 'Could not save - check your connection.'; status.style.color = '#ef4444'; }
+            }
+        }
+
+        const order = () => cards().map(c => c.dataset.id).join(',');
+        let before = '';
+
+        cards().forEach(card => {
+            card.addEventListener('dragstart', e => {
+                dragged = card; before = order(); card.style.opacity = '0.45';
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', card.dataset.id);
+            });
+            // Saved when the drag ends, whether it was dropped on a card, on
+            // itself or between cards - the drop event alone misses some of those.
+            card.addEventListener('dragend', () => {
+                card.style.opacity = ''; dragged = null;
+                if (order() !== before) { renumber(); save(); }
+            });
+            card.addEventListener('dragover', e => {
+                if (!dragged) return;
+                e.preventDefault();
+                if (dragged === card) return;
+                const r = card.getBoundingClientRect();
+                // Before or after this card, depending on which half the pointer is over.
+                const after = (e.clientY - r.top) / r.height > 0.5 || ((e.clientX - r.left) / r.width > 0.5 && Math.abs(e.clientY - (r.top + r.height / 2)) < r.height / 2);
+                card.parentNode.insertBefore(dragged, after ? card.nextSibling : card);
+            });
+            card.addEventListener('drop', e => e.preventDefault());
+        });
+    })();
+
     function editPhase(phase) {
         document.getElementById('phase_id').value = phase.id;
         document.getElementById('phase_title').value = phase.title;
@@ -683,6 +832,41 @@
         document.getElementById('url_content_area').style.display   = t === 'video'   ? 'block' : 'none';
         document.getElementById('video_settings_area').style.display= t === 'video'   ? 'block' : 'none';
     }
+
+    // Plays a module video inside HRX. Never navigates to the source.
+    let videoPreviewModal = null;
+    function playModuleVideo(kind, ref, title) {
+        const stage = document.getElementById('videoPreviewStage');
+        document.getElementById('videoPreviewTitle').textContent = title || 'Preview';
+
+        if (kind === 'yt') {
+            // nocookie + modestbranding + rel=0 + iv_load_policy=3 strip the
+            // logo, the end-screen grid and the annotation cards. The shield
+            // covers YouTube's title bar, which is a link out that no player
+            // parameter can disable.
+            stage.innerHTML =
+                '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(ref) +
+                '?rel=0&modestbranding=1&iv_load_policy=3&playsinline=1" ' +
+                'style="width:100%;height:100%;border:0;" allow="autoplay; encrypted-media" allowfullscreen></iframe>' +
+                '<div style="position:absolute;top:0;left:0;right:0;height:64px;z-index:5;"></div>';
+        } else {
+            stage.innerHTML =
+                '<video src="' + ref + '" controls controlsList="nodownload noplaybackrate" ' +
+                'disablePictureInPicture oncontextmenu="return false;" ' +
+                'style="width:100%;height:100%;background:#000;"></video>';
+        }
+
+        videoPreviewModal = videoPreviewModal || new bootstrap.Modal(document.getElementById('videoPreviewModal'));
+        videoPreviewModal.show();
+    }
+
+    // Stop playback when the dialog closes, or the audio keeps running.
+    document.addEventListener('DOMContentLoaded', function () {
+        const el = document.getElementById('videoPreviewModal');
+        if (el) el.addEventListener('hidden.bs.modal', () => {
+            document.getElementById('videoPreviewStage').innerHTML = '';
+        });
+    });
 
     const optLabels = ['A','B','C','D'];
 
@@ -760,17 +944,84 @@
         document.getElementById('q_opt_radio_0').checked = true;
     }
 
+    const AI_ENDPOINT = moduleId => `{{ url('training/manage/module') }}/${moduleId}/generate-ai-questions`;
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    // Renders the proposed set the same way the Active Questions list above
+    // renders saved ones, so what you approve looks like what you will get.
+    function buildAIPreview(questions) {
+        return questions.map((q, i) => {
+            const opts = q.options.map((opt, oi) => {
+                const isC = oi === q.correct_option_index;
+                return `<div class="q-opt-pill ${isC ? 'correct' : ''}">
+                            <div class="q-opt-dot ${isC ? 'correct' : ''}">${isC ? '&#10003;' : (optLabels[oi] || String.fromCharCode(65 + oi))}</div>
+                            <span>${escapeHtml(opt)}</span>
+                        </div>`;
+            }).join('');
+            return `<div class="question-item" style="text-align:left;margin-bottom:10px;">
+                        <span style="font-size:0.7rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;">Q${i + 1}</span>
+                        <div style="font-size:0.875rem;font-weight:600;color:#1e293b;line-height:1.4;margin:2px 0 8px;">${escapeHtml(q.question)}</div>
+                        <div class="d-flex flex-column gap-1">${opts}</div>
+                    </div>`;
+        }).join('');
+    }
+
     async function generateAIQuestions() {
         const moduleId = document.getElementById('q_module_id').value;
+
         Swal.fire({ title:'Generating...', text:'Nerds AI is analysing the module content.', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+
+        let data;
         try {
-            const res = await fetch(`{{ url('training/manage/module') }}/${moduleId}/generate-ai-questions`, {
+            const res = await fetch(AI_ENDPOINT(moduleId), {
                 method:'POST', headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}'}
             });
-            const data = await res.json();
-            if (data.success) Swal.fire('Done!', `Generated ${data.count} questions.`, 'success').then(()=>location.reload());
-            else Swal.fire('Error', data.message || 'Failed.', 'error');
-        } catch(e) { Swal.fire('Error','An unexpected error occurred.','error'); }
+            data = await res.json();
+        } catch(e) {
+            Swal.fire('Error','An unexpected error occurred.','error');
+            return;
+        }
+
+        if (!data.success || !Array.isArray(data.questions) || !data.questions.length) {
+            Swal.fire('Error', data.message || 'Failed.', 'error');
+            return;
+        }
+
+        // Nothing has been saved at this point - the reviewer decides.
+        const choice = await Swal.fire({
+            title: 'Review generated questions',
+            html: `<p style="font-size:0.82rem;color:#64748b;margin-bottom:12px;text-align:left;">
+                       ${data.questions.length} question(s) proposed. The ticked option is the answer that will be marked correct.
+                       Nothing is saved until you add them.
+                   </p>${buildAIPreview(data.questions)}`,
+            width: 760,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'Add to Test',
+            denyButtonText: 'Regenerate',
+            cancelButtonText: 'Discard',
+            customClass: { popup: 'tm-ai-preview' }
+        });
+
+        if (choice.isDenied) { generateAIQuestions(); return; }   // ask again, save nothing
+        if (!choice.isConfirmed) return;                          // discarded
+
+        Swal.fire({ title:'Saving...', allowOutsideClick:false, didOpen:()=>Swal.showLoading() });
+        try {
+            const res = await fetch(AI_ENDPOINT(moduleId), {
+                method:'POST',
+                headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}','Content-Type':'application/json'},
+                body: JSON.stringify({ save: 1, questions: data.questions })
+            });
+            const saved = await res.json();
+            if (saved.success) Swal.fire('Added', `${saved.count} question(s) added to the test.`, 'success').then(()=>location.reload());
+            else Swal.fire('Error', saved.message || 'Could not save.', 'error');
+        } catch(e) { Swal.fire('Error','An unexpected error occurred while saving.','error'); }
     }
 </script>
 @endsection

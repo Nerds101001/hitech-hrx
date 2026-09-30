@@ -57,7 +57,12 @@ class DashboardAttendanceCountsTest extends TestCase
         return json_decode($response->getContent(), true);
     }
 
-    public function test_live_stats_admin_path_excludes_an_uncorrected_miss_punch_from_present(): void
+    /**
+     * Updated 2026-09-29: written on 1 Sep, when an open check-in today counted
+     * as a miss-punch. Since 3528d6e7d (4 Sep) a day still running is not a
+     * missed punch - someone checked in today and not yet out is at work.
+     */
+    public function test_live_stats_admin_path_counts_someone_still_at_work_today_as_present(): void
     {
         $admin = $this->makeUser('admin');
         $before = $this->liveStats($admin);
@@ -73,9 +78,9 @@ class DashboardAttendanceCountsTest extends TestCase
         $after = $this->liveStats($admin);
 
         $this->assertEquals(
-            (int) str_replace(',', '', $before['present_count']),
+            (int) str_replace(',', '', $before['present_count']) + 1,
             (int) str_replace(',', '', $after['present_count']),
-            'an uncorrected miss-punch must not inflate the present count'
+            'still at work today counts as present'
         );
     }
 

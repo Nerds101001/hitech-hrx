@@ -4,7 +4,7 @@
     use App\Services\AddonService\IAddonService;
     use Carbon\Carbon;
     use App\Helpers\StaticDataHelpers;
-    $role = $user->roles()->first()?->name ?? '';
+    $role = \App\Support\RoleAssignment::primaryRole($user) ?? '';
     $addonService = app(IAddonService::class);
     // Banking, salary, payslips and payroll adjustments are confidential
     // financial data — only admin/hr/accounts or a holder of the explicit
@@ -606,7 +606,7 @@
                                         class="bx bx-credit-card me-1"></i> Banking & Payroll</a>
                             </li>
                             @endif
-                            @if(!auth()->user()->hasRole('accounts'))
+                            @if(!auth()->user()->hasRole('accounts') || auth()->user()->can('employee.view_document'))
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#documents"><i class="bx bx-file me-1"></i>
                                     Documents</a>
@@ -616,10 +616,12 @@
                                 <a class="nav-link" data-bs-toggle="tab" href="#tasks-tab"><i
                                         class="bx bx-bullseye me-1"></i> Key Result Areas (KRAs)</a>
                             </li>
+                            @can('employees.tab.kpa')
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#kpis-tab"><i
                                         class="bx bx-trending-up me-1"></i> Key Performance Indicators (KPIs)</a>
                             </li>
+                            @endcan
                             
                             <li class="nav-item">
                                 <a class="nav-link" data-bs-toggle="tab" href="#activity"><i class="bx bx-history me-1"></i>
@@ -652,7 +654,7 @@
                                             <h6 class="mb-0 fw-bold fs-5" style="color: #1E293B;">Primary Information</h6>
                                         </div>
                                         <button class="btn btn-hitech px-4 rounded-pill shadow-sm" data-bs-toggle="modal"
-                                            data-bs-target="#offcanvasEditBasicInfo" onclick="loadUserOnboardingData()">
+                                            data-bs-target="#offcanvasEditBasicInfo">
                                             <i class="bx bx-edit-alt me-1"></i> Update Details
                                         </button>
                                     </div>
@@ -911,7 +913,7 @@
                                                         <p class="mb-0 text-muted small fw-bold text-uppercase"
                                                             style="font-size: 0.65rem; letter-spacing: 0.05em;">System Role</p>
                                                         <p class="mb-0 fw-bold text-dark fs-6">
-                                                            {{ $user->getRoleNames()->first() ?? 'Employee' }}</p>
+                                                            {{ \App\Support\RoleAssignment::primaryRole($user) ?? 'Employee' }}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1206,6 +1208,8 @@
                                                             // date-diff here ignores both and always shows a flat
                                                             // -1.0 per day, same bug the My Leaves page already fixed.
                                                             $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
+                                                            // Unpaid portion, shown beside the deduction below.
+                                                            $lwpDaysRow = (float) ($item->lwp_days ?? 0);
                                                             $amountClass = 'text-danger';
                                                             $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ')';
                                                             if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
@@ -1213,6 +1217,7 @@
                                                                 $reason = $item->leave_type . ' - ' . $reason;
                                                             }
                                                         } else {
+                                                            $lwpDaysRow = 0;
                                                             $amt = (float)$item->amount;
                                                             $notes = $item->notes ?? '';
                                                             // Detect carry forward
@@ -1244,6 +1249,14 @@
                                                         </td>
                                                         <td class="py-2 text-center fw-bold">
                                                             <span class="{{ $amountClass }}">{{ $amountDisplay }}</span>
+                                                            {{-- Days the balance could not cover. Without this the row shows
+                                                                 only what was deducted, so a leave that was half unpaid reads
+                                                                 as though it was fully paid for. --}}
+                                                            @if(($lwpDaysRow ?? 0) > 0)
+                                                                <div class="small fw-semibold" style="color:#a855f7;">
+                                                                    {{ rtrim(rtrim(number_format($lwpDaysRow, 1), '0'), '.') }} non-paid
+                                                                </div>
+                                                            @endif
                                                         </td>
                                                         <td class="py-2">
                                                             <div class="text-muted small">{{ $reason }}</div>
@@ -2055,7 +2068,12 @@
                         {{-- /Banking & Payroll Tab (gated by $canViewFinancials) --}}
 
                         <!-- Documents Tab -->
-                        @if(!auth()->user()->hasRole('accounts'))
+                        {{-- Default: hidden from accounts role, same as always. The
+                             employee.view_document permission is an explicit override
+                             for a specific accounts-role person, not a general grant -
+                             nobody holds it today, so this changes nothing until it's
+                             deliberately assigned. --}}
+                        @if(!auth()->user()->hasRole('accounts') || auth()->user()->can('employee.view_document'))
                         <div class="tab-pane fade" id="documents">
                             <div class="card mb-4 emp-card">
                                 <div class="card-body p-5">
@@ -2473,6 +2491,7 @@
                         </div>
 
                         <!-- KPIs Tab -->
+                        @can('employees.tab.kpa')
                         <div class="tab-pane fade" id="kpis-tab">
                             {{-- Learn @ HiTech participation + score --}}
                             <div class="card border-0 shadow-sm rounded-3 mb-4">
@@ -2749,6 +2768,7 @@
                                 </div>
                             </div>
                         </div>
+                        @endcan
 
 
 
@@ -4095,6 +4115,46 @@
                     }
                 });
             }
+
+            // This whole script is a module, so a plain function declaration is
+            // private to it: the inline onclick="moveToOnboarding(...)" and
+            // onclick="navigateTabs(...)" buttons threw "is not defined" and did
+            // nothing. They are exported the same way as the page's other
+            // onclick handlers.
+            window.moveToOnboarding = moveToOnboarding;
+            window.navigateTabs = navigateTabs;
+
+            // Clicking an existing payroll adjustment opens the same form as "Add
+            // Item". editAdjustment() was never defined on this page (only on
+            // Settings), so the form opened EMPTY with no id and saving it
+            // created a duplicate adjustment instead of editing the one clicked.
+            const adjustmentForm = {
+                showCategory(category) {
+                    // The amount/percentage columns, found from their own inputs.
+                    $('#adjustmentAmount').closest('.col-md-6').toggle(category !== 'percentage');
+                    $('#adjustmentPercentage').closest('.col-md-6').toggle(category === 'percentage');
+                },
+                fill(a) {
+                    $('#adjustmentId').val(a ? a.id : '');
+                    $('#adjustmentName').val(a ? a.name : '');
+                    $('#adjustmentCode').val(a ? a.code : '');
+                    $('#adjustmentType').val(a ? a.type : 'benefit');
+                    const category = a && !(parseFloat(a.amount) > 0) && a.percentage ? 'percentage' : 'fixed';
+                    $('#adjustmentCategory').val(category);
+                    $('#adjustmentAmount').val(a && category === 'fixed' ? a.amount : '');
+                    $('#adjustmentPercentage').val(a && category === 'percentage' ? a.percentage : '');
+                    $('#adjustmentNotes').val(a ? (a.notes || '') : '');
+                    $('#adjustmentSubmitBtn').text(a ? 'Update Adjustment' : 'Save Adjustment');
+                    this.showCategory(category);
+                },
+            };
+            window.editAdjustment = (adjustment) => adjustmentForm.fill(adjustment);
+            $(document).on('click', '#addPayrollAdjustment', () => adjustmentForm.fill(null));
+            $(document).on('change', '#adjustmentCategory', function () {
+                adjustmentForm.showCategory(this.value);
+                // Only one of the two may be sent: clear the hidden one.
+                $(this.value === 'percentage' ? '#adjustmentAmount' : '#adjustmentPercentage').val('');
+            });
 
             // Move an employee (back) into onboarding. This re-issues their
             // password and emails a fresh invite, so it asks twice when the

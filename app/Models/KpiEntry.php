@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * One weekly submission against a KPI, awaiting or having had HR review.
@@ -11,9 +13,9 @@ use Illuminate\Database\Eloquent\Model;
  * The monthly KpiCheck holds the score; these hold what the employee actually
  * reported each week and who signed it off.
  */
-class KpiEntry extends Model
+class KpiEntry extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     public const SUBMITTED = 'submitted';
     public const APPROVED  = 'approved';

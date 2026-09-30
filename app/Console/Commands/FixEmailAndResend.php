@@ -46,7 +46,7 @@ class FixEmailAndResend extends Command
         $this->info("Email updated: {$oldEmail} → {$newEmail}");
 
         // Send onboarding email
-        $tempPassword = 'Hitech@' . rand(1000, 9999);
+        $tempPassword = \App\Support\TempPassword::make();
         $user->password = bcrypt($tempPassword);
         $user->save();
 

@@ -47,6 +47,27 @@ class KpiScorecardService
     }
 
     /** "2026-09" → first day of that month; null when malformed or in the future. */
+    /**
+     * The person's shown-not-scored figures for a month (see KpiAssignment::INFO),
+     * title => value, or null for one not entered yet. Empty when they have none.
+     */
+    public static function infoFor(int $userId, Carbon $month): array
+    {
+        $out = [];
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+        $assignments = KpiAssignment::where('user_id', $userId)->where('is_active', true)
+            ->where('data_source', KpiAssignment::INFO)->orderBy('id')->get();
+        foreach ($assignments as $a) {
+            $checks = \App\Models\KpiCheck::where('kpi_assignment_id', $a->id)
+                ->whereDate('period_start', '>=', $start->toDateString())
+                ->whereDate('period_start', '<=', $end->toDateString())->get();
+            $out[$a->title] = $checks->every(fn ($c) => $c->achieved_value === null) ? null : (float) $checks->sum('achieved_value');
+        }
+
+        return $out;
+    }
+
     public static function parseMonth(?string $ym): ?Carbon
     {
         if (!is_string($ym) || !preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/', $ym)) {
@@ -107,7 +128,7 @@ class KpiScorecardService
      * @param  Collection<int, User>  $users
      * @return Collection  user id => {user, rows, earned, possible, pct, grade}
      */
-    public static function forMonth(Collection $users, Carbon $month): Collection
+    public static function forMonth(Collection $users, Carbon $month, bool $live = false): Collection
     {
         $start = $month->copy()->startOfMonth();
         $end   = $month->copy()->endOfMonth();
@@ -153,14 +174,40 @@ class KpiScorecardService
         $managers = User::whereIn('id', $users->pluck('reporting_to_id')->filter()->unique())
             ->get(['id', 'first_name', 'last_name'])->keyBy('id');
 
-        return $users->mapWithKeys(function (User $user) use ($assignments, $checks, $managers, $awaiting) {
+        return $users->mapWithKeys(function (User $user) use ($assignments, $checks, $managers, $awaiting, $live) {
             $rows = [];
+            $info = [];
             foreach (($assignments->get($user->id) ?? collect()) as $a) {
                 $mine   = $checks->get($a->id) ?? collect();
+                // A figure shown, never scored (e.g. Total Leads Allocated): a card
+                // on the scorecard, kept out of the rows, the total and the grade.
+                if ($a->isInfo()) {
+                    $info[$a->title] = $mine->every(fn ($c) => $c->achieved_value === null) ? null : (float) $mine->sum('achieved_value');
+                    continue;
+                }
                 $latest = $mine->last();
                 $achieved = $mine->isEmpty() || $mine->every(fn ($c) => $c->achieved_value === null)
                     ? null
                     : (float) $mine->sum('achieved_value');
+                $score = (float) $mine->sum('score');
+
+                // $live: read the source again instead of trusting the stored
+                // figure. A check is written when the scoring job last ran, but
+                // the data behind it keeps moving -- the sales report stays open
+                // past month end and is often reopened -- so a scorecard printed
+                // today could otherwise show a number that stopped being true
+                // weeks ago. Printing is the moment someone acts on it, so the
+                // print recomputes. Nothing is written back: a download must
+                // never change a score.
+                if ($live && $mine->isNotEmpty() && str_starts_with((string) $a->data_source, 'auto:')) {
+                    $from = Carbon::parse($mine->first()->period_start);
+                    $to   = Carbon::parse($mine->last()->period_end)->endOfDay();
+                    $fresh = \App\Services\KpiAutoSourceService::compute($a, $from, $to);
+                    if ($fresh !== null) {
+                        $achieved = (float) $fresh;
+                        $score = KpiPeriodService::targetScore($a, $achieved);
+                    }
+                }
 
                 $rows[] = (object) [
                     'kra'      => $a->kra_group ?: 'Other',
@@ -173,7 +220,7 @@ class KpiScorecardService
                     'result'   => ($a->scoring_type === 'target' && $achieved !== null)
                         ? KpiPeriodService::resultPercent($a, $achieved) : null,
                     'max'      => (float) $a->max_marks * max(1, $mine->count()),
-                    'score'    => (float) $mine->sum('score'),
+                    'score'    => $score,
                     'checks'   => $mine->count(),
                     'status'   => self::statusOf($latest, $achieved, $awaiting->contains($a->id), (string) $a->frequency),
                     'banded'   => $a->scoring_type === 'banded',
@@ -209,6 +256,7 @@ class KpiScorecardService
                 'onPoints' => $onPoints,
                 'pct'      => $pct,
                 'grade'    => self::gradeFor($pct),
+                'info'     => $info,
             ]];
         });
     }
@@ -274,15 +322,25 @@ class KpiScorecardService
     {
         $users = \Illuminate\Database\Eloquent\Collection::make($users->all())->loadMissing(['department', 'designation', 'site']);
 
-        $cards = self::forMonth($users, $month)->filter(fn ($c) => !empty($c->rows))->values();
+        // live: the printed sheet is the one people act on, so its figures are
+        // read from the source at print time rather than from the last scoring
+        // run. The year-to-date table below stays on stored figures -- it is a
+        // trend, and recomputing twelve months per person would make a bulk
+        // download crawl.
+        $cards = self::forMonth($users, $month, true)->filter(fn ($c) => !empty($c->rows))->values();
         if ($cards->isEmpty()) {
             return $cards;
         }
 
         $ytd = self::yearToDate($cards->pluck('user'), $month);
+        $from = $month->copy()->startOfMonth();
+        $to   = $month->copy()->endOfMonth()->endOfDay();
         foreach ($cards as $c) {
             $c->ytd       = $ytd[$c->user->id] ?? [];
             $c->attention = self::attention($c->rows);
+            // Shown on the sheet whether or not the person carries an
+            // attendance KPI: it is context for every other number on it.
+            $c->attendance = \App\Services\KpiAutoSourceService::attendancePercentFor($c->user->id, $from, $to);
         }
 
         return $cards;

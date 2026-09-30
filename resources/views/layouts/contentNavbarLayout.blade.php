@@ -63,7 +63,10 @@
                 <div class="{{$container}} flex-grow-1 container-p-y">
                   @endif
 
-                  @if(auth()->check() && auth()->user()->status === \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED)
+                  @php $trainingLock = auth()->check() ? \App\Support\TrainingLock::progressFor(auth()->user()) : null; @endphp
+                  @if($trainingLock)
+                    @include('layouts.sections.training-lock-banner', ['lock' => $trainingLock])
+                  @elseif(auth()->check() && auth()->user()->status === \App\Enums\UserAccountStatus::ONBOARDING_SUBMITTED)
                     <div class="alert alert-warning hitech-note-card animate__animated animate__fadeIn m-4" role="alert">
                       <div class="d-flex align-items-center">
                         <i class="bx bx-time-five fs-4 me-3"></i>

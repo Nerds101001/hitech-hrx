@@ -30,8 +30,17 @@ class LeaveHistoryService
      * Short Leave "Earned for August" credit look like part of the ALP/PL
      * balance it was never counted in, so the ledger's own credit/debit
      * sum silently diverged from the cards above it.
+     *
+     * This governs POOL ARITHMETIC ONLY — never whether a request is listed.
+     * It was previously named EXCLUDED_FROM_LEDGER and used to `continue`
+     * past these requests entirely, which also removed them from the history
+     * table this same collection feeds. The result: an approved Short Leave
+     * deducted its balance and then appeared nowhere on My Leaves, the admin
+     * Leave Statement or My Profile, so employees re-applied for leave they
+     * had already been granted. 106 short leaves across 76 people were
+     * invisible this way. Keep the rows; zero their pool contribution.
      */
-    private const EXCLUDED_FROM_LEDGER = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
+    private const EXCLUDED_FROM_POOL = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
 
     public static function getUnifiedHistory($userOrId)
     {
@@ -58,10 +67,9 @@ class LeaveHistoryService
                 continue;
             }
 
-            // Not part of the pool the summary cards total — see EXCLUDED_FROM_LEDGER.
-            if (in_array(strtoupper($leave->leaveType->code ?? ''), self::EXCLUDED_FROM_LEDGER, true)) {
-                continue;
-            }
+            // Listed either way — see EXCLUDED_FROM_POOL. This only decides
+            // whether the row moves the pooled figure, not whether it shows.
+            $affectsPool = !in_array(strtoupper($leave->leaveType->code ?? ''), self::EXCLUDED_FROM_POOL, true);
 
             $status = $leave->status instanceof \UnitEnum ? $leave->status->value : $leave->status;
 
@@ -77,16 +85,24 @@ class LeaveHistoryService
             // Only an approved request ever touched the balance.
             $deducted = in_array($status, ['approved'], true) ? $paidDays : 0.0;
 
+            // What this row takes off the ALP/PL pool. A Short Leave or WFH
+            // consumed its own separate allowance, never the pool, so it
+            // contributes nothing here — but it still gets listed, and
+            // paid_days below still reports what was actually taken so the
+            // statement can show it.
+            $pooledDeduction = $affectsPool ? $deducted : 0.0;
+
             $history->push((object)[
                 'id'         => 'REQ-' . $leave->id,
                 'type'       => 'Request',
                 'leave_type' => $leave->leaveType->name ?? 'Unknown',
                 'from_date'  => $leave->from_date,
                 'to_date'    => $leave->to_date,
-                'amount'     => -$deducted,
+                'amount'     => -$pooledDeduction,
                 'total_days' => $days,
                 'paid_days'  => $deducted,
                 'lwp_days'   => $lwpDays,
+                'affects_pool' => $affectsPool,
                 'status'     => $status,
                 'notes'      => $leave->user_notes,
                 'created_at' => $leave->created_at,
@@ -97,7 +113,7 @@ class LeaveHistoryService
 
         // 2. Fetch Balance Audits via relationship
         $leaveBalances = $user->leaveBalances()->with('leaveType')->get()
-            ->reject(fn($b) => in_array(strtoupper($b->leaveType->code ?? ''), self::EXCLUDED_FROM_LEDGER, true));
+            ->reject(fn($b) => in_array(strtoupper($b->leaveType->code ?? ''), self::EXCLUDED_FROM_POOL, true));
         $balanceIds = $leaveBalances->pluck('id');
 
         // SPECIAL CASE: For User 248, we ignore automated audits for balance changes 

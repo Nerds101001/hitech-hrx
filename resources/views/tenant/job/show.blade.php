@@ -219,7 +219,7 @@
                   <h6 class="fw-bold mb-0" style="color: #1E293B;">Description</h6>
                 </div>
                 <div class="emp-field-box text-muted lh-lg">
-                  {!! $job->description !!}
+                  {!! \App\Support\SafeHtml::clean($job->description) !!}
                 </div>
               </div>
 
@@ -229,7 +229,7 @@
                   <h6 class="fw-bold mb-0" style="color: #1E293B;">Requirements</h6>
                 </div>
                 <div class="emp-field-box text-muted lh-lg">
-                  {!! $job->requirement !!}
+                  {!! \App\Support\SafeHtml::clean($job->requirement) !!}
                 </div>
               </div>
 
@@ -241,7 +241,7 @@
                       <h6 class="mb-0 fw-bold" style="color: #b45309;">Terms & Conditions</h6>
                     </div>
                     <div class="text-muted italic lh-lg">
-                      {!! $job->terms_and_conditions !!}
+                      {!! \App\Support\SafeHtml::clean($job->terms_and_conditions) !!}
                     </div>
                   </div>
                 </div>

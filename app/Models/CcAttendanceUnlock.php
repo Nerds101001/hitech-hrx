@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * An admin-opened window in which back-dated salesperson attendance may still
@@ -11,8 +13,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @see \App\Http\Controllers\tenant\CcAttendanceController::isLockedFor()
  */
-class CcAttendanceUnlock extends Model
+class CcAttendanceUnlock extends Model implements AuditableContract
 {
+    use Auditable;
+
     /** A single window may not exceed this many days — a guard against someone
      *  typing 2020 and silently reopening years of closed attendance. */
     public const MAX_DAYS = 30;

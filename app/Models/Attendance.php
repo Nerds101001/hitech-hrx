@@ -6,10 +6,12 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Attendance extends Model
+class Attendance extends Model implements AuditableContract
 {
-  use UserActionsTrait, TenantTrait, SoftDeletes;
+  use UserActionsTrait, TenantTrait, SoftDeletes, Auditable;
 
   public const STATUS_PRESENT  = 'Present';
   public const STATUS_HALF_DAY = 'Half-Day';
@@ -160,7 +162,9 @@ class Attendance extends Model
 
           if ($checkOut) {
               $mins = $checkIn->diffInMinutes($checkOut);
-              if ($mins >= 240) {
+              // 3h55m, not a strict 4h: see AttendanceDayStatus::OFFDAY_CREDIT_MINUTES.
+              // (The flag keeps its old name; it now means "worked enough for the credit".)
+              if ($mins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
                   $hasFourHours = true;
               }
           }

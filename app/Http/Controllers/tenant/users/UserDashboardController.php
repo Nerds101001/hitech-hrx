@@ -64,7 +64,8 @@ class UserDashboardController extends Controller
      *  - header hub: a vacant-position account whose access_delegate_id
      *    points at me (privileged accounts are always off limits);
      *  - Employee Directory: a super delegate (config/access.php) entering
-     *    ANY active account in one click, for support/debugging.
+     *    ANY active or still-onboarding account in one click, for
+     *    support/debugging.
      * The original user id is kept in the session so Exit can restore it.
      */
     public function switchToDelegate($id)
@@ -80,7 +81,13 @@ class UserDashboardController extends Controller
             return redirect()->back()->with('error', 'That is already your own account.');
         }
 
-        $query = User::where('id', $id)->where('status', UserAccountStatus::ACTIVE);
+        // A super delegate may also enter an account still in onboarding - to
+        // see what a new joiner sees (onboarding form, training portal) and to
+        // help them through it. Everyone else: active accounts only.
+        $statuses = $isSuper
+            ? [UserAccountStatus::ACTIVE, UserAccountStatus::ONBOARDING, UserAccountStatus::ONBOARDING_REQUESTED, UserAccountStatus::ONBOARDING_SUBMITTED]
+            : [UserAccountStatus::ACTIVE];
+        $query = User::where('id', $id)->whereIn('status', $statuses);
 
         // Super delegates skip the pointer requirement; everyone else may only
         // enter accounts explicitly delegated to them.
@@ -92,7 +99,7 @@ class UserDashboardController extends Controller
 
         if (!$target) {
             return redirect()->back()->with('error', $isSuper
-                ? 'That account was not found or is not active.'
+                ? 'That account was not found, or it is not active or in onboarding.'
                 : 'This account is not delegated to you.');
         }
 
@@ -264,7 +271,9 @@ class UserDashboardController extends Controller
         $presentUsersCount = Attendance::whereDate('created_at', now())->count();
         
         // Pending Requests (All for now, could be scoped to team for manager)
-        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
+        // Outdoor duty is approved on the Leave page too, so it counts as pending leave.
+        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count()
+            + \App\Models\OutdoorDuty::where('status', 'pending')->count();
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
         // 1. HR/Admin Dashboard (First Priority)
@@ -346,7 +355,9 @@ class UserDashboardController extends Controller
         $presentUsersCount = Attendance::whereDate('created_at', now())->count();
         
         // Pending Requests (All for now, could be scoped to team for manager)
-        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
+        // Outdoor duty is approved on the Leave page too, so it counts as pending leave.
+        $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count()
+            + \App\Models\OutdoorDuty::where('status', 'pending')->count();
         $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
 
         // 2. Manager Dashboard
@@ -365,7 +376,8 @@ class UserDashboardController extends Controller
             // Scoped Pending Requests
             $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
                 ->where('status', 'pending')
-                ->count();
+                ->count()
+                + \App\Models\OutdoorDuty::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
             $pendingExpenseRequests = ExpenseRequest::whereIn('user_id', $teamMemberIds)
                 ->where('status', 'pending')
                 ->count();
@@ -680,14 +692,9 @@ class UserDashboardController extends Controller
             return redirect()->back()->withErrors(['document' => 'Proof/Evidence document is required for this leave type.'])->withInput();
         }
 
-        // 3. Backdated Check (Limit: 30 Days)
-        $fromDateObj = \Carbon\Carbon::parse($validated['from_date']);
-        $todayObj = \Carbon\Carbon::today();
-        if ($fromDateObj->lt($todayObj)) {
-            $daysBack = $fromDateObj->diffInDays($todayObj);
-            if ($daysBack > 30) {
-                return redirect()->back()->withErrors(['from_date' => 'You cannot apply for leave more than 30 days in the past.'])->withInput();
-            }
+        // 3. Backdated Check (Limit: 1 week - see LeaveBackdate)
+        if ($backdateError = \App\Support\LeaveBackdate::error($validated['from_date'], $validated['to_date'], auth()->id())) {
+            return redirect()->back()->withErrors(['from_date' => $backdateError])->withInput();
         }
 
         // Unit leave policy enforcement
@@ -697,7 +704,10 @@ class UserDashboardController extends Controller
             $validated['from_date'],
             $validated['to_date'],
             $isShort ? ($request->input('duration_hours') ?? 2.0) : null,
-            $isHalfDay
+            $isHalfDay,
+            $isShort ? $request->input('start_time') : null,
+            $isShort ? $request->input('end_time') : null,
+            $isHalfDay ? ($validated['half_day_session'] ?? 'first_half') : null
         );
         if ($error) {
             return redirect()->back()->withErrors(['policy' => $error])->withInput();

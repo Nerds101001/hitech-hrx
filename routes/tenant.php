@@ -40,7 +40,6 @@ use App\Http\Controllers\tenant\UniformRequestController;
 use App\Http\Controllers\tenant\OrganisationHierarchyController;
 use App\Http\Controllers\tenant\PayrollController;
 use App\Http\Controllers\tenant\SalaryImportController;
-use App\Http\Controllers\tenant\PermissionController;
 use App\Http\Controllers\tenant\DigitalLibraryController;
 use App\Http\Controllers\tenant\ProbationController;
 use App\Http\Controllers\tenant\QrGroupController;
@@ -112,6 +111,8 @@ Route::middleware(['web'])->group(function () {
       Route::get('/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showModule'])->name('module.show');
       Route::get('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'getAssessment'])->name('assessment.get');
       Route::post('/assessment/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'submitAssessment'])->name('assessment.submit');
+      Route::get('/video/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'showLibraryVideo'])->name('library-video.show');
+      Route::post('/video/{id}/watched', [\App\Http\Controllers\tenant\TrainingController::class, 'markLibraryVideoWatched'])->name('library-video.watched');
       Route::post('/module/{id}/chat', [\App\Http\Controllers\tenant\TrainingController::class, 'chatWithDocument'])->name('module.chat');
       
       // HR/Admin Activity Dashboard
@@ -127,6 +128,7 @@ Route::middleware(['web'])->group(function () {
       Route::delete('/manage/phase/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyPhase'])->name('manage.phase.destroy');
       Route::post('/manage/module', [\App\Http\Controllers\tenant\TrainingController::class, 'storeModule'])->name('manage.module.store');
       Route::delete('/manage/module/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyModule'])->name('manage.module.destroy');
+      Route::post('/manage/library-videos/order', [\App\Http\Controllers\tenant\TrainingController::class, 'saveLibraryVideoOrder'])->name('manage.library-videos.order');
       Route::post('/manage/module/{id}/generate-ai-questions', [\App\Http\Controllers\tenant\TrainingController::class, 'generateAIQuestions'])->name('manage.module.ai-questions');
       Route::post('/manage/question', [\App\Http\Controllers\tenant\TrainingController::class, 'storeQuestion'])->name('manage.question.store');
       Route::delete('/manage/question/{id}', [\App\Http\Controllers\tenant\TrainingController::class, 'destroyQuestion'])->name('manage.question.destroy');
@@ -259,7 +261,7 @@ Route::middleware([
     Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage|holidays.manage|leave.create_type|leave.create_policy|expense.manage_types|document_types.manage|ipgroup.manage|geofencegroup.manage|qrgroup.manage|units.manage|setu.manage'])->group(function () {
 
     // Shifts
-    Route::prefix('shifts')->name('shifts.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|shifts.manage'])->prefix('shifts')->name('shifts.')->group(function () {
       Route::get('/', [ShiftController::class, 'index'])->name('index');
       Route::get('/list', [ShiftController::class, 'listAjax'])->name('listAjax');
       Route::post('/', [ShiftController::class, 'store'])->name('store');
@@ -271,7 +273,7 @@ Route::middleware([
     });
 
     // Holidays
-    Route::prefix('holidays')->name('holidays.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|holidays.manage'])->prefix('holidays')->name('holidays.')->group(function () {
       Route::get('', [HolidayController::class, 'index'])->name('index');
       Route::get('dashboard', [HolidayController::class, 'dashboard'])->name('dashboard');
       Route::get('dashboardAjax', [HolidayController::class, 'dashboardAjax'])->name('dashboardAjax');
@@ -283,7 +285,7 @@ Route::middleware([
     });
 
     // Leave Types
-    Route::prefix('leaveTypes')->name('leaveTypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|leave.create_type'])->prefix('leaveTypes')->name('leaveTypes.')->group(function () {
       Route::get('', [LeaveTypeController::class, 'index'])->name('index');
       Route::get('getLeaveTypesAjax', [LeaveTypeController::class, 'getLeaveTypesAjax'])->name('getLeaveTypesAjax');
       Route::post('addOrUpdateLeaveTypeAjax', [LeaveTypeController::class, 'addOrUpdateLeaveTypeAjax'])->name('addOrUpdateLeaveTypeAjax');
@@ -305,7 +307,7 @@ Route::middleware([
     });
 
     // Expense Types
-    Route::prefix('expenseTypes')->name('expenseTypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|expense.manage_types'])->prefix('expenseTypes')->name('expenseTypes.')->group(function () {
       Route::get('', [ExpenseTypeController::class, 'index'])->name('index');
       Route::get('getExpenseTypesListAjax', [ExpenseTypeController::class, 'getExpenseTypesListAjax'])->name('getExpenseTypesListAjax');
       Route::post('addOrUpdateExpenseTypeAjax', [ExpenseTypeController::class, 'addOrUpdateExpenseTypeAjax'])->name('addOrUpdateExpenseTypeAjax');
@@ -320,7 +322,7 @@ Route::middleware([
     });
 
     // Document Types
-    Route::prefix('documenttypes')->name('documenttypes.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|document_types.manage'])->prefix('documenttypes')->name('documenttypes.')->group(function () {
       Route::get('', [DocumentTypeController::class, 'index'])->name('index');
       Route::get('getDocumentTypesAjax', [DocumentTypeController::class, 'getDocumentTypesAjax'])->name('getDocumentTypesAjax');
       Route::post('addOrUpdateDocumentTypeAjax', [DocumentTypeController::class, 'addOrUpdateDocumentTypeAjax'])->name('addOrUpdateDocumentTypeAjax');
@@ -331,7 +333,10 @@ Route::middleware([
 
     // Setu Salesperson Mappings — Tally ledger name -> HRX user, reviewed
     // and corrected here instead of via the one-off CSV export/import loop.
-    Route::prefix('setu-mappings')->name('setu-mappings.')->group(function () {
+    // Admin/HR only (or setu.manage): the group around these admits every
+    // manager, accounts user and any one config permission, so "Manage
+    // Expense Types" alone used to open the Setu pages.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('setu-mappings')->name('setu-mappings.')->group(function () {
       Route::get('', [SetuMappingController::class, 'index'])->name('index');
       Route::get('getListAjax', [SetuMappingController::class, 'getListAjax'])->name('getListAjax');
       Route::get('getByIdAjax/{id}', [SetuMappingController::class, 'getByIdAjax'])->name('getByIdAjax');
@@ -341,7 +346,8 @@ Route::middleware([
     // Setu Sales Sync — trigger a sync for any confirmed salesperson directly
     // (the actual sync POST reuses sales-visits.pipeline.sync-setu; this is
     // only the listing page).
-    Route::prefix('setu-sync')->name('setu-sync.')->group(function () {
+    // Same admin/HR-only gate as Setu Salesperson Mappings above.
+    Route::middleware(['role_or_permission:admin|hr|setu.manage'])->prefix('setu-sync')->name('setu-sync.')->group(function () {
       Route::get('', [SetuSyncController::class, 'index'])->name('index');
     });
 
@@ -350,7 +356,7 @@ Route::middleware([
     // Report rows and how many CRM companies are cached to match against;
     // the actual sync/resolve POSTs reuse sales-visits.pipeline.sync-crm-
     // mapping / resolve-crm-mapping (already built and routed).
-    Route::prefix('crm-mapping-sync')->name('crm-mapping-sync.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|crm_clients.manage'])->prefix('crm-mapping-sync')->name('crm-mapping-sync.')->group(function () {
       Route::get('', [CrmMappingSyncController::class, 'index'])->name('index');
     });
 
@@ -384,19 +390,19 @@ Route::middleware([
     });
 
     // IP Groups
-    Route::prefix('ipgroup')->name('ipgroup.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|ipgroup.manage'])->prefix('ipgroup')->name('ipgroup.')->group(function () {
       Route::get('', [IpGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [IpGroupController::class, 'indexAjax'])->name('indexAjax');
     });
 
     // Geofence Groups
-    Route::prefix('geofencegroup')->name('geofencegroup.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|geofencegroup.manage'])->prefix('geofencegroup')->name('geofencegroup.')->group(function () {
       Route::get('', [GeofenceGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [GeofenceGroupController::class, 'indexAjax'])->name('indexAjax');
     });
 
     // QR Code Groups
-    Route::prefix('qrcode')->name('qrcode.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|qrgroup.manage'])->prefix('qrcode')->name('qrcode.')->group(function () {
       Route::get('', [QrGroupController::class, 'index'])->name('index');
       Route::get('indexAjax', [QrGroupController::class, 'indexAjax'])->name('indexAjax');
     });
@@ -424,10 +430,10 @@ Route::middleware([
 
 
     // --- OPERATIONS & REQUESTS ---
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import|visits.manage|leave.approve|leave.view_all|outdoor_duty.approve'])->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import|visits.manage|leave.approve|leave.approve.team|leave.approve.all|leave.view_all|outdoor_duty.approve'])->group(function () {
 
     // Attendance
-    Route::prefix('attendance')->name('attendance.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|attendance.view_page|attendance.manage|attendance.import'])->prefix('attendance')->name('attendance.')->group(function () {
       Route::get('', [AttendanceController::class, 'index'])->name('index');
       Route::get('indexAjax', [AttendanceController::class, 'indexAjax'])->name('indexAjax');
       Route::get('registryAjax', [AttendanceController::class, 'registryAjax'])->name('registryAjax');
@@ -447,7 +453,7 @@ Route::middleware([
     });
 
     // Visits
-    Route::prefix('visits')->name('visits.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|visits.manage'])->prefix('visits')->name('visits.')->group(function () {
       Route::get('', [VisitController::class, 'index'])->name('index');
       Route::get('getListAjax', [VisitController::class, 'getListAjax'])->name('getListAjax');
       Route::delete('deleteVisitAjax/{id}', [VisitController::class, 'deleteVisitAjax'])->name('deleteVisitAjax');
@@ -455,7 +461,7 @@ Route::middleware([
     });
 
     // Leave Requests
-    Route::prefix('leaveRequests')->name('leaveRequests.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts|manager|leave.approve|leave.approve.team|leave.approve.all|leave.view_all|outdoor_duty.approve'])->prefix('leaveRequests')->name('leaveRequests.')->group(function () {
       Route::get('', [LeaveController::class, 'index'])->name('index');
       Route::get('getListAjax', [LeaveController::class, 'getListAjax'])->name('getListAjax');
       Route::post('actionAjax', [LeaveController::class, 'actionAjax'])->name('actionAjax');
@@ -475,6 +481,16 @@ Route::middleware([
     // instead of one shared OR-alternation (that used to mean granting
     // ANY one of these four permissions unlocked all three modules below).
     // Expense Requests
+    // Leave Unlock Windows (Admin/HR): let people apply for leave further back
+    // than the one-week limit (App\Support\LeaveBackdate) for chosen dates -
+    // like the attendance unlock windows under Sales Field Ops.
+    Route::middleware(['role:admin|hr'])->prefix('leave-unlocks')->name('leave-unlocks.')->group(function () {
+      Route::get('', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'index'])->name('index');
+      Route::post('', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'store'])->name('store');
+      Route::post('{id}/toggle', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'toggle'])->name('toggle');
+      Route::delete('{id}', [\App\Http\Controllers\tenant\LeaveUnlockController::class, 'destroy'])->name('destroy');
+    });
+
     Route::middleware(['role_or_permission:admin|hr|expense.approve'])->prefix('expenseRequests')->name('expenseRequests.')->group(function () {
       Route::get('', [ExpenseController::class, 'index'])->name('index');
       Route::get('indexAjax', [ExpenseController::class, 'indexAjax'])->name('indexAjax');
@@ -733,7 +749,7 @@ Route::middleware([
     Route::middleware(['role_or_permission:admin|hr|departments.manage|designations.manage|teams.manage'])->group(function () {
 
     // Departments
-    Route::prefix('departments')->name('departments.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|departments.manage'])->prefix('departments')->name('departments.')->group(function () {
       Route::get('', [DepartmentsController::class, 'index'])->name('index');
       Route::get('indexAjax', [DepartmentsController::class, 'indexAjax'])->name('indexAjax');
       Route::post('addOrUpdateDepartmentAjax', [DepartmentsController::class, 'addOrUpdateDepartmentAjax'])->name('addOrUpdateDepartmentAjax');
@@ -746,7 +762,7 @@ Route::middleware([
     });
 
     // Designations
-    Route::prefix('designations')->name('designations.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|designations.manage'])->prefix('designations')->name('designations.')->group(function () {
       Route::get('', [DesignationController::class, 'index'])->name('index');
       Route::get('indexAjax', [DesignationController::class, 'indexAjax'])->name('indexAjax');
       Route::get('getDesignationListAjax', [DesignationController::class, 'getDesignationListAjax'])->name('getDesignationListAjax');
@@ -758,7 +774,7 @@ Route::middleware([
     });
 
     // Teams
-    Route::prefix('teams')->name('teams.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|teams.manage'])->prefix('teams')->name('teams.')->group(function () {
       Route::get('', [TeamController::class, 'index'])->name('index');
       Route::get('getTeamsListAjax', [TeamController::class, 'getTeamsListAjax'])->name('getTeamsListAjax');
       Route::post('addOrUpdateTeamAjax', [TeamController::class, 'addOrUpdateTeamAjax'])->name('addOrUpdateTeamAjax');
@@ -797,8 +813,10 @@ Route::middleware([
     // --- RECRUITMENT MANAGEMENT ---
     // recruitment.view lets a delegate reach the module; the recruitment
     // controllers enforce their own finer-grained permission catalog
-    // ("Manage Job", "Create Job", ...) for mutations.
-    Route::middleware(['role_or_permission:admin|hr|accounts|manager|recruitment.view'])->group(function () {
+    // ("Manage Job", "Create Job", ...) for mutations. HR's module: managers
+    // and accounts were let in here too, and Interview Schedule has no check of
+    // its own, so any manager could open it by URL.
+    Route::middleware(['role_or_permission:admin|hr|recruitment.view'])->group(function () {
     Route::resource('job', JobController::class);
     Route::post('job/copy/{id}', [JobController::class, 'copyjob'])->name('job.copy');
 
@@ -822,7 +840,7 @@ Route::middleware([
     Route::resource('interview-schedule', InterviewScheduleController::class)->except(['create']);
     Route::get('interview-schedule/create/{candidate?}', [InterviewScheduleController::class, 'create'])->name('interview-schedule.create');
 
-    }); // close Recruitment role:admin|hr|accounts|manager gate
+    }); // close Recruitment role:admin|hr gate
 
     }); // Close the admin|hr|manager group starting at line 108
 
@@ -1082,8 +1100,11 @@ Route::middleware([
             Route::delete('/{id}', [\App\Http\Controllers\tenant\TravelClaimController::class, 'destroy'])->name('destroy');
             
             // Admin/HR specific
+            // The claims dashboard is where verifiers, approvers and payers all
+            // work; each action keeps its own gate.
+            Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard')
+                ->middleware('role_or_permission:admin|hr|travel_claim.verify|travel_claim.approve|travel_claim.pay');
             Route::middleware(['role_or_permission:admin|hr|travel_claim.verify'])->group(function() {
-                Route::get('/admin/dashboard', [\App\Http\Controllers\tenant\TravelClaimController::class, 'adminDashboard'])->name('adminDashboard');
                 Route::post('/{id}/verify', [\App\Http\Controllers\tenant\TravelClaimController::class, 'verify'])->name('verify');
                 Route::post('/{id}/reject', [\App\Http\Controllers\tenant\TravelClaimController::class, 'reject'])->name('reject');
                 Route::post('/{id}/objection', [\App\Http\Controllers\tenant\TravelClaimController::class, 'objection'])->name('objection');
@@ -1165,6 +1186,38 @@ Route::middleware([
           Route::get('', [OrganisationHierarchyController::class, 'index'])->name('index');
         });
 
+        // 90-Day Goals is the Sales team's own tracker: everyone in Sales works their own goals,
+        // admin/HR/goals.manage see everyone's, a manager sees their team's. It has to sit HERE,
+        // with the other pages every logged-in user can open (like My Scorecard): the surrounding
+        // performance group only admits admin, HR and managers, which would lock out the very
+        // people it is for. NinetyDayGoalController decides who may do what.
+        Route::prefix('performance')->name('performance.')->group(function () {
+            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
+            Route::get('/ninety-day-goals/dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'dashboard'])->name('ninety-day-goals.dashboard');
+            Route::get('/ninety-day-goals/admin-view', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'adminView'])->name('ninety-day-goals.admin-view');
+            Route::get('/ninety-day-goals/admin-view/export', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'adminViewExport'])->name('ninety-day-goals.admin-view.export');
+            Route::get('/ninety-day-goals/program-dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDashboard'])->name('ninety-day-goals.program-dashboard');
+            Route::get('/ninety-day-goals/comments', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'comments'])->name('ninety-day-goals.comments');
+            Route::get('/ninety-day-goals/past', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'past'])->name('ninety-day-goals.past');
+            Route::get('/ninety-day-goals/past/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pastRound'])->name('ninety-day-goals.past.show');
+            Route::get('/ninety-day-goals/person/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'person'])->name('ninety-day-goals.person');
+            Route::get('/ninety-day-goals/my-program', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'myProgram'])->name('ninety-day-goals.my-program');
+            Route::get('/ninety-day-goals/my-dashboard', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'myDashboard'])->name('ninety-day-goals.my-dashboard');
+            Route::get('/ninety-day-goals/round/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'roundDetail'])->name('ninety-day-goals.round');
+            Route::get('/ninety-day-goals/program/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDetail'])->name('ninety-day-goals.program');
+            Route::post('/ninety-day-goals/program/{id}/remind', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programSendReminder'])->name('ninety-day-goals.program.remind');
+            Route::get('/ninety-day-goals/programs/create', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programCreate'])->name('ninety-day-goals.programs.create');
+            Route::post('/ninety-day-goals/programs', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programStore'])->name('ninety-day-goals.programs.store');
+            Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');
+            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
+            Route::post('/ninety-day-goals/checkin', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'checkin'])->name('ninety-day-goals.checkin');
+            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
+            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
+            Route::post('/ninety-day-goals/notes', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'note'])->name('ninety-day-goals.note');
+            Route::post('/ninety-day-goals/confirm-upsell', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'confirmUpsell'])->name('ninety-day-goals.confirm-upsell');
+            Route::delete('/ninety-day-goals/notes/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroyNote'])->name('ninety-day-goals.note.destroy');
+        });
+
         // Work Control (Viewable by all authenticated users)
         Route::prefix('work-control')->name('tenant.work-control.')->group(function () {
             Route::get('/', [\App\Http\Controllers\tenant\WorkControlController::class, 'index'])->name('index');
@@ -1193,6 +1246,21 @@ Route::middleware([
             Route::get('/approvals', [\App\Http\Controllers\tenant\KpiController::class, 'approvals'])->name('approvals');
             Route::get('/approvals/export', [\App\Http\Controllers\tenant\KpiController::class, 'exportApprovals'])->name('approvals.export');
             Route::post('/entries/{entryId}/review', [\App\Http\Controllers\tenant\KpiController::class, 'reviewEntry'])->name('entries.review');
+
+            // Bulk manual entry. Deliberately OUTSIDE the admin|hr group below:
+            // a KPI data owner is whoever actually holds the number -- the person
+            // running the GSM gateway, the one who keeps the CRM -- and they are
+            // usually neither admin nor HR. KpiBulkEntryController checks on every
+            // action that the caller owns the KPI being filled, and that each row
+            // belongs to a team they own it for.
+            Route::get('/bulk-entry', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'index'])->name('bulk-entry');
+            Route::post('/bulk-entry', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'store'])->name('bulk-entry.store');
+            Route::get('/bulk-entry/template', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'template'])->name('bulk-entry.template');
+            Route::post('/bulk-entry/import', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'import'])->name('bulk-entry.import');
+            Route::get('/bulk-entry/preview', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'preview'])->name('bulk-entry.preview');
+            Route::post('/bulk-entry/import/apply', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'importApply'])->name('bulk-entry.import.apply');
+            Route::post('/bulk-entry/owner', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'addOwner'])->name('bulk-entry.owner.add');
+            Route::delete('/bulk-entry/owner/{id}', [\App\Http\Controllers\tenant\KpiBulkEntryController::class, 'removeOwner'])->name('bulk-entry.owner.remove');
         });
 
         // Management side. NOTE: kept admin-only by default (not widened to
@@ -1226,7 +1294,9 @@ Route::middleware([
     Route::middleware([
       'web',
       'auth',
-      'role_or_permission:admin|hr|manager|device.manage|biometric.manage|account.manage'
+      // Every page in this group has its own gate below; this outer list only
+      // has to let each of their boxes in.
+      'role_or_permission:admin|hr|manager|device.manage|biometric.manage|account.manage|assets.manage_categories|sos.manage|chat.access|goals.manage|scorecards.manage'
     ])->group(function () {
 
 
@@ -1264,14 +1334,14 @@ Route::middleware([
     });
 
     // Device Status & Biometric Devices
-    Route::prefix('device')->name('device.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|manager|device.manage|account.manage'])->prefix('device')->name('device.')->group(function () {
       Route::get('', [DeviceController::class, 'index'])->name('index');
       Route::get('indexAjax', [DeviceController::class, 'indexAjax'])->name('indexAjax');
       Route::get('getByIdAjax/{id}', [DeviceController::class, 'getByIdAjax'])->name('getByIdAjax');
       Route::delete('deleteAjax/{id}', [DeviceController::class, 'deleteAjax'])->name('deleteAjax');
     });
 
-    Route::prefix('biometric')->name('biometric.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|manager|biometric.manage'])->prefix('biometric')->name('biometric.')->group(function () {
       Route::get('', [BiometricDeviceController::class, 'index'])->name('index');
       Route::get('create', [BiometricDeviceController::class, 'create'])->name('create');
       Route::post('store', [BiometricDeviceController::class, 'store'])->name('store');
@@ -1330,11 +1400,6 @@ Route::middleware([
         // scorecards.manage are available for individual delegation without
         // widening the role-based default.
         Route::middleware(['role_or_permission:admin|goals.manage|scorecards.manage'])->group(function () {
-            Route::get('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'index'])->name('ninety-day-goals.index');
-            Route::post('/ninety-day-goals', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'store'])->name('ninety-day-goals.store');
-            Route::put('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'update'])->name('ninety-day-goals.update');
-            Route::delete('/ninety-day-goals/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'destroy'])->name('ninety-day-goals.destroy');
-
             Route::get('/scorecards', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'index'])->name('scorecards.index');
             Route::post('/scorecards/generate', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'generate'])->name('scorecards.generate');
             Route::get('/scorecards/{id}', [\App\Http\Controllers\tenant\SalesAssessmentController::class, 'show'])->name('scorecards.show');
@@ -1351,11 +1416,14 @@ Route::middleware([
 // roles.manage-only holder before this middleware ever runs.
 Route::middleware(['web', 'auth', 'role_or_permission:admin|hr|manager|roles.manage'])->group(function () {
     Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+    Route::get('roles/{id}/panelAjax', [RoleController::class, 'panelAjax'])->name('roles.panelAjax');
+    Route::get('roles/{id}/getRolePermissionsAjax', [RoleController::class, 'getRolePermissionsAjax'])->name('roles.getRolePermissionsAjax');
     Route::post('roles/addOrUpdateAjax', [RoleController::class, 'addOrUpdateAjax'])->name('roles.addOrUpdateAjax');
     Route::delete('roles/deleteAjax/{id}', [RoleController::class, 'deleteAjax'])->name('roles.deleteAjax');
-    Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
 
     // User-specific special permissions
-    Route::get('roles/getUserPermissionsAjax/{userId}', [RoleController::class, 'getUserPermissionsAjax'])->name('roles.getUserPermissionsAjax');
-    Route::post('roles/syncUserPermissionsAjax', [RoleController::class, 'syncUserPermissionsAjax'])->name('roles.syncUserPermissionsAjax');
+    Route::get('roles/special-permissions', [RoleController::class, 'specialPermissionsPage'])->name('roles.specialPermissions');
+    Route::get('roles/specialPermissionsDataAjax/{userId}', [RoleController::class, 'specialPermissionsDataAjax'])->name('roles.specialPermissionsDataAjax');
+    Route::post('roles/toggleUserPermissionAjax', [RoleController::class, 'toggleUserPermissionAjax'])->name('roles.toggleUserPermissionAjax');
+    Route::post('roles/previewAccessAjax', [RoleController::class, 'previewAccessAjax'])->name('roles.previewAccessAjax');
 });

@@ -12,18 +12,27 @@ use Carbon\Carbon;
 
 class PipelineImportController extends Controller
 {
-    public function showImport(Request $request)
+    /**
+     * Who may import at all. The same rule for the page, the preview and the
+     * final write: preview and process used to skip it, so anyone who could
+     * reach the sales section - a read-only analytics grant included - could
+     * post an import straight to them.
+     */
+    private function canImport($user): bool
     {
-        $importTarget = $request->input('target', 'report');
-        $user = auth()->user();
-        if (!\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user) && !$user->can('sales_report.import')) {
-            abort(403);
-        }
+        return $user && (\App\Http\Middleware\SalesAccessGuard::isBroadSalesUser($user) || $user->can('sales_report.import'));
+    }
+
+    /**
+     * The salespeople this user may import for: exactly the page's dropdown.
+     * Only people in a Sales department, never terminated; a CCare or New Biz
+     * user only the salespeople tagged to them.
+     */
+    private function salespersonQuery($user)
+    {
         $isCcare = $user->department && str_contains(strtolower($user->department->name), 'customer care');
         $isNewBiz = $user->department && str_contains(strtolower($user->department->name), 'new biz');
 
-        // Salesperson dropdown must only list people tagged in a Sales
-        // department (never all employees), and never terminated staff.
         $query = User::where('status', 'active')
             ->notTerminated()
             ->whereHas('department', function($q) {
@@ -40,7 +49,21 @@ class PipelineImportController extends Controller
         }
         // Any other role: still limited to Sales-department users above
 
-        $salespersons = $query->orderBy('first_name')->get();
+        return $query;
+    }
+
+    /** Session key holding the one upload this user's preview saved. */
+    private const TEMP_KEY = 'pipeline_import_temp';
+
+    public function showImport(Request $request)
+    {
+        $importTarget = $request->input('target', 'report');
+        $user = auth()->user();
+        if (!$this->canImport($user)) {
+            abort(403);
+        }
+
+        $salespersons = $this->salespersonQuery($user)->orderBy('first_name')->get();
 
         $ccareUsers = User::where('status', 'active')
             ->whereHas('department', function($q) {
@@ -98,17 +121,26 @@ class PipelineImportController extends Controller
 
     public function previewImport(Request $request)
     {
+        if (!$this->canImport(auth()->user())) {
+            abort(403);
+        }
         $request->validate([
             'file' => 'required|mimes:xlsx,xls,csv|max:10240',
             'salesperson_id' => 'required|exists:users,id',
             'ccare_id' => 'nullable|exists:users,id',
             'new_biz_id' => 'nullable|exists:users,id'
         ]);
+        if (!$this->salespersonQuery(auth()->user())->whereKey($request->salesperson_id)->exists()) {
+            return back()->with('error', 'You can only import for a salesperson in your own list.');
+        }
 
         $path = null;
         try {
-            // Keep the file temporarily in storage
-            $path = $request->file('file')->storeAs('temp', 'pipeline_matrix_'.time().'.'.$request->file('file')->getClientOriginalExtension());
+            // Keep the file temporarily in storage. The extension comes from
+            // the validated file type, not the client's file name.
+            $path = $request->file('file')->storeAs('temp', 'pipeline_matrix_'.time().'_'.\Illuminate\Support\Str::random(8).'.'.$request->file('file')->guessExtension());
+            // The final step accepts only this file, for this user.
+            session([self::TEMP_KEY => $path]);
             $fullPath = storage_path('app/' . $path);
             $data = Excel::toArray(new \stdClass(), $fullPath)[0];
         } catch (\Exception $e) {
@@ -385,6 +417,10 @@ class PipelineImportController extends Controller
 
     public function processImport(Request $request)
     {
+        $user = auth()->user();
+        if (!$this->canImport($user)) {
+            abort(403);
+        }
         $request->validate([
             'temp_path' => 'required',
             'salesperson_id' => 'required|exists:users,id',
@@ -398,9 +434,17 @@ class PipelineImportController extends Controller
             'month_mappings' => 'required|json'
         ]);
 
-        $tempPath = $request->temp_path;
-        if (!str_starts_with($tempPath, 'temp/')) {
-            return redirect()->route('sales-visits.pipeline.import')->with('error', 'Invalid file reference.');
+        // Only the file this user's own preview saved. The path used to be
+        // trusted from the form with just a 'temp/' prefix check, so
+        // 'temp/../../<anything>' read any file on the server.
+        $tempPath = (string) $request->temp_path;
+        if ($tempPath === '' || $tempPath !== session(self::TEMP_KEY)
+            || !preg_match('~^temp/pipeline_matrix_[0-9]+_[A-Za-z0-9]{8}\.(xlsx|xls|csv)$~', $tempPath)) {
+            return redirect()->route('sales-visits.pipeline.import')->with('error', 'Invalid file reference. Please upload the file again.');
+        }
+        $allowedSalespersonIds = $this->salespersonQuery($user)->pluck('id')->map(fn ($i) => (int) $i)->all();
+        if (!in_array((int) $request->salesperson_id, $allowedSalespersonIds, true)) {
+            return redirect()->route('sales-visits.pipeline.import')->with('error', 'You can only import for a salesperson in your own list.');
         }
         $fullPath = storage_path('app/' . $tempPath);
         if (!file_exists($fullPath)) {
@@ -561,7 +605,11 @@ class PipelineImportController extends Controller
                 $rowSalespersonId = $salespersonId;
                 if ($salespersonColIdx !== null) {
                     $name = strtolower(trim($row[$salespersonColIdx] ?? ''));
-                    if ($name && isset($usersMap[$name])) $rowSalespersonId = $usersMap[$name];
+                    // A name in the sheet may only point at someone this user
+                    // could have picked; anyone else keeps the chosen salesperson.
+                    if ($name && isset($usersMap[$name]) && in_array((int) $usersMap[$name], $allowedSalespersonIds, true)) {
+                        $rowSalespersonId = $usersMap[$name];
+                    }
                 }
 
                 $rowNewBizId = $newBizId;
@@ -684,8 +732,9 @@ class PipelineImportController extends Controller
             }
         }
 
-        // Cleanup
+        // Cleanup: the file, and the session's claim on it (one import per upload).
         @unlink($fullPath);
+        session()->forget(self::TEMP_KEY);
 
         $msg = "Successfully processed {$successCount} parties/pipelines.";
         if ($lockedMonthsSkipped > 0) {

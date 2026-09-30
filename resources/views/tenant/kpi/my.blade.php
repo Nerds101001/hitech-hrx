@@ -76,6 +76,51 @@
                     <div><h3 class="stat-value mb-0">{{ $completedCount }}</h3><span class="stat-label">Completed</span></div>
                 </div>
             </div>
+
+            {{-- Two figures people were reading off the grid by eye. Both are
+                 computed exactly the way their KPIs are, so a card and a scored
+                 row can never disagree. --}}
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.25s">
+                <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-line-chart"></i></div>
+                    </div>
+                    <div>
+                        <h3 class="stat-value mb-0">₹{{ number_format((float) ($totalPipeline ?? 0), 2) }}<span style="font-size:.6em;font-weight:600;"> L</span></h3>
+                        <span class="stat-label">Total pipeline</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.3s">
+                <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-calendar-check"></i></div>
+                    </div>
+                    <div>
+                        <h3 class="stat-value mb-0">
+                            {{ $attendancePct === null ? '—' : number_format((float) $attendancePct, 1) . '%' }}
+                        </h3>
+                        <span class="stat-label">Attendance, {{ now()->format('M Y') }}</span>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Shown, not scored: e.g. Total Leads Allocated (Sales / New Biz),
+                 entered monthly in Bulk KPI Entry. --}}
+            @foreach(($infoCards ?? []) as $infoLabel => $infoValue)
+            <div class="col-xl-3 col-md-6 animate__animated animate__fadeInUp" style="animation-delay:.35s">
+                <div class="hitech-stat-card dashboard-variant card-teal uniform-card">
+                    <div class="stat-card-header mb-2">
+                        <div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-target-lock"></i></div>
+                    </div>
+                    <div>
+                        <h3 class="stat-value mb-0">{{ $infoValue === null ? '—' : rtrim(rtrim(number_format((float) $infoValue, 2), '0'), '.') }}</h3>
+                        <span class="stat-label">{{ $infoLabel }}, {{ now()->format('M Y') }}</span>
+                    </div>
+                </div>
+            </div>
+            @endforeach
         </div>
 
         {{-- This week's own reporting. Scoring stays monthly; these weekly

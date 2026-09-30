@@ -7,15 +7,17 @@ use App\Traits\TenantTrait;
 use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * No Auditable here (unlike CrmClientContact) -- this table already IS the
  * change/activity log; wrapping it in the generic field-change auditor
  * would just be a redundant second log of the same events.
  */
-class CrmClientActivity extends Model
+class CrmClientActivity extends Model implements AuditableContract
 {
-    use UserActionsTrait, TenantTrait, SoftDeletes;
+    use UserActionsTrait, TenantTrait, SoftDeletes, Auditable;
 
     protected $table = 'crm_client_activities';
 

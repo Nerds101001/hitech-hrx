@@ -47,7 +47,27 @@ return [
 
     'request_timeout' => env('OPENAI_REQUEST_TIMEOUT', 30),
 
-    'ai_model' => env('AI_MODEL', 'openai/gpt-oss-120b'),
+    /*
+    |--------------------------------------------------------------------------
+    | AI Model
+    |--------------------------------------------------------------------------
+    |
+    | Despite the OpenAI naming, this stack talks to NVIDIA NIM
+    | (OPENAI_BASE_URL is integrate.api.nvidia.com, the key is an nvapi- one),
+    | so these are NVIDIA-hosted builds and NVIDIA retires them on its own
+    | schedule. The previous default, openai/gpt-oss-120b, reached end of life
+    | on 2026-09-03: the endpoint answers 410 Gone with a body that carries no
+    | "choices" key, so every call surfaced as `Undefined array key "choices"`
+    | and every AI feature had been dead for weeks without anyone reading the
+    | actual response.
+    |
+    | Check `GET {base_url}/models` before changing this - it lists what is
+    | genuinely available, and openai/gpt-oss-20b was the only surviving
+    | openai/* build when this was last checked.
+    |
+    */
+
+    'ai_model' => env('AI_MODEL', 'openai/gpt-oss-20b'),
 
     /*
     |--------------------------------------------------------------------------

@@ -326,8 +326,9 @@
               <select id="leaveTypeFilter" name="leaveTypeFilter" class="form-select select2 filter-item-hitech">
                 <option value="">Type: All</option>
                 @foreach($leaveTypes as $leaveType)
-                  <option value="{{ $leaveType->id }}">{{ $leaveType->name }}</option>
+                  <option value="{{ $leaveType->id }}">{{ $leaveType->name }}{{ (($leaveType->status->value ?? $leaveType->status) !== 'active' || $leaveType->deleted_at) ? ' (old)' : '' }}</option>
                 @endforeach
+                <option value="outdoor">Outdoor Duty</option>
               </select>
             </div>
 

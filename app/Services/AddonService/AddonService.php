@@ -41,7 +41,8 @@ class AddonService implements IAddonService
   public function isAddonEnabled(string $name, bool $isStandard = false): bool
   {
     // Temporarily disabled modules as per user request
-    $disabledModules = ['AiChat', 'Monitoring', 'Reports', 'ClientVisit', 'SoS', 'Device', 'RegisteredDevices', 'DisabledModule'];
+    // Reports and Monitoring re-enabled 2026-09-24 per explicit request - see git log.
+    $disabledModules = ['AiChat', 'ClientVisit', 'SoS', 'Device', 'RegisteredDevices', 'DisabledModule'];
     if (in_array($name, $disabledModules)) {
       return false;
     }

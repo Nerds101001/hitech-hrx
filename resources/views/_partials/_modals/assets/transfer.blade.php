@@ -22,7 +22,7 @@
             <option value="">Select User</option>
             @if(isset($users))
               @foreach($users as $user)
-              <option value="{{ $user->id }}">{{ $user->first_name }} {{ $user->last_name }}</option>
+              <option value="{{ $user->id }}">{{ $user->name_with_department }}</option>
               @endforeach
             @endif
           </select>

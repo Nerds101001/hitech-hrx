@@ -96,13 +96,24 @@ class KpiPeriodService
     }
 
     /**
-     * Ensure a check row exists for the assignment's current period and
-     * close out (score) any past-period rows still pending.
+     * Ensure a check row exists for the period containing $day (today by
+     * default) and close out (score) any past-period rows still pending.
+     *
+     * $day exists because a figure does not always arrive inside the month it
+     * belongs to. Sales months stay open to the 5th and can be reopened for
+     * weeks; a data owner fills last month's call hours this month. Resolving
+     * the check from today would file that figure against the wrong period --
+     * and, worse, recalculate it there, overwriting a month nobody touched.
      */
-    public static function sync(KpiAssignment $a): KpiCheck
+    public static function sync(KpiAssignment $a, ?Carbon $day = null): KpiCheck
     {
-        [$start, $end, $due] = self::currentPeriod($a);
+        [$start, $end, $due] = self::currentPeriod($a, $day);
 
+        // One check per (assignment, period_start) -- the table has a unique
+        // index on exactly that, so period_start is the identity whether we
+        // like it or not. What it does NOT tell us is the window: a monthly
+        // April and a fiscal year both start on 1 April. recordAchievement()
+        // therefore checks the window before writing; see the note there.
         $check = KpiCheck::firstOrCreate(
             ['kpi_assignment_id' => $a->id, 'period_start' => $start->toDateString()],
             [
@@ -117,6 +128,7 @@ class KpiPeriodService
         // Close overdue past periods: pending + period ended => missed/scored
         $stale = KpiCheck::where('kpi_assignment_id', $a->id)
             ->where('status', 'pending')
+            ->whereKeyNot($check->getKey())
             ->whereDate('period_end', '<', Carbon::today())
             ->get();
         foreach ($stale as $s) {
@@ -162,12 +174,29 @@ class KpiPeriodService
     }
 
     /** Record achieved value for a target-based assignment (current period). */
-    public static function recordAchievement(KpiAssignment $a, float $achieved, ?int $evaluatorId = null, ?string $remarks = null): KpiCheck
+    public static function recordAchievement(KpiAssignment $a, float $achieved, ?int $evaluatorId = null, ?string $remarks = null, ?Carbon $day = null): KpiCheck
     {
-        $check = self::sync($a);
+        $check = self::sync($a, $day);
+
+        // The row holding this period_start may span a different window. 297 on
+        // production do: these KPIs were yearly when their checks were made and
+        // are monthly now, so a monthly April resolves onto a year-to-date row.
+        // Writing would replace a running annual total with one month's figure
+        // -- it moved 258 marks across 24 people before this guard existed. What
+        // to do with those rows is a decision about the assignment, not
+        // something a scoring pass should settle silently.
+        [, $expectedEnd] = self::currentPeriod($a, $day);
+        if ($check->period_end && !Carbon::parse($check->period_end)->isSameDay($expectedEnd)) {
+            return $check;
+        }
+
         $check->achieved_value = $achieved;
         $check->score = self::targetScore($a, $achieved);
-        $onTime = Carbon::today()->lte($check->due_date);
+        // Judged from the day being scored, not the day the scoring ran. An
+        // auto-sourced figure involves no human deadline: re-reading August's
+        // sales in September would otherwise stamp every row 'Late' and put
+        // that word on the sheet of somebody who did nothing late.
+        $onTime = ($day ? $day->copy()->startOfDay() : Carbon::today())->lte($check->due_date);
         $check->status = $onTime ? 'completed_on_time' : 'completed_late';
         $check->completed_at = Carbon::now();
         if ($evaluatorId) $check->evaluated_by_id = $evaluatorId;
@@ -213,7 +242,17 @@ class KpiPeriodService
                         $best = $b;
                     }
                 }
-                return $best ? round((float) ($best['marks'] ?? 0), 2) : 0.0;
+                $marks = $best ? (float) ($best['marks'] ?? 0) : 0.0;
+                // Never more than the KPI's own maximum (user decision 2026-09-30).
+                // The Sales rule book's top tiers paid past it - YoY 30 on a 25-mark
+                // KPI, New Customer Wins 15/13, Market Share 15/10 - and scorecards
+                // showed "30 / 25". A 0-mark KPI (a penalty, or a shown-only figure)
+                // is left as its bands say, so a negative penalty still applies.
+                if ((float) $a->max_marks > 0) {
+                    $marks = min($marks, (float) $a->max_marks);
+                }
+
+                return round($marks, 2);
             }
         }
 

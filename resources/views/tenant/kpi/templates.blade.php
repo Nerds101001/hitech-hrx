@@ -490,6 +490,39 @@
   const $ = (id) => document.getElementById(id);
   const modal = () => bootstrap.Modal.getOrCreateInstance($('tplModal'));
 
+  // Belt-and-suspenders: force the scrollable-modal layout with inline styles too, not just
+  // the .modal-dialog-scrollable CSS class. Plain `el.style.x = ...` loses to any stylesheet
+  // !important rule — style.setProperty(prop, value, 'important') is what actually wins that
+  // fight. The REAL bug, found by inspecting computed styles directly: .modal-header/.modal-body/
+  // .modal-footer here are wrapped in a <form>, a plain block box sitting between them and the
+  // flex .modal-content — so .modal-body's flex:1 1 auto had no flex container to size against
+  // and just rendered at full content height, silently clipped by .modal-content's overflow:
+  // hidden instead of ever scrolling. The <form> needs the same flex treatment relayed through it.
+  function forceScrollableModal() {
+    const content = this.querySelector('.modal-content');
+    const form = content ? content.querySelector(':scope > form') : null;
+    const body = this.querySelector('.modal-body');
+    if (content) {
+      content.style.setProperty('max-height', 'calc(100vh - 3.5rem)', 'important');
+      content.style.setProperty('display', 'flex', 'important');
+      content.style.setProperty('flex-direction', 'column', 'important');
+    }
+    if (form) {
+      form.style.setProperty('display', 'flex', 'important');
+      form.style.setProperty('flex-direction', 'column', 'important');
+      form.style.setProperty('flex', '1 1 auto', 'important');
+      form.style.setProperty('min-height', '0', 'important');
+      form.style.setProperty('overflow', 'hidden', 'important');
+    }
+    if (body) {
+      body.style.setProperty('overflow-y', 'auto', 'important');
+      body.style.setProperty('flex', '1 1 auto', 'important');
+      body.style.setProperty('min-height', '0', 'important');
+    }
+  }
+  $('tplModal').addEventListener('show.bs.modal', forceScrollableModal);
+  $('tplModal').addEventListener('shown.bs.modal', forceScrollableModal);
+
   // Only show the fields the chosen scoring type and late policy actually use,
   // so nobody fills in a threshold on a KPI that ignores it.
   function toggleFields() {

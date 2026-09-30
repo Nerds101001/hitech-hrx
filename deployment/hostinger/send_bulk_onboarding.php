@@ -28,7 +28,7 @@ foreach ($emails as $email) {
     echo "Found: ID={$user->id}, Name={$user->first_name} {$user->last_name}, Status=" . ($user->status instanceof \UnitEnum ? $user->status->value : $user->status) . "\n";
 
     // Generate temp password
-    $tempPassword = 'Hitech@' . rand(1000, 9999);
+    $tempPassword = \App\Support\TempPassword::make();
     $user->password = bcrypt($tempPassword);
     $user->save();
 

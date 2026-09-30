@@ -76,11 +76,37 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
             ['label' => 'Special Approval',          'value' => fn ($i) => (float) $i->special_approval_amount, 'sum' => true, 'money' => true],
             ['label' => 'Special Approval Proof',     'value' => fn ($i) => $i->special_approval_proof, 'bool' => true],
             ['label' => 'Other',                     'value' => fn ($i) => (float) $i->other_amount, 'sum' => true, 'money' => true],
+            ...$this->legacyAmountDefs(),
             ['label' => 'Row Total',                 'value' => null, 'sum' => true, 'money' => true],
             ['label' => 'Penalty Applied',            'value' => fn ($i) => $i->penalty_applied, 'bool' => true],
             ['label' => 'Flagged',                   'value' => fn ($i) => $i->is_flagged, 'bool' => true],
             ['label' => 'Remarks',                   'value' => fn ($i) => $i->remarks],
         ];
+    }
+
+    /**
+     * Fields the entry form no longer collects (saved as 0 since). They stay off
+     * the sheet - unless a claim actually carries an amount in one (an older or
+     * imported claim), in which case its column comes back. Dropping it would
+     * make the sheet total silently disagree with the claim's Gross Total.
+     */
+    private const LEGACY_AMOUNTS = [
+        'auto_taxi_amount'       => 'Auto/Taxi',
+        'transport_amount'       => 'Transport',
+        'bills_amount'           => 'Bills',
+        'freight_amount'         => 'Freight',
+        'additional_food_amount' => 'Additional Food',
+    ];
+
+    private function legacyAmountDefs(): array
+    {
+        $defs = [];
+        foreach (self::LEGACY_AMOUNTS as $field => $label) {
+            if ($this->claim->items->contains(fn ($i) => (float) ($i->{$field} ?? 0) != 0.0)) {
+                $defs[] = ['label' => $label, 'value' => fn ($i) => (float) ($i->{$field} ?? 0), 'sum' => true, 'money' => true];
+            }
+        }
+        return $defs;
     }
 
     /** Spreadsheet column letters (A, B, ... AA, AB...) for every 'money' column. */
@@ -124,10 +150,10 @@ class TravelClaimExport implements FromArray, WithTitle, ShouldAutoSize, WithEve
             array_map(fn ($d) => $d['label'], $defs),
         ];
 
-        // Row Total mirrors what the controller actually sums when it saves
-        // an item - the fields that still take a live amount, nothing else.
-        $rowTotal = fn ($i) => $n($i->conveyance_amount) + $n($i->food_allowance) + $n($i->lodging_amount)
-            + $n($i->courier_amount) + $n($i->toll_amount) + $n($i->special_approval_amount) + $n($i->other_amount);
+        // Row Total is the sum of every money column on the sheet - the same
+        // list, so a column shown is always a column counted.
+        $moneyDefs = array_filter($defs, fn ($d) => !empty($d['money']) && $d['label'] !== 'Row Total');
+        $rowTotal = fn ($i) => array_sum(array_map(fn ($d) => $n(($d['value'])($i)), $moneyDefs));
 
         foreach ($c->items as $item) {
             $rows[] = array_map(function ($d) use ($item, $rowTotal, $yn) {

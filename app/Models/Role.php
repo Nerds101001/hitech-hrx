@@ -3,11 +3,16 @@
 namespace App\Models;
 
 use Spatie\Permission\Models\Role as SpatieRole;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class Role extends SpatieRole
+class Role extends SpatieRole implements AuditableContract
 {
+    use Auditable;
+
   protected $fillable = [
     'name',
+    'description',
     'guard_name',
     'is_location_activity_tracking_enabled',
     'is_mobile_app_access_enabled',

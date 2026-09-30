@@ -1,5 +1,6 @@
 <!-- HR Assistant - Final Optimized Version -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 
 <style>
@@ -201,9 +202,13 @@
         row.className = `hs-msg-row ${role}`;
 
         // Humanize the leave balance display with Database Icons
-        let displayContent = text;
+        // Bot markdown is sanitised before it reaches innerHTML (an answer can
+        // carry text from documents or records); the user's own message is
+        // plain text. No sanitiser loaded -> show the answer as text.
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        let displayContent = esc(text);
         if (role === 'bot') {
-            displayContent = marked.parse(text)
+            displayContent = (window.DOMPurify ? DOMPurify.sanitize(marked.parse(String(text ?? ''))) : esc(text))
                 .replace(/Annual Leave:/g, '<span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:5px;color:#0D5C63;">event_available</span> Annual Leave:')
                 .replace(/Sick Leave:/g, '<span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle;margin-right:5px;color:#0D5C63;">medical_services</span> Sick Leave:');
         }
@@ -220,7 +225,7 @@
             `;
         } else {
             row.innerHTML = `
-                <div class="hs-bubble">${text}</div>
+                <div class="hs-bubble">${esc(text)}</div>
                 <div class="hs-meta">${time} • YOU</div>
             `;
         }

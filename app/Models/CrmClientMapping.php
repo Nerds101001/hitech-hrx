@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\TenantTrait;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class CrmClientMapping extends Model
+class CrmClientMapping extends Model implements AuditableContract
 {
-    use HasFactory, SoftDeletes, TenantTrait;
+    use HasFactory, SoftDeletes, TenantTrait, Auditable;
 
     protected $table = 'crm_client_mappings';
 

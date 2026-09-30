@@ -165,7 +165,14 @@ class TaskManagementController extends Controller
         // existing tasks they can see (scopeVisible() above).
         $departments = Department::cachedActive();
 
+        // The department comes along for the assignee pickers: names are not
+        // unique here. Two MANISHA KUMARIs are active right now, one in
+        // Accounts and one in Billing, and a list showing only names gives
+        // the assigner no way to tell which one they are picking.
+        // Eager-loaded rather than read per row, since this list renders four
+        // times on the page.
         $employees = User::where('status', UserAccountStatus::ACTIVE)
+            ->with('department:id,name')
             ->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'department_id']);
 
         $stats = [

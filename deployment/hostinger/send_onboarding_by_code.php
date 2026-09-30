@@ -29,7 +29,7 @@ foreach ($codes as $code) {
     echo "  Status : {$status}\n";
 
     // Generate temp password
-    $tempPassword = 'Hitech@' . rand(1000, 9999);
+    $tempPassword = \App\Support\TempPassword::make();
     $user->password = bcrypt($tempPassword);
     $user->save();
 

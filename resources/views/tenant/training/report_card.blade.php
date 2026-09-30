@@ -79,11 +79,11 @@
             <button class="btn btn-label-secondary me-2" onclick="window.print()">
                 <i class="ti ti-printer me-1"></i> Print Report
             </button>
-            @if($user->training_status !== 'completed')
+            @if($user->training_status !== 'completed' && ($canApprove ?? false))
                 <button class="btn btn-success" id="approve-btn">
                     <i class="ti ti-check me-1"></i> Approve & Finalize Training
                 </button>
-            @else
+            @elseif($user->training_status === 'completed')
                 <span class="badge bg-success">Training Finalized</span>
             @endif
         </div>

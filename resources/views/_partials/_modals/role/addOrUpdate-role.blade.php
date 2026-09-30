@@ -1,170 +1,63 @@
-<!-- Add Role Modal -->
+<!-- Create Role Modal — name + optional template only; fine-grained permissions
+     are configured on the dedicated Role Permissions page right after. -->
 <div class="modal fade" id="addOrUpdateRoleModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered modal-add-new-role">
+  <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content border-0 shadow-lg" style="border-radius: 24px; overflow: hidden;">
       <div class="modal-header modal-header-hitech py-4 px-5">
         <div class="d-flex align-items-center">
-          <div class="modal-icon-header animate__animated animate__pulse animate__infinite me-3" style="background: rgba(255,255,255,0.2); width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; border-radius: 12px;">
+          <div class="modal-icon-header me-3" style="background: rgba(255,255,255,0.2); width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; border-radius: 12px;">
             <i class="bx bx-shield-quarter fs-3 text-white"></i>
           </div>
           <div>
-            <h4 class="modal-title role-title text-white fw-bold mb-0">@lang('Update Role Permissions')</h4>
-            <p class="text-white opacity-75 mb-0 small">@lang('Configure granular access levels across all system modules.')</p>
+            <h4 class="modal-title text-white fw-bold mb-0">@lang('Create New Role')</h4>
+            <p class="text-white opacity-75 mb-0 small">@lang("Name it, optionally start from a template — you'll fine-tune access next.")</p>
           </div>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body p-0">
-        <form id="addRoleForm" class="row g-0" onsubmit="return false">
-          <input type="hidden" name="id" id="id">
-          
-          {{-- Section 1: Identity & Primary Controls --}}
-          <div class="col-12 p-5 pb-4" style="background: rgba(18, 116, 100, 0.02);">
-            <div class="row align-items-end g-4">
-                <div class="col-lg-6">
-                    <label class="form-label fw-bold text-heading mb-2 ms-1" for="name">@lang('Role Identity')</label>
-                    <div class="hitech-input-group-glass">
-                        <span class="input-group-text"><i class="bx bx-id-card fs-4"></i></span>
-                        <input type="text" id="name" name="name" class="form-control" placeholder="@lang('e.g. Senior HR Manager')" required />
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="d-flex justify-content-lg-end">
-                        <div class="hitech-checkbox-row d-flex align-items-center bg-white p-2 px-3 rounded-pill border shadow-sm">
-                            <label class="hitech-checkbox mb-0">
-                                <input type="checkbox" id="selectAll" class="select-all-permissions" />
-                                <span class="checkmark"></span>
-                                <span class="fw-bold text-teal small">@lang('Grant Full Administrative Access')</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            @if(!empty($rolePresets))
-            {{-- Persona templates: one-click permission bundles for common jobs. --}}
-            <div class="row align-items-end g-4 mt-1">
-                <div class="col-lg-8">
-                    <label class="form-label fw-bold text-heading mb-2 ms-1" for="rolePreset">
-                        <i class="bx bx-magic-wand me-1 text-primary"></i>@lang('Start from a template')
-                        <span class="text-muted fw-normal small">— @lang('picks the right permissions for a common role; you can still tweak below')</span>
-                    </label>
-                    <div class="hitech-input-group-glass">
-                        <span class="input-group-text"><i class="bx bx-category-alt fs-4"></i></span>
-                        <select id="rolePreset" class="form-select">
-                            <option value="">@lang('— No template (choose permissions manually) —')</option>
-                            @foreach($rolePresets as $presetKey => $preset)
-                                <option value="{{ $presetKey }}"
-                                        data-permissions="{{ implode(',', $preset['permissions'] ?? []) }}"
-                                        title="{{ $preset['description'] ?? '' }}">{{ $preset['label'] ?? $presetKey }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <p id="rolePresetHint" class="text-muted small mt-2 mb-0 ms-1" style="min-height: 1rem;"></p>
-                </div>
-            </div>
-            @endif
-          </div>
-
-          {{-- Section 2: Permissions Matrix --}}
-          <div class="col-12 px-5 py-4">
-            <h6 class="fw-bold text-heading mb-4 d-flex align-items-center">
-                <i class="bx bx-list-check me-2 text-primary fs-4"></i>@lang('Module-wise Access Permissions')
-            </h6>
-            <div class="table-responsive">
-              <table class="table table-permissions-hitech w-100">
-                <thead>
-                  <tr>
-                    <th style="width: 280px;">@lang('Module / Feature Set')</th>
-                    <th class="text-center" style="width: 120px;">@lang('Select All')</th>
-                    <th class="ps-4">@lang('Individual Permissions')</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @foreach($groupedPermissions as $moduleName => $permsArray)
-                  <tr>
-                    <td>
-                        <div class="d-flex align-items-center">
-                            <span class="stat-icon-wrap icon-primary me-3" style="width: 32px; height: 32px; font-size: 1rem;"><i class="bx bx-folder"></i></span>
-                            {{ $moduleName }}
-                        </div>
-                    </td>
-                    <td class="text-center">
-                        <label class="hitech-checkbox justify-content-center m-0">
-                            <input class="row-select-all" type="checkbox" data-module="{{ \Illuminate\Support\Str::slug($moduleName) }}" />
-                            <span class="checkmark"></span>
-                        </label>
-                    </td>
-                    <td class="ps-4">
-                        <div class="d-flex flex-wrap gap-4 py-2">
-                            @foreach($permsArray as $permName => $humanLabel)
-                                <label class="hitech-checkbox m-0 d-flex align-items-center">
-                                    <input class="permission-checkbox {{ \Illuminate\Support\Str::slug($moduleName) }}-checkbox" 
-                                           type="checkbox" 
-                                           name="permissions[]" 
-                                           value="{{ $permName }}" 
-                                           id="perm_{{ md5($permName) }}" />
-                                    <span class="checkmark me-2"></span>
-                                    <span class="small fw-medium text-muted" style="margin-top: 1px;">{{ $humanLabel }}</span>
-                                </label>
-                            @endforeach
-                        </div>
-                    </td>
-                  </tr>
-                  @endforeach
-                </tbody>
-              </table>
+      <div class="modal-body p-5">
+        <form id="addRoleForm" onsubmit="return false">
+          <div class="mb-4">
+            <label class="form-label fw-bold text-heading mb-2 ms-1" for="name">@lang('Role Identity')</label>
+            <div class="hitech-input-group-glass">
+                <span class="input-group-text"><i class="bx bx-id-card fs-4"></i></span>
+                <input type="text" id="name" name="name" class="form-control" placeholder="@lang('e.g. Senior HR Manager')" required />
             </div>
           </div>
 
-          {{-- Section 3: Advanced Settings Toggles --}}
-          <div class="col-12 px-5 py-4 border-top" style="background: rgba(18, 116, 100, 0.01);">
-              <h6 class="fw-bold text-heading mb-4 small text-uppercase letter-spacing-05">@lang('Advanced Role Configuration')</h6>
-              <div class="row g-4 mb-2">
-                  <div class="col-md-3">
-                    <div class="d-flex align-items-center">
-                        <div class="hitech-toggle-wrapper me-3">
-                            <input type="checkbox" class="hitech-switch-input" id="isMultiCheckInEnabled" name="isMultiCheckInEnabled" />
-                            <label class="hitech-switch-label" for="isMultiCheckInEnabled"></label>
-                        </div>
-                        <label class="fw-bold text-heading small" for="isMultiCheckInEnabled">@lang('Multi Check-In')</label>
-                    </div>
-                  </div>
-                  <div class="col-md-3">
-                    <div class="d-flex align-items-center">
-                        <div class="hitech-toggle-wrapper me-3">
-                            <input type="checkbox" class="hitech-switch-input" id="mobileAppAccess" name="mobileAppAccess" />
-                            <label class="hitech-switch-label" for="mobileAppAccess"></label>
-                        </div>
-                        <label class="fw-bold text-heading small" for="mobileAppAccess">@lang('Mobile App')</label>
-                    </div>
-                  </div>
-                  <div class="col-md-3">
-                    <div class="d-flex align-items-center">
-                        <div class="hitech-toggle-wrapper me-3">
-                            <input type="checkbox" class="hitech-switch-input" id="webAppAccess" name="webAppAccess" />
-                            <label class="hitech-switch-label" for="webAppAccess"></label>
-                        </div>
-                        <label class="fw-bold text-heading small" for="webAppAccess">@lang('Web Login')</label>
-                    </div>
-                  </div>
-                  <div class="col-md-3">
-                    <div class="d-flex align-items-center">
-                        <div class="hitech-toggle-wrapper me-3">
-                            <input type="checkbox" class="hitech-switch-input" id="locationActivityTracking" name="locationActivityTracking" />
-                            <label class="hitech-switch-label" for="locationActivityTracking"></label>
-                        </div>
-                        <label class="fw-bold text-heading small" for="locationActivityTracking">@lang('GPS Tracking')</label>
-                    </div>
-                  </div>
-              </div>
+          <div class="mb-4">
+            <label class="form-label fw-bold text-heading mb-2 ms-1" for="description">@lang('Description')
+              <span class="text-muted fw-normal small">— @lang('optional')</span>
+            </label>
+            <div class="hitech-input-group-glass">
+                <span class="input-group-text"><i class="bx bx-text fs-4"></i></span>
+                <input type="text" id="description" name="description" class="form-control" maxlength="255" placeholder="@lang('e.g. Sales team member — limited access to own data only')" />
+            </div>
           </div>
 
-          {{-- Section 4: Actions --}}
-          <div class="col-12 px-5 py-4 border-top text-end" style="background: #fff;">
-            <button type="reset" class="btn btn-label-secondary px-4 me-3" data-bs-dismiss="modal">@lang('Discard Changes')</button>
+          @if(!empty($rolePresets))
+          <div class="mb-1">
+            <label class="form-label fw-bold text-heading mb-2 ms-1" for="rolePreset">
+                <i class="bx bx-magic-wand me-1 text-primary"></i>@lang('Start from a template')
+                <span class="text-muted fw-normal small">— @lang('optional, you can adjust everything afterwards')</span>
+            </label>
+            <div class="hitech-input-group-glass">
+                <span class="input-group-text"><i class="bx bx-category-alt fs-4"></i></span>
+                <select id="rolePreset" name="preset" class="form-select">
+                    <option value="">@lang('— No template (start empty) —')</option>
+                    @foreach($rolePresets as $presetKey => $preset)
+                        <option value="{{ $presetKey }}" title="{{ $preset['description'] ?? '' }}">{{ $preset['label'] ?? $presetKey }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <p id="rolePresetHint" class="text-muted small mt-2 mb-0 ms-1" style="min-height: 1rem;"></p>
+          </div>
+          @endif
+
+          <div class="text-end pt-4 mt-4 border-top">
+            <button type="button" class="btn btn-label-secondary px-4 me-3" data-bs-dismiss="modal">@lang('Cancel')</button>
             <button type="submit" class="btn btn-primary btn-hitech-glow px-5">
-                <i class="bx bx-check-double me-1"></i> @lang('Save Role Permissions')
+                <i class="bx bx-arrow-forward me-1"></i> @lang('Create & Configure Access')
             </button>
           </div>
         </form>

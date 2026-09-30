@@ -155,8 +155,27 @@
     window.notyf.warning(message);
   };
 
+  // SweetAlert2 is not on every page. It loads per-page through Vite, and from a CDN only
+  // when the policy-enforcement block below has pending policies to show - so the same page
+  // has it for someone with an unacknowledged policy and not for anyone else.
+  //
+  // These helpers are defined globally regardless, so callers that guard with
+  // `typeof window.showSuccessSwal === 'function'` passed the check and then threw
+  // "Swal is not defined" on the line below. Where that call sat inside a fetch().then(),
+  // the throw fell through to the .catch() and reported the whole request as failed - while
+  // the request had in fact succeeded. Send Reminder, Submit All Updates and Comments on
+  // 90-Day Goals all did exactly that.
+  //
+  // Fall back to the browser's own dialog rather than throwing: a plain alert is a poor
+  // relation of a styled modal, but it tells the truth, and the caller keeps working.
+  function swalReady() {
+    return typeof Swal !== 'undefined' && Swal && typeof Swal.fire === 'function';
+  }
+
   window.showSuccessSwal = function(message) {
-    Swal.fire({
+    if (!swalReady()) { window.alert(message); return Promise.resolve({ isConfirmed: true }); }
+
+    return Swal.fire({
       title: '<i class="bx bx-check-circle"></i> Success!',
       text: message,
       html: `
@@ -178,6 +197,15 @@
   };
 
   window.showErrorSwal = function(message) {
+    // Same fallback as showSuccessSwal — see the note there.
+    if (!swalReady()) {
+      // Strip tags: callers pass HTML here, and alert() shows it raw.
+      var d = document.createElement('div');
+      d.innerHTML = message == null ? '' : String(message);
+      window.alert((d.textContent || '').trim() || 'Something went wrong.');
+      return;
+    }
+
     Swal.fire({
       title: '<i class="bx bx-error-alt"></i> Error!',
       html: `

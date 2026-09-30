@@ -4,12 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * One department's No-Objection Certificate for a leaver.
  */
-class ExitClearance extends Model
+class ExitClearance extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $fillable = [
         'exit_type', 'exit_id', 'user_id', 'step_key', 'label',
         'status', 'remarks', 'cleared_by_id', 'cleared_at', 'tenant_id',

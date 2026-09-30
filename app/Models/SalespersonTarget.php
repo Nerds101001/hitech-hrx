@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class SalespersonTarget extends Model
+class SalespersonTarget extends Model implements AuditableContract
 {
-    use HasFactory, TenantTrait;
+    use HasFactory, TenantTrait, Auditable;
 
     protected $fillable = [
         'tenant_id',

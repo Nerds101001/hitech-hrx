@@ -51,6 +51,7 @@
   var CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
   var APPROVAL_MAP = {
     Leave:    { url: 'leaveRequests/actionAjax',      ok: 'approved', no: 'rejected', reason: 'adminNotes' },
+    'Outdoor Duty': { url: 'leaveRequests/outdoorDuty/actionAjax', ok: 'approved', no: 'rejected', reason: 'adminNotes' },
     Expense:  { url: 'expenseRequests/actionAjax',    ok: 'approved', no: 'rejected', reason: 'adminRemarks' },
     Document: { url: 'documentmanagement/actionAjax', ok: 'Approved', no: 'Rejected', reason: 'admin_remarks' },
     Loan:     { url: 'loan/actionAjax',               ok: 'Approved', no: 'Rejected', reason: 'admin_remarks' }

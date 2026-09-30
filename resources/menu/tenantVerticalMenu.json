@@ -85,11 +85,9 @@
             "name": "Reports",
             "icon": "menu-icon bx bx-file",
             "slug": "reports.index",
-            "addon": "DisabledModule",
             "roles": [
                 "admin",
-                "hr",
-                "accounts"
+                "hr"
             ]
         },
         {
@@ -105,7 +103,6 @@
                 "admin",
                 "hr"
             ],
-            "addon": "DisabledModule",
             "submenu": [
                 {
                     "url": "/liveLocation",
@@ -174,7 +171,8 @@
                         "admin",
                         "hr",
                         "accounts"
-                    ]
+                    ],
+                    "permission": ["employee.view"]
                 },
                 {
                     "url": "/employees/celebrations",
@@ -284,7 +282,7 @@
                 "employees.onboarding.review_center",
                 "employees.onboarding.review"
             ],
-            "permission": "recruitment.view",
+            "permission": ["recruitment.view", "onboarding.manage", "training.manage"],
             "roles": [
                 "admin",
                 "hr",
@@ -312,7 +310,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job"]
                 },
                 {
                     "url": "/job-application",
@@ -321,7 +320,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Application"]
                 },
                 {
                     "url": "/job-application/candidate",
@@ -330,7 +330,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job OnBoard"]
                 },
                 {
                     "url": "/custom-question",
@@ -339,7 +340,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Custom Question"]
                 },
                 {
                     "url": "/interview-schedule",
@@ -357,7 +359,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Category"]
                 },
                 {
                     "url": "/job-stage",
@@ -366,7 +369,8 @@
                     "roles": [
                         "admin",
                         "hr"
-                    ]
+                    ],
+                    "permission": ["Manage Job Stage"]
                 },
                 {
                     "url": "/training",
@@ -379,9 +383,9 @@
                     "slug": "training.manage.index",
                     "roles": [
                         "admin",
-                        "hr",
-                        "manager"
-                    ]
+                        "hr"
+                    ],
+                    "rolesOrPermission": ["training.manage"]
                 }
             ]
         },
@@ -529,6 +533,15 @@
                     "url": "/leavePolicyProfiles",
                     "name": "Leave Policies",
                     "slug": "leavePolicyProfiles.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/leave-unlocks",
+                    "name": "Leave Unlock Windows",
+                    "slug": "leave-unlocks.index",
                     "roles": [
                         "admin",
                         "hr"
@@ -760,11 +773,31 @@
             ]
         },
         {
+            "name": "Training",
+            "icon": "menu-icon bx bx-book-reader",
+            "slug": ["training.portal", "training.activity", "training.report-card"],
+            "roles": ["admin", "hr", "manager", "employee", "accounts", "office_employee"],
+            "submenu": [
+                {
+                    "url": "/training",
+                    "name": "My Training",
+                    "slug": "training.portal",
+                    "hideForRoles": ["admin", "hr"]
+                },
+                {
+                    "url": "/training/activity",
+                    "name": "Training Results",
+                    "slug": "training.activity",
+                    "roles": ["admin", "hr"],
+                    "rolesOrPermission": ["training.manage"]
+                }
+            ]
+        },
+        {
             "name": "Performance",
             "icon": "menu-icon bx bx-trending-up",
             "slug": [
                 "performance.scorecards.index",
-                "performance.ninety-day-goals.index",
                 "tenant.kpi.manage",
                 "tenant.kpi.templates"
             ],
@@ -806,13 +839,64 @@
                     ]
                 },
                 {
-                    "url": "/performance/ninety-day-goals",
-                    "name": "90-Day Goals",
-                    "slug": "performance.ninety-day-goals.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
+                    "url": "/kpi/bulk-entry",
+                    "name": "Bulk KPI Entry",
+                    "slug": "tenant.kpi.bulk-entry"
+                }
+            ]
+        },
+        {
+            "name": "90-Day Goals",
+            "icon": "menu-icon bx bx-target-lock",
+            "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program", "performance.ninety-day-goals.past"],
+            "department": "Sales",
+            "departmentOrPermission": ["goals.manage", "scorecards.manage", "goals.view"],
+            "submenu": [
+                {
+                    "url": "/performance/ninety-day-goals/my-dashboard",
+                    "name": "My Dashboard",
+                    "icon": "menu-icon bx bx-grid-alt",
+                    "slug": "performance.ninety-day-goals.my-dashboard",
+                    "department": "Sales",
+                    "hideForRoles": ["admin","hr"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/my-program",
+                    "name": "My Programs",
+                    "icon": "menu-icon bx bx-target-lock",
+                    "slug": "performance.ninety-day-goals.round",
+                    "department": "Sales",
+                    "hideForRoles": ["admin","hr"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard",
+                    "name": "Team Dashboard",
+                    "icon": "menu-icon bx bx-group",
+                    "slug": "performance.ninety-day-goals.program-dashboard",
+                    "department": "Sales",
+                    "roles": ["manager"],
+                    "hideForRoles": ["admin","hr"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/program-dashboard",
+                    "name": "Dashboard",
+                    "icon": "menu-icon bx bx-grid-alt",
+                    "slug": "performance.ninety-day-goals.program-dashboard",
+                    "permission": ["goals.manage","scorecards.manage","goals.view"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/programs/create",
+                    "name": "New Program",
+                    "icon": "menu-icon bx bx-plus-circle",
+                    "slug": "performance.ninety-day-goals.programs.create",
+                    "permission": ["goals.manage","scorecards.manage"]
+                },
+                {
+                    "url": "/performance/ninety-day-goals/past",
+                    "name": "Past Programs",
+                    "icon": "menu-icon bx bx-history",
+                    "slug": "performance.ninety-day-goals.past",
+                    "permission": ["goals.manage","scorecards.manage","goals.view"]
                 }
             ]
         },
@@ -935,22 +1019,19 @@
                 "sales-visits.index",
                 "sales-visits.clients.index"
             ],
-            "permission": [
-                "access-sales-ops",
-                "cc_attendance.manage"
-            ],
+            "permission": ["access-sales-ops", "cc_attendance.manage", "sales_ops.view_all", "sales_visits.view", "sales_visits.create", "client_master.view", "sales_report.view", "sales_pipeline.view", "sales_analytics.view", "kingo_bingo.play"],
             "submenu": [
                 {
                     "url": "/sales-visits",
                     "name": "All Visits",
                     "slug": "sales-visits.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_visits.view"]
                 },
                 {
                     "url": "/sales-visits/create",
                     "name": "Book a Visit",
                     "slug": "sales-visits.create",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_visits.create"]
                 },
                 {
                     "url": "/sales-visits/reports",
@@ -961,13 +1042,14 @@
                         "hr",
                         "manager",
                         "accounts"
-                    ]
+                    ],
+                    "rolesOrPermission": ["sales_analytics.view"]
                 },
                 {
                     "url": "/sales-visits/clients",
                     "name": "Client Master",
                     "slug": "sales-visits.clients.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "client_master.view"]
                 },
                 {
                     "url": "/sales-visits/delete-requests",
@@ -991,19 +1073,19 @@
                     "url": "/sales-visits/pipeline",
                     "name": "Sales Report",
                     "slug": "sales-visits.pipeline.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_report.view"]
                 },
                 {
                     "url": "/sales-visits/sales-pipeline",
                     "name": "Sales Pipeline",
                     "slug": "sales-visits.actual-pipeline.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_pipeline.view"]
                 },
                 {
                     "url": "/sales-visits/kingo-bingo",
                     "name": "Kingo Bingo",
                     "slug": "sales-visits.kingo-bingo.index",
-                    "permission": "access-sales-ops"
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "kingo_bingo.play"]
                 },
                 {
                     "url": "/sales-visits/kingo-bingo/fill-targets",
@@ -1196,7 +1278,7 @@
         {
             "name": "Asset Management",
             "icon": "menu-icon bx bx-archive",
-            "permission": "assets.view",
+            "permission": ["assets.view", "assets.create", "assets.edit", "assets.delete", "assets.assign", "assets.manage_categories"],
             "roles": [
                 "admin",
                 "hr"
@@ -1452,6 +1534,15 @@
                     "url": "/roles",
                     "name": "Roles & Permissions",
                     "slug": "roles.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/roles/special-permissions",
+                    "name": "User Special Permissions",
+                    "slug": "roles.specialPermissions",
                     "roles": [
                         "admin",
                         "hr"

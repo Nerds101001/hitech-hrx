@@ -37,7 +37,11 @@
         function displayMessage(sender, message, type = 'response') {
           const messageBubble = document.createElement('div');
           messageBubble.classList.add('message', `${type}-message`);
-          messageBubble.innerHTML = `<strong>${sender}:</strong> ${message}`;
+          // Sender and message as text: an AI answer containing markup used to run here.
+          const who = document.createElement('strong');
+          who.textContent = sender + ':';
+          messageBubble.appendChild(who);
+          messageBubble.appendChild(document.createTextNode(' ' + (message ?? '')));
           chatContainer.appendChild(messageBubble);
           scrollToBottom();
         }

@@ -49,11 +49,22 @@ return Application::configure(basePath: dirname(__DIR__))
        Harmless if it finds nothing, and safe to run by hand. */
     $schedule->command('vault:audit-pending --limit=20')->hourly()->withoutOverlapping();
     /* Fills in the achieved figure for every auto-sourced KPI (data_source
-       auto:*) and scores it. Idempotent — overwrites the current period's
-       check rather than adding another — so daily is safe for weekly,
-       monthly and quarterly assignments alike; each only actually changes
-       when its own period rolls over. */
-    $schedule->command('kpi:auto-score')->dailyAt('05:00')->withoutOverlapping();
+       auto:*) and scores it. Idempotent — overwrites that period's check
+       rather than adding another — so daily is safe for weekly, monthly and
+       quarterly assignments alike.
+       --months=2 re-scores last month as well as this one, because the data
+       behind a month keeps moving after the month ends: the sales report
+       stays open to the 5th and is often reopened for weeks, and the owner of
+       a manual figure reports it in the first days of the following month.
+       Scoring a month once on the 1st froze half-entered numbers into
+       people's appraisals. */
+    $schedule->command('kpi:auto-score --months=2')->dailyAt('05:00')->withoutOverlapping();
+    /* 90-Day Goals: every morning, close rounds that have ended, start a round
+       for anyone in Sales without one, open the week's check-ins, pick up Sales
+       Report orders entered late, and put the "submit your status" task on each
+       person's list on its due day. Idempotent, so daily is safe; Monday-only
+       missed rounds that start on other weekdays. */
+    $schedule->command('goals:weekly')->dailyAt('06:00')->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);

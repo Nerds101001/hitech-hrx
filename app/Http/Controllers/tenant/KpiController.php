@@ -55,7 +55,7 @@ class KpiController extends Controller
     public function manage(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return redirect()->route('tenant.dashboard')->with('error', 'Unauthorized.');
         }
 
@@ -93,11 +93,26 @@ class KpiController extends Controller
         return view('tenant.kpi.manage', compact('employees', 'selected', 'routines', 'assignments'));
     }
 
+    /**
+     * The same limit manage() puts on the employee list: a manager (who is not
+     * also admin/HR) works only on their direct reports. The write actions used
+     * to check the role alone, so a manager could add, change, retire or score
+     * any employee's KPIs by posting another id.
+     */
+    private function mayManageKpisOf($user, $targetUserId): bool
+    {
+        if (!$user->hasRole('manager') || $user->hasRole(['admin', 'hr'])) {
+            return true;
+        }
+
+        return User::where('id', $targetUserId)->where('reporting_to_id', $user->id)->exists();
+    }
+
     /** Create a KPI/KRA assignment (optionally from a DWM routine). */
     public function store(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
 
@@ -119,6 +134,10 @@ class KpiController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Target value is required for target-based scoring.'], 422);
         }
 
+        if (!$this->mayManageKpisOf($user, $data['user_id'])) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
+
         $target = User::find($data['user_id']);
         $data['tenant_id'] = $target->tenant_id;
         $data['late_score'] = $data['late_score'] ?? 0;
@@ -133,11 +152,14 @@ class KpiController extends Controller
     public function update(Request $request, $id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
 
         $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'category' => 'required|in:KPI,KRA',
@@ -159,10 +181,14 @@ class KpiController extends Controller
     public function destroy($id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
-        KpiAssignment::where('id', $id)->update(['is_active' => false]);
+        $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
+        $assignment->update(['is_active' => false]);
         return response()->json(['status' => 'success', 'message' => 'KPI/KRA deactivated.']);
     }
 
@@ -174,7 +200,7 @@ class KpiController extends Controller
     public function assignFromRoutine(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         $data = $request->validate([
@@ -183,6 +209,10 @@ class KpiController extends Controller
             'category' => 'required|in:KRA,KPI,none',
             'check_date' => 'nullable|date',
         ]);
+
+        if (!$this->mayManageKpisOf($user, $data['user_id'])) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
 
         $routine = WorkControlRoutine::findOrFail($data['work_control_routine_id']);
 
@@ -230,7 +260,7 @@ class KpiController extends Controller
     public function evaluate(Request $request, $id)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['admin', 'hr', 'manager'])) {
+        if (!$user->hasRole(['admin', 'hr', 'manager']) && !$user->can('kpi.manage')) {
             return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
         }
         $data = $request->validate([
@@ -238,6 +268,9 @@ class KpiController extends Controller
             'remarks' => 'nullable|string|max:255',
         ]);
         $assignment = KpiAssignment::findOrFail($id);
+        if (!$this->mayManageKpisOf($user, $assignment->user_id)) {
+            return response()->json(['status' => 'error', 'message' => 'You can only manage KPIs of your own team.'], 403);
+        }
         $check = KpiPeriodService::recordAchievement($assignment, (float)$data['achieved_value'], $user->id, $data['remarks'] ?? null);
 
         return response()->json(['status' => 'success', 'message' => 'Achievement recorded.', 'score' => $check->score]);
@@ -260,6 +293,8 @@ class KpiController extends Controller
     public static function matrixData($user, bool $sync = true): array
     {
         $assignments = $sync ? KpiPeriodService::syncUser($user->id) : KpiAssignment::where('user_id', $user->id)->get();
+        // Shown-not-scored figures (Total Leads Allocated) are cards, not rows.
+        $assignments = $assignments->reject(fn ($a) => $a->data_source === KpiAssignment::INFO)->values();
 
         // Fiscal year to date (Apr -> current month), newest first — same
         // window convention the Sales Report month columns use.
@@ -276,7 +311,9 @@ class KpiController extends Controller
             ->where('user_id', $user->id)
             ->where('period_start', '>=', $fyStart->toDateString())
             ->orderByDesc('period_start')
-            ->get();
+            ->get()
+            ->reject(fn ($h) => optional($h->assignment)->data_source === KpiAssignment::INFO)
+            ->values();
 
         // Every check this FY, keyed by [assignment_id][Y-m of period_start] —
         // a KPI's row can then look up any month's cell by simple array access.
@@ -404,10 +441,22 @@ class KpiController extends Controller
 
         $pdfMonths = KpiScorecardService::months();
 
+        // Two headline figures that people were reading off the grid by eye:
+        // the pipeline they are carrying, and this month's attendance. Both are
+        // computed the same way their KPIs are, so the cards and the scored
+        // rows can never disagree.
+        $cardStart = now()->startOfMonth();
+        $cardEnd = now()->endOfMonth();
+
+        $totalPipeline = \App\Services\KpiAutoSourceService::totalPipelineValue($user->id);
+        $attendancePct = \App\Services\KpiAutoSourceService::attendancePercentFor($user->id, $cardStart, $cardEnd);
+        // e.g. Total Leads Allocated this month - shown, carries no marks.
+        $infoCards = \App\Services\KpiScorecardService::infoFor($user->id, $cardStart);
+
         return view('tenant.kpi.my', compact(
             'pdfMonths',
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
-            'pendingCount', 'completedCount',
+            'pendingCount', 'completedCount', 'totalPipeline', 'attendancePct', 'infoCards',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
             'targetNote', 'entryPeriod', 'lastMonthEntries', 'lastMonthKey'
         ));
@@ -577,7 +626,7 @@ class KpiController extends Controller
 
     private function assertCanManageTemplates(): ?string
     {
-        return Auth::user()->hasRole(['admin', 'hr']) ? null : 'Unauthorized.';
+        return (Auth::user()->hasRole(['admin', 'hr']) || Auth::user()->can('kpi.manage')) ? null : 'Unauthorized.';
     }
 
     public function templates(Request $request)
@@ -725,15 +774,20 @@ class KpiController extends Controller
             $data['parent_template_id'] = null;
         }
 
+        $oldTarget = $t->target_value;
         $t->update($data);
 
         // Existing assignments follow the edit, so a weight change does not
         // leave half the department scored on the old number.
         $res = KpiTemplateService::apply($t, true);
+        // The target too, for everyone who was still on the old one -- a
+        // personalised target stays the person's own.
+        $retargeted = KpiTemplateService::followTargetChange($t->fresh(), $oldTarget);
 
         return response()->json([
             'status' => 'success',
-            'message' => "Saved. {$res['updated']} existing assignment(s) refreshed, {$res['created']} added.",
+            'message' => "Saved. {$res['updated']} existing assignment(s) refreshed, {$res['created']} added"
+                . ($retargeted ? ", {$retargeted} moved to the new target." : '.'),
         ]);
     }
 

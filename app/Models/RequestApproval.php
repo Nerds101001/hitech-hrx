@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class RequestApproval extends Model
+class RequestApproval extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     protected $table = 'request_approvals';
 

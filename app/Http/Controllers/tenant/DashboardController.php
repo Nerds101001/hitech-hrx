@@ -90,7 +90,9 @@ class DashboardController extends Controller
 
       $todayAbsentUsers = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
 
-      $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count();
+      // Outdoor duty is approved on the same Leave page, so it counts as pending leave.
+      $pendingLeaveRequests = LeaveRequest::where('status', 'pending')->count()
+        + \App\Models\OutdoorDuty::where('status', 'pending')->count();
       $pendingExpenseRequests = ExpenseRequest::where('status', 'pending')->count();
       $pendingDocumentRequests = DocumentRequest::where('status', 'pending')->count();
       $pendingLoanRequests = LoanRequest::where('status', 'pending')->count();
@@ -285,6 +287,23 @@ class DashboardController extends Controller
               ]);
           }
 
+          // Outdoor duty waits on the same Leave page; it was missing from this card.
+          foreach (\App\Models\OutdoorDuty::where('status', 'pending')->with('user.department')->get() as $r) {
+              $list->push([
+                  'type'       => 'Outdoor Duty',
+                  'user'       => $r->user?->name ?? 'N/A',
+                  'emp_id'     => $r->user?->code ?? 'N/A',
+                  'department' => $r->user?->department?->name ?? 'HR',
+                  'avatar'     => $r->user ? $r->user->getProfilePicture() : 'https://ui-avatars.com/api/?name=' . urlencode($r->user?->name ?? 'User') . '&background=004D4D&color=fff',
+                  'date'       => $r->date ? $r->date->format('M d') : 'N/A',
+                  'raw_date'   => $r->date ?? now(),
+                  'time_ago'   => $r->created_at ? $r->created_at->diffForHumans() : 'Recently',
+                  'details'    => 'Outdoor Duty' . ($r->location ? ' - ' . $r->location : ''),
+                  'days'       => 1,
+                  'id'         => $r->id,
+              ]);
+          }
+
           $expensesPending = ExpenseRequest::where('status', 'pending')
               ->with(['user.department', 'expenseType'])
               ->get();
@@ -350,6 +369,7 @@ class DashboardController extends Controller
       // different approval types at once.
       $approvalTypeUrls = [
           'Leave'    => url('/leaveRequests'),
+          'Outdoor Duty' => url('/leaveRequests'),
           'Expense'  => url('/expenseRequests'),
           'Document' => url('/documentmanagement'),
           'Loan'     => url('/loan'),
@@ -862,7 +882,8 @@ class DashboardController extends Controller
             ->with(['user', 'leaveType'])
             ->get();
         
-        $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
+        $pendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count()
+            + \App\Models\OutdoorDuty::whereIn('user_id', $teamMemberIds)->where('status', 'pending')->count();
 
         $teamPendingLeaveRequests = LeaveRequest::whereIn('user_id', $teamMemberIds)
             ->where('status', 'pending')
@@ -1092,6 +1113,7 @@ class DashboardController extends Controller
       $present  = $this->countPresentToday($ids);
       $onLeave  = LeaveRequest::whereIn('user_id', $ids)->whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
       $approvals = LeaveRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
+        + \App\Models\OutdoorDuty::whereIn('user_id', $ids)->where('status', 'pending')->count()
         + DocumentRequest::whereIn('user_id', $ids)->where('status', 'pending')->count()
         + LoanRequest::whereIn('user_id', $ids)->where('status', 'pending')->count();
     } else {
@@ -1099,6 +1121,7 @@ class DashboardController extends Controller
       $present  = $this->countPresentToday(null);
       $onLeave  = LeaveRequest::whereDate('from_date', '<=', now())->whereDate('to_date', '>=', now())->where('status', LeaveRequestStatus::APPROVED)->count();
       $approvals = LeaveRequest::where('status', 'pending')->count()
+        + \App\Models\OutdoorDuty::where('status', 'pending')->count()
         + ExpenseRequest::where('status', 'pending')->count()
         + DocumentRequest::where('status', 'pending')->count()
         + LoanRequest::where('status', 'pending')->count();

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\LeaveBalance;
+use App\Models\LeaveRequest;
 use App\Models\LeaveType;
 use App\Models\User;
 use App\Services\LeaveHistoryService;
@@ -103,7 +104,15 @@ class LeaveHistoryServiceTest extends TestCase
      * own credit/debit sum silently diverged from Available Balance even
      * though neither number was individually wrong.
      */
-    public function test_short_leave_and_other_non_poolable_types_are_excluded_from_the_ledger(): void
+    /**
+     * A Short Leave BALANCE CREDIT must not become a pool adjustment row -
+     * the Available Balance card never counted it, so showing it as a credit
+     * beside poolable ones made the ledger's own sum diverge from the card.
+     * Scoped to adjustment rows on purpose: this says nothing about whether
+     * the employee's actual Short Leave REQUESTS are listed, which they must
+     * be - see the test below.
+     */
+    public function test_a_short_leave_balance_credit_is_not_shown_as_a_pool_adjustment(): void
     {
         $user = $this->makeUser();
         $shl = LeaveType::where('code', 'SHL')->firstOrFail();
@@ -118,8 +127,74 @@ class LeaveHistoryServiceTest extends TestCase
         $history = LeaveHistoryService::getUnifiedHistory($user->id);
 
         $this->assertTrue(
-            $history->every(fn($h) => $h->leave_type !== $shl->name),
-            'a Short Leave transaction has no place in the ledger the poolable-only Available Balance card reconciles against'
+            $history->every(fn($h) => !($h->is_adjustment && $h->leave_type === $shl->name)),
+            'a Short Leave credit has no place among the adjustments the poolable-only Available Balance card reconciles against'
         );
+    }
+
+    /**
+     * THE BUG THIS FILE MISSED: the pool-exclusion list was also used to
+     * `continue` past these requests, so an approved Short Leave deducted a
+     * balance and then appeared on none of the three screens this collection
+     * feeds - My Leaves, the admin Leave Statement, My Profile. Employees
+     * saw the Short Leave card say "used" with nothing explaining where it
+     * went, assumed the application had failed, and re-applied. 106 short
+     * leaves across 76 people were invisible this way. The row must be
+     * listed; only its pool contribution is zero.
+     */
+    public function test_an_approved_short_leave_request_is_listed_but_takes_nothing_from_the_pool(): void
+    {
+        $user = $this->makeUser();
+        $shl  = LeaveType::where('code', 'SHL')->firstOrFail();
+
+        $leave = LeaveRequest::create([
+            'user_id'        => $user->id,
+            'leave_type_id'  => $shl->id,
+            // After LEDGER_OPENS, or the date cut hides it for an unrelated reason.
+            'from_date'      => '2026-08-14',
+            'to_date'        => '2026-08-14',
+            'is_short_leave' => true,
+            'duration_hours' => 2.0,
+            'status'         => 'pending',
+            'user_notes'     => 'short leave visibility test',
+        ]);
+        $leave->update(['status' => 'approved']);
+
+        $history = LeaveHistoryService::getUnifiedHistory($user->id);
+        $row     = $history->first(fn($h) => $h->id === 'REQ-' . $leave->id);
+
+        $this->assertNotNull($row, 'an approved Short Leave must appear in the history the statement screens render');
+        $this->assertSame($shl->name, $row->leave_type);
+        $this->assertSame(0.0, (float) $row->amount, 'it is listed, but it never drew on the ALP/PL pool, so it must contribute 0 to it');
+        $this->assertFalse($row->affects_pool, 'the row must mark itself as outside the pool so no caller totals it');
+    }
+
+    /** The control: an ordinary poolable leave still both shows AND charges the pool. */
+    public function test_an_ordinary_leave_is_listed_and_does_charge_the_pool(): void
+    {
+        $user = $this->makeUser();
+        $alp  = LeaveType::where('code', 'ALP')->firstOrFail();
+
+        LeaveBalance::create([
+            'user_id' => $user->id, 'leave_type_id' => $alp->id,
+            'balance' => 5.0, 'used' => 0,
+        ]);
+
+        $leave = LeaveRequest::create([
+            'user_id'       => $user->id,
+            'leave_type_id' => $alp->id,
+            'from_date'     => '2026-08-14',
+            'to_date'       => '2026-08-14',
+            'status'        => 'pending',
+            'user_notes'    => 'poolable control',
+        ]);
+        $leave->update(['status' => 'approved']);
+
+        $row = LeaveHistoryService::getUnifiedHistory($user->id)
+            ->first(fn($h) => $h->id === 'REQ-' . $leave->id);
+
+        $this->assertNotNull($row);
+        $this->assertTrue($row->affects_pool);
+        $this->assertSame(-1.0, (float) $row->amount, 'a poolable approved day must still show as a real pool deduction');
     }
 }

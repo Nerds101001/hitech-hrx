@@ -39,7 +39,7 @@ class SendOnboardingByCode extends Command
             $user->onboarding_at = now();
             $user->onboarding_deadline = now()->addDays(3);
 
-            $tempPassword = 'Hitech@' . rand(1000, 9999);
+            $tempPassword = \App\Support\TempPassword::make();
             $user->password = bcrypt($tempPassword);
             $user->save();
 

@@ -621,6 +621,46 @@ div.dtr-modal div.dtr-modal-content {
     padding: 2rem !important;
 }
 
+// ── Scrollable modals must actually scroll ─────────────────
+// A form-heavy modal (e.g. the KPI/KRA "Edit KPI" dialog) is genuinely taller than most
+// viewports. Bootstrap's own .modal-dialog-scrollable already caps .modal-content and lets
+// .modal-body scroll via flex (.modal-content is display:flex/column, .modal-header/.modal-body/
+// .modal-footer are its direct flex children, .modal-body gets flex:1 1 auto + min-height:0 so it
+// shrinks to the remaining space and scrolls). Several modals in this app (e.g. #tplModal here)
+// wrap header/body/footer in a <form>, which sits between .modal-content and them — that form is
+// a normal block box, not a flex item honouring flex:1 1 auto, so .modal-body's own overflow-y:
+// auto never had anything to constrain it against: it just rendered at full content height and
+// got silently clipped by .modal-content's overflow:hidden instead of scrolling. The fix has to
+// carry the same flex layout through that extra <form> layer, not just the layers Bootstrap itself
+// assumes are there.
+.modal-dialog-scrollable {
+    .modal-content {
+        max-height: calc(100vh - 3.5rem) !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    // The <form> a modal's header/body/footer are sometimes wrapped in — direct child of
+    // .modal-content, so it must relay the flex column instead of blocking it.
+    .modal-content > form {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .modal-header, .modal-footer {
+        flex-shrink: 0 !important;
+    }
+
+    .modal-body {
+        overflow-y: auto !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+    }
+}
+
 // ── Table & Row Premium Styling ──
 .table-flush-spacing {
     border-collapse: separate !important;

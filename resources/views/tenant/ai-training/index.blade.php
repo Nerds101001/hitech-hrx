@@ -291,6 +291,7 @@
 @section('page-script')
 <!-- Load marked.js for markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 <script>
     const simInput = document.getElementById('sim-input');
     const simBody = document.getElementById('sim-chat-body');
@@ -308,8 +309,14 @@
         const div = document.createElement('div');
         div.className = `d-flex align-items-end gap-3 justify-content-${role === 'user' ? 'end' : 'start'} animate__animated animate__fadeInUp mb-4`;
         
-        // Parse markdown only for bot messages
-        const processedText = role === 'bot' ? marked.parse(text) : text;
+        // The bot's markdown is rendered, then sanitised: an answer can quote text
+        // from uploaded documents, and raw HTML in it used to run in the page.
+        // The user's own message is plain text. Without the sanitiser loaded,
+        // the answer is shown as text rather than risk raw HTML.
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const processedText = role === 'bot'
+            ? (window.DOMPurify ? DOMPurify.sanitize(marked.parse(String(text ?? ''))) : esc(text))
+            : esc(text);
 
         if (role === 'user') {
             div.innerHTML = `

@@ -180,6 +180,15 @@
                 <span class="badge bg-success" style="font-size:0.7rem;" title="Super Kingo achievers">SK {{ $skAchieved ?? 0 }}</span>
             </span>
         </div>
+        {{-- This month's actual sale. The YoY chips are whole financial years and
+             "Achieved" counts people, so nothing here showed what has actually
+             been sold this month. Comes from $monthlyActuals, which is built from
+             the same filtered query as Customers and Pending, so it moves with
+             the filters like they do. --}}
+        <div class="stat-chip" style="border-left-color:#0d9488;">
+            <span class="stat-label">This Month — Sales</span>
+            <span class="stat-value" style="color:#0f766e;" id="monthSalesCard">₹{{ number_format($monthlyActuals[$currentMonthKey] ?? 0, 2) }}<em>L</em></span>
+        </div>
         <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $totalNewClients }}</span></div>
         <div class="stat-chip" style="border-left-color:#f97316;"><span class="stat-label">Pending</span><span class="stat-value" id="pendingCard" style="color:#ea580c;">₹{{ number_format($totalPendingCurrentMonth ?? 0, 2) }}<em>L</em></span></div>
     </div>
@@ -258,6 +267,19 @@
                     @endif
                     @foreach($newBizFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $nbFilterCounts[$au->id] ?? 0 }})</option>
+                    @endforeach
+                </select>
+                {{-- One person, either role. The CCare and New Biz dropdowns above
+                     AND together, so someone who holds customers under both -
+                     Poonam has 226 as CCare and 75 as New Biz - could not be seen
+                     whole from either one. --}}
+                <select class="form-select" name="both" style="width:200px;" onchange="this.form.submit()"
+                        title="One person, counted whether they are the CCare or the New Biz rep">
+                    <option value="">All CCare &amp; New Biz</option>
+                    @foreach($bothFilterUsers as $au)
+                        <option value="{{ $au->id }}" {{ (string)($fBoth ?? '') === (string)$au->id ? 'selected' : '' }}>
+                            {{ $au->name }} ({{ $bothFilterCounts[$au->id] ?? 0 }})
+                        </option>
                     @endforeach
                 </select>
                 <select class="form-select" name="per" style="width:105px;" onchange="this.form.submit()" title="Rows per page">
@@ -617,7 +639,11 @@
                                         // one (grace period for month-end reconciliation). Once it
                                         // closes, only Admin/HR can still edit it — mirrors
                                         // isMonthLockedForUser() server-side.
-                                        $monthLocked = !$isAdminOrHr && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
+                                        // A one-off reopen (SalesPipelineController::isReopened) lifts the
+                                        // lock for everyone until it expires by itself.
+                                        $monthLocked = !$isAdminOrHr
+                                            && !\App\Http\Controllers\tenant\SalesPipelineController::isReopened($m['key'])
+                                            && !($isThisMonth || ($m['key'] === $prevMonthKey && \Carbon\Carbon::now()->day <= 5));
                                         // Sale / Pending / Remarks stay the book editors' job
                                         // (CCare / New Biz / manager / admin).
                                         $roAttr      = ($canEditBook && !$monthLocked) ? '' : 'readonly';
@@ -1382,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(() => {
                     c.dataset.cc = kind === 'cc' ? uid : '';
                     c.dataset.nb = kind === 'nb' ? uid : '';
-                    c.innerHTML = name; c.title = name + ' (click to change)';
+                    c.textContent = name; c.title = name + ' (click to change)'; // a name is text, not markup
                     c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
                     const cat = tr.querySelector('select[data-field="category"]');
                     if (cat) cat.value = kind === 'nb' ? 'New Biz' : (kind === 'cc' ? 'CCare' : '');
@@ -1396,7 +1422,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const tr = c.closest('tr');
             putRow(tr.dataset.id, { salesperson_id: uid || null }).then(() => {
                 c.dataset.sp = uid;
-                c.innerHTML = name; c.title = name + ' (click to change)';
+                c.textContent = name; c.title = name + ' (click to change)'; // a name is text, not markup
                 c.style.backgroundColor = '#e8f5e9'; setTimeout(() => c.style.backgroundColor = '', 600);
             });
         });
@@ -1430,7 +1456,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     const s = document.createElement('span');
                     s.className = 'badge extra-tag ' + ((cell.dataset.type === 'service') ? 'bg-label-info' : 'bg-label-secondary');
                     s.dataset.uid = uid; s.style.fontSize = '0.62rem';
-                    s.innerHTML = name + ' <i class="bx bx-x remove-extra" style="cursor:pointer;"></i>';
+                    // The name as text, then the remove icon - a name is never parsed as markup.
+                    s.textContent = name + ' ';
+                    const x = document.createElement('i');
+                    x.className = 'bx bx-x remove-extra'; x.style.cursor = 'pointer';
+                    s.appendChild(x);
                     cell.appendChild(s);
                     cell.style.backgroundColor = '#e8f5e9'; setTimeout(() => cell.style.backgroundColor = '', 600);
                 }

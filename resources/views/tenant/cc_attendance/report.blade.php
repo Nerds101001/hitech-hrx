@@ -109,7 +109,9 @@
                         <tr>
                             <td class="text-nowrap">{{ optional($r->check_in_time)->format('d M Y') }} <span class="text-muted">{{ optional($r->check_in_time)->format('D') }}</span></td>
                             <td class="fw-semibold">{{ $r->user->name ?? ('#'.$r->user_id) }} <span class="text-muted">{{ $r->user->code ? '('.$r->user->code.')' : '' }}</span></td>
-                            <td><span class="badge {{ $badge }}">{{ ucwords(str_replace('_',' ',$r->status ?? '-')) }}</span></td>
+                            <td><span class="badge {{ $badge }}">{{ ucwords(str_replace('_',' ',$r->status ?? '-')) }}</span>@if($r->leaveRequest)
+                                <div class="small text-info mt-1" style="white-space:normal;"><i class="ti ti-calendar-event"></i> {{ \App\Http\Controllers\tenant\CcAttendanceController::leaveLabel($r->leaveRequest) }}{{ ($r->check_in_time && $r->check_in_time->format('H:i') === '00:00' && !$r->check_out_time) ? ' - set by the leave, not marked by CCare' : '' }}</div>
+                            @endif</td>
                             <td style="max-width:260px;white-space:normal;">{{ $r->notes ?: '—' }}</td>
                             <td>{{ $r->createdBy->name ?? ($r->updatedBy->name ?? 'System/Biometric') }}</td>
                             <td class="text-nowrap font-monospace" style="font-size:.75rem;">{{ optional($r->created_at)->format('d M Y, h:i:s A') }}</td>

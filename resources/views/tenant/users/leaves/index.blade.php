@@ -50,7 +50,13 @@
 
     {{-- STATS SECTION --}}
     @php
-        $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL'];
+        // WFH belongs in this list. It is paid, but never out of the ALP/PL
+        // pool these three cards total - approval pays it directly and never
+        // deducts a balance. Leaving it out counted any WFH balance into
+        // Total Allocated and Available, so the cards disagreed with both the
+        // deduction logic and the JS copy of this same list further down,
+        // which already had it right.
+        $excludedCodes = ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH'];
 
         $poolableBalances = $leaveBalances->filter(function($b) use ($excludedCodes) {
             return $b->leaveType && $b->leaveType->is_paid && !in_array(strtoupper($b->leaveType->code), $excludedCodes);
@@ -194,6 +200,10 @@
                                     // regardless of is_lwp/lwp_days.
                                     $amountDisplay = '-' . number_format($item->paid_days ?? 0, 1);
                                 }
+                                // Days the balance could not cover. The service already
+                                // splits these out; the table just never showed them.
+                                $lwpDays = $isShortReq ? 0 : (float) ($item->lwp_days ?? 0);
+                                $paidDaysShown = (float) ($item->paid_days ?? 0);
                                 $amountClass   = 'text-danger';
                                 $reason = 'Leave Applied (' . $from->format('d M') . ' - ' . $to->format('d M, Y') . ') - ' . $leaveTypeDetail;
                                 if ($item->notes) $reason .= ' | ' . \Illuminate\Support\Str::limit($item->notes, 30);
@@ -225,6 +235,10 @@
                                 if ($item->leave_type ?? null) {
                                     $reason = $item->leave_type . ' — ' . $reason;
                                 }
+                                // Reset per-row, or a leave row's unpaid days leak onto the
+                                // credit/adjustment rows rendered after it.
+                                $lwpDays = 0;
+                                $paidDaysShown = 0;
                                 $isBackdated = false;
                             }
                             $statusValue = $item->status instanceof \UnitEnum ? $item->status->value : ($item->status ?? 'Processed');
@@ -253,10 +267,28 @@
                                     @if($isBackdated ?? false)
                                         <span class="badge bg-label-warning" style="font-size: 0.6rem;">BACK DATED</span>
                                     @endif
+                                    {{-- A request longer than the balance covers is split: some days
+                                         come off the balance, the rest are leave without pay. Only the
+                                         deducted part was ever shown, so the unpaid days simply vanished
+                                         from the statement and the row read as if the whole leave had
+                                         been paid for. --}}
+                                    @if(($lwpDays ?? 0) > 0)
+                                        <span class="badge" style="font-size: 0.6rem; font-weight:700; background-color:#a855f7; color:#fff !important;">
+                                            NON-PAID {{ rtrim(rtrim(number_format($lwpDays, 1), '0'), '.') }}
+                                        </span>
+                                    @endif
                                 </div>
                             </td>
                             <td class="py-3">
                                 <span class="fw-bold {{ $amountClass }}">{{ $amountDisplay }}</span>
+                                @if(($lwpDays ?? 0) > 0)
+                                    <div class="small" style="color:#a855f7; font-weight:600;">
+                                        {{ rtrim(rtrim(number_format($lwpDays, 1), '0'), '.') }} non-paid
+                                    </div>
+                                    @if(($paidDaysShown ?? 0) <= 0)
+                                        <div class="text-muted" style="font-size:0.7rem;">nothing deducted</div>
+                                    @endif
+                                @endif
                             </td>
                             <td class="py-3">
                                 <span class="text-muted small" title="{{ $reason }}">{{ \Illuminate\Support\Str::limit($reason, 50) }}</span>
@@ -445,7 +477,7 @@
                                     <span class="fw-bold text-dark small text-uppercase">Back-dated Leave Notice</span>
                                 </div>
                                 <div class="small text-dark opacity-75">
-                                    You are applying for a past date. Please ensure your reason/remarks are detailed and accurate.
+                                    You are applying for a past date (allowed up to {{ \App\Support\LeaveBackdate::MAX_DAYS }} days back). Please ensure your reason/remarks are detailed and accurate.
                                 </div>
                             </div>
                         </div>
@@ -684,6 +716,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // In half-day / short-leave mode End Date is hidden and simply mirrors the
+    // date. Its min must move with it: a min left over from an earlier full-day
+    // pick (say 29 Sep) made a hidden 23 Sep invalid, and the browser then
+    // refused to submit without showing anything - the form just sat there.
+    function syncHiddenEndDate() {
+        toDateInput.setAttribute('min', fromDateInput.value || fromDateInput.getAttribute('min') || '');
+        toDateInput.value = fromDateInput.value;
+    }
+
     function handleHalfDayToggle() {
         const typeId = typeSelect.value;
         const leaveTypesArr = Array.isArray(leaveTypes) ? leaveTypes : Object.values(leaveTypes);
@@ -706,7 +747,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fromLabel = document.querySelector("label[for='from_date']");
             if (fromLabel) fromLabel.innerText = 'Date';
             
-            toDateInput.value = fromDateInput.value;
+            syncHiddenEndDate();
         } else if (isHalfDaySelected()) {
             if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
             if (startTimeEl) startTimeEl.removeAttribute('required');
@@ -719,7 +760,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const fromLabel = document.querySelector("label[for='from_date']");
             if (fromLabel) fromLabel.innerText = 'Date';
             
-            toDateInput.value = fromDateInput.value;
+            syncHiddenEndDate();
             checkAttendance();
         } else {
             if (shortLeaveContainer) shortLeaveContainer.classList.add('d-none');
@@ -846,11 +887,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // 3. Past Date Validation & Range Restriction (Allowed up to 30 days back)
-    const todayDate = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(todayDate.getDate() - 30);
-    const minDate = thirtyDaysAgo.toISOString().split('T')[0];
+    // 3. Past Date Validation & Range Restriction (Allowed up to 1 week back).
+    // The earliest date comes from the server (LeaveBackdate), the same rule the
+    // form is checked against - worked out in the browser it was a UTC date, a
+    // day behind in India before 5:30 am.
+    const minDate = @json(\App\Support\LeaveBackdate::earliestFor(auth()->id()));
     
     fromDateInput.setAttribute('min', minDate);
     toDateInput.setAttribute('min', minDate);
@@ -882,7 +923,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const isSHL = selectedType && selectedType.code.toUpperCase() === 'SHL';
 
             if (isHalfDaySelected() || isSHL) {
-                toDateInput.value = this.value;
+                syncHiddenEndDate();
                 if (!isSHL) {
                     checkAttendance();
                 }

@@ -275,6 +275,13 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
     pointer-events: none;
 }
 
+/* Pages of the flip book (HTML mode: each page is a real <img>) */
+.book-page { background: #ffffff; overflow: hidden; }
+.book-page img {
+    display: block; width: 100%; height: 100%; object-fit: contain;
+    user-select: none; -webkit-user-drag: none; pointer-events: none;
+}
+
 /* Book controls bar */
 .book-controls {
     background: #0e0802;
@@ -391,6 +398,13 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
     position: relative;
 }
 .video-player video, .video-player iframe, .video-player > div { width: 100%; height: 100%; border: none; }
+/* Swallows clicks on YouTube's own title bar, which is a link out to
+   youtube.com that no player parameter can disable. Height covers the title
+   strip only, so the controls underneath stay usable. */
+#yt-title-shield {
+    position: absolute; top: 0; left: 0; right: 0; height: 64px;
+    background: transparent; cursor: default; z-index: 5;
+}
 .video-time-overlay {
     position: absolute; bottom: 16px; right: 16px;
     background: rgba(0,0,0,0.6); color: white;
@@ -741,7 +755,7 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
             {{-- Assessment button --}}
             <button class="assess-btn" id="assess-btn" onclick="openQuiz()">
                 <i class="ti ti-clipboard-check" style="font-size:0.88rem;"></i>
-                <span class="d-none d-sm-inline">Take Quiz</span>
+                <span class="d-none d-sm-inline">{{ \App\Http\Controllers\tenant\TrainingController::needsQuiz($module) ? 'Take Quiz' : 'Mark as complete' }}</span>
             </button>
         </div>
     </div>
@@ -819,7 +833,12 @@ html, body { height: 100%; overflow: hidden; font-family: 'Plus Jakarta Sans', s
 
             {{-- ══ VIDEO ══ --}}
             @elseif($module->content_type === 'video')
-            <div class="video-wrap">
+            {{-- Right-click is where "Copy video URL" and "Save video as" live.
+                 Blocking it on the wrapper covers the local <video> and the
+                 area around the YouTube iframe alike. It does not reach inside
+                 a cross-origin iframe - nothing in the page can - so the title
+                 shield above handles YouTube's own click-out instead. --}}
+            <div class="video-wrap" oncontextmenu="return false;">
                 <div class="video-player" id="video-player">
                     @if(!empty($module->content_url) && (str_contains($module->content_url, 'youtube.com') || str_contains($module->content_url, 'youtu.be')))
                         <div id="yt-player"></div>
@@ -1237,6 +1256,17 @@ async function initPdf() {
         const rScale   = Math.min(availW / nv.width, stageH / nv.height, 1.8); // cap at 1.8×
         const PW = Math.round(nv.width  * rScale);
         const PH = Math.round(nv.height * rScale);
+        // PW x PH is the on-screen (CSS pixel) size. Pages used to be drawn at
+        // exactly that size, so on any scaled display (125-200%, most laptops
+        // and phones) the browser stretched them and the text blurred - and the
+        // zoom buttons / fullscreen stretched them further. Draw them sharper:
+        // the screen's pixel density with headroom for zoom, 2x-3x, capped at
+        // ~6 megapixels a page so long catalogues stay light enough to load.
+        const DPR   = window.devicePixelRatio || 1;
+        let   SHARP = Math.min(3, Math.max(2, DPR * 1.5));
+        SHARP       = Math.min(SHARP, Math.sqrt(6e6 / (PW * PH)));
+        const RW = Math.round(PW * SHARP), RH = Math.round(PH * SHARP);
+        const canvasToUrl = (cv, q) => new Promise(res => cv.toBlob(b => res(URL.createObjectURL(b)), 'image/jpeg', q));
 
         // ── 3. Render all pages → JPEG ──────────────────
         // For proper book layout: total images must be EVEN (cover + inner pairs + back cover)
@@ -1253,15 +1283,18 @@ async function initPdf() {
                 const bx = bc.getContext('2d');
                 bx.fillStyle = '#f5f0e8';
                 bx.fillRect(0, 0, PW, PH);
-                images.push(bc.toDataURL('image/jpeg', 0.5));
+                images.push(await canvasToUrl(bc, 0.5));
                 bc.width = 0;
             }
             const page = await doc.getPage(i);
-            const vp   = page.getViewport({scale: rScale});
+            const vp   = page.getViewport({scale: rScale * SHARP});
             const cv   = document.createElement('canvas');
-            cv.width = PW; cv.height = PH;
-            await page.render({canvasContext: cv.getContext('2d'), viewport: vp}).promise;
-            images.push(cv.toDataURL('image/jpeg', 0.82));
+            cv.width = RW; cv.height = RH;
+            const cx = cv.getContext('2d');
+            cx.fillStyle = '#ffffff';            // JPEG has no transparency: white, not black, behind the page
+            cx.fillRect(0, 0, RW, RH);
+            await page.render({canvasContext: cx, viewport: vp}).promise;
+            images.push(await canvasToUrl(cv, 0.92));
             cv.width = 0; cv.height = 0;
             setProgress(35 + (i / pdfTotal) * 63);
         }
@@ -1289,7 +1322,20 @@ async function initPdf() {
             startZIndex:         0,
             maxShadowOpacity:    0.5,
         });
-        flipBook.loadFromImages(images);
+        // Pages as real <img> elements (HTML mode). loadFromImages() paints them
+        // onto a canvas the size of the book in CSS pixels, with no allowance for
+        // the screen's pixel density - blurry on any scaled display however
+        // sharp the images are. An <img> is drawn by the browser at full detail,
+        // zoomed or not.
+        const pageEls = images.map(src => {
+            const el = document.createElement('div');
+            el.className = 'book-page';
+            const img = document.createElement('img');
+            img.src = src; img.alt = ''; img.draggable = false;
+            el.appendChild(img);
+            return el;
+        });
+        flipBook.loadFromHTML(pageEls);
 
         // ── 5. Events ────────────────────────────────────
         function syncControls(idx) {
@@ -1356,19 +1402,11 @@ function toggleFullscreen() {
     });
 });
 
+// Reaching the last page no longer ends the reading time: jumping straight to
+// it skipped the whole catalogue. The test opens when the timer runs out (the
+// server enforces the same rule).
 function checkCatalogReady() {
-    if (pdfReached) {
-        timerDone = true;
-        if (timerInterval) clearInterval(timerInterval);
-        timerElapsed = timerSecs;
-        const disp = document.getElementById('timer-display');
-        if (disp) disp.textContent = 'Done!';
-        const chip = document.getElementById('timer-chip');
-        if (chip) { chip.classList.remove('active','warning'); chip.classList.add('done'); }
-        const icon = document.getElementById('timer-icon');
-        if (icon) icon.className = 'ti ti-check';
-    }
-    if (IS_COMPLETED || pdfReached || timerDone) showAssessBtn();
+    if (IS_COMPLETED || timerDone) showAssessBtn();
 }
 
 /* ── Checkpoint Popup ── */
@@ -1444,8 +1482,26 @@ function getYtId(u) { const m = u.match(/(?:youtu\.be\/|v=|embed\/)([a-zA-Z0-9_-
 
 window.onYouTubeIframeAPIReady = function() {
     const vid = getYtId(CURL); if (!vid) return;
-    ytP = new YT.Player('yt-player', { height:'100%', width:'100%', videoId:vid, playerVars:{playsinline:1,rel:0},
+    ytP = new YT.Player('yt-player', {
+        height:'100%', width:'100%', videoId:vid,
+        // Keep the session inside HRX. nocookie drops YouTube's tracking
+        // cookies, modestbranding removes the logo, rel=0 stops the grid of
+        // other channels' videos at the end, and iv_load_policy=3 hides
+        // annotation cards - every one of those is a way out of the module.
+        host: 'https://www.youtube-nocookie.com',
+        playerVars: { playsinline:1, rel:0, modestbranding:1, iv_load_policy:3, fs:0 },
         events: { onStateChange(e) { if (e.data===YT.PlayerState.PLAYING) startYT(); else stopYT(); if (e.data===YT.PlayerState.ENDED) { stopYT(); showAssessBtn(); const pb=document.getElementById('top-progress'); if(pb) pb.style.width='100%'; } } } });
+
+    // The title strip YouTube draws across the top of its own player is a
+    // link to youtube.com, and playerVars cannot turn it off. Cover it with a
+    // transparent shield that swallows the click. The shield sits above the
+    // iframe but below the controls, so play/pause and the scrubber still work.
+    const wrap = document.getElementById('video-player');
+    if (wrap && !document.getElementById('yt-title-shield')) {
+        const shield = document.createElement('div');
+        shield.id = 'yt-title-shield';
+        wrap.appendChild(shield);
+    }
 };
 function initLocalVideo() {
     const v = document.getElementById('local-video'); if (!v) return;
@@ -1467,8 +1523,8 @@ function initLocalVideo() {
 let qList=[], qIdx=0, qAnswers={}, showAll=false, passPct=80;
 
 function openQuiz() {
-    if (CTYPE !== 'video' && !timerDone && !pdfReached) {
-        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) or reach the last page first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
+    if (CTYPE !== 'video' && !timerDone && !IS_COMPLETED) {
+        Swal.fire({title:'Not yet!',text:`Complete the minimum read time (${EST_MINS} min) first.`,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'});
         return;
     }
     const ov = document.getElementById('quiz-overlay'); ov.style.display = 'block'; ov.scrollTop = 0;
@@ -1481,6 +1537,22 @@ async function loadQuiz() {
     const sub = document.getElementById('quiz-sub'); if (sub) sub.textContent = 'Loading...';
     try {
         const r = await fetch(ASSESS_URL); const d = await r.json();
+        if (!d.success && d.message) {
+            Swal.fire({title:'Not yet!',text:d.message,icon:'info',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#1f6feb'}); closeQuiz(); return;
+        }
+        // No quiz for this module: watching/reading it is what completes it.
+        if (d.no_quiz) {
+            closeQuiz();
+            const r2 = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF,'Accept':'application/json'},body:JSON.stringify({answers:{}})});
+            const d2 = await r2.json();
+            if (d2.success) {
+                Swal.fire({title:'Completed!',text:'This module is marked as complete.',icon:'success',background:'#161b22',color:'#e6edf3',confirmButtonColor:'#238636'})
+                    .then(() => location.reload());
+            } else {
+                Swal.fire({title:'Not yet!',text:d2.message || 'Could not mark it complete.',icon:'info',background:'#161b22',color:'#e6edf3'});
+            }
+            return;
+        }
         if (!d.success || !d.questions.length) {
             Swal.fire({title:'No questions',text:'No assessment questions found.',icon:'info',background:'#161b22',color:'#e6edf3'}); closeQuiz(); return;
         }
@@ -1551,7 +1623,7 @@ async function submitQuiz() {
         const r = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF},body:JSON.stringify({answers:qAnswers})});
         const d = await r.json(); Swal.close();
         if (d.success) showResult(d);
-        else Swal.fire({title:'Error',text:'Submission failed.',icon:'error',background:'#161b22',color:'#e6edf3'});
+        else Swal.fire({title: d.message ? 'Not yet!' : 'Error',text: d.message || 'Submission failed.',icon: d.message ? 'info' : 'error',background:'#161b22',color:'#e6edf3'});
     } catch { Swal.close(); Swal.fire({title:'Network error',text:'Please try again.',icon:'error',background:'#161b22',color:'#e6edf3'}); }
 }
 function showResult(d) {
@@ -1607,7 +1679,9 @@ function showResult(d) {
         }
     }
 }
-function retakeQuiz() { qAnswers={}; qIdx=0; document.getElementById('quiz-result').style.display='none'; document.getElementById('quiz-card').style.display='block'; buildDots(); if(showAll){renderAll();}else{renderQ();} }
+// A retake asks the server for a fresh set: each served set can be submitted
+// once, and the server applies the retry limit here.
+function retakeQuiz() { qAnswers={}; qIdx=0; document.getElementById('quiz-result').style.display='none'; loadQuiz(); }
 
 /* ══════════════════════════════════════════
    BOOT

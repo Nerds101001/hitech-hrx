@@ -82,14 +82,21 @@ class ArchiveAudits extends Command
             }
 
             try {
-                DB::transaction(function () use ($ids, &$moved) {
-                    $rows = DB::table('audits')->whereIn('id', $ids)->get()
+                DB::transaction(function () use ($ids, $cutoff, &$moved) {
+                    // The created_at bound is redundant for correctness --
+                    // every one of these ids was selected as older than the
+                    // cutoff -- but `audits` is partitioned by month on
+                    // created_at, and an id-only predicate cannot prune, so
+                    // without it both statements visit every partition.
+                    $rows = DB::table('audits')->whereIn('id', $ids)
+                        ->where('created_at', '<', $cutoff)->get()
                         ->map(fn ($r) => (array) $r)->all();
 
                     // insertOrIgnore: a re-run after a partial failure must not
                     // trip the primary key on rows that already made it across.
                     DB::table('audits_archive')->insertOrIgnore($rows);
-                    DB::table('audits')->whereIn('id', $ids)->delete();
+                    DB::table('audits')->whereIn('id', $ids)
+                        ->where('created_at', '<', $cutoff)->delete();
                     $moved += count($rows);
                 });
             } catch (\Throwable $e) {

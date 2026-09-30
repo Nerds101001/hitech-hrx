@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Traits\TenantTrait;
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class KingoBingoScore extends Model
+class KingoBingoScore extends Model implements AuditableContract
 {
-    use TenantTrait;
+    use TenantTrait, Auditable;
 
     protected $fillable = [
         'salesperson_id', 'month_year',

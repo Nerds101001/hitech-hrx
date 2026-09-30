@@ -20,8 +20,13 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AdminRoleGuard
 {
-    /** Roles that grant admin dashboard access */
-    private const ADMIN_ROLES = ['admin', 'hr', 'accounts', 'manager'];
+    /**
+     * Roles that grant admin dashboard access by name alone, independent of
+     * the Spatie permission system. Public so RoleController/the permission
+     * editor can explain this on-screen instead of showing a sparse-looking
+     * checkbox grid with no context for why it's sparse.
+     */
+    public const ADMIN_ROLES = ['admin', 'hr', 'accounts', 'manager'];
 
     /**
      * Permissions that, by themselves, grant admin.guard passage. Public so
@@ -37,6 +42,15 @@ class AdminRoleGuard
         'loans.view_all',
         'loans.approve',
         'onboarding.manage',
+        // Added 2026-09: verified via `route:list -v` the same way as the six
+        // above - employee.lifecycle_action only sits behind route middleware
+        // inside employees/* (terminate, confirm/extend/fail probation,
+        // relieve, retire), all within this guard's own route tree. Those
+        // controller methods now check it (see EmployeeController), so
+        // without it here, granting the permission alone would look like it
+        // worked and silently do nothing - blocked at this guard before ever
+        // reaching that check.
+        'employee.lifecycle_action',
     ];
 
     /**
@@ -86,17 +100,23 @@ class AdminRoleGuard
             }
         }
 
+        // A box ticked on the Roles page (or given as a special permission)
+        // opens the pages that check for it, whatever the person's role - see
+        // permissionOpens(). Only that page: the rest of the admin area stays
+        // closed to them.
+        $opensThisPage = self::permissionOpens($request->route(), $user);
+
         // 'employee' role ALWAYS blocks admin access, regardless of other roles.
         // This prevents accidental department bulk-assignments from leaking data.
         if ($user->hasRole('employee') || $user->hasRole('office_employee')) {
-            if (!$this->hasAdminPermissionOverride($user)) {
+            if (!$this->hasAdminPermissionOverride($user) && !$opensThisPage) {
                 return $this->redirectToEmployeeDashboard();
             }
         }
 
         // Must have at least one legitimate admin role
         if (!$user->hasAnyRole(self::ADMIN_ROLES)) {
-            if (!$this->hasAdminPermissionOverride($user)) {
+            if (!$this->hasAdminPermissionOverride($user) && !$opensThisPage) {
                 // No recognised role at all — send to employee dashboard safely
                 return $this->redirectToEmployeeDashboard();
             }
@@ -127,6 +147,42 @@ class AdminRoleGuard
         foreach ($user->getAllPermissions() as $permission) {
             if (in_array($permission->name, self::ELEVATED_PERMISSIONS, true)) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Does a permission this person holds open THIS page? True when the
+     * route's own gate (a role_or_permission: or permission: middleware on
+     * it or its groups) names a permission they hold.
+     *
+     * This is what makes the Roles & Permissions page mean what it says for
+     * every role - Employee, or a new role made on that page - not only the
+     * four ADMIN_ROLES that pass here by name. It is page by page: a route
+     * with no permission gate of its own is never opened this way, and the
+     * route's own gate still runs after this guard, so the person gets
+     * exactly the pages that check for what they were given.
+     */
+    public static function permissionOpens($route, $user): bool
+    {
+        if (!$route || !$user || !method_exists($route, 'gatherMiddleware')) {
+            return false;
+        }
+        $held = null;
+        foreach ($route->gatherMiddleware() as $m) {
+            if (!is_string($m)) {
+                continue;
+            }
+            foreach (['role_or_permission:', 'permission:'] as $prefix) {
+                if (!str_starts_with($m, $prefix)) {
+                    continue;
+                }
+                $held ??= $user->getAllPermissions()->pluck('name')->all();
+                if (array_intersect(array_map('trim', explode('|', substr($m, strlen($prefix)))), $held)) {
+                    return true;
+                }
             }
         }
 

@@ -7,10 +7,12 @@ use App\Traits\UserActionsTrait;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class ProfileUpdateApproval extends Model
+class ProfileUpdateApproval extends Model implements AuditableContract
 {
-    use HasFactory, SoftDeletes, TenantTrait, UserActionsTrait;
+    use HasFactory, SoftDeletes, TenantTrait, UserActionsTrait, Auditable;
 
     protected $fillable = [
         'user_id',

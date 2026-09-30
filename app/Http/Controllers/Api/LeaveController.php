@@ -160,6 +160,11 @@ class LeaveController extends Controller
       return Error::response('From date cannot be greater than to date');
     }
 
+    // Same one-week back-dating limit as the web form (the app had none).
+    if ($backdateError = \App\Support\LeaveBackdate::error($finalFromDate, $finalToDate, auth()->id())) {
+      return Error::response($backdateError);
+    }
+
     $user = auth()->user();
 
     $hours     = $request->duration_hours;
@@ -167,7 +172,7 @@ class LeaveController extends Controller
     $endTime   = $request->end_time;
 
     // Unit leave policy enforcement
-    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours, $isHalfDay);
+    $policyError = LeavePolicyService::validate($user, $leaveTypeId, $finalFromDate, $finalToDate, $hours, $isHalfDay, $startTime, $endTime, $isHalfDay ? ($halfDaySession ?? 'first_half') : null);
     if ($policyError) {
       return Error::response($policyError);
     }

@@ -214,6 +214,10 @@ class MyTasksController extends Controller
             'remarks'                   => 'nullable|string|max:2000',
         ]);
 
+        if ($validated['status'] === 'completed' && ($reason = \App\Services\NinetyDayGoalService::taskBlockReason($task))) {
+            return response()->json(['success' => false, 'message' => $reason], 422);
+        }
+
         $task->status = $validated['status'];
         $task->completed_at = $validated['status'] === 'completed' ? now() : null;
         // Clearing the reminder guard on any status change, not just when a

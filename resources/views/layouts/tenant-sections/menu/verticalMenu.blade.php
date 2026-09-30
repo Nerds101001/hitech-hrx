@@ -114,7 +114,15 @@
         };
 
         $menuUser = auth()->user();
-        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission) {
+        // "hideForRoles": links meant for one audience only (e.g. a salesperson's own pages),
+        // hidden from these roles even though they pass every other gate.
+        $hiddenForUser = function ($m) use ($menuUser) {
+            if (!isset($m->hideForRoles) || !$menuUser) return false;
+            $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
+            return (bool) array_intersect($ur, array_map('strtolower', (array) $m->hideForRoles));
+        };
+        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission, $hiddenForUser) {
+            if ($hiddenForUser($m)) return false;
             if (isset($m->addon) && !$addonService->isAddonEnabled($m->addon)) return false;
             if (isset($m->standardAddon)
                 && !in_array($m->standardAddon, $settings->available_modules ?? [])) return false;
@@ -127,12 +135,19 @@
                 if (!$menuUser) return false;
                 $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
                 $rr = array_map('strtolower', (array) $m->roles);
-                if (empty(array_intersect($ur, $rr))) return false;
+                // Role not listed - still shown if a permission ticked on the
+                // Roles page opens this item's page (see Nav::grantedByPermission),
+                // or is one the item names itself (rolesOrPermission: pages that
+                // check the permission in the controller, not the route).
+                if (empty(array_intersect($ur, $rr))
+                    && !(isset($m->rolesOrPermission) && $hasAnyPermission($menuUser, $m->rolesOrPermission))
+                    && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($m), $menuUser)) return false;
             }
             if (isset($m->permission) && !$isAdminUser) {
                 if (!$hasAnyPermission($menuUser, $m->permission)) return false;
             }
-            if (isset($m->department) && !$isAdminUser) {
+            if (isset($m->department) && !$isAdminUser
+                && !(isset($m->departmentOrPermission) && $hasAnyPermission($menuUser, $m->departmentOrPermission))) {
                 if (!$menuUser || !$menuUser->department
                     || stripos($menuUser->department->name, $m->department) === false) return false;
             }
@@ -179,11 +194,18 @@
           $user = auth()->user();
           $isAdmin = $user ? $user->hasRole(['Admin', 'admin', 'super_admin', 'ADMIN', 'HR', 'hr']) : false;
           
+          // True when this group is shown only because of a granted
+          // permission - its children then need their own permission too.
+          $viaPermission = false;
           if(isset($menu->roles)) {
               if (!$user) continue;
               $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
               $requiredRoles = array_map('strtolower', (array) $menu->roles);
-              if (empty(array_intersect($userRoles, $requiredRoles))) continue;
+              if (empty(array_intersect($userRoles, $requiredRoles))) {
+                  if (!(isset($menu->rolesOrPermission) && $hasAnyPermission($user, $menu->rolesOrPermission))
+                      && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)) continue;
+                  $viaPermission = true;
+              }
           }
 
           if(isset($menu->permission) && !$isAdmin) {
@@ -192,8 +214,12 @@
 
           if(isset($menu->department)) {
               if (!$user || !$user->department || stripos($user->department->name, $menu->department) === false) {
-                  // Only skip if they aren't admin/hr and don't match the department
-                  if (!$isAdmin) continue;
+                  // Only skip if they aren't admin/hr, don't match the department, and
+                  // don't hold a permission the entry accepts instead
+                  // (departmentOrPermission). Someone outside Sales given goals.manage
+                  // still needs the 90-Day Goals section to reach its admin pages.
+                  if (!$isAdmin && !(isset($menu->departmentOrPermission) && $user
+                      && $hasAnyPermission($user, $menu->departmentOrPermission))) continue;
               }
           }
 
@@ -261,12 +287,22 @@
                            if (!$user) continue;
                            $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
                            $requiredRoles = array_map('strtolower', (array) $submenu->roles);
-                           if (empty(array_intersect($userRoles, $requiredRoles))) continue;
+                           if (empty(array_intersect($userRoles, $requiredRoles))
+                               && !(isset($submenu->rolesOrPermission) && $hasAnyPermission($user, $submenu->rolesOrPermission))
+                               && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) continue;
+                       } elseif ($viaPermission && !\App\Support\Nav::grantedByPermission([$submenu->url ?? null], $user)) {
+                           continue;
                        }
 
                        if(isset($submenu->permission) && !$isAdmin) {
                          if (!$hasAnyPermission($user, $submenu->permission)) continue;
                      }
+
+                       // Audience-only links, and a child's own department gate (admin/HR pass
+                       // department gates, as on the parent).
+                       if ($hiddenForUser($submenu)) continue;
+                       if (isset($submenu->department) && !$isAdmin
+                           && (!$user->department || stripos($user->department->name, $submenu->department) === false)) continue;
 
                        // Same gate as the parent: never draw a child the user
                        // would only get a 403 from.

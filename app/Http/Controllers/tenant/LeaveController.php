@@ -21,13 +21,50 @@ use Yajra\DataTables\Facades\DataTables;
 
 class LeaveController extends Controller
 {
+  /**
+   * Two approval tiers, additive on top of today's role defaults:
+   *  - leave.approve.all  : anyone's request (admin/hr already get this by role)
+   *  - leave.approve.team : only people who report to you (manager already
+   *    gets this by role, scoped the same way getListAjax() already scopes
+   *    what a manager SEES — this just makes the action agree with the list).
+   *
+   * Before this, actionAjax()/bulkActionAjax() had no scope check at all: any
+   * non-accounts user who could reach this page could approve/reject ANY
+   * leave request by id, not just the ones the list ever showed them. The
+   * UI never sent an out-of-scope id, so this was invisible in normal use,
+   * but nothing stopped a crafted request. Both action methods now check
+   * this before writing, using the identical managerIdentityIds() scope the
+   * list already uses — so an already-legitimate approval keeps working
+   * exactly as before, and only an out-of-scope id newly gets rejected.
+   */
+  private function canApproveFor($actor, int $targetUserId): bool
+  {
+    if ($actor->hasRole(['admin', 'hr']) || $actor->can('leave.approve.all')) {
+        return true;
+    }
+    if ($actor->hasRole('manager') || $actor->can('leave.approve.team')) {
+        $scopedIds = User::whereIn('reporting_to_id', $actor->managerIdentityIds())
+            ->notTerminated()->pluck('id')->toArray();
+        return in_array($targetUserId, $scopedIds, true);
+    }
+    return false;
+  }
+
   public function index()
   {
     $employees = User::select('id', 'first_name', 'last_name', 'code')
       ->where('status', 'active')
       ->orderBy('first_name')
       ->get();
-    $leaveTypes = LeaveType::all();
+    // Every type someone can apply for, plus retired types that still have
+    // requests on record (so those stay findable), active ones first. Outdoor
+    // Duty is added as its own option in the view.
+    $usedTypeIds = LeaveRequest::query()->distinct()->pluck('leave_type_id')->all();
+    $leaveTypes = LeaveType::withTrashed()
+      ->where(fn ($q) => $q->where('status', 'active')->orWhereIn('id', $usedTypeIds))
+      ->get()
+      ->sortBy(fn ($t) => [($t->status->value ?? $t->status) === 'active' && !$t->deleted_at ? 0 : 1, $t->name])
+      ->values();
 
     return view('tenant.leave.index', [
       'pageConfigs' => ['contentLayout' => 'wide'],
@@ -66,7 +103,10 @@ class LeaveController extends Controller
         $leaveQuery->where('user_id', $request->employeeFilter);
         $odQuery->where('user_id', $request->employeeFilter);
       }
-      if ($request->filled('leaveTypeFilter')) {
+      if ($request->input('leaveTypeFilter') === 'outdoor') {
+        // "Outdoor Duty" in the type filter: outdoor duty requests only.
+        $leaveQuery->whereRaw('1 = 0');
+      } elseif ($request->filled('leaveTypeFilter')) {
         $leaveQuery->where('leave_type_id', $request->leaveTypeFilter);
         // Outdoor duties have no leave type, so we return empty if a specific leave type is selected
         $odQuery->whereRaw('1 = 0'); 
@@ -113,7 +153,8 @@ class LeaveController extends Controller
           $isShortItem = $item->is_short_leave || ($item->leaveType->is_short_leave ?? false);
 
           if ($item->leaveType) {
-              $name = $item->leaveType->name;
+              // Escaped: this column is sent as raw HTML (for the badges below).
+              $name = e($item->leaveType->name);
           } else {
               $name = $isShortItem ? 'Short Leave' : 'N/A';
           }
@@ -377,9 +418,13 @@ class LeaveController extends Controller
     try {
 
       $leaveRequest = LeaveRequest::findOrFail($validated['id']);
-      
+
       if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
           return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own leave request.']);
+      }
+
+      if (!$this->canApproveFor(auth()->user(), $leaveRequest->user_id)) {
+          return response()->json(['status' => 'error', 'message' => 'This leave request is outside what you can approve.']);
       }
 
       $leaveRequest->status = $validated['status'];
@@ -432,9 +477,13 @@ class LeaveController extends Controller
       // Process Leaves
       if (count($leaveIds) > 0) {
           $leaveRequests = LeaveRequest::whereIn('id', $leaveIds)->get();
+          $actor = auth()->user();
           foreach ($leaveRequests as $leaveRequest) {
             if ($leaveRequest->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
                 continue; // Skip their own requests
+            }
+            if (!$this->canApproveFor($actor, $leaveRequest->user_id)) {
+                continue; // Skip requests outside what this actor can approve
             }
             $newStatus = LeaveRequestStatus::tryFrom($validated['status']) ?? $validated['status'];
             $leaveRequest->status = $newStatus;
@@ -458,6 +507,9 @@ class LeaveController extends Controller
           foreach ($outdoorDuties as $duty) {
               if ($duty->user_id === auth()->id() && in_array($validated['status'], ['approved', 'rejected'])) {
                   continue; // Cannot approve/reject own outdoor duty
+              }
+              if (!$this->canApproveFor($actor, $duty->user_id)) {
+                  continue; // Skip requests outside what this actor can approve
               }
               $duty->status = $validated['status'];
               if ($validated['status'] === 'approved') {
@@ -625,16 +677,13 @@ class LeaveController extends Controller
 
       $duty->load('user');
 
-      // Notify manager + HR
-      $approvers = User::where(function ($q) use ($duty) {
-        $q->whereHas('roles', fn($r) => $r->whereIn('name', ['hr', 'admin']))
-          ->orWhere('id', optional($duty->user->reportingTo)->id);
-      })->where('status', 'active')->get();
-
-      foreach ($approvers as $approver) {
-        try {
-          // Outdoor duty notification logic pending NewOutdoorDuty notification class
-        } catch (Exception $e) { /* non-fatal */ }
+      // Alert HR and the manager (bell + push), the same people a leave request
+      // reaches. Nothing was sent before, so a request sat unseen until someone
+      // opened Leave Approvals. A failed alert must not fail the request.
+      try {
+        \App\Helpers\NotificationHelper::notifyAdminHR(new \App\Notifications\Leave\NewOutdoorDuty($duty));
+      } catch (Exception $e) {
+        Log::error('OutdoorDuty notify error: ' . $e->getMessage());
       }
 
       return response()->json(['status' => 'success', 'message' => 'Outdoor duty request submitted successfully.']);
@@ -647,8 +696,10 @@ class LeaveController extends Controller
   public function outdoorDutyActionAjax(Request $request)
   {
     $user = auth()->user();
+    // Refusals are 403, not 200: the pages treat any 200 as done, so a refused
+    // approval used to show "Success" and drop off the dashboard card.
     if (!$user->hasRole(['admin', 'hr', 'manager'])) {
-      return response()->json(['status' => 'error', 'message' => 'Unauthorized.']);
+      return response()->json(['status' => 'error', 'message' => 'Unauthorized.'], 403);
     }
 
     $validated = $request->validate([
@@ -661,7 +712,11 @@ class LeaveController extends Controller
       $duty = OutdoorDuty::findOrFail($validated['id']);
       
       if ($duty->user_id === $user->id && in_array($validated['status'], ['approved', 'rejected'])) {
-          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own outdoor duty request.']);
+          return response()->json(['status' => 'error', 'message' => 'You cannot approve or reject your own outdoor duty request.'], 403);
+      }
+      // The same team limit leave approval has: a manager acts on their reports only.
+      if (in_array($validated['status'], ['approved', 'rejected']) && !$this->canApproveFor($user, (int) $duty->user_id)) {
+          return response()->json(['status' => 'error', 'message' => 'You can only approve outdoor duty for your own team.'], 403);
       }
 
       $duty->status        = $validated['status'];

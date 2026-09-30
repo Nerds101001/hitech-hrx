@@ -105,6 +105,97 @@ class CcAttendanceSaveTest extends TestCase
         $this->assertStringContainsString('1 salesperson marked', $this->flash('success'));
     }
 
+    // ══ the leave module owns a day once leave is applied for ════════════
+
+    /** Build a leave request covering the register date, without firing the approval hook. */
+    private function leaveFor(string $status): \App\Models\LeaveRequest
+    {
+        return \App\Models\LeaveRequest::withoutEvents(fn () => \App\Models\LeaveRequest::create([
+            'user_id'       => $this->salesperson->id,
+            'leave_type_id' => \App\Models\LeaveType::where('code', 'ALP')->firstOrFail()->id,
+            'from_date'     => $this->date,
+            'to_date'       => $this->date,
+            'status'        => $status,
+            'user_notes'    => 'family function',
+        ]));
+    }
+
+    /**
+     * A salesperson who has APPLIED for leave is out of CCare's hands, even
+     * before anyone approves it. Previously the guard only looked at the
+     * attendance row, so a pending leave left the day wide open to be marked
+     * Absent -- and that absence then survived the approval.
+     */
+    public function test_a_salesperson_with_a_pending_leave_cannot_be_marked(): void
+    {
+        $this->leaveFor('pending');
+
+        $this->submit([
+            'attendance' => [$this->salesperson->id => 'Absent'],
+            'notes'      => [$this->salesperson->id => 'not reachable'],
+        ]);
+
+        $this->assertNull($this->savedRow(), 'no attendance row may be written while leave is pending');
+        $this->assertStringContainsString('applied for leave', $this->flash('error'));
+    }
+
+    /** And once it is approved, the same. */
+    public function test_a_salesperson_with_an_approved_leave_cannot_be_marked(): void
+    {
+        $this->leaveFor('approved');
+
+        $this->submit([
+            'attendance' => [$this->salesperson->id => 'Absent'],
+            'notes'      => [$this->salesperson->id => 'not reachable'],
+        ]);
+
+        $this->assertNull($this->savedRow(), 'no attendance row may be written over an approved leave');
+        $this->assertStringContainsString('approved leave', $this->flash('error'));
+    }
+
+    /** Marking Present is refused too -- the block is about the day, not the verdict. */
+    public function test_present_is_refused_on_a_leave_day_as_well(): void
+    {
+        $this->leaveFor('approved');
+
+        $this->submit([
+            'attendance' => [$this->salesperson->id => 'Present'],
+            'notes'      => [$this->salesperson->id => 'saw him at the depot'],
+        ]);
+
+        $this->assertNull($this->savedRow());
+    }
+
+    /**
+     * Clearing must still work: a day marked in error, before the leave was
+     * applied for, has to remain removable or the wrong mark is permanent.
+     */
+    public function test_a_wrongly_marked_day_can_still_be_cleared_after_leave_is_applied(): void
+    {
+        $this->submit([
+            'attendance' => [$this->salesperson->id => 'Absent'],
+            'notes'      => [$this->salesperson->id => 'marked before the leave came in'],
+        ]);
+        $this->assertNotNull($this->savedRow(), 'precondition: the day was marked first');
+
+        $this->leaveFor('approved');
+
+        $this->submit(['attendance' => [$this->salesperson->id => '__clear']]);
+
+        $this->assertNull($this->savedRow(), 'clearing a wrongly-marked day must still be allowed');
+    }
+
+    /** Someone with no leave at all is unaffected. */
+    public function test_a_salesperson_without_leave_is_still_markable(): void
+    {
+        $this->submit([
+            'attendance' => [$this->salesperson->id => 'Present'],
+            'notes'      => [$this->salesperson->id => 'visited Acme'],
+        ]);
+
+        $this->assertNotNull($this->savedRow());
+        $this->assertSame('present', $this->savedRow()->status);
+    }
     // ══ the two defects behind the live report ═══════════════════════════
 
     /**

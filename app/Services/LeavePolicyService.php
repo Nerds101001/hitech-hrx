@@ -20,7 +20,50 @@ class LeavePolicyService
      * @param  string $toDate     Y-m-d
      * @return string|null  Returns an error message string, or null if the request is valid.
      */
-    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null, bool $isHalfDay = false): ?string
+    /** Short leave length when the policy sets none. */
+    public const DEFAULT_SHORT_LEAVE_HOURS = 2.0;
+
+    /** Max hours for one short leave: the policy rule's figure, else the default. */
+    public static function shortLeaveHoursCap(User $user, int $leaveTypeId): float
+    {
+        $rule = $user->leavePolicyProfile
+            ? LeavePolicyProfileRule::where('profile_id', $user->leavePolicyProfile->id)->where('leave_type_id', $leaveTypeId)->first()
+            : \App\Models\UnitLeavePolicy::where('site_id', $user->site_id)->where('leave_type_id', $leaveTypeId)->first();
+
+        $hours = (float) ($rule->short_leave_hours ?? 0);
+        return $hours > 0 ? $hours : self::DEFAULT_SHORT_LEAVE_HOURS;
+    }
+
+    /**
+     * Length of a short leave in hours: the longer of the stated duration and
+     * the start-to-end span, so neither figure alone can understate it.
+     */
+    public static function shortLeaveHours(?float $hours, ?string $startTime, ?string $endTime): ?float
+    {
+        $span = null;
+        if ($startTime && $endTime) {
+            try {
+                $s = Carbon::parse($startTime);
+                $e = Carbon::parse($endTime);
+                if ($e->greaterThan($s)) {
+                    $span = $s->diffInMinutes($e) / 60;
+                }
+            } catch (\Throwable $ex) {
+                $span = null;
+            }
+        }
+        $values = array_filter([$hours !== null ? (float) $hours : null, $span], fn ($v) => $v !== null);
+        return $values ? max($values) : null;
+    }
+
+    /** A one-date half-day request that names its half (first_half / second_half). */
+    private static function isSingleHalfDay(bool $isHalfDay, string $fromDate, string $toDate, ?string $session): bool
+    {
+        return $isHalfDay && in_array($session, ['first_half', 'second_half'], true)
+            && Carbon::parse($fromDate)->isSameDay(Carbon::parse($toDate));
+    }
+
+    public static function validate(User $user, int $leaveTypeId, string $fromDate, string $toDate, ?float $hours = null, bool $isHalfDay = false, ?string $startTime = null, ?string $endTime = null, ?string $halfDaySession = null): ?string
     {
         $from = Carbon::parse($fromDate);
         $to   = Carbon::parse($toDate);
@@ -36,10 +79,18 @@ class LeavePolicyService
         }
 
         // --- 2. Overlap Check ---
+        // A half day may sit beside the OTHER half of the same date (first half
+        // taken, now the second half too): together they make a full day. Any
+        // other overlap - a full day, a longer span, the same half again - blocks.
         $overlap = LeaveRequest::where('user_id', $user->id)
             ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
             ->where('from_date', '<=', $toDate)
             ->where('to_date', '>=', $fromDate)
+            ->when(self::isSingleHalfDay($isHalfDay, $fromDate, $toDate, $halfDaySession), fn ($q) => $q->where(fn ($w) => $w
+                ->where('is_half_day', false)
+                ->orWhereNull('half_day_session')
+                ->orWhere('half_day_session', $halfDaySession)
+                ->orWhereColumn('from_date', '!=', 'to_date')))
             ->exists();
 
         if ($overlap) {
@@ -49,10 +100,17 @@ class LeavePolicyService
         // --- Short Leave: strictly one per month, enforced even when no
         // policy rule is configured for the type ---
         if ($leaveType && $leaveType->is_short_leave) {
+            // Scoped to THIS leave type, not to every type carrying the
+            // is_short_leave flag. Matching on the flag meant any two types
+            // that both had it shared a single monthly allowance: a
+            // Compensatory OFF (type 12, flagged is_short_leave by mistake
+            // when it was created) silently consumed the real Short Leave
+            // quota, so the balance card still read "1 available" while the
+            // application came back "already consumed" — confirmed live on
+            // seven CG Office employees. The flag says what KIND of leave
+            // this is; it was never an identity for one particular type.
             $usedThisMonth = LeaveRequest::where('user_id', $user->id)
-                ->whereHas('leaveType', function($q) {
-                    $q->where('is_short_leave', true);
-                })
+                ->where('leave_type_id', $leaveTypeId)
                 ->whereIn('status', [LeaveRequestStatus::PENDING, LeaveRequestStatus::APPROVED])
                 ->whereYear('from_date', $from->year)
                 ->whereMonth('from_date', $from->month)
@@ -60,6 +118,20 @@ class LeavePolicyService
 
             if ($usedThisMonth >= 1) {
                 return 'You have already consumed your short leave for this month.';
+            }
+
+            // Hours cap, enforced even when the policy has no rule for the
+            // type. It used to be checked only when a rule with
+            // short_leave_hours existed, so on a profile without one (Sales
+            // (New)) a "short leave" could run 10:18 to 18:59 -- and an
+            // approved short leave counts the day as Present. The length is
+            // taken from the start/end times as well as the client's own
+            // duration figure, whichever is longer.
+            $cap = self::shortLeaveHoursCap($user, $leaveTypeId);
+            $asked = self::shortLeaveHours($hours, $startTime, $endTime);
+            if ($asked !== null && $asked > $cap + 0.01) {
+                $capText = rtrim(rtrim(number_format($cap, 2), '0'), '.');
+                return "A short leave can be at most {$capText} hours (you asked for " . round($asked, 2) . " hours). For a longer absence apply for Half Day or a full-day leave.";
             }
         }
 
@@ -111,12 +183,8 @@ class LeavePolicyService
             }
         }
 
-        // Short Leave hours cap (monthly limit already enforced above)
+        // Short Leave: monthly limit and hours cap are both enforced above.
         if ($leaveType && $leaveType->is_short_leave) {
-            if ($hours && $rule && $rule->short_leave_hours && $hours > $rule->short_leave_hours) {
-                return "You can only apply for a maximum of {$rule->short_leave_hours} hours for this short leave.";
-            }
-
             return null;
         }
 
@@ -169,7 +237,10 @@ class LeavePolicyService
             // Subtract pending requests from available balance
             $pendingRequests = LeaveRequest::where('user_id', $user->id)
                 ->whereHas('leaveType', function($q) {
-                    $q->where('is_paid', true)->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+                    // Same pool-exclusion list as getPoolBalance() and
+                    // processApproval() -- WFH included, or a pending WFH
+                    // request would subtract days from a pool it never draws on.
+                    $q->where('is_paid', true)->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH']);
                 })
                 ->where('status', 'pending')
                 ->get();
@@ -410,11 +481,15 @@ class LeavePolicyService
 
     public static function getPoolBalance(User $user): float
     {
-        // Poolable types are all paid types EXCEPT Maternity, Paternity, and Short Leave
+        // Poolable types are all paid types EXCEPT Maternity, Paternity, Short
+        // Leave and WFH. WFH belongs here for the same reason as the rest: it
+        // is paid, but never out of this pool -- LeaveRequest::processApproval()
+        // excludes it from $excludedPoolCodes, so counting its balance here
+        // would inflate the pool by days approval will never deduct.
         $poolableBalances = LeaveBalance::where('user_id', $user->id)
             ->whereHas('leaveType', function($q) {
                 $q->where('is_paid', true)
-                  ->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL']);
+                  ->whereNotIn('code', ['ML', 'MAT', 'PL_PAT', 'PAT', 'SHL', 'WFH']);
             })
             ->get();
 

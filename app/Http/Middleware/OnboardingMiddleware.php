@@ -31,13 +31,17 @@ class OnboardingMiddleware
                 $currentRouteName = $request->route() ? $request->route()->getName() : null;
                 $currentPath = '/' . ltrim($request->getPathInfo(), '/');
                 
-                // 1. Always allow logout, changing language, and public recruitment routes
+                // 1. Always allow logout, changing language, and public recruitment routes.
+                // Also leaving a delegate session: an admin who switched into an
+                // onboarding account must be able to get back to their own.
                 $alwaysAllowedPaths = [
                     '/auth/logout',
                     '/logout',
+                    '/user/delegation/exit',
                 ];
                 $alwaysAllowedRoutes = [
                     'auth.logout',
+                    'user.delegation.exit',
                     'career',
                     'job.requirement',
                     'job.apply',

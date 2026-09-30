@@ -23,12 +23,12 @@ class KpiAutoSourceService
         'auto:revenue'             => 'Revenue booked in the period (₹ lakh)',
         'auto:target_achievement'  => 'Revenue as a % of the salesperson target',
         'auto:customer_health'     => '% of the book that ordered at least once',
-        'auto:total_pipeline'      => 'Revenue as a % of pipeline potential',
+        'auto:total_pipeline'      => 'The month\'s sale as a % of the month\'s forecast',
         'auto:customers_added'     => 'Customers whose first ever order falls in the period',
         'auto:customers_retained'  => '% of customers first seen 6+ months ago still ordering',
 
-        // Kingo/Bingo — salesperson_id ONLY (not the broader "book" the sources
-        // above use), matching the real Kingo/Bingo scorecard exactly
+        // Kingo/Bingo — the same five attribution routes as book(), matching
+        // the real Kingo/Bingo scorecard exactly
         // (SalesPipelineController@index's $targetAchieversByMonth) so a KPI
         // score never disagrees with what the scorecard itself shows.
         'auto:bingo_achievement'       => 'Sale ÷ Bingo target, as a % (matches the Kingo/Bingo scorecard)',
@@ -48,6 +48,7 @@ class KpiAutoSourceService
         // Mind Speak — only APPROVED submissions count, so an unreviewed or
         // rejected entry can't inflate a score before a reviewer has seen it.
         'auto:sales_pitches'      => 'Approved Sales Pitch submissions (Mind Speak)',
+        'auto:sales_pitch_submitted' => 'Sales Pitch submissions in Mind Speak (any not rejected)',
         'auto:seminars_conducted' => 'Approved Seminar submissions (Mind Speak)',
 
         // Digital Library — videos presented under the "Learn @ Hi Tech"
@@ -56,14 +57,19 @@ class KpiAutoSourceService
 
         // Sales Assessment rule book. Each returns the raw figure the rule book's tiers are
         // written against (a % or a count), to be scored with bands.
-        'auto:pipeline_vs_target'         => 'Pipeline potential as a % of the Bingo target',
+        'auto:pipeline_vs_target'         => 'The month\'s forecast as a % of the month\'s Bingo target',
         'auto:yoy_growth'                 => 'Revenue growth % against the same period a year earlier',
         'auto:new_customer_revenue_pct'   => '% of revenue from customers whose first ever order falls in the period',
         'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
+        'auto:market_share'               => 'Sales as a % of the book\'s monthly business potential',
         'auto:cost_of_selling'            => 'Travel + expense cost as a % of revenue',
         'auto:mindspeak_insights'         => 'Competitor Insights submissions accepted in Mind Speak',
         'auto:mindspeak_ideas'            => 'New Product Ideas accepted in Mind Speak',
         'auto:ninety_day_goals'           => '% of 90-Day Goals on track or in regular order',
+
+        // Attendance, read through AttendanceDayStatus so a KPI score can never
+        // disagree with what the attendance registry itself shows for the day.
+        'auto:attendance_percent'         => 'Days attended as a % of the working days in the period',
     ];
 
     /** Null = this KPI is not auto-sourced, or the figure cannot be derived. */
@@ -95,27 +101,45 @@ class KpiAutoSourceService
             'auto:trial_demo_visits'         => self::visitTypeCount($a->user_id, $start, $end, 'product_trial'),
 
             'auto:sales_pitches'      => self::mindSpeakCount($a->user_id, $start, $end, 'Sales Pitch'),
+            'auto:sales_pitch_submitted' => self::mindSpeakSubmitted($a->user_id, $start, $end, 'Sales Pitch'),
             'auto:seminars_conducted' => self::mindSpeakCount($a->user_id, $start, $end, 'Seminar'),
 
             'auto:learn_hitech_sessions' => self::learnHitechCount($a->user_id, $start, $end),
 
-            'auto:pipeline_vs_target'       => self::pipelineVsTarget($a->user_id),
+            'auto:pipeline_vs_target'       => self::pipelineVsTarget($a->user_id, $start, $end),
             'auto:yoy_growth'               => self::yoyGrowth($a->user_id, $start, $end),
             'auto:new_customer_revenue_pct' => self::newCustomerRevenuePct($a->user_id, $start, $end),
             'auto:customer_attrition'       => self::customerAttrition($a->user_id, $start, $end),
+            'auto:market_share'             => self::marketShare($a->user_id, $start, $end),
             'auto:cost_of_selling'          => self::costOfSelling($a->user_id, $start, $end),
             'auto:mindspeak_insights'       => self::mindSpeakAccepted($a->user_id, $start, $end, 'Competitor Insights'),
             'auto:mindspeak_ideas'          => self::mindSpeakAccepted($a->user_id, $start, $end, 'Idea'),
             'auto:ninety_day_goals'         => self::ninetyDayGoals($a->user_id, $start, $end),
+
+            'auto:attendance_percent'       => self::attendancePercent($a->user_id, $start, $end),
 
             default => null,
         };
     }
 
     /**
-     * The customers a person is measured on: theirs as salesperson, as New Biz
-     * rep, or as CCare rep. A New Biz executive owns rows through new_biz_id
-     * rather than salesperson_id, so all three have to count.
+     * The customers a person is measured on.
+     *
+     * There are FIVE ways somebody is attached to a customer, and this used to
+     * check only three -- salesperson_id, new_biz_id, ccare_id -- silently
+     * dropping new_biz_2_id and every row tagged through
+     * sales_pipeline_extra_reps. The Sales Report and the Kingo/Bingo
+     * scorecard both count all five, so a KPI built on the short list reported
+     * less revenue than the screens the same person is looking at.
+     *
+     * Measured on September 2026: ten of fifty KPI holders were short, by
+     * ₹24.78 lakh in total. DIPALI SHARMA's Kingo Achievement read 23.32%
+     * against the 22.99 lakh her own Sales Report showed (35.37%), and PRAPTI
+     * KAPOOR scored 2.38% on a month where she had in fact made 102% of her
+     * target -- nearly all of her revenue arrived through extra-rep tagging.
+     *
+     * Booked business is booked business whoever tagged it, which is the rule
+     * the Kingo/Bingo actuals already follow.
      */
     private static function book(int $userId)
     {
@@ -124,8 +148,118 @@ class KpiAutoSourceService
             ->where(function ($q) use ($userId) {
                 $q->where('salesperson_id', $userId)
                   ->orWhere('new_biz_id', $userId)
-                  ->orWhere('ccare_id', $userId);
+                  ->orWhere('new_biz_2_id', $userId)
+                  ->orWhere('ccare_id', $userId)
+                  ->orWhereExists(function ($e) use ($userId) {
+                      $e->selectRaw('1')
+                        ->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $userId);
+                  });
             });
+    }
+
+    /**
+     * Days attended as a percentage of the working days in the period.
+     *
+     * Resolved one day at a time through AttendanceDayStatus rather than by
+     * counting attendance rows, so this figure can never disagree with what
+     * the registry shows: the same rules for miss-punches, Sunday/holiday
+     * working, part-day holidays and off-Saturdays apply here too.
+     *
+     * What counts:
+     *   full credit  present, late, WFH, short-leave-present, SP, HP
+     *   half credit  a worked half day
+     *   no credit    absent, miss-punch, unpaid leave
+     *
+     * APPROVED PAID LEAVE COUNTS AS ATTENDED. Leave that HR has granted and
+     * already charged to the person's balance is authorised absence, and
+     * scoring it as a miss would dock marks for taking earned leave -- an
+     * incentive to come in sick rather than an attendance measure. Unpaid
+     * leave gets no credit, because there was no entitlement behind it.
+     *
+     * Returns a 0-100 figure, so the KPI carries target_value = 100.
+     */
+    private static function attendancePercent(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $user = \App\Models\User::find($userId);
+        if (!$user) {
+            return null;
+        }
+
+        // Never score a period that has not finished happening: counting the
+        // rest of the month as absence would show everyone failing mid-month.
+        $last = $end->copy()->min(Carbon::today());
+        if ($last->lt($start)) {
+            return null;
+        }
+
+        $rows = \App\Models\Attendance::where('user_id', $userId)
+            ->whereBetween('check_in_time', [$start->copy()->startOfDay(), $last->copy()->endOfDay()])
+            ->get()
+            ->keyBy(fn ($a) => $a->check_in_time->toDateString());
+
+        $leaves = \App\Models\LeaveRequest::with('leaveType')
+            ->where('user_id', $userId)
+            ->where('status', 'approved')
+            ->whereDate('from_date', '<=', $last->toDateString())
+            ->whereDate('to_date', '>=', $start->toDateString())
+            ->get();
+
+        $working = 0.0;
+        $attended = 0.0;
+
+        for ($d = $start->copy(); $d->lte($last); $d->addDay()) {
+            $holiday = \App\Models\Holiday::where('status', 1)->whereDate('date', $d->toDateString())->first();
+
+            // Sundays, weekly offs and full holidays are not working days, so
+            // they belong in neither side of the fraction.
+            if (!LeavePolicyService::isWorkingDay($user, $d) && !($holiday && $holiday->isFullDay())) {
+                if (!$rows->has($d->toDateString())) {
+                    continue;
+                }
+            }
+
+            $attendance = $rows->get($d->toDateString());
+            $leave = $leaves->first(fn ($l) => $l->from_date->lte($d) && $l->to_date->gte($d));
+
+            $result = AttendanceDayStatus::resolve($user, $d->copy(), $attendance, $leave, $holiday);
+            $code = $result['code'];
+
+            // Off days only enter the count when they were actually worked,
+            // where they can add credit but must not add to the denominator.
+            if (in_array($code, ['weekly_off', 'holiday', 'scheduled', 'today', 'missing'], true)) {
+                continue;
+            }
+            if (in_array($code, ['sp', 'hp'], true)) {
+                $attended += 1.0;
+                continue;
+            }
+
+            $working += 1.0;
+
+            if (in_array($code, ['half-day', 'half-day-paid'], true)) {
+                $attended += 0.5;
+            } elseif (in_array($code, AttendanceDayStatus::PRESENT_LIKE_CODES, true)) {
+                $attended += 1.0;
+            } elseif ($code === 'paid_leave') {
+                $attended += 1.0;   // authorised, and already paid for from the balance
+            }
+            // absent / miss-punch / unpaid_leave earn nothing.
+        }
+
+        if ($working <= 0) {
+            return null;
+        }
+
+        // A person with no attendance row and no leave for the whole period
+        // scores zero, the same as somebody who was marked absent every day.
+        // Asked for deliberately: the business treats an unrecorded month as an
+        // unattended one, and the four accounts it currently applies to are
+        // regional logins and a new joiner who should be on the registry. The
+        // KPI cannot distinguish missing paperwork from absence, and this is
+        // the side of that it errs on.
+        return round(min(100, $attended / $working * 100), 2);
     }
 
     /** Month keys (YYYY-MM) the period covers. */
@@ -138,6 +272,82 @@ class KpiAutoSourceService
             $c->addMonth();
         }
         return $keys;
+    }
+
+    /**
+     * Sales history before FY2026-27 was imported as YEARLY figures, not months:
+     * per salesperson in salesperson_annual_sales.fy_YY_YY and per customer in
+     * sales_pipelines.yoy_YY_YY (FY2022-23 to FY2025-26, lakh). From FY2026-27
+     * on, sales are kept month by month and the month rows answer instead.
+     */
+    private static function fySuffix(Carbon $inYear): string
+    {
+        $y = $inYear->month >= 4 ? $inYear->year : $inYear->year - 1;
+
+        return sprintf('%02d_%02d', $y % 100, ($y + 1) % 100);
+    }
+
+    /** customer id => imported yearly sale (lakh) for the financial year containing $inYear. */
+    private static function importedCustomerYear(int $userId, Carbon $inYear): \Illuminate\Support\Collection
+    {
+        $col = 'yoy_' . self::fySuffix($inYear);
+        if (!DB::getSchemaBuilder()->hasColumn('sales_pipelines', $col)) {
+            return collect();
+        }
+
+        return self::book($userId)->where($col, '>', 0)->pluck($col, 'id')->map(fn ($v) => (float) $v);
+    }
+
+    /** The person's imported yearly total: their own row, else the sum over their customers. */
+    private static function importedYearTotal(int $userId, Carbon $inYear): float
+    {
+        $col = 'fy_' . self::fySuffix($inYear);
+        $own = DB::getSchemaBuilder()->hasColumn('salesperson_annual_sales', $col)
+            ? (float) DB::table('salesperson_annual_sales')->where('user_id', $userId)->value($col)
+            : 0.0;
+
+        return $own > 0 ? $own : (float) self::importedCustomerYear($userId, $inYear)->sum();
+    }
+
+    /**
+     * Whether the imported per-customer figures say WHO bought that year, not just
+     * how much: spread over at least 3 customers, and adding up to at least 90% of
+     * the person's yearly total. Most people's imported year is one lump parked on
+     * a single customer row (e.g. a whole 1,599 L on one party with no sales this
+     * year) - read as a customer list, that made everyone "100% new" and "100%
+     * lost" at once. A lump says how much, never who.
+     */
+    private static function customerHistoryCovers(int $userId, Carbon $inYear): bool
+    {
+        $rows = self::importedCustomerYear($userId, $inYear);
+        if ($rows->count() < 3) {
+            return false;
+        }
+        $customers = (float) $rows->sum();
+        $col = 'fy_' . self::fySuffix($inYear);
+        $total = DB::getSchemaBuilder()->hasColumn('salesperson_annual_sales', $col)
+            ? (float) DB::table('salesperson_annual_sales')->where('user_id', $userId)->value($col)
+            : 0.0;
+
+        return $total <= 0 || $customers >= 0.9 * $total;
+    }
+
+    /** Customers in the book with an imported sale in any earlier year. */
+    private static function customersWithImportedSales(int $userId): \Illuminate\Support\Collection
+    {
+        $cols = array_values(array_filter(
+            ['yoy_22_23', 'yoy_23_24', 'yoy_24_25', 'yoy_25_26'],
+            fn ($c) => DB::getSchemaBuilder()->hasColumn('sales_pipelines', $c)
+        ));
+        if (!$cols) {
+            return collect();
+        }
+
+        return self::book($userId)->where(function ($q) use ($cols) {
+            foreach ($cols as $c) {
+                $q->orWhere($c, '>', 0);
+            }
+        })->pluck('id');
     }
 
     /** Revenue in ₹ lakh — sale_amount is stored in lakh. */
@@ -184,15 +394,75 @@ class KpiAutoSourceService
         return round($ordered / $ids->count() * 100, 2);
     }
 
-    /** Revenue against the book's total potential, as a percentage. */
+    /**
+     * The period's sale against the period's forecast, as a percentage: did
+     * they sell what they said they would?
+     *
+     * The pipeline IS the forecast -- the business's own definition. This used
+     * to divide by the book's total_business_potential, which counts prospects
+     * who have never ordered (about half of a New Biz book) and is a lifetime
+     * figure set against one month's sale: the best anyone ever reached was 73%
+     * of a 100% threshold. A forecast is dated, belongs to the month, and is the
+     * salesperson's own number.
+     */
     public static function totalPipeline(int $userId, Carbon $start, Carbon $end): ?float
     {
-        $potential = (float) self::book($userId)->sum('total_business_potential');
-        if ($potential <= 0) {
+        $forecast = self::forecast($userId, $start, $end);
+        if ($forecast <= 0) {
+            return null;   // nothing was forecast, so there is nothing to have delivered against
+        }
+
+        return round(self::revenue($userId, $start, $end) / $forecast * 100, 2);
+    }
+
+    /**
+     * Forecast for the period's months, in ₹ lakh (forecast_amount is stored in
+     * lakh, like sale_amount). Recorded from August 2026 onward; earlier months
+     * have none.
+     */
+    public static function forecast(int $userId, Carbon $start, Carbon $end): float
+    {
+        return (float) DB::table('sales_pipeline_months as m')
+            ->whereIn('m.sales_pipeline_id', self::book($userId)->select('id'))
+            ->whereIn('m.month_year', self::monthKeys($start, $end))
+            ->sum('m.forecast_amount');
+    }
+
+    /**
+     * The pipeline someone is carrying, in ₹ lakh, for the scorecard's headline
+     * card: the month's forecast (this month unless told otherwise), which is
+     * what the Total Pipeline KPI now measures sale against.
+     */
+    /**
+     * Market share: the period's sales as a % of the book's business potential.
+     * Business potential (sales_pipelines.total_business_potential, lakh) is a
+     * per-MONTH figure for each customer, so a period of n months is measured
+     * against n months of it. Null when the book has no potential recorded.
+     */
+    public static function marketShare(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $to = self::upTo($end);
+        $months = count(self::monthKeys($start, $to));
+        $potential = (float) self::book($userId)->where('total_business_potential', '>', 0)->sum('total_business_potential');
+        if ($potential <= 0 || $months <= 0) {
             return null;
         }
 
-        return round(self::revenue($userId, $start, $end) / $potential * 100, 2);
+        return round(self::revenue($userId, $start, $to) / ($potential * $months) * 100, 2);
+    }
+
+    public static function totalPipelineValue(int $userId, ?Carbon $start = null, ?Carbon $end = null): float
+    {
+        $start ??= Carbon::today()->startOfMonth();
+        $end ??= Carbon::today()->endOfMonth();
+
+        return round(self::forecast($userId, $start, $end), 2);
+    }
+
+    /** Public door to the attendance figure, for the scorecard's headline card. */
+    public static function attendancePercentFor(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        return self::attendancePercent($userId, $start, $end);
     }
 
     /** Customers whose FIRST ever recorded sale falls inside the period. */
@@ -277,12 +547,22 @@ class KpiAutoSourceService
             return null;
         }
 
+        // Same five attribution routes as book(). Counting only three made this
+        // disagree with the Sales Report the salesperson reads their own number
+        // off -- see book()'s note for the measured effect.
         $actual = (float) DB::table('sales_pipeline_months as m')
             ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
             ->where(function ($q) use ($userId) {
                 $q->where('sp.salesperson_id', $userId)
                   ->orWhere('sp.new_biz_id', $userId)
-                  ->orWhere('sp.ccare_id', $userId);
+                  ->orWhere('sp.new_biz_2_id', $userId)
+                  ->orWhere('sp.ccare_id', $userId)
+                  ->orWhereExists(function ($e) use ($userId) {
+                      $e->selectRaw('1')
+                        ->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sp.id')
+                        ->where('er.user_id', $userId);
+                  });
             })
             ->where('sp.is_locked', true)
             ->whereNull('sp.deleted_at')
@@ -319,6 +599,23 @@ class KpiAutoSourceService
      * 'approved' counts — pending or rejected entries can't inflate a score
      * before a reviewer has actually signed off on them.
      */
+    /**
+     * Mind Speak entries of a category the person SUBMITTED in the period - pending,
+     * approved or acknowledged, anything a reviewer has not rejected. Sales Pitch is
+     * counted this way (2026-09-29): all nine on record were still pending, so an
+     * approved-only count gave everyone 0 however many they had sent in.
+     */
+    public static function mindSpeakSubmitted(int $userId, Carbon $start, Carbon $end, string $category): float
+    {
+        return (float) DB::table('mind_speaks')
+            ->where('user_id', $userId)
+            ->where('category', $category)
+            ->where('status', '!=', 'rejected')
+            ->whereNull('deleted_at')
+            ->whereBetween('created_at', [$start->copy()->startOfDay(), $end->copy()->endOfDay()])
+            ->count();
+    }
+
     public static function mindSpeakCount(int $userId, Carbon $start, Carbon $end, string $category): float
     {
         return (float) DB::table('mind_speaks')
@@ -351,30 +648,26 @@ class KpiAutoSourceService
     }
 
     /**
-     * Total business potential of the book against the annual Bingo target, as a
-     * percentage (the rule book's "Pipeline ÷ Target"). Potential is not dated, so
-     * this reads the book as it stands; the target is the current fiscal year's.
+     * The period's forecast against the period's Bingo target, as a percentage
+     * (the rule book's "Pipeline ÷ Target"), read month on month.
+     *
+     * It used to divide the book's undated total potential by the whole fiscal
+     * year's Bingo target, so it printed the same number for every month -- one
+     * person read 16.07% in April, June, August and September alike -- and a
+     * small target against a large book of prospects produced 849%. A forecast
+     * is dated, so the figure now belongs to the month it is printed for.
      */
-    public static function pipelineVsTarget(int $userId): ?float
+    public static function pipelineVsTarget(int $userId, Carbon $start, Carbon $end): ?float
     {
         $target = (float) DB::table('salesperson_targets')
             ->where('salesperson_id', $userId)
-            ->whereIn('month_year', self::currentFiscalKeys())
+            ->whereIn('month_year', self::monthKeys($start, $end))
             ->sum('bingo_target');
         if ($target <= 0) {
             return null;
         }
 
-        return round((float) self::book($userId)->sum('total_business_potential') / $target * 100, 2);
-    }
-
-    /** The current fiscal year's month keys (Apr to Mar), for the undated figure above. */
-    private static function currentFiscalKeys(): array
-    {
-        $today = Carbon::today();
-        $start = $today->month >= 4 ? Carbon::create($today->year, 4, 1) : Carbon::create($today->year - 1, 4, 1);
-
-        return self::monthKeys($start, $start->copy()->addMonths(11));
+        return round(self::forecast($userId, $start, $end) / $target * 100, 2);
     }
 
     /**
@@ -387,6 +680,15 @@ class KpiAutoSourceService
         $to   = self::upTo($end);
         $now  = self::revenue($userId, $start, $to);
         $then = self::revenue($userId, $start->copy()->subYear(), $to->copy()->subYear());
+        if ($then <= 0) {
+            // Last year was imported as a yearly total, not month by month:
+            // compare with the same share of it (April-September = 6/12).
+            $annual = self::importedYearTotal($userId, $start->copy()->subYear());
+            $months = count(self::monthKeys($start, $to));
+            if ($annual > 0 && $months > 0) {
+                $then = $annual * min(12, $months) / 12;
+            }
+        }
         if ($then <= 0) {
             return null;
         }
@@ -409,8 +711,11 @@ class KpiAutoSourceService
         }
 
         // Without the year before on record, every customer looks new and everybody
-        // would be handed full marks. No history, no figure.
-        if (self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) <= 0) {
+        // would be handed full marks. No history, no figure. The year before may
+        // be on record month by month, or as imported yearly figures per customer
+        // - the latter only counts where they add up to the person's yearly total.
+        $monthHistory = self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) > 0;
+        if (!$monthHistory && !self::customerHistoryCovers($userId, $start->copy()->subYear())) {
             return null;
         }
 
@@ -420,6 +725,9 @@ class KpiAutoSourceService
             ->selectRaw('sales_pipeline_id, MIN(month_year) first_month')
             ->groupBy('sales_pipeline_id');
         $newIds = DB::query()->fromSub($firstSale, 'f')->whereIn('f.first_month', $keys)->pluck('f.sales_pipeline_id');
+        // A customer with imported sales in any earlier year was not new, whatever
+        // month their first MONTHLY row happens to fall in.
+        $newIds = $newIds->diff(self::customersWithImportedSales($userId));
         if ($newIds->isEmpty()) {
             return 0.0;
         }
@@ -444,6 +752,11 @@ class KpiAutoSourceService
             ->whereIn('month_year', $lastYear)
             ->where('sale_amount', '>', 0)
             ->distinct()->pluck('sales_pipeline_id');
+        // Last year's buyers imported as yearly figures count too - where those
+        // figures account for the person's yearly total.
+        if (self::customerHistoryCovers($userId, $start->copy()->subYear())) {
+            $base = $base->merge(self::importedCustomerYear($userId, $start->copy()->subYear())->keys())->unique()->values();
+        }
         if ($base->isEmpty()) {
             return null;
         }
@@ -513,21 +826,35 @@ class KpiAutoSourceService
      */
     public static function ninetyDayGoals(int $userId, Carbon $start, Carbon $end): ?float
     {
+        $good = ['Regular Order', 'On Track'];
+        $statuses = collect();
+
+        // The tracker: every goal in a 13-week round that overlaps the period, judged by
+        // the latest status the person has reported for it.
+        $roundIds = DB::table('ninety_day_rounds')->where('user_id', $userId)
+            ->where('starts_on', '<=', $end->toDateString())->where('ends_on', '>=', $start->toDateString())->pluck('id');
+        if ($roundIds->isNotEmpty()) {
+            foreach (DB::table('ninety_day_goals')->where('user_id', $userId)->whereNull('deleted_at')->whereIn('round_id', $roundIds)->pluck('id') as $goalId) {
+                $statuses->push(DB::table('ninety_day_goal_checkins')->where('goal_id', $goalId)->whereNotNull('status')->orderByDesc('week_no')->value('status'));
+            }
+        }
+
+        // Older goals filed against an appraisal cycle and judged by week 12.
         $cycles = DB::table('appraisal_cycles')
             ->where('start_date', '<=', $end->toDateString())
             ->where('end_date', '>=', $start->toDateString())
             ->pluck('id');
-        $goals = DB::table('ninety_day_goals')
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->whereIn('appraisal_cycle_id', $cycles)
-            ->pluck('w12');
-        if ($goals->isEmpty()) {
+        if ($cycles->isNotEmpty()) {
+            $statuses = $statuses->concat(
+                DB::table('ninety_day_goals')->where('user_id', $userId)->whereNull('deleted_at')->whereNull('round_id')
+                    ->whereIn('appraisal_cycle_id', $cycles)->pluck('w12')
+            );
+        }
+
+        if ($statuses->isEmpty()) {
             return null;
         }
 
-        $good = $goals->filter(fn ($w) => in_array($w, ['Regular Order', 'On Track'], true))->count();
-
-        return round($good / $goals->count() * 100, 2);
+        return round($statuses->filter(fn ($w) => in_array($w, $good, true))->count() / $statuses->count() * 100, 2);
     }
 }

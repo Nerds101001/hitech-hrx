@@ -151,6 +151,24 @@ class SalesPipelineController extends Controller
     }
 
     /**
+     * One-off reopen of closed months for the whole sales team, not only
+     * Admin/HR, at the client's request. April to August 2026 had passed their
+     * Sept-5 grace windows; they are open again through the end of Monday
+     * 21 Sept 2026 (IST) and then lock themselves with no follow-up. The months
+     * and the moment live here once: the lock check below and the Sales Report
+     * view both ask this method, so they cannot disagree. Once the moment has
+     * passed the constants (and this method) are dead code and safe to delete.
+     */
+    public const REOPEN_MONTHS = ['2026-04', '2026-05', '2026-06', '2026-07', '2026-08'];
+    public const REOPEN_UNTIL  = '2026-09-21 23:59:59';   // Asia/Kolkata
+
+    public static function isReopened(string $monthYear): bool
+    {
+        return in_array($monthYear, self::REOPEN_MONTHS, true)
+            && \Carbon\Carbon::now()->lte(\Carbon\Carbon::parse(self::REOPEN_UNTIL, 'Asia/Kolkata'));
+    }
+
+    /**
      * A closed month's Sale / Pending / Forecast / Remarks figures are
      * locked to everyone except Admin/HR. "Closed" means: not the current
      * month, and not last month before the 5th of this month either (e.g.
@@ -160,6 +178,10 @@ class SalesPipelineController extends Controller
     public static function isMonthLockedForUser($user, string $monthYear): bool
     {
         if ($user && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])) {
+            return false;
+        }
+
+        if (self::isReopened($monthYear)) {
             return false;
         }
 
@@ -285,6 +307,15 @@ class SalesPipelineController extends Controller
         $fSp     = $request->input('sp');      // salesperson_id
         $fCcare  = $request->input('ccare');   // ccare_id
         $fNb     = $request->input('nb');      // new_biz_id
+        // One person, either role. Somebody can hold customers as CCare on some
+        // rows and as New Biz on others - Poonam has 226 and 75 - and the two
+        // dropdowns above AND together, so picking her in both returns only the
+        // rows where she is somehow both, which is nearly none. Admin/HR already
+        // got a widened view through applyUnrestrictedPersonOrTeamFilter(), but
+        // it is invisible (the dropdown still says "CCare") and a CCare or New
+        // Biz rep never got it at all. This filter says what it does and works
+        // for everyone.
+        $fBoth   = $request->input('both');    // ccare_id OR new_biz_id OR new_biz_2_id
         if ($fParty !== '') {
             $query->where('party_name', 'like', '%' . $fParty . '%');
         }
@@ -325,6 +356,28 @@ class SalesPipelineController extends Controller
             }
             self::applyPersonFilter($query, 'ccare_id', $fCcare);
             self::applyPersonFilter($query, 'new_biz_id', $fNb);
+        }
+
+        // Applied on its own terms, outside the block above: this one has to
+        // work for a restricted rep too, which is the case the widening in
+        // applyUnrestrictedPersonOrTeamFilter() never covered.
+        if (!empty($fBoth) && is_numeric($fBoth)) {
+            $bothId = (int) $fBoth;
+            $query->where(function ($q) use ($bothId) {
+                $q->where('ccare_id', $bothId)
+                  ->orWhere('new_biz_id', $bothId)
+                  ->orWhere('new_biz_2_id', $bothId)
+                  // Extra reps count too. Without them this filter returned FEWER
+                  // rows than picking the same person under "CCare" - Poonam holds
+                  // 29 extra-rep rows, 13 of them on customers she is not the
+                  // named CCare or New Biz rep for - and a combined filter showing
+                  // less than a single-role one reads as broken.
+                  ->orWhereExists(function ($s) use ($bothId) {
+                      $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
+                        ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
+                        ->where('er.user_id', $bothId);
+                  });
+            });
         }
         // Brand filter. The Brand column is the free-text `product` field, which
         // holds things like "dr. bio - fillezy - rustx", so filtering on exact
@@ -484,6 +537,20 @@ class SalesPipelineController extends Controller
         $spFilterCounts    = $countsFor('salesperson_id');
         $ccareFilterCounts = $countsFor('ccare_id');
         $nbFilterCounts    = $countsFor('new_biz_id');
+
+        // Counts for the combined filter. Counted per person over the rows where
+        // they hold ANY of the three rep columns, and de-duplicated per row, so a
+        // row where the same person is both CCare and New Biz counts once - the
+        // number has to match what the grid shows after picking them.
+        $bothFilterCounts = (clone $optionBase)
+            ->where(function ($q) {
+                $q->whereNotNull('ccare_id')->orWhereNotNull('new_biz_id')->orWhereNotNull('new_biz_2_id');
+            })
+            ->get(['sales_pipelines.id', 'ccare_id', 'new_biz_id', 'new_biz_2_id'])
+            ->flatMap(fn ($r) => collect([$r->ccare_id, $r->new_biz_id, $r->new_biz_2_id])
+                ->filter()->unique()->values()->map(fn ($uid) => (int) $uid))
+            ->countBy();
+
         // Rows where the column is blank. $countsFor() groups by the column and
         // so skips these entirely, which is why "All Salespersons" showed fewer
         // than the grid did. Each becomes a "No …" option and is added back into
@@ -527,6 +594,15 @@ class SalesPipelineController extends Controller
         // and her pipeline read blank; she now shows with a (0) count and stays
         // selectable. Row visibility stays scoped by SalesScope, so nothing leaks.
         $newBizFilterUsers      = $newBizUsers;
+
+        // Combined filter list = everyone holding rows in either role, plus the whole
+        // New Biz directory so someone whose rows all sit in an earlier FY stays
+        // selectable at (0) - same reasoning as the New Biz filter above.
+        $bothFilterUsers = User::whereIn(
+            'id',
+            $bothFilterCounts->keys()->merge($newBizUsers->pluck('id'))
+                ->merge($ccareFilterCounts->keys())->unique()->values()->all()
+        )->orderBy('first_name')->get();
 
         // Only the FY months on screen and only the fields the page uses — the
         // full table serialized into the page was ~150 KB of dead weight.
@@ -763,6 +839,10 @@ class SalesPipelineController extends Controller
                     $spId = $t->salesperson_id;
                     $row = $actualByKey[$mk . '|' . $spId] ?? null;
                     $list[] = [
+                        // Carried so callers can match a row to a person without
+                        // going through the name, which is not unique here — two
+                        // MANISHA KUMARIs are active, in different departments.
+                        'id'       => $spId,
                         'name'     => $nameMap[$spId] ?? ('#' . $spId),
                         'category' => $categoryOf($spId),
                         'forecast' => (float) ($row->forecast ?? 0),
@@ -779,8 +859,30 @@ class SalesPipelineController extends Controller
         }
         // The stat chip still reports the current month.
         $targetAchievers = $targetAchieversByMonth[$currentMonthKey] ?? [];
+
+        // The chip counts only the person being filtered on, when there is one.
+        // It used to count every salesperson regardless, so filtering the page
+        // down to one rep still read "B 6  K 3  SK 1" — the whole company's
+        // figures sitting on top of that one person's rows, which reads as this
+        // rep having achieved all of it. The modal behind the chip still lists
+        // everyone: that is a company-wide league table by design.
+        $chipRows = $targetAchievers;
+        $chipPersonId = null;
+        foreach ([$fSp, $fCcare, $fNb, $fBoth ?? null] as $candidate) {
+            if ($candidate !== null && $candidate !== '' && $candidate !== self::FILTER_NONE && is_numeric($candidate)) {
+                $chipPersonId = (int) $candidate;
+                break;
+            }
+        }
+        if ($chipPersonId) {
+            $chipRows = array_values(array_filter(
+                $targetAchievers,
+                fn ($r) => (int) ($r['id'] ?? 0) === $chipPersonId
+            ));
+        }
+
         $kAchieved = 0; $bAchieved = 0; $skAchieved = 0;
-        foreach ($targetAchievers as $r) {
+        foreach ($chipRows as $r) {
             if ($r['bingo'] > 0 && $r['actual'] >= $r['bingo']) $bAchieved++;
             if ($r['kingo'] > 0 && $r['actual'] >= $r['kingo']) $kAchieved++;
             if ($r['super'] > 0 && $r['actual'] >= $r['super']) $skAchieved++;
@@ -839,7 +941,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
     }
 
     public function actualPipelineIndex(Request $request)

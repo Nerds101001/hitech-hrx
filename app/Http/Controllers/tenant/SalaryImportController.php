@@ -11,8 +11,24 @@ use Illuminate\Support\Facades\Response;
 
 class SalaryImportController extends Controller
 {
+    /** Session key holding the rows the preview read, for store() to save. */
+    private const RECORDS_KEY = 'salary_import_records';
+
+    /**
+     * Writing salaries needs a write grant. The route group also admits
+     * payroll.view, so a view-only user could run an import; the registry
+     * names the grant that covers it: "Process Payroll (incl. Salary Import)".
+     */
+    private function canImport(): bool
+    {
+        $u = auth()->user();
+
+        return $u && ($u->hasRole(['admin', 'hr', 'accounts']) || $u->can('payroll.process'));
+    }
+
     public function preview(Request $request)
     {
+        abort_unless($this->canImport(), 403, 'Importing salaries needs the Process Payroll permission.');
         $request->validate([
             'file' => 'required|mimes:xlsx,xls,csv'
         ]);
@@ -123,6 +139,10 @@ class SalaryImportController extends Controller
             }
         }
 
+        // What store() will save: these rows, read from the file here - never
+        // figures posted back by the browser.
+        session([self::RECORDS_KEY => $recordsToStore]);
+
         return view('tenant.payroll.salary_import_preview', [
             'previewData' => $previewData,
             'recordsJson' => json_encode($recordsToStore),
@@ -132,9 +152,14 @@ class SalaryImportController extends Controller
 
     public function store(Request $request)
     {
-        $records = json_decode($request->input('records'), true);
+        abort_unless($this->canImport(), 403, 'Importing salaries needs the Process Payroll permission.');
+
+        // The rows this user's own preview read from the file, once. The
+        // salaries used to come from a JSON field in the form, so anyone who
+        // could post it could write any salary for any employee.
+        $records = session()->pull(self::RECORDS_KEY);
         if (empty($records)) {
-            return redirect()->route('payroll.index')->with('error', 'No valid records to import.');
+            return redirect()->route('payroll.index')->with('error', 'No valid records to import. Please upload the file again.');
         }
 
         $count = 0;

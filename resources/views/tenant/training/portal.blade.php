@@ -480,17 +480,23 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                 <div class="lms-nav-pct-fill" style="width:{{ $progressPercentage }}%"></div>
             </div>
         </div>
-        @if(!auth()->user()->hasRole(['admin','hr','manager','accounts']) || request()->has('user_id'))
+        {{-- Your own results; the results dashboard is admin/HR only. --}}
+        @if($user->id === auth()->id())
+        <a href="{{ route('training.report-card', auth()->id()) }}" class="lms-nav-back" title="Your assessment results">
+            <i class="ti ti-certificate" style="font-size:0.8rem;"></i>
+            <span class="d-none d-sm-inline">My Results</span>
+        </a>
+        @endif
+        @if($resultsLink ?? null)
+        <a href="{{ route('training.activity') }}" class="lms-nav-back">
+            <i class="ti ti-chart-bar" style="font-size:0.8rem;"></i>
+            <span class="d-none d-sm-inline">{{ $resultsLink }}</span>
+        </a>
+        @endif
         <a href="{{ url('/') }}" class="lms-nav-back">
             <i class="ti ti-layout-dashboard" style="font-size:0.8rem;"></i>
             <span class="d-none d-sm-inline">Dashboard</span>
         </a>
-        @else
-        <a href="{{ route('training.activity') }}" class="lms-nav-back">
-            <i class="ti ti-chart-bar" style="font-size:0.8rem;"></i>
-            <span class="d-none d-sm-inline">Activity</span>
-        </a>
-        @endif
         <div class="dropdown">
             <div class="nav-avatar" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;" title="Account options">
                 {{ strtoupper(substr($user->first_name ?? $user->name, 0, 2)) }}
@@ -688,14 +694,28 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
 
         @foreach($phases as $phaseIdx => $phase)
         @php
-            $pTotalMods = $phase->modules->count();
-            $pDoneMods  = $phase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+            // Learn @ Hi Tech lists Digital Library videos live; it is complete
+            // once $videosRequired of them are watched (any of them).
+            $isLibraryPhase = in_array($phase->id, $libraryPhaseIds ?? [], true) && ($libraryVideos ?? collect())->isNotEmpty();
+            if ($isLibraryPhase) {
+                $libWatched = $libraryVideos->filter(fn($v) => optional($videoViews->get($v->id))->completed_at)->count();
+                $pTotalMods = $videosRequired;
+                $pDoneMods  = min($libWatched, $videosRequired);
+            } else {
+                $pTotalMods = $phase->modules->count();
+                $pDoneMods  = $phase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+            }
             $pPct       = $pTotalMods > 0 ? round($pDoneMods / $pTotalMods * 100) : 0;
             $ci         = (($phase->order - 1) % 5) + 1;
 
-            // Phase accessibility: all previous phases must be 100%
+            // Phase accessibility: all previous phases must be 100% - except the
+            // Learn @ Hi Tech videos, which open once the prerequisite phases
+            // (1 and 2) are done, whatever sits between.
             $isAccessible = true;
-            if ($phaseIdx > 0) {
+            $libraryBlocker = $isLibraryPhase ? \App\Http\Controllers\tenant\TrainingController::libraryPrerequisiteUndone($user->id) : null;
+            if ($isLibraryPhase) {
+                $isAccessible = $libraryBlocker === null;
+            } elseif ($phaseIdx > 0) {
                 $prevPhase = $phases[$phaseIdx - 1];
                 $prevDone  = $prevPhase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
                 if ($prevPhase->modules->count() > 0 && $prevDone < $prevPhase->modules->count()) {
@@ -728,7 +748,11 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     @endif
                 </div>
                 <div class="phase-info">
-                    <div class="phase-label">Phase {{ $phase->order }}</div>
+                    <div class="phase-label">Phase {{ $phase->order }}
+                        @unless(in_array($phase->id, config('training.onboarding_phase_ids', [1, 2]), true))
+                            <span style="margin-left:6px;padding:1px 8px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:0.62rem;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">Optional</span>
+                        @endunless
+                    </div>
                     <div class="phase-name">{{ $phase->title }}</div>
                     @if($phase->description)
                     <div class="phase-desc">{{ $phase->description }}</div>
@@ -738,6 +762,7 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     <span class="phase-pill {{ $pillClass }}">
                         @if($pPct === 100) <i class="ti ti-check me-1" style="font-size:0.65rem;"></i>Complete
                         @elseif(!$isAccessible) <i class="ti ti-lock me-1" style="font-size:0.65rem;"></i>Locked
+                        @elseif($isLibraryPhase) {{ $pDoneMods }}/{{ $pTotalMods }} watched
                         @else {{ $pDoneMods }}/{{ $pTotalMods }}
                         @endif
                     </span>
@@ -758,8 +783,55 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                     <div class="locked-icon-wrap">
                         <i class="ti ti-lock" style="color:#94a3b8;font-size:1.1rem;"></i>
                     </div>
+                    @if($isLibraryPhase && $libraryBlocker)
+                    <p>Complete <strong>{{ $libraryBlocker->phase->title }}</strong> to unlock these videos.</p>
+                    @else
                     <p>Complete <strong>Phase {{ $phase->order - 1 }}</strong> to unlock this phase.</p>
+                    @endif
                 </div>
+                @elseif($isLibraryPhase)
+                <div style="padding:10px 18px 4px;color:#64748b;font-size:0.8rem;">
+                    Watch any <strong>{{ $videosRequired }}</strong> of these Learn @ Hi Tech sessions to complete this phase
+                    ({{ config('training.library_video_min_minutes', 20) }} min minimum each). New sessions appear here as they are added to the Digital Library.
+                </div>
+                @foreach($libraryVideos as $video)
+                @php
+                    $vv       = $videoViews->get($video->id);
+                    $vStatus  = optional($vv)->completed_at ? 'completed' : ($vv ? 'in_progress' : 'available');
+                    $vRow     = $vStatus === 'completed' ? 'mod-completed' : 'mod-active';
+                @endphp
+                <a href="{{ route('training.library-video.show', $video->id) }}" class="module-item {{ $vRow }}">
+                    <div class="mod-num">
+                        @if($vStatus === 'completed') <i class="ti ti-check" style="font-size:0.75rem;"></i> @else {{ $loop->iteration }} @endif
+                    </div>
+                    <div class="mod-type-icon mti-video">
+                        <i class="ti ti-player-play" style="color:#f59e0b;font-size:1rem;"></i>
+                    </div>
+                    <div class="mod-text">
+                        <div class="mod-title">{{ $video->title }}</div>
+                        <div class="mod-meta">
+                            <span class="mod-meta-chip"><i class="ti ti-clock" style="font-size:0.72rem;"></i> {{ config('training.library_video_min_minutes', 20) }}m</span>
+                            <span class="mod-meta-chip">Video</span>
+                            @if($video->session_date)
+                            <span class="mod-meta-chip"><i class="ti ti-calendar" style="font-size:0.72rem;"></i> {{ \Carbon\Carbon::parse($video->session_date)->format('d M Y') }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="mod-status-area">
+                        @if($vStatus === 'available')
+                            <span class="start-badge">Watch</span>
+                        @elseif($vStatus === 'in_progress')
+                            <span class="start-badge resume-badge">Resume</span>
+                        @endif
+                        <div class="mod-status-icon {{ $vStatus === 'completed' ? 'msi-done' : ($vStatus === 'in_progress' ? 'msi-prog' : 'msi-avail') }}">
+                            @if($vStatus === 'completed') <i class="ti ti-check"></i>
+                            @elseif($vStatus === 'in_progress') <i class="ti ti-player-play"></i>
+                            @else <i class="ti ti-arrow-right"></i>
+                            @endif
+                        </div>
+                    </div>
+                </a>
+                @endforeach
                 @else
                 @forelse($phase->modules as $module)
                 @php
@@ -822,7 +894,11 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
                         <div class="mod-meta">
                             <span class="mod-meta-chip"><i class="ti ti-clock" style="font-size:0.72rem;"></i> {{ $module->estimated_time_minutes }}m</span>
                             <span class="mod-meta-chip" style="text-transform:capitalize;">
-                                {{ ucfirst($module->content_type ?? 'reading') }}
+                                {{-- Same wording the admin Content Type picker uses.
+                                     This printed the raw column, so staff saw
+                                     "Policy" and "Catalog" for what admins now
+                                     create as Text and PDF. --}}
+                                {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? ucfirst($module->content_type ?? 'reading') }}
                             </span>
                             @if($module->is_assessment_required ?? true)
                             <span class="mod-meta-chip"><i class="ti ti-clipboard-check" style="font-size:0.72rem;"></i> Quiz</span>

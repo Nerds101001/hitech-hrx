@@ -42,8 +42,9 @@ class AssetController extends Controller
             ];
 
             $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
+                ->with('department:id,name')
                 ->orderBy('first_name')
-                ->get(['id', 'first_name', 'last_name']);
+                ->get(['id', 'first_name', 'last_name', 'department_id']);
 
             $departments = \App\Models\Department::orderBy('name')->get(['id', 'name']);
 
@@ -71,8 +72,9 @@ class AssetController extends Controller
                 ->get();
                 
             $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
+                ->with('department:id,name')
                 ->orderBy('first_name')
-                ->get(['id', 'first_name', 'last_name']);
+                ->get(['id', 'first_name', 'last_name', 'department_id']);
 
             return view('tenant.assets.create', compact('categories', 'users'));
 
@@ -212,8 +214,9 @@ class AssetController extends Controller
             ->orderBy('name')
             ->get();
         $users = User::whereIn('status', ['active', 'onboarding', 'onboarding_submitted'])
+            ->with('department:id,name')
             ->orderBy('first_name')
-            ->get(['id', 'first_name', 'last_name']);
+            ->get(['id', 'first_name', 'last_name', 'department_id']);
 
         return view('tenant.assets.edit', compact('asset', 'categories', 'users'));
     }

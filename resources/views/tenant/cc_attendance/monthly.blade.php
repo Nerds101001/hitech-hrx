@@ -65,6 +65,10 @@
   .cc-opt-wfh { color: #17a2b8; font-weight: 600; }
   .cc-opt-ps { color: #28a745; font-weight: 600; }
   .cc-opt-hp { color: #28a745; font-weight: 600; }
+  .cc-leave-tag { display: inline-block; font-size: .62rem; font-weight: 700; line-height: 1.2; padding: 1px 5px; border-radius: 4px; margin-bottom: 3px; cursor: help; white-space: nowrap; }
+  .cc-leave-tag.part { background: rgba(0, 207, 232, .16); color: #00a3b7; }
+  .cc-leave-tag.full { background: rgba(255, 159, 67, .18); color: #e07b10; }
+  .cc-leave-tag.pending { border: 1px dashed currentColor; }
 </style>
 @endsection
 
@@ -153,6 +157,12 @@
             @else
                 <form action="{{ route('cc-attendance.monthly.store') }}" method="POST">
                     @csrf
+                    <div class="text-muted small mb-2">
+                        <span class="cc-leave-tag part">SHL 2h</span> <span class="cc-leave-tag part">HDL 1st</span> <span class="cc-leave-tag part">WFH</span>
+                        = short leave / half-day leave / work from home that day (hover for times). Mark what they did for the rest of the day:
+                        <b>P</b> on a short leave = worked the remaining hours, <b>P</b> or <b>HD</b> on a half-day leave = worked the other half, <b>WFH</b> on an approved WFH leave needs no snapshot.
+                        <span class="cc-leave-tag full">CL</span> = full-day leave, nothing to mark. A dashed tag is still awaiting approval.
+                    </div>
                     
                     <div class="table-responsive">
                         <table class="table table-bordered table-sm align-middle text-center" style="font-size: 0.8rem; min-width: 1500px;">
@@ -255,6 +265,25 @@
                                                 $attList = $attendances[$emp->id] ?? [];
                                                 $record = $attList[$dateStr] ?? null;
                                                 $status = $record ? strtolower($record->status) : null;
+
+                                                // Leave on this day, shown as a small tag in the cell.
+                                                $cellLeave = $monthLeaves[$emp->id][$dateStr] ?? null;
+                                                $leaveTag = null;
+                                                if ($cellLeave) {
+                                                    $kind = \App\Http\Controllers\tenant\CcAttendanceController::leaveKind($cellLeave);
+                                                    $hrs = $cellLeave->duration_hours ? rtrim(rtrim(number_format((float) $cellLeave->duration_hours, 2), '0'), '.') . 'h' : '';
+                                                    $leaveTag = [
+                                                        'text'  => match ($kind) {
+                                                            'short' => trim('SHL ' . $hrs),
+                                                            'half'  => 'HDL ' . ($cellLeave->half_day_session === 'second_half' ? '2nd' : '1st'),
+                                                            'wfh'   => 'WFH',
+                                                            default => $cellLeave->leaveType->code ?? 'LV',
+                                                        },
+                                                        'class' => ($kind === 'full' ? 'full' : 'part') . (\App\Http\Controllers\tenant\CcAttendanceController::leaveState($cellLeave) === 'pending' ? ' pending' : ''),
+                                                        'title' => \App\Http\Controllers\tenant\CcAttendanceController::leaveLabel($cellLeave),
+                                                        'full'  => $kind === 'full',
+                                                    ];
+                                                }
                                             @endphp
                                             @php
                                                 $skipCell = false;
@@ -286,6 +315,9 @@
                                             @endif
 
                                             <td class="{{ $isSunday ? 'bg-light' : '' }}">
+                                                @if($leaveTag)
+                                                    <div><span class="cc-leave-tag {{ $leaveTag['class'] }}" title="{{ $leaveTag['title'] }}">{{ $leaveTag['text'] }}</span></div>
+                                                @endif
                                                 @if($status)
                                                     {{-- Marked --}}
                                                     @php
@@ -300,7 +332,7 @@
                                                         elseif (str_contains($status, 'leave')) $displayStatus = 'LV';
                                                         elseif ($status === 'present' && $record->check_in_time) {
                                                             $workMins = $record->check_out_time ? $record->check_in_time->diffInMinutes($record->check_out_time) : 0;
-                                                            if ($workMins >= 240) {
+                                                            if ($workMins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
                                                                 if ($dateObj->isSunday()) {
                                                                     $displayStatus = 'PS';
                                                                 } elseif (isset($empHolidayDates[$dateStr])) {
@@ -320,6 +352,8 @@
                                                     @if($isSunday && !$isWithinWindow)
                                                         {{-- Sunday but not in window, just show Sun --}}
                                                         <span class="text-muted fst-italic" style="font-size: 0.75rem;">Sun</span>
+                                                    @elseif($leaveTag && $leaveTag['full'])
+                                                        {{-- Full-day leave: the Leave module owns the day --}}
                                                     @elseif(!$isWithinWindow)
                                                         {{-- Outside Window --}}
                                                         <span class="text-muted" style="font-size: 0.75rem;">-</span>

@@ -184,6 +184,18 @@
 @endsection
 
 @section('content')
+@php
+    // One label for every assignee picker on this page. Names are not unique -
+    // two MANISHA KUMARIs are active right now, one in Accounts and one in
+    // Billing - so a list of bare names leaves the assigner guessing. The
+    // department is what tells them apart. Select2 matches on option text, so
+    // typing a department name filters the list too.
+    $employeeLabel = function ($e) {
+        $label = trim($e->first_name . ' ' . $e->last_name);
+        if ($e->department?->name) { $label .= ' — ' . $e->department->name; }
+        return $label;
+    };
+@endphp
 <div class="layout-full-width animate__animated animate__fadeIn">
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-6 mx-4">
@@ -812,7 +824,7 @@
               <label class="form-label">Assign to employees</label>
               <select id="at_employees" class="form-select select2" multiple>
                 @foreach($employees as $e)
-                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                  <option value="{{ $e->id }}">{{ $employeeLabel($e) }}</option>
                 @endforeach
               </select>
               <div class="form-text">Pick specific people, or leave blank and use departments below.</div>
@@ -831,7 +843,7 @@
               <label class="form-label">CC (optional)</label>
               <select id="at_cc" class="form-select select2" multiple>
                 @foreach($employees as $e)
-                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                  <option value="{{ $e->id }}">{{ $employeeLabel($e) }}</option>
                 @endforeach
               </select>
               <div class="form-text">People who can follow this task's status and reply without owning it — it shows up on their dashboard as something Assigned to someone else you're watching.</div>
@@ -889,7 +901,7 @@
               <label class="form-label">Assigned to</label>
               <select id="et_assignee" class="form-select select2-single">
                 @foreach($employees as $e)
-                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                  <option value="{{ $e->id }}">{{ $employeeLabel($e) }}</option>
                 @endforeach
               </select>
               <div class="form-text">Reassigns this one task — only to someone on your own team.</div>
@@ -898,7 +910,7 @@
               <label class="form-label">CC (optional)</label>
               <select id="et_cc" class="form-select select2" multiple>
                 @foreach($employees as $e)
-                  <option value="{{ $e->id }}">{{ trim($e->first_name . ' ' . $e->last_name) }}</option>
+                  <option value="{{ $e->id }}">{{ $employeeLabel($e) }}</option>
                 @endforeach
               </select>
               <div class="form-text">People who can follow this task's status and reply without owning it.</div>

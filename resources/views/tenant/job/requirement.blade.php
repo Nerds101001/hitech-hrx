@@ -89,10 +89,10 @@
             </div>
 
             <h3 class="mt-0">The Role</h3>
-            <div class="mb-8">{!! $job->description !!}</div>
+            <div class="mb-8">{!! \App\Support\SafeHtml::clean($job->description) !!}</div>
 
             <h3>Requirements</h3>
-            <div class="mb-8">{!! $job->requirement !!}</div>
+            <div class="mb-8">{!! \App\Support\SafeHtml::clean($job->requirement) !!}</div>
 
             <h3>Preferred Skills</h3>
             <div class="d-flex flex-wrap gap-2 mb-8">

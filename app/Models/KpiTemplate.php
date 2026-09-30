@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * A department-level KPI/KRA definition. Stamped onto each matching employee as
  * a KpiAssignment, which is what the scoring engine reads.
  */
-class KpiTemplate extends Model
+class KpiTemplate extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $guarded = ['id'];
 
     protected $casts = [

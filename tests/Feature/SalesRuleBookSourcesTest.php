@@ -59,10 +59,10 @@ class SalesRuleBookSourcesTest extends TestCase
         ]);
     }
 
-    private function sale(int $customer, string $month, float $lakh): void
+    private function sale(int $customer, string $month, float $lakh, float $forecast = 0): void
     {
         DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $customer, 'month_year' => $month, 'sale_amount' => $lakh,
-            'forecast_amount' => 0, 'pending_amount' => 0, 'created_at' => now(), 'updated_at' => now()]);
+            'forecast_amount' => $forecast, 'pending_amount' => 0, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     private function currentFiscalStart(): Carbon
@@ -73,21 +73,51 @@ class SalesRuleBookSourcesTest extends TestCase
 
     // ── pipeline ÷ target ────────────────────────────────────────────────
 
-    public function test_pipeline_strength_is_potential_over_the_bingo_target(): void
+    private function bingo(string $month, float $lakh): void
     {
-        $this->customer(60);
-        $this->customer(30);
-        DB::table('salesperson_targets')->insert(['salesperson_id' => $this->rep->id, 'month_year' => $this->currentFiscalStart()->format('Y-m'),
-            'bingo_target' => 100, 'kingo_target' => 0, 'super_kingo_target' => 0, 'created_at' => now(), 'updated_at' => now()]);
-
-        $this->assertSame(90.0, Src::pipelineVsTarget($this->rep->id));
+        DB::table('salesperson_targets')->insert(['salesperson_id' => $this->rep->id, 'month_year' => $month,
+            'bingo_target' => $lakh, 'kingo_target' => 0, 'super_kingo_target' => 0, 'created_at' => now(), 'updated_at' => now()]);
     }
 
-    public function test_pipeline_strength_is_null_without_a_target(): void
+    private function monthOf(string $ym): array
     {
-        $this->customer(60);
+        $m = Carbon::createFromFormat('!Y-m', $ym);
 
-        $this->assertNull(Src::pipelineVsTarget($this->rep->id));
+        return [$m->copy()->startOfMonth(), $m->copy()->endOfMonth()];
+    }
+
+    public function test_pipeline_strength_is_the_months_forecast_over_the_months_bingo_target(): void
+    {
+        // Potential is deliberately enormous: it must no longer count.
+        $this->sale($this->customer(9000), '2026-08', 0, 60);
+        $this->sale($this->customer(9000), '2026-08', 0, 30);
+        $this->bingo('2026-08', 100);
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertSame(90.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+    }
+
+    public function test_pipeline_strength_differs_month_to_month(): void
+    {
+        $c = $this->customer(0);
+        $this->sale($c, '2026-08', 0, 80);
+        $this->sale($c, '2026-09', 0, 50);
+        $this->bingo('2026-08', 100);
+        $this->bingo('2026-09', 100);
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertSame(80.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+        [$s, $e] = $this->monthOf('2026-09');
+        $this->assertSame(50.0, Src::pipelineVsTarget($this->rep->id, $s, $e));
+    }
+
+    public function test_pipeline_strength_is_null_without_a_target_that_month(): void
+    {
+        $this->sale($this->customer(60), '2026-08', 0, 60);
+        $this->bingo('2026-09', 100);   // a target, but for another month
+
+        [$s, $e] = $this->monthOf('2026-08');
+        $this->assertNull(Src::pipelineVsTarget($this->rep->id, $s, $e));
     }
 
     // ── growth ───────────────────────────────────────────────────────────
@@ -253,14 +283,97 @@ class SalesRuleBookSourcesTest extends TestCase
             \App\Services\KpiTemplateService::apply($t);
         }
 
-        $this->assertCount(15, $templates);
-        $this->assertSame(15, KpiAssignment::where('user_id', $mine->id)->count());
+        // 14 parameters + the attrition penalty, less Cost of Selling (retired: it is
+        // a monthly Bulk KPI Entry KPI now) and Trial Activity / Demos (removed
+        // 2026-09-29: demos are not recorded in HRX).
+        $this->assertCount(13, $templates);
+        $this->assertArrayNotHasKey('Cost of Selling (COS%)', $templates);
+        $this->assertArrayNotHasKey('Trial Activity / Demos', $templates);
+        $this->assertSame('auto:sales_pitch_submitted', $templates['Sales Pitch Score']->data_source, 'sales pitch is counted, not typed in');
+        $this->assertSame(13, KpiAssignment::where('user_id', $mine->id)->count());
         $this->assertSame(0, KpiAssignment::where('user_id', $boss->id)->count(), 'the other designation gets nothing');
         $this->assertSame(0, KpiAssignment::where('user_id', $mine->id)->where('category', 'KRA')->count(), 'a heading is never assigned');
 
         // Running it again changes nothing.
         SalesRuleBook::install($this->dept->id, [$manager->id]);
-        $this->assertSame(16, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 15 KPIs, no duplicates');
+        $this->assertSame(14, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->count(), '1 heading + 13 KPIs, no duplicates');
+    }
+
+    public function test_installing_again_keeps_changes_made_on_the_site_and_only_adds_what_is_missing(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $t = SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        // What the scorecard admins did after the first install on the live site.
+        $t['Target Achievement (Bingo %)']->update(['frequency' => 'monthly', 'check_month' => null, 'check_day' => null]);
+        $t['Cross-Sell / Basket Mix']->update(['is_active' => false]);
+        $t['Market Share %']->update(['max_marks' => 12, 'description' => 'Edited on the site']);
+        $t['Pipeline Strength']->delete();
+
+        $again = SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $bingo = $t['Target Achievement (Bingo %)']->fresh();
+        $this->assertSame('monthly', $bingo->frequency, 'a KPI moved to monthly stays monthly');
+        $this->assertNull($bingo->check_month);
+        $this->assertFalse((bool) $t['Cross-Sell / Basket Mix']->fresh()->is_active, 'a KPI switched off stays off');
+        $this->assertSame(12.0, (float) $t['Market Share %']->fresh()->max_marks, 'edited marks are kept');
+        $this->assertSame('Edited on the site', $t['Market Share %']->fresh()->description);
+
+        $this->assertTrue($again['Pipeline Strength']->exists && $again['Pipeline Strength']->id !== $t['Pipeline Strength']->id,
+            'a KPI that is missing is created again');
+        $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Pipeline Strength')->count());
+        $this->assertCount(13, $again);
+    }
+
+    public function test_installing_again_switches_off_a_yearly_cost_of_selling_left_by_an_earlier_install(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $mine = $this->person(['designation_id' => $manager->id]);
+
+        // What an install before the retirement left behind.
+        $old = \App\Models\KpiTemplate::create(['department_id' => $this->dept->id, 'title' => 'Cost of Selling (COS%)', 'category' => 'KPI',
+            'frequency' => 'yearly', 'scoring_type' => 'banded', 'data_source' => 'auto:cost_of_selling', 'trend' => 'decrease',
+            'max_marks' => 3, 'target_value' => 1, 'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true]);
+        \App\Services\KpiTemplateService::apply($old);
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count());
+
+        SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $this->assertFalse((bool) $old->fresh()->is_active, 'the yearly COS% template is switched off');
+        $this->assertSame(0, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count(), 'and its assignment');
+        $this->assertSame(1, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->count(), 'switched off, not deleted');
+        $this->assertSame(1, \App\Models\KpiTemplate::where('department_id', $this->dept->id)->where('title', 'Cost of Selling (COS%)')->count(), 'not re-created');
+    }
+
+    public function test_installing_again_switches_off_demos_left_by_an_earlier_install(): void
+    {
+        $manager = \App\Models\Designation::create(['name' => 'ZZ Manager ' . uniqid(), 'code' => 'ZZM' . random_int(10000, 99999)]);
+        $mine = $this->person(['designation_id' => $manager->id]);
+        $old = \App\Models\KpiTemplate::create(['department_id' => $this->dept->id, 'title' => 'Trial Activity / Demos', 'category' => 'KPI',
+            'frequency' => 'monthly', 'scoring_type' => 'banded', 'data_source' => 'auto:trial_demo_visits', 'trend' => 'increase',
+            'max_marks' => 5, 'target_value' => 100, 'late_policy' => 'none', 'late_score' => 0, 'grace_days' => 0, 'is_active' => true]);
+        \App\Services\KpiTemplateService::apply($old);
+
+        SalesRuleBook::install($this->dept->id, [$manager->id]);
+
+        $this->assertFalse((bool) $old->fresh()->is_active, 'Demos is switched off');
+        $this->assertSame(0, KpiAssignment::where('kpi_template_id', $old->id)->where('user_id', $mine->id)->where('is_active', true)->count());
+    }
+
+    public function test_sales_pitch_counts_what_was_submitted_whatever_its_review_status_but_not_rejected(): void
+    {
+        $add = fn (string $status, string $on, $deleted = null) => DB::table('mind_speaks')->insert([
+            'user_id' => $this->rep->id, 'category' => 'Sales Pitch', 'content' => 'x', 'status' => $status,
+            'created_at' => $on, 'updated_at' => $on, 'deleted_at' => $deleted]);
+        $add('pending', '2024-06-01');        // the usual state - nobody has reviewed it yet
+        $add('approved', '2024-07-01');
+        $add('acknowledged', '2024-08-01');
+        $add('rejected', '2024-08-02');       // turned down: does not count
+        $add('pending', '2024-08-03', '2024-08-04');   // deleted
+        $add('pending', '2023-06-01');        // last year
+
+        $this->assertSame(3.0, Src::mindSpeakSubmitted($this->rep->id, $this->start, $this->end, 'Sales Pitch'));
+        $this->assertSame(0.0, Src::mindSpeakCount($this->rep->id, $this->start, Carbon::create(2024, 6, 30), 'Sales Pitch'), 'the approved-only count missed the pending pitch');
     }
 
     public function test_the_nightly_run_scores_a_yearly_bingo_kpi_from_the_data(): void
@@ -285,6 +398,75 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->assertSame(98.0, (float) $check->achieved_value);
         $this->assertSame(15.0, (float) $check->score, '97 % and over is 15 points');
     }
+    // ── history imported as yearly figures (FY2022-23 to FY2025-26) ──────
+
+    /** A customer whose earlier years were imported as yearly totals (yoy_YY_YY, lakh). */
+    private function importedCustomer(array $years): int
+    {
+        $id = $this->customer();
+        DB::table('sales_pipelines')->where('id', $id)->update($years);
+
+        return $id;
+    }
+
+    private function importedTotal(array $years): void
+    {
+        DB::table('salesperson_annual_sales')->insert(['user_id' => $this->rep->id, 'created_at' => now(), 'updated_at' => now()] + $years);
+    }
+
+    public function test_growth_uses_last_years_imported_total_pro_rata_when_it_is_not_on_record_by_month(): void
+    {
+        $this->importedTotal(['fy_23_24' => 120]);           // last year: 120 L for the year
+        $this->sale($this->customer(), '2024-05', 90);        // Apr-Sep this year: 90 L
+
+        // Six months in: compared with 6/12 of last year's 120 = 60 -> +50 %.
+        $this->assertSame(50.0, Src::yoyGrowth($this->rep->id, $this->start, Carbon::create(2024, 9, 30)));
+        // The full year: compared with all of it.
+        $this->assertSame(-25.0, Src::yoyGrowth($this->rep->id, $this->start, $this->end));
+    }
+
+    public function test_attrition_and_new_customers_use_imported_customer_history_that_covers_the_year(): void
+    {
+        $kept = $this->importedCustomer(['yoy_23_24' => 40]);
+        $kept2 = $this->importedCustomer(['yoy_23_24' => 20]);
+        $lost = $this->importedCustomer(['yoy_23_24' => 60]);
+        $older = $this->importedCustomer(['yoy_22_23' => 10]);   // bought two years ago, not last year
+        $this->importedTotal(['fy_23_24' => 120]);                 // customer rows add up to the total
+        $this->sale($kept, '2024-06', 30);
+        $this->sale($kept2, '2024-06', 10);
+        $this->sale($older, '2024-07', 10);
+        $new = $this->customer();
+        $this->sale($new, '2024-08', 20);
+
+        // Last year's buyers: kept, kept2, lost; lost has not ordered -> 1 of 3.
+        $this->assertSame(33.33, Src::customerAttrition($this->rep->id, $this->start, $this->end));
+        // Only $new is new ($older had imported sales before): 20 of 70.
+        $this->assertSame(28.57, Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
+    }
+
+    public function test_a_yearly_lump_on_one_customer_row_is_not_a_customer_history(): void
+    {
+        // The common import shape: the whole year on one party row, which has no sales this year.
+        $this->importedCustomer(['yoy_23_24' => 1599]);
+        $this->importedTotal(['fy_23_24' => 1599]);
+        $this->sale($this->customer(), '2024-06', 300);
+
+        $this->assertNull(Src::customerAttrition($this->rep->id, $this->start, $this->end), 'not "100% lost"');
+        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end), 'not "100% new"');
+        $this->assertNotNull(Src::yoyGrowth($this->rep->id, $this->start, $this->end), 'growth still works from the total');
+    }
+
+    public function test_a_yearly_total_with_no_customer_breakdown_gives_no_new_customer_or_attrition_figure(): void
+    {
+        $this->importedTotal(['fy_23_24' => 500]);                 // total known, customers not
+        $this->importedCustomer(['yoy_23_24' => 40]);              // only 8 % of it broken down
+        $this->sale($this->customer(), '2024-06', 30);
+
+        $this->assertNull(Src::customerAttrition($this->rep->id, $this->start, $this->end));
+        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
+        $this->assertNotNull(Src::yoyGrowth($this->rep->id, $this->start, $this->end), 'growth still works from the total');
+    }
+
     public function test_new_customer_revenue_is_no_figure_when_last_year_is_not_on_record(): void
     {
         // Revenue this year but nothing before: every customer would look new.

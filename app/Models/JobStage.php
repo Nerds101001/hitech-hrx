@@ -4,9 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use OwenIt\Auditing\Auditable;
+use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
-class JobStage extends Model
+class JobStage extends Model implements AuditableContract
 {
+    use Auditable;
+
     protected $fillable = [
         'title',
         'order',
