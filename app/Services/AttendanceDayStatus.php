@@ -153,6 +153,26 @@ class AttendanceDayStatus
     }
 
     /**
+     * A half-day leave with nothing recorded for the other half (under 4h
+     * worked): that half is absent. The leave half pays if it was paid
+     * ('half-day': half paid, half absent), else nothing is paid
+     * ('unpaid_leave'). This used to pay the whole day (paid leave) or half of
+     * it (unpaid) for a half nobody worked.
+     *
+     * Past days from WHOLLY_UNPAID_FROM only: July-August are already paid out,
+     * and today or a later day may not have its worked half recorded yet -
+     * CCare often marks it the next day. Null = keep the old code.
+     */
+    private static function unworkedHalfCode(Carbon $date, bool $isPaid): ?string
+    {
+        if ($date->lt(Carbon::parse(self::WHOLLY_UNPAID_FROM)) || !$date->isPast() || $date->isToday()) {
+            return null;
+        }
+
+        return $isPaid ? 'half-day' : 'unpaid_leave';
+    }
+
+    /**
      * Not cached: a long-running worker would keep a "no other half" answer
      * after the other half is approved. It only runs on half-day leave days.
      */
@@ -280,7 +300,7 @@ class AttendanceDayStatus
                     if ($workMins >= self::CREDIT_MINUTES) {
                         $result['code'] = $isPaid ? 'half-day-paid' : 'half-day';
                     } else {
-                        $result['code'] = $isPaid ? 'paid_leave' : 'half-day';
+                        $result['code'] = self::unworkedHalfCode($date, $isPaid) ?? ($isPaid ? 'paid_leave' : 'half-day');
                     }
                 } elseif ($isFullDayLeave) {
                     if ($workMins >= $reqMins) {
@@ -337,7 +357,7 @@ class AttendanceDayStatus
                 $result['code'] = $bothHalvesCode;
                 $isPaidLeave = $bothHalvesCode !== 'unpaid_leave';
             } elseif ($isHalfDayLeave) {
-                $result['code'] = $isPaidLeave ? 'paid_leave' : 'half-day';
+                $result['code'] = self::unworkedHalfCode($date, $isPaidLeave) ?? ($isPaidLeave ? 'paid_leave' : 'half-day');
             } else {
                 $result['code'] = $isPaidLeave ? 'paid_leave' : 'unpaid_leave';
             }
