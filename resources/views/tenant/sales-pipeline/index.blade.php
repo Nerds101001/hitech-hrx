@@ -180,6 +180,15 @@
                 <span class="badge bg-success" style="font-size:0.7rem;" title="Super Kingo achievers">SK {{ $skAchieved ?? 0 }}</span>
             </span>
         </div>
+        {{-- This month's actual sale. The YoY chips are whole financial years and
+             "Achieved" counts people, so nothing here showed what has actually
+             been sold this month. Comes from $monthlyActuals, which is built from
+             the same filtered query as Customers and Pending, so it moves with
+             the filters like they do. --}}
+        <div class="stat-chip" style="border-left-color:#0d9488;">
+            <span class="stat-label">This Month — Sales</span>
+            <span class="stat-value" style="color:#0f766e;" id="monthSalesCard">₹{{ number_format($monthlyActuals[$currentMonthKey] ?? 0, 2) }}<em>L</em></span>
+        </div>
         <div class="stat-chip" style="border-left-color:#3b82f6;"><span class="stat-label">Customers</span><span class="stat-value text-primary" id="totalCustomersCard">{{ $totalNewClients }}</span></div>
         <div class="stat-chip" style="border-left-color:#f97316;"><span class="stat-label">Pending</span><span class="stat-value" id="pendingCard" style="color:#ea580c;">₹{{ number_format($totalPendingCurrentMonth ?? 0, 2) }}<em>L</em></span></div>
     </div>
@@ -258,6 +267,19 @@
                     @endif
                     @foreach($newBizFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)($fNb ?? '') === (string)$au->id ? 'selected' : '' }}>{{ $au->name }} ({{ $nbFilterCounts[$au->id] ?? 0 }})</option>
+                    @endforeach
+                </select>
+                {{-- One person, either role. The CCare and New Biz dropdowns above
+                     AND together, so someone who holds customers under both -
+                     Poonam has 226 as CCare and 75 as New Biz - could not be seen
+                     whole from either one. --}}
+                <select class="form-select" name="both" style="width:200px;" onchange="this.form.submit()"
+                        title="One person, counted whether they are the CCare or the New Biz rep">
+                    <option value="">All CCare &amp; New Biz</option>
+                    @foreach($bothFilterUsers as $au)
+                        <option value="{{ $au->id }}" {{ (string)($fBoth ?? '') === (string)$au->id ? 'selected' : '' }}>
+                            {{ $au->name }} ({{ $bothFilterCounts[$au->id] ?? 0 }})
+                        </option>
                     @endforeach
                 </select>
                 <select class="form-select" name="per" style="width:105px;" onchange="this.form.submit()" title="Rows per page">
