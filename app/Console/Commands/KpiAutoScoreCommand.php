@@ -27,7 +27,9 @@ class KpiAutoScoreCommand extends Command
                             {--user=   : only this user id}
                             {--as-of=  : score the period containing this date (Y-m-d or Y-m), default today}
                             {--months=1 : also re-score this many earlier periods}
-                            {--dry     : show what would be written, change nothing}';
+                            {--dry     : show what would be written, change nothing}
+                            {--department= : only people in this department id}
+                            {--backfill : also score periods that ended before the KPI was assigned}';
 
     protected $description = 'Compute and score KPIs whose data_source is auto:*';
 
@@ -52,6 +54,7 @@ class KpiAutoScoreCommand extends Command
             ->where('is_active', true)
             ->where('data_source', 'like', 'auto:%')
             ->when($this->option('user'), fn ($q, $u) => $q->where('user_id', $u))
+            ->when($this->option('department'), fn ($q, $d) => $q->whereIn('user_id', \App\Models\User::where('department_id', $d)->select('id')))
             ->get();
 
         if ($assignments->isEmpty()) {
@@ -80,7 +83,9 @@ class KpiAutoScoreCommand extends Command
                 // that closed before the assignment was made does not just add a
                 // harmless zero -- it puts a KPI on a month's sheet that nobody
                 // was working to, and its marks into that month's denominator.
-                if ($a->created_at && $end->lt($a->created_at->copy()->startOfDay())) {
+                // --backfill lifts this on purpose, to build scorecards for months
+                // before the KPIs were set up (Sales / New Biz, Jul-Sep 2026).
+                if (!$this->option('backfill') && $a->created_at && $end->lt($a->created_at->copy()->startOfDay())) {
                     continue;
                 }
 

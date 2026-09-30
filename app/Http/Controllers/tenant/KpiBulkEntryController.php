@@ -46,7 +46,8 @@ class KpiBulkEntryController extends Controller
     private function fillableTemplates(User $user)
     {
         $manualTemplateIds = KpiAssignment::where('is_active', 1)
-            ->where(fn ($q) => $q->whereNull('data_source')->orWhereIn('data_source', ['approval', 'manual']))
+            // 'info' figures (e.g. Total Leads Allocated) are typed in here too; they carry no marks.
+            ->where(fn ($q) => $q->whereNull('data_source')->orWhereIn('data_source', ['approval', 'manual', KpiAssignment::INFO]))
             ->whereNotNull('kpi_template_id')
             ->distinct()->pluck('kpi_template_id');
 

@@ -159,6 +159,10 @@
              said nothing about the month, and every figure on this sheet was
              earned across the days the person was actually here. --}}
         <td><div class="n">{{ $attendance === null ? '—' : $fmt(round($attendance, 1)) . '%' }}</div><div class="l">Attendance</div></td>
+        {{-- Shown, not scored: e.g. Total Leads Allocated for Sales and New Biz. --}}
+        @foreach(($card->info ?? []) as $infoLabel => $infoValue)
+          <td><div class="n">{{ $fmt($infoValue) }}</div><div class="l">{{ $infoLabel }}</div></td>
+        @endforeach
       </tr>
     </table>
 

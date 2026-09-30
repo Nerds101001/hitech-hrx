@@ -61,6 +61,7 @@ class KpiAutoSourceService
         'auto:yoy_growth'                 => 'Revenue growth % against the same period a year earlier',
         'auto:new_customer_revenue_pct'   => '% of revenue from customers whose first ever order falls in the period',
         'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
+        'auto:market_share'               => 'Sales as a % of the book\'s monthly business potential',
         'auto:cost_of_selling'            => 'Travel + expense cost as a % of revenue',
         'auto:mindspeak_insights'         => 'Competitor Insights submissions accepted in Mind Speak',
         'auto:mindspeak_ideas'            => 'New Product Ideas accepted in Mind Speak',
@@ -109,6 +110,7 @@ class KpiAutoSourceService
             'auto:yoy_growth'               => self::yoyGrowth($a->user_id, $start, $end),
             'auto:new_customer_revenue_pct' => self::newCustomerRevenuePct($a->user_id, $start, $end),
             'auto:customer_attrition'       => self::customerAttrition($a->user_id, $start, $end),
+            'auto:market_share'             => self::marketShare($a->user_id, $start, $end),
             'auto:cost_of_selling'          => self::costOfSelling($a->user_id, $start, $end),
             'auto:mindspeak_insights'       => self::mindSpeakAccepted($a->user_id, $start, $end, 'Competitor Insights'),
             'auto:mindspeak_ideas'          => self::mindSpeakAccepted($a->user_id, $start, $end, 'Idea'),
@@ -431,6 +433,24 @@ class KpiAutoSourceService
      * card: the month's forecast (this month unless told otherwise), which is
      * what the Total Pipeline KPI now measures sale against.
      */
+    /**
+     * Market share: the period's sales as a % of the book's business potential.
+     * Business potential (sales_pipelines.total_business_potential, lakh) is a
+     * per-MONTH figure for each customer, so a period of n months is measured
+     * against n months of it. Null when the book has no potential recorded.
+     */
+    public static function marketShare(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $to = self::upTo($end);
+        $months = count(self::monthKeys($start, $to));
+        $potential = (float) self::book($userId)->where('total_business_potential', '>', 0)->sum('total_business_potential');
+        if ($potential <= 0 || $months <= 0) {
+            return null;
+        }
+
+        return round(self::revenue($userId, $start, $to) / ($potential * $months) * 100, 2);
+    }
+
     public static function totalPipelineValue(int $userId, ?Carbon $start = null, ?Carbon $end = null): float
     {
         $start ??= Carbon::today()->startOfMonth();

@@ -11,6 +11,18 @@ class KpiAssignment extends Model implements AuditableContract
 {
     use Auditable, TenantTrait;
 
+    /**
+     * data_source of a figure that is shown, never scored - e.g. "Total Leads
+     * Allocated" for Sales and New Biz. Entered monthly in Bulk KPI Entry,
+     * carries no marks, and appears as a card on the scorecard instead of a row.
+     */
+    public const INFO = 'info';
+
+    public function isInfo(): bool
+    {
+        return $this->data_source === self::INFO;
+    }
+
     protected $fillable = [
         'tenant_id',
         'user_id',

@@ -65,7 +65,8 @@ class SalesRuleBook
             ['New Product Ideas',            '1 point per idea, up to 8',                       'auto:mindspeak_ideas',          'increase', 3,  100, $upTo8],
             ['Cost of Selling (COS%)',       'Travel + expenses ÷ revenue, %. Lower is better', 'auto:cost_of_selling',          'decrease', 3,  1,   [[0, -5], [10, 0], [16.6666, 1], [25, 3], [50.0001, 5]]],
             ['Cross-Sell / Basket Mix',      'Dominant product share, %. Lower is better',      'approval',                      'decrease', 2,  100, [[0, 0], [111.1111, 3], [133.3333, 5]]],
-            ['Market Share %',               'Share of the market, %',                          'approval',                      'increase', 10, 100, [[0, 0], [20, 5], [30, 8], [40, 10], [60, 15]]],
+            // Counted, not typed in (2026-09-30): the month's sales ÷ the book's monthly business potential.
+            ['Market Share %',               "Sales ÷ the book's monthly business potential, %", 'auto:market_share',             'increase', 10, 100, [[0, 0], [20, 5], [30, 8], [40, 10], [60, 15]]],
             ['Attrition Penalty',            "Last year's customers with no order yet, %. Lower is better", 'auto:customer_attrition', 'decrease', 0, 1, [[0, -5], [10.0001, -3], [20.0001, 0]]],
         ];
     }

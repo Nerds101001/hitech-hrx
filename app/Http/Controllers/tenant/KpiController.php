@@ -293,6 +293,8 @@ class KpiController extends Controller
     public static function matrixData($user, bool $sync = true): array
     {
         $assignments = $sync ? KpiPeriodService::syncUser($user->id) : KpiAssignment::where('user_id', $user->id)->get();
+        // Shown-not-scored figures (Total Leads Allocated) are cards, not rows.
+        $assignments = $assignments->reject(fn ($a) => $a->data_source === KpiAssignment::INFO)->values();
 
         // Fiscal year to date (Apr -> current month), newest first — same
         // window convention the Sales Report month columns use.
@@ -309,7 +311,9 @@ class KpiController extends Controller
             ->where('user_id', $user->id)
             ->where('period_start', '>=', $fyStart->toDateString())
             ->orderByDesc('period_start')
-            ->get();
+            ->get()
+            ->reject(fn ($h) => optional($h->assignment)->data_source === KpiAssignment::INFO)
+            ->values();
 
         // Every check this FY, keyed by [assignment_id][Y-m of period_start] —
         // a KPI's row can then look up any month's cell by simple array access.
@@ -446,11 +450,13 @@ class KpiController extends Controller
 
         $totalPipeline = \App\Services\KpiAutoSourceService::totalPipelineValue($user->id);
         $attendancePct = \App\Services\KpiAutoSourceService::attendancePercentFor($user->id, $cardStart, $cardEnd);
+        // e.g. Total Leads Allocated this month - shown, carries no marks.
+        $infoCards = \App\Services\KpiScorecardService::infoFor($user->id, $cardStart);
 
         return view('tenant.kpi.my', compact(
             'pdfMonths',
             'assignments', 'months', 'grid', 'history', 'earned', 'possible',
-            'pendingCount', 'completedCount', 'totalPipeline', 'attendancePct',
+            'pendingCount', 'completedCount', 'totalPipeline', 'attendancePct', 'infoCards',
             'manualAssignments', 'weekEntries', 'weekStart', 'weekEnd', 'sentBack',
             'targetNote', 'entryPeriod', 'lastMonthEntries', 'lastMonthKey'
         ));

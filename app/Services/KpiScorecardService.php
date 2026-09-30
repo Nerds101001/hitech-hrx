@@ -47,6 +47,27 @@ class KpiScorecardService
     }
 
     /** "2026-09" → first day of that month; null when malformed or in the future. */
+    /**
+     * The person's shown-not-scored figures for a month (see KpiAssignment::INFO),
+     * title => value, or null for one not entered yet. Empty when they have none.
+     */
+    public static function infoFor(int $userId, Carbon $month): array
+    {
+        $out = [];
+        $start = $month->copy()->startOfMonth();
+        $end = $month->copy()->endOfMonth();
+        $assignments = KpiAssignment::where('user_id', $userId)->where('is_active', true)
+            ->where('data_source', KpiAssignment::INFO)->orderBy('id')->get();
+        foreach ($assignments as $a) {
+            $checks = \App\Models\KpiCheck::where('kpi_assignment_id', $a->id)
+                ->whereDate('period_start', '>=', $start->toDateString())
+                ->whereDate('period_start', '<=', $end->toDateString())->get();
+            $out[$a->title] = $checks->every(fn ($c) => $c->achieved_value === null) ? null : (float) $checks->sum('achieved_value');
+        }
+
+        return $out;
+    }
+
     public static function parseMonth(?string $ym): ?Carbon
     {
         if (!is_string($ym) || !preg_match('/^(\d{4})-(0[1-9]|1[0-2])$/', $ym)) {
@@ -155,8 +176,15 @@ class KpiScorecardService
 
         return $users->mapWithKeys(function (User $user) use ($assignments, $checks, $managers, $awaiting, $live) {
             $rows = [];
+            $info = [];
             foreach (($assignments->get($user->id) ?? collect()) as $a) {
                 $mine   = $checks->get($a->id) ?? collect();
+                // A figure shown, never scored (e.g. Total Leads Allocated): a card
+                // on the scorecard, kept out of the rows, the total and the grade.
+                if ($a->isInfo()) {
+                    $info[$a->title] = $mine->every(fn ($c) => $c->achieved_value === null) ? null : (float) $mine->sum('achieved_value');
+                    continue;
+                }
                 $latest = $mine->last();
                 $achieved = $mine->isEmpty() || $mine->every(fn ($c) => $c->achieved_value === null)
                     ? null
@@ -228,6 +256,7 @@ class KpiScorecardService
                 'onPoints' => $onPoints,
                 'pct'      => $pct,
                 'grade'    => self::gradeFor($pct),
+                'info'     => $info,
             ]];
         });
     }
