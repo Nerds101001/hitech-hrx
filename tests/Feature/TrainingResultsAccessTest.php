@@ -105,7 +105,7 @@ class TrainingResultsAccessTest extends TestCase
         $html = $this->actingAs($this->hr)->get('/training/activity')->assertOk()->getContent();
         $this->assertStringContainsString($this->report->first_name, $html);
         $this->assertStringContainsString($this->stranger->first_name, $html);
-        $this->assertStringContainsString('Manage Content', $html);
+        $this->assertStringContainsString('Manage Programs', $html);
     }
 
     public function test_report_cards_follow_the_same_rule(): void
@@ -171,7 +171,7 @@ class TrainingResultsAccessTest extends TestCase
         $html = $this->actingAs($this->hr)->get('/training/activity?department=' . $dept->id)->assertOk()->getContent();
         $this->assertStringContainsString($this->report->first_name, $html);
         $this->assertStringNotContainsString($this->stranger->first_name, $html);
-        $this->assertStringContainsString('Clear filters', $html);
+        $this->assertStringContainsString('&middot; filtered', $html);
         $this->assertMatchesRegularExpression('/Showing <strong>1<\/strong> of/', $html);
 
         $html = $this->actingAs($this->hr)->get('/training/activity?q=' . urlencode($this->stranger->first_name))->getContent();
@@ -185,7 +185,7 @@ class TrainingResultsAccessTest extends TestCase
 
     public function test_results_page_sorts_by_any_column(): void
     {
-        $pos = fn (string $html, User $u) => strpos($html, $u->first_name);
+        $pos = fn (string $html, User $u) => strpos($html, $u->first_name, strpos($html, 'id="empTable"'));   // in the table, not the activity feed above it
         $asc  = $this->actingAs($this->hr)->get('/training/activity?sort=name&dir=asc')->assertOk()->getContent();
         $desc = $this->actingAs($this->hr)->get('/training/activity?sort=name&dir=desc')->assertOk()->getContent();
         // "Reporty..." sorts before "Strangey..." ascending, after it descending.
