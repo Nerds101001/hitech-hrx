@@ -27,10 +27,22 @@ class JobHtmlSanitisedTest extends TestCase
         foreach (['<strong>Sales Manager</strong>', '<li>Travel</li>', 'class="ql-align-center"', 'href="https://example.com"'] as $kept) {
             $this->assertStringContainsString($kept, $out);
         }
-        foreach (['<script', 'onerror', 'onclick', 'javascript:', '<img', 'evil-class'] as $gone) {
+        foreach (['<script', 'onerror', 'onclick', 'javascript:', 'evil-class'] as $gone) {
             $this->assertStringNotContainsString($gone, $out);
         }
         $this->assertSame('', SafeHtml::clean(null));
+    }
+
+    public function test_an_embedded_picture_stays_but_a_data_link_or_non_image_data_goes(): void
+    {
+        // The editor's Image button stores pictures inline as data: images.
+        $png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        $this->assertStringContainsString('src="' . $png . '"', SafeHtml::clean('<p><img src="' . $png . '" onerror="alert(1)"></p>'));
+        $this->assertStringNotContainsString('onerror', SafeHtml::clean('<p><img src="' . $png . '" onerror="alert(1)"></p>'));
+
+        // A data: address on a link, or a data: "image" that is really a page, must not survive.
+        $this->assertStringNotContainsString('data:', SafeHtml::clean('<a href="data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==">x</a>'));
+        $this->assertStringNotContainsString('data:text/html', SafeHtml::clean('<img src="data:text/html;base64,PHNjcmlwdD4=">'));
     }
 
     public function test_the_public_careers_page_does_not_print_a_planted_script(): void

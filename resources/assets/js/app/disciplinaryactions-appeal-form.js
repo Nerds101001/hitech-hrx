@@ -52,12 +52,13 @@ $(function () {
     
     // Get Quill content
     if (reasonQuill) {
-      const reasonContent = reasonQuill.root.innerHTML;
+      // Quill 2: clean HTML (real ul/ol lists), not the editor's internal markup.
+      const reasonContent = typeof reasonQuill.getSemanticHTML === 'function' ? reasonQuill.getSemanticHTML() : reasonQuill.root.innerHTML;
       formData.set('appeal_reason', reasonContent);
     }
     
     if (evidenceQuill) {
-      const evidenceContent = evidenceQuill.root.innerHTML;
+      const evidenceContent = typeof evidenceQuill.getSemanticHTML === 'function' ? evidenceQuill.getSemanticHTML() : evidenceQuill.root.innerHTML;
       formData.set('employee_statement', evidenceContent);
     }
     

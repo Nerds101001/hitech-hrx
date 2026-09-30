@@ -28,10 +28,12 @@ class SafeHtml
         if (self::$purifier === null) {
             $config = HTMLPurifier_Config::createDefault();
             $config->set('Cache.DefinitionImpl', null); // no writable cache folder needed
-            $config->set('HTML.Allowed', 'p[class],br,b,strong,i,em,u,s,strike,sub,sup,ul[class],ol[class],li[class],h1[class],h2[class],h3[class],h4[class],h5[class],h6[class],blockquote[class],pre,code,span[class],a[href|target|rel]');
+            $config->set('HTML.Allowed', 'p[class],br,b,strong,i,em,u,s,strike,sub,sup,ul[class],ol[class],li[class],h1[class],h2[class],h3[class],h4[class],h5[class],h6[class],blockquote[class],pre,code,span[class],a[href|target|rel],img[src|alt|width|height]');
             // Only Quill's own layout classes (alignment, indent) - a class cannot run code.
             $config->set('Attr.AllowedClasses', ['ql-align-center', 'ql-align-right', 'ql-align-justify', 'ql-indent-1', 'ql-indent-2', 'ql-indent-3', 'ql-indent-4', 'ql-indent-5', 'ql-indent-6', 'ql-indent-7', 'ql-indent-8']);
-            $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true, 'tel' => true]);
+            // data: is for pictures the editor's Image button embeds inline; in an
+            // <img> it cannot run code, and HTMLPurifier only accepts image types.
+            $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true, 'tel' => true, 'data' => true]);
             $config->set('Attr.AllowedFrameTargets', ['_blank']);
             $config->set('HTML.TargetNoopener', true);
             $config->set('HTML.TargetNoreferrer', true);

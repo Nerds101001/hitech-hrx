@@ -168,6 +168,16 @@
                     new Tagify(skillEl);
                 }
 
+                // Quill 2: save the editor's clean HTML (getSemanticHTML - lists come out as
+                // real ul/ol, not Quill's internal markup), and load saved HTML through
+                // Quill's own clipboard so it is parsed, not injected raw.
+                const quillHtml = q => (typeof q.getSemanticHTML === 'function' ? q.getSemanticHTML() : q.root.innerHTML).replace(/&nbsp;/g, ' ');
+                const quillLoad = (q, html) => {
+                    if (!html) return;
+                    if (q.clipboard && typeof q.clipboard.dangerouslyPasteHTML === 'function') q.clipboard.dangerouslyPasteHTML(html);
+                    else q.root.innerHTML = html;
+                };
+
                 // Initialize Quill Editors
                 const quillConfig = {
                     theme: 'snow',
@@ -184,7 +194,7 @@
                 if (descEditor) {
                     const quillDescription = new Quill(descEditor, quillConfig);
                     quillDescription.on('text-change', function() {
-                        document.getElementById('description').value = quillDescription.root.innerHTML;
+                        document.getElementById('description').value = quillHtml(quillDescription);
                     });
                 }
 
@@ -192,7 +202,7 @@
                 if (reqEditor) {
                     const quillRequirement = new Quill(reqEditor, quillConfig);
                     quillRequirement.on('text-change', function() {
-                        document.getElementById('requirement').value = quillRequirement.root.innerHTML;
+                        document.getElementById('requirement').value = quillHtml(quillRequirement);
                     });
                 }
 
@@ -200,7 +210,7 @@
                 if (termsEditor) {
                     const quillTerms = new Quill(termsEditor, quillConfig);
                     quillTerms.on('text-change', function() {
-                        document.getElementById('terms_and_conditions').value = quillTerms.root.innerHTML;
+                        document.getElementById('terms_and_conditions').value = quillHtml(quillTerms);
                     });
                 }
 
