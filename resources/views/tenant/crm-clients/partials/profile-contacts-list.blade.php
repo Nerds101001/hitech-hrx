@@ -3,8 +3,10 @@
 @endphp
 @forelse($contacts as $contact)
     <div class="cp-contact-row" id="cp-contact-row-{{ $contact->id }}">
-        <div class="d-flex justify-content-between align-items-start">
-            <div style="min-width:0;">
+        @php $__parts = preg_split('/\s+/', trim($contact->name)); $__ini = strtoupper(mb_substr($__parts[0], 0, 1) . (count($__parts) > 1 ? mb_substr(end($__parts), 0, 1) : '')); @endphp
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="cp-avatar">{{ $__ini }}</div>
+            <div class="flex-grow-1" style="min-width:0;">
                 <div class="fw-semibold" style="font-size:0.85rem;">
                     {{ $contact->name }}
                     @if($contact->is_primary)<i class="bx bxs-star text-warning" style="font-size:0.7rem;" title="Primary"></i>@endif

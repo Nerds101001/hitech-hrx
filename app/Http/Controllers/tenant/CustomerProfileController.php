@@ -7,8 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Models\CrmClientActivity;
 use App\Models\CrmClientMapping;
 use App\Models\User;
+use App\Services\CompanySales;
+use App\Services\CrmCustomerResolver;
+use App\Services\TallyAnalytics;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 /**
  * "Customer Profile" -- a richer, tabbed alternative view of a CRM account,
@@ -37,6 +42,11 @@ class CustomerProfileController extends Controller
             || $user->can('crm_clients.manage');
     }
 
+    /** Tally figures are company-wide accounting data: the same people who may open Sales Sources, not everyone who is on this account's team. */
+    protected function canSeeTallySales(): bool
+    {
+        return (bool) Auth::user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'accounts']);
+    }
     protected function canViewMapping(CrmClientMapping $mapping, Request $request): bool
     {
         if ($this->canManageAll()) {
@@ -124,20 +134,112 @@ class CustomerProfileController extends Controller
         // Smart Agent -- there's no inbound-call tracking in this schema, so
         // this is a total, not an inbound/outbound split (nothing here would
         // honestly back that split).
-        $callsThisMonthTotal = $mapping->telephonyCalls()
+        //
+        // A call made outside Smart Agent and logged by hand (logCall) is saved
+        // as a call ACTIVITY with no telephony_call_id, never as a dialer row, so
+        // it has to be read from there too or it would never show under Calls.
+        // (Dialer calls also leave a call activity, but with telephony_call_id set.)
+        $manualCallQuery = fn() => $mapping->activities()->reorder()
+            ->where('type', CrmActivityType::CALL->value)->whereNull('telephony_call_id');
+        $callsAgentThisMonth = $mapping->telephonyCalls()
             ->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->count();
+        $callsLoggedThisMonth = $manualCallQuery()
+            ->whereYear('created_at', now()->year)->whereMonth('created_at', now()->month)->count();
+        $callsThisMonthTotal = $callsAgentThisMonth + $callsLoggedThisMonth;
+
+        $callLog = $this->callLog($mapping, $contacts);
+
+        // Who the Log Call form offers as "our team member": the account's HRX team plus whoever is logging.
+        $ourPeople = $teamByRole->flatten(1)->map(fn($m) => $m->user)->filter()->push(Auth::user())->unique('id')->values();
+
+        // Follow-ups that were ticked off: kept on the Tasks tab so a finished task doesn't just vanish.
+        $completedFollowUps = $mapping->activities()->reorder()
+            ->where('needs_follow_up', true)->whereNotNull('follow_up_completed_at')
+            ->with('followUpAssignedTo:id,first_name,last_name')
+            ->orderByDesc('follow_up_completed_at')->limit(10)->get();
 
         $lastActivity = $mapping->activities()->first();
-        $recentCalls = $mapping->telephonyCalls()->with('agent:id,first_name,last_name')->limit(6)->get();
 
         $health = $this->computeHealthScore($mapping, $pipelines, $lastActivity, $openFollowUps);
+
+        // Tally / Setu figures by name, only where the name certainly is this customer (see CrmCustomerResolver::keysFor).
+        $co = null;
+        $tallyFy = 0.0;
+        $tallyFyInvoices = 0;
+        $sharedName = 0;
+        if ($this->canSeeTallySales()) {
+            [$salesKeys, $sharedName] = app(CrmCustomerResolver::class)->keysFor($mapping);
+            $co = app(CompanySales::class)->for($salesKeys);
+            $fyKey = $fyStart->format('Y-m');
+            foreach ($co['tally'] as $m => $lakh) {
+                if ($m >= $fyKey) {
+                    $tallyFy += $lakh;
+                    $tallyFyInvoices += $co['tallyCount'][$m] ?? 0;
+                }
+            }
+        }
 
         return view('tenant.crm-clients.profile', compact(
             'mapping', 'contacts', 'activities', 'openFollowUps', 'teamByRole', 'teamPickable',
             'pipelines', 'totalSalesFy', 'salesTrendPct', 'openOpportunityCount', 'openOpportunityValue',
-            'callsThisMonthTotal',
-            'lastActivity', 'recentCalls', 'health'
+            'callsThisMonthTotal', 'callsAgentThisMonth', 'callsLoggedThisMonth', 'callLog', 'ourPeople', 'completedFollowUps',
+            'lastActivity', 'health', 'co', 'tallyFy', 'tallyFyInvoices', 'sharedName'
         ));
+    }
+
+    /**
+     * The account's calls as plain rows -- what the Smart Agent dialer placed
+     * (telephony_calls) and what people logged by hand (a call activity with no
+     * telephony_call_id) -- newest first. Every row names both sides with their
+     * phone and email: 'our' (the person on our team) and 'customer' (the contact
+     * they spoke to; null when a hand-logged call didn't record one).
+     */
+    private function callLog(CrmClientMapping $mapping, $contacts)
+    {
+        $key = fn($n) => substr(preg_replace('/\D+/', '', (string) $n), -10);
+        $byPhone = $contacts->filter(fn($c) => $c->phone)->keyBy(fn($c) => $key($c->phone));
+        $ours = fn($u) => $u ? ['name' => trim($u->first_name . ' ' . $u->last_name), 'phone' => $u->phone, 'email' => $u->email] : null;
+        $theirs = fn($c) => $c ? ['name' => $c->name, 'role' => $c->role?->label(), 'phone' => $c->phone, 'email' => $c->email] : null;
+
+        $agent = $mapping->telephonyCalls()->with('agent:id,first_name,last_name,email,phone')->limit(50)->get()
+            ->map(function ($c) use ($byPhone, $key, $ours, $theirs) {
+                $contact = $byPhone[$key($c->to_number)] ?? null;   // the number dialled, matched to one of the customer's contacts
+                $customer = $theirs($contact) ?? ['name' => null, 'role' => null, 'phone' => $c->to_number, 'email' => null];
+                return [
+                    'kind' => 'agent', 'at' => $c->created_at, 'ended' => $c->status?->value === 'ended',
+                    'headline' => 'Smart Agent call' . ($c->duration ? ' · ' . gmdate('i:s', $c->duration) : ''), 'notes' => '',
+                    'our' => $ours($c->agent), 'customer' => $customer, 'followUp' => null, 'followType' => null,
+                    'chip' => $c->disposition_code ? ($c->vendor_disposition ?: 'Logged') : 'Follow-up Due',
+                    'chipShort' => $c->disposition_code ? 'Logged' : 'Follow-up Due',
+                    'chipClass' => $c->disposition_code ? 'logged' : 'pending',
+                ];
+            });
+
+        $manual = $mapping->activities()->reorder()->where('type', CrmActivityType::CALL->value)->whereNull('telephony_call_id')
+            ->with(['createdBy:id,first_name,last_name,email,phone', 'ourUser:id,first_name,last_name,email,phone', 'customerContact'])
+            ->latest('id')->limit(50)->get()
+            ->map(function ($a) use ($ours, $theirs) {
+                [$headline, $notes] = array_pad(preg_split('/\R\R/', (string) $a->body, 2), 2, '');
+                $us = $ours($a->ourUser ?? $a->createdBy);
+                if ($us) {   // the summary starts with the caller's name; the row already shows them
+                    $headline = preg_replace('/^' . preg_quote($us['name'], '/') . '\s+—\s+/u', '', $headline);
+                }
+                $headline = trim($headline);
+                $followType = null;
+                if (preg_match('/^(Inbound|Outbound) call, outcome: (.+?)(?: \(follow-up: (.+?)\))?$/u', $headline, $m)) {
+                    $headline = $m[1] . ' call · ' . $m[2];   // the full sentence is still in the feed; here it has to fit one line
+                    $followType = $m[3] ?? null;
+                }
+                return [
+                    'kind' => 'manual', 'at' => $a->created_at, 'ended' => null,
+                    'headline' => $headline, 'notes' => trim($notes), 'followType' => $followType,
+                    'our' => $us, 'customer' => $theirs($a->customerContact),
+                    'followUp' => $a->needs_follow_up && !$a->follow_up_completed_at ? $a->follow_up_due_at : null,
+                    'chip' => 'Logged by hand', 'chipShort' => 'By hand', 'chipClass' => 'manual',
+                ];
+            });
+
+        return $agent->concat($manual)->sortByDesc('at')->values();
     }
 
     /**
@@ -207,6 +309,25 @@ class CustomerProfileController extends Controller
         return ['score' => $score, 'label' => $label, 'reasons' => array_slice($reasons, 0, 3)];
     }
 
+    /**
+     * One Tally invoice with its item lines (product, HSN, quantity, rate, taxable value, GST) for the
+     * "item view" on the Sales & Revenue tab. Same people as the Tally figures themselves, and only an
+     * invoice that belongs to THIS customer.
+     */
+    public function invoice(Request $request, $id)
+    {
+        $mapping = CrmClientMapping::findOrFail($id);
+        abort_unless($this->canViewMapping($mapping, $request) && $this->canSeeTallySales(), 403);
+
+        $no = trim((string) $request->query('invoice_no'));
+        [$keys] = app(CrmCustomerResolver::class)->keysFor($mapping);
+        abort_unless($no !== '' && $keys && DB::table('tally_invoices')->where('invoice_no', $no)->whereIn('normalized_name', $keys)->exists(), 404);
+
+        $bill = (new TallyAnalytics(TallyAnalytics::filters([])))->bill($no);
+        abort_if($bill === null, 404);
+        return response()->json($bill)->header('Cache-Control', 'private, max-age=60');
+    }
+
     /** Sales-trend chart data. $range is 6M|1Y|2Y, most recent month last. */
     public function salesTrend(Request $request, $id)
     {
@@ -235,9 +356,23 @@ class CustomerProfileController extends Controller
             }
         }
 
+        // Tally as a second series. A month outside the Tally export's window is null (no data), never a made-up zero.
+        $tally = null;
+        if ($this->canSeeTallySales()) {
+            [$salesKeys] = app(CrmCustomerResolver::class)->keysFor($mapping);
+            $t = app(CompanySales::class)->tallyByMonth($salesKeys);
+            if ($t['byMonth']) {
+                $tally = array_map(
+                    fn($k) => ($t['from'] && $k >= $t['from'] && $k <= $t['to']) ? round($t['byMonth'][$k] ?? 0.0, 2) : null,
+                    array_keys($byMonth)
+                );
+            }
+        }
+
         return response()->json([
             'labels' => array_map(fn($k) => \Carbon\Carbon::createFromFormat('Y-m-d', $k . '-01')->format('M y'), array_keys($byMonth)),
             'values' => array_map(fn($v) => round($v, 2), array_values($byMonth)),
+            'tally' => $tally,
         ]);
     }
 
@@ -263,10 +398,18 @@ class CustomerProfileController extends Controller
             'next_follow_up'   => ['nullable', 'date'],
             'follow_up_type'   => ['nullable', 'string', 'max:60'],
             'set_reminder'     => ['nullable', 'boolean'],
+            'customer_contact_id' => ['nullable', 'integer', Rule::exists('crm_client_contacts', 'id')->where('crm_client_mapping_id', $mapping->id)->whereNull('deleted_at')],
+            'our_user_id'      => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
+        // The person from our team defaults to whoever is logging; anyone else has to be on this account's team.
+        $ourUserId = !empty($data['our_user_id']) ? (int) $data['our_user_id'] : (int) Auth::id();
+        $allowed = $mapping->teamMembers()->pluck('user_id')->map(fn($i) => (int) $i)->push((int) Auth::id())->all();
+        abort_unless(in_array($ourUserId, $allowed, true), 422, "That person isn't on this account's team.");
+        $caller = User::findOrFail($ourUserId);
+
         $needsFollowUp = $request->boolean('set_reminder') && !empty($data['next_follow_up']);
-        $summary = sprintf('%s — %s call, outcome: %s', Auth::user()->getFullName(), $data['call_type'], $data['call_outcome']);
+        $summary = sprintf('%s — %s call, outcome: %s', $caller->getFullName(), $data['call_type'], $data['call_outcome']);
         if (!empty($data['follow_up_type'])) {
             $summary .= " (follow-up: {$data['follow_up_type']})";
         }
@@ -275,6 +418,8 @@ class CustomerProfileController extends Controller
             'crm_client_mapping_id'    => $mapping->id,
             'type'                     => CrmActivityType::CALL,
             'body'                     => "{$summary}\n\n{$data['notes']}",
+            'customer_contact_id'      => $data['customer_contact_id'] ?? null,
+            'our_user_id'              => $ourUserId,
             'needs_follow_up'          => $needsFollowUp,
             'follow_up_due_at'         => $needsFollowUp ? $data['next_follow_up'] : null,
             'follow_up_assigned_to_id' => $needsFollowUp ? Auth::id() : null,
