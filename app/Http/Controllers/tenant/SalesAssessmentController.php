@@ -39,7 +39,8 @@ class SalesAssessmentController extends Controller
             return $this->monthlyPdf($request);
         }
 
-        $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)->with('department');
+        $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)->with('department')
+            ->whereNotIn('id', config('kpi.excluded_user_ids', []));   // office accounts, not people
 
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->department_id);
@@ -106,7 +107,8 @@ class SalesAssessmentController extends Controller
         }
 
         $query = User::where('status', \App\Enums\UserAccountStatus::ACTIVE)
-            ->whereIn('id', \App\Models\KpiAssignment::query()->select('user_id'));
+            ->whereIn('id', \App\Models\KpiAssignment::query()->select('user_id'))
+            ->whereNotIn('id', config('kpi.excluded_user_ids', []));   // office accounts, not people
         if (!Auth::user()->hasRole(['admin', 'hr', 'manager'])) {
             $query->where('id', Auth::id());
         }
