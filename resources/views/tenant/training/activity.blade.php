@@ -170,9 +170,12 @@
             <h1>Training Activity Dashboard</h1>
             <p>Track employee training progress, completion, assessment scores and pending actions.</p>
         </div>
-        @if($canManage ?? false)
-            <a href="{{ route('training.manage.index') }}" class="ta-hero-btn"><i class="bx bx-book-open"></i> Manage Programs</a>
-        @endif
+        <div class="d-flex flex-wrap gap-2" style="position:relative;z-index:1;">
+            <a href="{{ route('training.activity', ['view' => 'log']) }}" class="ta-hero-btn"><i class="bx bx-history"></i> Activity Log</a>
+            @if($canManage ?? false)
+                <a href="{{ route('training.manage.index') }}" class="ta-hero-btn"><i class="bx bx-book-open"></i> Manage Programs</a>
+            @endif
+        </div>
     </div>
 
     {{-- ── Filters: they narrow the whole page ──────────────────── --}}
@@ -415,7 +418,7 @@
             <div class="ta-panel">
                 <div class="ta-panel-head">
                     <h6 class="ta-panel-title">Recent Training Activity</h6>
-                    <a href="{{ request()->fullUrlWithQuery(['sort' => 'last_activity', 'dir' => 'desc']) }}#progress" class="ta-panel-link">View All →</a>
+                    <a href="{{ route('training.activity', ['view' => 'log', 'tab' => 'log']) }}" class="ta-panel-link">View All →</a>
                 </div>
                 <div class="ta-panel-body">
                     @forelse($recent as $ev)

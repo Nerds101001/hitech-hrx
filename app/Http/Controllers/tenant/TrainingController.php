@@ -862,6 +862,11 @@ class TrainingController extends Controller
         }
         $canManage = true;
 
+        // Every attempt and how many it took to pass (same access): ?view=log.
+        if ($request->query('view') === 'log') {
+            return \App\Support\TrainingActivityLog::page($request);
+        }
+
         $phases = TrainingPhase::with(['modules'])->orderBy('order')->get();
 
         // Completion counts the compulsory modules only (phases 1 and 2);
