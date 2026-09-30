@@ -224,6 +224,10 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
 
 /* ══ QUIZ ═══════════════════════════════════════ */
 #quiz-overlay { position: fixed; left: 0; right: 0; bottom: 0; top: 67px; z-index: 9000; background: #f4f7f9; display: none; overflow-y: auto; }
+/* Pop-ups (Submitting..., "answer all questions", the server's reason for
+   refusing a submission) must show above the quiz: at SweetAlert's own
+   z-index (1060) they drew behind it, and a refused Submit looked dead. */
+.swal2-container { z-index: 20000 !important; }
 .qz-page { max-width: 1440px; margin: 0 auto; padding: 16px 28px 40px; display: flex; flex-direction: column; gap: 14px; }
 .qz-badge { display: inline-block; vertical-align: middle; margin-left: 10px; font-size: .85rem; font-weight: 700; color: #4f46e5; background: #e0e7ff; padding: 4px 12px; border-radius: 8px; }
 .qz-grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
@@ -1244,7 +1248,14 @@ function closeQuiz() {
 async function loadQuiz() {
     const sub = document.getElementById('quiz-sub'); if (sub) sub.textContent = 'Loading...';
     try {
-        const r = await fetch(ASSESS_URL); const d = await r.json();
+        const r = await fetch(ASSESS_URL, {headers: {'Accept': 'application/json'}});
+        if (r.status === 401 || r.status === 419) {
+            closeQuiz();
+            Swal.fire({title:'Your session has expired',text:'Please reload the page (sign in again if asked) and open the quiz again.',icon:'warning',confirmButtonText:'Reload page',...SW})
+                .then(x => { if (x.isConfirmed) location.reload(); });
+            return;
+        }
+        const d = await r.json();
         if (!d.success && d.message) {
             Swal.fire({title:'Not yet!',text:d.message,icon:'info',...SW}); closeQuiz(); return;
         }
@@ -1353,16 +1364,37 @@ function updateAllCount() {
 }
 async function submitQuiz() {
     if (Object.keys(qAnswers).length < qList.length) {
+        // Take them to the first unanswered question, and say so.
         const miss = qList.findIndex(q => qAnswers[q.id] === undefined);
-        Swal.fire({toast:true,position:'top-end',icon:'warning',title:'Answer all questions first' + (miss >= 0 ? ` (question ${miss + 1})` : ''),showConfirmButton:false,timer:2500}); return;
+        if (miss >= 0) {
+            if (showAll) document.getElementById('qall-' + miss)?.scrollIntoView({behavior:'smooth', block:'center'});
+            else { qIdx = miss; renderQ(); }
+        }
+        Swal.fire({icon:'warning',title:'One more to go',text:(miss >= 0 ? `Question ${miss + 1} has no answer yet.` : 'Some questions have no answer yet.') + ' Choose an answer, then press Submit Quiz.',...SW}); return;
     }
     Swal.fire({title:'Submitting...',didOpen:()=>Swal.showLoading(),allowOutsideClick:false});
+    let r, d = null;
     try {
-        const r = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-TOKEN':CSRF},body:JSON.stringify({answers:qAnswers})});
-        const d = await r.json(); Swal.close();
-        if (d.success) showResult(d);
-        else Swal.fire({title: d.message ? 'Not yet!' : 'Error',text: d.message || 'Submission failed.',icon: d.message ? 'info' : 'error',...SW});
-    } catch { Swal.close(); Swal.fire({title:'Network error',text:'Please try again.',icon:'error',...SW}); }
+        r = await fetch(SUBMIT_URL, {method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json','X-CSRF-TOKEN':CSRF},body:JSON.stringify({answers:qAnswers})});
+        try { d = await r.json(); } catch (e) { d = null; }
+    } catch { Swal.close(); Swal.fire({title:'Network error',text:'Please check your connection and press Submit again.',icon:'error',...SW}); return; }
+    Swal.close();
+    if (d && d.success) { showResult(d); return; }
+    // Signed out (the session ran out while the quiz was open): the answers
+    // cannot be accepted, and the questions served with it are gone too.
+    if (r.status === 419 || r.status === 401 || !d) {
+        Swal.fire({title:'Your session has expired',text:'Please reload the page (sign in again if asked) and take the quiz again - a fresh set of questions will be drawn.',icon:'warning',confirmButtonText:'Reload page',...SW})
+            .then(x => { if (x.isConfirmed) location.reload(); });
+        return;
+    }
+    // The server no longer holds this set (opened again elsewhere, or already
+    // submitted): offer a fresh one rather than leave the button dead.
+    if (r.status === 409 || r.status === 422) {
+        Swal.fire({title:'Please start the test again',text:d.message,icon:'warning',showCancelButton:true,confirmButtonText:'Load a fresh set',cancelButtonText:'Close',...SW})
+            .then(x => { if (x.isConfirmed) { qAnswers = {}; qFlags = {}; qIdx = 0; loadQuiz(); } });
+        return;
+    }
+    Swal.fire({title: d.message ? 'Not yet!' : 'Error',text: d.message || 'Submission failed.',icon: d.message ? 'info' : 'error',...SW});
 }
 function showResult(d) {
     stopQuizClock();
