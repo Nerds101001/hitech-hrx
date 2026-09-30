@@ -104,7 +104,15 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
 
 /* ── Viewer ─────────────────────────────────────── */
 .rd-view { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.rd-view-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--rd-border); flex-shrink: 0; }
+.rd-view-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 10px 16px; border-bottom: 1px solid var(--rd-border); flex-shrink: 0; }
+.rd-type-sm { width: 40px; height: 40px; border-radius: 9px; font-size: 1.35rem; }
+.rd-view-title { font-size: 1.2rem; font-weight: 800; color: var(--rd-navy); margin: 0 0 2px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-view-head .rd-head-text { min-width: 200px; }
+.rd-view-head .rd-meta { font-size: .78rem; gap: 2px 16px; }
+.rd-view-head .rd-meta i { font-size: 1rem; }
+.rd-view-head .timer-chip, .rd-view-head .rd-btn-outline, .rd-view-head .assess-btn { height: 40px; }
+.rd-view-head .rd-btn-outline { padding: 0 14px; }
+.rd-view-head .assess-btn { padding: 0 18px; }
 .rd-file-ic { width: 40px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
 .rd-file-ic.ic-pdf { background: #fdecec; color: #e5262d; } .rd-file-ic.ic-video { background: #fff5e0; color: #d97706; } .rd-file-ic.ic-text { background: #e0f2f1; color: #0b6b73; }
 .rd-file-text { flex: 1; min-width: 0; line-height: 1.3; }
@@ -119,7 +127,7 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
 .rd-tool:hover { background: #f1f5f6; }
 .rd-view-body { flex: 1; min-height: 0; position: relative; }
 .rd-view-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--rd-border); flex-shrink: 0; background: #fff; }
-.rd-foot-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 9px; font-size: .86rem; font-weight: 600; text-decoration: none; border: 1px solid #d5dfe3; background: #fff; color: var(--rd-navy); max-width: 42%; white-space: nowrap; }
+.rd-foot-btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 9px; font-size: .86rem; font-weight: 600; text-decoration: none; border: 1px solid #d5dfe3; background: #fff; color: var(--rd-navy); max-width: 260px; white-space: nowrap; flex-shrink: 0; }
 .rd-foot-btn span { overflow: hidden; text-overflow: ellipsis; }
 .rd-foot-btn:hover { border-color: var(--rd-primary); color: var(--rd-primary); }
 .rd-foot-btn.primary { background: var(--rd-primary); border-color: var(--rd-primary); color: #fff; }
@@ -136,7 +144,7 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
 .book-loading-label { font-size: .9rem; font-weight: 600; }
 .book-loading-track { width: 220px; height: 5px; background: rgba(255,255,255,.15); border-radius: 3px; overflow: hidden; }
 .book-loading-bar { height: 100%; width: 0; background: #5eead4; border-radius: 3px; transition: width .3s ease; }
-.book-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 16px 24px; position: relative; overflow: hidden; }
+.book-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; padding: 8px 16px; position: relative; overflow: hidden; }
 .book-page { background: #fff; overflow: hidden; }
 .book-page img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
 .book-controls { display: flex; align-items: center; gap: 10px; }
@@ -405,36 +413,6 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
             <b>{{ $module->title }}</b>
         </nav>
 
-        <div class="rd-head">
-            <span class="rd-type {{ $typeClass }}"><i class="bx {{ $typeIcon }}"></i></span>
-            <div class="rd-head-text">
-                <h1>{{ $module->title }}</h1>
-                <div class="rd-meta">
-                    <span><i class="bx bx-time-five"></i> {{ $module->estimated_time_minutes ?? 5 }} min</span>
-                    <span><i class="bx bx-file"></i> {{ $typeLabel }}</span>
-                    @if($needsQuiz)<span><i class="bx bx-clipboard"></i> Quiz</span>@endif
-                    @if($attempts > 0)<span><i class="bx bx-trophy"></i> {{ $attempts }} {{ $attempts == 1 ? 'Try' : 'Tries' }}</span>@endif
-                    @if($progress->status === 'completed')
-                        <span class="ok"><i class="bx bx-check-circle"></i> Passed{{ $progress->assessment_score > 0 ? ' · ' . round($progress->assessment_score) . '%' : '' }}</span>
-                    @endif
-                </div>
-            </div>
-            <div class="rd-actions">
-                {{-- Timer (not for video) --}}
-                @if($module->content_type !== 'video')
-                    <div class="timer-chip" id="timer-chip" title="Minimum reading time">
-                        <i class="bx bx-time-five" id="timer-icon"></i>
-                        <span id="timer-display">{{ str_pad($module->estimated_time_minutes ?? 5, 2, '0', STR_PAD_LEFT) }}:00</span>
-                    </div>
-                @endif
-                <button type="button" class="rd-btn-outline" id="notes-toggle" title="My notes"><i class="bx bx-notepad"></i><span class="d-none d-sm-inline">Notes</span></button>
-                <button type="button" class="assess-btn" id="assess-btn" title="{{ $module->content_type === 'video' ? 'Opens once the video has been watched' : 'Opens after the minimum reading time' }}">
-                    <i class="bx {{ $needsQuiz ? 'bx-list-check' : 'bx-check-circle' }}"></i>
-                    <span>{{ $needsQuiz ? 'Take Quiz' : 'Mark as Complete' }}</span>
-                </button>
-            </div>
-        </div>
-
         <div class="rd-grid">
 
             {{-- ── Modules, phase by phase ── --}}
@@ -486,21 +464,7 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
             @if($module->content_type === 'catalog' && $module->content_url)
             {{-- ══ CATALOG / PDF — page-flip book ══ --}}
             <section class="rd-view rd-card book-reader" id="book-reader">
-                <div class="rd-view-head">
-                    <span class="rd-file-ic ic-pdf"><i class="bx bxs-file-pdf"></i></span>
-                    <div class="rd-file-text">
-                        <b>{{ $fileName ?: $module->title }}</b>
-                        <small><span id="book-page-sub">Opening…</span><span id="book-size"></span></small>
-                    </div>
-                    <div class="rd-tools" id="book-tools" style="display:none;">
-                        <div class="book-zoom-group">
-                            <button type="button" class="book-zoom-btn" id="book-zoom-out" title="Zoom out"><i class="bx bx-minus"></i></button>
-                            <span class="book-zoom-label" id="book-zoom-label">100%</span>
-                            <button type="button" class="book-zoom-btn" id="book-zoom-in" title="Zoom in"><i class="bx bx-plus"></i></button>
-                        </div>
-                        <button type="button" class="rd-tool" id="book-fs-btn" title="Fullscreen (F)" onclick="toggleFullscreen()"><i class="bx bx-fullscreen" id="fs-btn-icon"></i></button>
-                    </div>
-                </div>
+                @include('tenant.training.partials.reader-view-head', ['isBook' => true])
                 <div class="rd-view-body rd-book-body">
                     <div class="book-loading-screen" id="book-loading">
                         <div class="book-loading-emoji"><i class="bx bx-book-open"></i></div>
@@ -525,10 +489,7 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
             @elseif($module->content_type === 'video')
             {{-- ══ VIDEO ══ --}}
             <section class="rd-view rd-card" id="rd-view">
-                <div class="rd-view-head">
-                    <span class="rd-file-ic ic-video"><i class="bx bxs-videos"></i></span>
-                    <div class="rd-file-text"><b>{{ $module->title }}</b><small>Video lesson · {{ $module->estimated_time_minutes ?? 5 }} min</small></div>
-                </div>
+                @include('tenant.training.partials.reader-view-head')
                 <div class="rd-view-body rd-video-body">
                     {{-- No right-click on the player: "Copy video URL" and "Save
                          video as" live there. The YouTube player adds its own
@@ -573,10 +534,7 @@ body { display: flex; flex-direction: column; background: #f4f7f9; }
             @else
             {{-- ══ TEXT / POLICY ══ --}}
             <section class="rd-view rd-card" id="rd-view">
-                <div class="rd-view-head">
-                    <span class="rd-file-ic ic-text"><i class="bx bx-book-content"></i></span>
-                    <div class="rd-file-text"><b>{{ $module->title }}</b><small>Reading module · {{ $module->estimated_time_minutes }} min read</small></div>
-                </div>
+                @include('tenant.training.partials.reader-view-head')
                 <div class="rd-view-body rd-text-body" id="content-pane">
                     <div class="text-content-wrap">
                         <div class="text-module-card" id="text-card">
@@ -884,12 +842,17 @@ function initNotes() {
         });
     }
 }
+// The quiz and notes open outside the PDF viewer: leave its fullscreen first.
+function leaveFullscreen() {
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+}
 function placeNotes() {
     const p = document.getElementById('notes-panel'), top = document.getElementById('rdTop');
     if (p && top) p.style.top = Math.max(0, top.getBoundingClientRect().bottom) + 'px';
 }
 function toggleNotes() {
     notesOpen = !notesOpen;
+    if (notesOpen) leaveFullscreen();
     placeNotes();
     const p = document.getElementById('notes-panel');
     const btn = document.getElementById('notes-toggle');
@@ -971,7 +934,7 @@ async function initPdf() {
         const stage    = document.getElementById('book-stage');
         const box      = stage.parentElement;
         const stageW   = Math.max((stage.clientWidth  || box.clientWidth  || window.innerWidth)  - 48, 300);
-        const stageH   = Math.max((stage.clientHeight || box.clientHeight || window.innerHeight) - 40, 300);
+        const stageH   = Math.max((stage.clientHeight || box.clientHeight || window.innerHeight) - 20, 300);
         const portrait = (box.clientWidth || window.innerWidth) < 700;
         const pg1      = await doc.getPage(1);
         const nv       = pg1.getViewport({scale: 1});
@@ -1265,6 +1228,7 @@ function openQuiz() {
         return;
     }
     closeNotes();
+    leaveFullscreen();
     const ov = document.getElementById('quiz-overlay');
     const top = document.getElementById('rdTop');
     if (top) ov.style.top = Math.max(0, top.getBoundingClientRect().bottom + 3) + 'px';
