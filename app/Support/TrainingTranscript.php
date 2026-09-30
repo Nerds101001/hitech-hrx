@@ -84,7 +84,7 @@ class TrainingTranscript
                     }
                     if (in_array($status, ['Passed', 'Completed'], true)) {
                         $done++;
-                        if ($score !== null) $scores[] = $score;
+                        if ($score !== null) $scores[] = (float) $p->assessment_score;   // exact, not the rounded figure shown
                         if ($compulsory && $p->completed_at && (!$compDoneAt || $p->completed_at->gt($compDoneAt))) $compDoneAt = $p->completed_at;
                     } elseif ($status === 'Failed') {
                         $failed[] = $m->title;
