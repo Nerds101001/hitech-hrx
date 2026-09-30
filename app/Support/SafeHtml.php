@@ -34,6 +34,9 @@ class SafeHtml
             // data: is for pictures the editor's Image button embeds inline; in an
             // <img> it cannot run code, and HTMLPurifier only accepts image types.
             $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true, 'tel' => true, 'data' => true]);
+            // A picture without alt text gets an empty one - HTMLPurifier's default
+            // copies the src in, which for an embedded picture is the whole data URI.
+            $config->set('Attr.DefaultImageAlt', '');
             $config->set('Attr.AllowedFrameTargets', ['_blank']);
             $config->set('HTML.TargetNoopener', true);
             $config->set('HTML.TargetNoreferrer', true);

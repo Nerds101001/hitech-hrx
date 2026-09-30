@@ -13,6 +13,7 @@ use App\Models\Shift;
 use App\Models\Team;
 use App\Models\User;
 use App\Models\UserDevice;
+use App\Support\MobileAppAccess;
 use App\Services\UserService\IUserService;
 use Carbon\Carbon;
 use Constants;
@@ -199,8 +200,16 @@ class AuthController extends Controller
       return Error::response('User not found.');
     }
 
-    if ($user->status == 'inactive') {
-      return Error::response('User is inactive.');
+    // Only current staff - this used to refuse just 'inactive', so a terminated
+    // or relieved employee's phone still got a token.
+    if (!MobileAppAccess::isCurrentStaff($user)) {
+      return Error::response('User account is not active', 403);
+    }
+
+    // No password here, so the phone must have reported in recently; after a
+    // month of silence the person signs in with their password again.
+    if (!MobileAppAccess::deviceIsRecent($device)) {
+      return Error::response('Please sign in with your password.', 401);
     }
 
     $userRole = $user->roles()->first();
