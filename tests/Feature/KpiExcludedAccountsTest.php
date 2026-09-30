@@ -45,6 +45,6 @@ class KpiExcludedAccountsTest extends TestCase
 
     public function test_the_real_office_accounts_are_on_the_list(): void
     {
-        $this->assertSame([568, 585], config('kpi.excluded_user_ids'));
+        $this->assertSame([568, 585, 597], config('kpi.excluded_user_ids'));
     }
 }

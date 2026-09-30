@@ -12,10 +12,10 @@ return [
   | KPI templates skip them - editing a template cannot hand them KPIs again -
   | and the scorecard pages leave them out.
   |
-  | 568 GM-North, 585 Hyderabad (2026-09-30).
+  | 568 GM-North, 585 Hyderabad, 597 Manpreet Walia office (2026-09-30).
   |
   */
 
-  'excluded_user_ids' => [568, 585],
+  'excluded_user_ids' => [568, 585, 597],
 
 ];
