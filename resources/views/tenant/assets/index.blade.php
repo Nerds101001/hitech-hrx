@@ -205,7 +205,7 @@
             <select id="filterUser" class="form-select select2 filter-item-hitech">
               <option value="">Assigned To: All</option>
               @foreach($users as $user)
-                <option value="{{ $user->id }}">{{ $user->first_name }} {{ $user->last_name }}</option>
+                <option value="{{ $user->id }}">{{ $user->name_with_department }}</option>
               @endforeach
             </select>
           </div>

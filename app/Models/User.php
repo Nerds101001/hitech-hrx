@@ -554,6 +554,26 @@ class User extends Authenticatable implements JWTSubject, AuditableContract
     return $this->getFullNameAttribute();
   }
 
+  /**
+   * "Name — Department", for any picker where one person has to be told from another.
+   *
+   * Names are not unique here: two MANISHA KUMARIs are active, one in Accounts and one in
+   * Billing, and a POOJA KUMARI sits alongside a Pooja Kumari differing only in case. A list
+   * of bare names gives whoever is choosing no way to know which one they picked - and on an
+   * asset or a task, picking the wrong one sends it to the wrong person.
+   *
+   * Falls back to the name alone when no department is set (8 of 226 active staff), so it is
+   * always safe to render. Eager-load `department:id,name` wherever this is used in a loop,
+   * or it is one query per row.
+   */
+  public function getNameWithDepartmentAttribute(): string
+  {
+    $name = $this->getFullNameAttribute();
+    $department = optional($this->department)->name;
+
+    return $department ? $name . ' — ' . $department : $name;
+  }
+
 
   //Tenant Specific
 

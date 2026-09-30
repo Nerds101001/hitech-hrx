@@ -81,7 +81,7 @@
                                         <option value="">Select User</option>
                                         @foreach($users as $user)
                                             <option value="{{ $user->id }}" {{ old('assigned_to') == $user->id ? 'selected' : '' }}>
-                                                {{ $user->first_name }} {{ $user->last_name }}
+                                                {{ $user->name_with_department }}
                                             </option>
                                         @endforeach
                                     </select>
