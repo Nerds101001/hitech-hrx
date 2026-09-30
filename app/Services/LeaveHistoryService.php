@@ -111,6 +111,32 @@ class LeaveHistoryService
             ]);
         }
 
+        // 1b. Absences CCare's register covered from the balance itself (it
+        // auto-adjusts an absence with no leave behind it). They raise `used`
+        // and never `balance`, so the audit step below cannot see them: the
+        // statement listed fewer deductions than Total Used - SHRI KANT's
+        // showed 2 against 4 (2026-09-30). A day later tied to a leave request
+        // is already that request's line.
+        $covered = \App\Models\Attendance::where('user_id', $userId)
+            ->whereNull('leave_request_id')
+            ->where('admin_reason', 'like', '%Auto-adjusted against Earned Leave%')
+            ->where('check_in_time', '>=', self::LEDGER_OPENS)
+            ->get(['id', 'check_in_time', 'created_at']);
+        foreach ($covered as $day) {
+            $history->push((object)[
+                'id'         => 'ABS-' . $day->id,
+                'type'       => 'Deduction',
+                'leave_type' => 'All Purpose Leave',
+                'from_date'  => null,
+                'to_date'    => null,
+                'amount'     => -1.0,
+                'status'     => 'Processed',
+                'notes'      => 'Absence on ' . $day->check_in_time->format('d M Y') . ' covered from balance (marked by Customer Care)',
+                'created_at' => $day->created_at,
+                'is_adjustment' => true,
+            ]);
+        }
+
         // 2. Fetch Balance Audits via relationship
         $leaveBalances = $user->leaveBalances()->with('leaveType')->get()
             ->reject(fn($b) => in_array(strtoupper($b->leaveType->code ?? ''), self::EXCLUDED_FROM_POOL, true));
