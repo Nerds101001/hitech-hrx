@@ -208,6 +208,44 @@ class AttendanceDayStatusTest extends TestCase
         $this->assertTrue($r['isPaid']);
     }
 
+    /**
+     * An unpaid half-day whose worked half CCare recorded afterwards: the row
+     * turns from 'unpaid_leave' into 'half-day', which used to read as paid.
+     */
+    private function unpaidHalfDayWorked(string $date): array
+    {
+        $user = $this->makeUser();
+        $hdl = LeaveType::where('code', 'HDL')->firstOrFail();
+        $leave = LeaveRequest::create([
+            'user_id' => $user->id, 'leave_type_id' => $hdl->id, 'from_date' => $date, 'to_date' => $date,
+            'is_half_day' => true, 'half_day_session' => 'second_half', 'status' => 'pending', 'user_notes' => 'resolver unpaid half',
+        ]);
+        $leave->updateQuietly(['status' => 'approved', 'is_lwp' => true, 'lwp_days' => 0.5]);
+        $att = $this->attendance($user, $date, '09:30:00', '14:00:00', $leave->fresh('leaveType'));
+        $att->updateQuietly(['status' => 'half-day']);
+
+        return [$user, $att->fresh(['leaveRequest.leaveType'])];
+    }
+
+    public function test_from_september_2026_an_unpaid_half_day_stays_unpaid_after_the_worked_half_is_recorded(): void
+    {
+        [$user, $att] = $this->unpaidHalfDayWorked('2026-09-29');
+
+        $r = AttendanceDayStatus::resolve($user, Carbon::parse('2026-09-29'), $att, null, null);
+
+        $this->assertEquals('half-day', $r['code'], 'half worked, half unpaid - not a full paid day');
+        $this->assertFalse($r['isPaid']);
+    }
+
+    public function test_july_and_august_2026_keep_the_old_reading(): void
+    {
+        [$user, $att] = $this->unpaidHalfDayWorked('2026-08-24');
+
+        $r = AttendanceDayStatus::resolve($user, Carbon::parse('2026-08-24'), $att, null, null);
+
+        $this->assertEquals('half-day-paid', $r['code'], 'already paid out; left as it was');
+    }
+
     public function test_full_day_paid_leave_with_a_dummy_attendance_row_is_paid_leave(): void
     {
         $user = $this->makeUser();

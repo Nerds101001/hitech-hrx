@@ -57,6 +57,9 @@ class AttendanceDayStatus
     /** Minutes of real work a Short Leave day needs to still count as a full Present. */
     public const SHORT_LEAVE_PRESENT_MINUTES = 350;
 
+    /** From this day a leave approved with no paid part stays unpaid, whatever its row reads (see leaveDayIsPaid). */
+    public const WHOLLY_UNPAID_FROM = '2026-09-01';
+
     /**
      * Resolver codes that mean "genuinely at work in some form" for a coarse
      * dashboard count - the "N Present today" cards and trend charts across
@@ -107,6 +110,17 @@ class AttendanceDayStatus
         // Wholly paid or wholly unpaid: the request-level flag is the answer.
         if (!$leave->is_lwp) {
             return true;
+        }
+
+        // Approved with no paid part at all: unpaid, whatever the row says now.
+        // CCare recording the worked half of an unpaid half-day turns its
+        // 'unpaid_leave' row into 'half-day', which read below as paid - the
+        // calendar said "(Paid)" and payroll paid the day in full. From
+        // September 2026 only: July-August were already paid out on the old
+        // reading and stay as they are (decided 2026-09-30).
+        if ($date->gte(Carbon::parse(self::WHOLLY_UNPAID_FROM))
+            && self::leaveSpanDays($user, $leave) - (float) ($leave->lwp_days ?? 0) <= 0) {
+            return false;
         }
 
         $perDay = $attendance ? strtolower((string) $attendance->status) : null;
