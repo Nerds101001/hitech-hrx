@@ -892,9 +892,10 @@
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#fde047;border-radius:2px;"></span> ≥75%</span>
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#fb923c;border-radius:2px;"></span> 50–75%</span>
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#dc2626;border-radius:2px;"></span> &lt;50%</span>
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#fef2f2;border:1px solid #dc2626;border-radius:2px;"></span> Tally ≠ Actual Sale</span>
                     <span class="ms-auto">All figures ₹ Lakh</span>
                 </div>
-                <style>.tgt-table td,.tgt-table th{padding:.28rem .35rem !important;white-space:nowrap;}.tgt-table td:first-child,.tgt-table th:first-child{white-space:normal;}</style>
+                <style>.tgt-table td,.tgt-table th{padding:.28rem .35rem !important;white-space:nowrap;}.tgt-table td:first-child,.tgt-table th:first-child{white-space:normal;}.tgt-table tr.tgt-mm td:nth-child(-n+5){background:#fef2f2 !important;}.tgt-table tr.tgt-mm td:first-child{border-left:3px solid #dc2626 !important;color:#991b1b;}.tgt-table tr.tgt-mm .tgt-actual{color:#b91c1c !important;}.tgt-table tr.tgt-mm .tgt-tally{color:#b91c1c !important;font-weight:700;}.tgt-table tr.tgt-mm .tgt-tally-cell{box-shadow:inset 0 0 0 2px #dc2626;}</style>
                 <div style="max-height:62vh;overflow-y:auto;">
                 <table class="table table-bordered table-sm mb-0 align-middle tgt-table" style="font-size:0.76rem;border-collapse:separate;border-spacing:0;">
                     {{-- Sticky header needs its own stacking context + solid bg,
@@ -918,29 +919,45 @@
                         @php $rowsForMonth = ($targetAchieversByMonth[$mk] ?? ($mk === $currentMonthKey ? ($targetAchievers ?? []) : [])); @endphp
                         <tbody class="tgt-month-body" data-month="{{ $mk }}" @if($mk !== $currentMonthKey) style="display:none;" @endif>
                             @forelse($rowsForMonth as $r)
-                                <tr class="tgt-row" data-category="{{ $r['category'] ?? 'Salesperson' }}">
-                                    <td class="fw-semibold">{{ $r['name'] }}</td>
+                                {{-- Tally Sale is typed in by CCare / New Biz, so it is the one
+                                     figure on this row that nobody derived from the book. When it
+                                     disagrees with Actual Sale the row is flagged red, because the
+                                     two are meant to reconcile and a gap means one of them is
+                                     wrong. Blank is not a mismatch: nobody has filled it in yet,
+                                     which reads differently from a recorded 0. --}}
+                                @php
+                                    $tgtLocked = \App\Http\Controllers\tenant\SalesPipelineController::isMonthLockedForUser(auth()->user(), $mk);
+                                    $tallyVal  = $r['tally'] ?? null;
+                                    // Half a paisa of tolerance, so a rounding tail does not read
+                                    // as a discrepancy.
+                                    $tallyDiff = $tallyVal === null ? null : round((float) $tallyVal - (float) $r['actual'], 2);
+                                    $tallyMm   = $tallyDiff !== null && abs($tallyDiff) > 0.005;
+                                @endphp
+                                <tr class="tgt-row {{ $tallyMm ? 'tgt-mm' : '' }}" data-category="{{ $r['category'] ?? 'Salesperson' }}"
+                                    @if($tallyMm) title="Tally {{ number_format($tallyVal, 2) }} vs Actual {{ number_format($r['actual'], 2) }} — off by {{ number_format(abs($tallyDiff), 2) }}" @endif>
+                                    <td class="fw-semibold">
+                                        @if($tallyMm)<i class="bx bx-error-circle text-danger me-1" style="vertical-align:-2px;"></i>@endif{{ $r['name'] }}
+                                    </td>
                                     <td class="text-end font-monospace" style="color:#1d4ed8;">{{ ($r['forecast'] ?? 0) > 0 ? number_format($r['forecast'], 2) : '—' }}</td>
-                                    <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
-                                    {{-- Tally Sale. Typed in by CCare / New Biz; blank means nobody
-                                         has entered it yet, which reads differently from a recorded
-                                         0. Editable only while the month is open under the same rule
+                                    <td class="text-end font-monospace fw-bold tgt-actual">{{ number_format($r['actual'], 2) }}</td>
+                                    <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
+                                    {{-- Editable only while the month is open, under the same rule
                                          the Sale/Pending figures use, so this cannot drift from the
                                          rest of the book. --}}
-                                    @php $tgtLocked = \App\Http\Controllers\tenant\SalesPipelineController::isMonthLockedForUser(auth()->user(), $mk); @endphp
-                                    <td class="text-end p-0" style="background:#f4fbfa;">
+                                    <td class="text-end p-0 tgt-tally-cell" style="background:#f4fbfa;">
                                         @if($canEditBook && !$tgtLocked)
                                             <input type="number" step="0.01" min="0"
                                                    class="form-control form-control-sm text-end font-monospace border-0 tgt-tally"
                                                    style="background:transparent;font-size:0.76rem;padding:.28rem .35rem;box-shadow:none;"
-                                                   value="{{ $r['tally'] !== null ? number_format($r['tally'], 2, '.', '') : '' }}"
+                                                   value="{{ $tallyVal !== null ? number_format($tallyVal, 2, '.', '') : '' }}"
                                                    data-sp="{{ $r['id'] }}" data-month="{{ $mk }}"
+                                                   data-actual="{{ number_format((float) $r['actual'], 2, '.', '') }}"
                                                    placeholder="—" title="Tally sale for {{ $r['name'] }}">
                                         @else
                                             <span class="d-block text-end font-monospace px-1"
-                                                  style="font-size:0.76rem;{{ $r['tally'] === null ? 'color:#9ca3af;' : '' }}"
+                                                  style="font-size:0.76rem;{{ $tallyVal === null ? 'color:#9ca3af;' : '' }}"
                                                   title="{{ $tgtLocked ? 'This month is closed' : 'You cannot edit the sales book' }}">
-                                                {{ $r['tally'] !== null ? number_format($r['tally'], 2) : '—' }}
+                                                {{ $tallyVal !== null ? number_format($tallyVal, 2) : '—' }}
                                             </span>
                                         @endif
                                     </td>
@@ -1637,6 +1654,31 @@ document.addEventListener('DOMContentLoaded', function () {
         deptPicker.addEventListener('change', applyRowFilter);
     }
 
+    // Flags the row when the typed Tally Sale disagrees with Actual Sale. Same
+    // rule and same half-paisa tolerance the server-rendered pass uses, so a row
+    // does not change colour just because it was edited rather than reloaded.
+    function flagMismatch(cell) {
+        const row = cell.closest('tr');
+        if (!row) return;
+        const actual = parseFloat(cell.dataset.actual || '0');
+        const typed  = cell.value === '' ? null : parseFloat(cell.value);
+        const off    = typed !== null && !isNaN(typed) && Math.abs(typed - actual) > 0.005;
+        row.classList.toggle('tgt-mm', off);
+        const icon = row.querySelector('td:first-child .bx-error-circle');
+        if (off && !icon) {
+            const i = document.createElement('i');
+            i.className = 'bx bx-error-circle text-danger me-1';
+            i.style.verticalAlign = '-2px';
+            row.querySelector('td:first-child').prepend(i);
+        } else if (!off && icon) {
+            icon.remove();
+        }
+        row.title = off
+            ? 'Tally ' + typed.toFixed(2) + ' vs Actual ' + actual.toFixed(2) +
+              ' — off by ' + Math.abs(typed - actual).toFixed(2)
+            : '';
+    }
+
     // Tally Sale cells. Saved on blur rather than per keystroke, and only when
     // the value actually changed, so tabbing across the table does not fire a
     // request per cell. The server re-checks who may write and whether the month
@@ -1664,6 +1706,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 cell.disabled = false;
                 if (data.success) {
                     cell.dataset.was = cell.value;
+                    flagMismatch(cell);
                     cell.style.backgroundColor = '#e8f5e9';
                     setTimeout(function () { cell.style.backgroundColor = 'transparent'; }, 600);
                 } else {
