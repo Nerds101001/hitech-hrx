@@ -11,11 +11,13 @@
 html, body { height: 100%; overflow: hidden; }
 body { display: flex; flex-direction: column; background: #f4f7f9; }
 
-.rd-root {
+/* Page-wide, not on .rd-root: the quiz layer sits outside .rd-root, and with
+   the colours undefined there its Next and Submit buttons drew white on white. */
+:root {
     --rd-primary: #0b5f68; --rd-primary-dark: #07464d; --rd-ink: #1e293b; --rd-navy: #13235b; --rd-muted: #64748b;
     --rd-border: #e3ebee; --rd-soft: #f4f8f9; --rd-green: #22c55e; --rd-orange: #f59e0b; --rd-red: #ef4444;
-    flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; color: var(--rd-ink);
 }
+.rd-root { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; color: var(--rd-ink); }
 
 /* ── Header ─────────────────────────────────────── */
 .rd-top { height: 64px; flex-shrink: 0; background: #fff; border-bottom: 1px solid var(--rd-border); display: flex; align-items: center; gap: 28px; padding: 0 28px; z-index: 300; }
