@@ -851,6 +851,13 @@ class SalesPipelineController extends Controller
                         'bingo'    => (float) $t->bingo_target,
                         'kingo'    => (float) $t->kingo_target,
                         'super'    => (float) $t->super_kingo_target,
+                        // Null, not 0: "nobody has entered this yet" and "entered
+                        // as zero" are different things and the cell shows them
+                        // differently. A synthesised row (no saved target) has no
+                        // id, so the cell renders read-only until one exists.
+                        'tally'       => $t->tally_sale === null ? null : (float) $t->tally_sale,
+                        'target_id'   => $t->id,
+                        'month_key'   => $mk,
                     ];
                 }
                 usort($list, fn($a, $b) => $b['actual'] <=> $a['actual']);
@@ -2296,6 +2303,78 @@ class SalesPipelineController extends Controller
         return redirect()->back()->with('success', 'Pipeline updated.');
     }
 
+
+    /**
+     * Save the Tally sale a CCare / New Biz rep recorded against one salesperson
+     * for one month, from the Target Achievement popup.
+     *
+     * Who may write it is the same question as who may write the rest of the
+     * book -- canEditBook() -- and the month closes on exactly the same rule as
+     * the Sale / Pending figures, isMonthLockedForUser(). Both are reused rather
+     * than restated so this cannot drift away from the page around it.
+     *
+     * Visibility is already handled upstream: the popup is built from
+     * $allTargets, which SalesScope has narrowed to the people this user may
+     * see, so a rep is only ever offered their own salespeople to fill in. This
+     * re-checks that rather than trusting the id that arrives in the request.
+     */
+    public function tallySaleUpdate(Request $request)
+    {
+        $data = $request->validate([
+            'salesperson_id' => 'required|integer|exists:users,id',
+            'month_year'     => 'required|string|size:7',
+            'value'          => 'nullable|numeric|min:0|max:9999999',
+        ]);
+
+        $user = auth()->user();
+
+        if (!self::canEditBook($user)) {
+            return response()->json(['success' => false, 'message' => 'You cannot edit the sales book.'], 403);
+        }
+
+        if (self::isMonthLockedForUser($user, $data['month_year'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'That month is closed. Only Admin/HR can change it now.',
+            ], 403);
+        }
+
+        // The same scope the popup itself was built from. Null means unrestricted.
+        $allowed = \App\Support\SalesScope::viewIds($user, $request, 'sp');
+        if ($allowed !== null && !in_array((int) $data['salesperson_id'], $allowed, true)) {
+            return response()->json(['success' => false, 'message' => 'That salesperson is not yours to fill in.'], 403);
+        }
+
+        // A blank box clears the figure back to "not entered yet", which is why
+        // this is nullable rather than being coerced to 0.
+        // Kept as a string, not a float: the column is cast decimal:2, and
+        // handing Brick\Math a float is deprecated and becomes an error in 0.15.
+        $value = ($data['value'] === null || $data['value'] === '')
+            ? null
+            : number_format((float) $data['value'], 2, '.', '');
+
+        $target = \App\Models\SalespersonTarget::firstOrNew([
+            'salesperson_id' => (int) $data['salesperson_id'],
+            'month_year'     => $data['month_year'],
+        ]);
+        if (!$target->exists) {
+            $target->tenant_id          = $user->tenant_id;
+            $target->bingo_target       = 0;
+            $target->kingo_target       = 0;
+            $target->super_kingo_target = 0;
+        }
+        $target->tally_sale       = $value;
+        $target->tally_sale_by_id = $value === null ? null : $user->id;
+        $target->tally_sale_at    = $value === null ? null : now();
+        $target->save();
+
+        return response()->json([
+            'success' => true,
+            'value'   => $value,
+            'by'      => $value === null ? null : $user->name,
+            'at'      => $value === null ? null : now()->format('d M Y, H:i'),
+        ]);
+    }
 
     public function monthUpdate(Request $request)
     {

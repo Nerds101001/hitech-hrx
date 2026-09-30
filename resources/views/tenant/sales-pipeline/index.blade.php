@@ -905,6 +905,7 @@
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Fcst</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Actual<br>Sale</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Pending</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#eef7f6;box-shadow:inset 0 -1px 0 #dee2e6;width:86px;min-width:86px;padding:.3rem .35rem;" title="Entered by CCare / New Biz">Tally<br>Sale</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Bingo</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Kingo</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Super<br>Kingo</th>
@@ -921,7 +922,28 @@
                                     <td class="fw-semibold">{{ $r['name'] }}</td>
                                     <td class="text-end font-monospace" style="color:#1d4ed8;">{{ ($r['forecast'] ?? 0) > 0 ? number_format($r['forecast'], 2) : '—' }}</td>
                                     <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
-                                    <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
+                                    {{-- Tally Sale. Typed in by CCare / New Biz; blank means nobody
+                                         has entered it yet, which reads differently from a recorded
+                                         0. Editable only while the month is open under the same rule
+                                         the Sale/Pending figures use, so this cannot drift from the
+                                         rest of the book. --}}
+                                    @php $tgtLocked = \App\Http\Controllers\tenant\SalesPipelineController::isMonthLockedForUser(auth()->user(), $mk); @endphp
+                                    <td class="text-end p-0" style="background:#f4fbfa;">
+                                        @if($canEditBook && !$tgtLocked)
+                                            <input type="number" step="0.01" min="0"
+                                                   class="form-control form-control-sm text-end font-monospace border-0 tgt-tally"
+                                                   style="background:transparent;font-size:0.76rem;padding:.28rem .35rem;box-shadow:none;"
+                                                   value="{{ $r['tally'] !== null ? number_format($r['tally'], 2, '.', '') : '' }}"
+                                                   data-sp="{{ $r['id'] }}" data-month="{{ $mk }}"
+                                                   placeholder="—" title="Tally sale for {{ $r['name'] }}">
+                                        @else
+                                            <span class="d-block text-end font-monospace px-1"
+                                                  style="font-size:0.76rem;{{ $r['tally'] === null ? 'color:#9ca3af;' : '' }}"
+                                                  title="{{ $tgtLocked ? 'This month is closed' : 'You cannot edit the sales book' }}">
+                                                {{ $r['tally'] !== null ? number_format($r['tally'], 2) : '—' }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     @foreach(['bingo','kingo','super'] as $tier)
                                         @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
                                         <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
@@ -933,7 +955,7 @@
                                     @endforeach
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
                             @endforelse
                         </tbody>
                     @endforeach
@@ -1614,6 +1636,52 @@ document.addEventListener('DOMContentLoaded', function () {
     if (deptPicker) {
         deptPicker.addEventListener('change', applyRowFilter);
     }
+
+    // Tally Sale cells. Saved on blur rather than per keystroke, and only when
+    // the value actually changed, so tabbing across the table does not fire a
+    // request per cell. The server re-checks who may write and whether the month
+    // is still open; this only reports what it says.
+    document.querySelectorAll('#targetAchieveModal .tgt-tally').forEach(function (input) {
+        input.dataset.was = input.value;
+
+        input.addEventListener('blur', function () {
+            if (this.value === this.dataset.was) return;
+
+            const cell = this;
+            cell.disabled = true;
+
+            fetch('{{ route('sales-visits.pipeline.tally-sale.update') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({
+                    salesperson_id: cell.dataset.sp,
+                    month_year: cell.dataset.month,
+                    value: cell.value === '' ? null : cell.value
+                })
+            }).then(function (r) { return r.json(); })
+              .then(function (data) {
+                cell.disabled = false;
+                if (data.success) {
+                    cell.dataset.was = cell.value;
+                    cell.style.backgroundColor = '#e8f5e9';
+                    setTimeout(function () { cell.style.backgroundColor = 'transparent'; }, 600);
+                } else {
+                    // Put back what was there, so the screen never shows a figure
+                    // the server did not accept.
+                    cell.value = cell.dataset.was;
+                    cell.style.backgroundColor = '#fdecea';
+                    setTimeout(function () { cell.style.backgroundColor = 'transparent'; }, 1200);
+                    if (data.message) { alert(data.message); }
+                }
+              })
+              .catch(function () {
+                cell.disabled = false;
+                cell.value = cell.dataset.was;
+                alert('Could not save that figure. Try again.');
+              });
+        });
+    });
 });
 
 function showAddNewRow() {
