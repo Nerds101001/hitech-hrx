@@ -126,11 +126,33 @@
     $w = $window;
     $nLocked = count($lockedTargetIds);
     $nGoals = $goals->whereNull('closed_at')->count();
+    // Can this viewer add right now? Then every red alert opens the add-customer popup.
+    $canAddNow = $canEdit && $isActive && ($w['open'] || $managesAll);
+    $addAttrs = $canAddNow ? 'role=button tabindex=0 data-bs-toggle=modal data-bs-target=#ndgRdAddModal title="Click to add customers"' : '';
   @endphp
+  @if(!$w['meets_min'] && $isActive)
+    {{-- Short of the minimum: a red alert, clickable straight into the add-customer popup. --}}
+    <div class="ndg-alert-red mb-3 {{ $canAddNow ? 'ndg-alert-click' : '' }}" id="ndgMinAlert" {!! $addAttrs !!}>
+      <i class="bx bx-error-circle fs-3"></i>
+      <div class="flex-grow-1">
+        <div class="fw-bold">This round is incomplete - add {{ $w['short_by'] }} more {{ \Illuminate\Support\Str::plural('customer', $w['short_by']) }} (minimum {{ $w['min'] }}, you have {{ $w['count'] }})</div>
+        <div class="small">
+          @if($w['open'])
+            The window to add customers closes {{ $w['closes_at']->format('d M Y, h:i A') }} - a round below {{ $w['min'] }} customers is not counted.
+          @else
+            The window to add customers closed {{ $w['closes_at']->format('d M Y, h:i A') }}.@unless($managesAll) Ask admin/HR to reopen it.@endunless
+          @endif
+        </div>
+      </div>
+      @if($canAddNow)
+        <span class="btn btn-hitech-danger rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-plus"></i> Add customers now</span>
+      @endif
+    </div>
+  @endif
   <div class="row g-3 mb-6" id="ndgRulesStrip">
     <div class="col-12 col-md-4">
-      <div class="ndg-kpi3 h-100">
-        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? '#dcfce7;color:#166534' : '#fee2e2;color:#b42318' }}"><i class="bx {{ $w['meets_min'] ? 'bx-check-circle' : 'bx-error-circle' }}"></i></div>
+      <div class="ndg-kpi3 h-100 {{ $w['meets_min'] ? '' : 'ndg-kpi3-red' }} {{ !$w['meets_min'] && $canAddNow ? 'ndg-alert-click' : '' }}" {!! !$w['meets_min'] ? $addAttrs : '' !!}>
+        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? '#dcfce7;color:#166534' : '#ffe4e6;color:#e11d48' }}"><i class="bx {{ $w['meets_min'] ? 'bx-check-circle' : 'bx-error-circle' }}"></i></div>
         <div>
           <div class="small text-muted fw-semibold">Customers (minimum {{ $w['min'] }})</div>
           <div class="ndg-kpi3-v">{{ $w['count'] }} / {{ $w['min'] }}
@@ -151,8 +173,8 @@
       </div>
     </div>
     <div class="col-12 col-md-4">
-      <div class="ndg-kpi3 h-100">
-        <div class="ndg-kpi3-icon" style="background:{{ $w['open'] ? '#e0f2f1;color:#007a7a' : '#e2e8f0;color:#475569' }}"><i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }}"></i></div>
+      <div class="ndg-kpi3 h-100 {{ $w['meets_min'] ? '' : 'ndg-kpi3-red' }} {{ !$w['meets_min'] && $canAddNow ? 'ndg-alert-click' : '' }}" {!! !$w['meets_min'] ? $addAttrs : '' !!}>
+        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? ($w['open'] ? '#e0f2f1;color:#007a7a' : '#e2e8f0;color:#475569') : '#ffe4e6;color:#e11d48' }}"><i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }}"></i></div>
         <div>
           <div class="small text-muted fw-semibold">Window to add customers</div>
           @if($w['open'] && $isActive)
@@ -697,6 +719,14 @@
   .ndg-kpi2-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: none; }
   .ndg-kpi2-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .ndg-kpi2-l { font-size: .68rem; color: #94a3b8; font-weight: 600; }
+  /* Customer-rule alerts: red while the round is short of its minimum, and clickable into the add-customer popup. */
+  .ndg-alert-red { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 12px; border: 1px solid #e11d48; background: #fff1f2; color: #9f1239; }
+  .ndg-alert-red .bx { color: #e11d48; }
+  .ndg-alert-red .btn .bx { color: #fff; }
+  .ndg-kpi3.ndg-kpi3-red { border-color: #e11d48; background: #fff1f2; }
+  .ndg-kpi3.ndg-kpi3-red .ndg-kpi3-v, .ndg-kpi3.ndg-kpi3-red .small { color: #9f1239 !important; }
+  .ndg-alert-click { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .ndg-alert-click:hover, .ndg-alert-click:focus { box-shadow: 0 6px 18px rgba(225, 29, 72, .22); transform: translateY(-1px); outline: none; }
   .ndg-kpi3 { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; display: flex; align-items: flex-start; gap: 12px; }
   .ndg-kpi3-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex: none; }
   .ndg-kpi3-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums; }
@@ -741,6 +771,20 @@
 
 @section('page-script')
 <script>
+// The red customer alerts are role=button: Enter/Space opens the popup like a click does.
+// Arriving with ?add=1 (from the My Dashboard alert) opens the add-customer popup straight away;
+// it waits for 'load' because Bootstrap is loaded deferred by Vite.
+(function () {
+  document.addEventListener('keydown', function (e) {
+    var el = e.target;
+    if ((e.key === 'Enter' || e.key === ' ') && el && el.classList && el.classList.contains('ndg-alert-click')) { e.preventDefault(); el.click(); }
+  });
+  if (new URLSearchParams(location.search).get('add') === '1' && document.getElementById('ndgRdAddModal')) {
+    window.addEventListener('load', function () {
+      if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgRdAddModal')).show(); }
+    });
+  }
+})();
 // Live countdown to the close of the add-customer window; reloads once it closes so the
 // add buttons disappear without a stale page accepting a click the server will refuse.
 (function () {

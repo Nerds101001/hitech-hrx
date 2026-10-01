@@ -689,6 +689,12 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertStringContainsString('id="ndgWinCountdown"', $html);
         $this->assertStringContainsString('1 of 1 targets editable', $html);
         $this->assertStringContainsString('data-bs-target="#ndgRdAddModal"', $html);
+        $this->assertMatchesRegularExpression('#class="ndg-alert-red mb-3 ndg-alert-click" id="ndgMinAlert" role=button tabindex=0 data-bs-toggle=modal data-bs-target=\#ndgRdAddModal#', $html, 'the red alert opens the Add Customer popup');
+        $this->assertStringContainsString('Add customers now', $html);
+
+        $dash = app(NinetyDayGoalController::class)->myDashboard($this->ask($this->rep, 'GET', '/x'))->render();
+        $this->assertStringContainsString('/performance/ninety-day-goals/round/' . $round->id . '?add=1', $dash, 'the My Dashboard alert links straight into the popup');
+        $this->assertStringContainsString('border-color:#e11d48', $dash);
 
         $round->update(['customer_window_until' => now()->subHour()]);
         $closed = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
@@ -696,6 +702,8 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertStringNotContainsString('id="ndgWinCountdown"', $closed);
         $this->assertStringContainsString('Ask admin/HR to reopen it', $closed);
         $this->assertStringContainsString('Adding closed', $closed);
+        $this->assertStringContainsString('id="ndgMinAlert"', $closed, 'still red: the round is short');
+        $this->assertStringNotContainsString('id="ndgMinAlert" role=button', $closed, 'but not clickable - adding is closed');
         $this->assertStringNotContainsString('data-bs-target="#ndgRdAddModal"', $closed, 'no Add Customer button once the window has closed');
     }
 

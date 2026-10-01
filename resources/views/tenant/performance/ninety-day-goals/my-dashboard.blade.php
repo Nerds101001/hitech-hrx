@@ -50,10 +50,12 @@
        be counted as stopping at zero, and neither said when the chance to fix it runs out. --}}
   @foreach($windowAlerts as $w)
     @php $r = $w['round']; @endphp
-    <div class="hitech-card mb-4" style="border-color:{{ $w['open'] ? '#f5a623' : '#dc3545' }};background:{{ $w['open'] ? '#fffbeb' : '#fef2f2' }}">
+    {{-- Red, and while the window is open the whole alert opens the round with the Add Customer popup. --}}
+    @if($w['open'])<a href="{{ route('performance.ninety-day-goals.round', $r->id) }}?add=1" class="d-block text-decoration-none ndg-dash-alert" title="Click to add customers">@endif
+    <div class="hitech-card mb-4" style="border-color:#e11d48;background:#fff1f2">
       <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div class="d-flex align-items-center gap-3">
-          <i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }} fs-2" style="color:{{ $w['open'] ? '#f5a623' : '#dc3545' }}"></i>
+          <i class="bx {{ $w['open'] ? 'bx-error-circle' : 'bx-lock-alt' }} fs-2" style="color:#e11d48"></i>
           <div>
             @if($w['open'])
               <div class="fw-bold text-dark">
@@ -77,10 +79,11 @@
           </div>
         </div>
         @if($w['open'])
-          <a href="{{ route('performance.ninety-day-goals.round', $r->id) }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-search-alt"></i> Search &amp; Add Customers</a>
+          <span class="btn btn-hitech-danger rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-plus"></i> Add customers now</span>
         @endif
       </div>
     </div>
+    @if($w['open'])</a>@endif
   @endforeach
 
   {{-- Select Program: a compact dropdown for small screens, real cards for the rest --}}
