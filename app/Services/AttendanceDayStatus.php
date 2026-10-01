@@ -58,6 +58,29 @@ class AttendanceDayStatus
     public const SHORT_LEAVE_PRESENT_MINUTES = 350;
 
     /**
+     * Put a day's two punches in order before they are saved. Some biometric reports list a
+     * day's punches reversed (evening first), and the import stored them as given - the
+     * evening punch became the check-in. A check-out before the check-in is either that
+     * (swap them) or, for someone on an overnight shift, an evening check-in whose check-out
+     * is the next morning (move the check-out to the next day).
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon} [checkIn, checkOut]
+     */
+    public static function orderPunches(?Carbon $in, ?Carbon $out, $shift = null): array
+    {
+        if (!$in || !$out || $out->gte($in)) {
+            return [$in, $out];
+        }
+        $overnight = $shift && $shift->start_time && $shift->end_time
+            && Carbon::parse($shift->end_time)->format('H:i:s') <= Carbon::parse($shift->start_time)->format('H:i:s');
+        if ($overnight && (int) $in->format('H') >= 12 && (int) $out->format('H') < 12) {
+            return [$in, $out->copy()->addDay()];
+        }
+
+        return [$out, $in];
+    }
+
+    /**
      * Minutes between the two punches, whichever order they were stored in.
      * The biometric report sometimes lists them the other way round (in
      * 18:07, out 10:22) or a night shift ends after midnight (in 19:41, out
