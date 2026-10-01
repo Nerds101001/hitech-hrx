@@ -137,7 +137,7 @@
                 <b class="small" style="min-width:44px;text-align:right;color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</b>
               </div>
             </td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">no status left</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">no status left</span>@endif</td>
           </tr>
         @empty
           <tr><td colspan="7" class="text-center text-muted p-4">No customers in this round.</td></tr>
@@ -270,7 +270,7 @@
             <td class="fw-semibold">{{ $r->goal->client_name }}</td>
             <td>{{ $r->brand }}</td>
             <td class="text-end">{{ $fmtL($r->potential) }}</td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
             <td>
               @if($r->overdueWeeks > 0)
                 <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>

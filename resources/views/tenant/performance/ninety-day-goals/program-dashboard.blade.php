@@ -297,7 +297,7 @@
                   @endfor
                   <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
                   <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-                  <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+                  <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="{{ 8 + $weeks }}" class="text-center text-muted p-5">No customers have been added to this program yet.</td></tr>
@@ -354,7 +354,7 @@
                 <tr>
                   <td class="ps-3 fw-semibold">{{ $r->goal->client_name }}</td>
                   <td class="small text-muted">{{ $name($r->user) }}</td>
-                  <td class="pe-3">@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-chip" style="background:#e2e8f0;color:#475569">No report</span>@endif</td>
+                  <td class="pe-3">@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-chip" style="background:#e2e8f0;color:#475569">No report</span>@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="3" class="text-center text-muted p-4">Nothing needs attention right now.</td></tr>
@@ -531,7 +531,7 @@
               @endfor
               <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
               <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
             </tr>
           @endforeach
           </tbody>
@@ -592,7 +592,7 @@
                   <td class="small text-muted">{{ $name($r->user) }}</td>
                   <td class="small text-muted">{{ $r->goal->product }}</td>
                   <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-                  <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+                  <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="5" class="text-center text-muted p-4">No qualifying orders on this page — clear filters or turn the page.</td></tr>
@@ -664,7 +664,7 @@
               <td class="fw-semibold">{{ $r->goal->client_name }}</td>
               <td>{{ $r->brand }}</td>
               <td class="text-end">{{ $fmtL($r->potential) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
               <td class="pe-4">
                 @if($r->overdueWeeks > 0)
                   <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>

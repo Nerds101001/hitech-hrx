@@ -106,7 +106,7 @@
           @endfor
           <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
           <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-          <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+          <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
           <td class="small" style="max-width:200px;white-space:normal">
             @if($last)
               <div class="text-dark">{{ \Illuminate\Support\Str::limit($last['text'], 70) }}</div>

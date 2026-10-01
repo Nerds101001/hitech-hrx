@@ -264,7 +264,7 @@
               <thead class="small text-uppercase text-muted">
                 <tr>
                   <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹ L)</th><th style="min-width:150px">Expected Stage</th>
-                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th style="min-width:150px">Next Follow-up Date</th><th class="pe-3"></th>
+                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th class="pe-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -288,10 +288,10 @@
                       <option value="">Choose…</option>
                       @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($ck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
                     </select>
+                    @if($rowsByGoal->has($g->id))<div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $rowsByGoal[$g->id]])</div>@endif
                   </td>
                   <td><input type="text" class="form-control ndg-wk-comment" maxlength="1000" placeholder="Optional note" value="{{ optional($ck)->comment }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
                   <td><input type="text" class="form-control ndg-wk-next-action" maxlength="255" placeholder="e.g. Share quotation" value="{{ optional($ck)->next_action }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
-                  <td><input type="date" class="form-control ndg-wk-next-date" value="{{ optional($ck)->next_follow_up_date ? $ck->next_follow_up_date->format('Y-m-d') : '' }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
                   <td class="pe-3 text-end">
                     @if($canEdit && $isActive)
                       <button type="button" class="btn btn-sm btn-hitech-cancel ndg-wk-save">Save</button>
@@ -299,7 +299,7 @@
                   </td>
                 </tr>
               @empty
-                <tr><td colspan="10" class="text-center text-muted p-5">No target customers yet — add one from Customer Summary.</td></tr>
+                <tr><td colspan="9" class="text-center text-muted p-5">No target customers yet — add one from Customer Summary.</td></tr>
               @endforelse
               </tbody>
             </table>
@@ -508,7 +508,7 @@
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Goal Amount</span><b>₹{{ $fmtL($g->monthly_potential) }} L</b></div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Expected Order Date</span><b>{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</b></div>
                     <div class="d-flex justify-content-between small py-1"><span class="text-muted">Current Status</span>
-                      @if(optional($r)->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif
+                      @if(optional($r)->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif
                     </div>
                   </div>
                 </div>
@@ -594,7 +594,7 @@
               <td class="ps-4 fw-semibold">{{ $r->goal->client_name }}</td>
               <td class="small text-muted">{{ $r->goal->product }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
             </tr>
           @empty
             <tr><td colspan="4" class="text-center text-muted p-4">No qualifying orders yet.</td></tr>

@@ -272,6 +272,29 @@
 
   {{-- ═══════════════════ Orders & Results ═══════════════════ --}}
   <div class="ndg-pr-section d-none" data-section="orders">
+    {{-- Marked as an order by the salesperson, but the Sales Report has no sale for the customer in
+         this program's months yet. These do not count as converted until the sale is entered there. --}}
+    @php $awaiting = $rows->filter(fn ($r) => in_array($r->status, $G::ORDER_STATUSES, true) && $r->achieved <= 0)->values(); @endphp
+    <div class="hitech-card mb-6" id="ndgAwaitingOrders" @if($awaiting->isNotEmpty()) style="border-color:#f59e0b" @endif>
+      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Orders awaiting Sales Report ({{ $awaiting->count() }})</div><div class="small text-muted">Marked as an order, but no sale for the customer is on the Sales Report yet - they count once it is</div></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th class="ps-4">Customer</th><th>Salesperson</th><th>Product</th><th class="pe-4">Status</th></tr></thead>
+          <tbody>
+          @forelse($awaiting as $r)
+            <tr>
+              <td class="ps-4 fw-semibold text-dark">{{ $r->goal->client_name }}</td>
+              <td>{{ trim(optional($r->user)->first_name . ' ' . optional($r->user)->last_name) }}</td>
+              <td class="small text-muted">{{ $r->goal->product }}</td>
+              <td class="pe-4"><span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])</td>
+            </tr>
+          @empty
+            <tr><td colspan="4" class="text-center text-muted p-4">None - every order marked so far is on the Sales Report.</td></tr>
+          @endforelse
+          </tbody>
+        </table>
+      </div>
+    </div>
     <div class="hitech-card mb-6">
       <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Qualifying orders</div><div class="small text-muted">Real Sales Report sales only, never typed in</div></div>
       <div class="card-body p-0 table-responsive">
@@ -284,7 +307,7 @@
               <td class="small text-muted">{{ $name($r->user) }}</td>
               <td class="small text-muted">{{ $r->goal->product }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
             </tr>
           @empty
             <tr><td colspan="5" class="text-center text-muted p-4">No qualifying orders yet.</td></tr>
@@ -313,7 +336,7 @@
               <td class="fw-semibold">{{ $r->goal->client_name }}</td>
               <td>{{ $r->brand }}</td>
               <td class="text-end">{{ $fmtL($r->potential) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
               <td class="pe-4">
                 @if($r->overdueWeeks > 0)<span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}</span>@else<span class="ndg-none">up to date</span>@endif
               </td>

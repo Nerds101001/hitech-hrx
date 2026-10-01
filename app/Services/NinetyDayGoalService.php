@@ -33,6 +33,12 @@ class NinetyDayGoalService
     /** The choices on the sheet's drop-down, in its order. */
     public const STATUSES = ['On Track', 'Off Track', 'Trial Order', 'Regular Order', 'No Report', 'Dropped', 'Transferred'];
 
+    /**
+     * The statuses that claim an order. A claim only counts once the Sales Report shows a sale
+     * for that customer during the round (see orderCheck()) - the amount is never typed here.
+     */
+    public const ORDER_STATUSES = ['Trial Order', 'Regular Order'];
+
     /** Chip colours [background, text], close to the sheet's so the team recognises them at a glance. */
     /**
      * [background, text]. A deliberate progression, not arbitrary colours: HRX teal for the
@@ -567,20 +573,21 @@ class NinetyDayGoalService
         $today = $now->copy()->startOfDay();
         $round = self::activeRound($user);
         $errors = [];
+        $notes = [];
         $saved = 0;
 
         if ($actor->id !== $target->id && !self::managesEveryone($actor)) {
-            return [0, ['You cannot fill this in for someone else.']];
+            return [0, ['You cannot fill this in for someone else.'], []];
         }
         if (!$round) {
-            return [0, ['You have no active 90-day round.']];
+            return [0, ['You have no active 90-day round.'], []];
         }
         if ($week < 0 || $week >= self::weeksOf($round)) {
-            return [0, ['That week does not exist.']];
+            return [0, ['That week does not exist.'], []];
         }
         $due = self::dueOn($round, $week);
         if ($due->gt($today)) {
-            return [0, ['Week ' . $week . ' is not due until ' . $due->format('D d M') . '.']];
+            return [0, ['Week ' . $week . ' is not due until ' . $due->format('D d M') . '.'], []];
         }
         $late = $today->gt($due);
 
@@ -620,7 +627,9 @@ class NinetyDayGoalService
                         'round_id' => $round->id, 'tenant_id' => $goal->tenant_id, 'due_on' => $due->toDateString(),
                         'status' => $status, 'comment' => $comment !== '' ? $comment : null,
                         'next_action' => $nextAction !== '' ? $nextAction : null,
-                        'next_follow_up_date' => $nextFollowUp ?: null,
+                        // The weekly table no longer has a date box (2026-10-01): keep a date already on
+                        // record unless a new one is sent, so re-saving a week never wipes it.
+                        'next_follow_up_date' => $nextFollowUp ?: optional($existing)->next_follow_up_date,
                         // First time: this is when/who/how-late it was actually reported, and that never changes
                         // again. Editing later only updates the content and appends who touched it and when.
                         'submitted_at'   => $isFirst ? $now : $existing->submitted_at,
@@ -634,11 +643,64 @@ class NinetyDayGoalService
                 self::writeLegacyWeek($goal, $week, $status);
                 $saved++;
             });
+
+            if (in_array($status, self::ORDER_STATUSES, true)) {
+                if (self::moveToSalesReport($goal)) {
+                    $notes[] = "{$goal->client_name} moved from your Sales Pipeline to the Sales Report.";
+                }
+                if (!self::orderCheck($goal)['confirmed']) {
+                    $notes[] = "{$goal->client_name}: order noted - it counts once the sale appears on the Sales Report.";
+                }
+            }
         }
 
         self::completeTaskIfDone($user, $round, $week);
 
-        return [$saved, $errors];
+        return [$saved, $errors, $notes];
+    }
+
+    /**
+     * An order marked on a customer that is still in the Sales Pipeline moves it to the Sales
+     * Report - the same thing setting the Pipeline's own stage to "Order" does
+     * (SalesPipelineController::update: status_stage Order => is_locked). Returns whether it moved.
+     */
+    public static function moveToSalesReport(NinetyDayGoal $goal): bool
+    {
+        if (!$goal->sales_pipeline_id) {
+            return false;
+        }
+        $p = \App\Models\SalesPipeline::withoutGlobalScopes()->find($goal->sales_pipeline_id);
+        if (!$p || $p->is_locked) {
+            return false;   // gone, or already on the Sales Report
+        }
+        $p->update(['status_stage' => 'Order', 'is_locked' => true]);
+
+        return true;
+    }
+
+    /**
+     * Whether a customer's order is backed by the Sales Report: any sale for its pipeline row in
+     * the round's months up to today. Accepts a goal or a dashboard() row (which already carries
+     * achieved). ['claimed' => order status?, 'confirmed' => sale found?, 'amount' => lakh].
+     */
+    public static function orderCheck($goalOrRow): array
+    {
+        if ($goalOrRow instanceof NinetyDayGoal) {
+            $goal = $goalOrRow;
+            $status = optional($goal->checkins()->whereNotNull('status')->orderByDesc('week_no')->first())->status;
+            $amount = 0.0;
+            if ($goal->sales_pipeline_id && $goal->round) {
+                $months = array_filter(self::roundMonths($goal->round), fn ($ym) => $ym <= Carbon::today()->format('Y-m'));
+                $amount = $months ? (float) DB::table('sales_pipeline_months')->where('sales_pipeline_id', $goal->sales_pipeline_id)
+                    ->whereIn('month_year', $months)->sum('sale_amount') : 0.0;
+            }
+        } else {
+            $status = $goalOrRow->status ?? null;
+            $amount = isset($goalOrRow->achieved) ? (float) $goalOrRow->achieved : null;
+        }
+        $claimed = in_array($status, self::ORDER_STATUSES, true);
+
+        return ['claimed' => $claimed, 'confirmed' => $claimed && $amount !== null && $amount > 0, 'amount' => (float) $amount, 'known' => $amount !== null];
     }
 
     /**
@@ -1113,7 +1175,9 @@ class NinetyDayGoalService
         $onTime = $due->filter(fn ($c) => $c->status !== null && !$c->is_late)->count();
         $discipline = fn ($c) => $c->count() > 0 ? round($c->filter(fn ($x) => $x->status !== null && !$x->is_late)->count() / $c->count() * 100) : null;
 
-        $converted = ['Trial Order', 'Regular Order'];
+        // Converted = an order status the Sales Report backs up with a sale in the round. An order
+        // marked with no sale yet is "awaiting Sales Report" and does not count until it arrives.
+        $isConverted = fn ($r) => in_array($r->status, self::ORDER_STATUSES, true) && $r->achieved > 0;
 
         // "Total Participants" means people enrolled, not people who have already nominated
         // customers. It counted distinct owners of goal rows, so a brand-new program read 0
@@ -1131,14 +1195,15 @@ class NinetyDayGoalService
         $cards = array_merge($sum($rows), [
             'people'     => $enrolledCount,
             'withGoals'  => $rows->pluck('user.id')->unique()->count(),
-            'converted'  => $rows->whereIn('status', $converted)->count(),
+            'converted'  => $rows->filter($isConverted)->count(),
+            'ordersAwaiting' => $rows->filter(fn ($r) => in_array($r->status, self::ORDER_STATUSES, true) && $r->achieved <= 0)->count(),
             'onTrack'    => $rows->where('status', 'On Track')->count(),
             'discipline' => $discipline($due),
             'dueTotal'   => $due->count(),
             'onTimeTotal' => $onTime,
         ]);
 
-        $users = $rows->groupBy('user.id')->map(function ($c) use ($sum, $discipline, $goals, $converted) {
+        $users = $rows->groupBy('user.id')->map(function ($c) use ($sum, $discipline, $goals, $isConverted) {
             $u = $c->first()->user;
             $mine = $goals->where('user_id', $u->id)->flatMap(fn ($g) => $g->checkins->filter(fn ($x) => $x->due_on->lte(Carbon::today())));
 
@@ -1146,7 +1211,7 @@ class NinetyDayGoalService
                 'id'         => $u->id,
                 'name'       => trim($u->first_name . ' ' . $u->last_name),
                 'department' => optional($u->department)->name,
-                'converted'  => $c->whereIn('status', $converted)->count(),
+                'converted'  => $c->filter($isConverted)->count(),
                 'discipline' => $discipline($mine),
                 'late'       => $mine->where('is_late', true)->count(),
                 'missing'    => $mine->whereNull('status')->count(),
@@ -1191,7 +1256,7 @@ class NinetyDayGoalService
             'qualifyingOrders'  => $withOrders->count(),
             'totalOrderValue'   => round((float) $withOrders->sum('achieved'), 2),
             'avgOrderValue'     => $withOrders->count() > 0 ? round($withOrders->sum('achieved') / $withOrders->count(), 2) : null,
-            'customersConverted' => $rows->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
+            'customersConverted' => $rows->filter($isConverted)->count(),
             'repeatOrders'      => $withOrders->where('repeat', true)->count(),
         ];
 

@@ -397,6 +397,54 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertSame(Goals::STATUSES, array_keys(Goals::STATUS_COLORS));
     }
 
+    public function test_an_order_status_moves_a_pipeline_customer_to_the_sales_report_and_waits_for_a_real_sale(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $pid = $this->pipeline($this->rep, 'Order Co', 'P', false);   // still in the Sales Pipeline
+        $g = $this->goal($this->rep, $round, 'Order Co');
+        $g->update(['sales_pipeline_id' => $pid]);
+        Goals::ensureCheckins($round);
+
+        [$saved, $errors, $notes] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Trial Order', 'comment' => '']]);
+
+        $this->assertSame([1, []], [$saved, $errors]);
+        $p = DB::table('sales_pipelines')->find($pid);
+        $this->assertSame(1, (int) $p->is_locked, 'on the Sales Report now');
+        $this->assertSame('Order', $p->status_stage);
+        $this->assertStringContainsString('moved from your Sales Pipeline to the Sales Report', implode(' ', $notes));
+        $this->assertStringContainsString('counts once the sale appears on the Sales Report', implode(' ', $notes));
+
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertSame(0, $cards['converted'], 'an order with no sale on the Sales Report is not converted yet');
+        $this->assertSame(1, $cards['ordersAwaiting']);
+        $this->assertFalse(Goals::orderCheck($g->fresh())['confirmed']);
+
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => '2026-10', 'sale_amount' => 1.75, 'created_at' => now(), 'updated_at' => now()]);
+
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertSame(1, $cards['converted'], 'confirmed by the Sales Report sale');
+        $this->assertSame(0, $cards['ordersAwaiting']);
+        $check = Goals::orderCheck($g->fresh());
+        $this->assertTrue($check['confirmed']);
+        $this->assertEquals(1.75, $check['amount'], 'the amount comes from the Sales Report');
+    }
+
+    public function test_re_saving_a_week_keeps_a_follow_up_date_already_on_record(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $g = $this->goal($this->rep, $round);
+        Goals::ensureCheckins($round);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track', 'comment' => '', 'next_follow_up_date' => '2026-10-09']]);
+
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'Off Track', 'comment' => 'Buyer away', 'next_follow_up_date' => null]]);
+
+        $c = $g->checkins()->where('week_no', 0)->first();
+        $this->assertSame('Off Track', $c->status);
+        $this->assertSame('2026-10-09', $c->next_follow_up_date->format('Y-m-d'));
+    }
+
     public function test_a_status_on_the_monday_needs_no_comment_and_is_not_late(): void
     {
         $this->at(self::MONDAY);
@@ -691,6 +739,7 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertStringContainsString('data-bs-target="#ndgRdAddModal"', $html);
         $this->assertMatchesRegularExpression('#class="ndg-alert-red mb-3 ndg-alert-click" id="ndgMinAlert" role=button tabindex=0 data-bs-toggle=modal data-bs-target=\#ndgRdAddModal#', $html, 'the red alert opens the Add Customer popup');
         $this->assertStringContainsString('Add customers now', $html);
+        $this->assertStringNotContainsString('Next Follow-up Date', $html, 'the weekly table has no follow-up date column any more');
 
         $dash = app(NinetyDayGoalController::class)->myDashboard($this->ask($this->rep, 'GET', '/x'))->render();
         $this->assertStringContainsString('/performance/ninety-day-goals/round/' . $round->id . '?add=1', $dash, 'the My Dashboard alert links straight into the popup');

@@ -228,7 +228,7 @@
             @endfor
             <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
             <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
             <td class="small text-muted">{{ $nextAction($r->status) }}</td>
             <td><a href="{{ route('performance.ninety-day-goals.round', $r->goal->round_id) }}" class="text-muted" title="View in My Programs"><i class="bx bx-dots-vertical-rounded"></i></a></td>
           </tr>

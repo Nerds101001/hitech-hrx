@@ -550,7 +550,7 @@ class NinetyDayGoalController extends Controller
                 'target'    => round($target, 2),
                 'achieved'  => round((float) $c->sum('achieved'), 2),
                 'pct'       => $target > 0 ? round($c->sum('achieved') / $target * 100, 1) : null,
-                'converted' => $c->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
+                'converted' => $c->filter(fn ($x) => in_array($x->status, Goals::ORDER_STATUSES, true) && $x->achieved > 0)->count(),
             ];
         }
     }
@@ -1431,10 +1431,10 @@ class NinetyDayGoalController extends Controller
                 'next_action' => $e['next_action'] ?? '', 'next_follow_up_date' => $e['next_follow_up_date'] ?? null,
             ];
         }
-        [$saved, $errors] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
+        [$saved, $errors, $notes] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
 
-        return response()->json(['success' => $saved > 0 && !$errors, 'saved' => $saved, 'errors' => $errors,
-            'message' => $errors ? implode(' ', $errors) : "Saved {$saved} status" . ($saved === 1 ? '' : 'es') . '.'], $errors && !$saved ? 422 : 200);
+        return response()->json(['success' => $saved > 0 && !$errors, 'saved' => $saved, 'errors' => $errors, 'notes' => $notes,
+            'message' => trim(($errors ? implode(' ', $errors) : "Saved {$saved} status" . ($saved === 1 ? '' : 'es') . '.') . ' ' . implode(' ', $notes))], $errors && !$saved ? 422 : 200);
     }
 
     // ── change / remove a goal ───────────────────────────────────────────
