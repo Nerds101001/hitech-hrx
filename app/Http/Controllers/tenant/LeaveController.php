@@ -786,9 +786,42 @@ class LeaveController extends Controller
   private function markOutdoorDutyAttendance(OutdoorDuty $duty): void
   {
     try {
-      $date       = $duty->date;
-      $attendance = Attendance::firstOrNew(['user_id' => $duty->user_id,
-        'check_in_time' => $date->copy()->setTime(9, 0, 0)]);
+      $date = $duty->date;
+      // The person's row for that day, whatever time it starts at. This used to
+      // look only for a row starting at exactly 09:00, so a day that already had
+      // a biometric punch (10:01) or a CCare mark (09:30) got a second row
+      // beside it - three duplicate days by 30 Sep 2026.
+      $existing = Attendance::where('user_id', $duty->user_id)
+        ->whereDate('check_in_time', $date->toDateString())
+        ->orderByDesc('is_outdoor_duty')
+        ->first();
+
+      if ($existing && !$existing->is_outdoor_duty) {
+        $status   = strtolower((string) $existing->status);
+        $onLeave  = $existing->leave_request_id || in_array($status, ['leave', 'paid_leave', 'unpaid_leave', 'on_leave', 'half-day'], true);
+        $realIn   = $existing->check_in_time && $existing->check_in_time->format('H:i') !== '00:00';
+        $link     = ['is_outdoor_duty' => true, 'outdoor_duty_id' => $duty->id];
+
+        if (!$onLeave && ($status === 'absent' || !$realIn || !$existing->check_out_time)) {
+          // Marked absent, or a missed punch: the approved duty explains the
+          // day. A real check-in is kept; only what is missing is filled.
+          $existing->update($link + [
+            'check_in_time'  => ($realIn && $status !== 'absent') ? $existing->check_in_time : $date->copy()->setTime(9, 0, 0),
+            'check_out_time' => $date->copy()->setTime(18, 0, 0),
+            'status'         => Attendance::STATUS_PRESENT,
+            'approved_by_id' => $duty->approved_by_id,
+            'approved_at'    => now(),
+            'admin_reason'   => 'Outdoor Duty',
+          ]);
+        } else {
+          // A real working day or a leave: keep it as it is, just tie the duty to it.
+          $existing->updateQuietly($link);
+        }
+
+        return;
+      }
+
+      $attendance = $existing ?: new Attendance();
 
       // Don't overwrite a real biometric punch — only write if no record or if it's already an OD record
       if (!$attendance->exists || $attendance->is_outdoor_duty) {
