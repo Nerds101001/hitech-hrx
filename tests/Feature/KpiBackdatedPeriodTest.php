@@ -265,8 +265,10 @@ class KpiBackdatedPeriodTest extends TestCase
             'target_value' => 100,
             'max_marks' => 10,
         ]);
-        $from = Carbon::today()->startOfMonth();
-        $to = Carbon::today()->endOfMonth();
+        // Last month, which is over: "this month" has no finished working day on the 1st (today
+        // itself is never scored), so the test failed on the first of every month.
+        $from = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+        $to = $from->copy()->endOfMonth();
 
         $this->assertSame(
             0.0,
