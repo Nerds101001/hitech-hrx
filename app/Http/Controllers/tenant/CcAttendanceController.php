@@ -80,7 +80,7 @@ class CcAttendanceController extends Controller
             if (str_contains($s, 'home') || str_contains($s, 'wfh')) return 'WFH';
             if (in_array($s, ['leave', 'paid-leave', 'unpaid-leave', 'on-leave'], true)) return 'L';
             if ($s === 'present' && $att->check_in_time) {
-                $workMins = $att->check_out_time ? $att->check_in_time->diffInMinutes($att->check_out_time) : 0;
+                $workMins = \App\Services\AttendanceDayStatus::workedMinutes($att->check_in_time, $att->check_out_time);   // unsigned: punches can be stored reversed
                 if ($workMins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {
                     if ($att->check_in_time->isSunday()) return 'PS';
                     if (\App\Models\Holiday::appliesTo($person, $att->check_in_time)) return 'HP';

@@ -63,7 +63,7 @@ class AttendanceController extends Controller
         'date' => $attendance->created_at->format(AppConstants::DateFormat),
         'checkInTime' => $attendance->check_in_time->format(AppConstants::TimeFormat),
         'checkOutTime' => $attendance->check_out_time->format(AppConstants::TimeFormat),
-        'totalHours' => round($attendance->check_in_time->diffInHours($attendance->check_out_time), 2),
+        'totalHours' => round(\App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time) / 60, 2),
         'shift' => $attendance->shift->name,
         'status' => $attendance->status,
         'lateReason' => $attendance->late_reason,

@@ -549,21 +549,21 @@ class UserDashboardController extends Controller
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $thisWeekWorkingHours = Attendance::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $todayHours = Attendance::whereDate('created_at', now())
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
@@ -1091,7 +1091,7 @@ class UserDashboardController extends Controller
             }
 
             if ($attendanceForResolve && $attendance->check_in_time && $attendance->check_out_time) {
-                $totalHours += $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
+                $totalHours += \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time) / 60;
                 $workCount++;
             }
 

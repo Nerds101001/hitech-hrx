@@ -165,6 +165,9 @@ class AttendanceService implements IAttendance
         $shiftEndStr = Carbon::parse($shift->end_time)->toTimeString();
         $shiftStartTime = Carbon::parse($dateStr . ' ' . $shiftStartStr);
         $shiftEndTime = Carbon::parse($dateStr . ' ' . $shiftEndStr);
+        if ($shiftEndTime->lte($shiftStartTime)) {
+            $shiftEndTime->addDay();   // a night shift ends the next morning
+        }
         $originalShiftMinutes = $shiftStartTime->diffInMinutes($shiftEndTime);
         $totalShiftMinutes = $originalShiftMinutes;
 
@@ -226,7 +229,9 @@ class AttendanceService implements IAttendance
 
         // --- Required Hours Calculation ---
         if ($checkIn && $checkOut) {
-            $minutesWorked = $checkIn->diffInMinutes($checkOut);
+            // Unsigned: Carbon 3 returns a negative number when the punches are stored reversed,
+            // which marked the day Absent and rejected an approved short leave.
+            $minutesWorked = \App\Services\AttendanceDayStatus::workedMinutes($checkIn, $checkOut);
             $shortLeaveMinutes = $approvedShortLeave ? ($approvedShortLeave->duration_hours * 60) : 0;
             
             // Standard required minutes for Full Day (8 hours = 480 mins)
