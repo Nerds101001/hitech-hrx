@@ -45,7 +45,11 @@
     <div>
       <nav class="small text-muted mb-1">
         <a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i>
-        <a href="{{ route('performance.ninety-day-goals.index') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i>
+        @if($round->program_id && \App\Services\NinetyDayGoalService::seesEveryone(auth()->user()))
+          <a href="{{ route('performance.ninety-day-goals.program', $round->program_id) }}" class="text-muted">{{ optional($round->program)->name ?? 'Program' }}</a> <i class="bx bx-chevron-right"></i>
+        @else
+          <a href="{{ route('performance.ninety-day-goals.my-dashboard') }}" class="text-muted">My 90-Day Goals</a> <i class="bx bx-chevron-right"></i>
+        @endif
         {{ $title }} <i class="bx bx-chevron-right"></i> Weekly Submission
       </nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">
@@ -62,6 +66,31 @@
   </div>
 
   <div class="px-4">
+
+  {{-- Order detected from the Sales Report a second time for a customer that already had one:
+       never assumed to be an upsell, confirmed here first. --}}
+  @if(($pendingUpsells ?? collect())->isNotEmpty() && ($canEdit ?? false))
+    <div class="hitech-card mb-6 mx-4" style="border-color:#f5a623">
+      <div class="card-body p-4 border-bottom">
+        <h6 class="fw-bold mb-0 text-dark"><i class="bx bx-receipt" style="color:#f5a623"></i> {{ $pendingUpsells->count() }} order{{ $pendingUpsells->count() === 1 ? '' : 's' }} detected from the Sales Report need confirming</h6>
+        <div class="small text-muted">A customer already had one order this round, and the Sales Report shows another. Confirm it is a repeat order / upsell, or leave it to fill in yourself.</div>
+      </div>
+      <div class="card-body p-0">
+        @foreach($pendingUpsells as $ck)
+          <div class="ndg-upsell-row" data-checkin="{{ $ck->id }}">
+            <div class="flex-grow-1">
+              <div class="fw-semibold text-dark">{{ optional($ck->goal)->client_name }} <span class="text-muted fw-normal">· W{{ $ck->week_no }}, due {{ optional($ck->due_on)->format('d M') }}</span></div>
+              <div class="small text-muted">{{ optional($ck->goal)->product }} · {{ optional($ck->goal)->brand }}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-hitech ndg-upsell-yes">Yes, it's an upsell</button>
+              <button type="button" class="btn btn-sm btn-hitech-cancel ndg-upsell-no">No</button>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
 
   {{-- KPI cards + Submit All Updates --}}
   <div class="row g-3 mb-6 align-items-stretch">
@@ -414,15 +443,23 @@
                 <div class="fw-bold text-dark">Weekly Timeline &amp; Comments</div>
               </div>
               <div class="card-body p-4 d-flex flex-wrap gap-3">
-                @forelse($g->checkins->whereNotNull('status') as $ck)
+                {{-- Weeks with a status, a comment, or already due - a lead or admin can comment
+                     on a week before the salesperson has filled it in. --}}
+                @forelse($g->checkins->filter(fn ($c) => $c->status !== null || $c->notes->isNotEmpty() || $c->due_on->lte(today())) as $ck)
                   <div class="ndg-rd-wk-card" style="min-width:150px">
                     <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
-                    <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status }}</span>
+                    <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status ?? 'Not submitted' }}</span>
                     <div class="small mt-1">{{ $ck->comment ?: '—' }}</div>
                     @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
                     @foreach($ck->notes as $n)
-                      <div class="small mt-1 pt-1 border-top"><b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}</div>
+                      <div class="small mt-1 pt-1 border-top">
+                        @if($canRemoveComment ?? false)<button type="button" class="ndg-note-del" data-id="{{ $n->id }}" title="Remove comment">&times;</button>@endif
+                        <b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}
+                      </div>
                     @endforeach
+                    @if($canComment ?? false)
+                      <button type="button" class="btn btn-link btn-sm p-0 mt-1 ndg-addnote" data-goal="{{ $g->id }}" data-week="{{ $ck->week_no }}"><i class="bx bx-comment-add"></i> Add comment</button>
+                    @endif
                   </div>
                 @empty
                   <div class="small text-muted p-2">No weekly updates yet.</div>
@@ -629,6 +666,9 @@
   .ndg-src { font-size: .65rem; }
   #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
   #ndgWeeklyTable .ndg-needs-stage { border-color: #f5a623 !important; box-shadow: 0 0 0 1px #f5a623; }
+  .ndg-upsell-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+  .ndg-upsell-row:last-child { border-bottom: none; }
+  .ndg-note-del { border: 0; background: none; color: #ef4444; float: right; line-height: 1; font-size: 1rem; padding: 0 2px; }
 </style>
 @endsection
 
@@ -639,6 +679,8 @@
   var ROUND_USER_ID = {{ (int) $round->user_id }};
   var SELECTED_WEEK = {{ (int) $selectedWeek }};
   var URLS = {
+    confirmUpsell: '{{ route('performance.ninety-day-goals.confirm-upsell') }}',
+    notes: '{{ url('performance/ninety-day-goals/notes') }}',
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
     update: '{{ url('performance/ninety-day-goals') }}',
     customers: '{{ route('performance.ninety-day-goals.pipeline-customers') }}',
@@ -648,6 +690,44 @@
     return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF }, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
+
+  // ── comments on a customer's week: add (owner, lead, admin/HR) / remove (admin/HR) ──
+  document.addEventListener('click', function (e) {
+    var add = e.target.closest ? e.target.closest('.ndg-addnote') : null;
+    if (add) {
+      var body = window.prompt('Comment for W' + add.getAttribute('data-week') + ':');
+      if (body === null || !body.trim()) { return; }
+      add.disabled = true;
+      post(URLS.notes, 'POST', { goal_id: parseInt(add.getAttribute('data-goal'), 10), week_no: parseInt(add.getAttribute('data-week'), 10), body: body.trim() }).then(function (j) {
+        if (!j.success) { add.disabled = false; alert(j.message || 'Could not save the comment.'); return; }
+        location.reload();
+      }).catch(function () { add.disabled = false; alert('Request failed. Try again.'); });
+      return;
+    }
+    var del = e.target.closest ? e.target.closest('.ndg-note-del') : null;
+    if (del) {
+      if (!confirm('Remove this comment?')) { return; }
+      post(URLS.notes + '/' + del.getAttribute('data-id'), 'DELETE').then(function (j) {
+        if (!j.success) { alert(j.message || 'Could not remove it.'); return; }
+        location.reload();
+      }).catch(function () { alert('Request failed. Try again.'); });
+    }
+  });
+
+  // ── upsell confirmation ──
+  document.querySelectorAll('.ndg-upsell-row').forEach(function (row) {
+    var checkinId = parseInt(row.getAttribute('data-checkin'), 10);
+    function answer(isUpsell) {
+      var buttons = row.querySelectorAll('button');
+      buttons.forEach(function (b) { b.disabled = true; });
+      post(URLS.confirmUpsell, 'POST', { checkin_id: checkinId, is_upsell: isUpsell }).then(function (j) {
+        if (!j.success) { buttons.forEach(function (b) { b.disabled = false; }); alert(j.message || 'Could not save that.'); return; }
+        location.reload();
+      }).catch(function () { buttons.forEach(function (b) { b.disabled = false; }); alert('Request failed. Try again.'); });
+    }
+    row.querySelector('.ndg-upsell-yes').addEventListener('click', function () { answer(true); });
+    row.querySelector('.ndg-upsell-no').addEventListener('click', function () { answer(false); });
+  });
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
   // ── top-level sub-tabs ──

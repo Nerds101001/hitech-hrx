@@ -364,10 +364,11 @@ class NinetyDayGoalsTest extends TestCase
     {
         $week4 = $this->pendingUpsellCheckin();
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $week4->round_id)->render();
 
         $this->assertStringContainsString('RepeatCo', $html);
-        $this->assertStringContainsString("it's an upsell", $html);
+        $this->assertStringContainsString("it's an upsell", $html, 'confirmed on the program page now');
     }
 
     /** A goal whose week 4 checkin is already flagged needs_upsell_confirm (week 0 auto-filled first). */
@@ -550,11 +551,14 @@ class NinetyDayGoalsTest extends TestCase
         $this->goal($this->rep, $round, 'Mine Ltd');
         $this->goal($this->rep2, Goals::roundFor($this->rep2), 'Theirs Ltd');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class,
+            app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals')), 'the old page sends them to My Programs');
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
 
         $this->assertStringContainsString('Mine Ltd', $html);
         $this->assertStringNotContainsString('Theirs Ltd', $html);
-        $this->assertStringContainsString('Add customers', $html);
+        $this->assertStringContainsString('Add Customer', $html);
         $this->assertStringNotContainsString('Proactive', $html, 'that column is not part of this tracker');
 
         $away = app(NinetyDayGoalController::class)->index($this->ask($this->outsider, 'GET', '/performance/ninety-day-goals'));
@@ -571,16 +575,15 @@ class NinetyDayGoalsTest extends TestCase
         Goals::submit($this->rep, 0, [$a->id => ['status' => 'Regular Order', 'comment' => 'Second PO in']]);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals', ['user_id' => $this->rep->id]))->render();
-        $this->assertStringContainsString('Alpha Ltd', $html);
-        $this->assertStringContainsString('Regular Order', $html);
-        $this->assertStringContainsString('<div class="ndg-n ndg-n-status">Second PO in</div>', $html, 'the comment sits in its own cell beside the status');
-        $this->assertStringContainsString('Beta Ltd', $html, 'the whole team is in one table; the salesperson filter narrows it on the page');
+        Auth::setUser($admin);
+        // Filtered by customer: the table pages through everyone's real data in this database.
+        $alpha = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Alpha Ltd']))->render();
+        $this->assertStringContainsString('Alpha Ltd', $alpha);
+        $this->assertStringContainsString('Regular Order', $alpha);
+        $this->assertStringContainsString('Beta Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Beta Ltd']))->render(), 'the whole team on the Program Dashboard');
 
-        $all = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
-        $this->assertStringContainsString('Alpha Ltd', $all);
-        $this->assertStringContainsString('Beta Ltd', $all);
-        $this->assertStringContainsString('Statuses submitted, week by week', $all);
+        $own = app(NinetyDayGoalController::class)->roundDetail($this->ask($admin, 'GET', '/x'), Goals::activeRound($this->rep)->id)->render();
+        $this->assertStringContainsString('Second PO in', $own, "and the status comment on that person's program page");
     }
 
     public function test_a_manager_sees_only_their_team(): void
@@ -591,7 +594,8 @@ class NinetyDayGoalsTest extends TestCase
         $this->goal($this->rep, Goals::roundFor($this->rep), 'Team Ltd');
         $this->goal($this->rep2, Goals::roundFor($this->rep2), 'Stranger Ltd');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview']))->render();
+        Auth::setUser($manager);
+        $html = app(NinetyDayGoalController::class)->programDashboard($this->ask($manager, 'GET', '/x'))->render();
 
         $this->assertStringContainsString('Team Ltd', $html);
         $this->assertStringNotContainsString('Stranger Ltd', $html);
@@ -912,23 +916,19 @@ class NinetyDayGoalsTest extends TestCase
         $idle = $this->person($this->sales);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
-
-        $this->assertSame(1, substr_count($html, 'id="ndgTable"'), 'one table for everyone');
-        $this->assertStringContainsString('Alpha Ltd', $html);
-        $this->assertStringContainsString('Beta Ltd', $html);
-        $this->assertStringContainsString('No customers added yet', $html);
-        $this->assertStringContainsString('id="fSearch"', $html, 'filters');
-        $this->assertStringContainsString('ndg-sort', $html, 'sortable headings');
-        $this->assertStringContainsString('ndg-note-del', $this->withNote($admin, 'Alpha Ltd'), 'admin sees the remove button on a comment');
+        Auth::setUser($admin);
+        $this->assertStringContainsString('Alpha Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Alpha Ltd']))->render());
+        $this->assertStringContainsString('Beta Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Beta Ltd']))->render());
+        $this->assertStringContainsString('class="ndg-note-del"', $this->withNote($admin, 'Alpha Ltd'), 'admin sees the remove button on a comment');
     }
 
     private function withNote(User $admin, string $client): string
     {
         $g = NinetyDayGoal::where('client_name', $client)->latest('id')->first();
         $this->postNote($admin, $g, 0, 'Seen by admin');
+        Auth::setUser($admin);
 
-        return app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+        return app(NinetyDayGoalController::class)->roundDetail($this->ask($admin, 'GET', '/x'), $g->round_id)->render();
     }
 
     public function test_a_salesperson_sees_no_delete_button_and_the_comments_page_lists_both_kinds(): void
@@ -939,8 +939,9 @@ class NinetyDayGoalsTest extends TestCase
         $this->postNote($this->person(null, 'admin'), $g, 0, 'admin says hurry');
         $c = app(NinetyDayGoalController::class);
 
-        $mine = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
-        $this->assertStringNotContainsString('icon-sophisticated text-danger ndg-remove', $mine, 'no delete button for the sales team');
+        Auth::setUser($this->rep);
+        $mine = $c->roundDetail($this->ask($this->rep, 'GET', '/x'), $g->round_id)->render();
+        $this->assertStringNotContainsString('class="ndg-note-del"', $mine, 'no delete button for the sales team');
         $this->assertStringContainsString('admin says hurry', $mine);
         $this->assertStringContainsString('ndg-addnote', $mine, 'and can add their own comment');
 
@@ -1064,13 +1065,12 @@ class NinetyDayGoalsTest extends TestCase
         $manager = $this->person($this->sales, 'manager');
         $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
 
-        $current = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview']))->render();
-        $this->assertStringNotContainsString('From A Closed Round Ltd', $current);
-        $this->assertMatchesRegularExpression('/stat-value mb-0">1<\/h3><span class="stat-label">Customers tracked/', $current);
-
-        $all = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview', 'round' => 'all']))->render();
-        $this->assertStringContainsString('From A Closed Round Ltd', $all);
-        $this->assertMatchesRegularExpression('/stat-value mb-0">2<\/h3><span class="stat-label">Customers tracked/', $all,
+        // The summary the dashboards are built from (the old Goals page that showed it is retired).
+        $scope = Goals::visibleUserIds($manager);
+        $current = Goals::dashboard($scope, ['round' => 'current']);
+        $this->assertSame(1, (int) $current['cards']['goals']);
+        $all = Goals::dashboard($scope, ['round' => 'all']);
+        $this->assertSame(2, (int) $all['cards']['goals'],
             'the summary card must widen to 2 with the closed round included, not silently stay at 1');
     }
     // ── past rounds, each kept on its own ─────────────────────────────────
@@ -1655,13 +1655,16 @@ class NinetyDayGoalsTest extends TestCase
         $admin = $this->person(null, 'admin');
 
         Auth::setUser($admin);
-        $adminHtml = $c->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringEndsWith('/ninety-day-goals/program-dashboard', $c->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->getTargetUrl());
+        $adminHtml = $c->comments($this->ask($admin, 'GET', '/performance/ninety-day-goals/comments'))->render();
         $this->assertStringNotContainsString('/ninety-day-goals/admin-view"', $adminHtml);
         $this->assertStringNotContainsString('/ninety-day-goals/dashboard"', $adminHtml);
         $this->assertStringContainsString('/ninety-day-goals/program-dashboard', $adminHtml);
+        $this->assertStringContainsString('/ninety-day-goals/programs"', $adminHtml, 'the Programs list is in the navigation');
 
         Auth::setUser($this->rep);
-        $repHtml = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringEndsWith('/ninety-day-goals/my-program', $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->getTargetUrl());
+        $repHtml = $c->comments($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/comments'))->render();
         $this->assertStringNotContainsString('/ninety-day-goals/admin-view"', $repHtml);
         $this->assertStringContainsString('/ninety-day-goals/my-dashboard', $repHtml);
     }

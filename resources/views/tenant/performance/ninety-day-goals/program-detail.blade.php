@@ -43,7 +43,7 @@
 
   <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> Program Details</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="text-muted">Programs</a> <i class="bx bx-chevron-right"></i> {{ $program->name }}</nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">
         {{ $program->name }}
         <span class="badge rounded-pill fw-bold" style="font-size:.62rem;background:{{ $isActive ? '#d7f3ee' : '#e2e8f0' }};color:{{ $isActive ? '#0b5b48' : '#475569' }}">{{ $isActive ? 'Active' : ($today->lt($program->starts_on) ? 'Upcoming' : 'Ended') }}</span>
@@ -54,7 +54,7 @@
       @if($canManage ?? false)
         <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgManageModal"><i class="bx bx-cog"></i> Manage program</button>
       @endif
-      <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> Back to Dashboard</a>
+      <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> All Programs</a>
     </div>
   </div>
 
@@ -556,6 +556,13 @@
       .catch(function () { if (btn) { btn.disabled = false; } tell(false, 'Request failed. Try again.'); });
   };
   var url = modal.dataset.url;
+
+  // "Edit" on the Programs list lands here with ?manage=1: open the panel straight away.
+  if (new URLSearchParams(window.location.search).get('manage') === '1') {
+    window.addEventListener('load', function () {
+      if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(modal).show(); }
+    });
+  }
 
   document.getElementById('ndgMgSaveDetails').addEventListener('click', function () {
     send('PUT', url, { name: document.getElementById('ndgMgName').value, starts_on: document.getElementById('ndgMgStart').value, ends_on: document.getElementById('ndgMgEnd').value }, this, true);

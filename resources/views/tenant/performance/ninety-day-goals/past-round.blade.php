@@ -40,7 +40,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
       <div class="d-flex align-items-center gap-2 mb-1">
-        <a href="{{ route('performance.ninety-day-goals.past') }}" class="text-muted" title="Back to Past rounds"><i class="bx bx-arrow-back"></i></a>
+        <a href="{{ \App\Services\NinetyDayGoalService::seesEveryone(auth()->user()) ? route('performance.ninety-day-goals.programs.index', ['status' => 'ended']) : route('performance.ninety-day-goals.my-program') }}" class="text-muted" title="Back"><i class="bx bx-arrow-back"></i></a>
         <h3 class="fw-extrabold mb-0 text-dark">Round {{ $round->round_no }}@if($seesMany) · <a href="{{ route('performance.ninety-day-goals.person', $round->user_id) }}" class="text-dark">{{ $name($round->user) }}</a>@endif</h3>
         <span class="ndg-closed-badge">closed</span>
       </div>

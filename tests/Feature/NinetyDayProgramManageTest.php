@@ -123,6 +123,46 @@ class NinetyDayProgramManageTest extends TestCase
         $this->assertSame(0, DB::table('notifications')->where('notifiable_id', $this->rep->id)->where('type', ProgramInvite::class)->count());
     }
 
+    public function test_the_programs_list_shows_every_program_with_edit_for_hr_and_delete_only_for_an_admin(): void
+    {
+        $hr = $this->actingAs($this->hr)->get('/performance/ninety-day-goals/programs')->assertOk()->getContent();
+        $this->assertStringContainsString('Phase QA', $hr);
+        $this->assertStringContainsString('manage=1', $hr, 'Edit opens the program with its Manage panel');
+        $this->assertStringNotContainsString('ndg-prog-del"', $hr);
+
+        $admin = $this->actingAs($this->admin)->get('/performance/ninety-day-goals/programs?status=upcoming')->assertOk()->getContent();
+        $this->assertStringContainsString('Phase QA', $admin, 'a program starting in 2027 is upcoming');
+        $this->assertStringContainsString('ndg-prog-del"', $admin);
+        $this->assertStringNotContainsString('Phase QA', $this->actingAs($this->admin)->get('/performance/ninety-day-goals/programs?status=ended')->getContent());
+
+        $this->actingAs($this->rep)->get('/performance/ninety-day-goals/programs')->assertRedirect();
+    }
+
+    public function test_the_retired_pages_send_people_to_the_page_that_replaced_them(): void
+    {
+        $this->actingAs($this->admin)->get('/performance/ninety-day-goals')->assertRedirect(route('performance.ninety-day-goals.program-dashboard'));
+        $this->actingAs($this->rep)->get('/performance/ninety-day-goals')->assertRedirect(route('performance.ninety-day-goals.my-program'));
+        $this->actingAs($this->rep)->get('/performance/ninety-day-goals/past')->assertRedirect(route('performance.ninety-day-goals.my-program'));
+        // Admin keeps the finished-rounds record, now reached from the Programs list.
+        $this->actingAs($this->admin)->get('/performance/ninety-day-goals/past')->assertOk();
+
+        // With nothing finished, My Programs goes straight into the current program.
+        $round = NinetyDayRound::where('program_id', $this->program->id)->where('user_id', $this->rep->id)->first();
+        $this->actingAs($this->rep)->get('/performance/ninety-day-goals/my-program')->assertRedirect(route('performance.ninety-day-goals.round', $round->id));
+    }
+
+    public function test_my_programs_lists_finished_rounds_once_there_are_some(): void
+    {
+        NinetyDayRound::create(['user_id' => $this->rep->id, 'round_no' => 0, 'tenant_id' => $this->rep->tenant_id,
+            'starts_on' => '2026-01-05', 'ends_on' => '2026-04-05', 'status' => 'closed']);
+
+        $html = $this->actingAs($this->rep)->get('/performance/ninety-day-goals/my-program')->assertOk()->getContent();
+
+        $this->assertStringContainsString('Open my program', $html);
+        $this->assertStringContainsString('Finished programs', $html);
+        $this->assertStringContainsString('View report', $html);
+    }
+
     public function test_the_program_page_offers_manage_to_hr_and_delete_only_to_an_admin(): void
     {
         $hrPage = $this->actingAs($this->hr)->get($this->url())->assertOk()->getContent();

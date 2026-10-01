@@ -33,7 +33,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> Admin View</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> 90-Day Goals <i class="bx bx-chevron-right"></i> Dashboard</nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">90-Day Sales Goals <span class="badge bg-label-success rounded-pill fw-bold" style="font-size:.62rem">{{ $isAdmin ? 'Admin View' : 'My Team' }}</span></h3>
       <p class="text-muted mb-0 small">Monitor all programs, participants, customer updates and results in real time. Drive accountability. Close more business.</p>
     </div>
@@ -423,11 +423,12 @@
     @if($canManage)
             <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
     @endif
-            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>
+    @if($isAdmin)
+            <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-list-ul"></i> View All Programs</a>
+    @endif
     @if($isAdmin)
             <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
     @endif
-            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="people"><i class="bx bx-group"></i> Manage Participants</button>
             <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-bar-chart-alt-2"></i> View Sales Report</a>
           </div>
         </div>

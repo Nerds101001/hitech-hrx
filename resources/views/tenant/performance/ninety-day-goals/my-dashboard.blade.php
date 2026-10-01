@@ -37,7 +37,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.index') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> My Dashboard</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> 90-Day Goals <i class="bx bx-chevron-right"></i> My Dashboard</nav>
       <h3 class="fw-extrabold mb-1 text-dark">My 90-Day Sales Goals</h3>
       <p class="text-muted mb-0 small">Track your progress across all assigned programs. Select a program to view detailed information.</p>
     </div>

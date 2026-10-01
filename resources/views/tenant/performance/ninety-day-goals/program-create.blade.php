@@ -16,7 +16,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2"><i class="bx bx-arrow-back"></i> Back to Goals</a>
+      <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2"><i class="bx bx-arrow-back"></i> Back to Programs</a>
       <h3 class="fw-extrabold mb-1 text-dark">New 90-Day Goals program</h3>
       <p class="text-muted mb-0 small">Give it a name and its own start and end date, then pick who's in it. Several programs can run at once, each on its own timeline — anyone already mid-round is skipped, not replaced.</p>
     </div>
@@ -101,7 +101,7 @@
 (function () {
   var CSRF = '{{ csrf_token() }}';
   var URL = '{{ route('performance.ninety-day-goals.programs.store') }}';
-  var BACK = '{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}';
+  var BACK = '{{ route('performance.ninety-day-goals.programs.index') }}';
 
   var ROUND_SPAN_DAYS = {{ (int) $roundSpanDays }};
   var people = Array.prototype.slice.call(document.querySelectorAll('.ndg-p-person'));

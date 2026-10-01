@@ -16,7 +16,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <a href="{{ route('performance.ninety-day-goals.past') }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2"><i class="bx bx-arrow-back"></i> Back to Past rounds</a>
+      <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="text-muted small d-inline-flex align-items-center gap-1 mb-2"><i class="bx bx-arrow-back"></i> Back to Dashboard</a>
       <h3 class="fw-extrabold mb-1 text-dark">{{ $name($target) }}</h3>
       <p class="text-muted mb-0 small">{{ optional($target->department)->name }} · {{ $rounds->count() }} {{ \Illuminate\Support\Str::plural('round', $rounds->count()) }} in total @if($active)· Round {{ $active->round_no }} running now @endif</p>
     </div>

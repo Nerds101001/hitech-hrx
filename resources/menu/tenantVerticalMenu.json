@@ -835,7 +835,7 @@
         {
             "name": "90-Day Goals",
             "icon": "menu-icon bx bx-target-lock",
-            "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program", "performance.ninety-day-goals.past"],
+            "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.index", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program", "performance.ninety-day-goals.past", "performance.ninety-day-goals.person", "performance.ninety-day-goals.comments"],
             "department": "Sales",
             "departmentOrPermission": ["goals.manage", "scorecards.manage", "goals.view"],
             "submenu": [
@@ -872,18 +872,18 @@
                     "permission": ["goals.manage","scorecards.manage","goals.view"]
                 },
                 {
+                    "url": "/performance/ninety-day-goals/programs",
+                    "name": "Programs",
+                    "icon": "menu-icon bx bx-list-ul",
+                    "slug": "performance.ninety-day-goals.programs.index",
+                    "permission": ["goals.manage","scorecards.manage","goals.view"]
+                },
+                {
                     "url": "/performance/ninety-day-goals/programs/create",
                     "name": "New Program",
                     "icon": "menu-icon bx bx-plus-circle",
                     "slug": "performance.ninety-day-goals.programs.create",
                     "permission": ["goals.manage","scorecards.manage"]
-                },
-                {
-                    "url": "/performance/ninety-day-goals/past",
-                    "name": "Past Programs",
-                    "icon": "menu-icon bx bx-history",
-                    "slug": "performance.ninety-day-goals.past",
-                    "permission": ["goals.manage","scorecards.manage","goals.view"]
                 }
             ]
         },
