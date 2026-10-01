@@ -692,7 +692,7 @@ class NinetyDayGoalController extends Controller
     private function myWeeklyProgress(User $user, NinetyDayRound $round): array
     {
         $goals = NinetyDayGoal::where('round_id', $round->id)->where('user_id', $user->id)->get();
-        // Same rule as Goals::dashboard(): the months that END inside the round, once each.
+        // Same rule as Goals::dashboard(): the months whose 16th is inside the round, once each.
         $roundMonths = Goals::roundMonths($round);
         $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * max(1, count($roundMonths)));
         $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();

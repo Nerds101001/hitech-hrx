@@ -673,6 +673,28 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertEquals(0.0, Goals::dashboard([$this->rep->id])['cards']['achieved']);
     }
 
+    public function test_a_round_starting_on_28_september_counts_october_to_december_not_september(): void
+    {
+        $this->at('2026-10-01');
+        $g = $this->soldGoal($this->rep, 'A-Trac', 4.0, 'Rust-X', 0.0);
+        $g->round->update(['starts_on' => '2026-09-28', 'ends_on' => '2026-12-31']);
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $g->sales_pipeline_id, 'month_year' => '2026-09', 'sale_amount' => 4.08, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->assertSame(['2026-10', '2026-11', '2026-12'], Goals::roundMonths($g->round->fresh()));
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertEquals(12.0, $cards['target'], '4 L a month for 3 months, not 4');
+        $this->assertEquals(0.0, $cards['achieved'], "September's sale was booked before the round began");
+    }
+
+    public function test_each_month_belongs_to_exactly_one_of_two_back_to_back_rounds(): void
+    {
+        $a = new NinetyDayRound(['starts_on' => '2026-09-28', 'ends_on' => '2026-12-27']);
+        $b = new NinetyDayRound(['starts_on' => '2026-12-28', 'ends_on' => '2027-03-28']);
+
+        $this->assertSame(['2026-10', '2026-11', '2026-12'], Goals::roundMonths($a));
+        $this->assertSame(['2027-01', '2027-02', '2027-03'], Goals::roundMonths($b));
+    }
+
     public function test_top_customers_and_brands_are_ranked_biggest_first(): void
     {
         $this->at(self::MONDAY);

@@ -366,11 +366,12 @@ class NinetyDayGoalService
     }
 
     /**
-     * The months ("Y-m") whose sales count for this round: every month that ENDS inside it.
+     * The months ("Y-m") whose sales count for this round: every month whose 16th falls inside it.
      * Sales are only known per month, and a 90-day round touches four calendar months, so
      * counting every month it touched overstated achievement against a three-month target and
-     * counted a boundary month in two consecutive rounds. With "the month belongs to the round
-     * it ends in", each month counts exactly once and a 90-day round usually covers three.
+     * counted a boundary month in two consecutive rounds. The month belongs to the round that
+     * holds most of it (its 16th): each month counts exactly once, and a round starting
+     * 28 Sep no longer takes all of September (sales booked before it began) for 3 days.
      */
     public static function roundMonths(NinetyDayRound $round): array
     {
@@ -378,13 +379,13 @@ class NinetyDayGoalService
         $ends = Carbon::parse($round->ends_on)->startOfDay();
         $out = [];
         for ($m = $starts->copy()->startOfMonth(); $m->lte($ends); $m->addMonth()) {
-            $monthEnd = $m->copy()->endOfMonth()->startOfDay();
-            if ($monthEnd->gte($starts) && $monthEnd->lte($ends)) {
+            $mid = $m->copy()->day(16);
+            if ($mid->gte($starts) && $mid->lte($ends)) {
                 $out[] = $m->format('Y-m');
             }
         }
 
-        // A short program inside one month has no month-end in it: use the month it runs in.
+        // A short program that misses every 16th: use the month it starts in.
         return $out ?: [$starts->format('Y-m')];
     }
 
