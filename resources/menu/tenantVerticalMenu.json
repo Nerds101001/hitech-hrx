@@ -773,25 +773,12 @@
             ]
         },
         {
-            "name": "Training",
+            "url": "/training",
+            "name": "My Training",
             "icon": "menu-icon bx bx-book-reader",
-            "slug": ["training.portal", "training.activity", "training.report-card"],
+            "slug": ["training.portal", "training.report-card"],
             "roles": ["admin", "hr", "manager", "employee", "accounts", "office_employee"],
-            "submenu": [
-                {
-                    "url": "/training",
-                    "name": "My Training",
-                    "slug": "training.portal",
-                    "hideForRoles": ["admin", "hr"]
-                },
-                {
-                    "url": "/training/activity",
-                    "name": "Training Results",
-                    "slug": "training.activity",
-                    "roles": ["admin", "hr"],
-                    "rolesOrPermission": ["training.manage"]
-                }
-            ]
+            "hideForRoles": ["admin", "hr"]
         },
         {
             "name": "Performance",

@@ -76,9 +76,14 @@ class LeaveHistoryService
             // Split the request into what came off the paid balance and what
             // was unpaid. A 13-day request against a 4-day balance is 4 paid +
             // 9 LWP — it is NOT a balance of minus nine.
+            // Working days, the way approval charges them: a leave across a
+            // Sunday or holiday is not charged for it. Calendar days made the
+            // statement disagree with Total Used for 10 people (2026-09-30) -
+            // CHANCHAL LDH's 12-18 Sep leave showed 6 days more than was taken.
             $days    = $leave->is_half_day
                 ? 0.5
-                : (Carbon::parse($leave->from_date)->diffInDays(Carbon::parse($leave->to_date)) + 1);
+                : \App\Services\LeavePolicyService::calculateWorkingDays(
+                    $user, $leave->leave_type_id, Carbon::parse($leave->from_date)->toDateString(), Carbon::parse($leave->to_date)->toDateString(), false);
             $lwpDays = (float) ($leave->lwp_days ?? 0);
             $paidDays = max(0, $days - $lwpDays);
 
@@ -108,6 +113,32 @@ class LeaveHistoryService
                 'created_at' => $leave->created_at,
                 'is_adjustment' => false,
                 'raw_request' => $leave
+            ]);
+        }
+
+        // 1b. Absences CCare's register covered from the balance itself (it
+        // auto-adjusts an absence with no leave behind it). They raise `used`
+        // and never `balance`, so the audit step below cannot see them: the
+        // statement listed fewer deductions than Total Used - SHRI KANT's
+        // showed 2 against 4 (2026-09-30). A day later tied to a leave request
+        // is already that request's line.
+        $covered = \App\Models\Attendance::where('user_id', $userId)
+            ->whereNull('leave_request_id')
+            ->where('admin_reason', 'like', '%Auto-adjusted against Earned Leave%')
+            ->where('check_in_time', '>=', self::LEDGER_OPENS)
+            ->get(['id', 'check_in_time', 'created_at']);
+        foreach ($covered as $day) {
+            $history->push((object)[
+                'id'         => 'ABS-' . $day->id,
+                'type'       => 'Deduction',
+                'leave_type' => 'All Purpose Leave',
+                'from_date'  => null,
+                'to_date'    => null,
+                'amount'     => -1.0,
+                'status'     => 'Processed',
+                'notes'      => 'Absence on ' . $day->check_in_time->format('d M Y') . ' covered from balance (marked by Customer Care)',
+                'created_at' => $day->created_at,
+                'is_adjustment' => true,
             ]);
         }
 

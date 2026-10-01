@@ -70,8 +70,9 @@ class TrainingResultsAccessTest extends TestCase
     private function links(User $u): array
     {
         Nav::flush();
-        $out = collect(Nav::previewMenuFor($u))->flatMap(fn ($e) => collect($e['submenu'] ?? [])
-            ->where('visible', true)->map(fn ($c) => $e['name'] . ' > ' . $c['name']))->all();
+        $out = collect(Nav::previewMenuFor($u))->where('visible', true)->flatMap(fn ($e) => empty($e['submenu'])
+            ? [$e['name']]
+            : collect($e['submenu'])->where('visible', true)->map(fn ($c) => $e['name'] . ' > ' . $c['name']))->all();
         Nav::flush();
 
         return $out;
@@ -104,7 +105,7 @@ class TrainingResultsAccessTest extends TestCase
         $html = $this->actingAs($this->hr)->get('/training/activity')->assertOk()->getContent();
         $this->assertStringContainsString($this->report->first_name, $html);
         $this->assertStringContainsString($this->stranger->first_name, $html);
-        $this->assertStringContainsString('Manage Content', $html);
+        $this->assertStringContainsString('Manage Programs', $html);
     }
 
     public function test_report_cards_follow_the_same_rule(): void
@@ -143,19 +144,63 @@ class TrainingResultsAccessTest extends TestCase
 
     // ── sidebar ──────────────────────────────────────────────────────────
 
-    public function test_the_training_section_in_the_sidebar(): void
+    public function test_one_my_training_link_and_no_duplicate_for_admin_hr(): void
     {
-        $emp = $this->links($this->report);
-        $this->assertContains('Training > My Training', $emp);
-        $this->assertNotContains('Training > Training Results', $emp);
+        foreach ([$this->report, $this->manager] as $u) {
+            $links = $this->links($u);
+            $this->assertContains('My Training', $links);
+            $this->assertEmpty(preg_grep('/^Training( >|$)/', $links), 'no separate Training section');
+        }
+        $this->assertNotContains('Recruitment & Onboarding > Manage Training', $this->links($this->manager));
 
-        $mgr = $this->links($this->manager);
-        $this->assertContains('Training > My Training', $mgr);
-        $this->assertNotContains('Training > Training Results', $mgr);
-        $this->assertNotContains('Recruitment & Onboarding > Manage Training', $mgr);
-
+        // Admin/HR reach training through Recruitment & Onboarding, as before - no second menu.
         $hr = $this->links($this->hr);
-        $this->assertNotContains('Training > My Training', $hr);
-        $this->assertContains('Training > Training Results', $hr);
+        $this->assertNotContains('My Training', $hr);
+        $this->assertEmpty(preg_grep('/^Training( >|$)/', $hr));
+        $this->assertContains('Recruitment & Onboarding > Training Portal', $hr);
+        $this->assertContains('Recruitment & Onboarding > Manage Training', $hr);
+    }
+
+    // ── the results page: filters, sorting, export ───────────────────────
+
+    public function test_results_page_filters_by_department_status_and_search(): void
+    {
+        $dept = \App\Models\Department::create(['name' => 'ZZ Filter Dept ' . uniqid(), 'code' => 'ZF' . random_int(10000, 99999)]);
+        $this->report->forceFill(['department_id' => $dept->id])->save();
+
+        $html = $this->actingAs($this->hr)->get('/training/activity?department=' . $dept->id)->assertOk()->getContent();
+        $this->assertStringContainsString($this->report->first_name, $html);
+        $this->assertStringNotContainsString($this->stranger->first_name, $html);
+        $this->assertStringContainsString('&middot; filtered', $html);
+        $this->assertMatchesRegularExpression('/Showing <strong>1<\/strong> of/', $html);
+
+        $html = $this->actingAs($this->hr)->get('/training/activity?q=' . urlencode($this->stranger->first_name))->getContent();
+        $this->assertStringContainsString($this->stranger->first_name, $html);
+        $this->assertStringNotContainsString($this->report->first_name, $html);
+
+        // Both have one compulsory module done, so neither is "not started".
+        $html = $this->actingAs($this->hr)->get('/training/activity?status=not_started&q=' . urlencode($this->report->first_name))->getContent();
+        $this->assertStringContainsString('No one matches these filters', $html);
+    }
+
+    public function test_results_page_sorts_by_any_column(): void
+    {
+        $pos = fn (string $html, User $u) => strpos($html, $u->first_name, strpos($html, 'id="empTable"'));   // in the table, not the activity feed above it
+        $asc  = $this->actingAs($this->hr)->get('/training/activity?sort=name&dir=asc')->assertOk()->getContent();
+        $desc = $this->actingAs($this->hr)->get('/training/activity?sort=name&dir=desc')->assertOk()->getContent();
+        // "Reporty..." sorts before "Strangey..." ascending, after it descending.
+        $this->assertLessThan($pos($asc, $this->stranger), $pos($asc, $this->report));
+        $this->assertGreaterThan($pos($desc, $this->stranger), $pos($desc, $this->report));
+        foreach (['department', 'completed', 'pct', 'avg_score', 'failed', 'last_activity', 'state'] as $col) {
+            $this->actingAs($this->hr)->get('/training/activity?sort=' . $col . '&dir=asc')->assertOk();
+        }
+    }
+
+    public function test_results_page_has_export_and_results_buttons(): void
+    {
+        $html = $this->actingAs($this->hr)->get('/training/activity')->getContent();
+        $this->assertStringContainsString('id="taExport"', $html);
+        $this->assertStringContainsString(route('training.report-card', $this->report->id), $html);
+        $this->assertStringContainsString('data-row=', $html);
     }
 }

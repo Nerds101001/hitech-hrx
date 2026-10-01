@@ -179,6 +179,17 @@ class LeaveRequest extends Model implements AuditableContract
 
                   $availableBalance = (float)$balance->balance - (float)$balance->used;
 
+                  // CCare's register already took this day from the balance (an
+                  // absence it auto-adjusted before this leave was approved):
+                  // the day is paid, but must not be taken a second time - it
+                  // was, for 5 days across 4 people by 30 Sep 2026. Cancelling
+                  // still refunds it, which undoes CCare's deduction along with
+                  // the row the cancellation deletes.
+                  $takenByRegister = !$leaveRequest->is_short_leave && str_contains(
+                      (string) Attendance::where('user_id', $leaveRequest->user_id)->whereDate('check_in_time', $tempDate)->value('admin_reason'),
+                      'Auto-adjusted against Earned Leave'
+                  );
+
                   if ($leaveRequest->is_short_leave) {
                       $attendanceStatus = 'present';
                       // Short Leave's paid/unpaid status used to be whatever was
@@ -214,7 +225,10 @@ class LeaveRequest extends Model implements AuditableContract
                           $balanceChecked = true;
                           $availableLegacy = $legacyBalance ? ((float)$legacyBalance->balance - (float)$legacyBalance->used) : 0.0;
 
-                          if ($availableBalance >= $decrement) {
+                          if ($takenByRegister) {
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'half-Day';
+                          } elseif ($availableBalance >= $decrement) {
                               $balance->used += $decrement;
                               $paidDays += $decrement;
                               $attendanceStatus = 'half-Day';
@@ -234,7 +248,10 @@ class LeaveRequest extends Model implements AuditableContract
                           $balanceChecked = true;
                           $availableLegacy = $legacyBalance ? ((float)$legacyBalance->balance - (float)$legacyBalance->used) : 0.0;
 
-                          if ($availableBalance >= $decrement) {
+                          if ($takenByRegister) {
+                              $paidDays += $decrement;
+                              $attendanceStatus = 'leave';
+                          } elseif ($availableBalance >= $decrement) {
                               $balance->used += $decrement;
                               $paidDays += $decrement;
                               $attendanceStatus = 'leave';

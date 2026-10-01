@@ -4,165 +4,93 @@
 
 @section('page-style')
 <style>
-    .report-card {
-        background: white;
-        padding: 60px;
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.05);
-        position: relative;
-        overflow: hidden;
+    /* The same sheet as the PDF (partials/report-card-sheet), sized for the screen. */
+    .rc-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; max-width: 1040px; margin: 0 auto 16px; }
+    .rc-toolbar h4 { margin: 0; font-weight: 800; color: #1e293b; }
+    .rc-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .rc-btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 18px; border-radius: 10px; font-weight: 600; font-size: .88rem; text-decoration: none; border: 1px solid #d5dfe3; background: #fff; color: #1e293b; cursor: pointer; }
+    .rc-btn i { font-size: 1.2rem; }
+    .rc-btn:hover { border-color: #005a5a; color: #005a5a; }
+    .rc-btn.primary { background: #005a5a; border-color: #005a5a; color: #fff; }
+    .rc-btn.primary:hover { background: #004646; color: #fff; }
+    .rc-btn.success { background: #16a34a; border-color: #16a34a; color: #fff; }
+    .rc-final { display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #15803d; font-weight: 700; font-size: .82rem; border-radius: 8px; padding: 8px 14px; }
+
+    .rc-paper { max-width: 1040px; margin: 0 auto; background: #fff; border: 1px solid #e3ebee; border-radius: 12px; box-shadow: 0 8px 28px rgba(15, 23, 42, .06); overflow-x: auto; }
+    .rc-sheet { color: #1f2937; font-size: .84rem; }
+    .rc-sheet table { width: 100%; border-collapse: collapse; }
+    .rc-sheet .muted { color: #94a3b8; }
+    .rc-sheet .small { font-size: .9rem; }
+    .rc-sheet .band { background: #005a5a; color: #fff; padding: 18px 26px 16px; border-bottom: 4px solid #007a7a; }
+    .rc-sheet .band .kicker { font-size: .72rem; letter-spacing: 1px; color: #cfe6e5; text-transform: uppercase; }
+    .rc-sheet .band h1 { font-size: 1.55rem; font-weight: 800; margin: 4px 0 2px; letter-spacing: .5px; color: #fff; }
+    .rc-sheet .band .sub { font-size: .76rem; color: #cfe6e5; }
+    .rc-sheet > .section, .rc-sheet > table, .rc-sheet > .verdict, .rc-sheet > .foot { margin-left: 26px; margin-right: 26px; width: calc(100% - 52px); }
+    .rc-sheet .section { color: #005a5a; font-weight: 800; font-size: .8rem; letter-spacing: .8px; text-transform: uppercase; padding: 3px 0 3px 10px; border-left: 3px solid #007a7a; border-bottom: 2px solid #cbd5e1; margin-top: 18px; margin-bottom: 8px; }
+    .rc-sheet .info { table-layout: fixed; }
+    .rc-sheet .info td { border: 1px solid #e2e8f0; padding: 7px 10px; vertical-align: top; }
+    .rc-sheet .info .k { background: #f8fafc; color: #475569; width: 11%; font-size: .7rem; text-transform: uppercase; letter-spacing: .3px; }
+    .rc-sheet .info .v { width: 22.3%; font-weight: 700; color: #0f172a; word-wrap: break-word; }
+    .rc-sheet .tiles { margin-top: 12px; border-collapse: separate; border-spacing: 8px 0; margin-left: 18px; margin-right: 18px; width: calc(100% - 36px); }
+    .rc-sheet .tiles td { width: 16.66%; text-align: center; border: 1px solid #dee2e6; border-bottom: 3px solid #007a7a; border-radius: 8px; padding: 12px 6px; background: #fff; }
+    .rc-sheet .tiles .n { font-size: 1.45rem; font-weight: 800; color: #005a5a; line-height: 1.2; }
+    .rc-sheet .tiles .l { font-size: .68rem; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-top: 2px; }
+    .rc-sheet .grid th { background: #f1f5f9; color: #475569; font-size: .7rem; text-transform: uppercase; letter-spacing: .3px; text-align: left; padding: 8px 10px; border: 1px solid #e2e8f0; border-bottom: 2px solid #cbd5e1; white-space: nowrap; }
+    .rc-sheet .grid td { border: 1px solid #e2e8f0; padding: 7px 10px; vertical-align: middle; }
+    .rc-sheet .grid tr.alt td { background: #fbfcfd; }
+    .rc-sheet .grid tr.kra td { background: #f0f7f6; font-weight: 800; color: #00706e; padding: 7px 10px; }
+    .rc-sheet .grid .kra-meta { font-weight: 500; color: #475569; font-size: .76rem; }
+    .rc-sheet .grid .total td { background: #005a5a; color: #fff; font-weight: 800; border-color: #005a5a; padding: 9px 10px; }
+    .rc-sheet .grid .empty { font-style: italic; }
+    .rc-sheet .grid th.num, .rc-sheet .num { text-align: right; white-space: nowrap; }
+    .rc-sheet .grid th.ctr, .rc-sheet .ctr { text-align: center; }
+    .rc-sheet .good { background: #ebf3f3; color: #005a5a; }
+    .rc-sheet .warn { background: #fbf1e6; color: #d97706; }
+    .rc-sheet .bad  { background: #ffeded; color: #e5484d; }
+    .rc-sheet .idle { background: #f1f5f9; color: #475569; }
+    .rc-sheet .chip { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+    .rc-sheet .verdict { margin-top: 14px; border: 1px solid #cfe3e2; border-left: 4px solid #007a7a; background: #f0f7f6; padding: 12px 16px; font-size: .88rem; border-radius: 0 8px 8px 0; }
+    .rc-sheet .verdict .note { color: #475569; font-size: .8rem; margin-top: 5px; }
+    .rc-sheet .notes td { padding: 0; height: 30px; vertical-align: bottom; }
+    .rc-sheet .notes .who { width: 17%; color: #475569; font-size: .72rem; text-transform: uppercase; letter-spacing: .3px; }
+    .rc-sheet .notes .ruled { border-bottom: 1px solid #cbd5e1; }
+    .rc-sheet .sign { margin-top: 36px; }
+    .rc-sheet .sign td { width: 33%; padding: 0 22px 0 0; vertical-align: bottom; }
+    .rc-sheet .sign .line { border-top: 1px solid #94a3b8; padding-top: 5px; color: #475569; font-size: .74rem; }
+    .rc-sheet .foot { margin-top: 18px; margin-bottom: 18px; border-top: 1px solid #e2e8f0; padding-top: 6px; color: #64748b; font-size: .72rem; }
+
+    @media (max-width: 767.98px) {
+        .rc-sheet { min-width: 720px; }   /* the table needs its columns: the sheet scrolls sideways instead */
+        .rc-sheet .band { padding: 14px 14px 12px; }
+        .rc-sheet .tiles td { padding: 8px 2px; }
+        .rc-sheet .tiles .n { font-size: 1.05rem; }
     }
-
-    .report-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 10px;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
-
-    .report-header {
-        border-bottom: 2px solid #f0f2f8;
-        padding-bottom: 30px;
-        margin-bottom: 40px;
-    }
-
-    .stat-box {
-        background: #f8fafc;
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        border: 1px solid #edf2f7;
-    }
-
-    .stat-value {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: #4a5568;
-    }
-
-    .phase-section {
-        margin-bottom: 30px;
-    }
-
-    .module-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 15px 0;
-        border-bottom: 1px solid #edf2f7;
-    }
-
-    .score-badge {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-
-    .score-high { background: #e6fffa; color: #234e52; }
-    .score-med { background: #fffaf0; color: #744210; }
-
+    /* Print just the sheet. */
     @media print {
-        .no-print { display: none; }
-        .report-card { box-shadow: none; padding: 20px; }
+        body * { visibility: hidden !important; }
+        .rc-paper, .rc-paper * { visibility: visible !important; }
+        .rc-paper { position: absolute; left: 0; top: 0; width: 100%; max-width: none; border: 0; box-shadow: none; border-radius: 0; }
+        .rc-sheet .band, .rc-sheet .grid .total td, .rc-sheet .kra td, .rc-sheet .chip, .rc-sheet .good, .rc-sheet .warn, .rc-sheet .bad, .rc-sheet .idle { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
 </style>
 @endsection
 
 @section('content')
-<div class="container-xxl flex-grow-1 container-p-y">
-    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
-        <h4 class="fw-bold mb-0">Training Performance Review</h4>
-        <div>
-            <button class="btn btn-label-secondary me-2" onclick="window.print()">
-                <i class="ti ti-printer me-1"></i> Print Report
-            </button>
-            @if($user->training_status !== 'completed' && ($canApprove ?? false))
-                <button class="btn btn-success" id="approve-btn">
-                    <i class="ti ti-check me-1"></i> Approve & Finalize Training
-                </button>
-            @elseif($user->training_status === 'completed')
-                <span class="badge bg-success">Training Finalized</span>
-            @endif
-        </div>
+<div class="rc-toolbar">
+    <h4>Training Report Card</h4>
+    <div class="rc-actions">
+        <a href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}" class="rc-btn primary"><i class="bx bxs-file-pdf"></i> Download PDF</a>
+        <button type="button" class="rc-btn" onclick="window.print()"><i class="bx bx-printer"></i> Print</button>
+        @if($user->training_status !== 'completed' && ($canApprove ?? false))
+            <button type="button" class="rc-btn success" id="approve-btn"><i class="bx bx-check-circle"></i> Approve &amp; Finalize Training</button>
+        @elseif($user->training_status === 'completed')
+            <span class="rc-final"><i class="bx bx-badge-check"></i> Training Finalized</span>
+        @endif
     </div>
+</div>
 
-    <div class="report-card">
-        <div class="report-header text-center">
-            <h2 class="fw-bold text-primary mb-1">Official Training Transcript</h2>
-            <p class="text-muted">Hitech HRX - Onboarding Training Module</p>
-            
-            <div class="row mt-5 text-start">
-                <div class="col-md-6">
-                    <div class="mb-2"><strong>Employee Name:</strong> {{ $user->name }}</div>
-                    <div class="mb-2"><strong>Employee ID:</strong> {{ $user->code ?? 'Pending' }}</div>
-                    <div class="mb-2"><strong>Department:</strong> {{ $user->department->name ?? 'N/A' }}</div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-2"><strong>Status:</strong> {{ strtoupper($user->training_status) }}</div>
-                    <div class="mb-2"><strong>Completion Date:</strong> {{ $user->training_completed_at ? $user->training_completed_at->format('d M, Y') : 'In Progress' }}</div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row mb-5">
-            <div class="col-md-4">
-                <div class="stat-box">
-                    <div class="text-muted small mb-1">Modules Completed</div>
-                    <div class="stat-value">{{ $summary['completed_modules'] }} / {{ $summary['total_modules'] }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-box">
-                    <div class="text-muted small mb-1">Average Score</div>
-                    <div class="stat-value">{{ number_format($summary['average_score'], 1) }}%</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="stat-box">
-                    <div class="text-muted small mb-1">Result</div>
-                    <div class="stat-value {{ $summary['average_score'] >= 80 ? 'text-success' : 'text-warning' }}">
-                        {{ $summary['average_score'] >= 80 ? 'PASSED' : 'INCOMPLETE' }}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <h5 class="fw-bold mb-4">Detailed Performance Breakdown</h5>
-
-        @foreach($phases as $phase)
-            <div class="phase-section">
-                <h6 class="text-primary fw-bold mb-3">Phase {{ $phase->order }}: {{ $phase->title }}</h6>
-                @foreach($phase->modules as $module)
-                    @php $progress = $module->userProgress->first(); @endphp
-                    <div class="module-row">
-                        <div>
-                            <div class="fw-bold">{{ $module->title }}</div>
-                            <div class="text-muted small">{{ strtoupper($module->content_type) }}</div>
-                        </div>
-                        <div class="text-end">
-                            @if($progress)
-                                <span class="score-badge {{ $progress->assessment_score >= 90 ? 'score-high' : 'score-med' }}">
-                                    Score: {{ $progress->assessment_score }}%
-                                </span>
-                                <div class="text-muted small mt-1">
-                                    {{ $progress->completed_at ? $progress->completed_at->format('d M, Y') : 'N/A' }}
-                                </div>
-                            @else
-                                <span class="badge bg-label-secondary">Not Started</span>
-                            @endif
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-        @endforeach
-
-        <div class="mt-5 pt-4 text-center border-top">
-            <p class="text-muted small">This is a system-generated report. Approval by HR/Manager is required for final dashboard activation.</p>
-        </div>
-    </div>
+<div class="rc-paper">
+    @include('tenant.training.partials.report-card-sheet', ['t' => $t, 'company' => $companyName ?? null])
 </div>
 @endsection
 

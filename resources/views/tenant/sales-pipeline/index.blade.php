@@ -892,9 +892,10 @@
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#fde047;border-radius:2px;"></span> ≥75%</span>
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#fb923c;border-radius:2px;"></span> 50–75%</span>
                     <span><span class="d-inline-block" style="width:12px;height:12px;background:#dc2626;border-radius:2px;"></span> &lt;50%</span>
+                    <span><span class="d-inline-block" style="width:12px;height:12px;background:#fef2f2;border:1px solid #dc2626;border-radius:2px;"></span> Tally ≠ Actual Sale</span>
                     <span class="ms-auto">All figures ₹ Lakh</span>
                 </div>
-                <style>.tgt-table td,.tgt-table th{padding:.28rem .35rem !important;white-space:nowrap;}.tgt-table td:first-child,.tgt-table th:first-child{white-space:normal;}</style>
+                <style>.tgt-table td,.tgt-table th{padding:.28rem .35rem !important;white-space:nowrap;}.tgt-table td:first-child,.tgt-table th:first-child{white-space:normal;}.tgt-table tr.tgt-mm td:nth-child(-n+5){background:#fef2f2 !important;}.tgt-table tr.tgt-mm td:first-child{border-left:3px solid #dc2626 !important;color:#991b1b;}.tgt-table tr.tgt-mm .tgt-actual{color:#b91c1c !important;}.tgt-table tr.tgt-mm .tgt-tally{color:#b91c1c !important;font-weight:700;}.tgt-table tr.tgt-mm .tgt-tally-cell{box-shadow:inset 0 0 0 2px #dc2626;}</style>
                 <div style="max-height:62vh;overflow-y:auto;">
                 <table class="table table-bordered table-sm mb-0 align-middle tgt-table" style="font-size:0.76rem;border-collapse:separate;border-spacing:0;">
                     {{-- Sticky header needs its own stacking context + solid bg,
@@ -905,6 +906,7 @@
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Fcst</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Actual<br>Sale</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Pending</th>
+                            <th class="text-end" style="position:sticky;top:0;z-index:10;background:#eef7f6;box-shadow:inset 0 -1px 0 #dee2e6;width:86px;min-width:86px;padding:.3rem .35rem;" title="Entered by CCare / New Biz">Tally<br>Sale</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Bingo</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Kingo</th>
                             <th class="text-end" style="position:sticky;top:0;z-index:10;background:#f8f9fa;box-shadow:inset 0 -1px 0 #dee2e6;width:74px;min-width:74px;padding:.3rem .35rem;">Super<br>Kingo</th>
@@ -917,11 +919,48 @@
                         @php $rowsForMonth = ($targetAchieversByMonth[$mk] ?? ($mk === $currentMonthKey ? ($targetAchievers ?? []) : [])); @endphp
                         <tbody class="tgt-month-body" data-month="{{ $mk }}" @if($mk !== $currentMonthKey) style="display:none;" @endif>
                             @forelse($rowsForMonth as $r)
-                                <tr class="tgt-row" data-category="{{ $r['category'] ?? 'Salesperson' }}">
-                                    <td class="fw-semibold">{{ $r['name'] }}</td>
+                                {{-- Tally Sale is typed in by CCare / New Biz, so it is the one
+                                     figure on this row that nobody derived from the book. When it
+                                     disagrees with Actual Sale the row is flagged red, because the
+                                     two are meant to reconcile and a gap means one of them is
+                                     wrong. Blank is not a mismatch: nobody has filled it in yet,
+                                     which reads differently from a recorded 0. --}}
+                                @php
+                                    $tgtLocked = \App\Http\Controllers\tenant\SalesPipelineController::isMonthLockedForUser(auth()->user(), $mk);
+                                    $tallyVal  = $r['tally'] ?? null;
+                                    // Half a paisa of tolerance, so a rounding tail does not read
+                                    // as a discrepancy.
+                                    $tallyDiff = $tallyVal === null ? null : round((float) $tallyVal - (float) $r['actual'], 2);
+                                    $tallyMm   = $tallyDiff !== null && abs($tallyDiff) > 0.005;
+                                @endphp
+                                <tr class="tgt-row {{ $tallyMm ? 'tgt-mm' : '' }}" data-category="{{ $r['category'] ?? 'Salesperson' }}"
+                                    @if($tallyMm) title="Tally {{ number_format($tallyVal, 2) }} vs Actual {{ number_format($r['actual'], 2) }} — off by {{ number_format(abs($tallyDiff), 2) }}" @endif>
+                                    <td class="fw-semibold">
+                                        @if($tallyMm)<i class="bx bx-error-circle text-danger me-1" style="vertical-align:-2px;"></i>@endif{{ $r['name'] }}
+                                    </td>
                                     <td class="text-end font-monospace" style="color:#1d4ed8;">{{ ($r['forecast'] ?? 0) > 0 ? number_format($r['forecast'], 2) : '—' }}</td>
-                                    <td class="text-end font-monospace fw-bold">{{ number_format($r['actual'], 2) }}</td>
+                                    <td class="text-end font-monospace fw-bold tgt-actual">{{ number_format($r['actual'], 2) }}</td>
                                     <td class="text-end font-monospace" style="color:#9a3412;">{{ ($r['pending'] ?? 0) > 0 ? number_format($r['pending'], 2) : '—' }}</td>
+                                    {{-- Editable only while the month is open, under the same rule
+                                         the Sale/Pending figures use, so this cannot drift from the
+                                         rest of the book. --}}
+                                    <td class="text-end p-0 tgt-tally-cell" style="background:#f4fbfa;">
+                                        @if($canEditBook && !$tgtLocked)
+                                            <input type="number" step="0.01" min="0"
+                                                   class="form-control form-control-sm text-end font-monospace border-0 tgt-tally"
+                                                   style="background:transparent;font-size:0.76rem;padding:.28rem .35rem;box-shadow:none;"
+                                                   value="{{ $tallyVal !== null ? number_format($tallyVal, 2, '.', '') : '' }}"
+                                                   data-sp="{{ $r['id'] }}" data-month="{{ $mk }}"
+                                                   data-actual="{{ number_format((float) $r['actual'], 2, '.', '') }}"
+                                                   placeholder="—" title="Tally sale for {{ $r['name'] }}">
+                                        @else
+                                            <span class="d-block text-end font-monospace px-1"
+                                                  style="font-size:0.76rem;{{ $tallyVal === null ? 'color:#9ca3af;' : '' }}"
+                                                  title="{{ $tgtLocked ? 'This month is closed' : 'You cannot edit the sales book' }}">
+                                                {{ $tallyVal !== null ? number_format($tallyVal, 2) : '—' }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     @foreach(['bingo','kingo','super'] as $tier)
                                         @php $c = $tgtCell($r['actual'], $r[$tier]); @endphp
                                         <td class="text-end font-monospace {{ $c['cls'] }}" style="{{ $c['style'] }}">
@@ -933,7 +972,7 @@
                                     @endforeach
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">No targets set for {{ $tgtMonthLabel[$mk] ?? $mk }}.</td></tr>
                             @endforelse
                         </tbody>
                     @endforeach
@@ -1614,6 +1653,78 @@ document.addEventListener('DOMContentLoaded', function () {
     if (deptPicker) {
         deptPicker.addEventListener('change', applyRowFilter);
     }
+
+    // Flags the row when the typed Tally Sale disagrees with Actual Sale. Same
+    // rule and same half-paisa tolerance the server-rendered pass uses, so a row
+    // does not change colour just because it was edited rather than reloaded.
+    function flagMismatch(cell) {
+        const row = cell.closest('tr');
+        if (!row) return;
+        const actual = parseFloat(cell.dataset.actual || '0');
+        const typed  = cell.value === '' ? null : parseFloat(cell.value);
+        const off    = typed !== null && !isNaN(typed) && Math.abs(typed - actual) > 0.005;
+        row.classList.toggle('tgt-mm', off);
+        const icon = row.querySelector('td:first-child .bx-error-circle');
+        if (off && !icon) {
+            const i = document.createElement('i');
+            i.className = 'bx bx-error-circle text-danger me-1';
+            i.style.verticalAlign = '-2px';
+            row.querySelector('td:first-child').prepend(i);
+        } else if (!off && icon) {
+            icon.remove();
+        }
+        row.title = off
+            ? 'Tally ' + typed.toFixed(2) + ' vs Actual ' + actual.toFixed(2) +
+              ' — off by ' + Math.abs(typed - actual).toFixed(2)
+            : '';
+    }
+
+    // Tally Sale cells. Saved on blur rather than per keystroke, and only when
+    // the value actually changed, so tabbing across the table does not fire a
+    // request per cell. The server re-checks who may write and whether the month
+    // is still open; this only reports what it says.
+    document.querySelectorAll('#targetAchieveModal .tgt-tally').forEach(function (input) {
+        input.dataset.was = input.value;
+
+        input.addEventListener('blur', function () {
+            if (this.value === this.dataset.was) return;
+
+            const cell = this;
+            cell.disabled = true;
+
+            fetch('{{ route('sales-visits.pipeline.tally-sale.update') }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                           'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                body: JSON.stringify({
+                    salesperson_id: cell.dataset.sp,
+                    month_year: cell.dataset.month,
+                    value: cell.value === '' ? null : cell.value
+                })
+            }).then(function (r) { return r.json(); })
+              .then(function (data) {
+                cell.disabled = false;
+                if (data.success) {
+                    cell.dataset.was = cell.value;
+                    flagMismatch(cell);
+                    cell.style.backgroundColor = '#e8f5e9';
+                    setTimeout(function () { cell.style.backgroundColor = 'transparent'; }, 600);
+                } else {
+                    // Put back what was there, so the screen never shows a figure
+                    // the server did not accept.
+                    cell.value = cell.dataset.was;
+                    cell.style.backgroundColor = '#fdecea';
+                    setTimeout(function () { cell.style.backgroundColor = 'transparent'; }, 1200);
+                    if (data.message) { alert(data.message); }
+                }
+              })
+              .catch(function () {
+                cell.disabled = false;
+                cell.value = cell.dataset.was;
+                alert('Could not save that figure. Try again.');
+              });
+        });
+    });
 });
 
 function showAddNewRow() {

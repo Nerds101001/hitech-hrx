@@ -1,530 +1,225 @@
-@extends('layouts/blankLayout')
+@extends('layouts.layoutMaster')
 
-@section('title', 'Training Academy — HiTech HRX')
-
-@section('vendor-style')
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
-@endsection
+@section('title', 'Employee Training Program')
 
 @section('page-style')
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap');
+    .tp-page {
+        --tp-primary: #0b5f68;
+        --tp-primary-dark: #07464d;
+        --tp-gradient: linear-gradient(120deg, #07464d 0%, #0b6b73 55%, #11a3ad 100%);
+        --tp-border: #e3ebee;
+        --tp-ink: #1e293b;
+        --tp-muted: #64748b;
+        --tp-soft: #f4f8f9;
+        --tp-green: #16a34a;
+        --tp-orange: #f59e0b;
+        --tp-blue: #3b82f6;
+        --tp-red: #ef4444;
+        --tp-purple: #8b5cf6;
+    }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; background: #f0f4f8; }
+    /* ── Hero ───────────────────────────────────────── */
+    .tp-hero {
+        background: var(--tp-gradient); border-radius: 18px; padding: 24px 28px; margin-bottom: 18px; color: #fff;
+        position: relative; overflow: hidden; box-shadow: 0 12px 32px rgba(7, 70, 77, .22);
+        display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(300px, 380px); gap: 26px; align-items: center;
+    }
+    .tp-hero::before { content: ''; position: absolute; right: -70px; top: -90px; width: 280px; height: 280px; border-radius: 50%; background: rgba(255,255,255,.06); pointer-events: none; }
+    .tp-hero > * { position: relative; z-index: 1; }
+    .tp-hero-badge {
+        display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(255,255,255,.45); border-radius: 8px;
+        padding: 4px 10px; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 12px;
+    }
+    .tp-hero h1 { font-size: 1.85rem; font-weight: 800; margin: 0 0 6px; color: #fff; letter-spacing: -.01em; }
+    .tp-hero p { margin: 0 0 16px; color: rgba(255,255,255,.85); font-size: .92rem; }
+    .tp-hero-meta { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .82rem; }
+    .tp-hero-meta span { display: inline-flex; align-items: center; gap: 7px; }
+    .tp-hero-meta i { font-size: 1.05rem; opacity: .9; }
+    .tp-ring-wrap { display: flex; align-items: center; gap: 18px; }
+    .tp-ring { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
+    .tp-ring svg { transform: rotate(-90deg); }
+    .tp-ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .tp-ring-center b { font-size: 1.55rem; font-weight: 800; line-height: 1; }
+    .tp-ring-center span { font-size: .72rem; opacity: .85; margin-top: 3px; }
+    .tp-ring-text b { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1.1; }
+    .tp-ring-text span { font-size: .8rem; opacity: .85; line-height: 1.3; display: block; }
+    .tp-timeline { background: rgba(4, 38, 43, .55); border: 1px solid rgba(255,255,255,.12); border-radius: 14px; padding: 16px 18px; }
+    .tp-timeline-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0; }
+    .tp-timeline-title { font-weight: 700; font-size: .86rem; }
+    .tp-timeline-dates { font-size: .8rem; opacity: .85; }
+    .tp-timeline-pill { font-size: .7rem; font-weight: 700; border-radius: 8px; padding: 4px 12px; white-space: nowrap; background: #d1fae5; color: #065f46; }
+    .tp-timeline-pill.tl-new { background: #e2e8f0; color: #334155; }
+    .tp-timeline-pill.tl-prog { background: #ccfbf1; color: #0f766e; }
+    .tp-timeline-track { flex: 1; height: 8px; border-radius: 8px; background: rgba(255,255,255,.18); overflow: hidden; }
+    .tp-timeline-track > span { display: block; height: 100%; border-radius: 8px; background: #5eead4; }
+    .tp-timeline-left { font-size: .8rem; white-space: nowrap; }
 
-/* ══════════════════════════════════════════
-   TOP NAV
-══════════════════════════════════════════ */
-.lms-nav {
-    position: sticky; top: 0; z-index: 1000;
-    background: #0a0f1e;
-    height: 56px;
-    display: flex; align-items: center;
-    padding: 0 24px;
-    gap: 16px;
-    box-shadow: 0 2px 20px rgba(0,0,0,0.3);
-}
-.lms-nav-brand {
-    display: flex; align-items: center; gap: 10px;
-    text-decoration: none;
-}
-.lms-nav-brand-meta { display: flex; flex-direction: column; justify-content: center; line-height: 1.1; }
-.lms-nav-title { font-size: 0.88rem; font-weight: 700; color: white; letter-spacing: 0.2px; display: block; }
-.lms-nav-slogan { font-size: 0.6rem; font-weight: 600; color: rgba(255,255,255,0.45); letter-spacing: 1px; text-transform: uppercase; display: block; }
-.lms-nav-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.12); }
-.lms-nav-course { font-size: 0.82rem; color: rgba(255,255,255,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
-.lms-nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
-.lms-nav-pct {
-    display: flex; align-items: center; gap: 7px;
-    font-size: 0.78rem; color: rgba(255,255,255,0.7);
-}
-.lms-nav-pct-bar {
-    width: 80px; height: 4px; background: rgba(255,255,255,0.15); border-radius: 10px; overflow: hidden;
-}
-.lms-nav-pct-fill { height: 100%; background: #06b6d4; border-radius: 10px; transition: width 1s ease; }
-.lms-nav-back {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.78rem; color: rgba(255,255,255,0.55);
-    text-decoration: none;
-    padding: 5px 10px; border-radius: 8px;
-    transition: all 0.15s;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-.lms-nav-back:hover { color: white; background: rgba(255,255,255,0.08); }
-.nav-avatar {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: linear-gradient(135deg, #06b6d4, #8b5cf6);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.78rem; font-weight: 700; color: white;
-    flex-shrink: 0;
-}
+    /* ── Cards ──────────────────────────────────────── */
+    .tp-card { background: #fff; border: 1px solid var(--tp-border); border-radius: 14px; box-shadow: 0 2px 10px rgba(15, 23, 42, .04); }
+    .tp-card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 18px 8px; }
+    .tp-card-title { font-size: 1.05rem; font-weight: 800; color: var(--tp-ink); margin: 0; }
+    .tp-card-link { font-size: .76rem; font-weight: 600; color: var(--tp-primary); text-decoration: none; white-space: nowrap; }
+    .tp-card-link:hover { color: var(--tp-primary-dark); }
+    .tp-card-body { padding: 8px 18px 18px; }
 
-/* ══════════════════════════════════════════
-   HERO
-══════════════════════════════════════════ */
-.course-hero {
-    background: linear-gradient(135deg, #0a0f1e 0%, #0f2040 40%, #0e3461 70%, #1a4b7c 100%);
-    padding: 48px 0 0;
-    position: relative;
-    overflow: hidden;
-}
-.hero-deco-1 {
-    position: absolute; top: -80px; right: -60px;
-    width: 400px; height: 400px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(6,182,212,0.12) 0%, transparent 70%);
-    pointer-events: none;
-}
-.hero-deco-2 {
-    position: absolute; bottom: 40px; left: -40px;
-    width: 280px; height: 280px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(139,92,246,0.1) 0%, transparent 70%);
-    pointer-events: none;
-}
-.hero-inner { max-width: 1200px; margin: 0 auto; padding: 0 32px 40px; }
-.hero-badge {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(6,182,212,0.15);
-    border: 1px solid rgba(6,182,212,0.3);
-    color: #67e8f9; font-size: 0.72rem; font-weight: 700;
-    letter-spacing: 1px; text-transform: uppercase;
-    padding: 5px 12px; border-radius: 20px;
-    margin-bottom: 14px;
-}
-.hero-title { font-size: 2rem; font-weight: 900; color: white; line-height: 1.2; margin-bottom: 8px; }
-.hero-sub { font-size: 0.95rem; color: rgba(255,255,255,0.55); margin-bottom: 24px; max-width: 480px; }
-.hero-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 28px; }
-.hero-meta-item {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.8rem; color: rgba(255,255,255,0.65);
-}
-.hero-meta-item i { color: #06b6d4; font-size: 0.9rem; }
-.hero-progress-label {
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.8px; color: rgba(255,255,255,0.45);
-    margin-bottom: 7px;
-}
-.hero-progress-track {
-    height: 6px; background: rgba(255,255,255,0.12);
-    border-radius: 10px; overflow: hidden; max-width: 400px;
-    margin-bottom: 6px;
-}
-.hero-progress-fill {
-    height: 100%; border-radius: 10px;
-    background: linear-gradient(90deg, #06b6d4, #8b5cf6);
-    transition: width 1s ease;
-}
-.hero-progress-text { font-size: 0.78rem; color: rgba(255,255,255,0.5); margin-bottom: 24px; }
-.hero-cta {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: linear-gradient(135deg, #06b6d4, #0284c7);
-    color: white; font-size: 0.9rem; font-weight: 700;
-    padding: 12px 28px; border-radius: 50px;
-    text-decoration: none;
-    box-shadow: 0 8px 24px rgba(6,182,212,0.35);
-    transition: all 0.2s ease;
-}
-.hero-cta:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 32px rgba(6,182,212,0.45);
-    color: white;
-}
-.hero-ring-wrap {
-    display: flex; flex-direction: column; align-items: center; gap: 12px;
-    flex-shrink: 0;
-}
-.ring-container { position: relative; width: 120px; height: 120px; }
-.ring-container svg { transform: rotate(-90deg); }
-.ring-center {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-}
-.ring-pct { font-size: 1.8rem; font-weight: 900; color: white; line-height: 1; }
-.ring-label { font-size: 0.6rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; }
-.ring-subtext { font-size: 0.78rem; color: rgba(255,255,255,0.55); text-align: center; }
+    /* ── KPI cards ──────────────────────────────────── */
+    .tp-kpi { display: flex; gap: 12px; align-items: flex-start; padding: 16px; height: 100%; }
+    .tp-kpi-icon { width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+    .tp-kpi-value { font-size: 1.45rem; font-weight: 800; color: var(--tp-ink); line-height: 1.1; }
+    .tp-kpi-label { font-size: .8rem; color: var(--tp-ink); font-weight: 500; }
+    .tp-kpi-sub { font-size: .7rem; color: var(--tp-muted); margin-top: 2px; }
+    .tp-trend { display: inline-block; margin-top: 5px; font-size: .68rem; font-weight: 700; color: var(--tp-green); background: #f0fdf4; border-radius: 6px; padding: 1px 6px; }
+    .tpc-teal { background: #e0f2f1; color: #0b6b73; } .tpc-green { background: #dcfce7; color: #16a34a; }
+    .tpc-orange { background: #fef3c7; color: #d97706; } .tpc-red { background: #fee2e2; color: #dc2626; }
+    .tpc-rose { background: #ffe4e6; color: #e11d48; } .tpc-purple { background: #ede9fe; color: #7c3aed; }
+    .tpc-blue { background: #dbeafe; color: #2563eb; }
 
-/* Hero wave SVG separator */
-.hero-wave { display: block; margin-top: -2px; }
+    /* ── Layout ─────────────────────────────────────── */
+    .tp-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
+    .tp-side { display: flex; flex-direction: column; gap: 18px; }
 
-/* ══════════════════════════════════════════
-   MAIN CONTENT AREA
-══════════════════════════════════════════ */
-.lms-body {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 32px 24px 80px;
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    gap: 28px;
-    align-items: start;
-}
-@media (max-width: 991px) {
-    .lms-body { grid-template-columns: 1fr; }
-    .progress-sidebar { order: -1; }
-}
+    /* ── Phases ─────────────────────────────────────── */
+    .tp-btn-outline {
+        display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 10px;
+        border: 1px solid var(--tp-border); background: #fff; color: var(--tp-ink); font-size: .8rem; font-weight: 600;
+    }
+    .tp-btn-outline:hover { border-color: var(--tp-primary); color: var(--tp-primary); }
+    .tp-btn-icon { height: 36px; width: 36px; border-radius: 10px; border: 1px solid var(--tp-border); background: #fff; color: var(--tp-ink); display: inline-flex; align-items: center; justify-content: center; }
+    .tp-phase { border: 1px solid var(--tp-border); border-radius: 14px; margin-bottom: 14px; overflow: hidden; background: #fff; }
+    .tp-phase:last-child { margin-bottom: 0; }
+    .tp-phase.is-locked { background: #fafbfc; }
+    .tp-phase-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; user-select: none; }
+    .tp-phase-head:hover { background: #fafcfc; }
+    .tp-phase-head:focus-visible { outline: 2px solid var(--tp-primary); outline-offset: -2px; }
+    .tp-phase-num { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.15rem; color: #fff; flex-shrink: 0; }
+    .tpn-1 { background: linear-gradient(135deg, #07464d, #0b7c86); }
+    .tpn-2 { background: linear-gradient(135deg, #4338ca, #6366f1); }
+    .tpn-3 { background: linear-gradient(135deg, #7c3aed, #a855f7); }
+    .tpn-4 { background: linear-gradient(135deg, #ea580c, #f97316); }
+    .tpn-5 { background: linear-gradient(135deg, #15803d, #22c55e); }
+    .tpn-locked { background: #cbd5e1; color: #475569; }
+    .tp-phase-info { flex: 1; min-width: 0; }
+    .tp-phase-label { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--tp-muted); }
+    .tp-optional { margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #eef2ff; color: #4f46e5; font-size: .6rem; }
+    .tp-phase-name { font-size: 1rem; font-weight: 800; color: var(--tp-ink); line-height: 1.3; }
+    .tp-phase.is-locked .tp-phase-name { color: #475569; }
+    .tp-phase-desc { font-size: .78rem; color: var(--tp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tp-phase-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .tp-count { font-size: .76rem; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 6px; padding: 3px 9px; white-space: nowrap; }
+    .tp-phase.is-locked .tp-count { background: transparent; color: var(--tp-muted); }
+    .tp-chevron { font-size: 1.3rem; color: var(--tp-muted); transition: transform .25s ease; }
+    .tp-chevron.open { transform: rotate(180deg); }
+    .tp-phase-progress { display: flex; align-items: center; gap: 12px; padding: 0 16px 12px; }
+    .tp-phase-progress b { font-size: .78rem; color: var(--tp-ink); min-width: 38px; text-align: right; }
+    .tp-track { flex: 1; height: 7px; border-radius: 8px; background: #e8eef0; overflow: hidden; display: block; }
+    .tp-track > span { display: block; height: 100%; border-radius: 8px; }
+    .tpb-1 { background: #0b7c86; } .tpb-2 { background: #6366f1; } .tpb-3 { background: #a855f7; } .tpb-4 { background: #f97316; } .tpb-5 { background: #22c55e; }
+    .tpb-done { background: #22c55e; } .tpb-fail { background: #ef4444; }
+    .tp-phase-body { border-top: 1px solid #eef3f4; }
+    .tp-locked-msg { display: flex; align-items: center; gap: 12px; padding: 14px 16px; font-size: .82rem; color: var(--tp-muted); }
+    .tp-locked-msg i { font-size: 1.3rem; color: #94a3b8; }
+    .tp-locked-msg strong { color: var(--tp-ink); }
+    .tp-lib-note { padding: 10px 16px 4px; color: var(--tp-muted); font-size: .8rem; }
 
-/* ══════════════════════════════════════════
-   PHASE / CURRICULUM CARDS
-══════════════════════════════════════════ */
-.curriculum-section { display: flex; flex-direction: column; gap: 16px; }
+    /* ── Pills ──────────────────────────────────────── */
+    .tp-pill { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 700; padding: 4px 11px; border-radius: 6px; white-space: nowrap; }
+    .tp-pill-done { background: #dcfce7; color: #15803d; }
+    .tp-pill-prog { background: #fef3c7; color: #b45309; }
+    .tp-pill-new { background: #f1f5f9; color: #64748b; }
+    .tp-pill-fail { background: #fee2e2; color: #b91c1c; }
+    .tp-pill-locked { background: #f1f5f9; color: #94a3b8; }
 
-.phase-card {
-    background: white;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-    border: 1px solid #e8edf2;
-    transition: box-shadow 0.2s;
-}
-.phase-card:hover { box-shadow: 0 8px 32px rgba(0,0,0,0.09); }
-.phase-card.locked-card {
-    background: #fafbfc;
-    border-color: #dde3ea;
-    opacity: 0.8;
-}
+    /* ── Module rows ────────────────────────────────── */
+    .tp-mod { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid #f1f5f6; color: var(--tp-ink); text-decoration: none; transition: background .15s; }
+    .tp-mod:last-child { border-bottom: none; }
+    .tp-mod:hover { background: #f8fcfc; color: var(--tp-ink); }
+    .tp-mod.is-locked { cursor: not-allowed; pointer-events: none; }
+    .tp-mod.is-locked .tp-mod-text, .tp-mod.is-locked .tp-mod-type { opacity: .55; }
+    .tp-mod-state { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .st-completed { background: #22c55e; color: #fff; }
+    .st-failed { background: #ef4444; color: #fff; }
+    .st-in_progress { background: #fef3c7; color: #d97706; }
+    .st-available { background: #ccfbf1; color: #0f766e; }
+    .st-locked { background: transparent; color: #94a3b8; font-size: 1.15rem; }
+    .tp-mod-type { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; background: #eef4ff; color: #3b82f6; }
+    .tp-mod-type.mt-video { background: #fff7e6; color: #d97706; }
+    .tp-mod-type.mt-text { background: #ecfdf5; color: #059669; }
+    .tp-mod-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .tp-mod-title { font-size: .86rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tp-mod-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 2px; font-size: .7rem; color: #94a3b8; }
+    .tp-mod-meta span { display: inline-flex; align-items: center; gap: 3px; }
+    .tp-mod-bar { width: 110px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .tp-mod-pct { width: 42px; flex-shrink: 0; font-size: .78rem; font-weight: 700; text-align: right; color: var(--tp-ink); }
+    .tp-mod-pct.pct-done { color: #15803d; } .tp-mod-pct.pct-fail { color: #b91c1c; }
+    .tp-mod-status { width: 96px; flex-shrink: 0; display: flex; justify-content: flex-end; }
+    .tp-mod-go { font-size: 1.15rem; color: #94a3b8; width: 18px; flex-shrink: 0; }
+    .tp-go { display: block; width: 100%; text-align: center; border-radius: 999px; padding: 6px 0; font-size: .76rem; font-weight: 700; color: #fff; background: #2563eb; }
+    .tp-mod:hover .tp-go { filter: brightness(1.08); }
+    .tp-go.go-resume { background: #f59e0b; }
+    .tp-go.go-retry { background: #ef4444; }
+    .tp-mod-lock { color: #94a3b8; font-size: 1.05rem; }
 
-.phase-header {
-    display: flex; align-items: center; gap: 16px;
-    padding: 18px 22px;
-    cursor: pointer;
-    user-select: none;
-    transition: background 0.15s;
-}
-.phase-header:hover { background: rgba(0,0,0,0.015); }
+    .tp-done-banner { display: flex; align-items: center; gap: 14px; background: linear-gradient(120deg, #065f46, #10b981); color: #fff; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+    .tp-done-banner i { font-size: 2rem; }
+    .tp-done-banner b { display: block; font-size: 1rem; }
+    .tp-done-banner span { font-size: .82rem; opacity: .9; }
 
-.phase-num {
-    width: 44px; height: 44px; border-radius: 12px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 900; font-size: 1.05rem; color: white;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-.pn-1 { background: linear-gradient(135deg, #0891b2, #06b6d4); }
-.pn-2 { background: linear-gradient(135deg, #2563eb, #3b82f6); }
-.pn-3 { background: linear-gradient(135deg, #7c3aed, #a855f7); }
-.pn-4 { background: linear-gradient(135deg, #ea580c, #f97316); }
-.pn-5 { background: linear-gradient(135deg, #16a34a, #22c55e); }
-.pn-locked { background: linear-gradient(135deg, #94a3b8, #cbd5e1); }
+    /* ── Right column ───────────────────────────────── */
+    .tp-donut-row { display: flex; align-items: center; gap: 22px; }
+    .tp-donut { width: 132px; height: 132px; border-radius: 50%; position: relative; flex-shrink: 0; }
+    .tp-donut::after { content: ''; position: absolute; inset: 17px; background: #fff; border-radius: 50%; }
+    .tp-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; }
+    .tp-donut-center b { font-size: 1.5rem; font-weight: 800; color: var(--tp-ink); line-height: 1; }
+    .tp-donut-center span { font-size: .74rem; color: var(--tp-muted); margin-top: 3px; }
+    .tp-legend { list-style: none; padding: 0; margin: 0; flex: 1; font-size: .8rem; }
+    .tp-legend li { display: flex; align-items: center; gap: 8px; padding: 5px 0; color: var(--tp-ink); }
+    .tp-legend .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tp-legend .n { margin-left: auto; font-weight: 700; }
+    .tp-legend .p { color: var(--tp-muted); width: 54px; text-align: right; font-weight: 600; }
+    .tp-minis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
+    .tp-mini { border: 1px solid var(--tp-border); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .tp-mini i { font-size: 1.35rem; color: var(--tp-primary); }
+    .tp-mini b { display: block; font-size: 1.05rem; font-weight: 800; color: var(--tp-ink); line-height: 1.1; }
+    .tp-mini span { font-size: .7rem; color: var(--tp-muted); }
+    .tp-cta { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: 12px; background: var(--tp-primary); color: #fff; font-weight: 700; font-size: .9rem; text-decoration: none; }
+    .tp-cta:hover { background: var(--tp-primary-dark); color: #fff; }
+    .tp-cta-done { background: #dcfce7; color: #15803d; pointer-events: none; }
+    .tp-cta-alt { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; margin-top: 10px; border-radius: 12px; border: 1px solid var(--tp-border); color: var(--tp-ink); font-weight: 600; font-size: .82rem; text-decoration: none; }
+    .tp-cta-alt:hover { border-color: var(--tp-primary); color: var(--tp-primary); }
+    .tp-pb-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f1f5f6; font-size: .78rem; color: var(--tp-ink); }
+    .tp-pb-row:last-child { border-bottom: none; }
+    .tp-pb-row .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tp-pb-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+    .tp-pb-count { width: 38px; text-align: right; color: var(--tp-muted); font-weight: 600; flex-shrink: 0; }
+    .tp-pb-row .tp-track { flex: 0 0 64px; }
+    .tp-pb-pct { width: 36px; text-align: right; font-weight: 700; flex-shrink: 0; }
+    .tp-act { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid #f1f5f6; font-size: .8rem; color: var(--tp-ink); }
+    .tp-act:last-child { border-bottom: none; }
+    .tp-act-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+    .tp-act .when { margin-left: auto; font-size: .7rem; color: var(--tp-muted); white-space: nowrap; padding-left: 8px; }
+    .tp-viewing { font-size: .8rem; color: var(--tp-muted); text-align: center; padding: 14px; }
 
-.phase-info { flex: 1; min-width: 0; }
-.phase-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; margin-bottom: 2px; }
-.phase-name { font-size: 1rem; font-weight: 800; color: #0f172a; line-height: 1.25; }
-.phase-desc { font-size: 0.78rem; color: #64748b; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.phase-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.phase-pill {
-    padding: 4px 12px; border-radius: 20px;
-    font-size: 0.68rem; font-weight: 700;
-    white-space: nowrap;
-}
-.pill-done     { background: #d1fae5; color: #065f46; }
-.pill-partial  { background: #fef3c7; color: #92400e; }
-.pill-empty    { background: #f1f5f9; color: #64748b; }
-.pill-locked   { background: #f1f5f9; color: #94a3b8; }
-.pill-complete { background: #d1fae5; color: #065f46; }
-
-.phase-chevron {
-    color: #94a3b8; font-size: 1rem;
-    transition: transform 0.25s ease;
-}
-.phase-chevron.open { transform: rotate(180deg); }
-
-.phase-progress-bar {
-    height: 3px;
-    background: #f1f5f9;
-    overflow: hidden;
-}
-.phase-progress-fill-bar {
-    height: 100%;
-    transition: width 0.7s ease;
-}
-.pb-1 { background: linear-gradient(90deg, #0891b2, #06b6d4); }
-.pb-2 { background: linear-gradient(90deg, #2563eb, #3b82f6); }
-.pb-3 { background: linear-gradient(90deg, #7c3aed, #a855f7); }
-.pb-4 { background: linear-gradient(90deg, #ea580c, #f97316); }
-.pb-5 { background: linear-gradient(90deg, #16a34a, #22c55e); }
-.pb-locked { background: #e2e8f0; }
-
-/* Locked phase overlay message */
-.phase-locked-msg {
-    padding: 20px 22px;
-    display: flex; align-items: center; gap: 14px;
-    background: #f8fafc;
-    border-top: 1px solid #f1f5f9;
-}
-.locked-icon-wrap {
-    width: 42px; height: 42px; border-radius: 12px;
-    background: #f1f5f9;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-}
-.phase-locked-msg p { font-size: 0.82rem; color: #64748b; margin: 0; line-height: 1.5; }
-.phase-locked-msg strong { color: #0f172a; }
-
-/* Module items */
-.phase-modules { border-top: 1px solid #f1f5f9; }
-
-.module-item {
-    display: flex; align-items: center; gap: 14px;
-    padding: 14px 22px;
-    border-bottom: 1px solid #f8fafc;
-    text-decoration: none;
-    color: #0f172a;
-    transition: background 0.15s;
-    position: relative;
-}
-.module-item:last-child { border-bottom: none; }
-.module-item:hover:not(.mod-locked) { background: #f8fcff; }
-.module-item.mod-locked { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
-.module-item.mod-active {
-    background: linear-gradient(90deg, #f0fdff, #faffff);
-    border-left: 3px solid #06b6d4;
-    padding-left: 19px;
-}
-.module-item.mod-completed { background: #fafffe; }
-.module-item.mod-failed { background: #fff8f8; border-left: 3px solid #ef4444; padding-left: 19px; }
-
-/* Module number bubble */
-.mod-num {
-    width: 28px; height: 28px; border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.72rem; font-weight: 800;
-    flex-shrink: 0;
-    background: #f1f5f9; color: #64748b;
-}
-.mod-completed .mod-num { background: #d1fae5; color: #059669; }
-.mod-active .mod-num    { background: rgba(6,182,212,0.15); color: #0891b2; }
-.mod-failed .mod-num    { background: #fee2e2; color: #dc2626; }
-
-/* Module type icon box */
-.mod-type-icon {
-    width: 38px; height: 38px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-    font-size: 1rem;
-}
-.mti-video  { background: #fffbeb; }
-.mti-catalog{ background: #eff6ff; }
-.mti-policy { background: #f0fdf4; }
-
-/* Module text */
-.mod-text { flex: 1; min-width: 0; }
-.mod-title { font-size: 0.88rem; font-weight: 700; color: #1e293b; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mod-meta  { display: flex; align-items: center; gap: 10px; margin-top: 3px; flex-wrap: wrap; }
-.mod-meta-chip { display: inline-flex; align-items: center; gap: 3px; font-size: 0.67rem; color: #94a3b8; }
-
-/* Module status right side */
-.mod-status-area { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.mod-score-badge { font-size: 0.7rem; font-weight: 700; color: #059669; }
-.mod-status-icon {
-    width: 26px; height: 26px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.75rem; flex-shrink: 0;
-}
-.msi-done  { background: #d1fae5; color: #059669; }
-.msi-prog  { background: #fef3c7; color: #d97706; }
-.msi-lock  { background: #f1f5f9; color: #94a3b8; }
-.msi-fail  { background: #fee2e2; color: #dc2626; }
-.msi-avail { background: rgba(6,182,212,0.15); color: #0891b2; }
-
-.start-badge {
-    display: inline-block;
-    background: linear-gradient(135deg, #06b6d4, #0284c7);
-    color: white;
-    font-size: 0.6rem; font-weight: 800;
-    letter-spacing: 0.8px; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 20px;
-    animation: pulse-glow 1.8s ease-in-out infinite;
-}
-@keyframes pulse-glow {
-    0%,100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.4); }
-    50%      { box-shadow: 0 0 0 6px rgba(6,182,212,0); }
-}
-.retry-badge { background: linear-gradient(135deg, #ef4444, #dc2626); }
-.resume-badge { background: linear-gradient(135deg, #f59e0b, #d97706); }
-
-/* ══════════════════════════════════════════
-   PROGRESS SIDEBAR
-══════════════════════════════════════════ */
-.progress-sidebar { position: sticky; top: 72px; display: flex; flex-direction: column; gap: 16px; }
-
-.progress-card {
-    background: white;
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.07);
-    border: 1px solid #e8edf2;
-}
-.progress-card-header {
-    background: linear-gradient(135deg, #0a0f1e, #0f2040);
-    padding: 24px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-.progress-card-header::before {
-    content: '';
-    position: absolute; top: -30px; right: -30px;
-    width: 120px; height: 120px; border-radius: 50%;
-    background: rgba(6,182,212,0.1);
-    pointer-events: none;
-}
-.pc-ring { position: relative; display: inline-flex; margin-bottom: 10px; }
-.pc-ring svg { transform: rotate(-90deg); }
-.pc-ring-text {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-}
-.pc-pct { font-size: 1.6rem; font-weight: 900; color: white; line-height: 1; }
-.pc-pct-label { font-size: 0.55rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; }
-.pc-title { font-size: 0.95rem; font-weight: 800; color: white; }
-.pc-subtitle { font-size: 0.75rem; color: rgba(255,255,255,0.5); }
-
-.progress-card-body { padding: 20px; }
-
-.pc-stat-row { display: flex; gap: 8px; margin-bottom: 16px; }
-.pc-stat {
-    flex: 1;
-    background: #f8fafc;
-    border-radius: 10px;
-    padding: 10px 12px;
-    text-align: center;
-}
-.pc-stat-val { font-size: 1.1rem; font-weight: 800; color: #0f172a; }
-.pc-stat-lbl { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-
-.pc-cta {
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    background: linear-gradient(135deg, #06b6d4, #0284c7);
-    color: white; font-size: 0.88rem; font-weight: 700;
-    padding: 12px; border-radius: 10px;
-    text-decoration: none;
-    transition: all 0.2s;
-    margin-bottom: 16px;
-    box-shadow: 0 4px 14px rgba(6,182,212,0.3);
-}
-.pc-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(6,182,212,0.4); color: white; }
-
-.pc-phase-list { display: flex; flex-direction: column; gap: 8px; }
-.pc-phase-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px;
-    background: #f8fafc;
-    border-radius: 8px;
-}
-.pc-phase-dot {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-}
-.pc-phase-info { flex: 1; min-width: 0; }
-.pc-phase-name { font-size: 0.75rem; font-weight: 700; color: #1e293b; }
-.pc-phase-mini-bar { height: 3px; background: #e2e8f0; border-radius: 10px; overflow: hidden; margin-top: 3px; }
-.pc-phase-mini-fill { height: 100%; border-radius: 10px; }
-.pc-phase-count { font-size: 0.68rem; font-weight: 700; color: #94a3b8; flex-shrink: 0; }
-
-/* Completed banner */
-.complete-banner {
-    background: linear-gradient(135deg, #064e3b, #065f46, #047857);
-    border-radius: 16px;
-    padding: 28px;
-    text-align: center;
-    color: white;
-    box-shadow: 0 8px 24px rgba(4,120,87,0.25);
-}
-
-/* Alert */
-.lms-alert {
-    max-width: 1200px; margin: 12px auto 0; padding: 0 24px;
-}
-.alert-inner {
-    background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444;
-    border-radius: 10px; padding: 12px 16px;
-    display: flex; align-items: center; gap: 10px;
-    font-size: 0.85rem; color: #991b1b;
-}
-
-/* ══════════════════════════════════════════
-   RESPONSIVE
-══════════════════════════════════════════ */
-@media (max-width: 767px) {
-    .hero-inner { padding: 0 16px 32px; }
-    .hero-title { font-size: 1.4rem; }
-    .hero-ring-wrap { display: none; }
-    .lms-body { padding: 20px 16px 60px; }
-    .phase-header { padding: 14px 16px; }
-    .module-item { padding: 12px 16px; }
-    .lms-nav-course { display: none; }
-}
+    @media (max-width: 1399.98px) {
+        .tp-hero { grid-template-columns: minmax(0, 1fr) auto; }
+        .tp-timeline { grid-column: 1 / -1; }
+    }
+    @media (max-width: 1199.98px) {
+        .tp-grid { grid-template-columns: minmax(0, 1fr); }
+        .tp-side { order: -1; }
+    }
+    @media (max-width: 767.98px) {
+        .tp-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; }
+        .tp-hero h1 { font-size: 1.35rem; }
+        .tp-mod-bar, .tp-mod-pct, .tp-mod-go, .tp-count { display: none; }
+        .tp-mod-status { width: auto; }
+        .tp-phase-desc { white-space: normal; }
+        .tp-pb-row .tp-track { display: none; }
+    }
 </style>
 @endsection
 
 @section('content')
-
-{{-- ════════════════════════════════════════════
-     TOP NAV
-════════════════════════════════════════════ --}}
-<nav class="lms-nav">
-    <a href="{{ route('training.portal') }}" class="lms-nav-brand">
-        <img src="{{ asset('assets/img/logo.png') }}" alt="HRX Logo" style="height:34px;width:auto;object-fit:contain;flex-shrink:0;">
-        <div class="lms-nav-brand-meta d-none d-md-block">
-            <span class="lms-nav-title">Hi Tech <span style="color:#06b6d4;font-weight:800;">HRX</span></span>
-            <span class="lms-nav-slogan">NEXT-GEN HRMS</span>
-        </div>
-    </a>
-    <div class="lms-nav-sep d-none d-md-block"></div>
-    <span class="lms-nav-course d-none d-md-block">Employee Training Program</span>
-    <div class="lms-nav-right">
-        <div class="lms-nav-pct d-none d-sm-flex">
-            <span class="fw-bold" style="color:white;">{{ $progressPercentage }}%</span>
-            <div class="lms-nav-pct-bar">
-                <div class="lms-nav-pct-fill" style="width:{{ $progressPercentage }}%"></div>
-            </div>
-        </div>
-        {{-- Your own results; the results dashboard is admin/HR only. --}}
-        @if($user->id === auth()->id())
-        <a href="{{ route('training.report-card', auth()->id()) }}" class="lms-nav-back" title="Your assessment results">
-            <i class="ti ti-certificate" style="font-size:0.8rem;"></i>
-            <span class="d-none d-sm-inline">My Results</span>
-        </a>
-        @endif
-        @if($resultsLink ?? null)
-        <a href="{{ route('training.activity') }}" class="lms-nav-back">
-            <i class="ti ti-chart-bar" style="font-size:0.8rem;"></i>
-            <span class="d-none d-sm-inline">{{ $resultsLink }}</span>
-        </a>
-        @endif
-        <a href="{{ url('/') }}" class="lms-nav-back">
-            <i class="ti ti-layout-dashboard" style="font-size:0.8rem;"></i>
-            <span class="d-none d-sm-inline">Dashboard</span>
-        </a>
-        <div class="dropdown">
-            <div class="nav-avatar" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="cursor:pointer;" title="Account options">
-                {{ strtoupper(substr($user->first_name ?? $user->name, 0, 2)) }}
-            </div>
-            <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0" style="border-radius:12px; margin-top:8px; min-width:160px;">
-                <li><span class="dropdown-item-text text-muted small px-3 pt-2 pb-1 d-block">{{ $user->first_name ?? $user->name }}</span></li>
-                <li><hr class="dropdown-divider my-1"></li>
-                <li>
-                    <a class="dropdown-item text-danger fw-semibold d-flex align-items-center gap-2" href="{{ route('auth.logout') }}"
-                       onclick="event.preventDefault(); document.getElementById('training-logout-form').submit();">
-                        <i class="ti ti-logout"></i> Logout
-                    </a>
-                </li>
-            </ul>
-            <form id="training-logout-form" method="POST" action="{{ route('auth.logout') }}" style="display:none;">@csrf</form>
-        </div>
-    </div>
-</nav>
-
-{{-- Flash error --}}
-@if(session('error'))
-<div class="lms-alert">
-    <div class="alert-inner">
-        <i class="ti ti-alert-circle" style="font-size:1.1rem;flex-shrink:0;"></i>
-        {{ session('error') }}
-    </div>
-</div>
-@endif
 
 {{-- ════════════════════════════════════════════
      COMPUTE DATA
@@ -589,471 +284,570 @@ html, body { height: 100%; font-family: 'Plus Jakarta Sans', system-ui, sans-ser
         $nextModId   = $phases->first()->modules->first()->id;
         $nextModName = $phases->first()->modules->first()->title;
     }
+
+    // ── Display figures (read-only; nothing here changes what unlocks) ──
+    $isSelf = $user->id === auth()->id();
+    $isDone = $user->training_status === 'completed';
+
+    // The compulsory phases gate the account - the hero ring is their progress,
+    // the same measure as $progressPercentage and the lock banner.
+    $compIds   = config('training.onboarding_phase_ids', [1, 2]);
+    $compMods  = $phases->filter(fn($p) => in_array($p->id, $compIds, true))->flatMap(fn($p) => $p->modules);
+    $compTotal = $compMods->count();
+    $compDone  = $compMods->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+
+    // Every module, by where it stands: the cards and the donut.
+    $inProgMods = 0; $failedMods = 0; $doneThisMonth = 0; $firstAt = null; $lastDoneAt = null; $events = collect();
+    foreach ($phases as $ph) {
+        foreach ($ph->modules as $mod) {
+            $prog = $mod->userProgress->first();
+            if (!$prog) continue;
+            if ($prog->status === 'in_progress') $inProgMods++;
+            if ($prog->status === 'failed') $failedMods++;
+            if ($prog->status === 'completed' && $prog->completed_at) {
+                if ($prog->completed_at->gte(now()->startOfMonth())) $doneThisMonth++;
+                if (!$lastDoneAt || $prog->completed_at->gt($lastDoneAt)) $lastDoneAt = $prog->completed_at;
+            }
+            $began = $prog->started_at ?? $prog->created_at;
+            if ($began && (!$firstAt || $began->lt($firstAt))) $firstAt = $began;
+            if (in_array($prog->status, ['completed', 'failed', 'in_progress'], true)) {
+                $at = $prog->status === 'completed' ? ($prog->completed_at ?? $prog->updated_at) : ($prog->updated_at ?? $began);
+                if ($at) $events->push(['at' => $at, 'kind' => $prog->status, 'title' => $mod->title, 'score' => $prog->assessment_score]);
+            }
+        }
+    }
+    foreach (($libraryVideos ?? collect()) as $v) {
+        $vv = $videoViews->get($v->id);
+        $at = $vv ? ($vv->completed_at ?? $vv->started_at ?? $vv->updated_at) : null;
+        if ($at) $events->push(['at' => $at, 'kind' => $vv->completed_at ? 'watched' : 'watching', 'title' => $v->title, 'score' => null]);
+    }
+    $events = $events->sortByDesc(fn($e) => $e['at']->timestamp)->take(5)->values();
+
+    $notStartedMods = max(0, $totalMods - $doneMods - $inProgMods - $failedMods);
+    $overallPct = $totalMods > 0 ? (int) round($doneMods / $totalMods * 100) : 0;
+    $modPct = fn($n) => $totalMods > 0 ? round($n / $totalMods * 100, 1) : 0;
+    $modsLeft = max(0, $totalMods - $doneMods);
+    $journey = $isDone || ($totalMods > 0 && $modsLeft === 0) ? 'Completed' : ($hasAnyProgress ? 'In Progress' : 'Not Started');
+    $firstName = $user->first_name ?: $user->name;
+
+    $d1 = $modPct($doneMods); $d2 = $d1 + $modPct($inProgMods); $d3 = $d2 + $modPct($failedMods);
+    $donut = $totalMods > 0
+        ? "conic-gradient(#22c55e 0 {$d1}%, #f59e0b {$d1}% {$d2}%, #ef4444 {$d2}% {$d3}%, #3b82f6 {$d3}% 100%)"
+        : 'conic-gradient(#e2e8f0 0 100%)';
+
+    $phaseRows = [];   // filled by the phase loop, so the breakdown matches the cards
 @endphp
 
-{{-- ════════════════════════════════════════════
-     HERO
-════════════════════════════════════════════ --}}
-<div class="course-hero">
-    <div class="hero-deco-1"></div>
-    <div class="hero-deco-2"></div>
-    <div class="hero-inner">
-        <div class="d-flex align-items-start justify-content-between gap-4">
-            <div style="flex:1;min-width:0;">
-                <div class="hero-badge animate__animated animate__fadeInDown">
-                    <i class="ti ti-certificate" style="font-size:0.8rem;"></i>
-                    Employee Training Program
-                </div>
-                <h1 class="hero-title animate__animated animate__fadeInUp">
-                    @if($user->id === auth()->id())
-                        Your Learning Journey
-                    @else
-                        {{ $user->name }}'s Training
-                    @endif
-                </h1>
-                <p class="hero-sub">Master your role through structured phases — each building on the last.</p>
-                <div class="hero-meta">
-                    <span class="hero-meta-item"><i class="ti ti-layers"></i> {{ $phases->count() }} Phases</span>
-                    <span class="hero-meta-item"><i class="ti ti-books"></i> {{ $totalMods }} Modules</span>
-                    <span class="hero-meta-item"><i class="ti ti-clock"></i> ~{{ round($estTotalMins/60, 1) }}h total</span>
-                    @if($avgScore > 0)
-                    <span class="hero-meta-item"><i class="ti ti-star"></i> {{ $avgScore }}% avg score</span>
-                    @endif
-                </div>
-                <div class="hero-progress-label">Overall Progress</div>
-                <div class="hero-progress-track">
-                    <div class="hero-progress-fill" style="width:{{ $progressPercentage }}%"></div>
-                </div>
-                <div class="hero-progress-text">{{ $doneMods }} of {{ $totalMods }} modules complete</div>
-                @if($nextModId && $user->training_status !== 'completed' && $user->id === auth()->id())
-                <a href="{{ route('training.module.show', $nextModId) }}" class="hero-cta animate__animated animate__fadeInUp" style="animation-delay:0.15s;">
-                    {{ $hasAnyProgress ? 'Continue Learning' : 'Start Learning' }}
-                    <i class="ti ti-arrow-right"></i>
-                </a>
-                @elseif($user->training_status === 'completed')
-                <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#6ee7b7;padding:10px 20px;border-radius:50px;font-size:0.88rem;font-weight:700;">
-                    <i class="ti ti-trophy"></i> Training Complete!
-                </div>
+<div class="tp-page">
+
+    {{-- Flash error --}}
+    @if(session('error'))
+        <div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+            <i class="bx bx-error-circle fs-5"></i> {{ session('error') }}
+        </div>
+    @endif
+
+    {{-- ── Hero ─────────────────────────────────────────────────── --}}
+    <div class="tp-hero">
+        <div>
+            <span class="tp-hero-badge"><i class="bx bx-certification"></i> Employee Training Program</span>
+            <h1>{{ $user->name }}'s Training</h1>
+            <p>Master your role through structured phases &mdash; each building on the last.</p>
+            <div class="tp-hero-meta">
+                <span><i class="bx bx-layer"></i> {{ $phases->count() }} Phases</span>
+                <span><i class="bx bx-book-open"></i> {{ $totalMods }} Modules</span>
+                <span><i class="bx bx-time-five"></i> {{ round($estTotalMins / 60, 1) }}h total</span>
+                @if($avgScore > 0)
+                    <span><i class="bx bx-trophy"></i> {{ $avgScore }}% avg score</span>
                 @endif
             </div>
+        </div>
 
-            {{-- Progress ring --}}
-            <div class="hero-ring-wrap animate__animated animate__fadeIn d-none d-lg-flex">
-                @php $c = round(2 * M_PI * 48, 2); @endphp
-                <div class="ring-container">
-                    <svg width="120" height="120" viewBox="0 0 120 120">
-                        <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8"/>
-                        <circle cx="60" cy="60" r="48" fill="none"
-                            stroke="url(#heroGrad)" stroke-width="8"
-                            stroke-dasharray="{{ $c }}"
-                            stroke-dashoffset="{{ round($c * (1 - $progressPercentage/100), 2) }}"
-                            stroke-linecap="round"
-                            style="transition:stroke-dashoffset 1.5s ease;"/>
-                        <defs>
-                            <linearGradient id="heroGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#06b6d4"/>
-                                <stop offset="100%" stop-color="#8b5cf6"/>
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                    <div class="ring-center">
-                        <span class="ring-pct">{{ $progressPercentage }}%</span>
-                        <span class="ring-label">Done</span>
+        <div class="tp-ring-wrap" title="Compulsory modules passed - these unlock the account">
+            @php $c = round(2 * M_PI * 48, 2); @endphp
+            <div class="tp-ring">
+                <svg width="112" height="112" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="10"/>
+                    <circle cx="60" cy="60" r="48" fill="none" stroke="#5eead4" stroke-width="10"
+                        stroke-dasharray="{{ $c }}" stroke-dashoffset="{{ round($c * (1 - $progressPercentage / 100), 2) }}"
+                        stroke-linecap="round" style="transition:stroke-dashoffset 1.5s ease;"/>
+                </svg>
+                <div class="tp-ring-center"><b>{{ $progressPercentage }}%</b><span>Completed</span></div>
+            </div>
+            <div class="tp-ring-text">
+                <b>{{ $compDone }}/{{ $compTotal }}</b>
+                <span>Compulsory<br>Modules Completed</span>
+            </div>
+        </div>
+
+        <div class="tp-timeline">
+            <div class="d-flex align-items-start gap-3">
+                <span class="tp-timeline-icon"><i class="bx bx-calendar"></i></span>
+                <div class="flex-grow-1" style="min-width:0;">
+                    <div class="tp-timeline-title">Training Timeline</div>
+                    <div class="tp-timeline-dates">
+                        @if($firstAt)
+                            {{ $firstAt->format('d M Y') }} &ndash; {{ $journey === 'Completed' && $lastDoneAt ? $lastDoneAt->format('d M Y') : 'Present' }}
+                        @else
+                            Not started yet
+                        @endif
                     </div>
                 </div>
-                <div class="ring-subtext">{{ $doneMods }}/{{ $totalMods }}<br>Modules</div>
+                <span class="tp-timeline-pill {{ $journey === 'Completed' ? '' : ($journey === 'In Progress' ? 'tl-prog' : 'tl-new') }}">{{ $journey }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-3 mt-3">
+                <div class="tp-timeline-track"><span style="width:{{ $overallPct }}%"></span></div>
+                <b class="tp-timeline-left">{{ $modsLeft > 0 ? $modsLeft . ' ' . \Illuminate\Support\Str::plural('module', $modsLeft) . ' left' : 'All modules done' }}</b>
             </div>
         </div>
     </div>
 
-    {{-- Wave separator --}}
-    <svg class="hero-wave" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 48" preserveAspectRatio="none" style="height:48px;width:100%;">
-        <path fill="#f0f4f8" d="M0,32 C360,0 1080,64 1440,32 L1440,48 L0,48 Z"/>
-    </svg>
-</div>
-
-{{-- ════════════════════════════════════════════
-     MAIN BODY
-════════════════════════════════════════════ --}}
-<div class="lms-body">
-
-    {{-- ── LEFT: Curriculum ──────────────────── --}}
-    <div class="curriculum-section">
-
-        @if($user->training_status === 'completed')
-        <div class="complete-banner animate__animated animate__zoomIn">
-            <div style="font-size:3rem;margin-bottom:12px;">🏆</div>
-            <h3 class="fw-bold mb-2">Training Complete!</h3>
-            <p style="color:rgba(255,255,255,0.75);font-size:0.88rem;margin:0;">You've mastered all phases. Welcome to the team!</p>
-        </div>
-        @endif
-
+    {{-- ── KPI cards: this person's modules ───────────────────── --}}
+    <div class="row g-3 mb-3">
         @php
-            $phaseColors = ['1','2','3','4','5'];
+            $kpis = [
+                ['icon' => 'bx bx-book-open', 'bg' => 'tpc-teal', 'value' => $totalMods, 'label' => 'Total Modules', 'sub' => $phases->count() . ' phases', 'trend' => null],
+                ['icon' => 'bx bx-check-circle', 'bg' => 'tpc-green', 'value' => $doneMods, 'label' => 'Completed', 'sub' => $modPct($doneMods) . '% of modules',
+                 'trend' => $doneThisMonth > 0 ? '+' . $doneThisMonth . ' this month' : null],
+                ['icon' => 'bx bx-play-circle', 'bg' => 'tpc-orange', 'value' => $inProgMods, 'label' => 'In Progress', 'sub' => $modPct($inProgMods) . '% of modules', 'trend' => null],
+                ['icon' => 'bx bx-time-five', 'bg' => 'tpc-rose', 'value' => $notStartedMods, 'label' => 'Not Started', 'sub' => $modPct($notStartedMods) . '% of modules', 'trend' => null],
+                ['icon' => 'bx bx-error', 'bg' => 'tpc-red', 'value' => $failedMods, 'label' => 'Needs Retry', 'sub' => $modPct($failedMods) . '% of modules', 'trend' => null],
+                ['icon' => 'bx bx-bar-chart-alt-2', 'bg' => 'tpc-purple', 'value' => $avgScore > 0 ? $avgScore . '%' : '—', 'label' => 'Average Score',
+                 'sub' => $scoreCount > 0 ? 'across ' . $scoreCount . ' ' . \Illuminate\Support\Str::plural('assessment', $scoreCount) : 'no assessments yet', 'trend' => null],
+            ];
         @endphp
-
-        @foreach($phases as $phaseIdx => $phase)
-        @php
-            // Learn @ Hi Tech lists Digital Library videos live; it is complete
-            // once $videosRequired of them are watched (any of them).
-            $isLibraryPhase = in_array($phase->id, $libraryPhaseIds ?? [], true) && ($libraryVideos ?? collect())->isNotEmpty();
-            if ($isLibraryPhase) {
-                $libWatched = $libraryVideos->filter(fn($v) => optional($videoViews->get($v->id))->completed_at)->count();
-                $pTotalMods = $videosRequired;
-                $pDoneMods  = min($libWatched, $videosRequired);
-            } else {
-                $pTotalMods = $phase->modules->count();
-                $pDoneMods  = $phase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
-            }
-            $pPct       = $pTotalMods > 0 ? round($pDoneMods / $pTotalMods * 100) : 0;
-            $ci         = (($phase->order - 1) % 5) + 1;
-
-            // Phase accessibility: all previous phases must be 100% - except the
-            // Learn @ Hi Tech videos, which open once the prerequisite phases
-            // (1 and 2) are done, whatever sits between.
-            $isAccessible = true;
-            $libraryBlocker = $isLibraryPhase ? \App\Http\Controllers\tenant\TrainingController::libraryPrerequisiteUndone($user->id) : null;
-            if ($isLibraryPhase) {
-                $isAccessible = $libraryBlocker === null;
-            } elseif ($phaseIdx > 0) {
-                $prevPhase = $phases[$phaseIdx - 1];
-                $prevDone  = $prevPhase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
-                if ($prevPhase->modules->count() > 0 && $prevDone < $prevPhase->modules->count()) {
-                    $isAccessible = false;
-                }
-            }
-
-            // Should this phase start expanded?
-            $hasActiveModule = false;
-            foreach ($phase->modules as $mod) {
-                $st = optional($mod->userProgress->first())->status ?? 'locked';
-                if (in_array($st, ['in_progress','available','failed'])) { $hasActiveModule = true; break; }
-            }
-            // Also expand if user has no progress and this is first phase
-            if (!$hasAnyProgress && $phaseIdx === 0) $hasActiveModule = true;
-            // Expand completed phases by default (collapsed)
-            $startOpen = $hasActiveModule || ($pPct > 0 && $pPct < 100);
-
-            $pillClass = $pPct === 100 ? 'pill-done' : ($pPct > 0 ? 'pill-partial' : (!$isAccessible ? 'pill-locked' : 'pill-empty'));
-        @endphp
-
-        <div class="phase-card {{ !$isAccessible ? 'locked-card' : '' }} animate__animated animate__fadeInUp" style="animation-delay:{{ $loop->index * 0.07 }}s;">
-
-            {{-- Phase Header --}}
-            <div class="phase-header" onclick="togglePhase('phase-{{ $phase->id }}')" id="ph-header-{{ $phase->id }}">
-                <div class="phase-num pn-{{ $isAccessible ? $ci : 'locked' }}">
-                    @if($pPct === 100) <i class="ti ti-check" style="font-size:1rem;"></i>
-                    @elseif(!$isAccessible) <i class="ti ti-lock" style="font-size:0.9rem;"></i>
-                    @else {{ str_pad($phase->order, 2, '0', STR_PAD_LEFT) }}
-                    @endif
-                </div>
-                <div class="phase-info">
-                    <div class="phase-label">Phase {{ $phase->order }}
-                        @unless(in_array($phase->id, config('training.onboarding_phase_ids', [1, 2]), true))
-                            <span style="margin-left:6px;padding:1px 8px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-size:0.62rem;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;">Optional</span>
-                        @endunless
+        @foreach($kpis as $k)
+            <div class="col-6 col-md-4 col-xl-2">
+                <div class="tp-card tp-kpi">
+                    <div class="tp-kpi-icon {{ $k['bg'] }}"><i class="{{ $k['icon'] }}"></i></div>
+                    <div style="min-width:0;">
+                        <div class="tp-kpi-value">{{ $k['value'] }}</div>
+                        <div class="tp-kpi-label">{{ $k['label'] }}</div>
+                        <div class="tp-kpi-sub">{{ $k['sub'] }}</div>
+                        @if($k['trend'])<span class="tp-trend">↑ {{ $k['trend'] }}</span>@endif
                     </div>
-                    <div class="phase-name">{{ $phase->title }}</div>
-                    @if($phase->description)
-                    <div class="phase-desc">{{ $phase->description }}</div>
-                    @endif
-                </div>
-                <div class="phase-right">
-                    <span class="phase-pill {{ $pillClass }}">
-                        @if($pPct === 100) <i class="ti ti-check me-1" style="font-size:0.65rem;"></i>Complete
-                        @elseif(!$isAccessible) <i class="ti ti-lock me-1" style="font-size:0.65rem;"></i>Locked
-                        @elseif($isLibraryPhase) {{ $pDoneMods }}/{{ $pTotalMods }} watched
-                        @else {{ $pDoneMods }}/{{ $pTotalMods }}
-                        @endif
-                    </span>
-                    <i class="ti ti-chevron-down phase-chevron {{ $startOpen ? 'open' : '' }}" id="chevron-{{ $phase->id }}"></i>
                 </div>
             </div>
+        @endforeach
+    </div>
 
-            {{-- Progress bar --}}
-            <div class="phase-progress-bar">
-                <div class="phase-progress-fill-bar pb-{{ $isAccessible ? $ci : 'locked' }}" style="width:{{ $pPct }}%;"></div>
-            </div>
+    <div class="tp-grid">
 
-            {{-- Phase Body --}}
-            <div class="phase-modules" id="phase-{{ $phase->id }}" style="{{ $startOpen ? '' : 'display:none;' }}">
-
-                @if(!$isAccessible)
-                <div class="phase-locked-msg">
-                    <div class="locked-icon-wrap">
-                        <i class="ti ti-lock" style="color:#94a3b8;font-size:1.1rem;"></i>
-                    </div>
-                    @if($isLibraryPhase && $libraryBlocker)
-                    <p>Complete <strong>{{ $libraryBlocker->phase->title }}</strong> to unlock these videos.</p>
-                    @else
-                    <p>Complete <strong>Phase {{ $phase->order - 1 }}</strong> to unlock this phase.</p>
+        {{-- ── LEFT: phases and modules ─────────────────────────── --}}
+        <div class="tp-card" id="tpPhases">
+            <div class="tp-card-head">
+                <h5 class="tp-card-title">Training Phases &amp; Modules</h5>
+                <div class="d-flex align-items-center gap-2">
+                    @if($phases->isNotEmpty())
+                        <button type="button" class="tp-btn-outline" id="tpExpandAll"><i class="bx bx-expand-alt"></i> <span>Expand All</span></button>
+                    @endif
+                    @if($isSelf || ($resultsLink ?? null))
+                        <div class="dropdown">
+                            <button type="button" class="tp-btn-icon" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More options"><i class="bx bx-dots-vertical-rounded"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                {{-- Your own results; the results dashboard is admin/HR only. --}}
+                                @if($isSelf)
+                                    <li><a class="dropdown-item" href="{{ route('training.report-card', auth()->id()) }}"><i class="bx bx-certification me-2"></i>My Results</a></li>
+                                @endif
+                                @if($resultsLink ?? null)
+                                    <li><a class="dropdown-item" href="{{ route('training.activity') }}"><i class="bx bx-bar-chart-alt-2 me-2"></i>{{ $resultsLink }} Dashboard</a></li>
+                                @endif
+                            </ul>
+                        </div>
                     @endif
                 </div>
-                @elseif($isLibraryPhase)
-                <div style="padding:10px 18px 4px;color:#64748b;font-size:0.8rem;">
-                    Watch any <strong>{{ $videosRequired }}</strong> of these Learn @ Hi Tech sessions to complete this phase
-                    ({{ config('training.library_video_min_minutes', 20) }} min minimum each). New sessions appear here as they are added to the Digital Library.
-                </div>
-                @foreach($libraryVideos as $video)
-                @php
-                    $vv       = $videoViews->get($video->id);
-                    $vStatus  = optional($vv)->completed_at ? 'completed' : ($vv ? 'in_progress' : 'available');
-                    $vRow     = $vStatus === 'completed' ? 'mod-completed' : 'mod-active';
-                @endphp
-                <a href="{{ route('training.library-video.show', $video->id) }}" class="module-item {{ $vRow }}">
-                    <div class="mod-num">
-                        @if($vStatus === 'completed') <i class="ti ti-check" style="font-size:0.75rem;"></i> @else {{ $loop->iteration }} @endif
-                    </div>
-                    <div class="mod-type-icon mti-video">
-                        <i class="ti ti-player-play" style="color:#f59e0b;font-size:1rem;"></i>
-                    </div>
-                    <div class="mod-text">
-                        <div class="mod-title">{{ $video->title }}</div>
-                        <div class="mod-meta">
-                            <span class="mod-meta-chip"><i class="ti ti-clock" style="font-size:0.72rem;"></i> {{ config('training.library_video_min_minutes', 20) }}m</span>
-                            <span class="mod-meta-chip">Video</span>
-                            @if($video->session_date)
-                            <span class="mod-meta-chip"><i class="ti ti-calendar" style="font-size:0.72rem;"></i> {{ \Carbon\Carbon::parse($video->session_date)->format('d M Y') }}</span>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="mod-status-area">
-                        @if($vStatus === 'available')
-                            <span class="start-badge">Watch</span>
-                        @elseif($vStatus === 'in_progress')
-                            <span class="start-badge resume-badge">Resume</span>
-                        @endif
-                        <div class="mod-status-icon {{ $vStatus === 'completed' ? 'msi-done' : ($vStatus === 'in_progress' ? 'msi-prog' : 'msi-avail') }}">
-                            @if($vStatus === 'completed') <i class="ti ti-check"></i>
-                            @elseif($vStatus === 'in_progress') <i class="ti ti-player-play"></i>
-                            @else <i class="ti ti-arrow-right"></i>
-                            @endif
-                        </div>
-                    </div>
-                </a>
-                @endforeach
-                @else
-                @forelse($phase->modules as $module)
-                @php
-                    $prog   = $module->userProgress->first();
-                    $status = $prog ? $prog->status : 'locked';
+            </div>
+            <div class="tp-card-body">
 
-                    // Auto-unlock first module if user has no progress
-                    if (!$hasAnyProgress && $phaseIdx === 0 && $loop->first && $status === 'locked') {
-                        $status = 'available';
+                @if($isDone)
+                    <div class="tp-done-banner">
+                        <i class="bx bx-trophy"></i>
+                        <div><b>Training Complete!</b><span>You've mastered all phases. Welcome to the team!</span></div>
+                    </div>
+                @endif
+
+                @foreach($phases as $phaseIdx => $phase)
+                @php
+                    // Learn @ Hi Tech lists Digital Library videos live; it is complete
+                    // once $videosRequired of them are watched (any of them).
+                    $isLibraryPhase = in_array($phase->id, $libraryPhaseIds ?? [], true) && ($libraryVideos ?? collect())->isNotEmpty();
+                    if ($isLibraryPhase) {
+                        $libWatched = $libraryVideos->filter(fn($v) => optional($videoViews->get($v->id))->completed_at)->count();
+                        $pTotalMods = $videosRequired;
+                        $pDoneMods  = min($libWatched, $videosRequired);
+                    } else {
+                        $pTotalMods = $phase->modules->count();
+                        $pDoneMods  = $phase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
                     }
+                    $pPct       = $pTotalMods > 0 ? round($pDoneMods / $pTotalMods * 100) : 0;
+                    $ci         = (($phase->order - 1) % 5) + 1;
 
-                    if ($status === 'locked' && $isAccessible) {
-                        $hasIncompleteLower = $phase->modules->filter(function($m) use ($module) {
-                            return $m->order < $module->order && optional($m->userProgress->first())->status !== 'completed';
-                        })->isNotEmpty();
-                        if (!$hasIncompleteLower) {
-                            $status = 'available';
+                    // Phase accessibility: all previous phases must be 100% - except the
+                    // Learn @ Hi Tech videos, which open once the prerequisite phases
+                    // (1 and 2) are done, whatever sits between.
+                    $isAccessible = true;
+                    $libraryBlocker = $isLibraryPhase ? \App\Http\Controllers\tenant\TrainingController::libraryPrerequisiteUndone($user->id) : null;
+                    if ($isLibraryPhase) {
+                        $isAccessible = $libraryBlocker === null;
+                    } elseif ($phaseIdx > 0) {
+                        $prevPhase = $phases[$phaseIdx - 1];
+                        $prevDone  = $prevPhase->modules->filter(fn($m) => optional($m->userProgress->first())->status === 'completed')->count();
+                        if ($prevPhase->modules->count() > 0 && $prevDone < $prevPhase->modules->count()) {
+                            $isAccessible = false;
                         }
                     }
 
-                    $isClickable = $status !== 'locked';
-                    $href = $isClickable ? route('training.module.show', $module->id) : 'javascript:void(0)';
-                    $rowClass = match($status) {
-                        'completed'   => 'mod-completed',
-                        'in_progress' => 'mod-active',
-                        'available'   => 'mod-active',
-                        'failed'      => 'mod-failed',
-                        default       => 'mod-locked',
-                    };
-                    $iconClass = match($module->content_type) {
-                        'video'   => 'mti-video',
-                        'catalog' => 'mti-catalog',
-                        default   => 'mti-policy',
-                    };
-                    $iconName = match($module->content_type) {
-                        'video'   => 'ti-player-play',
-                        'catalog' => 'ti-file-text',
-                        default   => 'ti-book',
-                    };
-                    $iconColor = match($module->content_type) {
-                        'video'   => '#f59e0b',
-                        'catalog' => '#3b82f6',
-                        default   => '#10b981',
-                    };
+                    // Should this phase start expanded?
+                    $hasActiveModule = false;
+                    foreach ($phase->modules as $mod) {
+                        $st = optional($mod->userProgress->first())->status ?? 'locked';
+                        if (in_array($st, ['in_progress','available','failed'])) { $hasActiveModule = true; break; }
+                    }
+                    // Also expand if user has no progress and this is first phase
+                    if (!$hasAnyProgress && $phaseIdx === 0) $hasActiveModule = true;
+                    // Expand completed phases by default (collapsed)
+                    $startOpen = $hasActiveModule || ($pPct > 0 && $pPct < 100);
+
+                    [$phaseLabel, $phasePill] = $pPct === 100 ? ['Completed', 'tp-pill-done']
+                        : (!$isAccessible ? ['Locked', 'tp-pill-locked']
+                        : ($pPct > 0 ? ['In Progress', 'tp-pill-prog'] : ['Not Started', 'tp-pill-new']));
+                    $phaseColors = ['#0b7c86', '#6366f1', '#a855f7', '#f97316', '#22c55e'];
+                    $phaseRows[] = ['title' => $phase->title, 'done' => $pDoneMods, 'total' => $pTotalMods, 'pct' => $pPct,
+                        'label' => $phaseLabel, 'pill' => $phasePill, 'color' => $isAccessible ? ($phaseColors[$ci - 1] ?? $phaseColors[0]) : '#94a3b8'];
                 @endphp
 
-                <a href="{{ $href }}" class="module-item {{ $rowClass }}" @if(!$isClickable)tabindex="-1"@endif>
-                    <div class="mod-num">
-                        @if($status === 'completed')
-                            <i class="ti ti-check" style="font-size:0.75rem;"></i>
-                        @else
-                            {{ $loop->iteration }}
-                        @endif
-                    </div>
-                    <div class="mod-type-icon {{ $iconClass }}">
-                        <i class="ti {{ $iconName }}" style="color:{{ $iconColor }};font-size:1rem;"></i>
-                    </div>
-                    <div class="mod-text">
-                        <div class="mod-title">{{ $module->title }}</div>
-                        <div class="mod-meta">
-                            <span class="mod-meta-chip"><i class="ti ti-clock" style="font-size:0.72rem;"></i> {{ $module->estimated_time_minutes }}m</span>
-                            <span class="mod-meta-chip" style="text-transform:capitalize;">
-                                {{-- Same wording the admin Content Type picker uses.
-                                     This printed the raw column, so staff saw
-                                     "Policy" and "Catalog" for what admins now
-                                     create as Text and PDF. --}}
-                                {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? ucfirst($module->content_type ?? 'reading') }}
-                            </span>
-                            @if($module->is_assessment_required ?? true)
-                            <span class="mod-meta-chip"><i class="ti ti-clipboard-check" style="font-size:0.72rem;"></i> Quiz</span>
-                            @endif
-                            @if($prog && $prog->attempts > 0)
-                            <span class="mod-meta-chip"><i class="ti ti-repeat" style="font-size:0.72rem;"></i> {{ $prog->attempts }} try</span>
-                            @endif
-                        </div>
-                    </div>
-                    <div class="mod-status-area">
-                        @if($prog && $prog->assessment_score > 0)
-                            <span class="mod-score-badge">{{ round($prog->assessment_score) }}%</span>
-                        @endif
-                        @if($status === 'available')
-                            <span class="start-badge">Start</span>
-                        @elseif($status === 'in_progress')
-                            <span class="start-badge resume-badge">Resume</span>
-                        @elseif($status === 'failed')
-                            <span class="start-badge retry-badge">Retry</span>
-                        @endif
-                        <div class="mod-status-icon
-                            @if($status==='completed') msi-done
-                            @elseif($status==='in_progress') msi-prog
-                            @elseif($status==='available') msi-avail
-                            @elseif($status==='failed') msi-fail
-                            @else msi-lock @endif">
-                            @if($status==='completed') <i class="ti ti-check"></i>
-                            @elseif($status==='in_progress') <i class="ti ti-player-play"></i>
-                            @elseif($status==='available') <i class="ti ti-arrow-right"></i>
-                            @elseif($status==='failed') <i class="ti ti-refresh"></i>
-                            @else <i class="ti ti-lock"></i>
-                            @endif
-                        </div>
-                    </div>
-                </a>
-
-                @empty
-                <div style="padding:24px;text-align:center;color:#94a3b8;font-size:0.82rem;">
-                    <i class="ti ti-inbox" style="font-size:1.8rem;opacity:0.3;display:block;margin-bottom:8px;"></i>
-                    No modules yet.
-                </div>
-                @endforelse
-                @endif
-            </div>
-        </div>
-        @endforeach
-
-        @if($phases->isEmpty())
-        <div style="text-align:center;padding:60px 20px;background:white;border-radius:16px;">
-            <div style="font-size:3rem;opacity:0.15;margin-bottom:16px;">📚</div>
-            <h5 style="color:#64748b;">No training content yet</h5>
-            <p style="color:#94a3b8;font-size:0.85rem;">Training phases will appear here once added by your HR team.</p>
-        </div>
-        @endif
-
-    </div>
-
-    {{-- ── RIGHT: Progress Sidebar ───────────── --}}
-    <aside class="progress-sidebar">
-
-        {{-- Progress Card --}}
-        <div class="progress-card">
-            <div class="progress-card-header">
-                @php $c2 = round(2 * M_PI * 38, 2); @endphp
-                <div class="pc-ring">
-                    <svg width="100" height="100" viewBox="0 0 100 100">
-                        <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7"/>
-                        <circle cx="50" cy="50" r="38" fill="none"
-                            stroke="#06b6d4" stroke-width="7"
-                            stroke-dasharray="{{ $c2 }}"
-                            stroke-dashoffset="{{ round($c2 * (1 - $progressPercentage/100), 2) }}"
-                            stroke-linecap="round"
-                            style="transition:stroke-dashoffset 1.5s ease;"/>
-                    </svg>
-                    <div class="pc-ring-text">
-                        <span class="pc-pct">{{ $progressPercentage }}%</span>
-                        <span class="pc-pct-label">Done</span>
-                    </div>
-                </div>
-                <div class="pc-title">Your Progress</div>
-                <div class="pc-subtitle">{{ $doneMods }}/{{ $totalMods }} modules complete</div>
-            </div>
-            <div class="progress-card-body">
-                <div class="pc-stat-row">
-                    <div class="pc-stat">
-                        <div class="pc-stat-val">{{ $phases->count() }}</div>
-                        <div class="pc-stat-lbl">Phases</div>
-                    </div>
-                    <div class="pc-stat">
-                        <div class="pc-stat-val">{{ $avgScore > 0 ? $avgScore.'%' : '—' }}</div>
-                        <div class="pc-stat-lbl">Avg Score</div>
-                    </div>
-                    <div class="pc-stat">
-                        <div class="pc-stat-val">{{ $estTotalMins }}m</div>
-                        <div class="pc-stat-lbl">Est. Time</div>
-                    </div>
-                </div>
-
-                @if($nextModId && $user->training_status !== 'completed')
-                <a href="{{ route('training.module.show', $nextModId) }}" class="pc-cta">
-                    {{ $hasAnyProgress ? 'Continue Learning' : 'Begin Training' }}
-                    <i class="ti ti-arrow-right"></i>
-                </a>
-                @endif
-
-                {{-- Per-phase mini progress --}}
-                <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#94a3b8;margin-bottom:10px;">Phase Breakdown</div>
-                <div class="pc-phase-list">
-                    @foreach($phases as $pi => $ph)
-                    @php
-                        $phD = $ph->modules->filter(fn($m) => optional($m->userProgress->first())->status==='completed')->count();
-                        $phT = $ph->modules->count();
-                        $phP = $phT > 0 ? round($phD/$phT*100) : 0;
-                        $phColors = ['#06b6d4','#3b82f6','#a855f7','#f97316','#22c55e'];
-                        $phCol = $phColors[$pi % 5];
-                    @endphp
-                    <div class="pc-phase-row">
-                        <div class="pc-phase-dot" style="background:{{ $phCol }};"></div>
-                        <div class="pc-phase-info">
-                            <div class="pc-phase-name">Phase {{ $ph->order }}: {{ \Illuminate\Support\Str::limit($ph->title, 22) }}</div>
-                            <div class="pc-phase-mini-bar">
-                                <div class="pc-phase-mini-fill" style="width:{{ $phP }}%;background:{{ $phCol }};"></div>
+                <div class="tp-phase {{ !$isAccessible ? 'is-locked' : '' }}">
+                    <div class="tp-phase-head" id="ph-header-{{ $phase->id }}" data-phase="{{ $phase->id }}" role="button" tabindex="0" aria-expanded="{{ $startOpen ? 'true' : 'false' }}" aria-controls="phase-{{ $phase->id }}">
+                        <div class="tp-phase-num tpn-{{ $isAccessible ? $ci : 'locked' }}">{{ str_pad($phase->order, 2, '0', STR_PAD_LEFT) }}</div>
+                        <div class="tp-phase-info">
+                            <div class="tp-phase-label">Phase {{ $phase->order }}
+                                @unless(in_array($phase->id, config('training.onboarding_phase_ids', [1, 2]), true))
+                                    <span class="tp-optional">Optional</span>
+                                @endunless
                             </div>
+                            <div class="tp-phase-name">{{ $phase->title }}</div>
+                            @if($phase->description)
+                                <div class="tp-phase-desc">{{ $phase->description }}</div>
+                            @endif
                         </div>
-                        <div class="pc-phase-count">{{ $phD }}/{{ $phT }}</div>
+                        <div class="tp-phase-right">
+                            <span class="tp-pill {{ $phasePill }}">@if(!$isAccessible && $pPct !== 100)<i class="bx bx-lock-alt"></i>@endif{{ $phaseLabel }}</span>
+                            <span class="tp-count">{{ $pDoneMods }}/{{ $pTotalMods }}@if($isLibraryPhase) watched @endif</span>
+                            <i class="bx bx-chevron-down tp-chevron {{ $startOpen ? 'open' : '' }}" id="chevron-{{ $phase->id }}"></i>
+                        </div>
                     </div>
-                    @endforeach
+
+                    @if($isAccessible)
+                        <div class="tp-phase-progress">
+                            <span class="tp-track"><span class="tpb-{{ $ci }}" style="width:{{ $pPct }}%;"></span></span>
+                            <b>{{ $pPct }}%</b>
+                        </div>
+                    @endif
+
+                    <div class="tp-phase-body" id="phase-{{ $phase->id }}" style="{{ $startOpen ? '' : 'display:none;' }}">
+
+                        @if(!$isAccessible)
+                            <div class="tp-locked-msg">
+                                <i class="bx bx-lock-alt"></i>
+                                @if($isLibraryPhase && $libraryBlocker)
+                                    <span>Complete <strong>{{ $libraryBlocker->phase->title }}</strong> to unlock these videos.</span>
+                                @else
+                                    <span>Complete <strong>Phase {{ $phase->order - 1 }}</strong> to unlock this phase.</span>
+                                @endif
+                            </div>
+                        @elseif($isLibraryPhase)
+                            <div class="tp-lib-note">
+                                Watch any <strong>{{ $videosRequired }}</strong> of these Learn @ Hi Tech sessions to complete this phase
+                                ({{ config('training.library_video_min_minutes', 20) }} min minimum each). New sessions appear here as they are added to the Digital Library.
+                            </div>
+                            @foreach($libraryVideos as $video)
+                            @php
+                                $vv      = $videoViews->get($video->id);
+                                $vStatus = optional($vv)->completed_at ? 'completed' : ($vv ? 'in_progress' : 'available');
+                            @endphp
+                            <a href="{{ route('training.library-video.show', $video->id) }}" class="tp-mod">
+                                <span class="tp-mod-state st-{{ $vStatus }}">
+                                    <i class="bx {{ $vStatus === 'completed' ? 'bx-check' : ($vStatus === 'in_progress' ? 'bx-play' : 'bx-right-arrow-alt') }}"></i>
+                                </span>
+                                <span class="tp-mod-type mt-video"><i class="bx bx-play-circle"></i></span>
+                                <span class="tp-mod-text">
+                                    <span class="tp-mod-title">{{ $video->title }}</span>
+                                    <span class="tp-mod-meta">
+                                        <span><i class="bx bx-time-five"></i> {{ config('training.library_video_min_minutes', 20) }} min</span>
+                                        <span><i class="bx bx-video"></i> Video</span>
+                                        @if($video->session_date)
+                                            <span><i class="bx bx-calendar"></i> {{ \Carbon\Carbon::parse($video->session_date)->format('d M Y') }}</span>
+                                        @endif
+                                    </span>
+                                </span>
+                                <span class="tp-mod-bar">
+                                    @if($vStatus === 'completed')
+                                        <span class="tp-track"><span class="tpb-done" style="width:100%;"></span></span>
+                                    @elseif($vStatus === 'in_progress')
+                                        <span class="tp-go go-resume">Resume</span>
+                                    @else
+                                        <span class="tp-go">Watch</span>
+                                    @endif
+                                </span>
+                                <span class="tp-mod-pct {{ $vStatus === 'completed' ? 'pct-done' : '' }}">{{ $vStatus === 'completed' ? '100%' : '–' }}</span>
+                                <span class="tp-mod-status">
+                                    <span class="tp-pill {{ $vStatus === 'completed' ? 'tp-pill-done' : ($vStatus === 'in_progress' ? 'tp-pill-prog' : 'tp-pill-new') }}">{{ $vStatus === 'completed' ? 'Watched' : ($vStatus === 'in_progress' ? 'In Progress' : 'Not Started') }}</span>
+                                </span>
+                                <i class="bx bx-chevron-right tp-mod-go"></i>
+                            </a>
+                            @endforeach
+                        @else
+                            @forelse($phase->modules as $module)
+                            @php
+                                $prog   = $module->userProgress->first();
+                                $status = $prog ? $prog->status : 'locked';
+
+                                // Auto-unlock first module if user has no progress
+                                if (!$hasAnyProgress && $phaseIdx === 0 && $loop->first && $status === 'locked') {
+                                    $status = 'available';
+                                }
+
+                                if ($status === 'locked' && $isAccessible) {
+                                    $hasIncompleteLower = $phase->modules->filter(function($m) use ($module) {
+                                        return $m->order < $module->order && optional($m->userProgress->first())->status !== 'completed';
+                                    })->isNotEmpty();
+                                    if (!$hasIncompleteLower) {
+                                        $status = 'available';
+                                    }
+                                }
+
+                                $isClickable = $status !== 'locked';
+                                $href = $isClickable ? route('training.module.show', $module->id) : 'javascript:void(0)';
+                                $stateKey = in_array($status, ['completed', 'in_progress', 'available', 'failed'], true) ? $status : 'locked';
+                                $stateIcon = ['completed' => 'bx-check', 'in_progress' => 'bx-play', 'available' => 'bx-right-arrow-alt', 'failed' => 'bx-x', 'locked' => 'bx-lock-alt'][$stateKey];
+                                [$typeClass, $typeIcon] = match($module->content_type) {
+                                    'video'   => ['mt-video', 'bx-play-circle'],
+                                    'catalog' => ['', 'bx-file'],
+                                    default   => ['mt-text', 'bx-book-content'],
+                                };
+                                $score = $prog && $prog->assessment_score > 0 ? round($prog->assessment_score) : null;
+                                [$statusLabel, $statusPill] = [
+                                    'completed'   => ['Completed', 'tp-pill-done'],
+                                    'in_progress' => ['In Progress', 'tp-pill-prog'],
+                                    'available'   => ['Not Started', 'tp-pill-new'],
+                                    'failed'      => ['Failed', 'tp-pill-fail'],
+                                    'locked'      => ['Locked', 'tp-pill-locked'],
+                                ][$stateKey];
+                            @endphp
+
+                            <a href="{{ $href }}" class="tp-mod {{ $isClickable ? '' : 'is-locked' }}" @if(!$isClickable) tabindex="-1" aria-disabled="true" @endif>
+                                <span class="tp-mod-state st-{{ $stateKey }}"><i class="bx {{ $stateIcon }}"></i></span>
+                                <span class="tp-mod-type {{ $typeClass }}"><i class="bx {{ $typeIcon }}"></i></span>
+                                <span class="tp-mod-text">
+                                    <span class="tp-mod-title">{{ $module->title }}</span>
+                                    <span class="tp-mod-meta">
+                                        <span><i class="bx bx-time-five"></i> {{ $module->estimated_time_minutes }} min</span>
+                                        {{-- Same wording the admin Content Type picker uses. --}}
+                                        <span><i class="bx bx-paperclip"></i> {{ ['policy' => 'Text', 'catalog' => 'PDF', 'video' => 'Video'][$module->content_type] ?? ucfirst($module->content_type ?? 'reading') }}</span>
+                                        @if($module->is_assessment_required ?? true)
+                                            <span><i class="bx bx-clipboard"></i> Quiz</span>
+                                        @endif
+                                        @if($prog && $prog->attempts > 0)
+                                            <span><i class="bx bx-revision"></i> {{ $prog->attempts }} {{ $prog->attempts == 1 ? 'Try' : 'Tries' }}</span>
+                                        @endif
+                                    </span>
+                                </span>
+                                <span class="tp-mod-bar">
+                                    @if($status === 'completed')
+                                        <span class="tp-track" title="{{ $score !== null ? 'Assessment score' : 'Completed' }}"><span class="tpb-done" style="width:{{ $score ?? 100 }}%;"></span></span>
+                                    @elseif($status === 'available')
+                                        <span class="tp-go">Start</span>
+                                    @elseif($status === 'in_progress')
+                                        <span class="tp-go go-resume">Resume</span>
+                                    @elseif($status === 'failed')
+                                        <span class="tp-go go-retry">Retry</span>
+                                    @else
+                                        <i class="bx bx-lock-alt tp-mod-lock"></i>
+                                    @endif
+                                </span>
+                                <span class="tp-mod-pct {{ $status === 'completed' ? 'pct-done' : ($status === 'failed' ? 'pct-fail' : '') }}">
+                                    @if($score !== null){{ $score }}%@elseif($status === 'completed')100%@elseif($status === 'locked')@else–@endif
+                                </span>
+                                <span class="tp-mod-status"><span class="tp-pill {{ $statusPill }}">@if($stateKey === 'locked')<i class="bx bx-lock-alt"></i>@endif{{ $statusLabel }}</span></span>
+                                <i class="bx bx-chevron-right tp-mod-go" @if(!$isClickable) style="visibility:hidden;" @endif></i>
+                            </a>
+
+                            @empty
+                                <div class="text-center text-muted py-4" style="font-size:.82rem;">
+                                    <i class="bx bx-archive d-block mb-2" style="font-size:1.8rem;opacity:.35;"></i>
+                                    No modules yet.
+                                </div>
+                            @endforelse
+                        @endif
+                    </div>
                 </div>
+                @endforeach
+
+                @if($phases->isEmpty())
+                    <div class="text-center py-5">
+                        <i class="bx bx-book-open d-block mb-3" style="font-size:3rem;opacity:.2;"></i>
+                        <h5 class="text-muted">No training content yet</h5>
+                        <p class="text-muted mb-0" style="font-size:.85rem;">Training phases will appear here once added by your HR team.</p>
+                    </div>
+                @endif
             </div>
         </div>
 
-        {{-- HR View info --}}
-        @if($user->id !== auth()->id())
-        <div style="background:white;border-radius:14px;padding:16px;border:1px solid #e2e8f0;font-size:0.8rem;color:#64748b;text-align:center;">
-            <i class="ti ti-eye" style="font-size:1.2rem;display:block;margin-bottom:6px;color:#94a3b8;"></i>
-            Viewing <strong style="color:#0f172a;">{{ $user->name }}</strong>'s training progress
-        </div>
-        @endif
+        {{-- ── RIGHT: progress, breakdown, activity ─────────────── --}}
+        <aside class="tp-side">
 
-    </aside>
+            <div class="tp-card">
+                <div class="tp-card-head"><h5 class="tp-card-title">{{ $isSelf ? 'Your Training Progress' : $firstName . "'s Progress" }}</h5></div>
+                <div class="tp-card-body">
+                    <div class="tp-donut-row">
+                        <div class="tp-donut" style="background:{{ $donut }};">
+                            <div class="tp-donut-center"><b>{{ $overallPct }}%</b><span>Completed</span></div>
+                        </div>
+                        <ul class="tp-legend">
+                            <li><span class="dot" style="background:#22c55e"></span>Completed <span class="n">{{ $doneMods }}</span><span class="p">({{ $modPct($doneMods) }}%)</span></li>
+                            <li><span class="dot" style="background:#f59e0b"></span>In Progress <span class="n">{{ $inProgMods }}</span><span class="p">({{ $modPct($inProgMods) }}%)</span></li>
+                            <li><span class="dot" style="background:#3b82f6"></span>Not Started <span class="n">{{ $notStartedMods }}</span><span class="p">({{ $modPct($notStartedMods) }}%)</span></li>
+                            <li><span class="dot" style="background:#ef4444"></span>Needs Retry <span class="n">{{ $failedMods }}</span><span class="p">({{ $modPct($failedMods) }}%)</span></li>
+                        </ul>
+                    </div>
+                    <div class="tp-minis">
+                        <div class="tp-mini"><i class="bx bx-book"></i><div><b>{{ $phases->count() }}</b><span>Phases</span></div></div>
+                        <div class="tp-mini"><i class="bx bx-file"></i><div><b>{{ $totalMods }}</b><span>Modules</span></div></div>
+                        <div class="tp-mini"><i class="bx bx-time-five"></i><div><b>{{ round($estTotalMins / 60, 1) }}h</b><span>Total Duration</span></div></div>
+                    </div>
 
+                    @if($nextModId && !$isDone && $isSelf)
+                        <a href="{{ route('training.module.show', $nextModId) }}" class="tp-cta" title="{{ $nextModName }}">
+                            {{ $hasAnyProgress ? 'Continue Learning' : 'Start Learning' }} <i class="bx bx-right-arrow-alt fs-5"></i>
+                        </a>
+                    @elseif($isDone)
+                        <div class="tp-cta tp-cta-done"><i class="bx bx-trophy"></i> Training Complete!</div>
+                    @endif
+                    @if($isSelf)
+                        <a href="{{ route('training.report-card', auth()->id()) }}" class="tp-cta-alt" title="Your assessment results"><i class="bx bx-certification"></i> My Results</a>
+                    @endif
+                </div>
+            </div>
+
+            <div class="tp-card">
+                <div class="tp-card-head">
+                    <h5 class="tp-card-title">Phase Breakdown</h5>
+                    <a href="#tpPhases" class="tp-card-link">View Details →</a>
+                </div>
+                <div class="tp-card-body">
+                    @forelse($phaseRows as $r)
+                        <div class="tp-pb-row">
+                            <span class="dot" style="background:{{ $r['color'] }}"></span>
+                            <span class="tp-pb-name" title="{{ $r['title'] }}">{{ $r['title'] }}</span>
+                            <span class="tp-pb-count">{{ $r['done'] }}/{{ $r['total'] }}</span>
+                            <span class="tp-track"><span style="width:{{ $r['pct'] }}%;background:{{ $r['color'] }};"></span></span>
+                            <span class="tp-pb-pct">{{ $r['pct'] }}%</span>
+                            <span class="tp-pill {{ $r['pill'] }}">@if($r['label'] === 'Locked')<i class="bx bx-lock-alt"></i>@endif{{ $r['label'] }}</span>
+                        </div>
+                    @empty
+                        <p class="text-muted text-center py-3 mb-0" style="font-size:.84rem;">No phases yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            <div class="tp-card">
+                <div class="tp-card-head">
+                    <h5 class="tp-card-title">Recent Training Activity</h5>
+                    <a href="{{ route('training.report-card', $user->id) }}" class="tp-card-link">View All →</a>
+                </div>
+                <div class="tp-card-body">
+                    @forelse($events as $ev)
+                        @php
+                            [$evIcon, $evTone] = [
+                                'completed'   => ['bx-check-circle', 'tpc-green'],
+                                'failed'      => ['bx-x-circle', 'tpc-red'],
+                                'in_progress' => ['bx-play-circle', 'tpc-blue'],
+                                'watched'     => ['bx-video', 'tpc-orange'],
+                                'watching'    => ['bx-video', 'tpc-orange'],
+                            ][$ev['kind']];
+                            $who = $isSelf ? 'You' : $firstName;
+                        @endphp
+                        <div class="tp-act">
+                            <span class="tp-act-icon {{ $evTone }}"><i class="bx {{ $evIcon }}"></i></span>
+                            <div>
+                                <b>{{ $who }}</b>
+                                @if($ev['kind'] === 'completed')
+                                    completed {{ $ev['title'] }}@if($ev['score'] > 0)<div style="color:#16a34a;font-weight:700;">Scored {{ round($ev['score']) }}%</div>@endif
+                                @elseif($ev['kind'] === 'failed')
+                                    did not pass {{ $ev['title'] }}@if($ev['score'] !== null)<div style="color:#dc2626;font-weight:700;">Scored {{ round($ev['score']) }}%</div>@endif
+                                @elseif($ev['kind'] === 'watched')
+                                    watched {{ $ev['title'] }}
+                                @elseif($ev['kind'] === 'watching')
+                                    started watching {{ $ev['title'] }}
+                                @else
+                                    started {{ $ev['title'] }}
+                                @endif
+                            </div>
+                            <span class="when">{{ $ev['at']->diffForHumans() }}</span>
+                        </div>
+                    @empty
+                        <p class="text-muted text-center py-3 mb-0" style="font-size:.84rem;">No training activity yet.</p>
+                    @endforelse
+                </div>
+            </div>
+
+            {{-- HR View info --}}
+            @if(!$isSelf)
+                <div class="tp-card tp-viewing">
+                    <i class="bx bx-show d-block mb-1" style="font-size:1.3rem;color:#94a3b8;"></i>
+                    Viewing <strong style="color:#0f172a;">{{ $user->name }}</strong>'s training progress
+                </div>
+            @endif
+        </aside>
+    </div>
 </div>
 
 @endsection
 
 @section('page-script')
 <script>
-function togglePhase(id) {
-    const body = document.getElementById(id);
-    if (!body) return;
-    // Chevron ID is "chevron-{phaseId}" where id is "phase-{phaseId}"
-    const chevron = document.getElementById('chevron-' + id.replace('phase-', ''));
-    const isOpen = body.style.display !== 'none';
-    body.style.display = isOpen ? 'none' : 'block';
-    if (chevron) chevron.classList.toggle('open', !isOpen);
-}
+// Plain JS on purpose: runs before the deferred bundles (jQuery, bootstrap) load.
+(function () {
+    function setOpen(id, open) {
+        var body = document.getElementById('phase-' + id);
+        if (!body) return;
+        var chevron = document.getElementById('chevron-' + id);
+        var head = document.getElementById('ph-header-' + id);
+        body.style.display = open ? '' : 'none';
+        if (chevron) chevron.classList.toggle('open', open);
+        if (head) head.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    // Kept for anything that still calls it by the body id ("phase-{id}").
+    window.togglePhase = function (id) {
+        var body = document.getElementById(id);
+        if (body) setOpen(id.replace('phase-', ''), body.style.display === 'none');
+    };
+
+    var heads = document.querySelectorAll('.tp-phase-head[data-phase]');
+    var expandBtn = document.getElementById('tpExpandAll');
+    function allOpen() {
+        return Array.prototype.every.call(heads, function (h) {
+            var b = document.getElementById('phase-' + h.getAttribute('data-phase'));
+            return !b || b.style.display !== 'none';
+        });
+    }
+    function syncExpandLabel() {
+        if (expandBtn) expandBtn.querySelector('span').textContent = allOpen() ? 'Collapse All' : 'Expand All';
+    }
+    Array.prototype.forEach.call(heads, function (h) {
+        h.addEventListener('click', function () { window.togglePhase('phase-' + h.getAttribute('data-phase')); syncExpandLabel(); });
+        h.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); h.click(); }
+        });
+    });
+    if (expandBtn) {
+        expandBtn.addEventListener('click', function () {
+            var open = !allOpen();
+            Array.prototype.forEach.call(heads, function (h) { setOpen(h.getAttribute('data-phase'), open); });
+            syncExpandLabel();
+        });
+    }
+    syncExpandLabel();
+})();
 </script>
 @endsection

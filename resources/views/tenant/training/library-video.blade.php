@@ -25,6 +25,8 @@
   .lv-done { color: #3fb950; font-weight: 700; }
   .lv-progress { font-size: .8rem; color: #8b949e; }
   .lv-msg { margin-top: 10px; font-size: .85rem; }
+  .lv-shield { position: absolute; top: 0; right: 0; width: 96px; height: 72px; z-index: 3; background: transparent; cursor: default; }
+  .lv-player .sv-frame { position: absolute; inset: 0; height: 100%; aspect-ratio: auto; }
 </style>
 @endsection
 
@@ -35,11 +37,22 @@
     <h1 class="lv-title">{{ $file->title }}</h1>
   </div>
 
-  <div class="lv-player">
+  @php
+    // YouTube plays through the protected player (only the id reaches the page).
+    $lvYtId = (!$isFile && $src && preg_match('~youtube(?:-nocookie)?\.com/embed/([a-zA-Z0-9_-]{6,})~', $src, $lvm)) ? $lvm[1] : null;
+  @endphp
+  {{-- No right-click anywhere on the player: "Copy video URL" lives there. --}}
+  <div class="lv-player" id="lvPlayer" oncontextmenu="return false;">
     @if($src && $isFile)
-      <video src="{{ $src }}" controls controlsList="nodownload" oncontextmenu="return false;"></video>
+      <video src="{{ $src }}" controls controlsList="nodownload noremoteplayback" disablePictureInPicture oncontextmenu="return false;"></video>
+    @elseif($lvYtId)
+      <div id="lvYt"></div>
     @elseif($src)
       <iframe src="{{ $src }}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+      {{-- Google Drive's preview has an "open in new window" button in its top
+           corner that leads to the file's own page and link. Nothing here can
+           switch it off inside Drive's frame; this shield swallows the click. --}}
+      <div class="lv-shield" title=""></div>
     @else
       <div class="lv-missing">This session's recording link is missing or not playable. Please tell HR.</div>
     @endif
@@ -58,6 +71,15 @@
   </div>
   <div class="lv-msg" id="lvMsg"></div>
 </div>
+
+@if($lvYtId)
+  @include('tenant.training.partials.secure-youtube')
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      HrxSecureYT.mount(document.getElementById('lvYt'), @json($lvYtId), { fsTarget: document.getElementById('lvPlayer') });
+    });
+  </script>
+@endif
 
 @unless($view->completed_at)
 <script>

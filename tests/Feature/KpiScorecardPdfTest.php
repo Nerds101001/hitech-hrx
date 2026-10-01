@@ -329,13 +329,13 @@ class KpiScorecardPdfTest extends TestCase
             KpiTemplateService::apply($t);
         }
 
-        // The points from the annual report the rule book came from: 63 in total.
-        // Cost of Selling's 5 are carried on Market Share (10 -> 15, a real band)
-        // since COS left the rule book for the monthly Bulk KPI Entry KPI.
-        $points = ['Target Achievement (Bingo %)' => 8, 'Pipeline Strength' => 5, 'YoY Revenue Growth' => 0, 'Trial Activity / Demos' => 8,
-            'New Customer Wins (%)' => 15, '90-Day Goals' => 3, 'Sales Pitch Score' => 0, 'Learn@HiTech' => 0, 'Seminars / Presentations' => 0,
-            'Competitor Insights' => 7, 'New Product Ideas' => 7, 'Cross-Sell / Basket Mix' => 0,
-            'Market Share %' => 15, 'Attrition Penalty' => -5];
+        // 63 points in total, each within its KPI's maximum (scores are capped at
+        // the maximum since 2026-09-30, and Demos and Cost of Selling have left the
+        // rule book). What is under test is the scale: 63 out of 100 is a C.
+        $points = ['Target Achievement (Bingo %)' => 15, 'Pipeline Strength' => 5, 'YoY Revenue Growth' => 10,
+            'New Customer Wins (%)' => 13, '90-Day Goals' => 3, 'Sales Pitch Score' => 2, 'Learn@HiTech' => 2, 'Seminars / Presentations' => 2,
+            'Competitor Insights' => 3, 'New Product Ideas' => 3, 'Cross-Sell / Basket Mix' => 0,
+            'Market Share %' => 10, 'Attrition Penalty' => -5];
         $fy = $this->month->month >= 4 ? Carbon::create($this->month->year, 4, 1) : Carbon::create($this->month->year - 1, 4, 1);
         foreach ($points as $title => $score) {
             $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
@@ -359,6 +359,65 @@ class KpiScorecardPdfTest extends TestCase
         $html = view('tenant.kpi.scorecard-pdf', ['cards' => collect([$card]), 'month' => $this->month, 'companyName' => ''])->render();
         $this->assertStringContainsString('63 points out of 100', $html);
         $this->assertStringContainsString('C - Meets Expectation', $html);
+    }
+
+    public function test_before_new_customers_can_be_counted_the_sales_card_is_graded_on_the_other_87_points(): void
+    {
+        $desig = \App\Models\Designation::create(['name' => 'ZZ Mgr ' . uniqid(), 'code' => 'ZZR' . random_int(10000, 99999)]);
+        $rep = $this->person();
+        $rep->update(['designation_id' => $desig->id]);
+        foreach (\App\Support\SalesRuleBook::install($this->dept->id, [$desig->id]) as $t) {
+            KpiTemplateService::apply($t);
+        }
+        KpiAssignment::where('user_id', $rep->id)->update(['created_at' => '2026-07-01']);
+
+        // August 2026: the Sales Report had just been loaded, so New Customer Wins has no figure.
+        $aug = Carbon::create(2026, 8, 1);
+        $points = ['Target Achievement (Bingo %)' => 15, 'YoY Revenue Growth' => 20, 'Market Share %' => 10, 'Pipeline Strength' => 5, 'New Customer Wins (%)' => null];
+        foreach ($points as $title => $score) {
+            $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
+            KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $rep->id, 'period_start' => '2026-08-01',
+                'period_end' => '2026-08-31', 'due_date' => '2026-08-31', 'status' => $score === null ? 'pending' : 'completed_on_time',
+                'achieved_value' => $score === null ? null : 1, 'score' => $score ?? 0]);
+        }
+
+        $card = KpiScorecardService::forMonth(collect([$rep]), $aug)->first();
+        $row = collect($card->rows)->firstWhere('title', 'New Customer Wins (%)');
+
+        $this->assertSame('Not measurable', $row->status);
+        $this->assertSame(50.0, $card->earned);
+        $this->assertSame(87.0, $card->possible, '100 less New Customer Wins\' 13');
+        $this->assertSame(57.5, $card->pct);
+
+        $html = view('tenant.kpi.scorecard-pdf', ['cards' => collect([$card]), 'month' => $aug, 'companyName' => ''])->render();
+        $this->assertStringContainsString('50 points out of 87 measurable (57.5%)', $html);
+        $this->assertStringContainsString('Not measurable', $html);
+    }
+
+    public function test_a_figure_stored_for_august_under_the_old_rule_is_ignored(): void
+    {
+        $desig = \App\Models\Designation::create(['name' => 'ZZ Mgr ' . uniqid(), 'code' => 'ZZR' . random_int(10000, 99999)]);
+        $rep = $this->person();
+        $rep->update(['designation_id' => $desig->id]);
+        foreach (\App\Support\SalesRuleBook::install($this->dept->id, [$desig->id]) as $t) {
+            KpiTemplateService::apply($t);
+        }
+        KpiAssignment::where('user_id', $rep->id)->update(['created_at' => '2026-07-01']);
+        foreach (['Target Achievement (Bingo %)' => [1, 15], 'New Customer Wins (%)' => [100, 13]] as $title => [$achieved, $score]) {
+            $a = KpiAssignment::where('user_id', $rep->id)->where('title', $title)->firstOrFail();
+            KpiCheck::create(['kpi_assignment_id' => $a->id, 'user_id' => $rep->id, 'period_start' => '2026-08-01',
+                'period_end' => '2026-08-31', 'due_date' => '2026-08-31', 'status' => 'completed_on_time',
+                'achieved_value' => $achieved, 'score' => $score]);
+        }
+
+        $card = KpiScorecardService::forMonth(collect([$rep]), Carbon::create(2026, 8, 1))->first();
+        $row = collect($card->rows)->firstWhere('title', 'New Customer Wins (%)');
+
+        $this->assertSame('Not measurable', $row->status);
+        $this->assertNull($row->achieved);
+        $this->assertSame(0.0, $row->score);
+        $this->assertSame(15.0, $card->earned, 'the stale 13 marks are not counted');
+        $this->assertSame(87.0, $card->possible);
     }
 
     public function test_other_scorecards_are_still_graded_on_their_own_marks(): void

@@ -909,6 +909,8 @@ Route::middleware([
             Route::put('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'update'])->name('pipeline.update');
             Route::delete('/sales-report/{id}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'destroy'])->name('pipeline.destroy');
             Route::post('/sales-report/month', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'monthUpdate'])->name('pipeline.month.update');
+            // Tally sale per salesperson per month, entered from the Target Achievement popup.
+            Route::post('/sales-report/tally-sale', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'tallySaleUpdate'])->name('pipeline.tally-sale.update');
 
             /* Approval-gated deletion. The sales floor raises a request with a
                reason; only Admin/HR approve, and approval performs the delete.

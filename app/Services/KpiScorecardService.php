@@ -209,6 +209,16 @@ class KpiScorecardService
                     }
                 }
 
+                // Nothing to measure it by yet (New Customer Wins before the Sales
+                // Report existed): no marks either way - graded on the rest. Any
+                // figure stored for that month is from an older rule and is ignored.
+                $na = $mine->isNotEmpty()
+                    && \App\Services\KpiAutoSourceService::notMeasurable($a, Carbon::parse($mine->last()->period_end));
+                if ($na) {
+                    $achieved = null;
+                    $score = 0.0;
+                }
+
                 $rows[] = (object) [
                     'kra'      => $a->kra_group ?: 'Other',
                     'title'    => $a->title,
@@ -222,7 +232,8 @@ class KpiScorecardService
                     'max'      => (float) $a->max_marks * max(1, $mine->count()),
                     'score'    => $score,
                     'checks'   => $mine->count(),
-                    'status'   => self::statusOf($latest, $achieved, $awaiting->contains($a->id), (string) $a->frequency),
+                    'status'   => $na ? 'Not measurable' : self::statusOf($latest, $achieved, $awaiting->contains($a->id), (string) $a->frequency),
+                    'na'       => $na,
                     'banded'   => $a->scoring_type === 'banded',
                     'order'    => (int) $a->id,
                 ];
@@ -237,13 +248,15 @@ class KpiScorecardService
             usort($rows, fn ($x, $y) => [$x->kra === 'Other', $firstOf[$x->kra], $x->order] <=> [$y->kra === 'Other', $firstOf[$y->kra], $y->order]);
 
             $earned   = round(array_sum(array_column($rows, 'score')), 2);
-            $rowMax   = round(array_sum(array_column($rows, 'max')), 2);
+            $naMax    = array_sum(array_map(fn ($r) => $r->na ? $r->max : 0, $rows));
+            $rowMax   = round(array_sum(array_column($rows, 'max')) - $naMax, 2);
             // The Sales Assessment rule book is graded on raw points out of 100 (60 to 69
             // points is a C), and its parameter weights add to 110, so dividing by the
             // weights would turn the sheet's 63-point C into a D. Every other scorecard
             // is graded on its own marks.
             $onPoints = collect($rows)->contains(fn ($r) => $r->kra === \App\Support\SalesRuleBook::KRA_TITLE);
-            $possible = $onPoints ? 100.0 : $rowMax;
+            // A KPI that cannot be measured comes off the 100 too (e.g. 87).
+            $possible = $onPoints ? round(100.0 - $naMax, 2) : $rowMax;
             $pct      = $possible > 0 ? round($earned / $possible * 100, 1) : null;
             $manager  = $managers->get($user->reporting_to_id);
 

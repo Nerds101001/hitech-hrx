@@ -4799,3 +4799,144 @@ input:checked + .ios-slider:before { transform: translateX(28px) !important; }
    index.blade.php, which had none. Real CSS density, applies at every
    screen size (matching what the already-compact pages already do),
    and touches nothing zoom/transform/font-size ever could. */
+
+/* ============================================================
+   ONE LOOK FOR EVERY FIELD
+   Text boxes had the theme look (15px corners, light grey, roomy),
+   but dropdowns were left on Bootstrap's default (small corners,
+   white, shorter), select2 pickers had a third look and the list
+   pages' search bar a fourth (a white 50px pill) - so no filter bar
+   ever lined up. Every field now shares the text box's look and
+   height: text boxes, dropdowns, select2 pickers and search bars.
+
+   Two densities: the normal one (about 46px), and the compact one
+   the list/dashboard pages opt into with .layout-full-width (34px).
+   Last in the file on purpose - it has to win over the older rules
+   above, several of which are !important.
+   ============================================================ */
+$field-border: #E2E8F0;
+$field-bg: #F8FAFC;
+$field-ink: #1E293B;
+$field-focus: #127464;
+
+/* ---- dropdowns: the text box, plus room for the arrow ---- */
+.form-select {
+    border-radius: 15px !important;
+    padding: 0.75rem 2.75rem 0.75rem 1.25rem !important;
+    border: 1px solid $field-border !important;
+    background-color: $field-bg !important;
+    background-position: right 1rem center !important;
+    font-size: 0.9rem;
+    font-weight: 500;
+    line-height: 1.375;
+    color: $field-ink;
+    transition: all 0.2s ease;
+
+    &:focus {
+        background-color: #fff !important;
+        border-color: $field-focus !important;
+        box-shadow: 0 0 0 4px rgba(18, 116, 100, 0.1) !important;
+        outline: none;
+    }
+}
+.form-control { line-height: 1.375; }   /* same line box as the dropdown, so the heights match */
+
+/* ---- select2 pickers ---- */
+.select2-container--default .select2-selection--single,
+.select2-container--bootstrap-5 .select2-selection--single {
+    height: 46px !important;
+    padding: 0 2.5rem 0 1.25rem !important;
+    border-radius: 15px !important;
+    border: 1px solid $field-border !important;
+    background-color: $field-bg !important;
+    display: flex !important;
+    align-items: center !important;
+
+    .select2-selection__rendered {
+        padding-left: 0 !important;
+        line-height: 1.375 !important;
+        font-size: 0.9rem;
+        font-weight: 500 !important;
+        color: $field-ink !important;
+    }
+    .select2-selection__arrow {
+        height: 100% !important;
+        top: 0 !important;
+        right: 0.9rem !important;
+        transform: none !important;
+    }
+}
+.select2-container--default .select2-selection--multiple,
+.select2-container--bootstrap-5 .select2-selection--multiple {
+    min-height: 46px !important;
+    padding: 0.3rem 0.75rem !important;
+    border-radius: 15px !important;
+    border: 1px solid $field-border !important;
+    background-color: $field-bg !important;
+}
+.select2-container--focus .select2-selection,
+.select2-container--open .select2-selection {
+    background-color: #fff !important;
+    border-color: $field-focus !important;
+    box-shadow: 0 0 0 4px rgba(18, 116, 100, 0.1) !important;
+}
+
+/* ---- list-page search bar: same box, button inside ---- */
+.search-wrapper-hitech {
+    height: 46px !important;
+    border-radius: 15px !important;
+    background: $field-bg !important;
+    border: 1px solid $field-border !important;
+    padding: 3px 3px 3px 0.5rem !important;
+
+    .form-control {
+        height: 100% !important;
+        min-height: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        background: transparent !important;
+    }
+    .btn-search {
+        height: 38px !important;
+        border-radius: 12px !important;
+    }
+    &:focus-within { background: #fff !important; }
+}
+
+/* ---- compact density (.layout-full-width list/dashboard pages) ---- */
+.layout-full-width {
+    input.form-control,
+    .form-select {
+        min-height: 34px;
+        height: 34px;
+        padding-top: 0.3rem !important;
+        padding-bottom: 0.3rem !important;
+        font-size: 0.8rem;
+        border-radius: 12px !important;
+    }
+    .form-select { padding-left: 0.9rem !important; padding-right: 2.25rem !important; background-position: right 0.7rem center !important; }
+    input.form-control { padding-left: 0.9rem !important; padding-right: 0.9rem !important; }
+
+    .select2-container--default .select2-selection--single,
+    .select2-container--bootstrap-5 .select2-selection--single {
+        height: 34px !important;
+        padding: 0 2.25rem 0 0.9rem !important;
+        border-radius: 12px !important;
+
+        .select2-selection__rendered { font-size: 0.8rem; }
+    }
+    .select2-container--default .select2-selection--multiple,
+    .select2-container--bootstrap-5 .select2-selection--multiple {
+        min-height: 34px !important;
+        border-radius: 12px !important;
+    }
+
+    .search-wrapper-hitech {
+        height: 34px !important;
+        border-radius: 12px !important;
+        padding: 2px 2px 2px 0.4rem !important;
+
+        .form-control { height: 100% !important; min-height: 0 !important; padding-left: 0.5rem !important; }
+        .btn-search { height: 28px !important; border-radius: 10px !important; }
+    }
+}

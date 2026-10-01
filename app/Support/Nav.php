@@ -207,6 +207,15 @@ class Nav
             return false;
         }
 
+        // Same idea for Bulk KPI Entry: the route is open to any logged-in user
+        // (data owners are usually neither admin nor HR), but only a KPI admin
+        // or a named data owner has anything there - everyone else was shown a
+        // link that opened a 403.
+        if ($route->getName() === 'tenant.kpi.bulk-entry'
+            && !\App\Models\KpiDataOwner::canOpenBulkEntry($user)) {
+            return false;
+        }
+
         foreach ($route->gatherMiddleware() as $m) {
             if (!is_string($m)) {
                 continue;

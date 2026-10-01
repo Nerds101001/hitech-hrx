@@ -57,6 +57,13 @@ class AppServiceProvider extends ServiceProvider
       return \Illuminate\Cache\RateLimiting\Limit::perMinute(5)->by($key);
     });
 
+    // Mobile app (JWT 'api' guard): a token only works while its owner is
+    // still current staff - see App\Support\MobileAppAccess.
+    \Illuminate\Support\Facades\Auth::provider('current_staff', function ($app, array $config) {
+      return (new \Illuminate\Auth\EloquentUserProvider($app['hash'], $config['model']))
+        ->withQuery(fn ($query) => $query->whereIn('status', \App\Support\MobileAppAccess::STATUSES));
+    });
+
     // Never mail an address that cannot be delivered to. Registered explicitly
     // rather than left to event discovery so it cannot quietly stop applying.
     \Illuminate\Support\Facades\Event::listen(

@@ -57,6 +57,9 @@ class AttendanceDayStatus
     /** Minutes of real work a Short Leave day needs to still count as a full Present. */
     public const SHORT_LEAVE_PRESENT_MINUTES = 350;
 
+    /** From this day a leave approved with no paid part stays unpaid, whatever its row reads (see leaveDayIsPaid). */
+    public const WHOLLY_UNPAID_FROM = '2026-09-01';
+
     /**
      * Resolver codes that mean "genuinely at work in some form" for a coarse
      * dashboard count - the "N Present today" cards and trend charts across
@@ -109,6 +112,17 @@ class AttendanceDayStatus
             return true;
         }
 
+        // Approved with no paid part at all: unpaid, whatever the row says now.
+        // CCare recording the worked half of an unpaid half-day turns its
+        // 'unpaid_leave' row into 'half-day', which read below as paid - the
+        // calendar said "(Paid)" and payroll paid the day in full. From
+        // September 2026 only: July-August were already paid out on the old
+        // reading and stay as they are (decided 2026-09-30).
+        if ($date->gte(Carbon::parse(self::WHOLLY_UNPAID_FROM))
+            && self::leaveSpanDays($user, $leave) - (float) ($leave->lwp_days ?? 0) <= 0) {
+            return false;
+        }
+
         $perDay = $attendance ? strtolower((string) $attendance->status) : null;
         if (in_array($perDay, ['leave', 'paid_leave', 'half-day'], true)) {
             return true;
@@ -136,6 +150,26 @@ class AttendanceDayStatus
         }
 
         return false;
+    }
+
+    /**
+     * A half-day leave with nothing recorded for the other half (under 4h
+     * worked): that half is absent. The leave half pays if it was paid
+     * ('half-day': half paid, half absent), else nothing is paid
+     * ('unpaid_leave'). This used to pay the whole day (paid leave) or half of
+     * it (unpaid) for a half nobody worked.
+     *
+     * Past days from WHOLLY_UNPAID_FROM only: July-August are already paid out,
+     * and today or a later day may not have its worked half recorded yet -
+     * CCare often marks it the next day. Null = keep the old code.
+     */
+    private static function unworkedHalfCode(Carbon $date, bool $isPaid): ?string
+    {
+        if ($date->lt(Carbon::parse(self::WHOLLY_UNPAID_FROM)) || !$date->isPast() || $date->isToday()) {
+            return null;
+        }
+
+        return $isPaid ? 'half-day' : 'unpaid_leave';
     }
 
     /**
@@ -266,7 +300,7 @@ class AttendanceDayStatus
                     if ($workMins >= self::CREDIT_MINUTES) {
                         $result['code'] = $isPaid ? 'half-day-paid' : 'half-day';
                     } else {
-                        $result['code'] = $isPaid ? 'paid_leave' : 'half-day';
+                        $result['code'] = self::unworkedHalfCode($date, $isPaid) ?? ($isPaid ? 'paid_leave' : 'half-day');
                     }
                 } elseif ($isFullDayLeave) {
                     if ($workMins >= $reqMins) {
@@ -299,6 +333,16 @@ class AttendanceDayStatus
                 // the one deliberate escape hatch from the rules above,
                 // consistent across all four original implementations.
                 $result['code'] = strtolower($attendance->status ?: 'present');
+                // The stored status IS the answer here, paid-ness included. An
+                // absence CCare's register covered from the balance is stored
+                // 'paid_leave' with no leave request behind it, so isPaid read
+                // false: payroll paid the day (it goes by the code) while the
+                // calendar called it "Unpaid Leave" (SHRI KANT 4 and 15 Sep 2026).
+                if ($result['code'] === 'paid_leave') {
+                    $result['isPaid'] = true;
+                } elseif ($result['code'] === 'unpaid_leave') {
+                    $result['isPaid'] = false;
+                }
             }
 
             // Worked minutes are 0 until the second punch lands, so anyone still at work
@@ -323,7 +367,7 @@ class AttendanceDayStatus
                 $result['code'] = $bothHalvesCode;
                 $isPaidLeave = $bothHalvesCode !== 'unpaid_leave';
             } elseif ($isHalfDayLeave) {
-                $result['code'] = $isPaidLeave ? 'paid_leave' : 'half-day';
+                $result['code'] = self::unworkedHalfCode($date, $isPaidLeave) ?? ($isPaidLeave ? 'paid_leave' : 'half-day');
             } else {
                 $result['code'] = $isPaidLeave ? 'paid_leave' : 'unpaid_leave';
             }

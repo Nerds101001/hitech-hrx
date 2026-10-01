@@ -47,7 +47,8 @@ return [
     ],
     'api' => [
       'driver' => 'jwt',  // or 'passport', 'sanctum', etc., depending on your setup
-      'provider' => 'users',
+      // Only current staff - a leaver's token stops working (App\Support\MobileAppAccess).
+      'provider' => 'current_staff',
       'hash' => false,
     ],
   ],
@@ -72,6 +73,12 @@ return [
   'providers' => [
     'users' => [
       'driver' => 'eloquent',
+      'model' => env('AUTH_MODEL', App\Models\User::class),
+    ],
+
+    // Registered in AppServiceProvider: the users provider, limited to current staff.
+    'current_staff' => [
+      'driver' => 'current_staff',
       'model' => env('AUTH_MODEL', App\Models\User::class),
     ],
 

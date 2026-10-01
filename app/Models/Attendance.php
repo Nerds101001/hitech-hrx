@@ -124,6 +124,24 @@ class Attendance extends Model implements AuditableContract
     return $this->belongsTo(User::class, 'created_by_id');
   }
 
+  /**
+   * Off-day (Sunday/holiday/OFF-Saturday) comp-off credits standing for this
+   * person and day, from the balance's own audit trail: "Earned via … Working
+   * on d-m-Y" less "… Working Credit Reversed … on d-m-Y".
+   */
+  public static function offDayCreditStanding(int $userId, int $leaveTypeId, $day): int
+  {
+    $balanceId = \App\Models\LeaveBalance::where('user_id', $userId)->where('leave_type_id', $leaveTypeId)->value('id');
+    if (!$balanceId) {
+      return 0;
+    }
+    $on = ' on ' . \Carbon\Carbon::parse($day)->format('d-m-Y');
+    $trail = \OwenIt\Auditing\Models\Audit::where('auditable_type', \App\Models\LeaveBalance::class)->where('auditable_id', $balanceId);
+
+    return (clone $trail)->where('user_agent', 'like', 'Earned via % Working' . $on)->count()
+      - (clone $trail)->where('user_agent', 'like', '% Working Credit Reversed%' . $on)->count();
+  }
+
   protected static function booted()
   {
       static::saved(function ($attendance) {
@@ -173,11 +191,24 @@ class Attendance extends Model implements AuditableContract
           $reasonStr = $dayName . " Working Credit (Auto-credited)";
           
           // Check if either Sunday or Holiday credit has already been applied
-          $hasAlreadyCredited = $attendance->admin_reason && (
+          $hasStamp = $attendance->admin_reason && (
               str_contains($attendance->admin_reason, "Sunday Working Credit") ||
               str_contains($attendance->admin_reason, "Holiday Working Credit") ||
               str_contains($attendance->admin_reason, "Saturday Working Credit")
           );
+          // The stamp alone is not proof: CCare's register rewrites
+          // admin_reason on every save, wiping it, and the next save credited
+          // the day again (7 days across 6 people by 30 Sep 2026). The
+          // balance's own trail says whether a credit for the day stands.
+          $standing = self::offDayCreditStanding($user->id, $compOffType->id, $checkIn);
+          $hasAlreadyCredited = $hasStamp || $standing > 0;
+
+          if ($hasFourHours && $standing > 0 && !$hasStamp) {
+              // Credited already, stamp wiped: put it back, credit nothing.
+              $attendance->withoutEvents(function () use ($attendance, $reasonStr) {
+                  $attendance->updateQuietly(['admin_reason' => $attendance->admin_reason ? $attendance->admin_reason . " | " . $reasonStr : $reasonStr]);
+              });
+          }
 
           if ($hasFourHours) {
               if (!$hasAlreadyCredited) {
@@ -258,11 +289,11 @@ class Attendance extends Model implements AuditableContract
           if (!$compOffType) return;
 
           $dayName = $isSunday ? "Sunday" : ($isHoliday ? "Holiday" : "Saturday");
-          $hasAlreadyCredited = $attendance->admin_reason && (
+          $hasAlreadyCredited = ($attendance->admin_reason && (
               str_contains($attendance->admin_reason, "Sunday Working Credit") ||
               str_contains($attendance->admin_reason, "Holiday Working Credit") ||
               str_contains($attendance->admin_reason, "Saturday Working Credit")
-          );
+          )) || self::offDayCreditStanding($user->id, $compOffType->id, $checkIn) > 0;   // stamp may have been wiped
 
           if ($hasAlreadyCredited) {
               $balance = \App\Models\LeaveBalance::where('user_id', $user->id)

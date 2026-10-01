@@ -163,26 +163,66 @@ class SalesRuleBookSourcesTest extends TestCase
 
     // ── new customer revenue ─────────────────────────────────────────────
 
-    public function test_new_customer_revenue_is_the_share_from_customers_first_seen_in_the_period(): void
-    {
-        $old = $this->customer();
-        $this->sale($old, '2023-10', 5);      // first order before the period, so last year is on record
-        $this->sale($old, '2024-07', 30);
-        $new = $this->customer();
-        $this->sale($new, '2024-06', 10);     // first ever order inside the period
+    // New = added to the Sales Report this financial year, from 1 Sep 2026 (the
+    // report was loaded in Jul-Aug 2026), with sales registered.
 
-        $this->assertSame(25.0, Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
+    private function addedOn(string $date, ?string $name = null, ?User $owner = null): int
+    {
+        $id = $this->customer(0, $owner);
+        DB::table('sales_pipelines')->where('id', $id)->update(['created_at' => $date] + ($name ? ['party_name' => $name] : []));
+
+        return $id;
     }
 
-    public function test_new_customer_revenue_is_zero_when_nobody_is_new_and_null_with_no_revenue(): void
+    private function newPct(string $from, string $to): ?float
     {
-        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
+        return Src::newCustomerRevenuePct($this->rep->id, Carbon::parse($from)->startOfDay(), Carbon::parse($to)->endOfDay());
+    }
 
-        $old = $this->customer();
-        $this->sale($old, '2023-10', 5);
-        $this->sale($old, '2024-07', 30);
+    public function test_new_customer_revenue_is_the_share_from_customers_added_this_year(): void
+    {
+        $loaded = $this->addedOn('2026-07-17 10:00:00');   // the initial load
+        $this->sale($loaded, '2026-09', 30);
+        $new = $this->addedOn('2026-09-10 10:00:00');
+        $this->sale($new, '2026-09', 10);
 
-        $this->assertSame(0.0, Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
+        $this->assertSame(25.0, $this->newPct('2026-09-01', '2026-09-30'));
+    }
+
+    public function test_a_customer_added_in_september_is_still_new_later_in_the_year(): void
+    {
+        Carbon::setTestNow('2026-11-15 12:00:00');   // October has to be in the past
+        $this->sale($this->addedOn('2026-07-17 10:00:00'), '2026-10', 30);
+        $this->sale($this->addedOn('2026-09-10 10:00:00'), '2026-10', 10);
+
+        $this->assertSame(25.0, $this->newPct('2026-10-01', '2026-10-31'));
+        Carbon::setTestNow();
+    }
+
+    public function test_july_and_august_2026_have_no_new_customer_figure(): void
+    {
+        $this->sale($this->addedOn('2026-07-17 10:00:00'), '2026-07', 30);
+        $this->sale($this->addedOn('2026-08-05 10:00:00'), '2026-08', 10);
+
+        $this->assertNull($this->newPct('2026-07-01', '2026-07-31'));
+        $this->assertNull($this->newPct('2026-08-01', '2026-08-31'));
+    }
+
+    public function test_an_existing_party_entered_again_is_not_a_new_customer(): void
+    {
+        $other = $this->person();
+        $this->addedOn('2026-07-17 10:00:00', 'ZZ Acme Foods Pvt Ltd', $other);   // already in the report, someone else's
+        $again = $this->addedOn('2026-09-12 10:00:00', ' zz acme foods pvt ltd ');
+        $this->sale($again, '2026-09', 10);
+
+        $this->assertSame(0.0, $this->newPct('2026-09-01', '2026-09-30'));
+    }
+
+    public function test_new_customer_revenue_is_null_with_no_revenue(): void
+    {
+        $this->addedOn('2026-09-10 10:00:00');
+
+        $this->assertNull($this->newPct('2026-09-01', '2026-09-30'));
     }
 
     // ── cost of selling ──────────────────────────────────────────────────
@@ -425,7 +465,7 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->assertSame(-25.0, Src::yoyGrowth($this->rep->id, $this->start, $this->end));
     }
 
-    public function test_attrition_and_new_customers_use_imported_customer_history_that_covers_the_year(): void
+    public function test_attrition_uses_imported_customer_history_that_covers_the_year(): void
     {
         $kept = $this->importedCustomer(['yoy_23_24' => 40]);
         $kept2 = $this->importedCustomer(['yoy_23_24' => 20]);
@@ -440,8 +480,6 @@ class SalesRuleBookSourcesTest extends TestCase
 
         // Last year's buyers: kept, kept2, lost; lost has not ordered -> 1 of 3.
         $this->assertSame(33.33, Src::customerAttrition($this->rep->id, $this->start, $this->end));
-        // Only $new is new ($older had imported sales before): 20 of 70.
-        $this->assertSame(28.57, Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
     }
 
     public function test_a_yearly_lump_on_one_customer_row_is_not_a_customer_history(): void
@@ -452,27 +490,17 @@ class SalesRuleBookSourcesTest extends TestCase
         $this->sale($this->customer(), '2024-06', 300);
 
         $this->assertNull(Src::customerAttrition($this->rep->id, $this->start, $this->end), 'not "100% lost"');
-        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end), 'not "100% new"');
         $this->assertNotNull(Src::yoyGrowth($this->rep->id, $this->start, $this->end), 'growth still works from the total');
     }
 
-    public function test_a_yearly_total_with_no_customer_breakdown_gives_no_new_customer_or_attrition_figure(): void
+    public function test_a_yearly_total_with_no_customer_breakdown_gives_no_attrition_figure(): void
     {
         $this->importedTotal(['fy_23_24' => 500]);                 // total known, customers not
         $this->importedCustomer(['yoy_23_24' => 40]);              // only 8 % of it broken down
         $this->sale($this->customer(), '2024-06', 30);
 
         $this->assertNull(Src::customerAttrition($this->rep->id, $this->start, $this->end));
-        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
         $this->assertNotNull(Src::yoyGrowth($this->rep->id, $this->start, $this->end), 'growth still works from the total');
-    }
-
-    public function test_new_customer_revenue_is_no_figure_when_last_year_is_not_on_record(): void
-    {
-        // Revenue this year but nothing before: every customer would look new.
-        $this->sale($this->customer(), '2024-07', 30);
-
-        $this->assertNull(Src::newCustomerRevenuePct($this->rep->id, $this->start, $this->end));
     }
 
     public function test_cost_of_selling_is_no_figure_when_no_claim_was_ever_entered(): void

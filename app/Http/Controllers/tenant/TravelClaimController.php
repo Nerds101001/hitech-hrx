@@ -540,7 +540,13 @@ class TravelClaimController extends Controller
                     $other = floatval($item['other_amount'] ?? 0);
                     $toll_amount = floatval($item['toll_amount'] ?? 0);
                     $special_approval_amount = floatval($item['special_approval_amount'] ?? 0);
-                    $currency = in_array($item['currency'] ?? 'INR', self::CURRENCIES, true) ? $item['currency'] : 'INR';
+                    // A row sent without a currency (an older cached form, the app) is INR.
+                    // This used to read $item['currency'] after the ?? check, so a missing
+                    // key threw "Undefined array key" and the whole claim failed to save.
+                    $currency = $item['currency'] ?? 'INR';
+                    if (!in_array($currency, self::CURRENCIES, true)) {
+                        $currency = 'INR';
+                    }
 
                     // Columns removed from UI, hardcode to 0 for DB backward compatibility
                     $add_food_amount = 0;

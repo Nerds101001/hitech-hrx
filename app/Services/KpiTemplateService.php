@@ -27,6 +27,8 @@ class KpiTemplateService
             ->when($t->tenant_id, fn ($q) => $q->where('tenant_id', $t->tenant_id))
             ->when($t->department_id, fn ($q) => $q->where('department_id', $t->department_id))
             ->when(!empty($t->designation_ids), fn ($q) => $q->whereIn('designation_id', $t->designation_ids))
+            // Office/branch accounts, not people (config/kpi.php).
+            ->whereNotIn('id', config('kpi.excluded_user_ids', []))
             ->get();
     }
 
@@ -174,6 +176,9 @@ class KpiTemplateService
      */
     public static function applyAllForUser(User $user): int
     {
+        if (in_array($user->id, config('kpi.excluded_user_ids', []), true)) {
+            return 0;
+        }
         $templates = KpiTemplate::where('is_active', true)
             ->where('category', 'KPI')   // KRA headings are not assigned
             ->when($user->tenant_id, fn ($q) => $q->where(function ($w) use ($user) {

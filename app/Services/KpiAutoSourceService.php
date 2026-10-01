@@ -19,6 +19,22 @@ use Illuminate\Support\Facades\DB;
  */
 class KpiAutoSourceService
 {
+    /**
+     * New Customer Wins is counted from this day on. The Sales Report was loaded
+     * in Jul-Aug 2026, so every customer in it was "added" then (2026-09-30).
+     */
+    public const NEW_CUSTOMER_FROM = '2026-09-01';
+
+    /**
+     * A KPI that cannot be measured for a period ending on $periodEnd: shown as
+     * "Not measurable" and left out of the marks a scorecard is graded on.
+     */
+    public static function notMeasurable(KpiAssignment $a, Carbon $periodEnd): bool
+    {
+        return $a->data_source === 'auto:new_customer_revenue_pct'
+            && $periodEnd->lt(Carbon::parse(self::NEW_CUSTOMER_FROM));
+    }
+
     public const SOURCES = [
         'auto:revenue'             => 'Revenue booked in the period (₹ lakh)',
         'auto:target_achievement'  => 'Revenue as a % of the salesperson target',
@@ -59,7 +75,7 @@ class KpiAutoSourceService
         // written against (a % or a count), to be scored with bands.
         'auto:pipeline_vs_target'         => 'The month\'s forecast as a % of the month\'s Bingo target',
         'auto:yoy_growth'                 => 'Revenue growth % against the same period a year earlier',
-        'auto:new_customer_revenue_pct'   => '% of revenue from customers whose first ever order falls in the period',
+        'auto:new_customer_revenue_pct'   => '% of revenue from customers added to the Sales Report this financial year',
         'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
         'auto:market_share'               => 'Sales as a % of the book\'s monthly business potential',
         'auto:cost_of_selling'            => 'Travel + expense cost as a % of revenue',
@@ -330,24 +346,6 @@ class KpiAutoSourceService
             : 0.0;
 
         return $total <= 0 || $customers >= 0.9 * $total;
-    }
-
-    /** Customers in the book with an imported sale in any earlier year. */
-    private static function customersWithImportedSales(int $userId): \Illuminate\Support\Collection
-    {
-        $cols = array_values(array_filter(
-            ['yoy_22_23', 'yoy_23_24', 'yoy_24_25', 'yoy_25_26'],
-            fn ($c) => DB::getSchemaBuilder()->hasColumn('sales_pipelines', $c)
-        ));
-        if (!$cols) {
-            return collect();
-        }
-
-        return self::book($userId)->where(function ($q) use ($cols) {
-            foreach ($cols as $c) {
-                $q->orWhere($c, '>', 0);
-            }
-        })->pluck('id');
     }
 
     /** Revenue in ₹ lakh — sale_amount is stored in lakh. */
@@ -697,37 +695,38 @@ class KpiAutoSourceService
     }
 
     /**
-     * Share of the period's revenue that came from customers whose first ever
-     * order falls inside the period. Only as good as the order history loaded:
-     * with a short history nearly everyone looks new.
+     * Share of the period's revenue that came from customers added to the Sales
+     * Report this financial year (from NEW_CUSTOMER_FROM on). Null before then.
      */
     public static function newCustomerRevenuePct(int $userId, Carbon $start, Carbon $end): ?float
     {
-        $to    = self::upTo($end);
+        $to = self::upTo($end);
+        // The whole Sales Report was loaded in Jul-Aug 2026, so nothing before
+        // then says who is new: those months stay blank ("Not measurable").
+        $countFrom = Carbon::parse(self::NEW_CUSTOMER_FROM)->startOfDay();
+        if ($to->lt($countFrom)) {
+            return null;
+        }
         $keys  = self::monthKeys($start, $to);
         $total = self::revenue($userId, $start, $to);
         if ($total <= 0) {
             return null;
         }
 
-        // Without the year before on record, every customer looks new and everybody
-        // would be handed full marks. No history, no figure. The year before may
-        // be on record month by month, or as imported yearly figures per customer
-        // - the latter only counts where they add up to the person's yearly total.
-        $monthHistory = self::revenue($userId, $start->copy()->subYear(), $start->copy()->subDay()) > 0;
-        if (!$monthHistory && !self::customerHistoryCovers($userId, $start->copy()->subYear())) {
-            return null;
-        }
-
-        $firstSale = DB::table('sales_pipeline_months')
-            ->whereIn('sales_pipeline_id', self::book($userId)->select('id'))
-            ->where('sale_amount', '>', 0)
-            ->selectRaw('sales_pipeline_id, MIN(month_year) first_month')
-            ->groupBy('sales_pipeline_id');
-        $newIds = DB::query()->fromSub($firstSale, 'f')->whereIn('f.first_month', $keys)->pluck('f.sales_pipeline_id');
-        // A customer with imported sales in any earlier year was not new, whatever
-        // month their first MONTHLY row happens to fall in.
-        $newIds = $newIds->diff(self::customersWithImportedSales($userId));
+        // New = added to the Sales Report this financial year (never before the
+        // count-from date) with sales registered - there is no customer-wise
+        // history from before FY2026-27 to tell a first order apart (2026-09-30).
+        $fyStart = Carbon::create($start->month >= 4 ? $start->year : $start->year - 1, 4, 1)->startOfDay();
+        $added = self::book($userId)
+            ->where('created_at', '>=', $fyStart->max($countFrom))
+            ->where('created_at', '<=', $to->copy()->endOfDay())
+            ->get(['id', 'party_name', 'created_at']);
+        // A party already in the Sales Report under an older row - anyone's, even
+        // deleted - is an existing customer entered again, not a new one.
+        $newIds = $added->reject(fn ($p) => DB::table('sales_pipelines')
+            ->whereRaw('LOWER(TRIM(party_name)) = ?', [mb_strtolower(trim((string) $p->party_name))])
+            ->where('created_at', '<', $p->created_at)
+            ->exists())->pluck('id');
         if ($newIds->isEmpty()) {
             return 0.0;
         }
