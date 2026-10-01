@@ -278,6 +278,11 @@ class NinetyDayGoalService
      */
     public static function customerWindowClosesAt(NinetyDayRound $round): Carbon
     {
+        // Admin/HR reopened (or set) the window from Program Details: that time wins.
+        if (!empty($round->customer_window_until)) {
+            return Carbon::parse($round->customer_window_until);
+        }
+
         $from = Carbon::parse($round->created_at ?: $round->starts_on);
         $ruleFrom = config('ninety_day.window_rule_from');
 
@@ -648,6 +653,214 @@ class NinetyDayGoalService
         if ($week >= 0 && $week < self::WEEKS) {
             $goal->forceFill(["w{$week}" => $status])->save();
         }
+    }
+
+    // ── editing a program (Program Details > Manage program) ─────────────
+
+    /**
+     * Add people to an existing program, by the same rules as creating one: anyone in another
+     * program or with customers in their current round is skipped; an empty self-started
+     * round is replaced. Each person gets the add-customers task; the caller sends the invite.
+     * Their 48-hour window to add customers runs from now, when they are told.
+     */
+    public static function addToProgram(NinetyDayProgram $program, User $admin, array $userIds): array
+    {
+        $targets = self::salesStaff()->whereIn('id', $userIds)->values();
+        $enrolled = [];
+        $skipped = [];
+
+        DB::transaction(function () use ($targets, $admin, $program, &$enrolled, &$skipped) {
+            foreach ($targets as $user) {
+                User::whereKey($user->id)->lockForUpdate()->first();
+                $active = self::activeRound($user);
+                if ($active) {
+                    $inUse = $active->program_id || NinetyDayGoal::where('round_id', $active->id)->exists();
+                    if ($inUse) {
+                        $skipped[] = $user;
+                        continue;
+                    }
+                    Task::where('user_id', $user->id)->where('title', self::addCustomersTitle($active))
+                        ->whereNotIn('status', Task::CLOSED_STATUSES)->delete();
+                    NinetyDayGoalCheckin::where('round_id', $active->id)->delete();
+                    $active->delete();
+                }
+
+                $round = NinetyDayRound::create([
+                    'tenant_id' => $user->tenant_id, 'user_id' => $user->id, 'program_id' => $program->id,
+                    'round_no'  => (int) NinetyDayRound::where('user_id', $user->id)->max('round_no') + 1,
+                    'starts_on' => $program->starts_on->toDateString(), 'ends_on' => $program->ends_on->toDateString(),
+                    'status'    => 'active',
+                ]);
+                $task = Task::create([
+                    'user_id' => $user->id, 'assigned_by_id' => $admin->id, 'created_by_id' => $admin->id, 'updated_by_id' => $admin->id,
+                    'title'   => self::addCustomersTitle($round),
+                    'description' => 'You have been added to the "' . $program->name . '" 90-Day Goals program. Open 90-Day Goals and add your target customers within 3 days.',
+                    'type' => 'open', 'status' => 'new', 'priority' => 'medium',
+                    'for_date' => Carbon::today(), 'due_date' => Carbon::today()->addDays(3)->toDateString(), 'tenant_id' => $user->tenant_id,
+                ]);
+                $enrolled[] = ['user' => $user, 'round' => $round, 'task' => $task];
+            }
+        });
+
+        return ['enrolled' => $enrolled, 'skipped' => $skipped];
+    }
+
+    /**
+     * Rename / re-date a program and every round in it. Weeks run Monday to Monday, so a new
+     * start is snapped back to its Monday as on creation. The start can only move while nobody
+     * has submitted a weekly status - moving it afterwards would shift every week under data
+     * already entered. Returns an error message, or null when saved.
+     */
+    public static function updateProgram(NinetyDayProgram $program, string $name, Carbon $startsOn, Carbon $endsOn): ?string
+    {
+        $startsOn = $startsOn->copy()->startOfDay();
+        $endsOn = $endsOn->copy()->startOfDay();
+        if (!$startsOn->isMonday()) {
+            $startsOn = self::mondayOf($startsOn);
+        }
+        if ($endsOn->lte($startsOn->copy()->addDays(6))) {
+            return 'The program must run at least one week.';
+        }
+        if ($startsOn->diffInDays($endsOn) > 366) {
+            return 'A program can run at most one year.';
+        }
+
+        $roundIds = NinetyDayRound::where('program_id', $program->id)->pluck('id');
+        $startMoves = !$startsOn->equalTo($program->starts_on);
+        if ($startMoves && NinetyDayGoalCheckin::whereIn('round_id', $roundIds)->whereNotNull('status')->exists()) {
+            return 'The start date cannot change: weekly statuses have already been submitted against the current weeks. The end date and name can still change.';
+        }
+
+        DB::transaction(function () use ($program, $name, $startsOn, $endsOn, $roundIds, $startMoves) {
+            if ($startMoves) {
+                // Unsubmitted check-ins and open weekly tasks were laid out on the old weeks;
+                // drop them and the next page load / Monday run lays them out again.
+                foreach (NinetyDayRound::whereIn('id', $roundIds)->get() as $round) {
+                    self::deleteRoundTasks($round, true);
+                }
+                NinetyDayGoalCheckin::whereIn('round_id', $roundIds)->whereNull('status')->delete();
+            }
+            $program->update(['name' => trim($name), 'starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString()]);
+            NinetyDayRound::whereIn('id', $roundIds)->update(['starts_on' => $startsOn->toDateString(), 'ends_on' => $endsOn->toDateString()]);
+        });
+
+        return null;
+    }
+
+    /** Reopen (or set) the add-customers window until $until, for the whole program or some of it. */
+    public static function openCustomerWindow(NinetyDayProgram $program, Carbon $until, ?array $userIds = null): int
+    {
+        return NinetyDayRound::where('program_id', $program->id)
+            ->when($userIds, fn ($q) => $q->whereIn('user_id', $userIds))
+            ->update(['customer_window_until' => $until->toDateTimeString()]);
+    }
+
+    /**
+     * Take someone out of a program: their round with its customers, weekly statuses and notes,
+     * the tasks it gave them and the program's notifications to them. They start an ordinary
+     * round again from the next page load or Monday run, like anyone without one.
+     */
+    public static function removeFromProgram(NinetyDayProgram $program, int $userId): array
+    {
+        $counts = ['rounds' => 0, 'customers' => 0, 'statuses' => 0, 'tasks' => 0, 'notifications' => 0];
+        DB::transaction(function () use ($program, $userId, &$counts) {
+            foreach (NinetyDayRound::where('program_id', $program->id)->where('user_id', $userId)->get() as $round) {
+                $counts = self::sumCounts($counts, self::deleteRound($round));
+            }
+            $counts['notifications'] += self::deleteProgramNotifications($program, $userId);
+        });
+
+        return $counts;
+    }
+
+    /** Delete a program and everything it created. */
+    public static function deleteProgram(NinetyDayProgram $program): array
+    {
+        $counts = ['rounds' => 0, 'customers' => 0, 'statuses' => 0, 'tasks' => 0, 'notifications' => 0];
+        DB::transaction(function () use ($program, &$counts) {
+            foreach (NinetyDayRound::where('program_id', $program->id)->get() as $round) {
+                $counts = self::sumCounts($counts, self::deleteRound($round));
+            }
+            $counts['notifications'] += self::deleteProgramNotifications($program, null);
+            $program->delete();
+        });
+
+        return $counts;
+    }
+
+    /** What deleting the program would remove - for the confirmation. */
+    public static function programFootprint(NinetyDayProgram $program): array
+    {
+        $roundIds = NinetyDayRound::where('program_id', $program->id)->pluck('id');
+
+        return [
+            'participants'  => NinetyDayRound::whereIn('id', $roundIds)->distinct()->count('user_id'),
+            'customers'     => NinetyDayGoal::whereIn('round_id', $roundIds)->count(),
+            'statuses'      => NinetyDayGoalCheckin::whereIn('round_id', $roundIds)->whereNotNull('status')->count(),
+            'notifications' => self::programNotifications($program, null)->count(),
+        ];
+    }
+
+    private static function deleteRound(NinetyDayRound $round): array
+    {
+        $goalIds = NinetyDayGoal::where('round_id', $round->id)->pluck('id');
+        $c = [
+            'rounds'    => 1,
+            'customers' => $goalIds->count(),
+            'statuses'  => NinetyDayGoalCheckin::where('round_id', $round->id)->whereNotNull('status')->count(),
+            'tasks'     => self::deleteRoundTasks($round, false),
+            'notifications' => 0,
+        ];
+        NinetyDayGoalNote::whereIn('goal_id', $goalIds)->delete();
+        NinetyDayGoalCheckin::where('round_id', $round->id)->delete();
+        NinetyDayGoal::whereIn('id', $goalIds)->delete();
+        $round->delete();
+
+        return $c;
+    }
+
+    /** The add-customers task and every weekly task this round gave its owner. */
+    private static function deleteRoundTasks(NinetyDayRound $round, bool $weeklyOpenOnly): int
+    {
+        $titles = [];
+        for ($w = 0; $w < self::weeksOf($round); $w++) {
+            $titles[] = self::weekTaskTitle($w, self::dueOn($round, $w));
+        }
+        $q = Task::where('user_id', $round->user_id);
+        if ($weeklyOpenOnly) {
+            $q->whereIn('title', $titles)->whereNotIn('status', Task::CLOSED_STATUSES);
+        } else {
+            $q->whereIn('title', array_merge($titles, [self::addCustomersTitle($round)]));
+        }
+        $n = 0;
+        foreach ($q->get() as $task) {
+            $task->delete();
+            $n++;
+        }
+
+        return $n;
+    }
+
+    private static function programNotifications(NinetyDayProgram $program, ?int $userId)
+    {
+        return DB::table('notifications')
+            ->whereIn('type', [\App\Notifications\NinetyDayGoal\ProgramInvite::class, \App\Notifications\NinetyDayGoal\WeekReminder::class])
+            ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(data, '$.program_id')) = ?", [(string) $program->id])
+            ->when($userId, fn ($q) => $q->where('notifiable_id', $userId));
+    }
+
+    private static function deleteProgramNotifications(NinetyDayProgram $program, ?int $userId): int
+    {
+        return self::programNotifications($program, $userId)->delete();
+    }
+
+    private static function sumCounts(array $a, array $b): array
+    {
+        foreach ($b as $k => $v) {
+            $a[$k] = ($a[$k] ?? 0) + $v;
+        }
+
+        return $a;
     }
 
     // ── the Monday task ──────────────────────────────────────────────────

@@ -1929,6 +1929,9 @@ class NinetyDayGoalsTest extends TestCase
         // rep2 is a real salesperson in the company but was never invited to this program.
 
         $html = app(NinetyDayGoalController::class)->programDetail($this->ask($admin, 'GET', '/x'), $result['program']->id)->render();
+        // The Manage program panel's "Add people" list exists to offer exactly the people
+        // outside the program; everything else on the page must not show them.
+        $html = preg_replace('/<div class="modal fade" id="ndgManageModal".*?<\/select>/s', '', $html);
 
         $this->assertStringNotContainsString(trim($this->rep2->first_name . ' ' . $this->rep2->last_name), $html,
             "Top Performing Salespersons must only ever list this program's own participants");

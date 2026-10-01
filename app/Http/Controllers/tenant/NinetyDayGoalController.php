@@ -1054,6 +1054,16 @@ class NinetyDayGoalController extends Controller
             'rows'       => $rows,
             'salespeople' => $d['users'],
             'activity'   => $activity,
+            // Manage program panel
+            'manageRounds' => Goals::managesEveryone($user)
+                ? NinetyDayRound::where('program_id', $program->id)->with('user:id,first_name,last_name,code')->get()
+                    ->map(fn ($r) => (object) ['user' => $r->user, 'customers' => Goals::customerCount($r), 'window' => Goals::windowState($r)])
+                    ->filter(fn ($r) => $r->user)->sortBy(fn ($r) => $r->user->first_name)->values()
+                : collect(),
+            'addablePeople' => Goals::managesEveryone($user) ? Goals::salesStaff()->whereNotIn('id', $participantIds)->values() : collect(),
+            'canDeleteProgram' => $user->hasRole(['admin', 'Admin', 'super_admin']),
+            'footprint'  => $user->hasRole(['admin', 'Admin', 'super_admin']) ? Goals::programFootprint($program) : null,
+            'startLocked' => NinetyDayGoalCheckin::whereIn('round_id', NinetyDayRound::where('program_id', $program->id)->pluck('id'))->whereNotNull('status')->exists(),
         ]);
     }
 
@@ -1109,6 +1119,115 @@ class NinetyDayGoalController extends Controller
             'message' => 'Reminder sent to ' . count($targetIds) . ' ' . \Illuminate\Support\Str::plural('salesperson', count($targetIds)) . ' for week W' . $week . '.',
             'count'   => count($targetIds),
         ]);
+    }
+
+    // ── editing a program (Program Details > Manage program) ─────────────
+
+    private function programManager(): ?User
+    {
+        $u = Auth::user();
+
+        return Goals::managesEveryone($u) ? $u : null;
+    }
+
+    /** Rename / re-date a program (admin/HR). */
+    public function programUpdate(Request $request, $id)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can change a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate([
+            'name'      => 'required|string|max:150',
+            'starts_on' => 'required|date',
+            'ends_on'   => 'required|date|after:starts_on',
+        ]);
+        $error = Goals::updateProgram($program, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']));
+        if ($error) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+        $program->refresh();
+
+        return response()->json(['success' => true, 'message' => 'Saved: "' . $program->name . '", ' . $program->starts_on->format('d M Y') . ' – ' . $program->ends_on->format('d M Y') . '.']);
+    }
+
+    /** Add people to a program (admin/HR); each gets the add-customers task and an in-app invite. */
+    public function programAddParticipants(Request $request, $id)
+    {
+        $admin = $this->programManager();
+        if (!$admin) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can add people to a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate(['user_ids' => 'required|array|min:1', 'user_ids.*' => 'integer|exists:users,id']);
+        $result = Goals::addToProgram($program, $admin, $data['user_ids']);
+
+        $roundIds = array_map(fn ($e) => $e['round']->id, $result['enrolled']);
+        app()->terminating(function () use ($program, $roundIds) {
+            foreach (NinetyDayRound::whereIn('id', $roundIds)->with('user')->get() as $round) {
+                try {
+                    $round->user?->notify(new ProgramInvite($program, $round));
+                } catch (\Throwable $e) {
+                    Log::warning("90-Day Goals program invite failed for user {$round->user_id}: " . $e->getMessage());
+                }
+            }
+        });
+
+        $names = fn ($list) => collect($list)->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name))->implode(', ');
+
+        return response()->json([
+            'success' => (bool) $result['enrolled'],
+            'message' => count($result['enrolled']) . ' added to "' . $program->name . '".'
+                . ($result['skipped'] ? ' ' . count($result['skipped']) . ' skipped - already in a program or with customers in their current round: ' . $names($result['skipped']) . '.' : ''),
+        ], $result['enrolled'] ? 200 : 422);
+    }
+
+    /** Take someone out of a program (admin/HR), with their round, customers, tasks and notifications. */
+    public function programRemoveParticipant($id, $userId)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can remove people from a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $c = Goals::removeFromProgram($program, (int) $userId);
+        if (!$c['rounds']) {
+            return response()->json(['success' => false, 'message' => 'That person is not in this program.'], 404);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Removed, with ' . $c['customers'] . ' customer(s), ' . $c['tasks'] . ' task(s) and ' . $c['notifications'] . ' notification(s).']);
+    }
+
+    /** Reopen the add-customers window until a chosen time, for everyone or the chosen people (admin/HR). */
+    public function programOpenWindow(Request $request, $id)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can open the window.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate(['until' => 'required|date|after:now', 'user_ids' => 'nullable|array', 'user_ids.*' => 'integer']);
+        $until = Carbon::parse($data['until']);
+        $n = Goals::openCustomerWindow($program, $until, $data['user_ids'] ?? null);
+
+        return response()->json(['success' => true, 'message' => 'Adding customers is open for ' . $n . ' ' . \Illuminate\Support\Str::plural('person', $n) . ' until ' . $until->format('D d M Y, h:i A') . '.']);
+    }
+
+    /** Delete a program and everything it created - admin only. */
+    public function programDestroy(Request $request, $id)
+    {
+        $u = Auth::user();
+        if (!$u || !$u->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return response()->json(['success' => false, 'message' => 'Only an admin can delete a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        if (trim((string) $request->input('confirm_name')) !== trim($program->name)) {
+            return response()->json(['success' => false, 'message' => 'Type the program name exactly to confirm.'], 422);
+        }
+        $name = $program->name;
+        $c = Goals::deleteProgram($program);
+        Log::info("90-Day Goals program deleted by user {$u->id}: \"$name\" (#$id)", $c);
+
+        return response()->json(['success' => true, 'redirect' => route('performance.ninety-day-goals.program-dashboard'),
+            'message' => '"' . $name . '" deleted: ' . $c['rounds'] . ' participant round(s), ' . $c['customers'] . ' customer(s), ' . $c['tasks'] . ' task(s) and ' . $c['notifications'] . ' notification(s).']);
     }
 
     // ── admin-created programs ───────────────────────────────────────────

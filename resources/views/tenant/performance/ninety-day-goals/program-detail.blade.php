@@ -50,7 +50,12 @@
       </h3>
       <p class="text-muted mb-0 small">{{ $program->starts_on->format('d M Y') }} – {{ $program->ends_on->format('d M Y') }} ({{ $program->starts_on->diffInDays($program->ends_on) }} days) · Real-time progress for every participant in this program.</p>
     </div>
-    <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> Back to Dashboard</a>
+    <div class="d-flex gap-2">
+      @if($canManage ?? false)
+        <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgManageModal"><i class="bx bx-cog"></i> Manage program</button>
+      @endif
+      <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> Back to Dashboard</a>
+    </div>
   </div>
 
   <div class="px-4">
@@ -359,6 +364,99 @@
   </div>
 </div>
 
+@if($canManage ?? false)
+{{-- Manage program: change name and dates, add or remove people, reopen the window to add customers, delete (admin only). --}}
+<div class="modal fade" id="ndgManageModal" tabindex="-1" aria-hidden="true"
+     data-url="{{ route('performance.ninety-day-goals.program.update', $program->id) }}" data-name="{{ $program->name }}">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Manage program · {{ $program->name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+
+        <h6 class="fw-bold text-dark mb-2">Program details</h6>
+        <div class="row g-2 mb-1">
+          <div class="col-md-6"><label class="form-label small mb-1" for="ndgMgName">Name</label><input type="text" id="ndgMgName" class="form-control" maxlength="150" value="{{ $program->name }}"></div>
+          <div class="col-md-3"><label class="form-label small mb-1" for="ndgMgStart">Start</label><input type="date" id="ndgMgStart" class="form-control" value="{{ $program->starts_on->toDateString() }}" {{ ($startLocked ?? false) ? 'disabled' : '' }}></div>
+          <div class="col-md-3"><label class="form-label small mb-1" for="ndgMgEnd">End</label><input type="date" id="ndgMgEnd" class="form-control" value="{{ $program->ends_on->toDateString() }}"></div>
+        </div>
+        <div class="small text-muted mb-2">
+          Weeks run Monday to Monday, so a start date is moved back to its Monday.
+          @if($startLocked ?? false) The start date is locked: weekly statuses have already been submitted against the current weeks. @endif
+        </div>
+        <button type="button" id="ndgMgSaveDetails" class="btn-hitech rounded-pill px-4 py-2 mb-4" style="font-size:.8rem">Save details</button>
+
+        <h6 class="fw-bold text-dark mb-2">Participants ({{ ($manageRounds ?? collect())->count() }})</h6>
+        <div class="table-responsive mb-2" style="max-height:260px">
+          <table class="table table-sm align-middle mb-0" style="font-size:.8rem">
+            <thead><tr><th>Name</th><th class="text-end">Customers</th><th>Adding customers</th><th></th></tr></thead>
+            <tbody>
+              @forelse(($manageRounds ?? collect()) as $r)
+                <tr>
+                  <td>{{ $name($r->user) }} <span class="text-muted">{{ $r->user->code }}</span></td>
+                  <td class="text-end">{{ $r->customers }}</td>
+                  <td>
+                    @if($r->window['open'])
+                      <span class="text-success">open until {{ $r->window['closes_at']->format('d M, h:i A') }}</span>
+                    @else
+                      <span class="text-muted">closed {{ $r->window['closes_at']->format('d M, h:i A') }}</span>
+                    @endif
+                  </td>
+                  <td class="text-end"><button type="button" class="btn btn-sm btn-hitech-cancel py-0 ndg-mg-remove" data-user="{{ $r->user->id }}" data-name="{{ $name($r->user) }}" data-customers="{{ $r->customers }}">Remove</button></td>
+                </tr>
+              @empty
+                <tr><td colspan="4" class="text-muted">Nobody is in this program.</td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+        <label class="form-label small mb-1" for="ndgMgAddSelect">Add people <span class="text-muted">(hold Ctrl to pick several)</span></label>
+        <div class="d-flex gap-2 align-items-start mb-4">
+          <select id="ndgMgAddSelect" class="form-select" multiple size="5" style="font-size:.8rem">
+            @foreach(($addablePeople ?? collect()) as $p)<option value="{{ $p->id }}">{{ $p->first_name }} {{ $p->last_name }} ({{ $p->code }})</option>@endforeach
+          </select>
+          <button type="button" id="ndgMgAdd" class="btn-hitech rounded-pill px-4 py-2 text-nowrap" style="font-size:.8rem">Add</button>
+        </div>
+
+        <h6 class="fw-bold text-dark mb-2">Window to add customers</h6>
+        <div class="small text-muted mb-2">Normally open for 48 hours after someone is enrolled. Reopen it until a time you choose.</div>
+        <div class="row g-2 align-items-end mb-2">
+          <div class="col-md-5"><label class="form-label small mb-1" for="ndgMgUntil">Open until</label><input type="datetime-local" id="ndgMgUntil" class="form-control" value="{{ now()->addHours(48)->format('Y-m-d\TH:i') }}"></div>
+          <div class="col-md-7 small">
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoAll" value="all" checked><label class="form-check-label" for="ndgMgWhoAll">Everyone in the program</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoSome" value="some"><label class="form-check-label" for="ndgMgWhoSome">Chosen people</label></div>
+          </div>
+        </div>
+        <select id="ndgMgWindowSelect" class="form-select d-none mb-2" multiple size="5" style="font-size:.8rem">
+          @foreach(($manageRounds ?? collect()) as $r)<option value="{{ $r->user->id }}">{{ $name($r->user) }}</option>@endforeach
+        </select>
+        <button type="button" id="ndgMgOpenWindow" class="btn-hitech rounded-pill px-4 py-2 mb-4" style="font-size:.8rem">Open window</button>
+
+        @if($canDeleteProgram ?? false)
+          <div class="border border-danger rounded-3 p-3">
+            <h6 class="fw-bold text-danger mb-1">Delete program</h6>
+            <div class="small text-muted mb-2">
+              Removes the program with its {{ $footprint['participants'] ?? 0 }} participant(s), {{ $footprint['customers'] ?? 0 }} customer(s),
+              {{ $footprint['statuses'] ?? 0 }} submitted weekly status(es), every task it created and {{ $footprint['notifications'] ?? 0 }} notification(s).
+              Type the program name to confirm.
+            </div>
+            <div class="d-flex gap-2">
+              <input type="text" id="ndgMgConfirmName" class="form-control form-control-sm" placeholder="{{ $program->name }}" autocomplete="off">
+              <button type="button" id="ndgMgDelete" class="btn btn-sm btn-danger rounded-pill px-3 text-nowrap">Delete program</button>
+            </div>
+          </div>
+        @endif
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+@endif
+
 <style>
   .ndg-subtab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid #d5e3e1; background: #fff; color: #334155; font-weight: 700; font-size: .8rem; cursor: pointer; }
   .ndg-subtab:hover { border-color: #007a7a; color: #007a7a; }
@@ -429,6 +527,73 @@
           } else if (typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg); } else { alert(msg); }
         })
         .catch(function () { remindBtn.disabled = false; alert('Request failed. Try again.'); });
+    });
+  }
+})();
+
+// Manage program: details, participants, customer window, delete.
+(function () {
+  var modal = document.getElementById('ndgManageModal');
+  if (!modal) { return; }
+  var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  var tell = function (ok, msg) {
+    if (ok && typeof window.showSuccessSwal === 'function') { window.showSuccessSwal(msg); }
+    else if (!ok && typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg); }
+    else { alert(msg); }
+  };
+  var send = function (method, url, body, btn, reloadOnOk) {
+    if (btn) { btn.disabled = true; }
+    return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf }, body: body ? JSON.stringify(body) : null })
+      .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Unexpected response (' + r.status + ').' }; }); })
+      .then(function (j) {
+        if (btn) { btn.disabled = false; }
+        var msg = j.message || (j.errors ? Object.values(j.errors).flat().join(' ') : 'Could not save.');
+        tell(!!j.success, msg);
+        if (j.success && j.redirect) { setTimeout(function () { window.location.href = j.redirect; }, 1200); }
+        else if (j.success && reloadOnOk) { setTimeout(function () { window.location.reload(); }, 1200); }
+        return j;
+      })
+      .catch(function () { if (btn) { btn.disabled = false; } tell(false, 'Request failed. Try again.'); });
+  };
+  var url = modal.dataset.url;
+
+  document.getElementById('ndgMgSaveDetails').addEventListener('click', function () {
+    send('PUT', url, { name: document.getElementById('ndgMgName').value, starts_on: document.getElementById('ndgMgStart').value, ends_on: document.getElementById('ndgMgEnd').value }, this, true);
+  });
+
+  document.getElementById('ndgMgAdd').addEventListener('click', function () {
+    var ids = Array.prototype.map.call(document.getElementById('ndgMgAddSelect').selectedOptions, function (o) { return parseInt(o.value, 10); });
+    if (!ids.length) { tell(false, 'Choose at least one person to add.'); return; }
+    send('POST', url + '/participants', { user_ids: ids }, this, true);
+  });
+
+  modal.querySelectorAll('.ndg-mg-remove').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var who = b.dataset.name, n = parseInt(b.dataset.customers, 10);
+      if (!confirm('Remove ' + who + ' from this program?' + (n ? '\n\nTheir ' + n + ' customer(s) and weekly statuses in this program are removed too.' : '') + '\n\nThe tasks and notifications this program gave them are removed.')) { return; }
+      send('DELETE', url + '/participants/' + b.dataset.user, null, b, true);
+    });
+  });
+
+  document.getElementById('ndgMgOpenWindow').addEventListener('click', function () {
+    var until = document.getElementById('ndgMgUntil').value;
+    if (!until) { tell(false, 'Pick until when adding customers should stay open.'); return; }
+    var who = document.querySelector('input[name="ndgMgWho"]:checked').value;
+    var ids = who === 'some' ? Array.prototype.map.call(document.getElementById('ndgMgWindowSelect').selectedOptions, function (o) { return parseInt(o.value, 10); }) : null;
+    if (who === 'some' && !ids.length) { tell(false, 'Choose who the window is for.'); return; }
+    send('POST', url + '/window', { until: until, user_ids: ids }, this, true);
+  });
+  document.querySelectorAll('input[name="ndgMgWho"]').forEach(function (r) {
+    r.addEventListener('change', function () { document.getElementById('ndgMgWindowSelect').classList.toggle('d-none', r.value !== 'some' || !r.checked); });
+  });
+
+  var del = document.getElementById('ndgMgDelete');
+  if (del) {
+    del.addEventListener('click', function () {
+      var typed = document.getElementById('ndgMgConfirmName').value;
+      if (typed.trim() !== modal.dataset.name.trim()) { tell(false, 'Type the program name exactly to confirm.'); return; }
+      if (!confirm('Delete "' + modal.dataset.name + '" and everything in it? This cannot be undone from the screen.')) { return; }
+      send('DELETE', url, { confirm_name: typed }, del, false);
     });
   }
 })();
