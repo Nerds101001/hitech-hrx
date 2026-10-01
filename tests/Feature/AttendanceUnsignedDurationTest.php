@@ -57,6 +57,7 @@ class AttendanceUnsignedDurationTest extends TestCase
         $reversed = app(AttendanceService::class)->calculateDayStatus($u, self::MONDAY, Carbon::parse(self::MONDAY . ' 18:30:00'), Carbon::parse(self::MONDAY . ' 09:30:00'));
 
         $this->assertNotSame(Attendance::STATUS_ABSENT, $reversed['status'], 'a 9-hour day must not be Absent because the punches are reversed');
-        $this->assertSame($forward['status'] === Attendance::STATUS_ABSENT, $reversed['status'] === Attendance::STATUS_ABSENT);
+        $this->assertSame($forward['status'], $reversed['status'], 'the same day whichever order the punches are stored in');
+        $this->assertSame($forward['is_late'], $reversed['is_late']);
     }
 }

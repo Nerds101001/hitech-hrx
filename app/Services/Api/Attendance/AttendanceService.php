@@ -137,6 +137,13 @@ class AttendanceService implements IAttendance
   {
     $date = $date instanceof Carbon ? $date : Carbon::parse($date);
     $dateStr = $date->toDateString();
+
+    // Punches can arrive reversed (some biometric reports list them that way, and a night shift
+    // stores its morning check-out on the same date). The earlier one is the check-in: otherwise
+    // an 18:30 "check-in" is late and trips the after-11:00 half-day rule on a full day.
+    if ($checkIn && $checkOut && $checkOut->lt($checkIn)) {
+        [$checkIn, $checkOut] = [$checkOut, $checkIn];
+    }
     
     $isWorkingDay = \App\Services\LeavePolicyService::isWorkingDay($user, $date);
     if (!$isWorkingDay) {
