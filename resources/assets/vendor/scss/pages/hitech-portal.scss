@@ -4819,13 +4819,19 @@ $field-bg: #F8FAFC;
 $field-ink: #1E293B;
 $field-focus: #127464;
 
-/* ---- dropdowns: the text box, plus room for the arrow ---- */
+/* ---- dropdowns: the text box, plus room for the arrow ----
+   The height sets the size, not padding: forcing 0.75rem top and bottom
+   left no room for the text in any field a page sizes itself (a 36px
+   filter bar kept 10px for the words, so nothing could be read). With no
+   vertical padding the browser centres the text at any height; 46px is
+   the normal size, and a page's own height (or -sm) still wins. */
 .form-select {
     border-radius: 15px !important;
-    padding: 0.75rem 2.75rem 0.75rem 1.25rem !important;
+    height: 46px;
+    padding: 0 2.25rem 0 1rem !important;
     border: 1px solid $field-border !important;
     background-color: $field-bg !important;
-    background-position: right 1rem center !important;
+    background-position: right 0.8rem center !important;
     font-size: 0.9rem;
     font-weight: 500;
     line-height: 1.375;
@@ -4839,7 +4845,24 @@ $field-focus: #127464;
         outline: none;
     }
 }
+.form-select[multiple],
+.form-select[size]:not([size="1"]) { height: auto; padding: 0.5rem 0.75rem !important; }   /* list boxes grow with their rows */
+.form-select-sm { height: 32px; font-size: 0.8rem; padding-left: 0.75rem !important; padding-right: 2rem !important; border-radius: 10px !important; }
+.form-select-lg { height: 52px; }
+
 .form-control { line-height: 1.375; }   /* same line box as the dropdown, so the heights match */
+
+/* Single-line text boxes, the same way: the older theme rule forces 0.75rem
+   top and bottom, which cut the text in any box a page made shorter. Text
+   areas and file pickers keep their padding. :where() keeps the specificity
+   at one class, so a page's own height still wins. */
+.form-control:where(input:not([type="file"]):not([type="color"]):not([type="range"])) {
+    height: 46px;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+.form-control-sm:where(input) { height: 32px; font-size: 0.8rem; }
+.form-control-lg:where(input) { height: 52px; }
 
 /* ---- select2 pickers ---- */
 .select2-container--default .select2-selection--single,

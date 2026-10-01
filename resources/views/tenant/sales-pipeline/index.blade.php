@@ -202,6 +202,22 @@
         .sales-filter .form-select,
         .sales-filter .form-control { border:1px solid #d9dee3; background-color:#fff; box-shadow:none; }
         .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
+        /* All the filters on one line (desktop): each takes a share of the
+           width instead of a fixed one, so they fit beside Search and Clear.
+           Tight side padding keeps the words readable; the full selection
+           shows on hover. Below 1200px they wrap as before. */
+        .sales-filter .form-select { padding-left:.6rem !important; padding-right:1.6rem !important; background-position:right .45rem center !important; }
+        .sales-filter .form-control { padding-left:.75rem !important; padding-right:.75rem !important; }
+        @media (min-width: 1200px) {
+            .sales-filter { flex-wrap:nowrap !important; }
+            .sales-filter > .form-select, .sales-filter > .form-control { flex:1 1 0; min-width:0; width:auto !important; }
+            .sales-filter > [name="party"] { flex-grow:1.4; }
+            .sales-filter > [name="type"], .sales-filter > [name="brand"] { flex-grow:.9; }
+            .sales-filter > [name="sp"] { flex-grow:1.15; }
+            .sales-filter > [name="both"] { flex-grow:1.25; }
+            .sales-filter > [name="per"] { flex-grow:.85; }
+            .sales-filter > .btn { flex:0 0 auto; }
+        }
     
 /* A negative sale is a credit note, not a typo - show it red so it reads as
    money going the other way, and name it on hover. */
@@ -220,14 +236,14 @@
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
                 <select class="form-select" name="type" style="width:130px;" onchange="this.form.submit()">
-                    <option value="">All Types</option>
+                    <option value="">Type</option>
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
                     <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
                     <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
                     <option value="Packer" {{ $fType === 'Packer' ? 'selected' : '' }}>Packer</option>
                 </select>
                 <select class="form-select" name="cat" style="width:130px;" onchange="this.form.submit()">
-                    <option value="">All Category</option>
+                    <option value="">Category</option>
                     <option value="New Biz" {{ request('cat') === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
@@ -237,7 +253,7 @@
                 {{-- "No Salesperson" isolates the independent customers a CCare
                      rep holds directly. Shown only when such rows exist here. --}}
                 <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
-                    <option value="">All Salespersons ({{ $spFilterCounts->sum() + $spNoneCount }})</option>
+                    <option value="">Salesperson</option>
                     @if($spNoneCount)
                         <option value="none" {{ (string)$fSp === 'none' ? 'selected' : '' }}>&mdash; No Salesperson &mdash; ({{ $spNoneCount }})</option>
                     @endif
@@ -246,7 +262,7 @@
                     @endforeach
                 </select>
                 <select class="form-select" name="ccare" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All CCare ({{ $ccareFilterCounts->sum() + $ccareNoneCount }})</option>
+                    <option value="">CCare</option>
                     @if($ccareNoneCount)
                         <option value="none" {{ (string)$fCcare === 'none' ? 'selected' : '' }}>&mdash; No CCare &mdash; ({{ $ccareNoneCount }})</option>
                     @endif
@@ -255,13 +271,13 @@
                     @endforeach
                 </select>
                 <select class="form-select" name="brand" style="width:150px;" onchange="this.form.submit()">
-                    <option value="">All Brands ({{ $brandCounts->sum() }})</option>
+                    <option value="">Brand</option>
                     @foreach($brandCounts as $bName => $bCount)
                         <option value="{{ $bName }}" {{ (string)($fBrand ?? '') === (string)$bName ? 'selected' : '' }}>{{ $bName }} ({{ $bCount }})</option>
                     @endforeach
                 </select>
                 <select class="form-select" name="nb" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All New Biz ({{ $nbFilterCounts->sum() + $nbNoneCount }})</option>
+                    <option value="">New Biz</option>
                     @if($nbNoneCount)
                         <option value="none" {{ (string)($fNb ?? '') === 'none' ? 'selected' : '' }}>&mdash; No New Biz &mdash; ({{ $nbNoneCount }})</option>
                     @endif
@@ -275,7 +291,7 @@
                      whole from either one. --}}
                 <select class="form-select" name="both" style="width:200px;" onchange="this.form.submit()"
                         title="One person, counted whether they are the CCare or the New Biz rep">
-                    <option value="">All CCare &amp; New Biz</option>
+                    <option value="">CCare / New Biz</option>
                     @foreach($bothFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)($fBoth ?? '') === (string)$au->id ? 'selected' : '' }}>
                             {{ $au->name }} ({{ $bothFilterCounts[$au->id] ?? 0 }})
@@ -305,16 +321,24 @@
                         </a>
                     @endif
                 @endif
-                <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
-                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
-                    <i class="bx bx-x"></i> Clear
+                <button type="submit" class="btn btn-primary" title="Search"><i class="bx bx-search"></i><span class="d-none d-xxl-inline"> Search</span></button>
+                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary" title="Clear filters">
+                    <i class="bx bx-x"></i><span class="d-none d-xxl-inline"> Clear</span>
                 </a>
-                <div class="d-flex align-items-center gap-2 ms-auto text-muted text-nowrap" style="font-size:0.8rem">
-                    Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
-                    of <strong>{{ $pipelines->total() }}</strong> customers
-                </div>
             </form>
+            <script>
+                // A share of the row can cut a long name short: show the full choice on hover.
+                document.querySelectorAll('.sales-filter select').forEach(function (s) {
+                    var base = s.getAttribute('title') || '';
+                    var tip = function () { var o = s.options[s.selectedIndex]; s.title = (o && o.value !== '') ? o.text.trim() : base; };
+                    tip(); s.addEventListener('change', tip);
+                });
+            </script>
         </div>
+    </div>
+    <div class="text-muted text-end mb-1" style="font-size:0.78rem">
+        Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
+        of <strong>{{ $pipelines->total() }}</strong> customers
     </div>
 
     {{-- ─── TABLE ──────────────────────────────────────────────────────── --}}
