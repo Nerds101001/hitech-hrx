@@ -43,7 +43,7 @@
   <div class="row g-4 mb-6">
     <div class="col-lg-6">
       <div class="hitech-card h-100">
-        <div class="card-body p-4 border-bottom fw-bold text-dark">Top customers by monthly potential</div>
+        <div class="card-body p-4 border-bottom fw-bold text-dark">Top customers by target</div>
         <div class="card-body">
           @php $maxP = max(1, (float) optional($career['topCustomers']->first())->potential); @endphp
           @forelse($career['topCustomers'] as $r)

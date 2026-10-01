@@ -648,17 +648,17 @@ class NinetyDayGoalsTest extends TestCase
         return $g->fresh();
     }
 
-    public function test_achievement_is_what_was_sold_in_the_round_against_three_months_of_potential(): void
+    public function test_achievement_is_what_was_sold_in_the_round_against_the_overall_target(): void
     {
         $this->at(self::MONDAY);
-        $this->soldGoal($this->rep, 'Half Ltd', 2.0, 'KIF', 3.0);       // target 6, sold 3
-        $this->soldGoal($this->rep, 'Over Ltd', 1.0, 'Rust-X', 6.0);    // target 3, sold 6
+        $this->soldGoal($this->rep, 'Half Ltd', 6.0, 'KIF', 3.0);       // target 6, sold 3
+        $this->soldGoal($this->rep, 'Over Ltd', 3.0, 'Rust-X', 6.0);    // target 3, sold 6
 
         $d = Goals::dashboard([$this->rep->id, $this->rep2->id]);
 
         $this->assertSame(2, $d['cards']['goals']);
-        $this->assertEquals(3.0, $d['cards']['potential']);
-        $this->assertEquals(9.0, $d['cards']['target']);
+        $this->assertEquals(9.0, $d['cards']['potential']);
+        $this->assertEquals(9.0, $d['cards']['target'], 'the typed target is not multiplied by months');
         $this->assertEquals(9.0, $d['cards']['achieved']);
         $this->assertEquals(100.0, $d['cards']['pct']);
         $this->assertSame('Over Ltd', $d['topAchieved']->first()->goal->client_name);
@@ -682,7 +682,7 @@ class NinetyDayGoalsTest extends TestCase
 
         $this->assertSame(['2026-10', '2026-11', '2026-12'], Goals::roundMonths($g->round->fresh()));
         $cards = Goals::dashboard([$this->rep->id])['cards'];
-        $this->assertEquals(12.0, $cards['target'], '4 L a month for 3 months, not 4');
+        $this->assertEquals(4.0, $cards['target'], 'the 4 L typed is the overall target');
         $this->assertEquals(0.0, $cards['achieved'], "September's sale was booked before the round began");
     }
 
@@ -712,8 +712,8 @@ class NinetyDayGoalsTest extends TestCase
     public function test_people_are_ranked_by_share_of_target_sold(): void
     {
         $this->at(self::MONDAY);
-        $this->soldGoal($this->rep, 'A Ltd', 10.0, 'KIF', 3.0);     // 3 of 30 = 10%
-        $this->soldGoal($this->rep2, 'B Ltd', 1.0, 'KIF', 3.0);     // 3 of 3 = 100%
+        $this->soldGoal($this->rep, 'A Ltd', 30.0, 'KIF', 3.0);     // 3 of 30 = 10%
+        $this->soldGoal($this->rep2, 'B Ltd', 3.0, 'KIF', 3.0);     // 3 of 3 = 100%
 
         $users = Goals::dashboard([$this->rep->id, $this->rep2->id])['users'];
 

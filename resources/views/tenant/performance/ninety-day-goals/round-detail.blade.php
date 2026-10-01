@@ -428,7 +428,7 @@
                 <div class="hitech-card h-100">
                   <div class="card-body p-4">
                     <div class="fw-bold text-dark mb-3"><i class="bx bx-trending-up" style="color:#007a7a"></i> Progress</div>
-                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Target (3 mo.)</span><b>{{ $fmtL(optional($r)->target ?? 0) }} L</b></div>
+                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Target</span><b>{{ $fmtL(optional($r)->target ?? 0) }} L</b></div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Achieved</span><b>{{ $fmtL(optional($r)->achieved ?? 0) }} L</b></div>
                     <div class="mt-2"><div class="progress" style="height:7px"><div class="progress-bar" style="width:{{ min(100, (float) optional($r)->pct) }}%;background:{{ $pctColor(optional($r)->pct) }}"></div></div></div>
                   </div>
@@ -530,7 +530,7 @@
     <div class="row g-4">
       <div class="col-xl-6">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by monthly potential</div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by target</div></div>
           <div class="card-body p-4">
             @php $maxCust = max(1, (float) optional($d['topCustomers']->first())->potential); @endphp
             @forelse($d['topCustomers'] as $tc)
@@ -597,7 +597,7 @@
     </div>
   </div>
 
-  {{-- Edit an existing target: product, brand, goal, monthly potential, expected order date. --}}
+  {{-- Edit an existing target: product, brand, goal, overall target, expected order date. --}}
   <div class="modal fade" id="ndgEditGoalModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -608,7 +608,7 @@
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Product</label><input type="text" name="product" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Brand</label><input type="text" name="brand" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Goal</label><input type="text" name="goal" class="form-control"></div>
-            <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Monthly potential (₹ lakh)</label><input type="number" step="0.01" min="0" name="monthly_potential" class="form-control"></div>
+            <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Target for the program (₹ lakh)</label><input type="number" step="0.01" min="0" name="monthly_potential" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Expected order date</label><input type="date" name="expected_order_date" class="form-control"></div>
           </div>
           <div class="modal-footer">
@@ -958,7 +958,7 @@
   }
 
   // ── add customer modal: only this round owner's own Sales Pipeline, nobody types one in.
-  // Checking a customer expands Product / Brand / Goal / Monthly potential right there, editable
+  // Checking a customer expands Product / Brand / Goal / Target right there, editable
   // before it's added — not just accepted blind from whatever the pipeline already says. ──
   var addModalEl = document.getElementById('ndgRdAddModal');
   if (addModalEl) {
@@ -990,7 +990,7 @@
             '<input type="text" class="form-control form-control-sm ndg-product" style="max-width:220px" placeholder="Product" value="' + esc(c.pProduct != null ? c.pProduct : c.product) + '">' +
             '<select class="form-select form-select-sm ndg-brand" style="max-width:150px">' + brandOptions(c.pBrand != null ? c.pBrand : c.brand) + '</select>' +
             '<select class="form-select form-select-sm ndg-goal" style="max-width:170px">' + goalOptions(c.pGoal != null ? c.pGoal : 'Order') + '</select>' +
-            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Monthly ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
+            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Target ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
           '</div></div>';
       }).join('');
     }
@@ -1021,7 +1021,7 @@
       if (!picked.length) { addMsg.textContent = 'Tick at least one customer.'; return; }
       for (var i = 0; i < picked.length; i++) {
         if (!String(picked[i].pGoal != null ? picked[i].pGoal : 'Order').trim()) { addMsg.textContent = picked[i].customer + ': write the goal.'; return; }
-        if (picked[i].pPot === undefined || picked[i].pPot === '' || isNaN(parseFloat(picked[i].pPot))) { addMsg.textContent = picked[i].customer + ': enter the monthly potential in lakh.'; return; }
+        if (picked[i].pPot === undefined || picked[i].pPot === '' || isNaN(parseFloat(picked[i].pPot))) { addMsg.textContent = picked[i].customer + ': enter the target in lakh.'; return; }
       }
       addMsg.textContent = ''; this.disabled = true; var btn = this;
       var customers = picked.map(function (c) {

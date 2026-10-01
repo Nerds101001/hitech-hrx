@@ -694,7 +694,7 @@ class NinetyDayGoalController extends Controller
         $goals = NinetyDayGoal::where('round_id', $round->id)->where('user_id', $user->id)->get();
         // Same rule as Goals::dashboard(): the months whose 16th is inside the round, once each.
         $roundMonths = Goals::roundMonths($round);
-        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * max(1, count($roundMonths)));
+        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential);   // overall target per customer
         $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
 
         $monthlySales = [];
@@ -1447,7 +1447,7 @@ class NinetyDayGoalController extends Controller
             'expected_order_date' => 'nullable|date',
         ]);
 
-        // The monthly potential IS the target (x months) that achievement % and the rankings are
+        // monthly_potential holds the customer's overall target that achievement % and the rankings are
         // measured against, so the salesperson can't move it once it has been reported on or the
         // round is over - lowering it after the fact inflated their achievement. Admin/HR still can.
         if (isset($data['monthly_potential']) && (float) $data['monthly_potential'] !== (float) $goal->monthly_potential
@@ -1455,7 +1455,7 @@ class NinetyDayGoalController extends Controller
             $closed = $goal->closed_at || optional($goal->round)->status !== 'active';
             $reported = NinetyDayGoalCheckin::where('goal_id', $goal->id)->whereNotNull('status')->exists();
             if ($closed || $reported) {
-                return response()->json(['success' => false, 'message' => 'The monthly potential is this customer\'s target and is fixed once you have reported on it or the round has ended. Ask an admin if it has to change.'], 422);
+                return response()->json(['success' => false, 'message' => 'The target is fixed once you have reported on it or the round has ended. Ask an admin if it has to change.'], 422);
             }
         }
         $goal->update(array_filter($data, fn ($v) => $v !== null));

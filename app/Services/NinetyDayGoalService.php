@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * The 90-Day Goals tracker, following the sales team's own sheet.
  *
  * Each person in the Sales department picks target customers from their own
- * Sales Pipeline (customer, product, brand, goal, monthly potential in lakh) and
+ * Sales Pipeline (customer, product, brand, goal, target for the round in lakh) and
  * reports a status on every Monday until the round ends — 13 weeks (W0 to W12)
  * for the usual 90-day round, but an admin-created program can run a different
  * length, and its rounds stretch or shrink to match (see weeksOf()). Then the
@@ -53,9 +53,6 @@ class NinetyDayGoalService
 
     /** W0 to W12. */
     public const WEEKS = 13;
-
-    /** A round is about three months, so a customer's round target is its monthly potential times this. */
-    public const ROUND_MONTHS = 3;
 
     /** Days from a round's first Monday to its last day (13 weeks). */
     public const ROUND_SPAN_DAYS = 90;
@@ -1022,7 +1019,8 @@ class NinetyDayGoalService
      * Everything the dashboard shows, for the goals in $scope (null = everyone).
      *
      * Achievement is real sales: what the customer has bought in the Sales Report during
-     * the round (lakh), against its monthly potential over the round's three months.
+     * the round (lakh), against the customer's target for the whole round. The target is
+     * stored in monthly_potential (the column's old name) and is NOT multiplied by months.
      * Filters: round (current|all), user_id, department_id, brand.
      */
     public static function dashboard(?array $scope, array $f = [], ?Carbon $today = null): array
@@ -1083,7 +1081,7 @@ class NinetyDayGoalService
                 }
             }
             $potential = (float) $g->monthly_potential;
-            $target = $potential * max(1, count($months));
+            $target = $potential;   // the overall target for the round, as typed
 
             return (object) [
                 'goal'      => $g,

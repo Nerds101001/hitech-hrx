@@ -90,7 +90,6 @@
     @php
       $cards = [
         ['bx-target-lock', 'Customers', $c['goals']],
-        ['bx-rupee', 'Monthly potential (₹L)', $fmtL($c['potential'])],
         ['bx-flag', 'Round target (₹L)', $fmtL($c['target'])],
         ['bx-trending-up', 'Sold (₹L)', $fmtL($c['achieved'])],
         ['bx-pie-chart-alt-2', 'Achievement', $pctText($c['pct'])],
