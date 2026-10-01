@@ -120,6 +120,71 @@
     @endif
   </div>
 
+  {{-- The customer rules, always in view: how many customers the round needs, whether the
+       window to add them is open (with a live countdown), and what can still be edited. --}}
+  @php
+    $w = $window;
+    $nLocked = count($lockedTargetIds);
+    $nGoals = $goals->whereNull('closed_at')->count();
+  @endphp
+  <div class="row g-3 mb-6" id="ndgRulesStrip">
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100">
+        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? '#dcfce7;color:#166534' : '#fee2e2;color:#b42318' }}"><i class="bx {{ $w['meets_min'] ? 'bx-check-circle' : 'bx-error-circle' }}"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Customers (minimum {{ $w['min'] }})</div>
+          <div class="ndg-kpi3-v">{{ $w['count'] }} / {{ $w['min'] }}
+            @if($w['meets_min'])
+              <span class="badge bg-label-success align-middle" style="font-size:.65rem">Complete</span>
+            @else
+              <span class="badge bg-label-danger align-middle" style="font-size:.65rem">Incomplete</span>
+            @endif
+          </div>
+          <div class="small text-muted">
+            @if($w['meets_min'])
+              The round counts. You can keep adding while the window is open.
+            @else
+              Add {{ $w['short_by'] }} more {{ \Illuminate\Support\Str::plural('customer', $w['short_by']) }} - until then this round does not count.
+            @endif
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100">
+        <div class="ndg-kpi3-icon" style="background:{{ $w['open'] ? '#e0f2f1;color:#007a7a' : '#e2e8f0;color:#475569' }}"><i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }}"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Window to add customers</div>
+          @if($w['open'] && $isActive)
+            <div class="ndg-kpi3-v" id="ndgWinCountdown" data-closes="{{ $w['closes_at']->toIso8601String() }}">{{ $w['hours_left'] }}h left</div>
+            <div class="small text-muted">Closes {{ $w['closes_at']->format('d M Y, h:i A') }}</div>
+          @else
+            <div class="ndg-kpi3-v">Closed</div>
+            <div class="small text-muted">Closed {{ $w['closes_at']->format('d M Y, h:i A') }}.@unless($managesAll) Ask admin/HR to reopen it if you need to add more.@endunless</div>
+          @endif
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100">
+        <div class="ndg-kpi3-icon" style="background:#ede9fe;color:#5b21b6"><i class="bx bx-edit"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Editing customers</div>
+          @if(!$isActive)
+            <div class="ndg-kpi3-v">Locked</div>
+            <div class="small text-muted">This round has ended.</div>
+          @elseif($managesAll)
+            <div class="ndg-kpi3-v">Open</div>
+            <div class="small text-muted">Admin/HR can change any customer, including fixed targets.</div>
+          @else
+            <div class="ndg-kpi3-v">{{ $nGoals - $nLocked }} of {{ $nGoals }} targets editable</div>
+            <div class="small text-muted">Product, brand, stage and expected date can be edited until the round ends. A customer's target is fixed once you report a status on it. Customers can't be removed.</div>
+          @endif
+        </div>
+      </div>
+    </div>
+  </div>
+
   {{-- Sub-tabs --}}
   <div class="d-flex gap-2 flex-wrap mb-6 ndg-subtabs" id="ndgRdTabs">
     @foreach(['weekly' => ['Weekly Submission','bx-calendar-check'], 'customers' => ['Customer Summary','bx-list-ul'], 'orders' => ['Orders & Results','bx-cart-download'], 'details' => ['Program Details','bx-info-circle']] as $key => [$lbl, $ic])
@@ -165,8 +230,10 @@
               @else
                 <span class="badge badge-hitech badge-brand-soft">Due today</span>
               @endif
-              @if($canEdit && $isActive)
+              @if($canEdit && $isActive && ($window['open'] || $managesAll))
                 <button type="button" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.8rem" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
+              @elseif($canEdit && $isActive)
+                <span class="small text-muted" title="The window to add customers closed {{ $window['closes_at']->format('d M, h:i A') }}"><i class="bx bx-lock-alt"></i> Adding closed</span>
               @endif
             </div>
           </div>
@@ -300,7 +367,7 @@
         </select>
         <span class="small text-muted" id="ndgRdCount"></span>
         <div class="ms-auto d-flex gap-2">
-          @if($canEdit && $isActive)
+          @if($canEdit && $isActive && ($window['open'] || $managesAll))
           <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
           @endif
           @if($isAdmin)
@@ -674,6 +741,23 @@
 
 @section('page-script')
 <script>
+// Live countdown to the close of the add-customer window; reloads once it closes so the
+// Add Customer buttons disappear without a stale page accepting a click the server will refuse.
+(function () {
+  var el = document.getElementById('ndgWinCountdown');
+  if (!el) { return; }
+  var closes = new Date(el.getAttribute('data-closes')).getTime();
+  if (isNaN(closes)) { return; }
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var tick = function () {
+    var left = Math.floor((closes - Date.now()) / 1000);
+    if (left <= 0) { el.textContent = 'Closed'; clearInterval(timer); setTimeout(function () { location.reload(); }, 1500); return; }
+    var d = Math.floor(left / 86400), h = Math.floor(left % 86400 / 3600), m = Math.floor(left % 3600 / 60), sec = left % 60;
+    el.textContent = (d ? d + 'd ' : '') + pad(h) + 'h ' + pad(m) + 'm ' + pad(sec) + 's left';
+  };
+  var timer = setInterval(tick, 1000);
+  tick();
+})();
 (function () {
   var CSRF = '{{ csrf_token() }}';
   var ROUND_USER_ID = {{ (int) $round->user_id }};
@@ -990,7 +1074,7 @@
             '<input type="text" class="form-control form-control-sm ndg-product" style="max-width:220px" placeholder="Product" value="' + esc(c.pProduct != null ? c.pProduct : c.product) + '">' +
             '<select class="form-select form-select-sm ndg-brand" style="max-width:150px">' + brandOptions(c.pBrand != null ? c.pBrand : c.brand) + '</select>' +
             '<select class="form-select form-select-sm ndg-goal" style="max-width:170px">' + goalOptions(c.pGoal != null ? c.pGoal : 'Order') + '</select>' +
-            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Target ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
+            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Target ₹ lakh"' + (c.potential ? ' title="Sales Report potential: ' + esc(c.potential) + ' lakh a month"' : '') + ' value="' + esc(c.pPot != null ? c.pPot : '') + '">' +
           '</div></div>';
       }).join('');
     }

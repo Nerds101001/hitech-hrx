@@ -673,6 +673,32 @@ class NinetyDayGoalsTest extends TestCase
         $this->assertEquals(0.0, Goals::dashboard([$this->rep->id])['cards']['achieved']);
     }
 
+    public function test_the_round_page_shows_the_customer_minimum_the_window_countdown_and_what_can_be_edited(): void
+    {
+        config(['ninety_day.min_customers' => 10, 'ninety_day.window_rule_from' => null]);
+        $round = Goals::roundFor($this->rep);
+        $this->goal($this->rep, $round, 'One Ltd');
+        $round->update(['customer_window_until' => now()->addHours(5)]);
+        Auth::setUser($this->rep);
+
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
+
+        $this->assertStringContainsString('Customers (minimum 10)', $html);
+        $this->assertStringContainsString('Incomplete', $html);
+        $this->assertStringContainsString('Add 9 more customers', $html);
+        $this->assertStringContainsString('id="ndgWinCountdown"', $html);
+        $this->assertStringContainsString('1 of 1 targets editable', $html);
+        $this->assertStringContainsString('data-bs-target="#ndgRdAddModal"', $html);
+
+        $round->update(['customer_window_until' => now()->subHour()]);
+        $closed = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
+
+        $this->assertStringNotContainsString('id="ndgWinCountdown"', $closed);
+        $this->assertStringContainsString('Ask admin/HR to reopen it', $closed);
+        $this->assertStringContainsString('Adding closed', $closed);
+        $this->assertStringNotContainsString('data-bs-target="#ndgRdAddModal"', $closed, 'no Add Customer button once the window has closed');
+    }
+
     public function test_a_round_starting_on_28_september_counts_october_to_december_not_september(): void
     {
         $this->at('2026-10-01');

@@ -874,6 +874,12 @@ class NinetyDayGoalController extends Controller
             // who may remove one (admin/HR) - moved here from the retired Goals page, 2026-10-01.
             'canComment' => $goals->isNotEmpty() && Goals::canNote($user, $goals->first()),
             'canRemoveComment' => Goals::managesEveryone($user),
+            // The customer rules, shown on the page (2026-10-01): minimum count, the add window
+            // and its countdown, and which targets are already fixed by a reported status.
+            'window'     => Goals::windowState($round),
+            'managesAll' => Goals::managesEveryone($user),
+            'lockedTargetIds' => NinetyDayGoalCheckin::whereIn('goal_id', $goals->pluck('id'))->whereNotNull('status')
+                ->distinct()->pluck('goal_id')->map(fn ($id) => (int) $id)->all(),
             'pendingUpsells' => NinetyDayGoalCheckin::with('goal')->where('round_id', $round->id)
                 ->where('needs_upsell_confirm', true)->orderBy('week_no')->get(),
             'round'    => $round,
