@@ -281,8 +281,24 @@ class AttendanceDayStatusTest extends TestCase
     public function test_the_unworked_half_rule_leaves_july_august_and_days_not_yet_over_alone(): void
     {
         $this->assertEquals('paid_leave', $this->halfDayNothingWorked('2026-08-24')['code'], 'already paid out');
-        $this->assertEquals('paid_leave', $this->halfDayNothingWorked(now()->addDays(3)->toDateString())['code'], 'not worked yet');
-        $this->assertEquals('paid_leave', $this->halfDayNothingWorked(now()->toDateString())['code'], 'today: the worked half may still be recorded');
+        Carbon::setTestNow('2026-09-30 11:00:00');   // a Wednesday, so neither day below is a weekly off
+        $this->assertEquals('paid_leave', $this->halfDayNothingWorked('2026-10-07')['code'], 'not worked yet');
+        $this->assertEquals('paid_leave', $this->halfDayNothingWorked('2026-09-30')['code'], 'today: the worked half may still be recorded');
+        Carbon::setTestNow();
+    }
+
+    public function test_punches_stored_the_other_way_round_still_count_as_worked(): void
+    {
+        $user = $this->makeUser();
+        // The biometric report listed the evening punch as check-in (Esha Das, 24 Sep 2026).
+        $swapped = $this->attendance($user, '2026-06-15', '17:57:00', '09:56:00');
+        $this->assertEquals('present', AttendanceDayStatus::resolve($user, Carbon::parse('2026-06-15'), $swapped, null, null)['code']);
+
+        // A night shift that ends after midnight, stored on the one date.
+        $night = $this->attendance($user, '2026-06-16', '19:41:00', '05:51:00');
+        $this->assertEquals('present', AttendanceDayStatus::resolve($user, Carbon::parse('2026-06-16'), $night, null, null)['code']);
+
+        $this->assertSame(481, AttendanceDayStatus::workedMinutes(Carbon::parse('2026-06-15 17:57'), Carbon::parse('2026-06-15 09:56')));
     }
 
     public function test_an_absence_ccare_covered_from_the_balance_reads_as_paid(): void
