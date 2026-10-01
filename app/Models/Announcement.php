@@ -65,10 +65,13 @@ class Announcement extends Model implements AuditableContract
 
     public function scopeCurrent($query)
     {
+        // end_date is a date: the post runs to the end of that day. Compared with
+        // now() it expired at 00:00 on its last day (a post ending 1 Oct vanished
+        // from every feed on the morning of 1 Oct).
         return $query->where('is_active', true)
                    ->where(function($q) {
                        $q->whereNull('end_date')
-                         ->orWhere('end_date', '>=', now());
+                         ->orWhere('end_date', '>=', now()->toDateString());
                    })
                    ->where('start_date', '<=', now());
     }
