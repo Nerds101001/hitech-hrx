@@ -384,6 +384,10 @@ Route::middleware([
       Route::get('tally/orders/dispatch', [$c, 'orderDispatch'])->name('orders.dispatch');
       Route::get('unmapped', [$c, 'unmapped'])->name('unmapped');
       Route::get('parties', [$c, 'parties'])->name('parties');
+      // Credit & Contacts' one write path into Tally -- admin-only, enforced again in the controller (the
+      // group middleware above is the broader admin|hr|accounts that reads everywhere else in Sales Sources use).
+      Route::post('parties/contact-preview', [\App\Http\Controllers\tenant\TallyContactUpdateController::class, 'preview'])->name('parties.contact-preview');
+      Route::post('parties/contact-update', [\App\Http\Controllers\tenant\TallyContactUpdateController::class, 'update'])->name('parties.contact-update');
       Route::get('team', [$c, 'team'])->name('team');
       Route::get('finance', [$c, 'finance'])->name('finance');
       Route::get('setu', [$c, 'setu'])->name('setu');

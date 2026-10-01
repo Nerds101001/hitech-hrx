@@ -60,6 +60,14 @@ return [
     'gateway_url' => env('TALLY_GATEWAY_URL', 'http://localhost:9000'),
     'gateway_company' => env('TALLY_GATEWAY_COMPANY', ''),
     'gateway_timeout' => (int) env('TALLY_GATEWAY_TIMEOUT', 30),
+
+    // Where the ONE write this app does (Credit & Contacts > update a customer's contact person/mobile,
+    // App\Http\Controllers\tenant\TallyContactUpdateController) actually goes. Deliberately a SEPARATE,
+    // unset-by-default pair from gateway_url/gateway_company above (which default to the sandbox) -- so a
+    // write can never silently land on whatever company happens to be configured for reads, and the feature
+    // fails with a clear "not configured" error until someone deliberately points it at a real company.
+    'write_gateway_url' => env('TALLY_WRITE_GATEWAY_URL', ''),
+    'write_gateway_company' => env('TALLY_WRITE_GATEWAY_COMPANY', ''),
   ],
 
   // Google Maps key for Live Location, Timeline, SOS map and client

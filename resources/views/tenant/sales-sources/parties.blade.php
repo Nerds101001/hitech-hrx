@@ -1,7 +1,7 @@
 @extends('tenant.sales-sources.layout')
 
 @section('tab')
-@php $inr = fn($v) => \App\Support\Fmt::inr($v, 0); @endphp
+@php $inr = fn($v) => \App\Support\Fmt::inr($v, 0); $canEditContact = auth()->user()->hasRole(['admin', 'Admin', 'super_admin']); @endphp
 
 <form method="GET" action="{{ route('sales-sources.parties') }}" class="hitech-card-white p-3 mb-4">
   <div class="row g-2 align-items-end">
@@ -46,7 +46,7 @@
       <thead class="table-light">
         <tr>
           <th style="min-width:260px;">Customer</th><th class="ss-num">Credit limit (₹)</th>
-          <th>GSTIN</th><th>PAN</th><th>Contact</th><th>Ledger group</th>
+          <th>GSTIN</th><th>PAN</th><th>Contact</th><th>Ledger group</th>@if($canEditContact)<th></th>@endif
         </tr>
       </thead>
       <tbody>
@@ -59,7 +59,7 @@
             <td class="ss-num fw-semibold">{{ $p->credit_limit !== null ? $inr($p->credit_limit) : '—' }}</td>
             <td>{{ $p->gstin ?: '—' }}</td>
             <td>{{ $p->pan ?: '—' }}</td>
-            <td>
+            <td class="tc-contact-cell">
               @if($p->contact_person || $p->contact_mobile)
                 {{ $p->contact_person ?: '—' }}
                 @if($p->contact_mobile)<div class="ss-sub">{{ $p->contact_mobile }}</div>@endif
@@ -68,9 +68,18 @@
               @endif
             </td>
             <td>{{ $p->ledger_group ?: '—' }}</td>
+            @if($canEditContact)
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-icon btn-outline-secondary tc-edit-btn" title="Update contact in Tally"
+                  data-normalized-name="{{ $p->normalized_name }}" data-party-name="{{ $p->party_name }}"
+                  data-contact-person="{{ $p->contact_person }}" data-contact-mobile="{{ $p->contact_mobile }}">
+                  <i class="bx bx-edit-alt"></i>
+                </button>
+              </td>
+            @endif
           </tr>
         @empty
-          <tr><td colspan="6" class="text-center text-muted py-5">No parties match these filters.</td></tr>
+          <tr><td colspan="{{ $canEditContact ? 7 : 6 }}" class="text-center text-muted py-5">No parties match these filters.</td></tr>
         @endforelse
       </tbody>
     </table>
@@ -84,5 +93,10 @@
 <p class="small text-muted mb-4">
   Pulled straight from Tally's own ledger master (<code>hrx:tally-push-parties</code>), not derived from invoices &mdash; a customer can have Tally sales but no row here yet if this sync hasn't run since they were added, or a credit limit/GSTIN simply
   because it was never entered in Tally. Credit limit here is what Tally's ledger master currently holds; Tally does not keep a change history for it (checked directly), so no "last changed" or "who changed it" is shown.
+  @if($canEditContact)The pencil icon is the one place this app writes back to Tally &mdash; it only ever changes that one customer's contact person and mobile, never anything financial, and always shows exactly what will change before it sends anything.@endif
 </p>
+
+@if($canEditContact)
+  @include('tenant.sales-sources.partials.contact-update-modal')
+@endif
 @endsection

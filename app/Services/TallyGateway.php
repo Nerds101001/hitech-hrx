@@ -9,11 +9,15 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Read-only client for TallyPrime's HTTP/XML gateway.
+ * Client for TallyPrime's HTTP/XML gateway. Read-only except for ONE deliberate, narrow exception --
+ * updateLedgerContact() -- everything else can only EXPORT.
  *
  * Safety, because this talks to accounting software people are working in:
- *  - It can only EXPORT. Every request is built here, and send() refuses anything that is not an Export
- *    (Tally's same gateway also accepts Imports, which would change the books).
+ *  - Every ordinary read goes through send(), which refuses anything that is not an Export (Tally's same
+ *    gateway also accepts Imports, which would change the books). The one write path, updateLedgerContact(),
+ *    deliberately goes through a SEPARATE method (sendWrite()) with its own separate guard
+ *    (assertLedgerContactWriteOnly()) that only ever allows altering exactly one named ledger's contact person
+ *    and mobile number -- see that method's own doc comment for the full safety design.
  *  - Every data request names the one company allowed (services.tally.gateway_company) and pulls refuse to start
  *    unless that company is the one Tally has loaded.
  *  - Tally is single-threaded, so requests go ONE AT A TIME, one day per request, with a short pause between them
@@ -194,6 +198,109 @@ class TallyGateway
     public function ledgerMaster(): array
     {
         return self::parseLedgers($this->send(self::ledgerMasterRequest($this->assertCompany())));
+    }
+
+    // ------------------------------------------------------------------ writing (one narrow operation only)
+
+    /**
+     * The ONE write this class will do: update a single ledger's contact person and mobile number. Everything
+     * else here is read-only by design (see the class doc comment and assertExportOnly()) -- this is a
+     * deliberate, narrow exception carved out for HRX's Credit & Contacts page, not a general import path.
+     *
+     * Earlier version of this method read the ledger's full native record first (TYPE="Object", SUBTYPE="Ledger")
+     * and edited it in place, so every untouched field round-tripped back unchanged. That request type got NO
+     * response at all from the real gateway (proven live: a clean 30s timeout, zero bytes back) -- so this
+     * sends the minimal Alter Tally's own documentation describes instead (NAME + ACTION="Alter" + only the
+     * fields being changed), and leans on the safeguards below rather than a full round-trip:
+     *  - sendWrite() has its OWN guard (assertLedgerContactWriteOnly), completely separate from
+     *    assertExportOnly(): it refuses to POST anything except exactly one <LEDGER ACTION="Alter"> for the
+     *    exact ledger name requested, with no voucher or other master type present anywhere in the request.
+     *  - Tally's own import response (CREATED/ALTERED/ERRORS/LINEERROR) is parsed, and anything other than a
+     *    clean one-record alteration is treated as failure even when the HTTP call itself succeeded.
+     *  - The ledger is read back afterwards via ledgerMaster() (the proven Collection pull already used
+     *    everywhere else in this class) rather than trusting the request just sent, confirming Tally actually
+     *    stored what was asked instead of the caller assuming success.
+     *
+     * @return array{contact_person: ?string, contact_mobile: ?string} the ledger's contact fields as Tally
+     *   reports them immediately after the write.
+     */
+    public function updateLedgerContact(string $ledgerName, ?string $contactPerson, ?string $contactMobile): array
+    {
+        $company = $this->assertCompany();
+        $request = self::contactUpdateRequest($company, $ledgerName, $contactPerson, $contactMobile);
+        self::assertImportSucceeded($this->sendWrite($request, $ledgerName));
+
+        $after = self::parseLedgers($this->send(self::ledgerMasterRequest($company)));
+        $match = array_values(array_filter($after, fn ($l) => $l['name'] === $ledgerName));
+        if ($match === []) {
+            throw new TallyGatewayException("Wrote to \"{$ledgerName}\" but could not read it back afterwards to confirm.");
+        }
+        return ['contact_person' => $match[0]['contact_person'], 'contact_mobile' => $match[0]['contact_mobile']];
+    }
+
+    /** The minimal Import Alter Tally's own documentation describes: identify the ledger, change only these two fields. */
+    public static function contactUpdateRequest(string $company, string $ledgerName, ?string $contactPerson, ?string $contactMobile): string
+    {
+        $c = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $n = htmlspecialchars($ledgerName, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $contact = htmlspecialchars(trim((string) $contactPerson), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $mobile = htmlspecialchars(trim((string) $contactMobile), ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>'
+            . '<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' . $c . '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC>'
+            . '<REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="' . $n . '" ACTION="Alter">'
+            . '<LEDGERCONTACT>' . $contact . '</LEDGERCONTACT><LEDGERMOBILE>' . $mobile . '</LEDGERMOBILE>'
+            . '</LEDGER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>';
+    }
+
+    /** POSTs the one allowed write request and returns the answer as clean UTF-8 text. */
+    protected function sendWrite(string $xml, string $expectedLedgerName): string
+    {
+        self::assertLedgerContactWriteOnly($xml, $expectedLedgerName);
+        try {
+            $response = Http::withBody($xml, 'text/xml')->connectTimeout(5)->timeout($this->timeout)->post($this->baseUrl);
+        } catch (ConnectionException $e) {
+            throw new TallyGatewayException("Cannot reach Tally at {$this->baseUrl}: is it running with its Client/Server port on? (" . $e->getMessage() . ')');
+        }
+        if (!$response->successful()) {
+            throw new TallyGatewayException("Tally answered HTTP {$response->status()}.");
+        }
+        return self::decode($response->body());
+    }
+
+    /**
+     * The write path's own guard, entirely separate from assertExportOnly() (every read call still goes
+     * through that one, unchanged). Refuses to send anything except exactly one <LEDGER ACTION="Alter"> for
+     * the exact ledger name requested, with no voucher or other master type present anywhere in the request.
+     */
+    public static function assertLedgerContactWriteOnly(string $xml, string $ledgerName): void
+    {
+        if (!preg_match('~<TALLYREQUEST>\s*Import Data\s*</TALLYREQUEST>~i', $xml)) {
+            throw new TallyGatewayException('Blocked: this is not a recognised contact-update request.');
+        }
+        $doc = self::load($xml);
+        $ledgers = $doc->xpath('//LEDGER') ?: [];
+        if (count($ledgers) !== 1) {
+            throw new TallyGatewayException('Blocked: a contact-update request must alter exactly one ledger.');
+        }
+        if (($doc->xpath('//VOUCHER | //GROUP | //STOCKITEM | //COMPANY') ?: []) !== []) {
+            throw new TallyGatewayException('Blocked: a contact-update request must not touch any other master or voucher.');
+        }
+        $l = $ledgers[0];
+        if ((string) ($l['ACTION'] ?? '') !== 'Alter' || trim((string) $l['NAME']) !== $ledgerName) {
+            throw new TallyGatewayException('Blocked: the ledger name or action on this request does not match what was requested.');
+        }
+    }
+
+    /** Tally's import response is CREATED/ALTERED/DELETED/ERRORS/LINEERROR counters, not HTTP status codes. */
+    private static function assertImportSucceeded(string $xml): void
+    {
+        $doc = self::load($xml);
+        $errors = (int) trim((string) ($doc->ERRORS ?? '0'));
+        $altered = (int) trim((string) ($doc->ALTERED ?? '0'));
+        if ($errors > 0 || $altered < 1) {
+            $lineError = trim((string) ($doc->LINEERROR ?? ''));
+            throw new TallyGatewayException('Tally did not accept the update' . ($lineError !== '' ? ": {$lineError}" : ' (no reason given).'));
+        }
     }
 
     /** POSTs an EXPORT request and returns the answer as clean UTF-8 text. Never sends anything that could change Tally's data. */
