@@ -655,6 +655,18 @@ class NinetyDayGoalService
         }
     }
 
+    /** Rows per page for the customer tables: 10 / 25 / 50 / 100, or 'all'. */
+    public const PER_PAGE_CHOICES = [10, 25, 50, 100];
+
+    public static function perPage($choice, int $default, int $total): int
+    {
+        if ($choice === 'all') {
+            return max(1, $total);
+        }
+
+        return in_array((int) $choice, self::PER_PAGE_CHOICES, true) ? (int) $choice : $default;
+    }
+
     // ── editing a program (Program Details > Manage program) ─────────────
 
     /**

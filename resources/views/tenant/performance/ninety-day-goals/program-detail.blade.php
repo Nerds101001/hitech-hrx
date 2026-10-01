@@ -31,8 +31,8 @@
   $statusColorMap = collect($G::STATUS_COLORS)->map(fn ($clr) => $clr[0]);
   $statusChartData = $statusCounts;
 
-  // Server-side pagination for the customer table — 10 per page, same as the reference.
-  $perPage = 10;
+  // Server-side pagination for the customer table: 10 per page unless "Show" picks more.
+  $perPage = \App\Services\NinetyDayGoalService::perPage(request('per_page'), 10, $rows->count());
   $page = max(1, request()->integer('page', 1));
   $paged = new \Illuminate\Pagination\LengthAwarePaginator(
       $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,

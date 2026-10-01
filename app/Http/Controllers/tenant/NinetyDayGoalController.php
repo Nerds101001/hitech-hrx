@@ -273,7 +273,7 @@ class NinetyDayGoalController extends Controller
         // Server-side pagination for the big customer table — the whole filtered set is already
         // in memory (this dataset is hundreds of rows, not millions), but the DOM only ever
         // gets one page of it.
-        $perPage = 25;
+        $perPage = Goals::perPage($request->input('per_page'), 25, $rows->count());
         $page = max(1, $request->integer('page', 1));
         $paged = new \Illuminate\Pagination\LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
@@ -626,7 +626,7 @@ class NinetyDayGoalController extends Controller
 
         // Same paginated customer table pattern the admin pages use, just this person's own rows.
         $rows = $d['rows'];
-        $perPage = 10;
+        $perPage = Goals::perPage($request->input('per_page'), 10, $rows->count());
         $page = max(1, $request->integer('page', 1));
         $paged = new \Illuminate\Pagination\LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,

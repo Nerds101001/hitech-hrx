@@ -258,6 +258,7 @@
             <div>
               <div class="fw-bold text-dark">Customer Tracking &amp; Weekly Updates @if($selectedProgram)— {{ $selectedProgram->name }}@endif</div>
               <div class="small text-muted">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('customer', $allRowsCount) }} in this program</div>
+              <div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 25, 'ppId' => 'Ov'])</div>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-3">
               <div class="d-flex flex-wrap gap-3 small text-muted">
@@ -489,7 +490,10 @@
           <div class="fw-bold text-dark">Customer submissions (all programs)</div>
           <div class="small text-muted">Every weekly status and comment, one row per target customer</div>
         </div>
-        <span class="small text-muted">Showing {{ $rows->count() }} of {{ $allRowsCount }}</span>
+        <div class="d-flex align-items-center gap-3">
+          @include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 25, 'ppId' => 'Tr'])
+          <span class="small text-muted">Showing {{ $rows->count() }} of {{ $allRowsCount }}</span>
+        </div>
       </div>
       <div class="card-body p-0 ndg-mx-scroll">
         <table class="ndg-mx ndg-mx-wide" style="font-size:.74rem">

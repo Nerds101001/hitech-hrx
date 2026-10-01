@@ -163,6 +163,28 @@ class NinetyDayProgramManageTest extends TestCase
         $this->assertStringContainsString('View report', $html);
     }
 
+    public function test_every_weekly_comment_can_be_read_on_the_program_page_and_the_page_size_can_change(): void
+    {
+        $round = NinetyDayRound::where('program_id', $this->program->id)->first();
+        DB::table('ninety_day_rounds')->where('id', $round->id)->update(['starts_on' => now()->subWeeks(3)->startOfWeek()->toDateString()]);
+        DB::table('ninety_day_programs')->where('id', $this->program->id)->update(['starts_on' => now()->subWeeks(3)->startOfWeek()->toDateString()]);
+        $pid = DB::table('sales_pipelines')->insertGetId(['party_name' => 'Comment Co ' . uniqid(), 'salesperson_id' => $this->rep->id, 'created_at' => now(), 'updated_at' => now()]);
+        $goal = NinetyDayGoal::create(['round_id' => $round->id, 'user_id' => $this->rep->id, 'sales_pipeline_id' => $pid, 'client_name' => 'Comment Co', 'goal' => 'Trial', 'monthly_potential' => 1]);
+        $w0 = NinetyDayGoalCheckin::create(['round_id' => $round->id, 'goal_id' => $goal->id, 'week_no' => 0, 'due_on' => now()->subWeeks(3)->startOfWeek(), 'status' => 'On Track', 'comment' => 'Met the buyer']);
+        NinetyDayGoalCheckin::create(['round_id' => $round->id, 'goal_id' => $goal->id, 'week_no' => 1, 'due_on' => now()->subWeeks(2)->startOfWeek(), 'status' => 'Off Track', 'comment' => 'Buyer on leave']);
+        \App\Models\NinetyDayGoalNote::create(['goal_id' => $goal->id, 'checkin_id' => $w0->id, 'week_no' => 0, 'user_id' => $this->admin->id, 'body' => 'Push for the trial']);
+
+        $html = $this->actingAs($this->admin)->get($this->url('?per_page=25'))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Met the buyer', $html, 'week 0 comment, on hover and in History');
+        $this->assertStringContainsString('Buyer on leave', $html, 'week 1 comment too - not just the last one');
+        $this->assertStringContainsString('Push for the trial', $html, "the admin's comment shows as well");
+        $this->assertStringContainsString('ndg-hist-btn', $html);
+        $this->assertStringContainsString('id="ndgHistModal"', $html);
+        $this->assertSame(1, substr_count($html, 'id="ndgHistModal"'), 'one History window, though the table appears on two tabs');
+        $this->assertMatchesRegularExpression('/<option value="25"\s+selected/', $html, 'the Show picker remembers 25');
+    }
+
     public function test_the_program_page_offers_manage_to_hr_and_delete_only_to_an_admin(): void
     {
         $hrPage = $this->actingAs($this->hr)->get($this->url())->assertOk()->getContent();
