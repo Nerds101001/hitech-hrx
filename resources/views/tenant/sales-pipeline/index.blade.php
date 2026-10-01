@@ -336,9 +336,19 @@
             </script>
         </div>
     </div>
-    <div class="text-muted text-end mb-1" style="font-size:0.78rem">
-        Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
-        of <strong>{{ $pipelines->total() }}</strong> customers
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        {{-- Choose which of the leading columns to show; S.No and Party Name always stay. --}}
+        <div class="dropdown">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle py-0" id="srColsBtn"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="font-size:0.78rem;">
+                <i class="bx bx-columns me-1"></i>Columns
+            </button>
+            <div class="dropdown-menu p-2" id="srColsMenu" style="min-width:220px;font-size:0.8rem;"></div>
+        </div>
+        <div class="text-muted" style="font-size:0.78rem">
+            Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
+            of <strong>{{ $pipelines->total() }}</strong> customers
+        </div>
     </div>
 
     {{-- ─── TABLE ──────────────────────────────────────────────────────── --}}
@@ -1192,6 +1202,13 @@
     /* Scoped to the main report table only — this rule used to leak into the
        achievement modal and wipe its coloured cells on hover (white on white). */
     #pipelineTable tbody tr:hover td { background-color: transparent !important; }
+    /* ...except the two frozen columns: transparent there let the cells
+       scrolled underneath show through on hover (Salesperson and Brand drawn
+       over the Party Name). They need a solid fill to cover what scrolls under. */
+    #pipelineTable tbody tr:hover td.col-sno,
+    #pipelineTable tbody tr:hover td.col-party { background-color: #f6faf9 !important; }
+    /* Columns switched off in the Columns menu */
+    #pipelineTable .sr-col-hidden { display: none !important; }
     .converted-row td { background-color: #fdf4ff !important; border-bottom: 2px solid #e879f9 !important; }
     .converted-row .col-party::after { content:' (Converted)'; color:#d946ef; font-size:0.7rem; font-weight:bold; }
     .pipeline-row-hidden { display: none !important; }
@@ -1995,7 +2012,78 @@ document.addEventListener('submit', function (e) {
 
     sizeIt();
     window.addEventListener('resize', sizeIt);
-    if (window.ResizeObserver) new ResizeObserver(sizeIt).observe(wrap);
+    window.addEventListener('load', sizeIt);
+    // Watch the table as well as its box: the table can widen after first
+    // paint (column widths, fonts, the Columns menu) without the box itself
+    // changing size, which left the top scrollbar hidden on some views.
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(sizeIt);
+        ro.observe(wrap);
+        const t = wrap.querySelector('table');
+        if (t) ro.observe(t);
+    }
+})();
+</script>
+<script>
+// Columns menu: hide/show the leading columns (everything before the month
+// groups except S.No and Party Name). Remembered per browser.
+(function () {
+    const tbl  = document.getElementById('pipelineTable');
+    const menu = document.getElementById('srColsMenu');
+    if (!tbl || !tbl.tHead || !menu) return;
+
+    const head = tbl.tHead.rows[0];
+    // The leading columns are the header cells spanning both header rows.
+    const lead = [];
+    for (const c of head.cells) { if (c.rowSpan < 2) break; lead.push(c); }
+    const label = c => c.textContent.replace(/\s+/g, ' ').replace(/₹.*$/, '').trim();   // "Potential ₹ Lakh/Month" -> "Potential"
+    const KEY = 'hrx.salesReport.hiddenCols';
+    let hidden = [];
+    try { hidden = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { hidden = []; }
+
+    const apply = () => {
+        const off = new Set(lead.map((c, i) => (i > 1 && hidden.includes(label(c))) ? i : -1).filter(i => i > 1));
+        const rows = [head, ...tbl.querySelectorAll('#monthTotalsRow, tbody tr')];
+        rows.forEach(row => {
+            // only real customer/total rows, which start with the S.No cell
+            if (!row.cells[0] || !row.cells[0].classList.contains('col-sno') || row.cells.length < lead.length) return;
+            for (let i = 0; i < lead.length; i++) row.cells[i].classList.toggle('sr-col-hidden', off.has(i));
+        });
+        const n = off.size;
+        document.getElementById('srColsBtn').innerHTML = '<i class="bx bx-columns me-1"></i>Columns' + (n ? ' (' + n + ' hidden)' : '');
+        window.dispatchEvent(new Event('resize'));   // re-measure the top scrollbar
+    };
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(hidden)); } catch (e) {} };
+
+    lead.forEach((c, i) => {
+        if (i < 2) return;   // S.No and Party Name always show
+        const name = label(c);
+        const id = 'srCol' + i;
+        const row = document.createElement('div');
+        row.className = 'form-check mb-1';
+        row.innerHTML = '<input class="form-check-input" type="checkbox" id="' + id + '">'
+            + '<label class="form-check-label" for="' + id + '"></label>';
+        row.querySelector('label').textContent = name;
+        const box = row.querySelector('input');
+        box.checked = !hidden.includes(name);
+        box.addEventListener('change', () => {
+            hidden = box.checked ? hidden.filter(h => h !== name) : [...new Set([...hidden, name])];
+            save(); apply();
+        });
+        menu.appendChild(row);
+    });
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'btn btn-sm btn-link p-0 mt-1';
+    all.textContent = 'Show all columns';
+    all.addEventListener('click', () => {
+        hidden = []; save();
+        menu.querySelectorAll('input[type=checkbox]').forEach(b => { b.checked = true; });
+        apply();
+    });
+    menu.appendChild(all);
+
+    apply();
 })();
 </script>
 
