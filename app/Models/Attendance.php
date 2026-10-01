@@ -179,7 +179,7 @@ class Attendance extends Model implements AuditableContract
           $hasFourHours = false;
 
           if ($checkOut) {
-              $mins = $checkIn->diffInMinutes($checkOut);
+              $mins = \App\Services\AttendanceDayStatus::workedMinutes($checkIn, $checkOut);   // punches may be stored the other way round
               // 3h55m, not a strict 4h: see AttendanceDayStatus::OFFDAY_CREDIT_MINUTES.
               // (The flag keeps its old name; it now means "worked enough for the credit".)
               if ($mins >= \App\Services\AttendanceDayStatus::OFFDAY_CREDIT_MINUTES) {

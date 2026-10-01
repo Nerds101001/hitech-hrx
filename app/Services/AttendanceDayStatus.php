@@ -57,6 +57,23 @@ class AttendanceDayStatus
     /** Minutes of real work a Short Leave day needs to still count as a full Present. */
     public const SHORT_LEAVE_PRESENT_MINUTES = 350;
 
+    /**
+     * Minutes between the two punches, whichever order they were stored in.
+     * The biometric report sometimes lists them the other way round (in
+     * 18:07, out 10:22) or a night shift ends after midnight (in 19:41, out
+     * 05:51); Carbon 3 returns a negative difference for both, and every such
+     * day resolved Absent - 41 days across 19 people in Aug-Sep 2026, each
+     * charged at the unexplained-absence rate by payroll.
+     */
+    public static function workedMinutes(?Carbon $in, ?Carbon $out): int
+    {
+        if (!$in || !$out) {
+            return 0;
+        }
+
+        return (int) $in->diffInMinutes($out, true);
+    }
+
     /** From this day a leave approved with no paid part stays unpaid, whatever its row reads (see leaveDayIsPaid). */
     public const WHOLLY_UNPAID_FROM = '2026-09-01';
 
@@ -225,7 +242,7 @@ class AttendanceDayStatus
         $isDummyPunch = $attendance && $attendance->check_in_time
             && $attendance->check_in_time->format('H:i') === '00:00';
         $hasRealPunch = $attendance && $attendance->check_in_time && $attendance->check_out_time && !$isDummyPunch;
-        $workMins = $hasRealPunch ? $attendance->check_in_time->diffInMinutes($attendance->check_out_time) : 0;
+        $workMins = $hasRealPunch ? self::workedMinutes($attendance->check_in_time, $attendance->check_out_time) : 0;
 
         // A leave can reach this day via two routes that both exist across
         // the four original implementations: linked directly on the
