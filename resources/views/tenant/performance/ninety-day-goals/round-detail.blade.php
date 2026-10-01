@@ -742,7 +742,7 @@
 @section('page-script')
 <script>
 // Live countdown to the close of the add-customer window; reloads once it closes so the
-// Add Customer buttons disappear without a stale page accepting a click the server will refuse.
+// add buttons disappear without a stale page accepting a click the server will refuse.
 (function () {
   var el = document.getElementById('ndgWinCountdown');
   if (!el) { return; }
