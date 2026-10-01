@@ -178,7 +178,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Create a div and add a class
         let renderMsg = document.createElement('div');
         renderMsg.className = 'chat-message-text mt-2';
-        renderMsg.innerHTML = '<p class="mb-0 text-break">' + messageInput.value + '</p>';
+        renderMsg.innerHTML = '<p class="mb-0 text-break">' + esc(messageInput.value) + '</p>';
         document.querySelector('li:last-child .chat-message-wrapper').appendChild(renderMsg);
         messageInput.value = '';
         scrollToBottom();
@@ -313,6 +313,11 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     }
 
+    // Message text and names are typed by people: never parse them as HTML.
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
     function renderMessages(messages, append = false) {
       if (!chatMessagesEl) return;
       if (!append) chatMessagesEl.innerHTML = '';
@@ -320,7 +325,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const li = document.createElement('li');
         li.className = 'chat-message';
         li.dataset.id = msg.id;
-        li.innerHTML = `<div class="chat-message-wrapper"><div class="chat-message-text mt-2"><p class="mb-0 text-break">${msg.content ?? ''}</p></div></div><div class="small text-muted">${msg.userName} - ${msg.createdAtHuman}</div><button class="btn btn-sm btn-outline-secondary react-btn" data-message="${msg.id}">👍</button>`;
+        li.innerHTML = `<div class="chat-message-wrapper"><div class="chat-message-text mt-2"><p class="mb-0 text-break">${esc(msg.content)}</p></div></div><div class="small text-muted">${esc(msg.userName)} - ${esc(msg.createdAtHuman)}</div><button class="btn btn-sm btn-outline-secondary react-btn" data-message="${msg.id}">👍</button>`;
         chatMessagesEl.appendChild(li);
         lastMessageId = msg.id;
         markAsRead(msg.id);
@@ -330,7 +335,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderParticipants(users) {
       if (!participantsEl) return;
-      participantsEl.innerHTML = users.map(u => `<span class="badge bg-info me-1">${u.firstName}</span>`).join('');
+      participantsEl.innerHTML = users.map(u => `<span class="badge bg-info me-1">${esc(u.firstName)}</span>`).join('');
     }
 
     // Event listeners

@@ -561,7 +561,7 @@ class LeaveController extends Controller
       'id' => $leaveRequest->id,
       'userName' => $leaveRequest->user->getFullName(),
       'userCode' => $leaveRequest->user->code,
-      'leaveType' => $leaveRequest->leaveType->name . ($leaveRequest->from_date && $leaveRequest->from_date->lt($leaveRequest->created_at->startOfDay()) ? ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>' : ''),
+      'leaveType' => e($leaveRequest->leaveType->name) . ($leaveRequest->from_date && $leaveRequest->from_date->lt($leaveRequest->created_at->startOfDay()) ? ' <span class="badge bg-label-warning ms-1" style="font-size:0.6rem;">BACK DATED</span>' : ''),
       'fromDate' => $leaveRequest->from_date->format(Constants::DateFormat),
       'toDate' => $leaveRequest->to_date->format(Constants::DateFormat),
       'document' => $leaveRequest->document != null ? asset('storage/'.Constants::BaseFolderLeaveRequestDocument . $leaveRequest->document) : null,
