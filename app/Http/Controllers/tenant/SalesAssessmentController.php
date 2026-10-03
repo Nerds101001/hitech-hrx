@@ -199,15 +199,14 @@ class SalesAssessmentController extends Controller
             ->count();
 
         // 6. New Customer Revenue Percentage
-        $newCustomerSales = \App\Models\SalesPipelineMonth::whereHas('pipeline', function ($q) use ($user) {
-                $q->where('salesperson_id', $user->id)
-                  ->where(function($sub) {
-                      $sub->whereNotNull('new_biz_id')
-                          ->orWhere('converted_from_newbiz', 1);
-                  });
+        // New Biz months: a New Biz customer's, and a customer's months before it
+        // moved to CCare (converted_from_newbiz was meant for that but never got set).
+        $newCustomerSalesQuery = \App\Models\SalesPipelineMonth::whereHas('pipeline', function ($q) use ($user) {
+                $q->where('salesperson_id', $user->id);
             })
-            ->whereBetween('month_year', [$startMonth, $endMonth])
-            ->sum('sale_amount') ?? 0;
+            ->whereBetween('month_year', [$startMonth, $endMonth]);
+        \App\Models\SalesPipeline::whereMonthInCategory($newCustomerSalesQuery, 'New Biz');
+        $newCustomerSales = $newCustomerSalesQuery->sum('sale_amount') ?? 0;
 
         $newCustomerRevenuePercentage = $revenueAchieved > 0 ? ($newCustomerSales / $revenueAchieved) * 100 : 0;
 

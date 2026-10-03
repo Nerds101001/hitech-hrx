@@ -602,6 +602,13 @@
                                         <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                                         <option value="CCare" {{ $catDisplay === 'CCare' ? 'selected' : '' }}>CCare</option>
                                     </select>
+                                    @if($row->ccare_from)
+                                        @php $movedFrom = \Carbon\Carbon::parse($row->ccare_from . '-01'); @endphp
+                                        <div class="cat-moved"
+                                             title="New Biz{{ $row->formerNewBiz ? ' (' . $row->formerNewBiz->name . ')' : '' }} until {{ $movedFrom->copy()->subMonth()->format('M Y') }}; CCare from {{ $movedFrom->format('M Y') }}">
+                                            New Biz till {{ $movedFrom->copy()->subMonth()->format('M y') }}
+                                        </div>
+                                    @endif
                                 </td>
 
                                 {{-- Representative — click to pick any CCare/New Biz agent --}}
@@ -689,9 +696,18 @@
                                         // and every cell rendered readonly.
                                         $isMyOpenRow = $canEditOwnRow && !$canEditBook;
                                         $fcstRoAttr  = (($canEditBook || $isMyOpenRow) && !$monthLocked) ? '' : 'readonly';
+                                        // A customer that moved New Biz -> CCare: its months before
+                                        // the move are New Biz months, and a month outside the
+                                        // category / person in view is left out of the totals row.
+                                        $nbEra   = $row->ccare_from && $m['key'] < $row->ccare_from;
+                                        $counted = (!$monthCategory || ($monthCategory === 'New Biz') === $row->isNewBizMonth($m['key']))
+                                            && collect($creditPeople)->every(fn ($pid) => $row->creditsMonth($pid, $m['key']));
+                                        $eraCls  = ($nbEra ? ' nb-era' : '') . ($counted ? '' : ' month-out');
+                                        $eraTip  = !$row->ccare_from ? null
+                                            : ($nbEra ? 'New Biz month' : 'CCare month') . ($counted ? '' : ' (not counted in this view)');
                                     @endphp
                                     @if($showPend)
-                                        <td class="p-0 bg-forecast-light" style="max-width:52px;">
+                                        <td class="p-0 bg-forecast-light{{ $eraCls }}" style="max-width:52px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
@@ -699,7 +715,7 @@
                                                    {!! $fcstRoAttr !!}>
                                         </td>
                                     @endif
-                                    <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
+                                    <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}{{ $eraCls }}" style="max-width:55px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                         @php $isCredit = $mData && (float) $mData->sale_amount < 0; @endphp
                                         <input type="number" step="0.01"
                                                class="excel-input text-end month-field font-monospace{{ $isCredit ? ' is-credit-note' : '' }}"
@@ -709,7 +725,7 @@
                                                {!! $roAttr !!}>
                                     </td>
                                     @if($showPend)
-                                        <td class="p-0 bg-pending-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:52px;">
+                                        <td class="p-0 bg-pending-light {{ !$isThisMonth ? 'block-end' : '' }}{{ $eraCls }}" style="max-width:52px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
@@ -1211,6 +1227,12 @@
     #pipelineTable .sr-col-hidden { display: none !important; }
     .converted-row td { background-color: #fdf4ff !important; border-bottom: 2px solid #e879f9 !important; }
     .converted-row .col-party::after { content:' (Converted)'; color:#d946ef; font-size:0.7rem; font-weight:bold; }
+    /* A customer that moved New Biz -> CCare: "New Biz till ..." under its
+       Category, a violet underline on its New Biz months, and greyed figures
+       in months the current Category / person filter leaves out of the totals. */
+    .cat-moved { font-size: 0.58rem; color: #a21caf; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+    td.nb-era { box-shadow: inset 0 -2px 0 #e879f9; }
+    td.month-out input { color: #9ca3af !important; font-style: italic; }
     .pipeline-row-hidden { display: none !important; }
 </style>
 
@@ -1365,6 +1387,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     this.style.backgroundColor = '#e8f5e9';
                     setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
+                    // 5th month with sales: the customer has just moved to CCare.
+                    if (data.moved_to_ccare) {
+                        const cat = tr.querySelector('select[data-field="category"]');
+                        if (cat) cat.value = 'CCare';
+                        const rep = tr.querySelector('.rep-cell');
+                        if (rep) {
+                            rep.dataset.cc = data.ccare_id || '';
+                            rep.dataset.nb = '';
+                            if (data.rep_name) { rep.textContent = data.rep_name; rep.title = data.rep_name + ' (click to change)'; }
+                        }
+                        alert('This customer now has sales in 5 months, so it has moved to CCare from ' + data.ccare_from + '. Earlier months stay under New Biz.');
+                    }
                 } else if (data.message) {
                     alert(data.message);
                 }

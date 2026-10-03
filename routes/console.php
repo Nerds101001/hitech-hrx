@@ -61,6 +61,8 @@ Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify
 Schedule::command('tasks:notify-expected-date')->dailyAt('09:00')->description("Remind staff the day their own completion_expected_date arrives");
 
 Schedule::command('hrx:transfer-newbiz-ccare')->daily();
+// Sales Report 5-month rule: New Biz customers with sales in 5 months move to CCare.
+Schedule::command('sales:graduate-newbiz')->dailyAt('06:30')->description('Move New Biz customers with sales in 5 months to CCare');
 
 // Keeps the audits table's monthly partitions rolling: extends the runway of
 // future months so nothing ever falls into the pmax catch-all, and drops whole

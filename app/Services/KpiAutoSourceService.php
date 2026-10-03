@@ -157,11 +157,11 @@ class KpiAutoSourceService
      * Booked business is booked business whoever tagged it, which is the rule
      * the Kingo/Bingo actuals already follow.
      */
-    private static function book(int $userId)
+    private static function book(int $userId, bool $withMovedOn = false)
     {
         return DB::table('sales_pipelines')
             ->whereNull('deleted_at')
-            ->where(function ($q) use ($userId) {
+            ->where(function ($q) use ($userId, $withMovedOn) {
                 $q->where('salesperson_id', $userId)
                   ->orWhere('new_biz_id', $userId)
                   ->orWhere('new_biz_2_id', $userId)
@@ -172,6 +172,11 @@ class KpiAutoSourceService
                         ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
                         ->where('er.user_id', $userId);
                   });
+                // Money sums only: customers that moved New Biz -> CCare, for the
+                // New Biz months they sold in (SalesPipeline::whereMonthCredited()).
+                if ($withMovedOn) {
+                    $q->orWhere('former_new_biz_id', $userId);
+                }
             });
     }
 
@@ -348,13 +353,19 @@ class KpiAutoSourceService
         return $total <= 0 || $customers >= 0.9 * $total;
     }
 
-    /** Revenue in ₹ lakh — sale_amount is stored in lakh. */
+    /**
+     * Revenue in ₹ lakh — sale_amount is stored in lakh. A customer that moved
+     * New Biz -> CCare counts its months before the move for the New Biz
+     * person and the rest for CCare (SalesPipeline::whereMonthCredited()).
+     */
     public static function revenue(int $userId, Carbon $start, Carbon $end): float
     {
-        return (float) DB::table('sales_pipeline_months as m')
-            ->whereIn('m.sales_pipeline_id', self::book($userId)->select('id'))
-            ->whereIn('m.month_year', self::monthKeys($start, $end))
-            ->sum('m.sale_amount');
+        $q = DB::table('sales_pipeline_months as m')
+            ->whereIn('m.sales_pipeline_id', self::book($userId, true)->select('id'))
+            ->whereIn('m.month_year', self::monthKeys($start, $end));
+        \App\Models\SalesPipeline::whereMonthCredited($q, $userId, 'm');
+
+        return (float) $q->sum('m.sale_amount');
     }
 
     /** Revenue ÷ target, as a percentage. Pair with target_value = 100. */
@@ -420,10 +431,12 @@ class KpiAutoSourceService
      */
     public static function forecast(int $userId, Carbon $start, Carbon $end): float
     {
-        return (float) DB::table('sales_pipeline_months as m')
-            ->whereIn('m.sales_pipeline_id', self::book($userId)->select('id'))
-            ->whereIn('m.month_year', self::monthKeys($start, $end))
-            ->sum('m.forecast_amount');
+        $q = DB::table('sales_pipeline_months as m')
+            ->whereIn('m.sales_pipeline_id', self::book($userId, true)->select('id'))
+            ->whereIn('m.month_year', self::monthKeys($start, $end));
+        \App\Models\SalesPipeline::whereMonthCredited($q, $userId, 'm');   // see revenue()
+
+        return (float) $q->sum('m.forecast_amount');
     }
 
     /**
@@ -548,13 +561,14 @@ class KpiAutoSourceService
         // Same five attribution routes as book(). Counting only three made this
         // disagree with the Sales Report the salesperson reads their own number
         // off -- see book()'s note for the measured effect.
-        $actual = (float) DB::table('sales_pipeline_months as m')
+        $actualQuery = DB::table('sales_pipeline_months as m')
             ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
             ->where(function ($q) use ($userId) {
                 $q->where('sp.salesperson_id', $userId)
                   ->orWhere('sp.new_biz_id', $userId)
                   ->orWhere('sp.new_biz_2_id', $userId)
                   ->orWhere('sp.ccare_id', $userId)
+                  ->orWhere('sp.former_new_biz_id', $userId)
                   ->orWhereExists(function ($e) use ($userId) {
                       $e->selectRaw('1')
                         ->from('sales_pipeline_extra_reps as er')
@@ -564,8 +578,10 @@ class KpiAutoSourceService
             })
             ->where('sp.is_locked', true)
             ->whereNull('sp.deleted_at')
-            ->whereIn('m.month_year', self::monthKeys($start, $end))
-            ->sum('m.sale_amount');
+            ->whereIn('m.month_year', self::monthKeys($start, $end));
+        // A customer that moved New Biz -> CCare splits its months - see revenue().
+        \App\Models\SalesPipeline::whereMonthCredited($actualQuery, $userId, 'm');
+        $actual = (float) $actualQuery->sum('m.sale_amount');
 
         return round($actual / $target * 100, 2);
     }
