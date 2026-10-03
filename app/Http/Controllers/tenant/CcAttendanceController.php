@@ -137,9 +137,9 @@ class CcAttendanceController extends Controller
 
         $salespeople = $filtered;
 
-        // Lock state for the banner: date D closes at D+2, 12:00 PM (Admin/HR exempt).
+        // Lock state for the banner: date D closes at 12:00 PM on the 2nd working day after it (Admin/HR exempt).
         $isLocked = $this->isLockedFor($date, $user);
-        $lockDeadline = Carbon::parse($date)->addDays(2)->setTime(12, 0);
+        $lockDeadline = $this->lockDeadline($date, $user);
         // Earliest date a non-admin may load (July back-fill window is open).
         $minDate = min(self::OPEN_FROM, Carbon::today()->subDays(2)->toDateString());
         $openWindow = [self::OPEN_FROM, self::OPEN_TO];
@@ -152,8 +152,8 @@ class CcAttendanceController extends Controller
     }
 
     /**
-     * Filling window: date D stays open until D+2 at 12:00 PM (app time / IST).
-     * Admin/HR are never locked.
+     * Filling window: date D stays open until 12:00 PM (app time / IST) on the
+     * 2nd working day after it - see lockDeadline(). Admin/HR are never locked.
      */
     /** Approved-leave style statuses are managed by the leave module, not here. */
     private function isLeaveStatus(?string $status): bool
@@ -349,7 +349,52 @@ class CcAttendanceController extends Controller
                 return false;
             }
         }
-        return now()->greaterThan(Carbon::parse($date)->addDays(2)->setTime(12, 0));
+        return now()->greaterThan($this->lockDeadline($date, $user));
+    }
+
+    /**
+     * When date D stops being fillable: 12:00 PM on the 2nd WORKING day after
+     * it, counting the working days of the person filling it in - Sundays,
+     * holidays that apply to them and their off-Saturdays don't count.
+     *
+     * It was D+2 calendar days, so a weekend or a holiday used up the window:
+     * Friday's sheet locked on Sunday and Saturday's at Monday noon, before the
+     * team was back. Now Saturday's stays open until Tuesday noon, and a day
+     * before a holiday gets the holiday added on.
+     */
+    public function lockDeadline(string $date, $user): Carbon
+    {
+        $day = Carbon::parse($date)->startOfDay();
+        $counted = 0;
+        for ($i = 0; $i < 31 && $counted < 2; $i++) {
+            $day->addDay();
+            if ($this->isWorkingDay($day, $user)) {
+                $counted++;
+            }
+        }
+
+        return $day->copy()->setTime(12, 0);
+    }
+
+    /** Per-request memo: the monthly grid asks about the same few days for every row. */
+    private array $workingDays = [];
+
+    private function isWorkingDay(Carbon $day, $user): bool
+    {
+        $key = ($user->id ?? 0) . '|' . $day->toDateString();
+
+        return $this->workingDays[$key] ??= (function () use ($day, $user) {
+            if ($day->isSunday()) {
+                return false;
+            }
+            if ($user && \App\Models\Holiday::appliesTo($user, $day->toDateString())) {
+                return false;
+            }
+            if ($user && $day->isSaturday() && \App\Services\LeavePolicyService::saturdayOffState($user, $day) === true) {
+                return false;
+            }
+            return true;
+        })();
     }
 
     /**
@@ -548,14 +593,14 @@ class CcAttendanceController extends Controller
 
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
-        // Filling window: date D stays open until D+2 at 12:00 PM (IST). After
-        // that it is locked for CCare — only Admin/HR can still mark it.
+        // Filling window: date D stays open until 12:00 PM (IST) on the 2nd working
+        // day after it. After that it is locked for CCare — only Admin/HR can still mark it.
         $maxDate = Carbon::today()->format('Y-m-d');
         if ($date > $maxDate) {
             return redirect()->back()->with('error', 'Attendance cannot be marked for a future date.');
         }
         if ($this->isLockedFor($date, Auth::user())) {
-            $deadline = Carbon::parse($date)->addDays(2)->setTime(12, 0)->format('d M Y, h:i A');
+            $deadline = $this->lockDeadline($date, Auth::user())->format('d M Y, h:i A');
             return redirect()->back()->with('error', "Attendance for {$date} is locked (deadline was {$deadline}). Please contact Admin/HR.");
         }
 
@@ -867,7 +912,23 @@ class CcAttendanceController extends Controller
 
         $canSeeReport = $this->canSeeReport($user);
 
-        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'monthLeaves', 'user', 'canSeeReport'));
+        // Days that can still be marked on this sheet: up to today and not past
+        // their working-day deadline (lockDeadline). It was a fixed 3 calendar
+        // days, so a Sunday or holiday hid days that were still open. CCare also
+        // gets any unlock window; Admin/HR keep the deadline window here and use
+        // the daily page for older dates.
+        $openDates = [];
+        for ($d = $startOfMonth->copy(); $d->lte($endOfMonth) && $d->lte(Carbon::today()); $d->addDay()) {
+            $ds = $d->toDateString();
+            $open = $this->isAttendanceAdmin($user)
+                ? !now()->greaterThan($this->lockDeadline($ds, $user))
+                : !$this->isLockedFor($ds, $user);
+            if ($open) {
+                $openDates[$ds] = true;
+            }
+        }
+
+        return view('tenant.cc_attendance.monthly', compact('salespeople', 'month', 'year', 'daysInMonth', 'startOfMonth', 'attendances', 'monthLeaves', 'user', 'canSeeReport', 'openDates'));
     }
 
     /**

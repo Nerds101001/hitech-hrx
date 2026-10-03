@@ -110,8 +110,8 @@
         @endif
     </ul>
     @unless($user->hasRole(['admin','hr']))
-        <div class="alert alert-info py-2" style="font-size:.85rem;"><i class="ti ti-clock me-1"></i>
-            Each date stays open until <strong>2 days later, 12:00 PM</strong> — after that it locks and only Admin/HR can mark it.</div>
+        <div class="alert alert-info py-2" style="font-size:.85rem;"><i class="bx bx-time-five me-1"></i>
+            Each date stays open until <strong>12:00 PM on the 2nd working day after it</strong> (Sundays and holidays don't count) — after that it locks and only Admin/HR can mark it.</div>
     @endunless
 
     <!-- Month Selection Filter -->
@@ -255,11 +255,8 @@
                                                 $dateStr = $dateObj->format('Y-m-d');
                                                 $isSunday = $dateObj->isSunday();
                                                 
-                                                // 3-day window logic
-                                                $minDate = \Carbon\Carbon::today()->subDays(3);
-                                                $maxDate = \Carbon\Carbon::today();
-                                                
-                                                $isWithinWindow = $dateObj->between($minDate, $maxDate);
+                                                // Still open: 12:00 PM on the 2nd working day after the date (Sundays/holidays don't count).
+                                                $isWithinWindow = isset($openDates[$dateStr]);
                                                 
                                                 // Existing Record
                                                 $attList = $attendances[$emp->id] ?? [];
