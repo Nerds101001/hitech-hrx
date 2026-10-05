@@ -44,8 +44,11 @@ class MyTasksController extends Controller
         // pushed to the end rather than sorting first as NULL otherwise
         // would — same ordering Task Management uses, so the two pages never
         // disagree about what "most urgent" means.
+        // Latest update (with who wrote it) and the CC list come along: both
+        // are shown on the rows, not only inside the Updates popup.
+        $latestUpdate = fn ($q) => $q->with('createdBy:id,first_name,last_name')->latest()->limit(1);
         $tasks = Task::forUser($user->id)
-            ->with(['assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+            ->with(['assignedBy', 'ccUsers', 'taskUpdates' => $latestUpdate])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
@@ -57,13 +60,15 @@ class MyTasksController extends Controller
         // watched row into "pending"/"overdue" would make it look like this
         // person's own task is late, when it's actually someone else's.
         $watching = Task::ccTo($user->id)
-            ->with(['assignedBy', 'user', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+            ->with(['assignedBy', 'user', 'ccUsers', 'taskUpdates' => $latestUpdate])
             ->get()
             ->concat(
                 Task::where('assigned_by_id', $user->id)->where('user_id', '!=', $user->id)
-                    ->with(['assignedBy', 'user', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+                    ->with(['assignedBy', 'user', 'ccUsers', 'taskUpdates' => $latestUpdate])
                     ->get()
             )
+            // CC'd on a task I also assigned - once, not twice.
+            ->unique('id')
             // Undated tasks pushed to the end, matching every other bucket's
             // ordering here - Collection::sortBy alone would put a null
             // due_date first, the opposite of what orderByRaw('due_date IS
@@ -133,8 +138,22 @@ class MyTasksController extends Controller
             'attachment' => TaskAttachment::RULES,
         ]);
 
+        if ($task->status === 'objection') {
+            return response()->json(['success' => false, 'message' => 'This task was sent back - use Fix & Resubmit.'], 422);
+        }
+        if ($task->is_completed) {
+            return response()->json(['success' => false, 'message' => 'This task is already completed.'], 422);
+        }
+        // Same guard as updateStatus(): this endpoint (used by the dashboard
+        // card and the photo upload) used to skip it, so a 90-Day Goals task
+        // could be ticked off without the data it asks for.
+        if ($reason = \App\Services\NinetyDayGoalService::taskBlockReason($task)) {
+            return response()->json(['success' => false, 'message' => $reason], 422);
+        }
+
         $task->status = 'completed';
         $task->completed_at = now();
+        $task->completion_expected_date = null;
         $task->save();
 
         $task->taskUpdates()->create([
@@ -253,7 +272,7 @@ class MyTasksController extends Controller
      */
     public function addReply(Request $request, Task $task)
     {
-        if (!$task->isVisibleTo(auth()->id())) {
+        if (!$task->canBeViewedBy(auth()->user())) {
             abort(403, 'You do not have access to this task.');
         }
 
@@ -282,12 +301,13 @@ class MyTasksController extends Controller
     }
 
     /**
-     * The full update thread for one task, for the assignee/assigner/CC'd
-     * detail panel — same isVisibleTo() gate as addReply().
+     * The full update thread for one task - same canBeViewedBy() gate as
+     * addReply(): the assignee, assigner, CC'd people, and whoever manages
+     * the task on Task Management (admin/HR, the assignee's manager).
      */
     public function thread(Task $task)
     {
-        if (!$task->isVisibleTo(auth()->id())) {
+        if (!$task->canBeViewedBy(auth()->user())) {
             abort(403, 'You do not have access to this task.');
         }
 
@@ -299,10 +319,11 @@ class MyTasksController extends Controller
                 'title'                     => $task->title,
                 'description'               => $task->description,
                 'status'                    => $task->status,
-                'status_label'              => Task::PROGRESS_STATUSES[$task->status] ?? ucfirst($task->status),
+                'status_label'              => $task->status === 'objection' ? 'Objection raised' : (Task::PROGRESS_STATUSES[$task->status] ?? ucfirst($task->status)),
+                'priority'                  => ucfirst((string) $task->priority),
                 'assigned_by'               => optional($task->assignedBy)->getFullName(),
                 'assignee'                  => optional($task->user)->getFullName(),
-                'due_date'                  => optional($task->due_date)->format('d M Y'),
+                'due_date'                  => $task->dueLabel(),
                 'completion_expected_date'  => optional($task->completion_expected_date)->format('d M Y'),
                 'is_overdue'                => $task->is_overdue,
                 'cc_users'                  => $task->ccUsers->map(fn ($u) => $u->getFullName())->values(),

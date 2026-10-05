@@ -262,6 +262,7 @@
   </div>
 
   <div class="px-4">
+    <p class="text-muted small mb-4" style="margin-top:-.75rem;">The counts above are per person - an assignment sent to 10 people counts 10. In the list below it is one row.</p>
     <div class="hitech-segmented-control mb-6" id="tmTabs">
       <button class="btn btn-sm status-toggle-btn active js-tm-tab" data-tm-target="#tmOneTime" type="button">
         <i class="bx bx-task me-1"></i>One-Time Tasks
@@ -313,6 +314,7 @@
             <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
             <select class="form-select form-select-hitech" name="status" onchange="this.form.submit()">
               <option value="">All statuses</option>
+              <option value="open" {{ request('status') === 'open' ? 'selected' : '' }}>Open (not completed)</option>
               <option value="new" {{ request('status') === 'new' ? 'selected' : '' }}>New</option>
               <option value="in_progress" {{ request('status') === 'in_progress' ? 'selected' : '' }}>In progress</option>
               <option value="due_today" {{ request('status') === 'due_today' ? 'selected' : '' }}>Due today</option>
@@ -340,7 +342,17 @@
           <div class="col-lg-1 col-md-6">
             <a href="{{ route('task-management.index') }}" class="btn btn-hitech-cancel w-100">Clear</a>
           </div>
+          @foreach(['sort', 'dir', 'user_id'] as $keep)
+            @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+          @endforeach
         </form>
+        @if(request()->filled('user_id'))
+          @php $onlyPerson = \App\Models\User::find((int) request('user_id')); @endphp
+          <div class="mt-3 small">
+            Showing only <strong>{{ optional($onlyPerson)->getFullName() ?? 'one person' }}</strong>'s tasks
+            &middot; <a href="{{ request()->fullUrlWithQuery(['user_id' => null, 'page' => null]) }}">show everyone</a>
+          </div>
+        @endif
       </div>
 
       {{-- Bulk action bar - hidden until at least one row is checked --}}
@@ -353,15 +365,25 @@
 
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0" id="taskTable">
+          @php
+            // Click a header to sort by it; click again to reverse.
+            $sortLink = function (string $key, string $label) use ($sort, $dir) {
+                $active = $sort === $key;
+                $next = $active && $dir === 'asc' ? 'desc' : 'asc';
+                $icon = $active ? ($dir === 'asc' ? 'bx-sort-up' : 'bx-sort-down') : 'bx-sort-alt-2 text-muted opacity-50';
+                return '<a href="' . e(request()->fullUrlWithQuery(['sort' => $key, 'dir' => $next, 'page' => null])) . '" class="text-reset text-decoration-none text-nowrap">'
+                    . e($label) . ' <i class="bx ' . $icon . '"></i></a>';
+            };
+          @endphp
           <thead class="table-light">
             <tr>
               <th style="width:40px"><input type="checkbox" class="form-check-input" id="checkAllTasks"></th>
-              <th style="min-width:200px">Task</th>
-              <th style="min-width:180px">Assigned To</th>
-              <th>Priority</th>
-              <th>Due</th>
-              <th>Assigned By</th>
-              <th>Status</th>
+              <th style="min-width:200px">{!! $sortLink('title', 'Task') !!}</th>
+              <th style="min-width:180px">{!! $sortLink('assignee', 'Assigned To') !!}</th>
+              <th>{!! $sortLink('priority', 'Priority') !!}</th>
+              <th>{!! $sortLink('due', 'Due') !!}</th>
+              <th>{!! $sortLink('assigned_by', 'Assigned By') !!}</th>
+              <th>{!! $sortLink('status', 'Status') !!}</th>
               <th class="text-end" style="min-width:160px">Actions</th>
             </tr>
           </thead>
@@ -409,6 +431,16 @@
                           <i class="bx bx-group"></i> {{ $batchCounts[$t->batch_id]->total }} people
                           &middot; {{ (int) $batchCounts[$t->batch_id]->done }}/{{ $batchCounts[$t->batch_id]->total }} done
                         </small>
+                      @else
+                        @php $latest = $t->taskUpdates->first(); @endphp
+                        @if($latest && $latest->comment)
+                          <small class="text-muted d-block fst-italic text-truncate" style="max-width:320px;" title="{{ $latest->comment }}">
+                            <i class="bx bx-message-rounded-dots"></i> {{ optional($latest->createdBy)->getFullName() ?? '—' }}: {{ $latest->comment }}
+                          </small>
+                        @endif
+                      @endif
+                      @if($t->ccUsers->isNotEmpty())
+                        <small class="text-muted d-block"><i class="bx bx-user-voice"></i> CC: {{ $t->ccUsers->map(fn ($u) => $u->getFullName())->implode(', ') }}</small>
                       @endif
                     </div>
                   </div>
@@ -426,7 +458,7 @@
                   <span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span>
                 </td>
                 <td class="text-nowrap">
-                  {{ $t->due_date ? $t->due_date->format('d/m/Y' . ($t->due_date->format('H:i') !== '00:00' ? ' h:i A' : '')) : '—' }}
+                  {{ $t->dueLabel('d/m/Y') ?? '—' }}
                   @if($t->is_overdue)
                     <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
                   @elseif($t->due_date && $t->due_date->isToday() && !$t->is_completed)
@@ -450,34 +482,26 @@
                   @endif
                 </td>
                 <td class="text-end text-nowrap">
-                  <button type="button" class="icon-sophisticated js-view-task" title="View"
-                          data-task="{{ json_encode([
-                            'title' => $t->title,
-                            'description' => $t->description,
-                            'priority' => ucfirst($t->priority),
-                            'due' => $t->due_date ? $t->due_date->format('d/m/Y h:i A') : '—',
-                            'assignee' => optional($t->user)->getFullName() ?? '—',
-                            'assignedBy' => optional($t->assignedBy)->getFullName() ?? '—',
-                            'status' => ucfirst(str_replace('_', ' ', $t->status)),
-                            'objection' => $t->objection_notes,
-                            'attachment' => $t->attachment_path ? route('tasks.attachment', $t->id) : null,
-                            'updateAttachment' => optional($t->taskUpdates->first())->file_url ? route('task-updates.attachment', $t->taskUpdates->first()->id) : null,
-                            'assignedOn' => $t->created_at?->format('d/m/Y h:i A') ?? '—',
-                            'expectedCompletion' => $t->due_date ? $t->due_date->format('d/m/Y h:i A') : '—',
-                            'actualCompletion' => $t->completed_at ? $t->completed_at->format('d/m/Y h:i A') : '—',
-                            'timingLabel' => ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'][$t->completion_timing] ?? null,
-                            'timingClass' => ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'][$t->completion_timing] ?? null,
-                            'ccNames' => $t->ccUsers->map(fn($u) => $u->getFullName())->implode(', '),
-                            'threadUrl' => route('my-tasks.thread', $t->id),
-                          ]) }}">
-                    <i class="bx bx-show"></i>
-                  </button>
+                  @if($isBatched)
+                    {{-- One assignment, many people: the popup used to show just
+                         the first person's copy. Expand instead - every person
+                         has their own View there. --}}
+                    <button type="button" class="icon-sophisticated js-batch-view" data-batch-id="{{ $t->batch_id }}" title="View everyone" aria-label="View everyone on this task">
+                      <i class="bx bx-show"></i>
+                    </button>
+                  @else
+                    <button type="button" class="icon-sophisticated js-view-task" title="View" aria-label="View task"
+                            data-task="{{ json_encode(\App\Http\Controllers\tenant\TaskManagementController::viewPayload($t)) }}">
+                      <i class="bx bx-show"></i>
+                    </button>
+                  @endif
                   @if($canManageThis)
                     <button type="button" class="icon-sophisticated js-edit-task" title="Edit"
                             data-id="{{ $t->id }}" data-title="{{ $t->title }}" data-description="{{ $t->description }}"
                             data-priority="{{ $t->priority }}" data-due="{{ $t->due_date?->format('Y-m-d H:i') }}"
                             data-user-id="{{ $t->user_id }}" data-user-name="{{ optional($t->user)->getFullName() ?? 'Unknown' }}"
-                            data-cc-ids="{{ $t->ccUsers->pluck('id')->implode(',') }}">
+                            data-cc-ids="{{ $t->ccUsers->pluck('id')->implode(',') }}"
+                            data-batch-size="{{ $isBatched ? $batchCounts[$t->batch_id]->total : 1 }}">
                       <i class="bx bx-edit"></i>
                     </button>
                     @if(in_array($t->status, ['completed', 'resolved']))
@@ -505,6 +529,7 @@
                             <th>Completed</th>
                             <th>Timing</th>
                             <th style="min-width:220px">Latest remark</th>
+                            <th class="text-end"></th>
                           </tr>
                         </thead>
                         <tbody class="js-batch-children-body">
@@ -581,7 +606,18 @@
                   <td><span class="badge-hitech badge-brand-soft"><i class="bx bx-repeat"></i> {{ $s->recurrenceLabel() }}</span></td>
                   <td><span class="badge-hitech {{ ['low' => 'badge-muted', 'medium' => 'badge-brand-soft', 'high' => 'badge-hitech-danger'][$s->priority] ?? 'badge-muted' }}">{{ ucfirst($s->priority) }}</span></td>
                   <td><small class="text-muted">{{ optional($s->assignedBy)->getFullName() ?? '—' }}</small></td>
-                  <td>{{ count($s->target_user_ids ?? []) }} {{ \Illuminate\Support\Str::plural('person', count($s->target_user_ids ?? [])) }}</td>
+                  @php
+                    $peopleOn = count($s->target_user_ids ?? []);
+                    $activeOn = collect($s->target_user_ids ?? [])->filter(fn ($uid) => isset($activeTargetIds[(int) $uid]))->count();
+                  @endphp
+                  <td>
+                    {{ $peopleOn }} {{ \Illuminate\Support\Str::plural('person', $peopleOn) }}
+                    @if($activeOn === 0)
+                      <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;" title="Everyone on this recurring task has left - it creates nothing">Nobody active</span>
+                    @elseif($activeOn < $peopleOn)
+                      <small class="text-muted d-block">{{ $peopleOn - $activeOn }} left the company</small>
+                    @endif
+                  </td>
                   <td>
                     @if($lastFire)
                       <div class="small">{{ \Carbon\Carbon::parse($lastFire->fire_date)->format('d M Y') }}</div>
@@ -741,7 +777,7 @@
                     @endif
                   </td>
                   <td class="text-end">
-                    <a href="{{ route('task-management.index', ['search' => $p->first_name]) }}" class="small text-decoration-none js-pendency-tab-link">View tasks</a>
+                    <a href="{{ route('task-management.index', ['user_id' => $p->user_id, 'status' => 'open']) }}" class="small text-decoration-none js-pendency-tab-link">View tasks</a>
                   </td>
                 </tr>
               @empty
@@ -897,7 +933,14 @@
               <label class="form-label">Due date &amp; time</label>
               <input type="text" id="et_due_date" class="form-control" placeholder="dd/mm/yyyy --:-- --">
             </div>
-            <div class="col-12">
+            <div class="col-12 d-none" id="et_batch_wrap">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="et_apply_batch" checked>
+                <label class="form-check-label" for="et_apply_batch">Apply to all <span id="et_batch_size"></span> people on this task</label>
+              </div>
+              <div class="form-text">Untick to change only the one person's copy shown on this row.</div>
+            </div>
+            <div class="col-12" id="et_assignee_wrap">
               <label class="form-label">Assigned to</label>
               <select id="et_assignee" class="form-select select2-single">
                 @foreach($employees as $e)
@@ -948,7 +991,8 @@
         <hr class="my-3">
         <dl class="row mb-0">
           <dt class="col-4">Assigned On</dt><dd class="col-8" id="vt_assignedOn"></dd>
-          <dt class="col-4">Expected Completion</dt><dd class="col-8" id="vt_due"></dd>
+          <dt class="col-4">Due</dt><dd class="col-8" id="vt_due"></dd>
+          <dt class="col-4 d-none" id="vt_expected_label">Assignee expects</dt><dd class="col-8 d-none" id="vt_expected"></dd>
           <dt class="col-4">Actual Completion</dt><dd class="col-8" id="vt_actualCompletion"></dd>
           <dt class="col-4 d-none" id="vt_timing_label">Timing</dt>
           <dd class="col-8 d-none" id="vt_timing_wrap"><span class="badge-hitech" id="vt_timing"></span></dd>
@@ -1243,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', function () {
       const body = childRow.querySelector('.js-batch-children-body');
       if (body.dataset.loaded) return;
 
-      body.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Loading...</td></tr>';
+      body.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-3">Loading...</td></tr>';
       fetch('/task-management/batch/' + batchId, {
         headers: { 'Accept': 'application/json' },
       })
@@ -1253,7 +1297,7 @@ document.addEventListener('DOMContentLoaded', function () {
           body.dataset.loaded = '1';
         })
         .catch(() => {
-          body.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
+          body.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-3">Could not load. Try again.</td></tr>';
         });
     });
   });
@@ -1348,13 +1392,28 @@ document.addEventListener('DOMContentLoaded', function () {
   // ══ View Task (read-only, populated from the row's own data attribute) ═
   const viewModalEl = document.getElementById('viewTaskModal');
   const viewModal = new bootstrap.Modal(viewModalEl);
-  document.querySelectorAll('.js-view-task').forEach(function (btn) {
+  // A grouped row's View opens the list of everyone on it.
+  document.querySelectorAll('.js-batch-view').forEach(function (btn) {
     btn.addEventListener('click', function () {
+      const toggle = document.querySelector('.js-batch-toggle[data-batch-id="' + btn.dataset.batchId + '"]');
+      const children = document.querySelector('.batch-children-row[data-batch-children="' + btn.dataset.batchId + '"]');
+      if (toggle && children && children.classList.contains('d-none')) toggle.click();
+      if (children) children.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  });
+  // Delegated: the per-person View buttons inside an expanded group are
+  // added after the page loads.
+  document.addEventListener('click', function (e) {
+    const btn = e.target.closest('.js-view-task');
+    if (!btn) return;
       const t = JSON.parse(btn.dataset.task);
       document.getElementById('vt_title').textContent = t.title;
       document.getElementById('vt_description').textContent = t.description || '—';
       document.getElementById('vt_priority').textContent = t.priority;
       document.getElementById('vt_due').textContent = t.due;
+      document.getElementById('vt_expected_label').classList.toggle('d-none', !t.expected);
+      document.getElementById('vt_expected').classList.toggle('d-none', !t.expected);
+      document.getElementById('vt_expected').textContent = t.expected || '';
       document.getElementById('vt_assignee').textContent = t.assignee;
       document.getElementById('vt_assignedBy').textContent = t.assignedBy;
       document.getElementById('vt_cc_label').classList.toggle('d-none', !t.ccNames);
@@ -1392,7 +1451,6 @@ document.addEventListener('DOMContentLoaded', function () {
       loadTaskThread(t.threadUrl);
 
       viewModal.show();
-    });
   });
 
   // Renders each update via DOM APIs (never innerHTML with the comment
@@ -1402,9 +1460,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const box = document.getElementById('vt_thread');
     box.innerHTML = '<div class="text-muted small">Loading...</div>';
     fetch(threadUrl, { headers: { 'Accept': 'application/json' } })
-      .then(r => r.json())
-      .then(data => {
+      .then(r => r.json().then(data => ({ ok: r.ok, data: data })))
+      .then(({ ok, data }) => {
         box.innerHTML = '';
+        if (!ok) {
+          const err = document.createElement('div');
+          err.className = 'text-danger small';
+          err.textContent = data.message || 'Could not load updates.';
+          box.appendChild(err);
+          return;
+        }
         if (!data.updates || !data.updates.length) {
           const empty = document.createElement('div');
           empty.className = 'text-muted small';
@@ -1535,9 +1600,24 @@ document.addEventListener('DOMContentLoaded', function () {
       const ccIds = (btn.dataset.ccIds || '').split(',').filter(Boolean);
       $('#et_cc').val(ccIds).trigger('change');
 
+      // A grouped row: edit everyone's copy by default; reassigning is one
+      // person at a time, so the picker hides while that's ticked.
+      const batchSize = parseInt(btn.dataset.batchSize || '1', 10);
+      document.getElementById('et_batch_wrap').classList.toggle('d-none', batchSize < 2);
+      document.getElementById('et_batch_size').textContent = batchSize;
+      document.getElementById('et_apply_batch').checked = batchSize > 1;
+      refreshEtBatch();
+
       editModal.show();
     });
   });
+
+  function refreshEtBatch() {
+    const applyAll = !document.getElementById('et_batch_wrap').classList.contains('d-none')
+      && document.getElementById('et_apply_batch').checked;
+    document.getElementById('et_assignee_wrap').classList.toggle('d-none', applyAll);
+  }
+  document.getElementById('et_apply_batch').addEventListener('change', refreshEtBatch);
 
   document.getElementById('editTaskForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -1561,10 +1641,15 @@ document.addEventListener('DOMContentLoaded', function () {
         // Only sent when actually changed from what the row was opened
         // with -- never let a select2 quirk reassign a task nobody touched.
         user_id: (function () {
-          const v = $('#et_assignee').val();
-          return (v && v !== etOriginalUserId) ? v : null;
+          if (!document.getElementById('et_assignee_wrap').classList.contains('d-none')) {
+            const v = $('#et_assignee').val();
+            return (v && v !== etOriginalUserId) ? v : null;
+          }
+          return null;
         })(),
         cc_user_ids: $('#et_cc').val() || [],
+        apply_to_batch: !document.getElementById('et_batch_wrap').classList.contains('d-none')
+          && document.getElementById('et_apply_batch').checked,
       }),
     })
       .then(({ ok, data }) => {

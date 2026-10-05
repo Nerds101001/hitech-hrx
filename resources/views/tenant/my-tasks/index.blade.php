@@ -119,15 +119,38 @@
             </button>
           </li>
         </ul>
-        <div style="min-width:180px">
-          <select class="form-select form-select-sm" id="taskPriorityFilter">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <input type="search" class="form-control form-control-sm" id="taskSearch" style="min-width:220px;"
+                 placeholder="Search task, person, remark..." aria-label="Search tasks">
+          <div style="min-width:160px">
+          <select class="form-select form-select-sm" id="taskPriorityFilter" aria-label="Filter by priority">
             <option value="">All priorities</option>
             @foreach(\App\Models\Task::PRIORITIES as $p)
               <option value="{{ $p }}">{{ ucfirst($p) }} priority</option>
             @endforeach
           </select>
+          </div>
         </div>
       </div>
+      @php
+        // Sort/search keys on each row - read by the small script at the
+        // bottom (click a column header to sort, type to search).
+        $rowKeys = function ($t) {
+            $latest = $t->taskUpdates->first();
+            return [
+                'search'   => mb_strtolower(implode(' ', array_filter([$t->title, $t->description, optional($t->user)->getFullName(),
+                    optional($t->assignedBy)->getFullName(), $t->ccUsers->map(fn ($u) => $u->getFullName())->implode(' '), optional($latest)->comment]))),
+                'title'    => mb_strtolower($t->title),
+                'priority' => ['high' => 3, 'medium' => 2, 'low' => 1][$t->priority] ?? 0,
+                'due'      => $t->due_date ? $t->due_date->timestamp : 99999999999,
+                'by'       => mb_strtolower(optional($t->assignedBy)->getFullName() ?? ''),
+                'to'       => mb_strtolower(optional($t->user)->getFullName() ?? ''),
+                'status'   => ['objection' => 0, 'new' => 1, 'in_progress' => 2][$t->status] ?? 3,
+            ];
+        };
+        $sortTh = fn (string $key, string $label, string $extra = '') => '<th class="js-sort ' . $extra . '" data-key="' . $key . '" role="button" tabindex="0" style="cursor:pointer;white-space:nowrap;">'
+            . e($label) . ' <i class="bx bx-sort-alt-2 text-muted opacity-50"></i></th>';
+      @endphp
 
       @php
         $timingBadge = ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'];
@@ -146,33 +169,43 @@
                     <table class="table table-hover align-middle mb-0">
                       <thead class="table-light">
                         <tr>
-                          <th style="min-width:220px">Task</th>
-                          <th>Assigned To</th>
-                          <th style="min-width:150px">Assigned By</th>
-                          <th>Due</th>
-                          <th class="text-end" style="min-width:150px">Status</th>
+                          {!! $sortTh('title', 'Task') !!}
+                          {!! $sortTh('to', 'Assigned To') !!}
+                          {!! $sortTh('by', 'Assigned By') !!}
+                          {!! $sortTh('priority', 'Priority') !!}
+                          {!! $sortTh('due', 'Due') !!}
+                          {!! $sortTh('status', 'Status', 'text-end') !!}
                         </tr>
                       </thead>
                       <tbody>
                         @foreach($taskBuckets['watching'] as $t)
-                          <tr>
+                          @php $k = $rowKeys($t); $latest = $t->taskUpdates->first(); @endphp
+                          <tr data-priority="{{ $t->priority }}" data-search="{{ $k['search'] }}" data-sort-title="{{ $k['title'] }}" data-sort-to="{{ $k['to'] }}"
+                              data-sort-by="{{ $k['by'] }}" data-sort-priority="{{ $k['priority'] }}" data-sort-due="{{ $k['due'] }}" data-sort-status="{{ $k['status'] }}">
                             <td>
                               <div class="fw-medium">{{ $t->title }}</div>
                               @if($t->description)
                                 <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
                               @endif
+                              @if($latest && $latest->comment)
+                                <small class="text-muted d-block fst-italic"><i class="bx bx-message-rounded-dots"></i> {{ optional($latest->createdBy)->getFullName() ?? '—' }}: {{ \Illuminate\Support\Str::limit($latest->comment, 120) }}</small>
+                              @endif
+                              @if($t->ccUsers->isNotEmpty())
+                                <small class="text-muted d-block"><i class="bx bx-user-voice"></i> CC: {{ $t->ccUsers->map(fn ($u) => $u->getFullName())->implode(', ') }}</small>
+                              @endif
                             </td>
                             <td><small class="text-muted">{{ optional($t->user)->getFullName() ?? '—' }}</small></td>
                             <td><small class="text-muted">{{ optional($t->assignedBy)->getFullName() ?? '—' }}</small></td>
+                            <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
                             <td class="text-nowrap">
-                              {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
+                              {{ $t->dueLabel() ?? '—' }}
                               @if($t->is_overdue)
                                 <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
                               @endif
                             </td>
                             <td class="text-end">
-                              <span class="badge-hitech {{ $t->is_completed ? 'badge-hitech-success' : 'badge-brand-soft' }} d-block mb-1" style="width:fit-content;margin-left:auto;">
-                                {{ \App\Models\Task::PROGRESS_STATUSES[$t->status] ?? ucfirst($t->status) }}
+                              <span class="badge-hitech {{ $t->is_completed ? 'badge-hitech-success' : ($t->status === 'objection' ? 'badge-hitech-danger' : 'badge-brand-soft') }} d-block mb-1" style="width:fit-content;margin-left:auto;">
+                                {{ $t->status === 'objection' ? 'Objection raised' : (\App\Models\Task::PROGRESS_STATUSES[$t->status] ?? ucfirst($t->status)) }}
                               </span>
                               <button type="button" class="mt-go js-view-thread" data-url="{{ route('my-tasks.thread', $t->id) }}" data-title="{{ $t->title }}">
                                 View &amp; Reply
@@ -196,16 +229,18 @@
                   <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                       <tr>
-                        <th style="min-width:220px">Task</th>
-                        <th>Priority</th>
-                        <th>Due</th>
-                        <th style="min-width:150px">Assigned By</th>
-                        <th class="text-end" style="min-width:190px">Status</th>
+                        {!! $sortTh('title', 'Task') !!}
+                        {!! $sortTh('priority', 'Priority') !!}
+                        {!! $sortTh('due', 'Due') !!}
+                        {!! $sortTh('by', 'Assigned By') !!}
+                        {!! $sortTh('status', 'Status', 'text-end') !!}
                       </tr>
                     </thead>
                     <tbody>
                       @foreach($taskBuckets[$bucketKey] as $t)
-                        <tr data-priority="{{ $t->priority }}">
+                        @php $k = $rowKeys($t); @endphp
+                        <tr data-priority="{{ $t->priority }}" data-search="{{ $k['search'] }}" data-sort-title="{{ $k['title'] }}" data-sort-by="{{ $k['by'] }}"
+                            data-sort-priority="{{ $k['priority'] }}" data-sort-due="{{ $k['due'] }}" data-sort-status="{{ $k['status'] }}">
                           <td>
                             <div class="fw-medium">
                               {{ $t->title }}
@@ -218,8 +253,11 @@
                             @if($t->description)
                               <small class="text-muted">{{ \Illuminate\Support\Str::limit($t->description, 90) }}</small>
                             @endif
-                            @if($t->is_completed && optional($t->taskUpdates->first())->comment)
-                              <small class="text-muted d-block fst-italic">"{{ $t->taskUpdates->first()->comment }}"</small>
+                            @if($t->status !== 'objection' && optional($t->taskUpdates->first())->comment)
+                              <small class="text-muted d-block fst-italic"><i class="bx bx-message-rounded-dots"></i> {{ optional($t->taskUpdates->first()->createdBy)->getFullName() ?? '—' }}: {{ \Illuminate\Support\Str::limit($t->taskUpdates->first()->comment, 120) }}</small>
+                            @endif
+                            @if($t->ccUsers->isNotEmpty())
+                              <small class="text-muted d-block"><i class="bx bx-user-voice"></i> CC: {{ $t->ccUsers->map(fn ($u) => $u->getFullName())->implode(', ') }}</small>
                             @endif
                             @if($t->is_completed && optional($t->taskUpdates->first())->file_url)
                               <a href="{{ route('task-updates.attachment', $t->taskUpdates->first()->id) }}" target="_blank" class="small text-decoration-none d-block">
@@ -237,7 +275,7 @@
                           </td>
                           <td><span class="badge-hitech {{ $priorityBadge[$t->priority] ?? 'badge-muted' }}">{{ ucfirst($t->priority) }}</span></td>
                           <td class="text-nowrap">
-                            {{ $t->due_date ? $t->due_date->format('d M Y') : '—' }}
+                            {{ $t->dueLabel() ?? '—' }}
                             @if($t->is_overdue)
                               <span class="badge-hitech badge-hitech-danger d-block mt-1" style="width:fit-content;">Overdue</span>
                             @endif
@@ -418,6 +456,8 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body" style="background:#f8fafc;">
+        {{-- Who, when, CC - the popup used to show only the messages. --}}
+        <dl class="row small mb-3 d-none" id="threadTaskInfo"></dl>
         <div id="threadModalBody" style="min-height:120px;">
           <div class="text-muted small">Loading...</div>
         </div>
@@ -481,15 +521,46 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
+  // Search + priority filter, across every tab (the Assigned tab included -
+  // its rows used to carry no priority, so the filter never touched them).
   const priorityFilter = document.getElementById('taskPriorityFilter');
-  if (priorityFilter) {
-    priorityFilter.addEventListener('change', function () {
-      const want = this.value;
-      document.querySelectorAll('.tab-content tr[data-priority]').forEach(function (row) {
-        row.style.display = (!want || row.dataset.priority === want) ? '' : 'none';
-      });
+  const taskSearch = document.getElementById('taskSearch');
+  function applyTaskFilters() {
+    const want = priorityFilter ? priorityFilter.value : '';
+    const q = taskSearch ? taskSearch.value.trim().toLowerCase() : '';
+    document.querySelectorAll('.tab-content tr[data-search]').forEach(function (row) {
+      const show = (!want || row.dataset.priority === want) && (!q || row.dataset.search.indexOf(q) !== -1);
+      row.style.display = show ? '' : 'none';
     });
   }
+  if (priorityFilter) priorityFilter.addEventListener('change', applyTaskFilters);
+  if (taskSearch) taskSearch.addEventListener('input', applyTaskFilters);
+
+  // Click a column header to sort that table; click again to reverse.
+  function sortBy(th) {
+    const key = th.dataset.key;
+    const tbody = th.closest('table').querySelector('tbody');
+    const dir = th.dataset.dir === 'asc' ? 'desc' : 'asc';
+    th.closest('tr').querySelectorAll('.js-sort').forEach(function (h) {
+      delete h.dataset.dir;
+      const i = h.querySelector('i'); if (i) i.className = 'bx bx-sort-alt-2 text-muted opacity-50';
+    });
+    th.dataset.dir = dir;
+    const icon = th.querySelector('i'); if (icon) icon.className = 'bx ' + (dir === 'asc' ? 'bx-sort-up' : 'bx-sort-down');
+    const attr = 'sort' + key.charAt(0).toUpperCase() + key.slice(1);
+    const rows = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    rows.sort(function (a, b) {
+      const x = a.dataset[attr] || '', y = b.dataset[attr] || '';
+      const nx = parseFloat(x), ny = parseFloat(y);
+      const cmp = (!isNaN(nx) && !isNaN(ny) && String(nx) === x && String(ny) === y) ? nx - ny : x.localeCompare(y);
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+  }
+  document.querySelectorAll('.js-sort').forEach(function (th) {
+    th.addEventListener('click', function () { sortBy(th); });
+    th.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(th); } });
+  });
 
   const statusModalEl = document.getElementById('statusTaskModal');
   if (!statusModalEl) return;
@@ -587,13 +658,37 @@ document.addEventListener('DOMContentLoaded', function () {
   const threadModal = new bootstrap.Modal(threadModalEl);
   let threadUrl = null;
 
+  function renderTaskInfo(task) {
+    const info = document.getElementById('threadTaskInfo');
+    info.innerHTML = '';
+    if (!task) { info.classList.add('d-none'); return; }
+    [['Assigned to', task.assignee], ['Assigned by', task.assigned_by], ['Due', task.due_date], ['Priority', task.priority],
+     ['Status', task.status_label], ['Assignee expects', task.completion_expected_date],
+     ['CC', (task.cc_users || []).join(', ')], ['Description', task.description]].forEach(function (pair) {
+      if (!pair[1]) return;
+      const dt = document.createElement('dt'); dt.className = 'col-4 col-md-3 text-muted fw-normal'; dt.textContent = pair[0];
+      const dd = document.createElement('dd'); dd.className = 'col-8 col-md-9 mb-1'; dd.textContent = pair[1];
+      info.appendChild(dt); info.appendChild(dd);
+    });
+    info.classList.remove('d-none');
+  }
+
   function loadThread() {
     const box = document.getElementById('threadModalBody');
     box.innerHTML = '<div class="text-muted small">Loading...</div>';
+    renderTaskInfo(null);
     fetch(threadUrl, { headers: { 'Accept': 'application/json' } })
-      .then(r => r.json())
-      .then(data => {
+      .then(r => r.json().then(data => ({ ok: r.ok, data: data })))
+      .then(({ ok, data }) => {
         box.innerHTML = '';
+        if (!ok) {
+          const err = document.createElement('div');
+          err.className = 'text-danger small';
+          err.textContent = data.message || 'Could not load updates.';
+          box.appendChild(err);
+          return;
+        }
+        renderTaskInfo(data.task);
         if (!data.updates || !data.updates.length) {
           const empty = document.createElement('div');
           empty.className = 'text-muted small';

@@ -108,7 +108,7 @@
           <div class="dash-task-title">{{ $t->title }}</div>
           <div class="dash-task-sub">{{ optional($t->assignedBy)->getFullName() ? 'Assigned by ' . $t->assignedBy->getFullName() : '—' }}</div>
         </div>
-        <div class="dtw-due is-upcoming">{{ $t->due_date ? $t->due_date->format('d M Y') : 'No due date' }}</div>
+        <div class="dtw-due is-upcoming">{{ $t->dueLabel() ?? 'No due date' }}</div>
       </div>
     @empty
       @if($twUpcomingSchedules->isEmpty())

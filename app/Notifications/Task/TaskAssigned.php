@@ -21,7 +21,7 @@ class TaskAssigned extends Notification
   {
     $this->task = $task;
     $this->title = 'New Task Assigned';
-    $this->message = ($task->assignedBy->getFullName() ?? 'Someone') . ' assigned you a task: ' . $task->title;
+    $this->message = (optional($task->assignedBy)->getFullName() ?? 'Someone') . ' assigned you a task: ' . $task->title;
   }
 
   public function via(object $notifiable): array
@@ -37,7 +37,7 @@ class TaskAssigned extends Notification
         'notifiable'      => $notifiable,
         'taskTitle'       => $this->task->title,
         'description'     => $this->task->description,
-        'dueDate'         => $this->task->due_date?->format('d M Y'),
+        'dueDate'         => $this->task->dueLabel(),
         'priority'        => $this->task->priority,
         'assignedByName'  => optional($this->task->assignedBy)->getFullName() ?? 'your organisation',
         'actionUrl'       => url('/my-tasks'),
