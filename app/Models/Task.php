@@ -63,6 +63,8 @@ class Task extends Model implements AuditableContract
     'objected_by_id',
     'objected_at',
     'delay_notified_at',
+    'due_soon_notified_at',
+    'escalated_at',
     'completion_expected_date',
     'expected_date_notified_at',
     'created_by_id',
@@ -260,6 +262,8 @@ class Task extends Model implements AuditableContract
     'completed_at' => 'datetime',
     'objected_at' => 'datetime',
     'delay_notified_at' => 'datetime',
+    'due_soon_notified_at' => 'datetime',
+    'escalated_at' => 'datetime',
     'completion_expected_date' => 'date',
     'expected_date_notified_at' => 'datetime',
   ];
