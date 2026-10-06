@@ -45,7 +45,9 @@ class CustomerProfileController extends Controller
     /** Tally figures are company-wide accounting data: the same people who may open Sales Sources, not everyone who is on this account's team. */
     protected function canSeeTallySales(): bool
     {
-        return (bool) Auth::user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'accounts']);
+        // Role rules first, then the named-viewer list (TALLY_VIEWER_EMAILS): holding the role is not enough.
+        return (bool) Auth::user()->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'accounts'])
+            && \App\Http\Middleware\RestrictTallyAccess::permits(Auth::user());
     }
     protected function canViewMapping(CrmClientMapping $mapping, Request $request): bool
     {

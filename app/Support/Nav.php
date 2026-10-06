@@ -233,6 +233,14 @@ class Nav
                 continue;
             }
 
+            // Tally-derived pages are limited to the emails in TALLY_VIEWER_EMAILS; same reasoning as above.
+            if ($m === 'tally.viewer') {
+                if (!\App\Http\Middleware\RestrictTallyAccess::permits($user)) {
+                    return false;
+                }
+                continue;
+            }
+
             if (str_starts_with($m, 'can:')) {
                 $ability = explode(',', substr($m, 4))[0];
                 if (!Gate::forUser($user)->allows($ability)) {

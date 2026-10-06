@@ -41,6 +41,7 @@ class SalesSourcesController extends Controller
     {
         $user = Auth::user();
         abort_unless($user && $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'accounts']), 403);
+        abort_unless(\App\Http\Middleware\RestrictTallyAccess::permits($user), 404);   // the named viewer(s) only
     }
 
     private function perPage(Request $request): int

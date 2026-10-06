@@ -364,7 +364,7 @@ Route::middleware([
     // exports side by side (read-only). Company-wide sales and receivables,
     // so it is admin/HR/accounts only -- deliberately narrower than the broad
     // group this sits inside, and enforced again in the controller.
-    Route::middleware(['role_or_permission:admin|hr|accounts'])->prefix('sales-sources')->name('sales-sources.')->group(function () {
+    Route::middleware(['role_or_permission:admin|hr|accounts', 'tally.viewer'])->prefix('sales-sources')->name('sales-sources.')->group(function () {
       $c = \App\Http\Controllers\tenant\SalesSourcesController::class;
       $an = \App\Http\Controllers\tenant\SalesAnalyticsController::class;
       Route::get('', [$c, 'compare'])->name('index');

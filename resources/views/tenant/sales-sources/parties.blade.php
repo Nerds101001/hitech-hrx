@@ -1,7 +1,9 @@
 @extends('tenant.sales-sources.layout')
 
 @section('tab')
-@php $inr = fn($v) => \App\Support\Fmt::inr($v, 0); $canEditContact = auth()->user()->hasRole(['admin', 'Admin', 'super_admin']); @endphp
+@php $inr = fn($v) => \App\Support\Fmt::inr($v, 0); $canEditContact = auth()->user()->hasRole(['admin', 'Admin', 'super_admin'])
+    && \App\Http\Middleware\RestrictTallyAccess::permits(auth()->user())
+    && (string) config('services.tally.write_gateway_url') !== '' && (string) config('services.tally.write_gateway_company') !== ''; // no pencil where writing to Tally is not set up (the live server can never reach Tally) @endphp
 
 <form method="GET" action="{{ route('sales-sources.parties') }}" class="hitech-card-white p-3 mb-4">
   <div class="row g-2 align-items-end">
