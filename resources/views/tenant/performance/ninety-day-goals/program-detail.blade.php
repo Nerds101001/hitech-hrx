@@ -482,10 +482,20 @@
           <button type="button" id="ndgMgAdd" class="btn-hitech rounded-pill px-4 py-2 text-nowrap" style="font-size:.8rem">Add</button>
         </div>
 
+        @php
+          // Default the picker to the window that is ACTUALLY open now (the latest current
+          // close across the program's rounds) so the admin sees the real end and does not
+          // accidentally shorten it. Only fall back to now+48h when no window is open.
+          $openWindows = ($manageRounds ?? collect())->filter(fn ($r) => data_get($r->window, 'open'))
+            ->map(fn ($r) => data_get($r->window, 'closes_at'))->filter();
+          $windowDefault = $openWindows->isNotEmpty()
+            ? $openWindows->sortByDesc(fn ($c) => $c->getTimestamp())->first()
+            : now()->addHours(48);
+        @endphp
         <h6 class="fw-bold text-dark mb-2">Window to add customers</h6>
-        <div class="small text-muted mb-2">Normally open for 48 hours after someone is enrolled. Reopen it until a time you choose.</div>
+        <div class="small text-muted mb-2">Normally open for 48 hours after someone is enrolled. Reopen it until a time you choose.@if($openWindows->isNotEmpty()) <span class="text-dark">Currently open until {{ $windowDefault->format('d M Y, h:i A') }}.</span>@endif</div>
         <div class="row g-2 align-items-end mb-2">
-          <div class="col-md-5"><label class="form-label small mb-1" for="ndgMgUntil">Open until</label><input type="datetime-local" id="ndgMgUntil" class="form-control" value="{{ now()->addHours(48)->format('Y-m-d\TH:i') }}"></div>
+          <div class="col-md-5"><label class="form-label small mb-1" for="ndgMgUntil">Open until</label><input type="datetime-local" id="ndgMgUntil" class="form-control" value="{{ $windowDefault->format('Y-m-d\TH:i') }}"></div>
           <div class="col-md-7 small">
             <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoAll" value="all" checked><label class="form-check-label" for="ndgMgWhoAll">Everyone in the program</label></div>
             <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoSome" value="some"><label class="form-check-label" for="ndgMgWhoSome">Chosen people</label></div>
