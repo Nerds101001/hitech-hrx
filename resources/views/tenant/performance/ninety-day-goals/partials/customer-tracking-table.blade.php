@@ -52,10 +52,25 @@
       @endforeach
     </div>
   </div>
+  {{-- Row-height and alignment fixes: the # / Customer sticky columns get fixed
+       widths so the header lines up with the body, and the free-text columns are
+       held to one line (full text stays in the tooltip / History) so a long name
+       or comment no longer blows a row up to two or three times the height. --}}
+  @once
+  <style>
+    .ndg-mx th, .ndg-mx td { vertical-align: middle; }
+    .ndg-mx tbody td { height: 34px; }
+    .ndg-mx-l[data-col="no"] { width: 34px; min-width: 34px; }
+    .ndg-mx-l[data-col="cust"] { left: 40px !important; width: 190px; min-width: 190px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+    .ndg-mx .ndg-ell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ndg-mx td.ndg-ell { text-align: left; }
+    .ndg-mx td.ndg-lastc { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  </style>
+  @endonce
   <div class="card-body p-0 ndg-mx-scroll">
     <table class="ndg-mx" style="font-size:.74rem">
       <thead><tr>
-        <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹L</th><th>Expected</th>
+        <th class="ndg-mx-l" data-col="no" style="left:0">#</th><th class="ndg-mx-l ndg-ell" data-col="cust" style="left:40px">Customer</th><th class="ndg-ell">Product</th><th class="ndg-ell">Salesperson</th><th>Target ₹L</th><th>Expected</th>
         @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
         <th>Actual ₹L</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
       </tr></thead>
@@ -84,10 +99,10 @@
           $nComments = $hist->sum(fn ($h) => ($h['comment'] ? 1 : 0) + count($h['notes']));
         @endphp
         <tr>
-          <td class="ndg-mx-l" style="left:0">{{ ($paged->currentPage() - 1) * $paged->perPage() + $i + 1 }}</td>
-          <td class="ndg-mx-l" style="left:30px;font-weight:600">{{ $r->goal->client_name }}</td>
-          <td>{{ $r->goal->product }}</td>
-          <td class="small text-muted">{{ $name($r->user) }}</td>
+          <td class="ndg-mx-l" data-col="no" style="left:0">{{ ($paged->currentPage() - 1) * $paged->perPage() + $i + 1 }}</td>
+          <td class="ndg-mx-l ndg-ell" data-col="cust" style="left:40px;font-weight:600" title="{{ $r->goal->client_name }}">{{ $r->goal->client_name }}</td>
+          <td class="ndg-ell" title="{{ $r->goal->product }}">{{ $r->goal->product }}</td>
+          <td class="small text-muted ndg-ell" title="{{ $name($r->user) }}">{{ $name($r->user) }}</td>
           <td>{{ $fmtL($r->goal->monthly_potential) }}</td>
           <td class="small text-muted">{{ $r->goal->expected_order_date ? $r->goal->expected_order_date->format('d M Y') : '—' }}</td>
           @for($w = 0; $w < $weeks; $w++)

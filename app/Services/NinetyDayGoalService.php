@@ -336,7 +336,27 @@ class NinetyDayGoalService
             'min'         => $min,
             'short_by'    => max(0, $min - $count),
             'meets_min'   => $count >= $min,
+            'rag'         => self::customerRag($count),
+            'reminder_sent_at' => $round->completion_reminder_sent_at,
         ];
+    }
+
+    /**
+     * The add-customer progress light: green at/above the minimum, amber from
+     * config('ninety_day.customers_amber_from') up to it, red below that.
+     * Returns [level, label, dot colour, soft background, text colour].
+     */
+    public static function customerRag(int $count): array
+    {
+        $min = (int) config('ninety_day.min_customers', 10);
+        $amber = (int) config('ninety_day.customers_amber_from', 7);
+        if ($count >= $min) {
+            return ['level' => 'green', 'label' => 'On target', 'dot' => '#16a34a', 'bg' => '#dcfce7', 'fg' => '#166534'];
+        }
+        if ($count >= $amber) {
+            return ['level' => 'amber', 'label' => 'Almost there', 'dot' => '#d97706', 'bg' => '#fef3c7', 'fg' => '#92400e'];
+        }
+        return ['level' => 'red', 'label' => 'Behind', 'dot' => '#dc2626', 'bg' => '#fee2e2', 'fg' => '#991b1b'];
     }
 
     /** The user's active round, starting one this week if they have none. */
@@ -819,12 +839,50 @@ class NinetyDayGoalService
         return null;
     }
 
-    /** Reopen (or set) the add-customers window until $until, for the whole program or some of it. */
+    /**
+     * Reopen (or set) the add-customers window until $until, for the whole
+     * program or some of it. Admin action only (called from
+     * NinetyDayGoalController::programOpenWindow) - never automatic.
+     *
+     * Also covers self-started rounds (program_id NULL) that are still active:
+     * someone who got a round just by opening the page, without ever being
+     * added to the program, is a 90-Day participant too. The program-level
+     * reopen used to skip them, so their window stayed shut (the default
+     * start+48h) and they showed "closed" while everyone in the program was
+     * open. Only ACTIVE self-started rounds - a closed one stays closed.
+     */
     public static function openCustomerWindow(NinetyDayProgram $program, Carbon $until, ?array $userIds = null): int
     {
-        return NinetyDayRound::where('program_id', $program->id)
+        return NinetyDayRound::where(function ($q) use ($program) {
+                $q->where('program_id', $program->id)
+                  ->orWhere(fn ($s) => $s->whereNull('program_id')->where('status', 'active'));
+            })
             ->when($userIds, fn ($q) => $q->whereIn('user_id', $userIds))
-            ->update(['customer_window_until' => $until->toDateTimeString()]);
+            // A new deadline re-arms the "finish your customers" reminder.
+            ->update(['customer_window_until' => $until->toDateTimeString(), 'completion_reminder_sent_at' => null]);
+    }
+
+    /**
+     * Rounds that should get the "add your customers" reminder now: still
+     * active, window open but closing within config('ninety_day.reminder_lead_hours'),
+     * under the minimum, and not already reminded for this deadline.
+     */
+    public static function roundsNeedingAddReminder(?Carbon $now = null): \Illuminate\Support\Collection
+    {
+        $now = $now ?: Carbon::now();
+        $lead = (int) config('ninety_day.reminder_lead_hours', 12);
+
+        return NinetyDayRound::with('user')->where('status', 'active')->whereNull('completion_reminder_sent_at')->get()
+            ->filter(function (NinetyDayRound $r) use ($now, $lead) {
+                if (!$r->user) {
+                    return false;
+                }
+                $closes = self::customerWindowClosesAt($r);
+                return $closes->isAfter($now)
+                    && $closes->lte($now->copy()->addHours($lead))
+                    && self::customerCount($r) < (int) config('ninety_day.min_customers', 10);
+            })
+            ->values();
     }
 
     /**

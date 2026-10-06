@@ -983,7 +983,14 @@ class NinetyDayGoalController extends Controller
         // Recent activity: every comment and status change from this program's own participants.
         $activity = Goals::comments($participantIds->all(), [], 20);
 
+        // Per participant: add-customer window state, RAG light on the customer
+        // count, and whether the "finish adding" reminder has gone out - for the
+        // Participants tab. Keyed by user id.
+        $participantMeta = NinetyDayRound::where('program_id', $program->id)->get()
+            ->mapWithKeys(fn ($r) => [$r->user_id => Goals::windowState($r)]);
+
         return view('tenant.performance.ninety-day-goals.program-detail', [
+            'participantMeta' => $participantMeta,
             'tab'        => null,
             'isAdmin'    => true,
             'canManage'  => Goals::managesEveryone($user),

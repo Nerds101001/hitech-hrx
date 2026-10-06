@@ -18,6 +18,14 @@ return [
 
     'min_customers' => (int) env('NINETY_DAY_MIN_CUSTOMERS', 10),
 
+    // Amber threshold for the add-customer progress light: >= this (but below
+    // the minimum) is yellow, below it is red, the minimum or more is green.
+    'customers_amber_from' => (int) env('NINETY_DAY_CUSTOMERS_AMBER_FROM', 7),
+
+    // Email a "finish adding your customers" reminder when the add window has
+    // this many hours left and the person is still under the minimum.
+    'reminder_lead_hours' => (int) env('NINETY_DAY_REMINDER_LEAD_HOURS', 12),
+
     /*
     |--------------------------------------------------------------------------
     | How long the window to add customers stays open

@@ -24,6 +24,8 @@
   $pctText = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format($v, 1), '0'), '.') . '%';
   $pctColor = fn ($v) => $v === null ? '#cbd5e1' : ($v >= 66 ? '#007a7a' : ($v >= 33 ? '#f5a623' : '#ef4444'));
   $name = fn ($u) => trim(optional($u)->first_name . ' ' . optional($u)->last_name);
+  $min = (int) config('ninety_day.min_customers', 10);
+  $amber = (int) config('ninety_day.customers_amber_from', 7);
   $isActive = $today->between($program->starts_on, $program->ends_on);
   $target = (float) $cards['target'];
   $achieved = (float) $cards['achieved'];
@@ -220,16 +222,41 @@
   {{-- ═══════════════════ Participants ═══════════════════ --}}
   <div class="ndg-pr-section d-none" data-section="participants">
     <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Participants</div></div>
+      <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="fw-bold text-dark">Participants</div>
+        {{-- Customer-count light: green at the minimum, amber close, red behind. --}}
+        <div class="d-flex flex-wrap gap-3 small text-muted">
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#16a34a"></span>{{ $min }}+ on target</span>
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#d97706"></span>{{ $amber }}–{{ $min - 1 }} almost there</span>
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#dc2626"></span>under {{ $amber }} behind</span>
+        </div>
+      </div>
       <div class="card-body p-0 table-responsive">
         <table class="table align-middle mb-0">
-          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
+          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
           <tbody>
           @foreach($salespeople as $i => $u)
+            @php
+              $meta = ($participantMeta ?? collect())[$u['id']] ?? null;
+              $rag = $meta['rag'] ?? $G::customerRag((int) $u['goals']);
+            @endphp
             <tr>
               <td class="ps-4 text-muted">{{ $i + 1 }}</td>
               <td><a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a><div class="small text-muted">{{ $u['department'] }}</div></td>
-              <td class="text-end">{{ $u['goals'] }}</td>
+              <td class="text-center">
+                <span class="ndg-rag" style="background:{{ $rag['bg'] }};color:{{ $rag['fg'] }}" title="{{ $rag['label'] }} — {{ $u['goals'] }} of {{ $min }}">
+                  <span class="ndg-dot" style="background:{{ $rag['dot'] }}"></span>{{ $u['goals'] }}/{{ $min }}
+                </span>
+                @if($meta && !$meta['meets_min'])
+                  @if($meta['reminder_sent_at'])
+                    <div class="small text-warning mt-1" style="font-size:.62rem"><i class="bx bx-envelope"></i> Reminder sent for completion</div>
+                  @elseif($meta['open'])
+                    <div class="small text-muted mt-1" style="font-size:.62rem">window open till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                  @else
+                    <div class="small text-muted mt-1" style="font-size:.62rem">window closed</div>
+                  @endif
+                @endif
+              </td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>
               <td class="text-end">{{ $fmtL($u['achieved']) }}</td>
               <td><div class="d-flex align-items-center gap-2"><div class="ndg-track flex-grow-1" style="height:8px"><div class="ndg-fill" style="width:{{ min(100, (float) $u['pct']) }}%;background:{{ $pctColor($u['pct']) }}"></div></div><b class="small" style="min-width:44px;text-align:right">{{ $pctText($u['pct']) }}</b></div></td>
@@ -495,6 +522,8 @@
   .ndg-week-pill.is-current:not(.on) { border-color: #f5a623; box-shadow: inset 0 0 0 1px #f5a623; }
   .ndg-chip { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: .72rem; font-weight: 700; }
   .ndg-none { color: #cbd5e1; }
+  .ndg-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .ndg-rag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
   .ndg-overdue { color: #b42318; font-weight: 700; font-size: .82rem; }
   .ndg-bar { margin-bottom: 12px; }
   .ndg-bar-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; font-size: .84rem; }
