@@ -186,6 +186,7 @@ class TallyPushCommand extends Command
                     'party_name' => $party ?: null, 'normalized_name' => NameMatcher::normalize($party) ?: null,
                     'amount' => abs((float) ($v['total'] ?? 0)), 'bank_ledger' => $bankLedger,
                     'reference' => $v['reference'] ?? null,
+                    '_guid' => (string) ($v['guid'] ?? ''),   // only to tell same-numbered receipts apart; stripped below
                 ], fn ($val) => $val !== null);
                 continue;
             }
@@ -252,7 +253,44 @@ class TallyPushCommand extends Command
             }
         }
 
+        $out['receipts'] = $this->uniqueReceiptKeys($out['receipts']);
+
         return $out;
+    }
+
+    /**
+     * Tally does not stop two different Receipt vouchers having the same type and number on one day (e.g. a second
+     * payment-gateway receipt keyed in under the same number). The receipt key is date|type|number, so the second one
+     * collided with the first, the server refused the whole day, and every sync that touched that day failed.
+     *
+     * The first voucher (lowest GUID, which never changes) keeps the plain key, so rows already stored under it are
+     * replaced rather than duplicated; each further one gets "#<end of its GUID>". Both stay stable between pushes.
+     *
+     * @param  array<int,array<string,mixed>> $receipts
+     * @return array<int,array<string,mixed>>
+     */
+    private function uniqueReceiptKeys(array $receipts): array
+    {
+        $groups = [];
+        foreach ($receipts as $i => $r) {
+            $groups[$r['receipt_key']][] = $i;
+        }
+        foreach ($groups as $key => $indexes) {
+            if (count($indexes) < 2) {
+                continue;
+            }
+            usort($indexes, fn ($a, $b) => strcmp((string) ($receipts[$a]['_guid'] ?? ''), (string) ($receipts[$b]['_guid'] ?? '')));
+            foreach (array_slice($indexes, 1) as $n => $i) {
+                $tail = substr(preg_replace('/[^A-Za-z0-9]/', '', (string) ($receipts[$i]['_guid'] ?? '')), -12);
+                $receipts[$i]['receipt_key'] = $key . '#' . ($tail !== '' ? $tail : $n + 2);
+            }
+        }
+        foreach ($receipts as &$r) {
+            unset($r['_guid']);
+        }
+        unset($r);
+
+        return $receipts;
     }
 
     /** @param array<string,float> $gst head => % (CGST, SGST/UTGST, IGST, Cess, State Cess) */
