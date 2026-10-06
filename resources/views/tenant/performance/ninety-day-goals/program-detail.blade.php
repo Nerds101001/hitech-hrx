@@ -33,8 +33,8 @@
   $statusColorMap = collect($G::STATUS_COLORS)->map(fn ($clr) => $clr[0]);
   $statusChartData = $statusCounts;
 
-  // Server-side pagination for the customer table: 10 per page unless "Show" picks more.
-  $perPage = \App\Services\NinetyDayGoalService::perPage(request('per_page'), 10, $rows->count());
+  // Server-side pagination for the customer table: 25 per page unless "Show" picks more.
+  $perPage = \App\Services\NinetyDayGoalService::perPage(request('per_page'), 25, $rows->count());
   $page = max(1, request()->integer('page', 1));
   $paged = new \Illuminate\Pagination\LengthAwarePaginator(
       $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
@@ -233,7 +233,7 @@
       </div>
       <div class="card-body p-0 table-responsive">
         <table class="table align-middle mb-0">
-          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
+          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-center" style="min-width:150px">Add Window</th><th class="text-center" style="min-width:140px">Reminder</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
           <tbody>
           @foreach($salespeople as $i => $u)
             @php
@@ -247,14 +247,24 @@
                 <span class="ndg-rag" style="background:{{ $rag['bg'] }};color:{{ $rag['fg'] }}" title="{{ $rag['label'] }} — {{ $u['goals'] }} of {{ $min }}">
                   <span class="ndg-dot" style="background:{{ $rag['dot'] }}"></span>{{ $u['goals'] }}/{{ $min }}
                 </span>
-                @if($meta && !$meta['meets_min'])
-                  @if($meta['reminder_sent_at'])
-                    <div class="small text-warning mt-1" style="font-size:.62rem"><i class="bx bx-envelope"></i> Reminder sent for completion</div>
-                  @elseif($meta['open'])
-                    <div class="small text-muted mt-1" style="font-size:.62rem">window open till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
-                  @else
-                    <div class="small text-muted mt-1" style="font-size:.62rem">window closed</div>
-                  @endif
+              </td>
+              <td class="text-center small">
+                @if(!$meta)
+                  <span class="text-muted">—</span>
+                @elseif($meta['meets_min'])
+                  <span class="text-success"><i class="bx bx-check"></i> complete</span>
+                @elseif($meta['open'])
+                  <span class="text-success">open</span><div class="text-muted" style="font-size:.62rem">till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                @else
+                  <span class="text-danger">closed</span><div class="text-muted" style="font-size:.62rem">{{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                @endif
+              </td>
+              <td class="text-center small">
+                @if($meta && $meta['reminder_sent_at'])
+                  <span class="badge" style="background:#fef3c7;color:#92400e"><i class="bx bx-envelope"></i> Sent for completion</span>
+                  <div class="text-muted" style="font-size:.62rem">{{ \Illuminate\Support\Carbon::parse($meta['reminder_sent_at'])->format('d M, h:i A') }}</div>
+                @else
+                  <span class="text-muted">—</span>
                 @endif
               </td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>

@@ -44,11 +44,11 @@
   <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
     <div class="d-flex flex-wrap align-items-center gap-3">
       <div class="fw-bold text-dark">Customer Tracking &amp; Weekly Updates ({{ $rows->count() }} Customers)</div>
-      @include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 10, 'ppId' => 'Ct' . ($ctId ?? '')])
+      @include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 25, 'ppId' => 'Ct' . ($ctId ?? '')])
     </div>
     <div class="d-flex flex-wrap gap-3 small text-muted">
       @foreach($G::STATUS_COLORS as $st => [$bg, $fg])
-        <span class="d-inline-flex align-items-center gap-1"><span style="width:9px;height:9px;border-radius:50%;display:inline-block;background:{{ $fg }}"></span>{{ $st }}</span>
+        <span class="d-inline-flex align-items-center gap-1"><span style="width:10px;height:10px;border-radius:3px;display:inline-block;border:1px solid rgba(0,0,0,.08);background:{{ $bg }}"></span>{{ $st }}</span>
       @endforeach
     </div>
   </div>
@@ -79,7 +79,7 @@
       <thead><tr>
         <th class="ndg-mx-l" data-col="no" style="left:0">#</th><th class="ndg-mx-l ndg-ell" data-col="cust" style="left:40px">Customer</th><th class="ndg-ell">Product</th><th class="ndg-ell">Salesperson</th><th>Target ₹L</th><th>Expected</th>
         @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
-        <th>Actual ₹L</th><th>Ach.%</th><th>Status</th><th>Last Comment</th>
+        <th style="text-align:right">Actual ₹L</th><th>Ach.%</th><th style="text-align:left">Status</th><th style="text-align:left">Last Comment</th>
       </tr></thead>
       <tbody>
       @forelse($paged as $i => $r)
@@ -126,8 +126,8 @@
             @endphp
             <td class="ndg-mx-c" style="{{ $bg ? 'background:' . $bg : '' }}" title="{{ $tip }}"></td>
           @endfor
-          <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
-          <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
+          <td class="fw-semibold" style="text-align:right">{{ $fmtL($r->achieved) }}</td>
+          <td style="text-align:center;color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
           <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
           <td class="small ndg-lastc">
             @if($last)
@@ -136,8 +136,8 @@
               <span class="text-muted">No comments yet</span>
             @endif
             @if($hist->isNotEmpty())
-              <button type="button" class="btn btn-link btn-sm p-0 ms-1 ndg-hist-btn" style="font-size:.66rem;vertical-align:baseline"
-                      data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</button>
+              <span role="button" tabindex="0" class="ndg-hist-btn text-primary ms-1" style="font-size:.66rem;text-decoration:underline;cursor:pointer"
+                      data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</span>
             @endif
           </td>
         </tr>
