@@ -58,13 +58,20 @@
        or comment no longer blows a row up to two or three times the height. --}}
   @once
   <style>
-    .ndg-mx th, .ndg-mx td { vertical-align: middle; }
-    .ndg-mx tbody td { height: 34px; }
-    .ndg-mx-l[data-col="no"] { width: 34px; min-width: 34px; }
-    .ndg-mx-l[data-col="cust"] { left: 40px !important; width: 190px; min-width: 190px; max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
-    .ndg-mx .ndg-ell { max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ndg-mx td.ndg-ell { text-align: left; }
-    .ndg-mx td.ndg-lastc { max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* One fixed row height everywhere - every data cell on one line, so a long
+       comment can no longer make a row 2-3x tall or stretch the week squares. */
+    .ndg-mx { border-spacing: 2px; table-layout: auto; }
+    .ndg-mx th, .ndg-mx td { vertical-align: middle; white-space: nowrap; }
+    .ndg-mx tbody td { height: 30px; padding-top: 2px; padding-bottom: 2px; }
+    .ndg-mx thead th { padding: 6px 4px; }
+    .ndg-mx-l[data-col="no"] { width: 30px; min-width: 30px; }
+    .ndg-mx-l[data-col="cust"] { left: 36px !important; width: 170px; min-width: 170px; max-width: 170px; }
+    .ndg-mx .ndg-ell { max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+    .ndg-mx td.ndg-ell, .ndg-mx th.ndg-ell { text-align: left; }
+    .ndg-mx-l[data-col="cust"] { overflow: hidden; text-overflow: ellipsis; }
+    /* Compact week squares so more of the grid fits before scrolling. */
+    .ndg-mx-c { width: 16px !important; height: 16px !important; min-width: 16px !important; }
+    .ndg-mx td.ndg-lastc { max-width: 210px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
   </style>
   @endonce
   <div class="card-body p-0 ndg-mx-scroll">
@@ -122,16 +129,15 @@
           <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
           <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
           <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
-          <td class="small" style="max-width:200px;white-space:normal">
+          <td class="small ndg-lastc">
             @if($last)
-              <div class="text-dark">{{ \Illuminate\Support\Str::limit($last['text'], 70) }}</div>
-              <div class="text-muted" style="font-size:.66rem">{{ $last['by'] }} · W{{ $last['week'] }}</div>
+              <span class="text-dark" title="{{ $last['by'] }} · W{{ $last['week'] }}: {{ $last['text'] }}">{{ \Illuminate\Support\Str::limit($last['text'], 38) }}</span>
             @else
               <span class="text-muted">No comments yet</span>
             @endif
             @if($hist->isNotEmpty())
-              <button type="button" class="btn btn-link btn-sm p-0 ndg-hist-btn" style="font-size:.68rem"
-                      data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}">History{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}</button>
+              <button type="button" class="btn btn-link btn-sm p-0 ms-1 ndg-hist-btn" style="font-size:.66rem;vertical-align:baseline"
+                      data-customer="{{ $r->goal->client_name }}" data-history="{{ json_encode($hist) }}" title="View the full history{{ $nComments ? ' (' . $nComments . ' comment' . ($nComments === 1 ? '' : 's') . ')' : '' }}">History{{ $nComments ? ' (' . $nComments . ')' : '' }}</button>
             @endif
           </td>
         </tr>
