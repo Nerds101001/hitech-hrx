@@ -49,6 +49,19 @@ class TallyPushCommand extends Command
     /** More than this many days in one run is refused: it is one request per day, and Tally is single-threaded. */
     private const MAX_DAYS = 31;
 
+    /**
+     * Signed financial data only ever travels over TLS: https:// anywhere, or plain http:// to this very machine
+     * (the local test setup). A mistyped http://hrx.hitechgroup.in/... would otherwise send the bearer key and the
+     * whole day's invoices in clear text (or be silently redirected by the host, dropping the body).
+     */
+    public static function targetIsSafe(string $url): bool
+    {
+        $parts = parse_url($url);
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        return $scheme === 'https' || ($scheme === 'http' && in_array($host, ['localhost', '127.0.0.1', '::1', '[::1]'], true));
+    }
+
     public function handle(): int
     {
         [$start, $end] = $this->resolveRange();
@@ -60,6 +73,10 @@ class TallyPushCommand extends Command
         $dry = (bool) $this->option('dry-run');
         if (!$dry && $targetUrl === '') {
             $this->error('TALLY_PUSH_TARGET_URL is not set (config/tally_push.php outbound.target_url). Nothing to push to.');
+            return self::FAILURE;
+        }
+        if (!$dry && !self::targetIsSafe($targetUrl)) {
+            $this->error('Refusing to send: the target must be https:// (plain http is only allowed to this machine itself). Got: ' . $targetUrl);
             return self::FAILURE;
         }
 

@@ -37,6 +37,10 @@ class TallyPartyPushCommand extends Command
             $this->error('TALLY_PUSH_TARGET_URL is not set.');
             return self::FAILURE;
         }
+        if (!$dry && !TallyPushCommand::targetIsSafe($targetBase)) {
+            $this->error('Refusing to send: the target must be https:// (plain http is only allowed to this machine itself). Got: ' . $targetBase);
+            return self::FAILURE;
+        }
         // sync-parties sits next to sync on the same endpoint path.
         $targetUrl = str_replace('/tally-push/sync', '/tally-push/sync-parties', $targetBase);
 
