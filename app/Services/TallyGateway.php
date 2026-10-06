@@ -227,7 +227,7 @@ class TallyGateway
     public function updateLedgerContact(string $ledgerName, ?string $contactPerson, ?string $contactMobile): array
     {
         $company = $this->assertCompany();
-        $request = self::contactUpdateRequest($company, $ledgerName, $contactPerson, $contactMobile);
+        $request = self::contactUpdateRequest($ledgerName, $contactPerson, $contactMobile);
         self::assertImportSucceeded($this->sendWrite($request, $ledgerName));
 
         $after = self::parseLedgers($this->send(self::ledgerMasterRequest($company)));
@@ -238,15 +238,24 @@ class TallyGateway
         return ['contact_person' => $match[0]['contact_person'], 'contact_mobile' => $match[0]['contact_mobile']];
     }
 
-    /** The minimal Import Alter Tally's own documentation describes: identify the ledger, change only these two fields. */
-    public static function contactUpdateRequest(string $company, string $ledgerName, ?string $contactPerson, ?string $contactMobile): string
+    /**
+     * The minimal Import Alter Tally's own documentation describes: identify the ledger, change only these two
+     * fields. No company is named anywhere in this request (unlike every Export request in this class) --
+     * Tally's single-user gateway only ever has the one company assertCompany() already confirmed is loaded,
+     * and the documented Import sample itself carries none either.
+     */
+    public static function contactUpdateRequest(string $ledgerName, ?string $contactPerson, ?string $contactMobile): string
     {
-        $c = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $n = htmlspecialchars($ledgerName, ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $contact = htmlspecialchars(trim((string) $contactPerson), ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $mobile = htmlspecialchars(trim((string) $contactMobile), ENT_XML1 | ENT_QUOTES, 'UTF-8');
-        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>'
-            . '<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' . $c . '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC>'
+        // Matches Tally's own documented sample structure for a master Import as closely as possible: no
+        // VERSION, no STATICVARIABLES/SVCURRENTCOMPANY inside REQUESTDESC (unlike every Export request in this
+        // class) -- an earlier version of this request carried both, copied from the Export requests elsewhere
+        // in this file, and Tally answered every attempt with a flat "Unknown Request, cannot be processed"
+        // instead of its normal CREATED/ALTERED/ERRORS response, which is what that shape change was for.
+        return '<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>'
+            . '<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC>'
             . '<REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF"><LEDGER NAME="' . $n . '" ACTION="Alter">'
             . '<LEDGERCONTACT>' . $contact . '</LEDGERCONTACT><LEDGERMOBILE>' . $mobile . '</LEDGERMOBILE>'
             . '</LEDGER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>';
@@ -291,15 +300,23 @@ class TallyGateway
         }
     }
 
-    /** Tally's import response is CREATED/ALTERED/DELETED/ERRORS/LINEERROR counters, not HTTP status codes. */
+    /**
+     * Tally's import response is normally CREATED/ALTERED/DELETED/ERRORS/LINEERROR counters, not an HTTP status
+     * code -- but Tally sometimes answers a request it does not recognise with a one-line plain-text <RESPONSE>
+     * instead of that counter structure (e.g. "Unknown Request, cannot be processed"), which has none of those
+     * tags at all. When neither ALTERED nor ERRORS is present, the raw response is surfaced directly rather
+     * than silently reading both as zero and reporting a generic, undiagnosable "no reason given".
+     */
     private static function assertImportSucceeded(string $xml): void
     {
         $doc = self::load($xml);
+        $hasCounters = isset($doc->ALTERED) || isset($doc->ERRORS);
         $errors = (int) trim((string) ($doc->ERRORS ?? '0'));
         $altered = (int) trim((string) ($doc->ALTERED ?? '0'));
-        if ($errors > 0 || $altered < 1) {
+        if (!$hasCounters || $errors > 0 || $altered < 1) {
             $lineError = trim((string) ($doc->LINEERROR ?? ''));
-            throw new TallyGatewayException('Tally did not accept the update' . ($lineError !== '' ? ": {$lineError}" : ' (no reason given).'));
+            $detail = $lineError !== '' ? $lineError : ($hasCounters ? 'no reason given' : 'Tally\'s raw answer: ' . trim($xml));
+            throw new TallyGatewayException("Tally did not accept the update: {$detail}");
         }
     }
 
