@@ -60,7 +60,19 @@ class TallyAnalytics
 
     public static function importId(): int
     {
-        return self::$importId ??= (int) (TallyImport::latestGood()?->id ?? 0);
+        // Every cache here is keyed on this number. It used to follow only the file import, so a day's API push
+        // changed the data without changing the key and the dashboards kept answering from the old cache until
+        // the date rolled over. Fold in the latest successful push (as a large, distinct number) so a push
+        // refreshes them too, while a quiet day (no push) still reuses the cache.
+        if (self::$importId === null) {
+            try {
+                $push = (int) (\Illuminate\Support\Facades\DB::table('tally_push_runs')->whereIn('status', ['ok', 'partial'])->max('id') ?? 0);
+            } catch (\Throwable $e) {
+                $push = 0;                       // table not there yet (code ahead of its migration): file import only
+            }
+            self::$importId = (int) (TallyImport::latestGood()?->id ?? 0) + 1_000_000 * $push;
+        }
+        return self::$importId;
     }
 
     /** [first invoice date, last invoice date] in the loaded data. */
