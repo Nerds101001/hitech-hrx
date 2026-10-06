@@ -1025,7 +1025,13 @@ class NinetyDayGoalController extends Controller
                 } else {
                     $participantStatus[$uid] = ['label' => "Window closed · {$cnt}/{$mn}", 'tone' => 'red'];
                 }
+            } elseif ($m['open']) {
+                // Still inside the add-customer window but already has the full set:
+                // done adding, weekly tracking has not begun yet - don't raise a
+                // premature "week overdue". This is the clean "all added" state.
+                $participantStatus[$uid] = ['label' => "All {$cnt} customers added", 'tone' => 'green'];
             } else {
+                // Add window has closed: weekly tracking is the live concern now.
                 $wk = $cwByUser[$uid] ?? null;
                 if ($wk && $wk['total'] > 0 && $wk['done'] >= $wk['total']) {
                     $participantStatus[$uid] = ['label' => "All {$cnt} added · W{$currentWeek} submitted", 'tone' => 'green'];
