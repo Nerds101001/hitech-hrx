@@ -233,7 +233,7 @@
       </div>
       <div class="card-body p-0 table-responsive">
         <table class="table align-middle mb-0">
-          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-center" style="min-width:150px">Add Window</th><th class="text-center" style="min-width:140px">Reminder</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
+          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-center" style="min-width:230px">Current Status</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
           <tbody>
           @foreach($salespeople as $i => $u)
             @php
@@ -248,23 +248,25 @@
                   <span class="ndg-dot" style="background:{{ $rag['dot'] }}"></span>{{ $u['goals'] }}/{{ $min }}
                 </span>
               </td>
+              @php
+                $st = ($participantStatus ?? [])[$u['id']] ?? ['label' => '—', 'tone' => 'muted'];
+                $tone = [
+                  'green' => ['#dcfce7', '#166534', '#16a34a'],
+                  'amber' => ['#fef3c7', '#92400e', '#d97706'],
+                  'red'   => ['#fee2e2', '#991b1b', '#dc2626'],
+                  'muted' => ['#f1f5f9', '#475569', '#94a3b8'],
+                ][$st['tone']] ?? ['#f1f5f9', '#475569', '#94a3b8'];
+              @endphp
               <td class="text-center small">
-                @if(!$meta)
-                  <span class="text-muted">—</span>
-                @elseif($meta['meets_min'])
-                  <span class="text-success"><i class="bx bx-check"></i> complete</span>
-                @elseif($meta['open'])
-                  <span class="text-success">open</span><div class="text-muted" style="font-size:.62rem">till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
-                @else
-                  <span class="text-danger">closed</span><div class="text-muted" style="font-size:.62rem">{{ $meta['closes_at']->format('d M, h:i A') }}</div>
-                @endif
-              </td>
-              <td class="text-center small">
+                <span class="ndg-rag" style="background:{{ $tone[0] }};color:{{ $tone[1] }}">
+                  <span class="ndg-dot" style="background:{{ $tone[2] }}"></span>{{ $st['label'] }}
+                </span>
                 @if($meta && $meta['reminder_sent_at'])
-                  <span class="badge" style="background:#fef3c7;color:#92400e"><i class="bx bx-envelope"></i> Sent for completion</span>
-                  <div class="text-muted" style="font-size:.62rem">{{ \Illuminate\Support\Carbon::parse($meta['reminder_sent_at'])->format('d M, h:i A') }}</div>
-                @else
-                  <span class="text-muted">—</span>
+                  <div class="text-muted" style="font-size:.62rem"><i class="bx bx-envelope"></i> reminder sent {{ \Illuminate\Support\Carbon::parse($meta['reminder_sent_at'])->format('d M, h:i A') }}</div>
+                @elseif($meta && !$meta['meets_min'] && $meta['open'])
+                  <div class="text-muted" style="font-size:.62rem">window till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                @elseif($meta && !$meta['meets_min'] && !$meta['open'])
+                  <div class="text-muted" style="font-size:.62rem">closed {{ $meta['closes_at']->format('d M, h:i A') }}</div>
                 @endif
               </td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>

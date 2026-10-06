@@ -989,8 +989,57 @@ class NinetyDayGoalController extends Controller
         $participantMeta = NinetyDayRound::where('program_id', $program->id)->get()
             ->mapWithKeys(fn ($r) => [$r->user_id => Goals::windowState($r)]);
 
+        // A single "current status" per participant for the Participants tab:
+        // while they are still adding customers that is the live concern
+        // (adding / reminder sent / window closed); once all are in, it is the
+        // current week's submission (W-n submitted / pending / overdue).
+        $cwByUser = [];
+        foreach ($d['rows'] as $r) {
+            $ck = $r->goal->checkins->firstWhere('week_no', $currentWeek);
+            if (!$ck) {
+                continue;
+            }
+            $uid = $r->user->id;
+            $cwByUser[$uid]['total'] = ($cwByUser[$uid]['total'] ?? 0) + 1;
+            $cwByUser[$uid]['done'] = ($cwByUser[$uid]['done'] ?? 0) + ($ck->status !== null ? 1 : 0);
+        }
+        $currentWeekOverdue = $program->starts_on->copy()->addDays(7 * $currentWeek)->lt($today);
+        $participantStatus = [];
+        foreach ($participantIds as $uid) {
+            $m = $participantMeta[$uid] ?? null;
+            if (!$m) {
+                $participantStatus[$uid] = ['label' => '—', 'tone' => 'muted'];
+                continue;
+            }
+            $cnt = $m['count'];
+            $mn = $m['min'];
+            if (!$m['meets_min']) {
+                // Still short of the minimum: colour by the same red/amber RAG light as the
+                // Customers column (red below the amber threshold, amber up to the minimum),
+                // and let the label carry which state they are in.
+                $tone = $m['rag']['level'] === 'green' ? 'amber' : $m['rag']['level'];
+                if ($m['reminder_sent_at']) {
+                    $participantStatus[$uid] = ['label' => "Reminder sent · {$cnt}/{$mn}", 'tone' => $tone];
+                } elseif ($m['open']) {
+                    $participantStatus[$uid] = ['label' => "Adding customers · {$cnt}/{$mn}", 'tone' => $tone];
+                } else {
+                    $participantStatus[$uid] = ['label' => "Window closed · {$cnt}/{$mn}", 'tone' => 'red'];
+                }
+            } else {
+                $wk = $cwByUser[$uid] ?? null;
+                if ($wk && $wk['total'] > 0 && $wk['done'] >= $wk['total']) {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} added · W{$currentWeek} submitted", 'tone' => 'green'];
+                } elseif ($wk && $wk['total'] > 0) {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} added · W{$currentWeek} " . ($currentWeekOverdue ? 'overdue' : 'pending'), 'tone' => $currentWeekOverdue ? 'red' : 'amber'];
+                } else {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} customers added", 'tone' => 'green'];
+                }
+            }
+        }
+
         return view('tenant.performance.ninety-day-goals.program-detail', [
             'participantMeta' => $participantMeta,
+            'participantStatus' => $participantStatus,
             'tab'        => null,
             'isAdmin'    => true,
             'canManage'  => Goals::managesEveryone($user),
