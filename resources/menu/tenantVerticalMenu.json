@@ -836,7 +836,7 @@
             "name": "90-Day Goals",
             "icon": "menu-icon bx bx-target-lock",
             "slug": ["performance.ninety-day-goals.my-dashboard", "performance.ninety-day-goals.round", "performance.ninety-day-goals.program-dashboard", "performance.ninety-day-goals.programs.index", "performance.ninety-day-goals.programs.create", "performance.ninety-day-goals.program", "performance.ninety-day-goals.past", "performance.ninety-day-goals.person", "performance.ninety-day-goals.comments"],
-            "department": "Sales",
+            "department": "Sales|Export",
             "departmentOrPermission": ["goals.manage", "scorecards.manage", "goals.view"],
             "submenu": [
                 {
@@ -844,7 +844,7 @@
                     "name": "My Dashboard",
                     "icon": "menu-icon bx bx-grid-alt",
                     "slug": "performance.ninety-day-goals.my-dashboard",
-                    "department": "Sales",
+                    "department": "Sales|Export",
                     "hideForRoles": ["admin","hr"]
                 },
                 {
@@ -852,7 +852,7 @@
                     "name": "My Programs",
                     "icon": "menu-icon bx bx-target-lock",
                     "slug": "performance.ninety-day-goals.round",
-                    "department": "Sales",
+                    "department": "Sales|Export",
                     "hideForRoles": ["admin","hr"]
                 },
                 {

@@ -1312,7 +1312,7 @@ class NinetyDayGoalService
             : null;
 
         $withRow = $users->keys();
-        $idle = self::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))
+        $idle = self::programmableStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))
             ->when($enrolledIds !== null, fn ($c) => $c->whereIn('id', $enrolledIds))
             ->reject(fn ($u) => $withRow->contains($u->id))
             ->mapWithKeys(fn ($u) => [$u->id => [

@@ -367,7 +367,11 @@ class Nav
             // department gate, exactly as the live sidebar does.
             if (isset($item->department) && !$isAdminUser
                 && !(isset($item->departmentOrPermission) && $hasAnyPermission($item->departmentOrPermission))) {
-                if (!$user->department || stripos($user->department->name, $item->department) === false) {
+                // "department" may list several, pipe-separated (e.g. "Sales|Export") -- a person
+                // in ANY of them is let through. A plain single value behaves exactly as before.
+                $wantDepts = array_filter(array_map('trim', explode('|', (string) $item->department)));
+                $inDept = $user->department && collect($wantDepts)->contains(fn ($d) => stripos($user->department->name, $d) !== false);
+                if (!$inDept) {
                     return ['text' => "Limited to the \"{$item->department}\" department" . ($user->department ? " - this person is in \"{$user->department->name}\"." : ' - this person has no department set.'), 'grantable' => []];
                 }
             }
