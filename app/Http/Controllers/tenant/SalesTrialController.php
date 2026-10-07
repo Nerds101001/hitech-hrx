@@ -381,12 +381,16 @@ class SalesTrialController extends Controller
      */
     private function visibleSalespersonIds(User $user): array
     {
-        // Self (plus any vacant positions delegated to this account), the direct-report
-        // team of whoever reports to any of those identities, and CCare/NewBiz mappings.
-        // No "manager" role gate: a non-manager simply has no reports, so the set is self-correcting.
-        $identities = $user->managerIdentityIds();
+        // Self, plus (where the app supports it) any vacant positions delegated to this
+        // account via managerIdentityIds(); the direct-report team of those identities; and
+        // the salespeople a CCare/NewBiz agent is mapped to. method_exists keeps this working
+        // where managerIdentityIds()/delegation isn't present — it falls back to self only.
+        // No "manager" role gate: a non-manager simply has no reports, so the set self-corrects.
+        $identities = method_exists($user, 'managerIdentityIds')
+            ? collect($user->managerIdentityIds())
+            : collect([$user->id]);
 
-        $ids = collect($identities)
+        $ids = $identities
             ->merge(User::whereIn('reporting_to_id', $identities)->pluck('id'))
             ->merge(CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id'));
 
