@@ -96,6 +96,20 @@ class NinetyDayGoalService
             ->orderBy('first_name')->get();
     }
 
+    /**
+     * Current employees who may be PUT INTO a program from the create / edit
+     * picker: the Sales departments PLUS Export. Deliberately wider than
+     * salesStaff(), which stays Sales-only because it also governs the daily
+     * auto-enrolment and the self-start-on-visit -- Export people are only ever
+     * added by hand, never auto-enrolled.
+     */
+    public static function programmableStaff(): Collection
+    {
+        return self::current(User::query())->with('department')
+            ->whereHas('department', fn ($d) => $d->where('name', 'like', '%sales%')->orWhere('name', 'like', '%export%'))
+            ->orderBy('first_name')->get();
+    }
+
     public static function isSalesStaff(?User $user): bool
     {
         if (!$user) {
@@ -103,6 +117,17 @@ class NinetyDayGoalService
         }
 
         return str_contains(strtolower((string) optional($user->department)->name), 'sales');
+    }
+
+    /**
+     * Someone who already has a 90-Day round of their own -- e.g. an Export
+     * person an admin added to a program. The page is theirs to open and fill
+     * even though they are not Sales, but this never starts a round, so a
+     * non-Sales employee who was never added stays out.
+     */
+    public static function isParticipant(?User $user): bool
+    {
+        return $user && NinetyDayRound::where('user_id', $user->id)->exists();
     }
 
     /**
@@ -129,7 +154,7 @@ class NinetyDayGoalService
 
     public static function canOpenPage(?User $user): bool
     {
-        return self::seesEveryone($user) || self::isSalesStaff($user) || ($user && $user->hasRole(['manager', 'Manager']));
+        return self::seesEveryone($user) || self::isSalesStaff($user) || self::isParticipant($user) || ($user && $user->hasRole(['manager', 'Manager']));
     }
 
     /** The ids whose goals this viewer may see: null = everyone. */
@@ -209,7 +234,7 @@ class NinetyDayGoalService
             $endsOn->subDays($shift);
         }
 
-        $targets = self::salesStaff()->whereIn('id', $userIds)->values();
+        $targets = self::programmableStaff()->whereIn('id', $userIds)->values();
         $enrolled = [];
         $skipped = [];
         $program = null;
@@ -757,7 +782,7 @@ class NinetyDayGoalService
      */
     public static function addToProgram(NinetyDayProgram $program, User $admin, array $userIds): array
     {
-        $targets = self::salesStaff()->whereIn('id', $userIds)->values();
+        $targets = self::programmableStaff()->whereIn('id', $userIds)->values();
         $enrolled = [];
         $skipped = [];
 

@@ -35,13 +35,16 @@ class NinetyDayGoalController extends Controller
         }
 
         $isSales  = Goals::isSalesStaff($user);
+        // An Export person added to a program owns their own round too, so they land on it
+        // rather than the admin dashboard they cannot open.
+        $ownsProgram = $isSales || Goals::isParticipant($user);
         $scope    = Goals::visibleUserIds($user);
         $seesMany = $scope === null || count($scope) > 1;
 
         // The original Goals page is retired (2026-10-01): it ran beside the newer pages with
         // its own tab bar, and admin and salespeople ended up between two designs. Every old
         // link (tasks, notifications, bookmarks) now lands on the page that replaced it.
-        if ($isSales && ($request->input('view') === 'mine' || !$seesMany)) {
+        if ($ownsProgram && ($request->input('view') === 'mine' || !$seesMany)) {
             return redirect()->route('performance.ninety-day-goals.my-program');
         }
 
@@ -100,7 +103,7 @@ class NinetyDayGoalController extends Controller
             return redirect()->route('performance.ninety-day-goals.program-dashboard', $request->query());
         }
 
-        return Goals::isSalesStaff($user)
+        return (Goals::isSalesStaff($user) || Goals::isParticipant($user))
             ? redirect()->route('performance.ninety-day-goals.my-dashboard')
             : redirect()->route('tenant.dashboard');
     }
@@ -564,7 +567,7 @@ class NinetyDayGoalController extends Controller
     public function myDashboard(Request $request)
     {
         $user = Auth::user();
-        if (!Goals::isSalesStaff($user)) {
+        if (!Goals::isSalesStaff($user) && !Goals::isParticipant($user)) {
             return redirect()->route('tenant.dashboard')->with('error', 'The 90-Day Goals tracker is for the Sales team.');
         }
         $today = Carbon::today();
@@ -732,13 +735,26 @@ class NinetyDayGoalController extends Controller
     public function myProgram()
     {
         $user = Auth::user();
-        if (!Goals::isSalesStaff($user)) {
+        $isSales = Goals::isSalesStaff($user);
+        if (!$isSales && !Goals::isParticipant($user)) {
             return redirect()->route('performance.ninety-day-goals.program-dashboard')
                 ->with('error', 'Only the Sales team has a program of their own to view.');
         }
 
-        $current = Goals::roundFor($user);
+        // Sales self-start a round on visit; an Export person added to a program only ever views
+        // the round an admin already gave them -- never auto-starts one.
+        $current = $isSales ? Goals::roundFor($user) : Goals::activeRound($user);
         $finished = NinetyDayRound::with('program')->where('user_id', $user->id)->where('status', 'closed')->orderByDesc('starts_on')->get();
+
+        // No active round (an Export participant between rounds): drop them straight onto their most
+        // recent round rather than the summary page, which assumes a current one.
+        if (!$current) {
+            $recent = NinetyDayRound::where('user_id', $user->id)->orderByDesc('starts_on')->first();
+            return $recent
+                ? redirect()->route('performance.ninety-day-goals.round', $recent->id)
+                : redirect()->route('tenant.dashboard')->with('error', 'No 90-Day program yet.');
+        }
+
         // Nothing finished yet: straight into the one program they have.
         if ($finished->isEmpty()) {
             return redirect()->route('performance.ninety-day-goals.round', $current->id);
@@ -933,7 +949,7 @@ class NinetyDayGoalController extends Controller
         $participantIds = NinetyDayRound::where('program_id', $program->id)->pluck('user_id')->unique()->values();
         // Same reasoning for the salesperson filter dropdown: nobody outside this program has
         // anything to filter to, so the list only offers this program's own participants.
-        $people = Goals::salesStaff()->whereIn('id', $participantIds);
+        $people = Goals::programmableStaff()->whereIn('id', $participantIds);
         if ($f['user_id'] && !$people->contains('id', $f['user_id'])) {
             $f['user_id'] = null;
         }
@@ -1074,7 +1090,7 @@ class NinetyDayGoalController extends Controller
                     ->map(fn ($r) => (object) ['user' => $r->user, 'customers' => Goals::customerCount($r), 'window' => Goals::windowState($r)])
                     ->filter(fn ($r) => $r->user)->sortBy(fn ($r) => $r->user->first_name)->values()
                 : collect(),
-            'addablePeople' => Goals::managesEveryone($user) ? Goals::salesStaff()->whereNotIn('id', $participantIds)->values() : collect(),
+            'addablePeople' => Goals::managesEveryone($user) ? Goals::programmableStaff()->whereNotIn('id', $participantIds)->values() : collect(),
             'canDeleteProgram' => $user->hasRole(['admin', 'Admin', 'super_admin']),
             'footprint'  => $user->hasRole(['admin', 'Admin', 'super_admin']) ? Goals::programFootprint($program) : null,
             'startLocked' => NinetyDayGoalCheckin::whereIn('round_id', NinetyDayRound::where('program_id', $program->id)->pluck('id'))->whereNotNull('status')->exists(),
@@ -1258,7 +1274,7 @@ class NinetyDayGoalController extends Controller
             'tab'    => 'goals',
             'canSwitch' => false,
             'seesMany'  => true,
-            'people' => Goals::salesStaff(),
+            'people' => Goals::programmableStaff(),
             'roundSpanDays' => Goals::ROUND_SPAN_DAYS,
         ]);
     }
