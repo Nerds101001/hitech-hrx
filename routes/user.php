@@ -117,3 +117,5 @@ Route::middleware([
 });
 
 require __DIR__ . '/telephony-web.php';
+
+require __DIR__ . '/tally-push-web.php';

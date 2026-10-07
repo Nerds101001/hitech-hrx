@@ -1119,6 +1119,15 @@
                         "hr",
                         "accounts"
                     ]
+                },
+                {
+                    "url": "/user/tally-push/admin/connection",
+                    "name": "Tally Push",
+                    "slug": "user.tally-push.admin.connection",
+                    "roles": [
+                        "admin",
+                        "accounts"
+                    ]
                 }
             ],
             "roles": [
