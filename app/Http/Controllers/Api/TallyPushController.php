@@ -410,6 +410,20 @@ class TallyPushController extends Controller
     }
 
     /**
+     * The normalised names of customers HRX has actually invoiced. The desktop sync program narrows Tally's whole ledger
+     * master (banks, expenses, tax heads, one-off parties...) to these before sending anything, so nothing beyond real
+     * customers ever leaves the office PC. Read-only; same signature check as the posts.
+     */
+    public function customerNames(): JsonResponse
+    {
+        return response()->json([
+            'names' => DB::table('tally_invoices')->where('is_branch_transfer', 0)
+                ->whereNotNull('normalized_name')->where('normalized_name', '!=', '')
+                ->distinct()->orderBy('normalized_name')->pluck('normalized_name')->values(),
+        ]);
+    }
+
+    /**
      * A ledger-master sync (credit limit, GSTIN, PAN, contact), separate from sync() above: it's a small,
      * COMPLETE list every time (Tally's whole ledger master, filtered to known customers by the puller), not
      * an incremental per-day feed, so it's a genuine full-table replace -- guarded by a minimum row count so a

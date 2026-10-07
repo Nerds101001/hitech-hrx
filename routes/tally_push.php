@@ -13,4 +13,6 @@ Route::middleware(['api', 'tally_push.signed', 'throttle:tally_push'])
     ->group(function () {
         Route::post('tally-push/sync', [TallyPushController::class, 'sync'])->name('api.tally_push.sync');
         Route::post('tally-push/sync-parties', [TallyPushController::class, 'syncParties'])->name('api.tally_push.sync_parties');
+        // Read-only: the customer names the party sync is narrowed to. Signed like the posts (the signature covers an empty body).
+        Route::get('tally-push/customer-names', [TallyPushController::class, 'customerNames'])->name('api.tally_push.customer_names');
     });
