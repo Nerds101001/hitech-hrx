@@ -79,6 +79,13 @@ class AdminRoleGuard
         // (TaskManagementController::scopeVisible()) - same self-service
         // pattern as my-tasks above, not an admin-data page.
         'task-management',
+
+        // A task's reference image and completion/objection photo. They sit
+        // in the admin route group, so the assignee - usually a plain
+        // employee - was bounced to the dashboard when opening the image on
+        // their own task. TaskController checks Task::canBeViewedBy().
+        'tasks/*/attachment',
+        'task-updates/*/attachment',
     ];
 
     public function handle(Request $request, Closure $next): Response

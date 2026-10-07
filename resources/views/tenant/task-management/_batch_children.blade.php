@@ -1,7 +1,7 @@
 {{-- Rendered as JSON ('html' key) by TaskManagementController::showBatch()
      and injected into the collapsed batch row's placeholder in index.blade.php.
-     Kept deliberately simple (no per-row actions) - editing or deleting one
-     person's task out of a batch still goes through the full batch page. --}}
+     Each person has a View button (their own details and remarks); editing
+     or deleting one person's task still goes through the full batch page. --}}
 @foreach($tasks as $t)
   <tr>
     <td>
@@ -33,6 +33,20 @@
         <span class="text-muted">—</span>
       @endif
     </td>
-    <td><small class="text-muted">{{ optional($t->taskUpdates->first())->comment ?: '—' }}</small></td>
+    @php $latest = $t->taskUpdates->first(); @endphp
+    <td>
+      @if($latest && $latest->comment)
+        <small class="text-muted"><span class="fw-medium">{{ optional($latest->createdBy)->getFullName() ?? '—' }}:</span> {{ $latest->comment }}</small>
+      @else
+        <small class="text-muted">—</small>
+      @endif
+    </td>
+    {{-- This person's own task: details, every remark, and reply. --}}
+    <td class="text-end">
+      <button type="button" class="icon-sophisticated js-view-task" title="View" aria-label="View this person's task"
+              data-task="{{ json_encode(\App\Http\Controllers\tenant\TaskManagementController::viewPayload($t)) }}">
+        <i class="bx bx-show"></i>
+      </button>
+    </td>
   </tr>
 @endforeach

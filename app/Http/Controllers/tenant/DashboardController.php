@@ -250,9 +250,18 @@ class DashboardController extends Controller
               ->limit(25)
               ->get();
       });
-      $probationOverdueCount = $upcomingProbationEnds
-          ->filter(fn($u) => \Carbon\Carbon::parse($u->probation_end_date)->isPast())->count();
-      $probationDueSoonCount = $upcomingProbationEnds->count() - $probationOverdueCount;
+      // Counted in full, not from the list above: it stops at 25 rows, and
+      // counting it capped the overdue / due-soon figures at 25 as well.
+      [$probationOverdueCount, $probationDueSoonCount] = Cache::remember("dashboard.probation_counts.{$tenantId}", 1800, function () use ($probationCutoff) {
+          $q = User::where('status', UserAccountStatus::ACTIVE)
+              ->whereNotNull('probation_end_date')
+              ->whereNull('probation_confirmed_at');
+          $today = now()->toDateString();
+          return [
+              (clone $q)->where('probation_end_date', '<', $today)->count(),
+              (clone $q)->whereBetween('probation_end_date', [$today, $probationCutoff])->count(),
+          ];
+      });
 
       // Extra Stats for Suggestions
       $absentCount = max(0, $active - $presentUsersCount - $onLeaveUsersCount);
@@ -715,35 +724,35 @@ class DashboardController extends Controller
 
         // --- AI Insights: real signals derived from the numbers above ---
         $aiInsights = [];
-        $aiInsights[] = ['icon' => 'bx-user-check', 'tone' => $attPct >= 90 ? 'success' : ($attPct >= 75 ? 'warning' : 'danger'), 'title' => $attPct . '% present today', 'sub' => $presentUsersCount . ' of ' . $active . ' active staff checked in'];
-        if ($probationOverdueCount > 0)          $aiInsights[] = ['icon' => 'bx-error-circle', 'tone' => 'danger', 'title' => $probationOverdueCount . ' probations overdue', 'sub' => 'End date passed, still unconfirmed'];
-        if ($probationDueSoonCount > 0)          $aiInsights[] = ['icon' => 'bx-time-five', 'tone' => 'warning', 'title' => $probationDueSoonCount . ' probations ending', 'sub' => 'Within 30 days — review confirmations'];
-        if ($activeApprovalsTotal > 0)           $aiInsights[] = ['icon' => 'bx-check-shield', 'tone' => 'info', 'title' => $activeApprovalsTotal . ' approvals pending', 'sub' => 'Leave, expense, document & loan requests'];
-        if (($salesTargets['Bingo'] ?? 0) > 0)   $aiInsights[] = ['icon' => 'bx-trending-up', 'tone' => $salesAchievementPct >= 80 ? 'success' : 'warning', 'title' => 'Sales at ' . $salesAchievementPct . '% of target', 'sub' => 'Bingo target for ' . now()->format('F')];
-        if ($relievedThisYear > 0)               $aiInsights[] = ['icon' => 'bx-user-x', 'tone' => 'danger', 'title' => $attritionRate . '% attrition YTD', 'sub' => $relievedThisYear . ' employees relieved this year'];
-        if ($newHiresThisMonth > 0)              $aiInsights[] = ['icon' => 'bx-user-plus', 'tone' => 'success', 'title' => $newHiresThisMonth . ' new hires this month', 'sub' => 'Onboarding in progress'];
+        $aiInsights[] = ['icon' => 'bx-user-check', 'tone' => $attPct >= 90 ? 'success' : ($attPct >= 75 ? 'warning' : 'danger'), 'title' => $attPct . '% present today', 'sub' => $presentUsersCount . ' of ' . $active . ' active staff checked in', 'url' => url('/attendance')];
+        if ($probationOverdueCount > 0)          $aiInsights[] = ['icon' => 'bx-error-circle', 'tone' => 'danger', 'title' => $probationOverdueCount . ' probations overdue', 'sub' => 'End date passed, still unconfirmed', 'url' => url('/probation/dashboard')];
+        if ($probationDueSoonCount > 0)          $aiInsights[] = ['icon' => 'bx-time-five', 'tone' => 'warning', 'title' => $probationDueSoonCount . ' probations ending', 'sub' => 'Within 30 days — review confirmations', 'url' => url('/probation/dashboard')];
+        if ($activeApprovalsTotal > 0)           $aiInsights[] = ['icon' => 'bx-check-shield', 'tone' => 'info', 'title' => $activeApprovalsTotal . ' approvals pending', 'sub' => 'Leave, expense, document & loan requests', 'url' => $pendingApprovalsUrl];
+        if (($salesTargets['Bingo'] ?? 0) > 0)   $aiInsights[] = ['icon' => 'bx-trending-up', 'tone' => $salesAchievementPct >= 80 ? 'success' : 'warning', 'title' => 'Sales at ' . $salesAchievementPct . '% of target', 'sub' => 'Bingo target for ' . now()->format('F'), 'url' => url('/sales-visits/kingo-bingo')];
+        if ($relievedThisYear > 0)               $aiInsights[] = ['icon' => 'bx-user-x', 'tone' => 'danger', 'title' => $attritionRate . '% attrition YTD', 'sub' => $relievedThisYear . ' employees relieved this year', 'url' => url('/employees')];
+        if ($newHiresThisMonth > 0)              $aiInsights[] = ['icon' => 'bx-user-plus', 'tone' => 'success', 'title' => $newHiresThisMonth . ' new hires this month', 'sub' => 'Onboarding in progress', 'url' => url('/employees')];
 
         // --- Today's events (real counts) ---
         $eventsToday = [
-          ['icon' => 'bx-cake', 'label' => 'Birthdays Today', 'count' => $todayBirthdays->count(), 'tone' => 'primary'],
-          ['icon' => 'bx-gift', 'label' => 'Work Anniversaries', 'count' => $todayAnniversaries->count(), 'tone' => 'info'],
-          ['icon' => 'bx-time', 'label' => 'Probation Ending', 'count' => $upcomingProbationEnds->count(), 'tone' => 'warning'],
-          ['icon' => 'bx-calendar-star', 'label' => 'Holidays This Month', 'count' => Holiday::countThisMonthForUser($user), 'tone' => 'success'],
-          ['icon' => 'bx-calendar-event', 'label' => 'Leaves Pending', 'count' => $pendingLeaveRequests, 'tone' => 'danger'],
-          ['icon' => 'bx-user-plus', 'label' => 'Joined This Month', 'count' => $newHiresThisMonth, 'tone' => 'primary'],
+          ['icon' => 'bx-cake', 'label' => 'Birthdays Today', 'count' => $todayBirthdays->count(), 'tone' => 'primary', 'url' => route('employee.celebrations')],
+          ['icon' => 'bx-gift', 'label' => 'Work Anniversaries', 'count' => $todayAnniversaries->count(), 'tone' => 'info', 'url' => route('employee.celebrations')],
+          ['icon' => 'bx-time', 'label' => 'Probation Ending', 'count' => $probationOverdueCount + $probationDueSoonCount, 'tone' => 'warning', 'url' => url('/probation/dashboard')],
+          ['icon' => 'bx-calendar-star', 'label' => 'Holidays This Month', 'count' => Holiday::countThisMonthForUser($user), 'tone' => 'success', 'url' => url('/holidays')],
+          ['icon' => 'bx-calendar-event', 'label' => 'Leaves Pending', 'count' => $pendingLeaveRequests, 'tone' => 'danger', 'url' => url('/leaveRequests')],
+          ['icon' => 'bx-user-plus', 'label' => 'Joined This Month', 'count' => $newHiresThisMonth, 'tone' => 'primary', 'url' => url('/employees')],
         ];
 
         // --- Recent activity feed (real: new joiners + latest approvals) ---
         $recentFeed = collect();
         try {
           foreach (User::whereNotNull('date_of_joining')->where('date_of_joining', '>=', now()->subDays(30)->toDateString())->orderByDesc('date_of_joining')->take(4)->get(['id', 'first_name', 'last_name', 'date_of_joining']) as $u) {
-              $recentFeed->push(['type' => 'People', 'icon' => 'bx-user-plus', 'tone' => 'primary', 'title' => trim($u->first_name . ' ' . $u->last_name) . ' joined', 'time' => Carbon::parse($u->date_of_joining)->diffForHumans(), 'raw' => Carbon::parse($u->date_of_joining)]);
+              $recentFeed->push(['type' => 'People', 'icon' => 'bx-user-plus', 'tone' => 'primary', 'title' => trim($u->first_name . ' ' . $u->last_name) . ' joined', 'time' => Carbon::parse($u->date_of_joining)->diffForHumans(), 'raw' => Carbon::parse($u->date_of_joining), 'url' => url('/employees/view/' . $u->id)]);
           }
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Dashboard tile failed: ' . $e->getMessage(), ['file' => $e->getFile(), 'line' => $e->getLine()]);
         }
         foreach ($pendingApprovals->take(5) as $a) {
-          $recentFeed->push(['type' => $a['type'], 'icon' => 'bx-check-shield', 'tone' => 'warning', 'title' => ($a['user'] ?? 'Someone') . ' — ' . $a['type'] . ' request', 'time' => $a['time_ago'] ?? 'Recently', 'raw' => $a['raw_date'] ?? now()]);
+          $recentFeed->push(['type' => $a['type'], 'icon' => 'bx-check-shield', 'tone' => 'warning', 'title' => ($a['user'] ?? 'Someone') . ' — ' . $a['type'] . ' request', 'time' => $a['time_ago'] ?? 'Recently', 'raw' => $a['raw_date'] ?? now(), 'url' => $approvalTypeUrls[$a['type']] ?? $pendingApprovalsUrl]);
         }
         $recentFeed = $recentFeed->sortByDesc('raw')->take(8)->values();
 

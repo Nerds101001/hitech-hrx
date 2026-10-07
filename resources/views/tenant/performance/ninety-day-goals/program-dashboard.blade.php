@@ -33,7 +33,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.index', ['view' => 'overview']) }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> Admin View</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> 90-Day Goals <i class="bx bx-chevron-right"></i> Dashboard</nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">90-Day Sales Goals <span class="badge bg-label-success rounded-pill fw-bold" style="font-size:.62rem">{{ $isAdmin ? 'Admin View' : 'My Team' }}</span></h3>
       <p class="text-muted mb-0 small">Monitor all programs, participants, customer updates and results in real time. Drive accountability. Close more business.</p>
     </div>
@@ -258,6 +258,7 @@
             <div>
               <div class="fw-bold text-dark">Customer Tracking &amp; Weekly Updates @if($selectedProgram)— {{ $selectedProgram->name }}@endif</div>
               <div class="small text-muted">{{ $allRowsCount }} {{ \Illuminate\Support\Str::plural('customer', $allRowsCount) }} in this program</div>
+              <div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 25, 'ppId' => 'Ov'])</div>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-3">
               <div class="d-flex flex-wrap gap-3 small text-muted">
@@ -296,7 +297,7 @@
                   @endfor
                   <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
                   <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-                  <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+                  <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="{{ 8 + $weeks }}" class="text-center text-muted p-5">No customers have been added to this program yet.</td></tr>
@@ -353,7 +354,7 @@
                 <tr>
                   <td class="ps-3 fw-semibold">{{ $r->goal->client_name }}</td>
                   <td class="small text-muted">{{ $name($r->user) }}</td>
-                  <td class="pe-3">@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-chip" style="background:#e2e8f0;color:#475569">No report</span>@endif</td>
+                  <td class="pe-3">@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-chip" style="background:#e2e8f0;color:#475569">No report</span>@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="3" class="text-center text-muted p-4">Nothing needs attention right now.</td></tr>
@@ -423,11 +424,12 @@
     @if($canManage)
             <a href="{{ route('performance.ninety-day-goals.programs.create') }}" class="btn btn-hitech text-start d-flex align-items-center gap-2"><i class="bx bx-plus-circle"></i> Create 90-Day Program</a>
     @endif
-            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="tracking"><i class="bx bx-list-ul"></i> View All Programs</button>
+    @if($isAdmin)
+            <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-list-ul"></i> View All Programs</a>
+    @endif
     @if($isAdmin)
             <a href="{{ route('performance.ninety-day-goals.admin-view.export', array_merge(['round' => 'all'], request()->query())) }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-download"></i> Export Report</a>
     @endif
-            <button type="button" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2 ndg-goto" data-tab="people"><i class="bx bx-group"></i> Manage Participants</button>
             <a href="{{ route('sales-visits.pipeline.index') }}" class="btn btn-hitech-cancel text-start d-flex align-items-center gap-2"><i class="bx bx-bar-chart-alt-2"></i> View Sales Report</a>
           </div>
         </div>
@@ -488,7 +490,10 @@
           <div class="fw-bold text-dark">Customer submissions (all programs)</div>
           <div class="small text-muted">Every weekly status and comment, one row per target customer</div>
         </div>
-        <span class="small text-muted">Showing {{ $rows->count() }} of {{ $allRowsCount }}</span>
+        <div class="d-flex align-items-center gap-3">
+          @include('tenant.performance.ninety-day-goals.partials.per-page', ['ppDefault' => 25, 'ppId' => 'Tr'])
+          <span class="small text-muted">Showing {{ $rows->count() }} of {{ $allRowsCount }}</span>
+        </div>
       </div>
       <div class="card-body p-0 ndg-mx-scroll">
         <table class="ndg-mx ndg-mx-wide" style="font-size:.74rem">
@@ -526,7 +531,7 @@
               @endfor
               <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
               <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
             </tr>
           @endforeach
           </tbody>
@@ -587,7 +592,7 @@
                   <td class="small text-muted">{{ $name($r->user) }}</td>
                   <td class="small text-muted">{{ $r->goal->product }}</td>
                   <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-                  <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+                  <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
                 </tr>
               @empty
                 <tr><td colspan="5" class="text-center text-muted p-4">No qualifying orders on this page — clear filters or turn the page.</td></tr>
@@ -659,7 +664,7 @@
               <td class="fw-semibold">{{ $r->goal->client_name }}</td>
               <td>{{ $r->brand }}</td>
               <td class="text-end">{{ $fmtL($r->potential) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
               <td class="pe-4">
                 @if($r->overdueWeeks > 0)
                   <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>

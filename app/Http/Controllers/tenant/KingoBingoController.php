@@ -157,6 +157,7 @@ class KingoBingoController extends Controller
                   ->orWhere('ccare_id', $spId)
                   ->orWhere('new_biz_id', $spId)
                   ->orWhere('new_biz_2_id', $spId)
+                  ->orWhere('former_new_biz_id', $spId)
                   ->orWhereExists(function ($s) use ($spId) {
                       $s->selectRaw('1')->from('sales_pipeline_extra_reps as er')
                         ->whereColumn('er.sales_pipeline_id', 'sales_pipelines.id')
@@ -179,17 +180,20 @@ class KingoBingoController extends Controller
                 ->pluck('sales_pipeline_id')
                 ->all();
 
+            // A customer that moved New Biz -> CCare counts its months before
+            // the move for the New Biz person and the rest for CCare.
+            $monthOf = fn ($p, $mk) => $p->creditsMonth((int) $spId, $mk) ? $p->months->firstWhere('month_year', $mk) : null;
 
             foreach ($monthKeys as $mk) {
                 // Bingo/Kingo actual (locked pipelines only)
-                $actualSale = $lockedPipelines->sum(function ($p) use ($mk) {
-                    $m = $p->months->firstWhere('month_year', $mk);
+                $actualSale = $lockedPipelines->sum(function ($p) use ($mk, $monthOf) {
+                    $m = $monthOf($p, $mk);
                     return $m ? (float)$m->sale_amount : 0;
                 });
 
                 // Payment collection (in lacs): sale_amounts already stored in lakh units
-                $paymentAchieved = round($pipelines->sum(function ($p) use ($mk) {
-                    $m = $p->months->firstWhere('month_year', $mk);
+                $paymentAchieved = round($pipelines->sum(function ($p) use ($mk, $monthOf) {
+                    $m = $monthOf($p, $mk);
                     return $m ? (float)$m->sale_amount : 0;
                 }), 2);
 
@@ -198,13 +202,13 @@ class KingoBingoController extends Controller
 
                 // Forecast for the month, split the same way.
                 $forecastOwn = round($pipelines->reject(fn($p) => in_array($p->id, $serviceRowIds))
-                    ->sum(function ($p) use ($mk) {
-                        $m = $p->months->firstWhere('month_year', $mk);
+                    ->sum(function ($p) use ($mk, $monthOf) {
+                        $m = $monthOf($p, $mk);
                         return $m ? (float) $m->forecast_amount : 0;
                     }), 2);
                 $forecastService = round($pipelines->filter(fn($p) => in_array($p->id, $serviceRowIds))
-                    ->sum(function ($p) use ($mk) {
-                        $m = $p->months->firstWhere('month_year', $mk);
+                    ->sum(function ($p) use ($mk, $monthOf) {
+                        $m = $monthOf($p, $mk);
                         return $m ? (float) $m->forecast_amount : 0;
                     }), 2);
 
@@ -224,9 +228,9 @@ class KingoBingoController extends Controller
                     'product_ideas'     => $monthVisits->where('product_idea', true)->count(),
                     'total_visits'      => $monthVisits->count(),
                     // Customer/Order ratio from pipeline
-                    'total_customers'   => $pipelines->count(),
-                    'total_orders'      => $pipelines->filter(function ($p) use ($mk) {
-                        $m = $p->months->firstWhere('month_year', $mk);
+                    'total_customers'   => $pipelines->filter(fn ($p) => $p->creditsMonth((int) $spId, $mk))->count(),
+                    'total_orders'      => $pipelines->filter(function ($p) use ($mk, $monthOf) {
+                        $m = $monthOf($p, $mk);
                         return $m && (float)$m->sale_amount > 0;
                     })->count(),
                 ];
@@ -428,7 +432,8 @@ class KingoBingoController extends Controller
                 $q->whereIn('salesperson_id', $spIds)
                   ->orWhereIn('ccare_id', $spIds)
                   ->orWhereIn('new_biz_id', $spIds)
-                  ->orWhereIn('new_biz_2_id', $spIds);
+                  ->orWhereIn('new_biz_2_id', $spIds)
+                  ->orWhereIn('former_new_biz_id', $spIds);
                 if ($repsByPipeline !== []) {
                     $q->orWhereIn('id', array_keys($repsByPipeline));
                 }
@@ -447,7 +452,7 @@ class KingoBingoController extends Controller
             // Service Fcst; every other tagging goes to their own. A customer
             // counts once per person, never in both.
             $tagged = [];
-            foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id] as $uid) {
+            foreach ([$p->salesperson_id, $p->ccare_id, $p->new_biz_id, $p->new_biz_2_id, $p->former_new_biz_id] as $uid) {
                 if ($uid && isset($spIdSet[$uid])) {
                     $tagged[$uid] = $tagged[$uid] ?? false;
                 }
@@ -470,7 +475,8 @@ class KingoBingoController extends Controller
                 $sa = (float) $m->sale_amount;
 
                 foreach ($tagged as $uid => $isService) {
-                    if (!isset($liveByCsp[$uid][$mk])) {
+                    // A customer that moved New Biz -> CCare: each side keeps its own months.
+                    if (!isset($liveByCsp[$uid][$mk]) || !$p->creditsMonth((int) $uid, $mk)) {
                         continue;
                     }
                     $liveByCsp[$uid][$mk][$isService ? 'forecast_service' : 'forecast'] += $fc;

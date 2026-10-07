@@ -1212,6 +1212,12 @@ Route::middleware([
             Route::get('/ninety-day-goals/round/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'roundDetail'])->name('ninety-day-goals.round');
             Route::get('/ninety-day-goals/program/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDetail'])->name('ninety-day-goals.program');
             Route::post('/ninety-day-goals/program/{id}/remind', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programSendReminder'])->name('ninety-day-goals.program.remind');
+            Route::put('/ninety-day-goals/program/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programUpdate'])->name('ninety-day-goals.program.update');
+            Route::delete('/ninety-day-goals/program/{id}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programDestroy'])->name('ninety-day-goals.program.destroy');
+            Route::post('/ninety-day-goals/program/{id}/participants', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programAddParticipants'])->name('ninety-day-goals.program.participants.add');
+            Route::delete('/ninety-day-goals/program/{id}/participants/{userId}', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programRemoveParticipant'])->name('ninety-day-goals.program.participants.remove');
+            Route::post('/ninety-day-goals/program/{id}/window', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programOpenWindow'])->name('ninety-day-goals.program.window');
+            Route::get('/ninety-day-goals/programs', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programs'])->name('ninety-day-goals.programs.index');
             Route::get('/ninety-day-goals/programs/create', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programCreate'])->name('ninety-day-goals.programs.create');
             Route::post('/ninety-day-goals/programs', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'programStore'])->name('ninety-day-goals.programs.store');
             Route::get('/ninety-day-goals/pipeline-customers', [\App\Http\Controllers\tenant\NinetyDayGoalController::class, 'pipelineCustomers'])->name('ninety-day-goals.pipeline-customers');

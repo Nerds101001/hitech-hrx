@@ -12,12 +12,16 @@
 <div class="adc-card mb-4">
   <div class="adc-card-head">
     <div><h6 class="adc-card-title">Latest Announcements</h6></div>
-    @if(auth()->user()->hasRole(['admin','hr']))
-      <a href="{{ url('/employee-lifecycle/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>
-    @endif
+    <div class="d-flex align-items-center gap-3">
+      {{-- Publishing lives in the Announcements module (same page as the sidebar). --}}
+      @if(auth()->user()->hasRole(['admin','hr']))
+        <a href="{{ url('/announcements') }}" class="adc-link"><i class="bx bx-plus"></i> Publish</a>
+      @endif
+      <a href="{{ url('/announcements/feed') }}" class="adc-link">View all</a>
+    </div>
   </div>
   @if(collect($recentNotices ?? [])->isEmpty())
-    <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
+    <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No current announcements.</span></div>
   @else
     <ul class="adc-feed">
       @foreach(collect($recentNotices)->take(5) as $n)

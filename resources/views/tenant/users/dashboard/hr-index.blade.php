@@ -186,7 +186,7 @@
         </div>
         <div class="col-xl-5">
           <div class="adc-card h-100">
-            <div class="adc-card-head"><div><h6 class="adc-card-title">Announcements</h6></div><a href="{{ url('/noticeboard') }}" class="adc-link">All</a></div>
+            <div class="adc-card-head"><div><h6 class="adc-card-title">Announcements</h6></div><a href="{{ url('/announcements') }}" class="adc-link">All</a></div>
             @if(collect($announcements ?? [])->isEmpty())
               <div class="adc-empty adc-empty-sm"><i class="bx bx-megaphone"></i><span>No announcements.</span></div>
             @else
@@ -320,7 +320,7 @@
           <a href="{{ url('/leaveRequests') }}" class="adc-qa-btn"><i class="bx bx-check-shield"></i><span>Approvals</span></a>
           <a href="{{ url('/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Attendance</span></a>
           <a href="{{ url('/payroll') }}" class="adc-qa-btn"><i class="bx bx-money"></i><span>Payroll</span></a>
-          <a href="{{ url('/noticeboard') }}" class="adc-qa-btn"><i class="bx bx-news"></i><span>Publish News</span></a>
+          <a href="{{ url('/announcements') }}" class="adc-qa-btn"><i class="bx bx-news"></i><span>Publish News</span></a>
           <a href="{{ url('/hr-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
         </div>
       </div>

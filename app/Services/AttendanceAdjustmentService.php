@@ -54,7 +54,7 @@ class AttendanceAdjustmentService
                 $isWorked = true;
             } elseif ($att->check_out_time) {
                 $checkOut = Carbon::parse($att->check_out_time);
-                $mins = $checkIn->diffInMinutes($checkOut);
+                $mins = \App\Services\AttendanceDayStatus::workedMinutes($checkIn, $checkOut);
                 if ($mins >= 240) { // 4 hours
                     $isWorked = true;
                 }

@@ -24,6 +24,8 @@
   $pctText = fn ($v) => $v === null ? '–' : rtrim(rtrim(number_format($v, 1), '0'), '.') . '%';
   $pctColor = fn ($v) => $v === null ? '#cbd5e1' : ($v >= 66 ? '#007a7a' : ($v >= 33 ? '#f5a623' : '#ef4444'));
   $name = fn ($u) => trim(optional($u)->first_name . ' ' . optional($u)->last_name);
+  $min = (int) config('ninety_day.min_customers', 10);
+  $amber = (int) config('ninety_day.customers_amber_from', 7);
   $isActive = $today->between($program->starts_on, $program->ends_on);
   $target = (float) $cards['target'];
   $achieved = (float) $cards['achieved'];
@@ -31,8 +33,8 @@
   $statusColorMap = collect($G::STATUS_COLORS)->map(fn ($clr) => $clr[0]);
   $statusChartData = $statusCounts;
 
-  // Server-side pagination for the customer table — 10 per page, same as the reference.
-  $perPage = 10;
+  // Server-side pagination for the customer table: 25 per page unless "Show" picks more.
+  $perPage = \App\Services\NinetyDayGoalService::perPage(request('per_page'), 25, $rows->count());
   $page = max(1, request()->integer('page', 1));
   $paged = new \Illuminate\Pagination\LengthAwarePaginator(
       $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
@@ -43,14 +45,19 @@
 
   <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> Program Details</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="text-muted">Programs</a> <i class="bx bx-chevron-right"></i> {{ $program->name }}</nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">
         {{ $program->name }}
         <span class="badge rounded-pill fw-bold" style="font-size:.62rem;background:{{ $isActive ? '#d7f3ee' : '#e2e8f0' }};color:{{ $isActive ? '#0b5b48' : '#475569' }}">{{ $isActive ? 'Active' : ($today->lt($program->starts_on) ? 'Upcoming' : 'Ended') }}</span>
       </h3>
       <p class="text-muted mb-0 small">{{ $program->starts_on->format('d M Y') }} – {{ $program->ends_on->format('d M Y') }} ({{ $program->starts_on->diffInDays($program->ends_on) }} days) · Real-time progress for every participant in this program.</p>
     </div>
-    <a href="{{ route('performance.ninety-day-goals.program-dashboard') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> Back to Dashboard</a>
+    <div class="d-flex gap-2">
+      @if($canManage ?? false)
+        <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgManageModal"><i class="bx bx-cog"></i> Manage program</button>
+      @endif
+      <a href="{{ route('performance.ninety-day-goals.programs.index') }}" class="btn btn-hitech-cancel rounded-pill px-4 d-flex align-items-center gap-2"><i class="bx bx-arrow-back"></i> All Programs</a>
+    </div>
   </div>
 
   <div class="px-4">
@@ -215,16 +222,53 @@
   {{-- ═══════════════════ Participants ═══════════════════ --}}
   <div class="ndg-pr-section d-none" data-section="participants">
     <div class="hitech-card mb-6">
-      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Participants</div></div>
+      <div class="card-body p-4 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="fw-bold text-dark">Participants</div>
+        {{-- Customer-count light: green at the minimum, amber close, red behind. --}}
+        <div class="d-flex flex-wrap gap-3 small text-muted">
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#16a34a"></span>{{ $min }}+ on target</span>
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#d97706"></span>{{ $amber }}–{{ $min - 1 }} almost there</span>
+          <span class="d-inline-flex align-items-center gap-1"><span class="ndg-dot" style="background:#dc2626"></span>under {{ $amber }} behind</span>
+        </div>
+      </div>
       <div class="card-body p-0 table-responsive">
         <table class="table align-middle mb-0">
-          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-end">Customers</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
+          <thead><tr><th class="ps-4">#</th><th>Salesperson</th><th class="text-center">Customers</th><th class="text-center" style="min-width:230px">Current Status</th><th class="text-end">Target ₹L</th><th class="text-end">Achieved ₹L</th><th style="min-width:160px">Achievement</th><th class="text-end pe-4">Orders</th></tr></thead>
           <tbody>
           @foreach($salespeople as $i => $u)
+            @php
+              $meta = ($participantMeta ?? collect())[$u['id']] ?? null;
+              $rag = $meta['rag'] ?? $G::customerRag((int) $u['goals']);
+            @endphp
             <tr>
               <td class="ps-4 text-muted">{{ $i + 1 }}</td>
               <td><a href="{{ route('performance.ninety-day-goals.person', $u['id']) }}" class="fw-semibold text-dark">{{ $u['name'] }}</a><div class="small text-muted">{{ $u['department'] }}</div></td>
-              <td class="text-end">{{ $u['goals'] }}</td>
+              <td class="text-center">
+                <span class="ndg-rag" style="background:{{ $rag['bg'] }};color:{{ $rag['fg'] }}" title="{{ $rag['label'] }} — {{ $u['goals'] }} of {{ $min }}">
+                  <span class="ndg-dot" style="background:{{ $rag['dot'] }}"></span>{{ $u['goals'] }}/{{ $min }}
+                </span>
+              </td>
+              @php
+                $st = ($participantStatus ?? [])[$u['id']] ?? ['label' => '—', 'tone' => 'muted'];
+                $tone = [
+                  'green' => ['#dcfce7', '#166534', '#16a34a'],
+                  'amber' => ['#fef3c7', '#92400e', '#d97706'],
+                  'red'   => ['#fee2e2', '#991b1b', '#dc2626'],
+                  'muted' => ['#f1f5f9', '#475569', '#94a3b8'],
+                ][$st['tone']] ?? ['#f1f5f9', '#475569', '#94a3b8'];
+              @endphp
+              <td class="text-center small">
+                <span class="ndg-rag" style="background:{{ $tone[0] }};color:{{ $tone[1] }}">
+                  <span class="ndg-dot" style="background:{{ $tone[2] }}"></span>{{ $st['label'] }}
+                </span>
+                @if($meta && $meta['reminder_sent_at'])
+                  <div class="text-muted" style="font-size:.62rem"><i class="bx bx-envelope"></i> reminder sent {{ \Illuminate\Support\Carbon::parse($meta['reminder_sent_at'])->format('d M, h:i A') }}</div>
+                @elseif($meta && !$meta['meets_min'] && $meta['open'])
+                  <div class="text-muted" style="font-size:.62rem">window till {{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                @elseif($meta && !$meta['meets_min'] && !$meta['open'])
+                  <div class="text-muted" style="font-size:.62rem">closed {{ $meta['closes_at']->format('d M, h:i A') }}</div>
+                @endif
+              </td>
               <td class="text-end">{{ $fmtL($u['target']) }}</td>
               <td class="text-end">{{ $fmtL($u['achieved']) }}</td>
               <td><div class="d-flex align-items-center gap-2"><div class="ndg-track flex-grow-1" style="height:8px"><div class="ndg-fill" style="width:{{ min(100, (float) $u['pct']) }}%;background:{{ $pctColor($u['pct']) }}"></div></div><b class="small" style="min-width:44px;text-align:right">{{ $pctText($u['pct']) }}</b></div></td>
@@ -267,6 +311,29 @@
 
   {{-- ═══════════════════ Orders & Results ═══════════════════ --}}
   <div class="ndg-pr-section d-none" data-section="orders">
+    {{-- Marked as an order by the salesperson, but the Sales Report has no sale for the customer in
+         this program's months yet. These do not count as converted until the sale is entered there. --}}
+    @php $awaiting = $rows->filter(fn ($r) => in_array($r->status, $G::ORDER_STATUSES, true) && $r->achieved <= 0)->values(); @endphp
+    <div class="hitech-card mb-6" id="ndgAwaitingOrders" @if($awaiting->isNotEmpty()) style="border-color:#f59e0b" @endif>
+      <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Orders awaiting Sales Report ({{ $awaiting->count() }})</div><div class="small text-muted">Marked as an order, but no sale for the customer is on the Sales Report yet - they count once it is</div></div>
+      <div class="card-body p-0 table-responsive">
+        <table class="table align-middle mb-0">
+          <thead><tr><th class="ps-4">Customer</th><th>Salesperson</th><th>Product</th><th class="pe-4">Status</th></tr></thead>
+          <tbody>
+          @forelse($awaiting as $r)
+            <tr>
+              <td class="ps-4 fw-semibold text-dark">{{ $r->goal->client_name }}</td>
+              <td>{{ trim(optional($r->user)->first_name . ' ' . optional($r->user)->last_name) }}</td>
+              <td class="small text-muted">{{ $r->goal->product }}</td>
+              <td class="pe-4"><span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])</td>
+            </tr>
+          @empty
+            <tr><td colspan="4" class="text-center text-muted p-4">None - every order marked so far is on the Sales Report.</td></tr>
+          @endforelse
+          </tbody>
+        </table>
+      </div>
+    </div>
     <div class="hitech-card mb-6">
       <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Qualifying orders</div><div class="small text-muted">Real Sales Report sales only, never typed in</div></div>
       <div class="card-body p-0 table-responsive">
@@ -279,7 +346,7 @@
               <td class="small text-muted">{{ $name($r->user) }}</td>
               <td class="small text-muted">{{ $r->goal->product }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
             </tr>
           @empty
             <tr><td colspan="5" class="text-center text-muted p-4">No qualifying orders yet.</td></tr>
@@ -308,7 +375,7 @@
               <td class="fw-semibold">{{ $r->goal->client_name }}</td>
               <td>{{ $r->brand }}</td>
               <td class="text-end">{{ $fmtL($r->potential) }}</td>
-              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+              <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
               <td class="pe-4">
                 @if($r->overdueWeeks > 0)<span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}</span>@else<span class="ndg-none">up to date</span>@endif
               </td>
@@ -359,6 +426,109 @@
   </div>
 </div>
 
+@if($canManage ?? false)
+{{-- Manage program: change name and dates, add or remove people, reopen the window to add customers, delete (admin only). --}}
+<div class="modal fade" id="ndgManageModal" tabindex="-1" aria-hidden="true"
+     data-url="{{ route('performance.ninety-day-goals.program.update', $program->id) }}" data-name="{{ $program->name }}">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Manage program · {{ $program->name }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+
+        <h6 class="fw-bold text-dark mb-2">Program details</h6>
+        <div class="row g-2 mb-1">
+          <div class="col-md-6"><label class="form-label small mb-1" for="ndgMgName">Name</label><input type="text" id="ndgMgName" class="form-control" maxlength="150" value="{{ $program->name }}"></div>
+          <div class="col-md-3"><label class="form-label small mb-1" for="ndgMgStart">Start</label><input type="date" id="ndgMgStart" class="form-control" value="{{ $program->starts_on->toDateString() }}" {{ ($startLocked ?? false) ? 'disabled' : '' }}></div>
+          <div class="col-md-3"><label class="form-label small mb-1" for="ndgMgEnd">End</label><input type="date" id="ndgMgEnd" class="form-control" value="{{ $program->ends_on->toDateString() }}"></div>
+        </div>
+        <div class="small text-muted mb-2">
+          Weeks run Monday to Monday, so a start date is moved back to its Monday.
+          @if($startLocked ?? false) The start date is locked: weekly statuses have already been submitted against the current weeks. @endif
+        </div>
+        <button type="button" id="ndgMgSaveDetails" class="btn-hitech rounded-pill px-4 py-2 mb-4" style="font-size:.8rem">Save details</button>
+
+        <h6 class="fw-bold text-dark mb-2">Participants ({{ ($manageRounds ?? collect())->count() }})</h6>
+        <div class="table-responsive mb-2" style="max-height:260px">
+          <table class="table table-sm align-middle mb-0" style="font-size:.8rem">
+            <thead><tr><th>Name</th><th class="text-end">Customers</th><th>Adding customers</th><th></th></tr></thead>
+            <tbody>
+              @forelse(($manageRounds ?? collect()) as $r)
+                <tr>
+                  <td>{{ $name($r->user) }} <span class="text-muted">{{ $r->user->code }}</span></td>
+                  <td class="text-end">{{ $r->customers }}</td>
+                  <td>
+                    @if($r->window['open'])
+                      <span class="text-success">open until {{ $r->window['closes_at']->format('d M, h:i A') }}</span>
+                    @else
+                      <span class="text-muted">closed {{ $r->window['closes_at']->format('d M, h:i A') }}</span>
+                    @endif
+                  </td>
+                  <td class="text-end"><button type="button" class="btn btn-sm btn-hitech-cancel py-0 ndg-mg-remove" data-user="{{ $r->user->id }}" data-name="{{ $name($r->user) }}" data-customers="{{ $r->customers }}">Remove</button></td>
+                </tr>
+              @empty
+                <tr><td colspan="4" class="text-muted">Nobody is in this program.</td></tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
+        <label class="form-label small mb-1" for="ndgMgAddSelect">Add people <span class="text-muted">(hold Ctrl to pick several)</span></label>
+        <div class="d-flex gap-2 align-items-start mb-4">
+          <select id="ndgMgAddSelect" class="form-select" multiple size="5" style="font-size:.8rem">
+            @foreach(($addablePeople ?? collect()) as $p)<option value="{{ $p->id }}">{{ $p->first_name }} {{ $p->last_name }} ({{ $p->code }})</option>@endforeach
+          </select>
+          <button type="button" id="ndgMgAdd" class="btn-hitech rounded-pill px-4 py-2 text-nowrap" style="font-size:.8rem">Add</button>
+        </div>
+
+        @php
+          // Default the picker to the window that is ACTUALLY open now (the latest current
+          // close across the program's rounds) so the admin sees the real end and does not
+          // accidentally shorten it. Only fall back to now+48h when no window is open.
+          $openWindows = ($manageRounds ?? collect())->filter(fn ($r) => data_get($r->window, 'open'))
+            ->map(fn ($r) => data_get($r->window, 'closes_at'))->filter();
+          $windowDefault = $openWindows->isNotEmpty()
+            ? $openWindows->sortByDesc(fn ($c) => $c->getTimestamp())->first()
+            : now()->addHours(48);
+        @endphp
+        <h6 class="fw-bold text-dark mb-2">Window to add customers</h6>
+        <div class="small text-muted mb-2">Normally open for 48 hours after someone is enrolled. Reopen it until a time you choose.@if($openWindows->isNotEmpty()) <span class="text-dark">Currently open until {{ $windowDefault->format('d M Y, h:i A') }}.</span>@endif</div>
+        <div class="row g-2 align-items-end mb-2">
+          <div class="col-md-5"><label class="form-label small mb-1" for="ndgMgUntil">Open until</label><input type="datetime-local" id="ndgMgUntil" class="form-control" value="{{ $windowDefault->format('Y-m-d\TH:i') }}"></div>
+          <div class="col-md-7 small">
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoAll" value="all" checked><label class="form-check-label" for="ndgMgWhoAll">Everyone in the program</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="ndgMgWho" id="ndgMgWhoSome" value="some"><label class="form-check-label" for="ndgMgWhoSome">Chosen people</label></div>
+          </div>
+        </div>
+        <select id="ndgMgWindowSelect" class="form-select d-none mb-2" multiple size="5" style="font-size:.8rem">
+          @foreach(($manageRounds ?? collect()) as $r)<option value="{{ $r->user->id }}">{{ $name($r->user) }}</option>@endforeach
+        </select>
+        <button type="button" id="ndgMgOpenWindow" class="btn-hitech rounded-pill px-4 py-2 mb-4" style="font-size:.8rem">Open window</button>
+
+        @if($canDeleteProgram ?? false)
+          <div class="border border-danger rounded-3 p-3">
+            <h6 class="fw-bold text-danger mb-1">Delete program</h6>
+            <div class="small text-muted mb-2">
+              Removes the program with its {{ $footprint['participants'] ?? 0 }} participant(s), {{ $footprint['customers'] ?? 0 }} customer(s),
+              {{ $footprint['statuses'] ?? 0 }} submitted weekly status(es), every task it created and {{ $footprint['notifications'] ?? 0 }} notification(s).
+              Type the program name to confirm.
+            </div>
+            <div class="d-flex gap-2">
+              <input type="text" id="ndgMgConfirmName" class="form-control form-control-sm" placeholder="{{ $program->name }}" autocomplete="off">
+              <button type="button" id="ndgMgDelete" class="btn btn-sm btn-danger rounded-pill px-3 text-nowrap">Delete program</button>
+            </div>
+          </div>
+        @endif
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-hitech-cancel rounded-pill px-4" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+@endif
+
 <style>
   .ndg-subtab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 10px; border: 1px solid #d5e3e1; background: #fff; color: #334155; font-weight: 700; font-size: .8rem; cursor: pointer; }
   .ndg-subtab:hover { border-color: #007a7a; color: #007a7a; }
@@ -374,6 +544,8 @@
   .ndg-week-pill.is-current:not(.on) { border-color: #f5a623; box-shadow: inset 0 0 0 1px #f5a623; }
   .ndg-chip { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: .72rem; font-weight: 700; }
   .ndg-none { color: #cbd5e1; }
+  .ndg-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .ndg-rag { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
   .ndg-overdue { color: #b42318; font-weight: 700; font-size: .82rem; }
   .ndg-bar { margin-bottom: 12px; }
   .ndg-bar-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; font-size: .84rem; }
@@ -429,6 +601,80 @@
           } else if (typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg); } else { alert(msg); }
         })
         .catch(function () { remindBtn.disabled = false; alert('Request failed. Try again.'); });
+    });
+  }
+})();
+
+// Manage program: details, participants, customer window, delete.
+(function () {
+  var modal = document.getElementById('ndgManageModal');
+  if (!modal) { return; }
+  var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+  var tell = function (ok, msg) {
+    if (ok && typeof window.showSuccessSwal === 'function') { window.showSuccessSwal(msg); }
+    else if (!ok && typeof window.showErrorSwal === 'function') { window.showErrorSwal(msg); }
+    else { alert(msg); }
+  };
+  var send = function (method, url, body, btn, reloadOnOk) {
+    if (btn) { btn.disabled = true; }
+    return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf }, body: body ? JSON.stringify(body) : null })
+      .then(function (r) { return r.json().catch(function () { return { success: false, message: 'Unexpected response (' + r.status + ').' }; }); })
+      .then(function (j) {
+        if (btn) { btn.disabled = false; }
+        var msg = j.message || (j.errors ? Object.values(j.errors).flat().join(' ') : 'Could not save.');
+        tell(!!j.success, msg);
+        if (j.success && j.redirect) { setTimeout(function () { window.location.href = j.redirect; }, 1200); }
+        else if (j.success && reloadOnOk) { setTimeout(function () { window.location.reload(); }, 1200); }
+        return j;
+      })
+      .catch(function () { if (btn) { btn.disabled = false; } tell(false, 'Request failed. Try again.'); });
+  };
+  var url = modal.dataset.url;
+
+  // "Edit" on the Programs list lands here with ?manage=1: open the panel straight away.
+  if (new URLSearchParams(window.location.search).get('manage') === '1') {
+    window.addEventListener('load', function () {
+      if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(modal).show(); }
+    });
+  }
+
+  document.getElementById('ndgMgSaveDetails').addEventListener('click', function () {
+    send('PUT', url, { name: document.getElementById('ndgMgName').value, starts_on: document.getElementById('ndgMgStart').value, ends_on: document.getElementById('ndgMgEnd').value }, this, true);
+  });
+
+  document.getElementById('ndgMgAdd').addEventListener('click', function () {
+    var ids = Array.prototype.map.call(document.getElementById('ndgMgAddSelect').selectedOptions, function (o) { return parseInt(o.value, 10); });
+    if (!ids.length) { tell(false, 'Choose at least one person to add.'); return; }
+    send('POST', url + '/participants', { user_ids: ids }, this, true);
+  });
+
+  modal.querySelectorAll('.ndg-mg-remove').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var who = b.dataset.name, n = parseInt(b.dataset.customers, 10);
+      if (!confirm('Remove ' + who + ' from this program?' + (n ? '\n\nTheir ' + n + ' customer(s) and weekly statuses in this program are removed too.' : '') + '\n\nThe tasks and notifications this program gave them are removed.')) { return; }
+      send('DELETE', url + '/participants/' + b.dataset.user, null, b, true);
+    });
+  });
+
+  document.getElementById('ndgMgOpenWindow').addEventListener('click', function () {
+    var until = document.getElementById('ndgMgUntil').value;
+    if (!until) { tell(false, 'Pick until when adding customers should stay open.'); return; }
+    var who = document.querySelector('input[name="ndgMgWho"]:checked').value;
+    var ids = who === 'some' ? Array.prototype.map.call(document.getElementById('ndgMgWindowSelect').selectedOptions, function (o) { return parseInt(o.value, 10); }) : null;
+    if (who === 'some' && !ids.length) { tell(false, 'Choose who the window is for.'); return; }
+    send('POST', url + '/window', { until: until, user_ids: ids }, this, true);
+  });
+  document.querySelectorAll('input[name="ndgMgWho"]').forEach(function (r) {
+    r.addEventListener('change', function () { document.getElementById('ndgMgWindowSelect').classList.toggle('d-none', r.value !== 'some' || !r.checked); });
+  });
+
+  var del = document.getElementById('ndgMgDelete');
+  if (del) {
+    del.addEventListener('click', function () {
+      var typed = document.getElementById('ndgMgConfirmName').value;
+      if (typed.trim() !== modal.dataset.name.trim()) { tell(false, 'Type the program name exactly to confirm.'); return; }
+      if (!confirm('Delete "' + modal.dataset.name + '" and everything in it? This cannot be undone from the screen.')) { return; }
+      send('DELETE', url, { confirm_name: typed }, del, false);
     });
   }
 })();

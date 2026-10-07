@@ -17,6 +17,8 @@ class NinetyDayRound extends Model implements AuditableContract
         'starts_on'  => 'date',
         'ends_on'    => 'date',
         'closed_at'  => 'datetime',
+        'customer_window_until' => 'datetime',
+        'completion_reminder_sent_at' => 'datetime',
     ];
 
     public function user()

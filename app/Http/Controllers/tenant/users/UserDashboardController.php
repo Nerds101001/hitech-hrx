@@ -549,21 +549,21 @@ class UserDashboardController extends Controller
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $thisWeekWorkingHours = Attendance::whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $todayHours = Attendance::whereDate('created_at', now())
             ->where('check_out_time', '!=', null)
             ->get()
             ->sum(function ($attendance) {
-                return $attendance->check_in_time->diffInMinutes($attendance->check_out_time);
+                return \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time);
         });
 
         $onLeaveUsersCount = LeaveRequest::whereDate('from_date', now())
@@ -1091,7 +1091,7 @@ class UserDashboardController extends Controller
             }
 
             if ($attendanceForResolve && $attendance->check_in_time && $attendance->check_out_time) {
-                $totalHours += $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
+                $totalHours += \App\Services\AttendanceDayStatus::workedMinutes($attendance->check_in_time, $attendance->check_out_time) / 60;
                 $workCount++;
             }
 
@@ -1627,6 +1627,11 @@ class UserDashboardController extends Controller
                 $i === 0 ? $q->where($c, $user->id) : $q->orWhere($c, $user->id);
             }
         };
+        // Sales figures also count a customer that moved New Biz -> CCare for
+        // its New Biz person, for the months before the move only.
+        $soldByMe = function ($q) use ($heldByMe, $user) {
+            $q->where($heldByMe)->orWhere('former_new_biz_id', $user->id);
+        };
 
         $todayVisits = collect();
         try {
@@ -1663,9 +1668,10 @@ class UserDashboardController extends Controller
             // is_locked true is the Sales Report, false is the open pipeline.
             // Without this filter the card counted forecast as money earned.
             $pipelines = \App\Models\SalesPipeline::with(['months' => fn($q) => $q->where('month_year', $monthKey)])
-                ->where($heldByMe)
+                ->where($soldByMe)
                 ->where('is_locked', true)
-                ->get();
+                ->get()
+                ->filter(fn ($p) => $p->creditsMonth((int) $user->id, $monthKey));
 
             foreach ($pipelines as $p) {
                 $achieved += (float) ($p->months->first()->sale_amount ?? 0);
@@ -1703,14 +1709,16 @@ class UserDashboardController extends Controller
             // empty. Give them their own six months of sales instead — same
             // figures, just measured against their own history rather than a
             // target nobody sets for them.
-            $ids = \App\Models\SalesPipeline::where($heldByMe)->where('is_locked', true)->pluck('id');
+            $ids = \App\Models\SalesPipeline::where($soldByMe)->where('is_locked', true)->pluck('id');
             if ($ids->isNotEmpty()) {
                 $keys = [];
                 for ($i = 5; $i >= 0; $i--) {
                     $keys[] = Carbon::today()->subMonths($i)->format('Y-m');
                 }
-                $sums = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
-                    ->whereIn('sales_pipeline_id', $ids)->whereIn('month_year', $keys)
+                $sumsQuery = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                    ->whereIn('sales_pipeline_id', $ids)->whereIn('month_year', $keys);
+                \App\Models\SalesPipeline::whereMonthCredited($sumsQuery, (int) $user->id);
+                $sums = $sumsQuery
                     ->groupBy('month_year')
                     ->selectRaw('month_year, SUM(sale_amount) total')
                     ->pluck('total', 'month_year');
@@ -1720,7 +1728,8 @@ class UserDashboardController extends Controller
                         'value' => round((float) ($sums[$k] ?? 0), 2),
                     ];
                 }
-                $customerCount = $ids->count();
+                // Customers held now - not ones that have moved on to CCare.
+                $customerCount = \App\Models\SalesPipeline::where($heldByMe)->where('is_locked', true)->count();
 
                 // Financial-year figures, using the same definitions as the
                 // manager dashboard so an employee's card and their manager's
@@ -1732,9 +1741,11 @@ class UserDashboardController extends Controller
                 $end = now()->copy()->endOfMonth();
                 while ($cur <= $end) { $fyMonths[] = $cur->format('Y-m'); $cur->addMonth(); }
 
-                $fy = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                $fyQuery = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
                     ->whereIn('sales_pipeline_id', $ids)
-                    ->whereIn('month_year', $fyMonths)
+                    ->whereIn('month_year', $fyMonths);
+                \App\Models\SalesPipeline::whereMonthCredited($fyQuery, (int) $user->id);
+                $fy = $fyQuery
                     ->selectRaw('SUM(sale_amount) sold, SUM(forecast_amount) fcst, SUM(pending_amount) pend')
                     ->first();
                 $fySold     = (float) ($fy->sold ?? 0);
@@ -1745,11 +1756,12 @@ class UserDashboardController extends Controller
                 $pctPending  = $book > 0 ? round($fySold / $book * 100, 1) : null;
 
                 // Customers still carrying a pending amount this FY.
-                $openOrders = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
+                $openQuery = \Illuminate\Support\Facades\DB::table('sales_pipeline_months')
                     ->whereIn('sales_pipeline_id', $ids)
                     ->whereIn('month_year', $fyMonths)
-                    ->where('pending_amount', '>', 0)
-                    ->distinct()->count('sales_pipeline_id');
+                    ->where('pending_amount', '>', 0);
+                \App\Models\SalesPipeline::whereMonthCredited($openQuery, (int) $user->id);
+                $openOrders = $openQuery->distinct()->count('sales_pipeline_id');
                 $prev = (float) ($sums[Carbon::today()->subMonth()->format('Y-m')] ?? 0);
                 $lastMonth = $prev;
                 $momPct = $prev > 0 ? round((($achieved - $prev) / $prev) * 100, 1) : null;

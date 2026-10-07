@@ -59,13 +59,38 @@ class TaskManagementController extends Controller
         // needs attention next — with undated tasks pushed to the end rather
         // than sorting first as NULL otherwise would, and newest-assigned as
         // the final tiebreaker. Same ordering My Tasks uses.
-        $query = Task::with(['user.department', 'assignedBy', 'ccUsers', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+        $query = Task::with(['user.department', 'assignedBy', 'ccUsers', 'taskUpdates' => fn ($q) => $q->with('createdBy:id,first_name,last_name')->latest()->limit(1)])
             ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
             ->orderByRaw('due_date IS NULL')
             ->orderBy('due_date')
             ->orderByDesc('created_at');
 
+        // Column sorting - the table headers link here. There was none: the
+        // order was fixed to priority, then due date.
+        $sort = $request->input('sort');
+        $dir = $request->input('dir') === 'desc' ? 'desc' : 'asc';
+        $nameOf = fn (string $col) => "(SELECT CONCAT(u.first_name, ' ', COALESCE(u.last_name, '')) FROM users u WHERE u.id = tasks.$col)";
+        $sortSql = [
+            'title'       => 'tasks.title',
+            'assignee'    => $nameOf('user_id'),
+            'assigned_by' => $nameOf('assigned_by_id'),
+            'priority'    => "FIELD(tasks.priority, 'low', 'medium', 'high')",
+            'status'      => "FIELD(tasks.status, 'objection', 'new', 'in_progress', 'completed', 'resolved', 'closed', 'cancelled')",
+            'created'     => 'tasks.created_at',
+        ][$sort] ?? null;
+        if ($sort === 'due') {
+            $query->reorder()->orderByRaw('tasks.due_date IS NULL')->orderBy('tasks.due_date', $dir)->orderByDesc('tasks.id');
+        } elseif ($sortSql) {
+            $query->reorder()->orderByRaw("$sortSql $dir")->orderByDesc('tasks.id');
+        }
+
         $query = $this->scopeVisible($query, $user);
+
+        // One person's tasks - what Pendency's "View tasks" opens (it used to
+        // search by first name, which also matched everyone sharing it).
+        if ($request->filled('user_id')) {
+            $query->where('tasks.user_id', (int) $request->user_id);
+        }
 
         // "Assigned by me" answers the exact question asked for: which
         // tasks did I hand to someone else, and what's their status - as
@@ -85,11 +110,11 @@ class TaskManagementController extends Controller
         if ($request->filled('status')) {
             match ($request->status) {
                 'overdue'    => $query->overdue(),
-                'due_today'  => $query->whereDate('due_date', now()->toDateString())
-                    ->whereNotIn('status', Task::CLOSED_STATUSES),
-                'completed'  => $query->whereIn('status', Task::CLOSED_STATUSES),
-                default      => $query->where('status', $request->status)
-                    ->whereNotIn('status', Task::CLOSED_STATUSES),
+                'due_today'  => $query->dueToday(),
+                'open'       => $query->whereNotIn('tasks.status', Task::CLOSED_STATUSES),
+                'completed'  => $query->whereIn('tasks.status', Task::CLOSED_STATUSES),
+                default      => $query->where('tasks.status', $request->status)
+                    ->whereNotIn('tasks.status', Task::CLOSED_STATUSES),
             };
         }
 
@@ -178,10 +203,9 @@ class TaskManagementController extends Controller
         $stats = [
             'total'      => (clone $query)->count(),
             'overdue'    => (clone $query)->overdue()->count(),
-            'due_today'  => (clone $query)->whereDate('due_date', now()->toDateString())
-                ->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
-            'completed'  => (clone $query)->whereIn('status', Task::CLOSED_STATUSES)->count(),
-            'pending'    => (clone $query)->whereNotIn('status', Task::CLOSED_STATUSES)->count(),
+            'due_today'  => (clone $query)->dueToday()->count(),
+            'completed'  => (clone $query)->whereIn('tasks.status', Task::CLOSED_STATUSES)->count(),
+            'pending'    => (clone $query)->whereNotIn('tasks.status', Task::CLOSED_STATUSES)->count(),
         ];
 
         $scheduleQuery = TaskSchedule::where('is_active', true)->with('assignedBy');
@@ -203,7 +227,10 @@ class TaskManagementController extends Controller
         // Resolved once here rather than per-row in the view (N+1) — the id
         // list is small (schedule targets), so one query per page is fine.
         $allTargetIds = $schedules->flatMap(fn ($s) => $s->target_user_ids ?? [])->unique();
-        $targetNames = User::whereIn('id', $allTargetIds)->get(['id', 'first_name', 'last_name'])->keyBy('id');
+        $targetNames = User::whereIn('id', $allTargetIds)->get(['id', 'first_name', 'last_name', 'status'])->keyBy('id');
+        // Who on each schedule is still here - a schedule whose people have
+        // all left creates nothing (TaskScheduleService::fireIfDue).
+        $activeTargetIds = $targetNames->filter(fn ($u) => $u->status === UserAccountStatus::ACTIVE)->keys()->flip();
 
         // "Was this actually firing?" was the whole reason the recurring
         // table needed redoing — last_run_on alone doesn't say whether that
@@ -223,7 +250,7 @@ class TaskManagementController extends Controller
 
         $pendency = $this->buildPendency($request, $user);
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'lastFireStats', 'pendency', 'canSeeAll'));
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir'));
     }
 
     /**
@@ -241,7 +268,13 @@ class TaskManagementController extends Controller
         $base = Task::whereNotIn('tasks.status', Task::CLOSED_STATUSES);
         $base = $this->scopeVisible($base, $user);
 
-        $overdueCase = "sum(case when tasks.due_date is not null and tasks.due_date < NOW() then 1 else 0 end) as overdue";
+        // The same overdue rule as the tiles and the list (Task::DEADLINE_SQL),
+        // against the app's clock. It used to be "due before NOW()": overdue
+        // from midnight instead of 6pm, and on the database's clock, which
+        // runs on UTC - five and a half hours behind - so the tab's own total
+        // and its breakdowns could disagree with each other and with the tiles.
+        $overdueCase = 'sum(case when tasks.due_date is not null and ' . Task::DEADLINE_SQL . ' < ? then 1 else 0 end) as overdue';
+        $now = now()->toDateTimeString();
 
         $byDepartment = (clone $base)
             ->join('users', 'users.id', '=', 'tasks.user_id')
@@ -249,9 +282,9 @@ class TaskManagementController extends Controller
             ->select(
                 'departments.id as department_id',
                 DB::raw("COALESCE(departments.name, 'No Department') as department_name"),
-                DB::raw('count(*) as pending'),
-                DB::raw($overdueCase)
+                DB::raw('count(*) as pending')
             )
+            ->selectRaw($overdueCase, [$now])
             ->groupBy('departments.id', 'departments.name')
             ->orderByDesc('pending')
             ->get();
@@ -266,9 +299,9 @@ class TaskManagementController extends Controller
             ->select(
                 'users.id as user_id', 'users.first_name', 'users.last_name',
                 DB::raw("COALESCE(departments.name, 'No Department') as department_name"),
-                DB::raw('count(*) as pending'),
-                DB::raw($overdueCase)
+                DB::raw('count(*) as pending')
             )
+            ->selectRaw($overdueCase, [$now])
             ->groupBy('users.id', 'users.first_name', 'users.last_name', 'departments.name');
 
         if ($request->filled('pendency_department_id')) {
@@ -284,7 +317,7 @@ class TaskManagementController extends Controller
 
         return [
             'totalPending'        => (clone $base)->count(),
-            'totalOverdue'        => (clone $base)->whereNotNull('due_date')->where('due_date', '<', now())->count(),
+            'totalOverdue'        => (clone $base)->overdue()->count(),
             'departmentsAffected' => $byDepartment->count(),
             'peopleAffected'      => $byPerson->count(),
             'byDepartment'        => $byDepartment,
@@ -324,6 +357,12 @@ class TaskManagementController extends Controller
             return response()->json(['success' => false, 'message' => 'Pick at least one employee or department.'], 422);
         }
 
+        // after_or_equal:today only compares days, so a time earlier today
+        // passed and the task was born overdue.
+        if ($message = self::pastDueMessage($validated['due_date'] ?? null)) {
+            return response()->json(['success' => false, 'message' => $message], 422);
+        }
+
         // Resolve the full target list: explicit picks plus every active
         // person in the picked departments, deduplicated.
         $targetIds = collect($validated['employee_ids'] ?? []);
@@ -337,11 +376,10 @@ class TaskManagementController extends Controller
         // No reach restriction - anyone can assign a task to anyone, so
         // nothing gets silently dropped here the way it used to when this
         // page was manager-scoped.
-        $targetIds = $targetIds->unique()->values();
-        $dropped = 0;
+        $targetIds = $targetIds->map(fn ($id) => (int) $id)->unique()->values();
 
         if ($targetIds->isEmpty()) {
-            return response()->json(['success' => false, 'message' => 'None of the selected people are in your team.'], 422);
+            return response()->json(['success' => false, 'message' => 'Nobody active was found in the selected department(s).'], 422);
         }
 
         // Not scoped by TaskAccess like $targetIds: CC is watching, not being
@@ -351,7 +389,7 @@ class TaskManagementController extends Controller
         $ccIds = collect($validated['cc_user_ids'] ?? [])->unique()->diff($targetIds)->values();
 
         if (!empty($validated['interval'])) {
-            return $this->storeSchedule($validated, $targetIds, $ccIds, $dropped, $user);
+            return $this->storeSchedule($validated, $targetIds, $ccIds, $user);
         }
 
         $batchId = (string) Str::uuid();
@@ -418,11 +456,22 @@ class TaskManagementController extends Controller
         });
 
         $message = count($created) . ' task(s) assigned.';
-        if ($dropped > 0) {
-            $message .= " {$dropped} selected person(s) were outside your team and skipped.";
-        }
 
         return response()->json(['success' => true, 'message' => $message, 'batch_id' => $batchId, 'assigned' => count($created)]);
+    }
+
+    /** A due date+time that has already passed (a day-only date of today is fine - it runs to 6pm). */
+    private static function pastDueMessage(?string $due): ?string
+    {
+        if (!$due) {
+            return null;
+        }
+        $at = \Carbon\Carbon::parse($due);
+        $passed = $at->format('H:i:s') === '00:00:00'
+            ? $at->copy()->startOfDay()->lt(today())
+            : $at->lt(now()->subMinutes(5));
+
+        return $passed ? 'That due date and time has already passed - pick a later one.' : null;
     }
 
     /**
@@ -432,8 +481,25 @@ class TaskManagementController extends Controller
      * occurrence right away if the chosen day matches, instead of making the
      * assigner wait for tomorrow's cron run to see anything happen.
      */
-    private function storeSchedule(array $validated, \Illuminate\Support\Collection $targetIds, \Illuminate\Support\Collection $ccIds, int $dropped, $user)
+    private function storeSchedule(array $validated, \Illuminate\Support\Collection $targetIds, \Illuminate\Support\Collection $ccIds, $user)
     {
+        // The same recurring task twice: the same people got it twice a day.
+        // 145 such pairs on prod came from five schedules created twice.
+        $weekday = $validated['interval'] === 'weekly' ? (int) $validated['weekday'] : null;
+        $dayOfMonth = $validated['interval'] === 'monthly' ? (int) $validated['day_of_month'] : null;
+        $twin = TaskSchedule::where('is_active', true)
+            ->where('frequency', $validated['interval'])
+            ->whereRaw('LOWER(TRIM(title)) = ?', [mb_strtolower(trim($validated['title']))])
+            ->get()
+            ->first(fn ($s) => $s->weekday === $weekday && $s->day_of_month === $dayOfMonth
+                && collect($s->target_user_ids ?? [])->map(fn ($id) => (int) $id)->intersect($targetIds)->isNotEmpty());
+        if ($twin) {
+            $overlap = collect($twin->target_user_ids ?? [])->map(fn ($id) => (int) $id)->intersect($targetIds)->count();
+            return response()->json(['success' => false, 'message' => 'This recurring task already exists - "' . $twin->title . '", '
+                . $twin->recurrenceLabel() . ', set by ' . (optional($twin->assignedBy)->getFullName() ?? 'someone')
+                . ', for ' . $overlap . ' of these people. Stop that one first, or change the title.'], 422);
+        }
+
         $schedule = TaskSchedule::create([
             'title'           => $validated['title'],
             'description'     => $validated['description'] ?? null,
@@ -454,9 +520,6 @@ class TaskManagementController extends Controller
         $message = 'Recurring task created — ' . $schedule->recurrenceLabel() . ', ' . $targetIds->count() . ' ' . \Illuminate\Support\Str::plural('person', $targetIds->count()) . '.';
         if ($firstRun->isNotEmpty()) {
             $message .= ' ' . $firstRun->count() . ' assigned today, since today matches.';
-        }
-        if ($dropped > 0) {
-            $message .= " {$dropped} selected person(s) were outside your team and skipped.";
         }
 
         return response()->json(['success' => true, 'message' => $message, 'schedule_id' => $schedule->id]);
@@ -523,7 +586,7 @@ class TaskManagementController extends Controller
     {
         $user = auth()->user();
 
-        $query = Task::with(['user.department', 'assignedBy', 'taskUpdates' => fn ($q) => $q->latest()->limit(1)])
+        $query = Task::with(['user.department', 'assignedBy', 'ccUsers', 'taskUpdates' => fn ($q) => $q->with('createdBy:id,first_name,last_name')->latest()->limit(1)])
             ->where('batch_id', $batchId);
         $query = $this->scopeVisible($query, $user);
 
@@ -608,35 +671,119 @@ class TaskManagementController extends Controller
             'user_id'     => 'nullable|integer|exists:users,id',
             'cc_user_ids'   => 'nullable|array',
             'cc_user_ids.*' => 'integer|exists:users,id',
+            // An edit made on a grouped row used to change only the one
+            // person's copy the row happened to show. Now it can apply to
+            // everyone in the assignment (reassigning stays one person).
+            'apply_to_batch' => 'nullable|boolean',
         ]);
 
-        $updates = [
-            'title'         => $validated['title'],
-            'description'   => $validated['description'] ?? null,
-            'due_date'      => $validated['due_date'] ?? null,
-            'priority'      => $validated['priority'] ?? $task->priority,
-            'updated_by_id' => $user->id,
+        $newDue = !empty($validated['due_date']) ? \Carbon\Carbon::parse($validated['due_date']) : null;
+        $dueChanged = optional($newDue)->format('Y-m-d H:i') !== optional($task->due_date)->format('Y-m-d H:i');
+        if ($dueChanged && ($message = self::pastDueMessage($validated['due_date'] ?? null))) {
+            return response()->json(['success' => false, 'message' => $message], 422);
+        }
+
+        $targets = collect([$task]);
+        if (!empty($validated['apply_to_batch']) && $task->batch_id) {
+            $targets = Task::where('batch_id', $task->batch_id)->get()->filter(fn ($t) => TaskAccess::canManage($user, $t))->values();
+        }
+
+        $reassignTo = (!empty($validated['user_id']) && $targets->count() === 1 && (int) $validated['user_id'] !== (int) $task->user_id)
+            ? User::find((int) $validated['user_id'])
+            : null;
+
+        DB::transaction(function () use ($targets, $validated, $request, $user, $newDue, $reassignTo) {
+            foreach ($targets as $t) {
+                $notes = [];
+                $tDueChanged = optional($newDue)->format('Y-m-d H:i') !== optional($t->due_date)->format('Y-m-d H:i');
+                $oldDue = $t->dueLabel() ?? 'no due date';
+                $updates = [
+                    'title'         => $validated['title'],
+                    'description'   => $validated['description'] ?? null,
+                    'due_date'      => $newDue,
+                    'priority'      => $validated['priority'] ?? $t->priority,
+                    'updated_by_id' => $user->id,
+                ];
+                // A new deadline (or a new person) re-arms the overdue reminder -
+                // it used to stay silenced by the stamp from the old deadline.
+                if ($tDueChanged) {
+                    $updates['delay_notified_at'] = null;
+                }
+                if ($reassignTo) {
+                    $notes[] = 'Reassigned from ' . (optional($t->user)->getFullName() ?? 'nobody') . ' to ' . $reassignTo->getFullName() . '.';
+                    $updates['user_id'] = $reassignTo->id;
+                    $updates['delay_notified_at'] = null;
+                }
+                $t->update($updates);
+                if ($tDueChanged) {
+                    $notes[] = 'Due date changed from ' . $oldDue . ' to ' . ($t->dueLabel() ?? 'no due date') . '.';
+                }
+
+                // Not scoped by TaskAccess, same reasoning as store() - CC is
+                // watching, not being assigned work. Excludes the (possibly just
+                // reassigned) owner - being CC'd on your own task is meaningless.
+                if ($request->has('cc_user_ids')) {
+                    $ccIds = collect($validated['cc_user_ids'] ?? [])->unique()->reject(fn ($id) => (int) $id === (int) $t->user_id);
+                    $t->ccUsers()->sync($ccIds->mapWithKeys(fn ($id) => [$id => ['created_by_id' => $user->id]])->all());
+                }
+
+                // Shown in the task's updates, so the assignee and the CC'd
+                // people can see what changed and who changed it.
+                if ($notes) {
+                    $t->taskUpdates()->create([
+                        'comment'       => implode(' ', $notes),
+                        'update_type'   => 'comment',
+                        'is_admin'      => true,
+                        'created_by_id' => $user->id,
+                        'updated_by_id' => $user->id,
+                    ]);
+                }
+            }
+        });
+
+        // The new person is told, exactly as if it had been assigned to them.
+        if ($reassignTo) {
+            $taskId = $task->id;
+            app()->terminating(function () use ($taskId) {
+                $fresh = Task::with(['user', 'assignedBy'])->find($taskId);
+                try {
+                    $fresh?->user?->notify(new TaskAssigned($fresh));
+                } catch (\Throwable $e) {
+                    Log::warning("Task-reassigned notify failed for task {$taskId}: " . $e->getMessage());
+                }
+            });
+        }
+
+        $message = $targets->count() > 1 ? "Updated for all {$targets->count()} people." : 'Task updated successfully.';
+
+        return response()->json(['success' => true, 'message' => $message]);
+    }
+
+    /** What the View popup shows for one person's task - built here so the list row and an expanded group row agree. */
+    public static function viewPayload(Task $t): array
+    {
+        $timing = $t->completion_timing;
+        $latest = $t->relationLoaded('taskUpdates') ? $t->taskUpdates->first() : null;
+
+        return [
+            'title'              => $t->title,
+            'description'        => $t->description,
+            'priority'           => ucfirst($t->priority),
+            'due'                => $t->dueLabel('d/m/Y') ?? '—',
+            'expected'           => optional($t->completion_expected_date)->format('d/m/Y'),
+            'assignee'           => optional($t->user)->getFullName() ?? '—',
+            'assignedBy'         => optional($t->assignedBy)->getFullName() ?? '—',
+            'status'             => $t->status === 'objection' ? 'Objection raised' : (Task::PROGRESS_STATUSES[$t->status] ?? ucfirst(str_replace('_', ' ', $t->status))),
+            'objection'          => $t->objection_notes,
+            'attachment'         => $t->attachment_path ? route('tasks.attachment', $t->id) : null,
+            'updateAttachment'   => optional($latest)->file_url ? route('task-updates.attachment', $latest->id) : null,
+            'assignedOn'         => $t->created_at?->format('d/m/Y h:i A') ?? '—',
+            'actualCompletion'   => $t->completed_at ? $t->completed_at->format('d/m/Y h:i A') : '—',
+            'timingLabel'        => ['early' => 'Completed early', 'on_time' => 'Completed on time', 'late' => 'Completed late'][$timing] ?? null,
+            'timingClass'        => ['early' => 'badge-hitech-success', 'on_time' => 'badge-brand-soft', 'late' => 'badge-hitech-danger'][$timing] ?? null,
+            'ccNames'            => $t->relationLoaded('ccUsers') ? $t->ccUsers->map(fn ($u) => $u->getFullName())->implode(', ') : '',
+            'threadUrl'          => route('my-tasks.thread', $t->id),
         ];
-
-        // Reassignment: no reach restriction, same as assigning in the first
-        // place - the editor just needs to be allowed to manage this task at
-        // all (checked above), not have the new person in any particular scope.
-        if (!empty($validated['user_id']) && (int) $validated['user_id'] !== $task->user_id) {
-            $updates['user_id'] = (int) $validated['user_id'];
-        }
-
-        $task->update($updates);
-
-        // Not scoped by TaskAccess, same reasoning as store() - CC is
-        // watching, not being assigned work. Excludes the (possibly just
-        // reassigned) owner - being CC'd on your own task is meaningless.
-        if ($request->has('cc_user_ids')) {
-            $ownerId = $updates['user_id'] ?? $task->user_id;
-            $ccIds = collect($validated['cc_user_ids'] ?? [])->unique()->reject(fn ($id) => (int) $id === (int) $ownerId);
-            $task->ccUsers()->sync($ccIds->mapWithKeys(fn ($id) => [$id => ['created_by_id' => $user->id]])->all());
-        }
-
-        return response()->json(['success' => true, 'message' => 'Task updated successfully.']);
     }
 
     /**
@@ -659,6 +806,13 @@ class TaskManagementController extends Controller
             'reason'     => 'required|string|max:2000',
             'attachment' => TaskAttachment::RULES,
         ]);
+
+        // An objection sends finished work back. The page only offers it on a
+        // completed task, but nothing checked that here, and the assignee's
+        // only way out of 'objection' is Fix & Resubmit.
+        if (!in_array($task->status, ['completed', 'resolved'], true)) {
+            return response()->json(['success' => false, 'message' => 'An objection can only be raised on a completed task.'], 422);
+        }
 
         $task->update([
             'status'          => 'objection',

@@ -65,6 +65,8 @@ return Application::configure(basePath: dirname(__DIR__))
        person's list on its due day. Idempotent, so daily is safe; Monday-only
        missed rounds that start on other weekdays. */
     $schedule->command('goals:weekly')->dailyAt('06:00')->withoutOverlapping();
+    // Hourly so it catches the ~12h-before-close mark whatever time a window ends.
+    $schedule->command('ninety-day:remind-add-customers')->hourly()->withoutOverlapping();
   })
   ->withMiddleware(function (Middleware $middleware) {
     // $middleware->web(LicenseChecker::class);

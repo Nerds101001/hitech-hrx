@@ -3,7 +3,6 @@
 namespace App\Support;
 
 use App\Models\Announcement;
-use App\Models\Notice;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -14,10 +13,10 @@ use Illuminate\Support\Facades\Log;
  * One implementation for the employee, manager, admin, HR and finance
  * dashboards, so they cannot drift apart the way the sales figures did.
  *
- * Announcements published through Employee Lifecycle are the real feed. The
- * legacy notices table is only a fallback: on most tenants it holds nothing but
- * seeded "Notice 1/2/3" rows, and reading it meant genuine announcements went
- * unseen.
+ * Current announcements (the Announcements module) are the whole feed. The
+ * legacy notices table is not read at all: it holds nothing but seeded
+ * "Notice 1/2/3" rows, which used to fill the panel whenever nothing current
+ * was published.
  */
 class DashboardAnnouncements
 {
@@ -42,20 +41,9 @@ class DashboardAnnouncements
             }
         }
 
-        if ($items->isEmpty()) {
-            try {
-                $items = Notice::where('status', 1)
-                    ->where(function ($q) {
-                        $q->whereNull('expiry_date')->orWhere('expiry_date', '>=', now());
-                    })
-                    ->orderBy('created_at', 'desc')
-                    ->take($limit)
-                    ->get();
-            } catch (\Throwable $e) {
-                $items = collect();
-            }
-        }
-
+        // No fallback to the legacy notices table: it holds only the seeded
+        // "Notice 1/2/3" rows, which then showed as the latest announcements
+        // whenever nothing current was published.
         return self::attachJoiners($items);
     }
 

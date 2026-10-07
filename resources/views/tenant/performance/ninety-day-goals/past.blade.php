@@ -127,7 +127,7 @@
                 <div class="small text-muted mb-3">{{ $r->starts_on->format('d M') }} to {{ $r->ends_on->format('d M Y') }}</div>
                 <div class="d-flex flex-wrap gap-3 small">
                   <span><b class="text-dark">{{ $s['goals'] }}</b> customers</span>
-                  <span><b class="text-dark">{{ $fmtL($s['potential']) }}</b> ₹L potential</span>
+                  <span><b class="text-dark">{{ $fmtL($s['potential']) }}</b> ₹L target</span>
                   <span><b class="text-dark">{{ $fmtL($s['achieved']) }}</b> ₹L sold</span>
                   <span><b class="text-dark">{{ $s['converted'] }}</b> converted</span>
                 </div>

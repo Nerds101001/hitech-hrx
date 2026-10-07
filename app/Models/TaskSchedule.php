@@ -107,13 +107,44 @@ class TaskSchedule extends Model implements AuditableContract
    */
   public static function isNonWorkingDay(\Carbon\Carbon $day): bool
   {
+    $key = $day->toDateString();
+
+    // Remembered for this request only: the "moved to the next working day"
+    // look-back asks about the same few dates for every schedule.
     return $day->isSunday()
-      || \App\Models\Holiday::where('date', $day->toDateString())->where('status', 1)->exists();
+      || \Illuminate\Support\Facades\Cache::store('array')->rememberForever('task-holiday:' . $key,
+        fn () => \App\Models\Holiday::where('date', $key)->where('status', 1)->exists());
+  }
+
+  /**
+   * Is $day a day this schedule fires? Its own day, or - when that fell on
+   * a Sunday or holiday - the first working day after it. Skipping used to
+   * drop the occurrence: a weekly Friday task skipped on a Friday holiday
+   * simply didn't happen that week, and a monthly one lost the whole month
+   * (three schedules missed 2 Oct 2026 that way). Days before the schedule
+   * existed never count.
+   */
+  public function isDueOn(\Carbon\Carbon $day): bool
+  {
+    if (self::isNonWorkingDay($day)) {
+      return false;
+    }
+    if ($this->matchesToday($day)) {
+      return true;
+    }
+    $since = $this->created_at ? $this->created_at->copy()->startOfDay() : null;
+    for ($d = $day->copy()->subDay(), $i = 0; $i < 7 && self::isNonWorkingDay($d); $d->subDay(), $i++) {
+      if ($this->matchesToday($d) && (!$since || $d->gte($since))) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
    * The next date this schedule will fire, starting today. Today counts
-   * only if it matches and hasn't already fired (last_run_on isn't today) -
+   * only if it is due and hasn't already fired (last_run_on isn't today) -
    * this is what lets a dashboard preview a recurring assignment before its
    * Task row exists, since fireIfDue() only ever creates that row on the
    * day it's actually due, never in advance. 62 days covers the longest
@@ -127,10 +158,7 @@ class TaskSchedule extends Model implements AuditableContract
     $from = $from ? $from->copy() : \Carbon\Carbon::today();
     for ($i = 0; $i <= 62; $i++) {
       $day = $from->copy()->addDays($i);
-      if (!$this->matchesToday($day)) {
-        continue;
-      }
-      if (self::isNonWorkingDay($day)) {
+      if (!$this->isDueOn($day)) {
         continue;
       }
       if ($i === 0 && $this->last_run_on && $this->last_run_on->isSameDay($day)) {

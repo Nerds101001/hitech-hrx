@@ -63,6 +63,8 @@ class Task extends Model implements AuditableContract
     'objected_by_id',
     'objected_at',
     'delay_notified_at',
+    'due_soon_notified_at',
+    'escalated_at',
     'completion_expected_date',
     'expected_date_notified_at',
     'created_by_id',
@@ -142,23 +144,48 @@ class Task extends Model implements AuditableContract
   /** True if this person can see the task's full update thread and add a reply: assignee, assigner, or CC'd. */
   public function isVisibleTo(int $userId): bool
   {
-    return $this->user_id === $userId
-      || $this->assigned_by_id === $userId
+    return (int) $this->user_id === $userId
+      || (int) $this->assigned_by_id === $userId
       || $this->taskCcs()->where('user_id', $userId)->exists();
   }
 
   /**
-   * A task due "today" stays due until 6pm IST, not midnight - after that
-   * it's overdue the same day, it doesn't wait for tomorrow.
+   * isVisibleTo(), plus whoever may manage the task on Task Management
+   * (admin/HR/tasks.manage, a manager for their own reports). Those people
+   * can already edit or delete it, so its remarks must not be hidden from
+   * them - the View popup used to say "No updates yet." to an admin.
+   */
+  public function canBeViewedBy(?User $user): bool
+  {
+    return $user && ($this->isVisibleTo((int) $user->id) || \App\Support\TaskAccess::canManage($user, $this));
+  }
+
+  /**
+   * A task due on a DAY (no time picked) stays due until 6pm IST, not
+   * midnight - after that it's overdue the same day. A task given an exact
+   * time is overdue at that time. The time used to be ignored: 18 hours were
+   * added to it as well, so a task due at 3 PM only turned overdue at 9 AM
+   * the next morning.
    */
   public const DUE_CUTOFF_HOUR = 18;
+
+  /** When a task with this due_date becomes overdue, in SQL (see DUE_CUTOFF_HOUR). */
+  public const DEADLINE_SQL = "(CASE WHEN TIME(tasks.due_date) = '00:00:00' THEN tasks.due_date + INTERVAL 18 HOUR ELSE tasks.due_date END)";
 
   /** Same rows the daily overdue check targets, for the badge/list to agree with it. */
   public function scopeOverdue(Builder $query): Builder
   {
-    return $query->whereNotNull('due_date')
-      ->whereRaw('due_date + INTERVAL ' . self::DUE_CUTOFF_HOUR . ' HOUR < ?', [now()])
-      ->whereNotIn('status', self::CLOSED_STATUSES);
+    return $query->whereNotNull('tasks.due_date')
+      ->whereRaw(self::DEADLINE_SQL . ' < ?', [now()])
+      ->whereNotIn('tasks.status', self::CLOSED_STATUSES);
+  }
+
+  /** Due today and not overdue yet - a task is never in both. */
+  public function scopeDueToday(Builder $query): Builder
+  {
+    return $query->whereDate('tasks.due_date', now()->toDateString())
+      ->whereRaw(self::DEADLINE_SQL . ' >= ?', [now()])
+      ->whereNotIn('tasks.status', self::CLOSED_STATUSES);
   }
 
   public function getIsOverdueAttribute(): bool
@@ -168,10 +195,30 @@ class Task extends Model implements AuditableContract
       && !in_array($this->status, self::CLOSED_STATUSES, true);
   }
 
-  /** The actual moment this task becomes overdue - due_date's day at the 6pm cutoff, not midnight. */
+  /** True when the assigner picked an exact time, not just a day. */
+  public function getHasDueTimeAttribute(): bool
+  {
+    return $this->due_date !== null && $this->due_date->format('H:i:s') !== '00:00:00';
+  }
+
+  /** The moment this task becomes overdue: its exact time, or 6pm on its day. */
   public function getDueDeadlineAttribute(): ?\Carbon\Carbon
   {
-    return $this->due_date?->copy()->addHours(self::DUE_CUTOFF_HOUR);
+    if ($this->due_date === null) {
+      return null;
+    }
+
+    return $this->has_due_time ? $this->due_date->copy() : $this->due_date->copy()->addHours(self::DUE_CUTOFF_HOUR);
+  }
+
+  /** "05 Oct 2026", or "05 Oct 2026, 03:00 PM" when a time was picked - never a fake 12:00 AM. */
+  public function dueLabel(string $dateFormat = 'd M Y'): ?string
+  {
+    if ($this->due_date === null) {
+      return null;
+    }
+
+    return $this->due_date->format($dateFormat) . ($this->has_due_time ? ', ' . $this->due_date->format('h:i A') : '');
   }
 
   public function getIsCompletedAttribute(): bool
@@ -181,10 +228,11 @@ class Task extends Model implements AuditableContract
 
   /**
    * How completing this task landed against its deadline: 'early', 'on_time'
-   * or 'late' — comparing the DAY completed_at falls on against the day
-   * due_date falls on, not the exact timestamp, since a task finished at
-   * 11pm on the due date is still on time. Null when there is nothing to
-   * judge it against (not completed, or no due date was ever set).
+   * or 'late'. A day-only task compares DAYS - finished any time on the due
+   * day is on time (a task done at 11pm on its due date still counts). A task
+   * given an exact time is late once that time has passed; it used to count
+   * as on time for the rest of that day. Null when there is nothing to judge
+   * it against (not completed, or no due date set).
    */
   public function getCompletionTimingAttribute(): ?string
   {
@@ -197,6 +245,7 @@ class Task extends Model implements AuditableContract
 
     return match (true) {
       $completedDay->lt($dueDay) => 'early',
+      $this->has_due_time => $this->completed_at->lte($this->due_date) ? 'on_time' : 'late',
       $completedDay->eq($dueDay) => 'on_time',
       default => 'late',
     };
@@ -213,6 +262,8 @@ class Task extends Model implements AuditableContract
     'completed_at' => 'datetime',
     'objected_at' => 'datetime',
     'delay_notified_at' => 'datetime',
+    'due_soon_notified_at' => 'datetime',
+    'escalated_at' => 'datetime',
     'completion_expected_date' => 'date',
     'expected_date_notified_at' => 'datetime',
   ];

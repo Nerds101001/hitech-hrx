@@ -59,8 +59,12 @@ Schedule::command('probation:process-expirations')->daily()->description('Proces
 Schedule::command('tasks:generate-recurring')->dailyAt('06:00')->description('Fire recurring task schedules due today');
 Schedule::command('tasks:notify-overdue')->dailyAt('09:00')->description('Notify staff whose assigned task is overdue');
 Schedule::command('tasks:notify-expected-date')->dailyAt('09:00')->description("Remind staff the day their own completion_expected_date arrives");
+Schedule::command('tasks:notify-due-soon')->dailyAt('08:30')->description('Remind staff their assigned task is due soon (before it is due)');
+Schedule::command('tasks:escalate-overdue')->dailyAt('09:30')->description("Escalate a long-overdue open task to the assignee's manager");
 
 Schedule::command('hrx:transfer-newbiz-ccare')->daily();
+// Sales Report 5-month rule: New Biz customers with sales in 5 months move to CCare.
+Schedule::command('sales:graduate-newbiz')->dailyAt('06:30')->description('Move New Biz customers with sales in 5 months to CCare');
 
 // Keeps the audits table's monthly partitions rolling: extends the runway of
 // future months so nothing ever falls into the pmax catch-all, and drops whole

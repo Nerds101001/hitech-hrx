@@ -356,11 +356,13 @@
               <ul class="adc-feed">
                 @foreach($recentFeed->take(6) as $f)
                   <li>
-                    <span class="adc-feed-dot adc-tone-{{ $f['tone'] }}"><i class="bx {{ $f['icon'] }}"></i></span>
-                    <div class="adc-feed-body">
-                      <div class="adc-feed-title">{{ $f['title'] }}</div>
-                      <div class="adc-feed-meta"><span class="adc-badge adc-tone-{{ $f['tone'] }}">{{ $f['type'] }}</span> · {{ $f['time'] }}</div>
-                    </div>
+                    <a href="{{ $f['url'] ?? '#' }}" class="adc-rowlink">
+                      <span class="adc-feed-dot adc-tone-{{ $f['tone'] }}"><i class="bx {{ $f['icon'] }}"></i></span>
+                      <div class="adc-feed-body">
+                        <div class="adc-feed-title">{{ $f['title'] }}</div>
+                        <div class="adc-feed-meta"><span class="adc-badge adc-tone-{{ $f['tone'] }}">{{ $f['type'] }}</span> · {{ $f['time'] }}</div>
+                      </div>
+                    </a>
                   </li>
                 @endforeach
               </ul>
@@ -386,8 +388,10 @@
         <ul class="adc-insights">
           @foreach($aiInsights as $ins)
             <li>
-              <span class="adc-ins-icon adc-tone-{{ $ins['tone'] }}"><i class="bx {{ $ins['icon'] }}"></i></span>
-              <div><div class="adc-ins-title">{{ $ins['title'] }}</div><div class="adc-ins-sub">{{ $ins['sub'] }}</div></div>
+              <a href="{{ $ins['url'] ?? '#' }}" class="adc-rowlink">
+                <span class="adc-ins-icon adc-tone-{{ $ins['tone'] }}"><i class="bx {{ $ins['icon'] }}"></i></span>
+                <div><div class="adc-ins-title">{{ $ins['title'] }}</div><div class="adc-ins-sub">{{ $ins['sub'] }}</div></div>
+              </a>
             </li>
           @endforeach
         </ul>
@@ -401,9 +405,11 @@
         <ul class="adc-events">
           @foreach($eventsToday as $ev)
             <li>
-              <span class="adc-ev-icon adc-tone-{{ $ev['tone'] }}"><i class="bx {{ $ev['icon'] }}"></i></span>
-              <span class="adc-ev-label">{{ $ev['label'] }}</span>
-              <span class="adc-ev-count">{{ $ev['count'] }}</span>
+              <a href="{{ $ev['url'] ?? '#' }}" class="adc-rowlink">
+                <span class="adc-ev-icon adc-tone-{{ $ev['tone'] }}"><i class="bx {{ $ev['icon'] }}"></i></span>
+                <span class="adc-ev-label">{{ $ev['label'] }}</span>
+                <span class="adc-ev-count">{{ $ev['count'] }}</span>
+              </a>
             </li>
           @endforeach
         </ul>
@@ -418,8 +424,10 @@
           <ul class="adc-cal">
             @foreach($upcomingHolidays as $h)
               <li>
-                <span class="adc-cal-date"><b>{{ \Carbon\Carbon::parse($h->date)->format('d') }}</b><small>{{ \Carbon\Carbon::parse($h->date)->format('M') }}</small></span>
-                <div><div class="adc-cal-name">{{ $h->name ?? $h->title ?? 'Holiday' }}</div><div class="adc-cal-day">{{ \Carbon\Carbon::parse($h->date)->format('l') }}</div></div>
+                <a href="{{ url('/holidays') }}" class="adc-rowlink">
+                  <span class="adc-cal-date"><b>{{ \Carbon\Carbon::parse($h->date)->format('d') }}</b><small>{{ \Carbon\Carbon::parse($h->date)->format('M') }}</small></span>
+                  <div><div class="adc-cal-name">{{ $h->name ?? $h->title ?? 'Holiday' }}</div><div class="adc-cal-day">{{ \Carbon\Carbon::parse($h->date)->format('l') }}</div></div>
+                </a>
               </li>
             @endforeach
           </ul>
@@ -465,12 +473,14 @@
             @foreach($upcomingProbationEnds as $u)
               @php $pd = \Carbon\Carbon::parse($u->probation_end_date); @endphp
               <li>
-                <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=d97706&color=fff&bold=true" alt="">
-                <div class="adc-appr-body">
-                  <div class="adc-appr-name">{{ $u->name }}</div>
-                  <div class="adc-appr-meta">Ends {{ $pd->format('d M Y') }}</div>
-                </div>
-                <span class="adc-badge adc-tone-{{ $pd->isPast() ? 'danger' : 'warning' }}">{{ $pd->diffForHumans(null, true) }}</span>
+                <a href="{{ url('/probation/evaluate/' . $u->id) }}" class="adc-rowlink" title="Review probation">
+                  <img class="adc-appr-av" src="https://ui-avatars.com/api/?name={{ urlencode($u->name) }}&background=d97706&color=fff&bold=true" alt="">
+                  <div class="adc-appr-body">
+                    <div class="adc-appr-name">{{ $u->name }}</div>
+                    <div class="adc-appr-meta">Ends {{ $pd->format('d M Y') }}</div>
+                  </div>
+                  <span class="adc-badge adc-tone-{{ $pd->isPast() ? 'danger' : 'warning' }}">{{ $pd->diffForHumans(null, true) }}</span>
+                </a>
               </li>
             @endforeach
           </ul>
@@ -490,7 +500,7 @@
           <a href="{{ url('/leaveRequests') }}" class="adc-qa-btn"><i class="bx bx-check-shield"></i><span>Approvals</span></a>
           <a href="{{ url('/job') }}" class="adc-qa-btn"><i class="bx bx-briefcase"></i><span>Post Job</span></a>
           <a href="{{ url('/attendance') }}" class="adc-qa-btn"><i class="bx bx-time-five"></i><span>Attendance</span></a>
-          <a href="{{ url('/noticeboard') }}" class="adc-qa-btn"><i class="bx bx-news"></i><span>Publish News</span></a>
+          <a href="{{ url('/announcements') }}" class="adc-qa-btn"><i class="bx bx-news"></i><span>Publish News</span></a>
           <a href="{{ url('/hr-policies') }}" class="adc-qa-btn"><i class="bx bx-book-content"></i><span>HR Policies</span></a>
         </div>
       </div>

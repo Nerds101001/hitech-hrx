@@ -123,6 +123,11 @@
   .adc-ai{background:linear-gradient(180deg,#f0fdfa 0%,#ffffff 60%);border-color:#cffafe;}
   .adc-insights{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:13px;}
   .adc-insights li{display:flex;gap:11px;align-items:flex-start;}
+  /* A whole row as one link: keeps the row's own layout (gap / alignment). */
+  .adc-rowlink{display:flex;gap:inherit;align-items:inherit;flex:1;min-width:0;color:inherit;text-decoration:none;border-radius:9px;}
+  .adc-rowlink:hover{color:inherit;}
+  .adc-rowlink:hover .adc-ins-title,.adc-rowlink:hover .adc-ev-label,.adc-rowlink:hover .adc-feed-title,.adc-rowlink:hover .adc-cal-name,.adc-rowlink:hover .adc-appr-name{color:var(--p);}
+  .adc-rowlink:focus-visible{outline:2px solid var(--p);outline-offset:2px;}
   .adc-ins-icon{width:32px;height:32px;flex:none;border-radius:9px;display:grid;place-items:center;font-size:1rem;color:var(--c);background:color-mix(in srgb,var(--c) 14%,#fff);}
   .adc-ins-title{font-size:.84rem;font-weight:700;line-height:1.2;}
   .adc-ins-sub{font-size:.74rem;color:var(--muted);line-height:1.25;}

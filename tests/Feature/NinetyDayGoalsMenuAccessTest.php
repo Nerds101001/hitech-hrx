@@ -64,7 +64,8 @@ class NinetyDayGoalsMenuAccessTest extends TestCase
         $u->givePermissionTo(Permission::firstOrCreate(['name' => 'goals.manage', 'guard_name' => 'web']));
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $this->assertSame(['Dashboard', 'New Program', 'Past Programs'], $this->ninetyDayLinks($u->fresh()));
+        // Past Programs gave way to the Programs list (2026-10-01).
+        $this->assertSame(['Dashboard', 'Programs', 'New Program'], $this->ninetyDayLinks($u->fresh()));
     }
 
     public function test_the_same_manager_without_the_permission_sees_no_section(): void

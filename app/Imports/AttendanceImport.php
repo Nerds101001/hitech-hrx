@@ -27,6 +27,7 @@ class AttendanceImport implements ToCollection, WithHeadingRow
             $checkIn = $row['check_in'] ? Carbon::parse($date . ' ' . $row['check_in']) : null;
             $checkOut = $row['check_out'] ? Carbon::parse($date . ' ' . $row['check_out']) : null;
             $status = $row['status'] ?? 'Present';
+            [$checkIn, $checkOut] = \App\Services\AttendanceDayStatus::orderPunches($checkIn, $checkOut, $user->shift);
 
             // ----------------------------------------------------
             // 1. Skip Salesperson (they are marked manually by CCARE)

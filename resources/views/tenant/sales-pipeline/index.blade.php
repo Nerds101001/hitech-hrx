@@ -202,6 +202,22 @@
         .sales-filter .form-select,
         .sales-filter .form-control { border:1px solid #d9dee3; background-color:#fff; box-shadow:none; }
         .sales-filter .btn { display:inline-flex; align-items:center; gap:4px; }
+        /* All the filters on one line (desktop): each takes a share of the
+           width instead of a fixed one, so they fit beside Search and Clear.
+           Tight side padding keeps the words readable; the full selection
+           shows on hover. Below 1200px they wrap as before. */
+        .sales-filter .form-select { padding-left:.6rem !important; padding-right:1.6rem !important; background-position:right .45rem center !important; }
+        .sales-filter .form-control { padding-left:.75rem !important; padding-right:.75rem !important; }
+        @media (min-width: 1200px) {
+            .sales-filter { flex-wrap:nowrap !important; }
+            .sales-filter > .form-select, .sales-filter > .form-control { flex:1 1 0; min-width:0; width:auto !important; }
+            .sales-filter > [name="party"] { flex-grow:1.4; }
+            .sales-filter > [name="type"], .sales-filter > [name="brand"] { flex-grow:.9; }
+            .sales-filter > [name="sp"] { flex-grow:1.15; }
+            .sales-filter > [name="both"] { flex-grow:1.25; }
+            .sales-filter > [name="per"] { flex-grow:.85; }
+            .sales-filter > .btn { flex:0 0 auto; }
+        }
     
 /* A negative sale is a credit note, not a typo - show it red so it reads as
    money going the other way, and name it on hover. */
@@ -220,14 +236,14 @@
                 <input type="text" class="form-control" name="party" value="{{ $fParty }}"
                        placeholder="Search customer…" style="width:200px;">
                 <select class="form-select" name="type" style="width:130px;" onchange="this.form.submit()">
-                    <option value="">All Types</option>
+                    <option value="">Type</option>
                     <option value="Distributor" {{ $fType === 'Distributor' ? 'selected' : '' }}>Distributor</option>
                     <option value="Dealer" {{ $fType === 'Dealer' ? 'selected' : '' }}>Dealer</option>
                     <option value="Customer" {{ $fType === 'Customer' ? 'selected' : '' }}>Customer</option>
                     <option value="Packer" {{ $fType === 'Packer' ? 'selected' : '' }}>Packer</option>
                 </select>
                 <select class="form-select" name="cat" style="width:130px;" onchange="this.form.submit()">
-                    <option value="">All Category</option>
+                    <option value="">Category</option>
                     <option value="New Biz" {{ request('cat') === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                     <option value="CCare" {{ request('cat') === 'CCare' ? 'selected' : '' }}>CCare</option>
                     <option value="None" {{ request('cat') === 'None' ? 'selected' : '' }}>No Category</option>
@@ -237,7 +253,7 @@
                 {{-- "No Salesperson" isolates the independent customers a CCare
                      rep holds directly. Shown only when such rows exist here. --}}
                 <select class="form-select" name="sp" style="width:190px;" onchange="this.form.submit()">
-                    <option value="">All Salespersons ({{ $spFilterCounts->sum() + $spNoneCount }})</option>
+                    <option value="">Salesperson</option>
                     @if($spNoneCount)
                         <option value="none" {{ (string)$fSp === 'none' ? 'selected' : '' }}>&mdash; No Salesperson &mdash; ({{ $spNoneCount }})</option>
                     @endif
@@ -246,7 +262,7 @@
                     @endforeach
                 </select>
                 <select class="form-select" name="ccare" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All CCare ({{ $ccareFilterCounts->sum() + $ccareNoneCount }})</option>
+                    <option value="">CCare</option>
                     @if($ccareNoneCount)
                         <option value="none" {{ (string)$fCcare === 'none' ? 'selected' : '' }}>&mdash; No CCare &mdash; ({{ $ccareNoneCount }})</option>
                     @endif
@@ -255,13 +271,13 @@
                     @endforeach
                 </select>
                 <select class="form-select" name="brand" style="width:150px;" onchange="this.form.submit()">
-                    <option value="">All Brands ({{ $brandCounts->sum() }})</option>
+                    <option value="">Brand</option>
                     @foreach($brandCounts as $bName => $bCount)
                         <option value="{{ $bName }}" {{ (string)($fBrand ?? '') === (string)$bName ? 'selected' : '' }}>{{ $bName }} ({{ $bCount }})</option>
                     @endforeach
                 </select>
                 <select class="form-select" name="nb" style="width:180px;" onchange="this.form.submit()">
-                    <option value="">All New Biz ({{ $nbFilterCounts->sum() + $nbNoneCount }})</option>
+                    <option value="">New Biz</option>
                     @if($nbNoneCount)
                         <option value="none" {{ (string)($fNb ?? '') === 'none' ? 'selected' : '' }}>&mdash; No New Biz &mdash; ({{ $nbNoneCount }})</option>
                     @endif
@@ -275,7 +291,7 @@
                      whole from either one. --}}
                 <select class="form-select" name="both" style="width:200px;" onchange="this.form.submit()"
                         title="One person, counted whether they are the CCare or the New Biz rep">
-                    <option value="">All CCare &amp; New Biz</option>
+                    <option value="">CCare / New Biz</option>
                     @foreach($bothFilterUsers as $au)
                         <option value="{{ $au->id }}" {{ (string)($fBoth ?? '') === (string)$au->id ? 'selected' : '' }}>
                             {{ $au->name }} ({{ $bothFilterCounts[$au->id] ?? 0 }})
@@ -305,15 +321,33 @@
                         </a>
                     @endif
                 @endif
-                <button type="submit" class="btn btn-primary"><i class="bx bx-search"></i> Search</button>
-                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary">
-                    <i class="bx bx-x"></i> Clear
+                <button type="submit" class="btn btn-primary" title="Search"><i class="bx bx-search"></i><span class="d-none d-xxl-inline"> Search</span></button>
+                <a href="{{ route('sales-visits.pipeline.index', ['fy' => $selectedFy]) }}" class="btn btn-outline-secondary" title="Clear filters">
+                    <i class="bx bx-x"></i><span class="d-none d-xxl-inline"> Clear</span>
                 </a>
-                <div class="d-flex align-items-center gap-2 ms-auto text-muted text-nowrap" style="font-size:0.8rem">
-                    Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
-                    of <strong>{{ $pipelines->total() }}</strong> customers
-                </div>
             </form>
+            <script>
+                // A share of the row can cut a long name short: show the full choice on hover.
+                document.querySelectorAll('.sales-filter select').forEach(function (s) {
+                    var base = s.getAttribute('title') || '';
+                    var tip = function () { var o = s.options[s.selectedIndex]; s.title = (o && o.value !== '') ? o.text.trim() : base; };
+                    tip(); s.addEventListener('change', tip);
+                });
+            </script>
+        </div>
+    </div>
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        {{-- Choose which of the leading columns to show; S.No and Party Name always stay. --}}
+        <div class="dropdown">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle py-0" id="srColsBtn"
+                    data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="font-size:0.78rem;">
+                <i class="bx bx-columns me-1"></i>Columns
+            </button>
+            <div class="dropdown-menu p-2" id="srColsMenu" style="min-width:220px;font-size:0.8rem;"></div>
+        </div>
+        <div class="text-muted" style="font-size:0.78rem">
+            Showing <strong>{{ $pipelines->firstItem() ?? 0 }}–{{ $pipelines->lastItem() ?? 0 }}</strong>
+            of <strong>{{ $pipelines->total() }}</strong> customers
         </div>
     </div>
 
@@ -568,6 +602,13 @@
                                         <option value="New Biz" {{ $catDisplay === 'New Biz' ? 'selected' : '' }}>New Biz</option>
                                         <option value="CCare" {{ $catDisplay === 'CCare' ? 'selected' : '' }}>CCare</option>
                                     </select>
+                                    @if($row->ccare_from)
+                                        @php $movedFrom = \Carbon\Carbon::parse($row->ccare_from . '-01'); @endphp
+                                        <div class="cat-moved"
+                                             title="New Biz{{ $row->formerNewBiz ? ' (' . $row->formerNewBiz->name . ')' : '' }} until {{ $movedFrom->copy()->subMonth()->format('M Y') }}; CCare from {{ $movedFrom->format('M Y') }}">
+                                            New Biz till {{ $movedFrom->copy()->subMonth()->format('M y') }}
+                                        </div>
+                                    @endif
                                 </td>
 
                                 {{-- Representative — click to pick any CCare/New Biz agent --}}
@@ -655,9 +696,18 @@
                                         // and every cell rendered readonly.
                                         $isMyOpenRow = $canEditOwnRow && !$canEditBook;
                                         $fcstRoAttr  = (($canEditBook || $isMyOpenRow) && !$monthLocked) ? '' : 'readonly';
+                                        // A customer that moved New Biz -> CCare: its months before
+                                        // the move are New Biz months, and a month outside the
+                                        // category / person in view is left out of the totals row.
+                                        $nbEra   = $row->ccare_from && $m['key'] < $row->ccare_from;
+                                        $counted = (!$monthCategory || ($monthCategory === 'New Biz') === $row->isNewBizMonth($m['key']))
+                                            && collect($creditPeople)->every(fn ($pid) => $row->creditsMonth($pid, $m['key']));
+                                        $eraCls  = ($nbEra ? ' nb-era' : '') . ($counted ? '' : ' month-out');
+                                        $eraTip  = !$row->ccare_from ? null
+                                            : ($nbEra ? 'New Biz month' : 'CCare month') . ($counted ? '' : ' (not counted in this view)');
                                     @endphp
                                     @if($showPend)
-                                        <td class="p-0 bg-forecast-light" style="max-width:52px;">
+                                        <td class="p-0 bg-forecast-light{{ $eraCls }}" style="max-width:52px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="forecast_amount"
@@ -665,7 +715,7 @@
                                                    {!! $fcstRoAttr !!}>
                                         </td>
                                     @endif
-                                    <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:55px;">
+                                    <td class="p-0 bg-sale-light {{ !$isThisMonth ? 'block-end' : '' }}{{ $eraCls }}" style="max-width:55px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                         @php $isCredit = $mData && (float) $mData->sale_amount < 0; @endphp
                                         <input type="number" step="0.01"
                                                class="excel-input text-end month-field font-monospace{{ $isCredit ? ' is-credit-note' : '' }}"
@@ -675,7 +725,7 @@
                                                {!! $roAttr !!}>
                                     </td>
                                     @if($showPend)
-                                        <td class="p-0 bg-pending-light {{ !$isThisMonth ? 'block-end' : '' }}" style="max-width:52px;">
+                                        <td class="p-0 bg-pending-light {{ !$isThisMonth ? 'block-end' : '' }}{{ $eraCls }}" style="max-width:52px;" @if($eraTip) title="{{ $eraTip }}" @endif>
                                             <input type="number" step="0.01"
                                                    class="excel-input text-end month-field font-monospace"
                                                    data-month="{{ $m['key'] }}" data-field="pending_amount"
@@ -1168,8 +1218,21 @@
     /* Scoped to the main report table only — this rule used to leak into the
        achievement modal and wipe its coloured cells on hover (white on white). */
     #pipelineTable tbody tr:hover td { background-color: transparent !important; }
+    /* ...except the two frozen columns: transparent there let the cells
+       scrolled underneath show through on hover (Salesperson and Brand drawn
+       over the Party Name). They need a solid fill to cover what scrolls under. */
+    #pipelineTable tbody tr:hover td.col-sno,
+    #pipelineTable tbody tr:hover td.col-party { background-color: #f6faf9 !important; }
+    /* Columns switched off in the Columns menu */
+    #pipelineTable .sr-col-hidden { display: none !important; }
     .converted-row td { background-color: #fdf4ff !important; border-bottom: 2px solid #e879f9 !important; }
     .converted-row .col-party::after { content:' (Converted)'; color:#d946ef; font-size:0.7rem; font-weight:bold; }
+    /* A customer that moved New Biz -> CCare: "New Biz till ..." under its
+       Category, a violet underline on its New Biz months, and greyed figures
+       in months the current Category / person filter leaves out of the totals. */
+    .cat-moved { font-size: 0.58rem; color: #a21caf; font-weight: 600; line-height: 1.1; white-space: nowrap; }
+    td.nb-era { box-shadow: inset 0 -2px 0 #e879f9; }
+    td.month-out input { color: #9ca3af !important; font-style: italic; }
     .pipeline-row-hidden { display: none !important; }
 </style>
 
@@ -1324,6 +1387,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (data.success) {
                     this.style.backgroundColor = '#e8f5e9';
                     setTimeout(() => { this.style.backgroundColor = 'transparent'; }, 500);
+                    // 5th month with sales: the customer has just moved to CCare.
+                    if (data.moved_to_ccare) {
+                        const cat = tr.querySelector('select[data-field="category"]');
+                        if (cat) cat.value = 'CCare';
+                        const rep = tr.querySelector('.rep-cell');
+                        if (rep) {
+                            rep.dataset.cc = data.ccare_id || '';
+                            rep.dataset.nb = '';
+                            if (data.rep_name) { rep.textContent = data.rep_name; rep.title = data.rep_name + ' (click to change)'; }
+                        }
+                        alert('This customer now has sales in 5 months, so it has moved to CCare from ' + data.ccare_from + '. Earlier months stay under New Biz.');
+                    }
                 } else if (data.message) {
                     alert(data.message);
                 }
@@ -1971,7 +2046,78 @@ document.addEventListener('submit', function (e) {
 
     sizeIt();
     window.addEventListener('resize', sizeIt);
-    if (window.ResizeObserver) new ResizeObserver(sizeIt).observe(wrap);
+    window.addEventListener('load', sizeIt);
+    // Watch the table as well as its box: the table can widen after first
+    // paint (column widths, fonts, the Columns menu) without the box itself
+    // changing size, which left the top scrollbar hidden on some views.
+    if (window.ResizeObserver) {
+        const ro = new ResizeObserver(sizeIt);
+        ro.observe(wrap);
+        const t = wrap.querySelector('table');
+        if (t) ro.observe(t);
+    }
+})();
+</script>
+<script>
+// Columns menu: hide/show the leading columns (everything before the month
+// groups except S.No and Party Name). Remembered per browser.
+(function () {
+    const tbl  = document.getElementById('pipelineTable');
+    const menu = document.getElementById('srColsMenu');
+    if (!tbl || !tbl.tHead || !menu) return;
+
+    const head = tbl.tHead.rows[0];
+    // The leading columns are the header cells spanning both header rows.
+    const lead = [];
+    for (const c of head.cells) { if (c.rowSpan < 2) break; lead.push(c); }
+    const label = c => c.textContent.replace(/\s+/g, ' ').replace(/₹.*$/, '').trim();   // "Potential ₹ Lakh/Month" -> "Potential"
+    const KEY = 'hrx.salesReport.hiddenCols';
+    let hidden = [];
+    try { hidden = JSON.parse(localStorage.getItem(KEY) || '[]') || []; } catch (e) { hidden = []; }
+
+    const apply = () => {
+        const off = new Set(lead.map((c, i) => (i > 1 && hidden.includes(label(c))) ? i : -1).filter(i => i > 1));
+        const rows = [head, ...tbl.querySelectorAll('#monthTotalsRow, tbody tr')];
+        rows.forEach(row => {
+            // only real customer/total rows, which start with the S.No cell
+            if (!row.cells[0] || !row.cells[0].classList.contains('col-sno') || row.cells.length < lead.length) return;
+            for (let i = 0; i < lead.length; i++) row.cells[i].classList.toggle('sr-col-hidden', off.has(i));
+        });
+        const n = off.size;
+        document.getElementById('srColsBtn').innerHTML = '<i class="bx bx-columns me-1"></i>Columns' + (n ? ' (' + n + ' hidden)' : '');
+        window.dispatchEvent(new Event('resize'));   // re-measure the top scrollbar
+    };
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(hidden)); } catch (e) {} };
+
+    lead.forEach((c, i) => {
+        if (i < 2) return;   // S.No and Party Name always show
+        const name = label(c);
+        const id = 'srCol' + i;
+        const row = document.createElement('div');
+        row.className = 'form-check mb-1';
+        row.innerHTML = '<input class="form-check-input" type="checkbox" id="' + id + '">'
+            + '<label class="form-check-label" for="' + id + '"></label>';
+        row.querySelector('label').textContent = name;
+        const box = row.querySelector('input');
+        box.checked = !hidden.includes(name);
+        box.addEventListener('change', () => {
+            hidden = box.checked ? hidden.filter(h => h !== name) : [...new Set([...hidden, name])];
+            save(); apply();
+        });
+        menu.appendChild(row);
+    });
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'btn btn-sm btn-link p-0 mt-1';
+    all.textContent = 'Show all columns';
+    all.addEventListener('click', () => {
+        hidden = []; save();
+        menu.querySelectorAll('input[type=checkbox]').forEach(b => { b.checked = true; });
+        apply();
+    });
+    menu.appendChild(all);
+
+    apply();
 })();
 </script>
 

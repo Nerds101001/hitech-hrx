@@ -115,7 +115,16 @@ class AnnouncementController extends Controller
                     return $s . ' → ' . $e;
                 })
                 ->addColumn('is_expired', fn ($a) => $a->end_date && $a->end_date->lt(now()->startOfDay()))
-                ->addColumn('reach', fn ($a) => $a->recipients_count ?? 0)
+                // Posts the system makes itself (welcome posts) never stored a
+                // reach, and showed "0 people"; an Everyone post reaches the
+                // whole active headcount.
+                ->addColumn('reach', function ($a) use (&$everyone) {
+                    if ($a->recipients_count || $a->audience_type !== 'global') {
+                        return $a->recipients_count ?? 0;
+                    }
+                    return $everyone ??= \App\Models\User::notTerminated()
+                        ->where('status', \App\Enums\UserAccountStatus::ACTIVE)->count();
+                })
                 ->orderColumn('published', 'published_at $1')
                 ->make(true);
         } catch (\Exception $e) {

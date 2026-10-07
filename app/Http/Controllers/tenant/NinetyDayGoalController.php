@@ -37,132 +37,15 @@ class NinetyDayGoalController extends Controller
         $isSales  = Goals::isSalesStaff($user);
         $scope    = Goals::visibleUserIds($user);
         $seesMany = $scope === null || count($scope) > 1;
-        $view     = $request->input('view', $seesMany ? 'overview' : 'mine');
-        if ($view === 'mine' && !$isSales) {
-            $view = 'overview';
-        }
-        // Only a salesperson has goals of their own. A manager outside Sales with no team stays on
-        // the overview; "mine" would start a round (and a weekly task) for them just for looking.
-        if ($view === 'overview' && !$seesMany && $isSales) {
-            $view = 'mine';
+
+        // The original Goals page is retired (2026-10-01): it ran beside the newer pages with
+        // its own tab bar, and admin and salespeople ended up between two designs. Every old
+        // link (tasks, notifications, bookmarks) now lands on the page that replaced it.
+        if ($isSales && ($request->input('view') === 'mine' || !$seesMany)) {
+            return redirect()->route('performance.ninety-day-goals.my-program');
         }
 
-        return $view === 'mine' ? $this->mine($user) : $this->overview($request, $user, $scope, $isSales);
-    }
-
-    // ── my goals ─────────────────────────────────────────────────────────
-
-    private function mine(User $user)
-    {
-        $today = Carbon::today();
-        $round = Goals::roundFor($user, $today);
-        Goals::ensureCheckins($round, $today);
-
-        $goals = NinetyDayGoal::with('checkins.notes.author')->where('round_id', $round->id)->where('user_id', $user->id)
-            ->whereNull('closed_at')->orderBy('id')->get();
-        $pending = Goals::pending($round, $today)->groupBy('week_no');
-        // A repeat month's Sales Report sale never silently becomes an upsell — it waits here
-        // until the salesperson (or admin on their behalf) says yes or no.
-        $pendingUpsells = NinetyDayGoalCheckin::with('goal')->where('round_id', $round->id)->where('needs_upsell_confirm', true)->orderBy('week_no')->get();
-
-        return view('tenant.performance.ninety-day-goals.index', [
-            'mode'      => 'mine',
-            'isAdmin'   => Goals::seesEveryone($user),
-            'canManage' => Goals::managesEveryone($user),
-            'canSwitch' => Goals::visibleUserIds($user) !== [$user->id],
-            'round'     => $round,
-            'week'      => Goals::weekOf($round, $today),
-            'dates'     => Goals::weekDates($round),
-            'goals'     => $goals,
-            'pending'   => $pending,
-            'pendingUpsells' => $pendingUpsells,
-            'today'     => $today,
-            'statuses'  => Goals::STATUSES,
-            'brands'    => array_keys(Goals::BRANDS),
-            'weeks'     => Goals::weeksOf($round),
-        ]);
-    }
-
-    // ── everyone's goals ─────────────────────────────────────────────────
-
-    private function overview(Request $request, User $viewer, ?array $scope, bool $isSales)
-    {
-        $today = Carbon::today();
-        $roundFilter = $request->input('round') === 'all' ? 'all' : 'current';
-
-        $q = NinetyDayGoal::with(['user.department', 'round', 'checkins.notes.author'])->orderBy('id');
-        if ($scope !== null) {
-            $q->whereIn('user_id', $scope);
-        }
-        if ($roundFilter === 'current') {
-            $q->whereHas('round', fn ($r) => $r->where('status', 'active'));
-        }
-        // One list for the whole team, people in name order; the page filters and sorts it.
-        $goals = $q->get()->sortBy(fn ($g) => strtolower(trim(optional($g->user)->first_name . ' ' . optional($g->user)->last_name)) . '|' . str_pad($g->id, 9, '0', STR_PAD_LEFT))->values();
-
-        // "This week" only means something for a round that is actually running right now; the cards,
-        // the strip and the overdue count follow whichever round filter is selected, so choosing "All
-        // rounds, including closed" visibly changes the numbers instead of silently staying on the
-        // active round only.
-        $trueActive = $goals->filter(fn ($g) => $g->round && $g->round->status === 'active' && !$g->closed_at);
-        $scoped = $roundFilter === 'current' ? $trueActive : $goals;
-        $weekOfGoal = fn ($g) => Goals::weekOf($g->round, $today);
-        $people = Goals::salesStaff()->when($scope !== null, fn ($c) => $c->whereIn('id', $scope))->values();
-
-        $summary = [
-            'staff'    => $people->count(),
-            'people'   => $scoped->pluck('user_id')->unique()->count(),
-            'goals'    => $scoped->count(),
-            'potential' => round((float) $scoped->sum('monthly_potential'), 2),
-            'thisWeekDone'  => $trueActive->filter(fn ($g) => optional($g->checkins->firstWhere('week_no', $weekOfGoal($g)))->status !== null)->count(),
-            'thisWeekTotal' => $trueActive->filter(fn ($g) => $g->checkins->firstWhere('week_no', $weekOfGoal($g)) !== null)->count(),
-            'overdue'  => $scoped->sum(fn ($g) => $g->checkins->filter(fn ($c) => $c->status === null && $c->due_on->lt($today))->count()),
-            // How many customers are at each status right now (their latest reported one).
-            'byStatus' => $scoped->map(fn ($g) => Goals::latestStatus($g))->filter()->countBy()->all(),
-        ];
-
-        // Rounds in view can be different lengths (an admin-created program can run longer or
-        // shorter than the usual 90 days) — span the longest one so nothing gets truncated.
-        $weeksSpan = $scoped->isEmpty() ? Goals::WEEKS : $scoped->max(fn ($g) => Goals::weeksOf($g->round));
-        $strip = [];
-        for ($w = 0; $w < $weeksSpan; $w++) {
-            $rows = $scoped->map(fn ($g) => $g->checkins->firstWhere('week_no', $w))->filter();
-            $strip[$w] = ['total' => $rows->count(), 'done' => $rows->whereNotNull('status')->count(), 'late' => $rows->where('is_late', true)->count()];
-        }
-
-        // Everyone on the team appears, including people who have not added a customer yet.
-        $withGoals = $goals->pluck('user_id')->unique();
-        $notStarted = $roundFilter === 'current' ? $people->reject(fn ($u) => $withGoals->contains($u->id))->values() : collect();
-
-        $isAdmin = Goals::seesEveryone($viewer);
-        // Admin-created programs, newest first, so "New program" has somewhere visible to land —
-        // without this an admin who just created one had no way to see it existed at all.
-        $programs = $isAdmin
-            ? NinetyDayProgram::withCount('rounds')->with('creator')->orderByDesc('id')->limit(20)->get()
-                ->map(function ($p) use ($today) {
-                    $p->isLive = $today->between($p->starts_on, $p->ends_on);
-                    return $p;
-                })
-            : collect();
-
-        return view('tenant.performance.ninety-day-goals.index', [
-            'mode'       => 'overview',
-            'canManage'  => Goals::managesEveryone($viewer),
-            'canSwitch'  => $isSales,
-            'goals'      => $goals,
-            'summary'    => $summary,
-            'strip'      => $strip,
-            'notStarted' => $notStarted,
-            'people'     => $people,
-            'isAdmin'    => $isAdmin,
-            'programs'   => $programs,
-            'preUser'    => $request->integer('user_id') ?: null,
-            'filters'    => ['round' => $roundFilter],
-            'today'      => $today,
-            'statuses'   => Goals::STATUSES,
-            'weeks'      => $weeksSpan,
-            'brands'     => array_keys(Goals::BRANDS),
-        ]);
+        return redirect()->route('performance.ninety-day-goals.program-dashboard');
     }
 
     // ── dashboard and comments ───────────────────────────────────────────
@@ -390,7 +273,7 @@ class NinetyDayGoalController extends Controller
         // Server-side pagination for the big customer table — the whole filtered set is already
         // in memory (this dataset is hundreds of rows, not millions), but the DOM only ever
         // gets one page of it.
-        $perPage = 25;
+        $perPage = Goals::perPage($request->input('per_page'), 25, $rows->count());
         $page = max(1, $request->integer('page', 1));
         $paged = new \Illuminate\Pagination\LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
@@ -561,6 +444,12 @@ class NinetyDayGoalController extends Controller
         if ($redirect) {
             return $redirect;
         }
+        // A salesperson's finished rounds are listed under My Programs (2026-10-01). Admin/HR and
+        // team leads keep this page - its closed-round record by salesperson is not shown
+        // anywhere else - reached from the Programs list.
+        if (Goals::isSalesStaff($user) && $scope !== null && count($scope) <= 1) {
+            return redirect()->route('performance.ninety-day-goals.my-program');
+        }
 
         $rounds = NinetyDayRound::with('user.department')
             ->when($scope !== null, fn ($q) => $q->whereIn('user_id', $scope))
@@ -661,7 +550,7 @@ class NinetyDayGoalController extends Controller
                 'target'    => round($target, 2),
                 'achieved'  => round((float) $c->sum('achieved'), 2),
                 'pct'       => $target > 0 ? round($c->sum('achieved') / $target * 100, 1) : null,
-                'converted' => $c->whereIn('status', ['Trial Order', 'Regular Order'])->count(),
+                'converted' => $c->filter(fn ($x) => in_array($x->status, Goals::ORDER_STATUSES, true) && $x->achieved > 0)->count(),
             ];
         }
     }
@@ -737,7 +626,7 @@ class NinetyDayGoalController extends Controller
 
         // Same paginated customer table pattern the admin pages use, just this person's own rows.
         $rows = $d['rows'];
-        $perPage = 10;
+        $perPage = Goals::perPage($request->input('per_page'), 10, $rows->count());
         $page = max(1, $request->integer('page', 1));
         $paged = new \Illuminate\Pagination\LengthAwarePaginator(
             $rows->forPage($page, $perPage)->values(), $rows->count(), $perPage, $page,
@@ -803,9 +692,9 @@ class NinetyDayGoalController extends Controller
     private function myWeeklyProgress(User $user, NinetyDayRound $round): array
     {
         $goals = NinetyDayGoal::where('round_id', $round->id)->where('user_id', $user->id)->get();
-        // Same rule as Goals::dashboard(): the months that END inside the round, once each.
+        // Same rule as Goals::dashboard(): the months whose 16th is inside the round, once each.
         $roundMonths = Goals::roundMonths($round);
-        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential * max(1, count($roundMonths)));
+        $totalTarget = (float) $goals->sum(fn ($g) => (float) $g->monthly_potential);   // overall target per customer
         $ids = $goals->pluck('sales_pipeline_id')->filter()->unique()->values()->all();
 
         $monthlySales = [];
@@ -848,7 +737,56 @@ class NinetyDayGoalController extends Controller
                 ->with('error', 'Only the Sales team has a program of their own to view.');
         }
 
-        return redirect()->route('performance.ninety-day-goals.round', Goals::roundFor($user)->id);
+        $current = Goals::roundFor($user);
+        $finished = NinetyDayRound::with('program')->where('user_id', $user->id)->where('status', 'closed')->orderByDesc('starts_on')->get();
+        // Nothing finished yet: straight into the one program they have.
+        if ($finished->isEmpty()) {
+            return redirect()->route('performance.ninety-day-goals.round', $current->id);
+        }
+
+        return view('tenant.performance.ninety-day-goals.my-programs', [
+            'current'  => $current->load('program'),
+            'finished' => $finished,
+            'stats'    => $finished->mapWithKeys(fn ($r) => [$r->id => [
+                'customers' => NinetyDayGoal::where('round_id', $r->id)->count(),
+            ]]),
+        ]);
+    }
+
+    /** Every program, with Open / Edit / Delete - the admin's one place to find and change them. */
+    public function programs(Request $request)
+    {
+        $user = Auth::user();
+        if (!Goals::seesEveryone($user)) {
+            return redirect()->route('performance.ninety-day-goals.program-dashboard');
+        }
+        $today = Carbon::today();
+        $status = in_array($request->input('status'), ['active', 'upcoming', 'ended'], true) ? $request->input('status') : 'all';
+
+        $all = NinetyDayProgram::with('creator')->orderByDesc('starts_on')->orderByDesc('id')->get();
+        $stateOf = fn ($p) => $today->lt($p->starts_on) ? 'upcoming' : ($today->gt($p->ends_on) ? 'ended' : 'active');
+        $counts = ['all' => $all->count(), 'active' => 0, 'upcoming' => 0, 'ended' => 0];
+        foreach ($all as $p) {
+            $counts[$stateOf($p)]++;
+        }
+        $programs = $status === 'all' ? $all : $all->filter(fn ($p) => $stateOf($p) === $status)->values();
+
+        $ids = $programs->pluck('id');
+        $roundIds = NinetyDayRound::whereIn('program_id', $ids)->get(['id', 'program_id'])->groupBy('program_id');
+        $goalCounts = NinetyDayGoal::whereIn('round_id', NinetyDayRound::whereIn('program_id', $ids)->pluck('id'))
+            ->selectRaw('round_id, count(*) n')->groupBy('round_id')->pluck('n', 'round_id');
+
+        return view('tenant.performance.ninety-day-goals.programs', [
+            'programs' => $programs,
+            'status'   => $status,
+            'counts'   => $counts,
+            'today'    => $today,
+            'stateOf'  => $stateOf,
+            'participants' => $roundIds->map->count(),
+            'customers' => $roundIds->map(fn ($rs) => $rs->sum(fn ($r) => $goalCounts[$r->id] ?? 0)),
+            'canManage' => Goals::managesEveryone($user),
+            'canDelete' => $user->hasRole(['admin', 'Admin', 'super_admin']),
+        ]);
     }
 
     /**
@@ -930,6 +868,20 @@ class NinetyDayGoalController extends Controller
             'canSwitch' => Goals::isSalesStaff($user),
             'isAdmin'  => Goals::seesEveryone($user),
             'canEdit'  => Goals::managesEveryone($user) || (int) $round->user_id === (int) $user->id,
+            // Orders the Sales Report shows a second time for a customer: confirm upsell or not
+            // (moved here from the retired Goals page, 2026-10-01).
+            // Comments on a customer's week: who may add one (owner, their lead, admin/HR) and
+            // who may remove one (admin/HR) - moved here from the retired Goals page, 2026-10-01.
+            'canComment' => $goals->isNotEmpty() && Goals::canNote($user, $goals->first()),
+            'canRemoveComment' => Goals::managesEveryone($user),
+            // The customer rules, shown on the page (2026-10-01): minimum count, the add window
+            // and its countdown, and which targets are already fixed by a reported status.
+            'window'     => Goals::windowState($round),
+            'managesAll' => Goals::managesEveryone($user),
+            'lockedTargetIds' => NinetyDayGoalCheckin::whereIn('goal_id', $goals->pluck('id'))->whereNotNull('status')
+                ->distinct()->pluck('goal_id')->map(fn ($id) => (int) $id)->all(),
+            'pendingUpsells' => NinetyDayGoalCheckin::with('goal')->where('round_id', $round->id)
+                ->where('needs_upsell_confirm', true)->orderBy('week_no')->get(),
             'round'    => $round,
             'goals'    => $goals,
             'd'        => $d,
@@ -1031,7 +983,69 @@ class NinetyDayGoalController extends Controller
         // Recent activity: every comment and status change from this program's own participants.
         $activity = Goals::comments($participantIds->all(), [], 20);
 
+        // Per participant: add-customer window state, RAG light on the customer
+        // count, and whether the "finish adding" reminder has gone out - for the
+        // Participants tab. Keyed by user id.
+        $participantMeta = NinetyDayRound::where('program_id', $program->id)->get()
+            ->mapWithKeys(fn ($r) => [$r->user_id => Goals::windowState($r)]);
+
+        // A single "current status" per participant for the Participants tab:
+        // while they are still adding customers that is the live concern
+        // (adding / reminder sent / window closed); once all are in, it is the
+        // current week's submission (W-n submitted / pending / overdue).
+        $cwByUser = [];
+        foreach ($d['rows'] as $r) {
+            $ck = $r->goal->checkins->firstWhere('week_no', $currentWeek);
+            if (!$ck) {
+                continue;
+            }
+            $uid = $r->user->id;
+            $cwByUser[$uid]['total'] = ($cwByUser[$uid]['total'] ?? 0) + 1;
+            $cwByUser[$uid]['done'] = ($cwByUser[$uid]['done'] ?? 0) + ($ck->status !== null ? 1 : 0);
+        }
+        $currentWeekOverdue = $program->starts_on->copy()->addDays(7 * $currentWeek)->lt($today);
+        $participantStatus = [];
+        foreach ($participantIds as $uid) {
+            $m = $participantMeta[$uid] ?? null;
+            if (!$m) {
+                $participantStatus[$uid] = ['label' => '—', 'tone' => 'muted'];
+                continue;
+            }
+            $cnt = $m['count'];
+            $mn = $m['min'];
+            if (!$m['meets_min']) {
+                // Still short of the minimum: colour by the same red/amber RAG light as the
+                // Customers column (red below the amber threshold, amber up to the minimum),
+                // and let the label carry which state they are in.
+                $tone = $m['rag']['level'] === 'green' ? 'amber' : $m['rag']['level'];
+                if ($m['reminder_sent_at']) {
+                    $participantStatus[$uid] = ['label' => "Reminder sent · {$cnt}/{$mn}", 'tone' => $tone];
+                } elseif ($m['open']) {
+                    $participantStatus[$uid] = ['label' => "Adding customers · {$cnt}/{$mn}", 'tone' => $tone];
+                } else {
+                    $participantStatus[$uid] = ['label' => "Window closed · {$cnt}/{$mn}", 'tone' => 'red'];
+                }
+            } elseif ($m['open']) {
+                // Still inside the add-customer window but already has the full set:
+                // done adding, weekly tracking has not begun yet - don't raise a
+                // premature "week overdue". This is the clean "all added" state.
+                $participantStatus[$uid] = ['label' => "All {$cnt} customers added", 'tone' => 'green'];
+            } else {
+                // Add window has closed: weekly tracking is the live concern now.
+                $wk = $cwByUser[$uid] ?? null;
+                if ($wk && $wk['total'] > 0 && $wk['done'] >= $wk['total']) {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} added · W{$currentWeek} submitted", 'tone' => 'green'];
+                } elseif ($wk && $wk['total'] > 0) {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} added · W{$currentWeek} " . ($currentWeekOverdue ? 'overdue' : 'pending'), 'tone' => $currentWeekOverdue ? 'red' : 'amber'];
+                } else {
+                    $participantStatus[$uid] = ['label' => "All {$cnt} customers added", 'tone' => 'green'];
+                }
+            }
+        }
+
         return view('tenant.performance.ninety-day-goals.program-detail', [
+            'participantMeta' => $participantMeta,
+            'participantStatus' => $participantStatus,
             'tab'        => null,
             'isAdmin'    => true,
             'canManage'  => Goals::managesEveryone($user),
@@ -1054,6 +1068,16 @@ class NinetyDayGoalController extends Controller
             'rows'       => $rows,
             'salespeople' => $d['users'],
             'activity'   => $activity,
+            // Manage program panel
+            'manageRounds' => Goals::managesEveryone($user)
+                ? NinetyDayRound::where('program_id', $program->id)->with('user:id,first_name,last_name,code')->get()
+                    ->map(fn ($r) => (object) ['user' => $r->user, 'customers' => Goals::customerCount($r), 'window' => Goals::windowState($r)])
+                    ->filter(fn ($r) => $r->user)->sortBy(fn ($r) => $r->user->first_name)->values()
+                : collect(),
+            'addablePeople' => Goals::managesEveryone($user) ? Goals::salesStaff()->whereNotIn('id', $participantIds)->values() : collect(),
+            'canDeleteProgram' => $user->hasRole(['admin', 'Admin', 'super_admin']),
+            'footprint'  => $user->hasRole(['admin', 'Admin', 'super_admin']) ? Goals::programFootprint($program) : null,
+            'startLocked' => NinetyDayGoalCheckin::whereIn('round_id', NinetyDayRound::where('program_id', $program->id)->pluck('id'))->whereNotNull('status')->exists(),
         ]);
     }
 
@@ -1109,6 +1133,115 @@ class NinetyDayGoalController extends Controller
             'message' => 'Reminder sent to ' . count($targetIds) . ' ' . \Illuminate\Support\Str::plural('salesperson', count($targetIds)) . ' for week W' . $week . '.',
             'count'   => count($targetIds),
         ]);
+    }
+
+    // ── editing a program (Program Details > Manage program) ─────────────
+
+    private function programManager(): ?User
+    {
+        $u = Auth::user();
+
+        return Goals::managesEveryone($u) ? $u : null;
+    }
+
+    /** Rename / re-date a program (admin/HR). */
+    public function programUpdate(Request $request, $id)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can change a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate([
+            'name'      => 'required|string|max:150',
+            'starts_on' => 'required|date',
+            'ends_on'   => 'required|date|after:starts_on',
+        ]);
+        $error = Goals::updateProgram($program, $data['name'], Carbon::parse($data['starts_on']), Carbon::parse($data['ends_on']));
+        if ($error) {
+            return response()->json(['success' => false, 'message' => $error], 422);
+        }
+        $program->refresh();
+
+        return response()->json(['success' => true, 'message' => 'Saved: "' . $program->name . '", ' . $program->starts_on->format('d M Y') . ' – ' . $program->ends_on->format('d M Y') . '.']);
+    }
+
+    /** Add people to a program (admin/HR); each gets the add-customers task and an in-app invite. */
+    public function programAddParticipants(Request $request, $id)
+    {
+        $admin = $this->programManager();
+        if (!$admin) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can add people to a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate(['user_ids' => 'required|array|min:1', 'user_ids.*' => 'integer|exists:users,id']);
+        $result = Goals::addToProgram($program, $admin, $data['user_ids']);
+
+        $roundIds = array_map(fn ($e) => $e['round']->id, $result['enrolled']);
+        app()->terminating(function () use ($program, $roundIds) {
+            foreach (NinetyDayRound::whereIn('id', $roundIds)->with('user')->get() as $round) {
+                try {
+                    $round->user?->notify(new ProgramInvite($program, $round));
+                } catch (\Throwable $e) {
+                    Log::warning("90-Day Goals program invite failed for user {$round->user_id}: " . $e->getMessage());
+                }
+            }
+        });
+
+        $names = fn ($list) => collect($list)->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name))->implode(', ');
+
+        return response()->json([
+            'success' => (bool) $result['enrolled'],
+            'message' => count($result['enrolled']) . ' added to "' . $program->name . '".'
+                . ($result['skipped'] ? ' ' . count($result['skipped']) . ' skipped - already in a program or with customers in their current round: ' . $names($result['skipped']) . '.' : ''),
+        ], $result['enrolled'] ? 200 : 422);
+    }
+
+    /** Take someone out of a program (admin/HR), with their round, customers, tasks and notifications. */
+    public function programRemoveParticipant($id, $userId)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can remove people from a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $c = Goals::removeFromProgram($program, (int) $userId);
+        if (!$c['rounds']) {
+            return response()->json(['success' => false, 'message' => 'That person is not in this program.'], 404);
+        }
+
+        return response()->json(['success' => true, 'message' => 'Removed, with ' . $c['customers'] . ' customer(s), ' . $c['tasks'] . ' task(s) and ' . $c['notifications'] . ' notification(s).']);
+    }
+
+    /** Reopen the add-customers window until a chosen time, for everyone or the chosen people (admin/HR). */
+    public function programOpenWindow(Request $request, $id)
+    {
+        if (!$this->programManager()) {
+            return response()->json(['success' => false, 'message' => 'Only admin/HR can open the window.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        $data = $request->validate(['until' => 'required|date|after:now', 'user_ids' => 'nullable|array', 'user_ids.*' => 'integer']);
+        $until = Carbon::parse($data['until']);
+        $n = Goals::openCustomerWindow($program, $until, $data['user_ids'] ?? null);
+
+        return response()->json(['success' => true, 'message' => 'Adding customers is open for ' . $n . ' ' . \Illuminate\Support\Str::plural('person', $n) . ' until ' . $until->format('D d M Y, h:i A') . '.']);
+    }
+
+    /** Delete a program and everything it created - admin only. */
+    public function programDestroy(Request $request, $id)
+    {
+        $u = Auth::user();
+        if (!$u || !$u->hasRole(['admin', 'Admin', 'super_admin'])) {
+            return response()->json(['success' => false, 'message' => 'Only an admin can delete a program.'], 403);
+        }
+        $program = NinetyDayProgram::findOrFail($id);
+        if (trim((string) $request->input('confirm_name')) !== trim($program->name)) {
+            return response()->json(['success' => false, 'message' => 'Type the program name exactly to confirm.'], 422);
+        }
+        $name = $program->name;
+        $c = Goals::deleteProgram($program);
+        Log::info("90-Day Goals program deleted by user {$u->id}: \"$name\" (#$id)", $c);
+
+        return response()->json(['success' => true, 'redirect' => route('performance.ninety-day-goals.program-dashboard'),
+            'message' => '"' . $name . '" deleted: ' . $c['rounds'] . ' participant round(s), ' . $c['customers'] . ' customer(s), ' . $c['tasks'] . ' task(s) and ' . $c['notifications'] . ' notification(s).']);
     }
 
     // ── admin-created programs ───────────────────────────────────────────
@@ -1360,10 +1493,10 @@ class NinetyDayGoalController extends Controller
                 'next_action' => $e['next_action'] ?? '', 'next_follow_up_date' => $e['next_follow_up_date'] ?? null,
             ];
         }
-        [$saved, $errors] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
+        [$saved, $errors, $notes] = Goals::submit($target, (int) $data['week_no'], $entries, null, $actor);
 
-        return response()->json(['success' => $saved > 0 && !$errors, 'saved' => $saved, 'errors' => $errors,
-            'message' => $errors ? implode(' ', $errors) : "Saved {$saved} status" . ($saved === 1 ? '' : 'es') . '.'], $errors && !$saved ? 422 : 200);
+        return response()->json(['success' => $saved > 0 && !$errors, 'saved' => $saved, 'errors' => $errors, 'notes' => $notes,
+            'message' => trim(($errors ? implode(' ', $errors) : "Saved {$saved} status" . ($saved === 1 ? '' : 'es') . '.') . ' ' . implode(' ', $notes))], $errors && !$saved ? 422 : 200);
     }
 
     // ── change / remove a goal ───────────────────────────────────────────
@@ -1382,7 +1515,7 @@ class NinetyDayGoalController extends Controller
             'expected_order_date' => 'nullable|date',
         ]);
 
-        // The monthly potential IS the target (x months) that achievement % and the rankings are
+        // monthly_potential holds the customer's overall target that achievement % and the rankings are
         // measured against, so the salesperson can't move it once it has been reported on or the
         // round is over - lowering it after the fact inflated their achievement. Admin/HR still can.
         if (isset($data['monthly_potential']) && (float) $data['monthly_potential'] !== (float) $goal->monthly_potential
@@ -1390,7 +1523,7 @@ class NinetyDayGoalController extends Controller
             $closed = $goal->closed_at || optional($goal->round)->status !== 'active';
             $reported = NinetyDayGoalCheckin::where('goal_id', $goal->id)->whereNotNull('status')->exists();
             if ($closed || $reported) {
-                return response()->json(['success' => false, 'message' => 'The monthly potential is this customer\'s target and is fixed once you have reported on it or the round has ended. Ask an admin if it has to change.'], 422);
+                return response()->json(['success' => false, 'message' => 'The target is fixed once you have reported on it or the round has ended. Ask an admin if it has to change.'], 422);
             }
         }
         $goal->update(array_filter($data, fn ($v) => $v !== null));

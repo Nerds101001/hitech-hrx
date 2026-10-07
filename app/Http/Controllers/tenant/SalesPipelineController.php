@@ -261,7 +261,7 @@ class SalesPipelineController extends Controller
         // Most recent month first so users see the current month without scrolling right
         $months = array_reverse($months);
 
-        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'customer', 'extraReps.user', 'serviceReps.user', 'months' => function($q) use ($months) {
+        $query = SalesPipeline::with(['salesperson', 'ccare', 'newBiz', 'formerNewBiz', 'customer', 'extraReps.user', 'serviceReps.user', 'months' => function($q) use ($months) {
             $monthKeys = array_column($months, 'key');
             $q->whereIn('month_year', $monthKeys);
         }])->where('is_locked', true);
@@ -290,8 +290,10 @@ class SalesPipelineController extends Controller
         $allowedSpIds = \App\Support\SalesScope::viewIds($user, $request, 'sp');
         // Row visibility: that list OR — for a CCare/New Biz rep — the individual
         // customer rows they are personally assigned to (ccare_id / new_biz_id).
+        // former_new_biz_id: a customer that moved to CCare stays visible to its
+        // New Biz person, for the months that are still theirs.
         \App\Support\SalesScope::applyScope($query, $user, $request, [
-            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id', 'new_biz_2_id'], 'member' => 'sp', 'extra' => true,
+            'sp' => 'salesperson_id', 'rep' => ['ccare_id', 'new_biz_id', 'new_biz_2_id', 'former_new_biz_id'], 'member' => 'sp', 'extra' => true,
         ]);
 
         // Snapshot of what this user may see, BEFORE the filters below. The filter
@@ -343,7 +345,7 @@ class SalesPipelineController extends Controller
         $personOrTeam = self::applyUnrestrictedPersonOrTeamFilter(
             $query, $allowedSpIds, $teamView,
             [$fSp, $fCcare, $fNb],
-            ['salesperson_id', 'ccare_id', 'new_biz_id', 'new_biz_2_id']
+            ['salesperson_id', 'ccare_id', 'new_biz_id', 'new_biz_2_id', 'former_new_biz_id']
         );
         $isUnrestricted        = $personOrTeam['isUnrestricted'];
         $selectedPersonId      = $personOrTeam['selectedPersonId'];
@@ -355,7 +357,13 @@ class SalesPipelineController extends Controller
                 self::applyPersonFilter($query, 'salesperson_id', $fSp);
             }
             self::applyPersonFilter($query, 'ccare_id', $fCcare);
-            self::applyPersonFilter($query, 'new_biz_id', $fNb);
+            if (!empty($fNb) && is_numeric($fNb)) {
+                // ...including customers that have since moved to CCare: their
+                // months before the move are still this New Biz person's.
+                $query->where(fn ($q) => $q->where('new_biz_id', $fNb)->orWhere('former_new_biz_id', $fNb));
+            } else {
+                self::applyPersonFilter($query, 'new_biz_id', $fNb);
+            }
         }
 
         // Applied on its own terms, outside the block above: this one has to
@@ -367,6 +375,7 @@ class SalesPipelineController extends Controller
                 $q->where('ccare_id', $bothId)
                   ->orWhere('new_biz_id', $bothId)
                   ->orWhere('new_biz_2_id', $bothId)
+                  ->orWhere('former_new_biz_id', $bothId)
                   // Extra reps count too. Without them this filter returned FEWER
                   // rows than picking the same person under "CCare" - Poonam holds
                   // 29 extra-rep rows, 13 of them on customers she is not the
@@ -393,9 +402,12 @@ class SalesPipelineController extends Controller
         }
         // Category filter — mirrors the Category column: "New Biz" when a New Biz
         // rep is set, "CCare" when only a CCare rep is set, "None" when neither.
+        // A customer that moved New Biz -> CCare is in both: New Biz for the
+        // months before ccare_from, CCare from it (the month totals split alike).
         $fCat = trim((string) $request->input('cat', ''));
         if ($fCat === 'New Biz') {
-            $query->whereNotNull('new_biz_id');
+            $firstMonthKey = min(array_column($months, 'key'));
+            $query->where(fn ($q) => $q->whereNotNull('new_biz_id')->orWhere('ccare_from', '>', $firstMonthKey));
         } elseif ($fCat === 'CCare') {
             $query->whereNull('new_biz_id')->whereNotNull('ccare_id');
         } elseif ($fCat === 'None') {
@@ -408,8 +420,27 @@ class SalesPipelineController extends Controller
         $monthKeys = array_column($months, 'key');
         $totalNewClients = (clone $query)->count();
         $totalPotential  = (float) (clone $query)->sum('total_business_potential');
-        $monthAgg = SalesPipelineMonth::whereIn('sales_pipeline_id', (clone $query)->select('sales_pipelines.id'))
-            ->whereIn('month_year', $monthKeys)
+
+        // Whose months the totals count: the category picked, and each person
+        // picked (or a CCare / New Biz rep's own book). Only a customer that
+        // moved New Biz -> CCare has months that fall outside them.
+        $monthCategory = in_array($fCat, ['New Biz', 'CCare', 'None'], true) ? $fCat : null;
+        $creditPeople = array_values(array_unique(array_map('intval', array_filter(
+            $teamView ? [] : [$fSp, $fCcare, $fNb, $fBoth],
+            fn ($v) => is_numeric($v)
+        ))));
+        if (!$creditPeople && ($isCcare || $isNewBiz) && !$isManager && $allowedSpIds !== null) {
+            $creditPeople = [(int) $user->id];
+        }
+        $monthAggQuery = SalesPipelineMonth::whereIn('sales_pipeline_id', (clone $query)->select('sales_pipelines.id'))
+            ->whereIn('month_year', $monthKeys);
+        if ($monthCategory) {
+            SalesPipeline::whereMonthInCategory($monthAggQuery, $monthCategory);
+        }
+        foreach ($creditPeople as $personId) {
+            SalesPipeline::whereMonthCredited($monthAggQuery, $personId);
+        }
+        $monthAgg = $monthAggQuery
             ->selectRaw('month_year, SUM(sale_amount) AS sale, SUM(pending_amount) AS pending, SUM(forecast_amount) AS forecast')
             ->groupBy('month_year')->get()->keyBy('month_year');
 
@@ -948,7 +979,7 @@ class SalesPipelineController extends Controller
         $ccareOnly   = $ccareUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
         $newBizOnly  = $newBizUsers->whereNotIn('id', $bothUsers->pluck('id'))->values();
 
-        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive'));
+        return view('tenant.sales-pipeline.index', compact('bothUsers', 'ccareOnly', 'newBizOnly', 'canDeleteCustomer', 'canEditBook', 'canEditOwnRow', 'isAdminOrHr', 'pipelines', 'months', 'selectedFy', 'defaultFy', 'assignedUsers', 'salespersons', 'newBizUsers', 'isCcare', 'isNewBiz', 'totals', 'salespersonTargets', 'monthlyActuals', 'monthlyForecast', 'monthlyPending', 'monthlyTargets', 'currentMonthKey', 'totalNewClients', 'totalPendingCurrentMonth', 'totalPotential', 'annualMap', 'annualGrand', 'salespersonFilterUsers', 'ccareFilterUsers', 'newBizFilterUsers', 'spFilterCounts', 'ccareFilterCounts', 'nbFilterCounts', 'spNoneCount', 'ccareNoneCount', 'nbNoneCount', 'brandCounts', 'fBrand', 'kbByName', 'fParty', 'fType', 'fSp', 'fCcare', 'fNb', 'fBoth', 'bothFilterUsers', 'bothFilterCounts', 'targetAchievers', 'targetAchieversByMonth', 'achieveMonthKeys', 'kAchieved', 'bAchieved', 'skAchieved', 'isManager', 'teamView', 'hasTeam', 'teamMembers', 'ccareUsers', 'syncTargetId', 'syncTargetLabel', 'syncMapped', 'isUnrestricted', 'selectedPersonId', 'selectedPersonHasTeam', 'showTeamActive', 'monthCategory', 'creditPeople'));
     }
 
     public function actualPipelineIndex(Request $request)
@@ -2231,31 +2262,18 @@ class SalesPipelineController extends Controller
 
             if ($newCategory === 'CCare') {
                 // Keep existing ccare_id if already set, otherwise find from CcSalespersonMap
-                $ccareId = $pipeline->ccare_id;
-                if (!$ccareId) {
-                    $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
-                        ->with(['ccUser.department'])->get();
-                    foreach ($maps as $map) {
-                        if (!$map->ccUser) continue;
-                        if ($map->role === 'ccare') { $ccareId = $map->ccUser->id; break; }
-                        if ($map->role) continue;
-                        if ($map->ccUser->department) {
-                            $dept = strtolower($map->ccUser->department->name);
-                            if (str_contains($dept, 'customer care') || str_contains($dept, 'c-care') || str_contains($dept, 'ccare')) {
-                                $ccareId = $map->ccUser->id;
-                                break;
-                            }
-                        }
-                    }
-                }
-                // Directly save — bypasses mass assignment issues with null
+                $ccareId = $pipeline->ccare_id ?: SalesPipeline::mappedCcareFor($pipeline->salesperson_id);
+                // Directly save — bypasses mass assignment issues with null.
+                // Leaving New Biz keeps the months before this one under New
+                // Biz (SalesPipeline's saving hook sets ccare_from).
                 $pipeline->ccare_id   = $ccareId;
                 $pipeline->new_biz_id = null;
                 $pipeline->save();
 
             } elseif ($newCategory === 'New Biz') {
-                // Keep existing new_biz_id if already set, otherwise find from CcSalespersonMap
-                $newBizId = $pipeline->new_biz_id;
+                // Keep existing new_biz_id if already set, else the New Biz person it
+                // had before moving to CCare (undoing a switch), else CcSalespersonMap
+                $newBizId = $pipeline->new_biz_id ?: $pipeline->former_new_biz_id;
                 if (!$newBizId) {
                     $maps = \App\Models\CcSalespersonMap::where('sales_user_id', $pipeline->salesperson_id)
                         ->with(['ccUser.department'])->get();
@@ -2429,17 +2447,19 @@ class SalesPipelineController extends Controller
         $monthData->$field = $value;
         $monthData->save();
 
-        if ($field === 'sale_amount') {
-            if ($pipeline->type === 'New Biz') {
-                $monthsWithSales = SalesPipelineMonth::where('sales_pipeline_id', $pipeline->id)
-                    ->where('sale_amount', '>', 0)
-                    ->count();
-                if ($monthsWithSales >= 5) {
-                    $pipeline->type = 'CCare';
-                    $pipeline->converted_from_newbiz = true;
-                    $pipeline->save();
-                }
-            }
+        // The 5-month rule. This used to test `type`, which holds the customer
+        // type (Customer / Dealer / ...), never 'New Biz' - so it never fired.
+        $moved = $field === 'sale_amount' && $pipeline->graduateIfDue();
+        if ($moved) {
+            $pipeline->load('ccare');
+            return response()->json([
+                'success'        => true,
+                'data'           => $monthData,
+                'moved_to_ccare' => true,
+                'ccare_id'       => $pipeline->ccare_id,
+                'rep_name'       => $pipeline->ccare->name ?? null,
+                'ccare_from'     => \Carbon\Carbon::parse($pipeline->ccare_from . '-01')->format('M Y'),
+            ]);
         }
 
         return response()->json(['success' => true, 'data' => $monthData]);

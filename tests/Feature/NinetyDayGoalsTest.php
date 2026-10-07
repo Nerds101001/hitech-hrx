@@ -364,10 +364,11 @@ class NinetyDayGoalsTest extends TestCase
     {
         $week4 = $this->pendingUpsellCheckin();
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $week4->round_id)->render();
 
         $this->assertStringContainsString('RepeatCo', $html);
-        $this->assertStringContainsString("it's an upsell", $html);
+        $this->assertStringContainsString("it's an upsell", $html, 'confirmed on the program page now');
     }
 
     /** A goal whose week 4 checkin is already flagged needs_upsell_confirm (week 0 auto-filled first). */
@@ -394,6 +395,54 @@ class NinetyDayGoalsTest extends TestCase
     {
         $this->assertSame(['On Track', 'Off Track', 'Trial Order', 'Regular Order', 'No Report', 'Dropped', 'Transferred'], Goals::STATUSES);
         $this->assertSame(Goals::STATUSES, array_keys(Goals::STATUS_COLORS));
+    }
+
+    public function test_an_order_status_moves_a_pipeline_customer_to_the_sales_report_and_waits_for_a_real_sale(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $pid = $this->pipeline($this->rep, 'Order Co', 'P', false);   // still in the Sales Pipeline
+        $g = $this->goal($this->rep, $round, 'Order Co');
+        $g->update(['sales_pipeline_id' => $pid]);
+        Goals::ensureCheckins($round);
+
+        [$saved, $errors, $notes] = Goals::submit($this->rep, 0, [$g->id => ['status' => 'Trial Order', 'comment' => '']]);
+
+        $this->assertSame([1, []], [$saved, $errors]);
+        $p = DB::table('sales_pipelines')->find($pid);
+        $this->assertSame(1, (int) $p->is_locked, 'on the Sales Report now');
+        $this->assertSame('Order', $p->status_stage);
+        $this->assertStringContainsString('moved from your Sales Pipeline to the Sales Report', implode(' ', $notes));
+        $this->assertStringContainsString('counts once the sale appears on the Sales Report', implode(' ', $notes));
+
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertSame(0, $cards['converted'], 'an order with no sale on the Sales Report is not converted yet');
+        $this->assertSame(1, $cards['ordersAwaiting']);
+        $this->assertFalse(Goals::orderCheck($g->fresh())['confirmed']);
+
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $pid, 'month_year' => '2026-10', 'sale_amount' => 1.75, 'created_at' => now(), 'updated_at' => now()]);
+
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertSame(1, $cards['converted'], 'confirmed by the Sales Report sale');
+        $this->assertSame(0, $cards['ordersAwaiting']);
+        $check = Goals::orderCheck($g->fresh());
+        $this->assertTrue($check['confirmed']);
+        $this->assertEquals(1.75, $check['amount'], 'the amount comes from the Sales Report');
+    }
+
+    public function test_re_saving_a_week_keeps_a_follow_up_date_already_on_record(): void
+    {
+        $this->at(self::MONDAY);
+        $round = Goals::roundFor($this->rep);
+        $g = $this->goal($this->rep, $round);
+        Goals::ensureCheckins($round);
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'On Track', 'comment' => '', 'next_follow_up_date' => '2026-10-09']]);
+
+        Goals::submit($this->rep, 0, [$g->id => ['status' => 'Off Track', 'comment' => 'Buyer away', 'next_follow_up_date' => null]]);
+
+        $c = $g->checkins()->where('week_no', 0)->first();
+        $this->assertSame('Off Track', $c->status);
+        $this->assertSame('2026-10-09', $c->next_follow_up_date->format('Y-m-d'));
     }
 
     public function test_a_status_on_the_monday_needs_no_comment_and_is_not_late(): void
@@ -550,11 +599,14 @@ class NinetyDayGoalsTest extends TestCase
         $this->goal($this->rep, $round, 'Mine Ltd');
         $this->goal($this->rep2, Goals::roundFor($this->rep2), 'Theirs Ltd');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class,
+            app(NinetyDayGoalController::class)->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals')), 'the old page sends them to My Programs');
+        Auth::setUser($this->rep);
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
 
         $this->assertStringContainsString('Mine Ltd', $html);
         $this->assertStringNotContainsString('Theirs Ltd', $html);
-        $this->assertStringContainsString('Add customers', $html);
+        $this->assertStringContainsString('Add Customer', $html);
         $this->assertStringNotContainsString('Proactive', $html, 'that column is not part of this tracker');
 
         $away = app(NinetyDayGoalController::class)->index($this->ask($this->outsider, 'GET', '/performance/ninety-day-goals'));
@@ -571,16 +623,15 @@ class NinetyDayGoalsTest extends TestCase
         Goals::submit($this->rep, 0, [$a->id => ['status' => 'Regular Order', 'comment' => 'Second PO in']]);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals', ['user_id' => $this->rep->id]))->render();
-        $this->assertStringContainsString('Alpha Ltd', $html);
-        $this->assertStringContainsString('Regular Order', $html);
-        $this->assertStringContainsString('<div class="ndg-n ndg-n-status">Second PO in</div>', $html, 'the comment sits in its own cell beside the status');
-        $this->assertStringContainsString('Beta Ltd', $html, 'the whole team is in one table; the salesperson filter narrows it on the page');
+        Auth::setUser($admin);
+        // Filtered by customer: the table pages through everyone's real data in this database.
+        $alpha = app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Alpha Ltd']))->render();
+        $this->assertStringContainsString('Alpha Ltd', $alpha);
+        $this->assertStringContainsString('Regular Order', $alpha);
+        $this->assertStringContainsString('Beta Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Beta Ltd']))->render(), 'the whole team on the Program Dashboard');
 
-        $all = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
-        $this->assertStringContainsString('Alpha Ltd', $all);
-        $this->assertStringContainsString('Beta Ltd', $all);
-        $this->assertStringContainsString('Statuses submitted, week by week', $all);
+        $own = app(NinetyDayGoalController::class)->roundDetail($this->ask($admin, 'GET', '/x'), Goals::activeRound($this->rep)->id)->render();
+        $this->assertStringContainsString('Second PO in', $own, "and the status comment on that person's program page");
     }
 
     public function test_a_manager_sees_only_their_team(): void
@@ -591,7 +642,8 @@ class NinetyDayGoalsTest extends TestCase
         $this->goal($this->rep, Goals::roundFor($this->rep), 'Team Ltd');
         $this->goal($this->rep2, Goals::roundFor($this->rep2), 'Stranger Ltd');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview']))->render();
+        Auth::setUser($manager);
+        $html = app(NinetyDayGoalController::class)->programDashboard($this->ask($manager, 'GET', '/x'))->render();
 
         $this->assertStringContainsString('Team Ltd', $html);
         $this->assertStringNotContainsString('Stranger Ltd', $html);
@@ -644,17 +696,17 @@ class NinetyDayGoalsTest extends TestCase
         return $g->fresh();
     }
 
-    public function test_achievement_is_what_was_sold_in_the_round_against_three_months_of_potential(): void
+    public function test_achievement_is_what_was_sold_in_the_round_against_the_overall_target(): void
     {
         $this->at(self::MONDAY);
-        $this->soldGoal($this->rep, 'Half Ltd', 2.0, 'KIF', 3.0);       // target 6, sold 3
-        $this->soldGoal($this->rep, 'Over Ltd', 1.0, 'Rust-X', 6.0);    // target 3, sold 6
+        $this->soldGoal($this->rep, 'Half Ltd', 6.0, 'KIF', 3.0);       // target 6, sold 3
+        $this->soldGoal($this->rep, 'Over Ltd', 3.0, 'Rust-X', 6.0);    // target 3, sold 6
 
         $d = Goals::dashboard([$this->rep->id, $this->rep2->id]);
 
         $this->assertSame(2, $d['cards']['goals']);
-        $this->assertEquals(3.0, $d['cards']['potential']);
-        $this->assertEquals(9.0, $d['cards']['target']);
+        $this->assertEquals(9.0, $d['cards']['potential']);
+        $this->assertEquals(9.0, $d['cards']['target'], 'the typed target is not multiplied by months');
         $this->assertEquals(9.0, $d['cards']['achieved']);
         $this->assertEquals(100.0, $d['cards']['pct']);
         $this->assertSame('Over Ltd', $d['topAchieved']->first()->goal->client_name);
@@ -667,6 +719,63 @@ class NinetyDayGoalsTest extends TestCase
         DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $g->sales_pipeline_id, 'month_year' => '2026-08', 'sale_amount' => 50, 'created_at' => now(), 'updated_at' => now()]);
 
         $this->assertEquals(0.0, Goals::dashboard([$this->rep->id])['cards']['achieved']);
+    }
+
+    public function test_the_round_page_shows_the_customer_minimum_the_window_countdown_and_what_can_be_edited(): void
+    {
+        config(['ninety_day.min_customers' => 10, 'ninety_day.window_rule_from' => null]);
+        $round = Goals::roundFor($this->rep);
+        $this->goal($this->rep, $round, 'One Ltd');
+        $round->update(['customer_window_until' => now()->addHours(5)]);
+        Auth::setUser($this->rep);
+
+        $html = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
+
+        $this->assertStringContainsString('Customers (minimum 10)', $html);
+        $this->assertStringContainsString('Incomplete', $html);
+        $this->assertStringContainsString('Add 9 more customers', $html);
+        $this->assertStringContainsString('id="ndgWinCountdown"', $html);
+        $this->assertStringContainsString('1 of 1 targets editable', $html);
+        $this->assertStringContainsString('data-bs-target="#ndgRdAddModal"', $html);
+        $this->assertMatchesRegularExpression('#class="ndg-alert-red mb-3 ndg-alert-click" id="ndgMinAlert" role=button tabindex=0 data-bs-toggle=modal data-bs-target=\#ndgRdAddModal#', $html, 'the red alert opens the Add Customer popup');
+        $this->assertStringContainsString('Add customers now', $html);
+        $this->assertStringNotContainsString('Next Follow-up Date', $html, 'the weekly table has no follow-up date column any more');
+
+        $dash = app(NinetyDayGoalController::class)->myDashboard($this->ask($this->rep, 'GET', '/x'))->render();
+        $this->assertStringContainsString('/performance/ninety-day-goals/round/' . $round->id . '?add=1', $dash, 'the My Dashboard alert links straight into the popup');
+        $this->assertStringContainsString('border-color:#e11d48', $dash);
+
+        $round->update(['customer_window_until' => now()->subHour()]);
+        $closed = app(NinetyDayGoalController::class)->roundDetail($this->ask($this->rep, 'GET', '/x'), $round->id)->render();
+
+        $this->assertStringNotContainsString('id="ndgWinCountdown"', $closed);
+        $this->assertStringContainsString('Ask admin/HR to reopen it', $closed);
+        $this->assertStringContainsString('Adding closed', $closed);
+        $this->assertStringContainsString('id="ndgMinAlert"', $closed, 'still red: the round is short');
+        $this->assertStringNotContainsString('id="ndgMinAlert" role=button', $closed, 'but not clickable - adding is closed');
+        $this->assertStringNotContainsString('data-bs-target="#ndgRdAddModal"', $closed, 'no Add Customer button once the window has closed');
+    }
+
+    public function test_a_round_starting_on_28_september_counts_october_to_december_not_september(): void
+    {
+        $this->at('2026-10-01');
+        $g = $this->soldGoal($this->rep, 'A-Trac', 4.0, 'Rust-X', 0.0);
+        $g->round->update(['starts_on' => '2026-09-28', 'ends_on' => '2026-12-31']);
+        DB::table('sales_pipeline_months')->insert(['sales_pipeline_id' => $g->sales_pipeline_id, 'month_year' => '2026-09', 'sale_amount' => 4.08, 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->assertSame(['2026-10', '2026-11', '2026-12'], Goals::roundMonths($g->round->fresh()));
+        $cards = Goals::dashboard([$this->rep->id])['cards'];
+        $this->assertEquals(4.0, $cards['target'], 'the 4 L typed is the overall target');
+        $this->assertEquals(0.0, $cards['achieved'], "September's sale was booked before the round began");
+    }
+
+    public function test_each_month_belongs_to_exactly_one_of_two_back_to_back_rounds(): void
+    {
+        $a = new NinetyDayRound(['starts_on' => '2026-09-28', 'ends_on' => '2026-12-27']);
+        $b = new NinetyDayRound(['starts_on' => '2026-12-28', 'ends_on' => '2027-03-28']);
+
+        $this->assertSame(['2026-10', '2026-11', '2026-12'], Goals::roundMonths($a));
+        $this->assertSame(['2027-01', '2027-02', '2027-03'], Goals::roundMonths($b));
     }
 
     public function test_top_customers_and_brands_are_ranked_biggest_first(): void
@@ -686,8 +795,8 @@ class NinetyDayGoalsTest extends TestCase
     public function test_people_are_ranked_by_share_of_target_sold(): void
     {
         $this->at(self::MONDAY);
-        $this->soldGoal($this->rep, 'A Ltd', 10.0, 'KIF', 3.0);     // 3 of 30 = 10%
-        $this->soldGoal($this->rep2, 'B Ltd', 1.0, 'KIF', 3.0);     // 3 of 3 = 100%
+        $this->soldGoal($this->rep, 'A Ltd', 30.0, 'KIF', 3.0);     // 3 of 30 = 10%
+        $this->soldGoal($this->rep2, 'B Ltd', 3.0, 'KIF', 3.0);     // 3 of 3 = 100%
 
         $users = Goals::dashboard([$this->rep->id, $this->rep2->id])['users'];
 
@@ -912,23 +1021,19 @@ class NinetyDayGoalsTest extends TestCase
         $idle = $this->person($this->sales);
         $admin = $this->person(null, 'admin');
 
-        $html = app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
-
-        $this->assertSame(1, substr_count($html, 'id="ndgTable"'), 'one table for everyone');
-        $this->assertStringContainsString('Alpha Ltd', $html);
-        $this->assertStringContainsString('Beta Ltd', $html);
-        $this->assertStringContainsString('No customers added yet', $html);
-        $this->assertStringContainsString('id="fSearch"', $html, 'filters');
-        $this->assertStringContainsString('ndg-sort', $html, 'sortable headings');
-        $this->assertStringContainsString('ndg-note-del', $this->withNote($admin, 'Alpha Ltd'), 'admin sees the remove button on a comment');
+        Auth::setUser($admin);
+        $this->assertStringContainsString('Alpha Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Alpha Ltd']))->render());
+        $this->assertStringContainsString('Beta Ltd', app(NinetyDayGoalController::class)->programDashboard($this->ask($admin, 'GET', '/x', ['customer' => 'Beta Ltd']))->render());
+        $this->assertStringContainsString('class="ndg-note-del"', $this->withNote($admin, 'Alpha Ltd'), 'admin sees the remove button on a comment');
     }
 
     private function withNote(User $admin, string $client): string
     {
         $g = NinetyDayGoal::where('client_name', $client)->latest('id')->first();
         $this->postNote($admin, $g, 0, 'Seen by admin');
+        Auth::setUser($admin);
 
-        return app(NinetyDayGoalController::class)->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+        return app(NinetyDayGoalController::class)->roundDetail($this->ask($admin, 'GET', '/x'), $g->round_id)->render();
     }
 
     public function test_a_salesperson_sees_no_delete_button_and_the_comments_page_lists_both_kinds(): void
@@ -939,8 +1044,9 @@ class NinetyDayGoalsTest extends TestCase
         $this->postNote($this->person(null, 'admin'), $g, 0, 'admin says hurry');
         $c = app(NinetyDayGoalController::class);
 
-        $mine = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
-        $this->assertStringNotContainsString('icon-sophisticated text-danger ndg-remove', $mine, 'no delete button for the sales team');
+        Auth::setUser($this->rep);
+        $mine = $c->roundDetail($this->ask($this->rep, 'GET', '/x'), $g->round_id)->render();
+        $this->assertStringNotContainsString('class="ndg-note-del"', $mine, 'no delete button for the sales team');
         $this->assertStringContainsString('admin says hurry', $mine);
         $this->assertStringContainsString('ndg-addnote', $mine, 'and can add their own comment');
 
@@ -1064,13 +1170,12 @@ class NinetyDayGoalsTest extends TestCase
         $manager = $this->person($this->sales, 'manager');
         $this->rep->forceFill(['reporting_to_id' => $manager->id])->save();
 
-        $current = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview']))->render();
-        $this->assertStringNotContainsString('From A Closed Round Ltd', $current);
-        $this->assertMatchesRegularExpression('/stat-value mb-0">1<\/h3><span class="stat-label">Customers tracked/', $current);
-
-        $all = app(NinetyDayGoalController::class)->index($this->ask($manager, 'GET', '/performance/ninety-day-goals', ['view' => 'overview', 'round' => 'all']))->render();
-        $this->assertStringContainsString('From A Closed Round Ltd', $all);
-        $this->assertMatchesRegularExpression('/stat-value mb-0">2<\/h3><span class="stat-label">Customers tracked/', $all,
+        // The summary the dashboards are built from (the old Goals page that showed it is retired).
+        $scope = Goals::visibleUserIds($manager);
+        $current = Goals::dashboard($scope, ['round' => 'current']);
+        $this->assertSame(1, (int) $current['cards']['goals']);
+        $all = Goals::dashboard($scope, ['round' => 'all']);
+        $this->assertSame(2, (int) $all['cards']['goals'],
             'the summary card must widen to 2 with the closed round included, not silently stay at 1');
     }
     // ── past rounds, each kept on its own ─────────────────────────────────
@@ -1655,13 +1760,16 @@ class NinetyDayGoalsTest extends TestCase
         $admin = $this->person(null, 'admin');
 
         Auth::setUser($admin);
-        $adminHtml = $c->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringEndsWith('/ninety-day-goals/program-dashboard', $c->index($this->ask($admin, 'GET', '/performance/ninety-day-goals'))->getTargetUrl());
+        $adminHtml = $c->comments($this->ask($admin, 'GET', '/performance/ninety-day-goals/comments'))->render();
         $this->assertStringNotContainsString('/ninety-day-goals/admin-view"', $adminHtml);
         $this->assertStringNotContainsString('/ninety-day-goals/dashboard"', $adminHtml);
         $this->assertStringContainsString('/ninety-day-goals/program-dashboard', $adminHtml);
+        $this->assertStringContainsString('/ninety-day-goals/programs"', $adminHtml, 'the Programs list is in the navigation');
 
         Auth::setUser($this->rep);
-        $repHtml = $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->render();
+        $this->assertStringEndsWith('/ninety-day-goals/my-program', $c->index($this->ask($this->rep, 'GET', '/performance/ninety-day-goals'))->getTargetUrl());
+        $repHtml = $c->comments($this->ask($this->rep, 'GET', '/performance/ninety-day-goals/comments'))->render();
         $this->assertStringNotContainsString('/ninety-day-goals/admin-view"', $repHtml);
         $this->assertStringContainsString('/ninety-day-goals/my-dashboard', $repHtml);
     }
@@ -1929,6 +2037,9 @@ class NinetyDayGoalsTest extends TestCase
         // rep2 is a real salesperson in the company but was never invited to this program.
 
         $html = app(NinetyDayGoalController::class)->programDetail($this->ask($admin, 'GET', '/x'), $result['program']->id)->render();
+        // The Manage program panel's "Add people" list exists to offer exactly the people
+        // outside the program; everything else on the page must not show them.
+        $html = preg_replace('/<div class="modal fade" id="ndgManageModal".*?<\/select>/s', '', $html);
 
         $this->assertStringNotContainsString(trim($this->rep2->first_name . ' ' . $this->rep2->last_name), $html,
             "Top Performing Salespersons must only ever list this program's own participants");

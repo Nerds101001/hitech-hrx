@@ -172,7 +172,9 @@ class TaskController extends Controller
     {
         $task = Task::findOrFail($id);
 
-        if ($task->user_id !== auth()->id() && !TaskAccess::canManage(auth()->user(), $task)) {
+        // Anyone who can see the task's updates: CC'd people were shown the
+        // link in the thread but got a 403 opening it.
+        if (!$task->canBeViewedBy(auth()->user())) {
             abort(403, 'You cannot view this attachment.');
         }
 
@@ -189,7 +191,7 @@ class TaskController extends Controller
         $update = TaskUpdate::with('task')->findOrFail($id);
         $task = $update->task;
 
-        if (!$task || ($task->user_id !== auth()->id() && !TaskAccess::canManage(auth()->user(), $task))) {
+        if (!$task || !$task->canBeViewedBy(auth()->user())) {
             abort(403, 'You cannot view this attachment.');
         }
 

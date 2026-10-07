@@ -30,16 +30,9 @@ class TaskScheduleService
     {
         $day = $day ?: Carbon::today();
 
-        if (!$schedule->is_active || !$schedule->matchesToday($day)) {
-            return collect();
-        }
-
-        // Sunday or a company holiday - no recurring task fires on either,
-        // whatever the schedule's own frequency says. last_run_on is
-        // deliberately left untouched here, same as the checks above: the
-        // schedule just fires on its next actual matching working day
-        // instead, it doesn't lose today's occurrence forever.
-        if (TaskSchedule::isNonWorkingDay($day)) {
+        // Never on a Sunday or company holiday; an occurrence that fell on
+        // one fires on the first working day after it (TaskSchedule::isDueOn).
+        if (!$schedule->is_active || !$schedule->isDueOn($day)) {
             return collect();
         }
 
@@ -50,6 +43,15 @@ class TaskScheduleService
         $targetIds = User::whereIn('id', $schedule->target_user_ids ?? [])
             ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
             ->pluck('id');
+
+        // Everyone on it has left. This used to still count as a run -
+        // last_run_on moved on every morning while nothing was created, so
+        // the schedule looked healthy. Not stamped now; the Recurring tab
+        // shows it as having nobody active.
+        if ($targetIds->isEmpty()) {
+            Log::warning("Recurring task schedule {$schedule->id} has no active people left; nothing created.");
+            return collect();
+        }
 
         // Same active-only filter as targets, and excludes anyone who's also
         // a target - being CC'd on your own task is meaningless.

@@ -114,7 +114,11 @@ class SalesManagerSummary
                 $sm['expectedClosingL'] = $funnel['Closing']['v'] + $funnel['Negotiation']['v'];
 
                 // ---- Targets vs realized (this FY) per rep ----
-                $allPipeIds = DB::table('sales_pipelines')->where($heldByTeam)->pluck('id');
+                // A customer that moved New Biz -> CCare is still its New Biz
+                // person's for the months before the move (former_new_biz_id).
+                $allPipeIds = DB::table('sales_pipelines')
+                    ->where(fn ($q) => $q->where($heldByTeam)->orWhereIn('former_new_biz_id', $repIds))
+                    ->pluck('id');
                 $salesByRep = []; $fcstByRep = []; $pendingByRep = [];
                 $teamAchievedL = 0.0; $teamForecastL = 0.0; $teamPendingL = 0.0;
                 if ($allPipeIds->isNotEmpty()) {
@@ -125,46 +129,48 @@ class SalesManagerSummary
                     // Credit each customer once per rep. Summing the role
                     // columns separately counted a rep who is both salesperson
                     // and CCare on the same row twice.
+                    $holderCols = array_merge($roleCols, ['former_new_biz_id']);
                     $rowHolders = DB::table('sales_pipelines')
                         ->whereIn('id', $allPipeIds)
-                        ->get(array_merge(['id'], $roleCols));
-                    $fyTotals = DB::table('sales_pipeline_months')
-                        ->whereIn('sales_pipeline_id', $allPipeIds)
-                        ->whereIn('month_year', $fyMonths)
-                        ->groupBy('sales_pipeline_id')
-                        ->selectRaw('sales_pipeline_id pid, SUM(sale_amount) sold,
-                                     SUM(forecast_amount) fcst, SUM(pending_amount) pend')
-                        ->get()->keyBy('pid');
+                        ->get(array_merge(['id', 'ccare_from'], $holderCols));
+                    // Split at the move (`pre` = months before ccare_from), so
+                    // each side of a moved customer is credited its own months.
+                    $fyTotals = DB::table('sales_pipeline_months as m')
+                        ->join('sales_pipelines as sp', 'sp.id', '=', 'm.sales_pipeline_id')
+                        ->whereIn('m.sales_pipeline_id', $allPipeIds)
+                        ->whereIn('m.month_year', $fyMonths)
+                        ->groupBy('m.sales_pipeline_id', 'pre')
+                        ->selectRaw('m.sales_pipeline_id pid,
+                                     (sp.ccare_from IS NOT NULL AND m.month_year < sp.ccare_from) pre,
+                                     SUM(m.sale_amount) sold, SUM(m.forecast_amount) fcst, SUM(m.pending_amount) pend')
+                        ->get()->groupBy('pid');
                     $repLookupPerf = array_flip($repIds);
                     foreach ($rowHolders as $row) {
-                        $t = $fyTotals[$row->id] ?? null;
-                        if (!$t) {
-                            continue;
-                        }
-                        $onRow = [];
-                        foreach ($roleCols as $col) {
-                            $holder = $row->{$col} ?? null;
-                            if ($holder && isset($repLookupPerf[$holder])) {
-                                $onRow[$holder] = true;
+                        foreach ($fyTotals[$row->id] ?? [] as $t) {
+                            $onRow = [];
+                            foreach ($holderCols as $col) {
+                                $holder = $row->{$col} ?? null;
+                                if ($holder && isset($repLookupPerf[$holder])
+                                    && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, (bool) $t->pre)) {
+                                    $onRow[$holder] = true;
+                                }
+                            }
+                            foreach (array_keys($onRow) as $uid) {
+                                $salesByRep[$uid]   = ($salesByRep[$uid] ?? 0) + (float) $t->sold;
+                                $fcstByRep[$uid]    = ($fcstByRep[$uid] ?? 0) + (float) $t->fcst;
+                                $pendingByRep[$uid] = ($pendingByRep[$uid] ?? 0) + (float) $t->pend;
+                            }
+                            // ...but the TEAM total must count each customer once, or
+                            // a row with both a salesperson and a CCare on this team
+                            // would be added twice - and only the months someone on
+                            // the team is credited with.
+                            if ($onRow) {
+                                $teamAchievedL += (float) $t->sold;
+                                $teamForecastL += (float) $t->fcst;
+                                $teamPendingL  += (float) $t->pend;
                             }
                         }
-                        foreach (array_keys($onRow) as $uid) {
-                            $salesByRep[$uid]   = ($salesByRep[$uid] ?? 0) + (float) $t->sold;
-                            $fcstByRep[$uid]    = ($fcstByRep[$uid] ?? 0) + (float) $t->fcst;
-                            $pendingByRep[$uid] = ($pendingByRep[$uid] ?? 0) + (float) $t->pend;
-                        }
                     }
-                    // ...but the TEAM total must count each customer once, or a
-                    // row with both a salesperson and a CCare on this team would
-                    // be added twice.
-                    $teamTotals = DB::table('sales_pipeline_months')
-                        ->whereIn('sales_pipeline_id', $allPipeIds)
-                        ->whereIn('month_year', $fyMonths)
-                        ->selectRaw('SUM(sale_amount) sold, SUM(forecast_amount) fcst, SUM(pending_amount) pend')
-                        ->first();
-                    $teamAchievedL = (float) ($teamTotals->sold ?? 0);
-                    $teamForecastL = (float) ($teamTotals->fcst ?? 0);
-                    $teamPendingL  = (float) ($teamTotals->pend ?? 0);
                 }
                 $targetByRep = DB::table('salesperson_targets')
                     ->whereIn('salesperson_id', $repIds)->whereIn('month_year', $fyMonths)
@@ -291,14 +297,17 @@ class SalesManagerSummary
                 // salesperson and ccare on a row was credited twice, reading up
                 // to 39% high. Resolve each row to the distinct set of reps on
                 // it, then credit the amount once per rep.
+                // former_new_biz_id: a customer that moved New Biz -> CCare is
+                // still its New Biz person's for the months before the move.
+                $holderCols = array_merge($roleCols, ['former_new_biz_id']);
                 $rowRoles = DB::table('sales_pipelines')
-                    ->where(function ($w) use ($roleCols, $repIds) {
-                        foreach ($roleCols as $i => $c) {
+                    ->where(function ($w) use ($holderCols, $repIds) {
+                        foreach ($holderCols as $i => $c) {
                             $i === 0 ? $w->whereIn($c, $repIds) : $w->orWhereIn($c, $repIds);
                         }
                     })
                     ->where('is_locked', true)->whereNull('deleted_at')
-                    ->get(array_merge(['id'], $roleCols));
+                    ->get(array_merge(['id', 'ccare_from'], $holderCols));
 
                 $monthAmounts = DB::table('sales_pipeline_months')
                     ->whereIn('sales_pipeline_id', $rowRoles->pluck('id'))
@@ -309,35 +318,31 @@ class SalesManagerSummary
 
                 $repLookup = array_flip($repIds);
                 $achievedBySp = [];
+                $teamMonthAchieved = 0.0;
                 foreach ($rowRoles as $row) {
                     $amt = (float) ($monthAmounts[$row->id] ?? 0);
                     if ($amt == 0.0) {
                         continue;
                     }
+                    $beforeMove = !empty($row->ccare_from) && $mk < $row->ccare_from;
                     $onThisRow = [];
-                    foreach ($roleCols as $col) {
+                    foreach ($holderCols as $col) {
                         $holder = $row->{$col} ?? null;
-                        if ($holder && isset($repLookup[$holder])) {
+                        if ($holder && isset($repLookup[$holder])
+                            && \App\Models\SalesPipeline::creditsSide($row, (int) $holder, $beforeMove)) {
                             $onThisRow[$holder] = true;   // set — one credit per rep
                         }
                     }
                     foreach (array_keys($onThisRow) as $spid) {
                         $achievedBySp[$spid] = ($achievedBySp[$spid] ?? 0) + $amt;
                     }
+                    // Team headline is deduplicated: a customer with two of the
+                    // team on it counts once, and only if someone here is credited.
+                    if ($onThisRow) {
+                        $teamMonthAchieved += $amt;
+                    }
                 }
-
-                // Team headline is deduplicated: a customer with two of the team
-                // on it must not be counted twice.
-                $monthIds = DB::table('sales_pipelines')
-                    ->where(function ($w) use ($roleCols, $repIds) {
-                        foreach ($roleCols as $i => $c) {
-                            $i === 0 ? $w->whereIn($c, $repIds) : $w->orWhereIn($c, $repIds);
-                        }
-                    })
-                    ->where('is_locked', true)->whereNull('deleted_at')->pluck('id');
-                $sm['scorecardAchieved'] = (float) DB::table('sales_pipeline_months')
-                    ->whereIn('sales_pipeline_id', $monthIds)->where('month_year', $mk)
-                    ->sum('sale_amount');
+                $sm['scorecardAchieved'] = (float) $teamMonthAchieved;
 
                 foreach ($sm['tierTargets'] as $tier => $t) {
                     $sm['tierPct'][$tier] = $t > 0 ? round($sm['scorecardAchieved'] / $t * 100, 1) : 0.0;

@@ -1,17 +1,34 @@
-{{-- Goals | Dashboard | Past | Comments. "Dashboard" is the current one for this person:
-     the Program Dashboard for admin/HR and team managers, My Dashboard for a salesperson. --}}
+{{-- The module's navigation, the same as the sidebar: Dashboard / Programs / New Program for
+     admin and HR, Team Dashboard for a team lead, My Dashboard / My Programs for a salesperson.
+     Replaces the old Goals / Dashboard / Past rounds / Comments tab bar (2026-10-01), which
+     belonged to retired pages and sent people between two different designs. --}}
 @php
-  $tabs = [
-      'goals'     => ['Goals', 'bx-target-lock', route('performance.ninety-day-goals.index', ['view' => ($seesMany ?? false) ? 'overview' : 'mine'])],
-      'dashboard' => ['Dashboard', 'bx-bar-chart-alt-2', route((($isAdmin ?? false) || ($seesMany ?? false))
-          ? 'performance.ninety-day-goals.program-dashboard' : 'performance.ninety-day-goals.my-dashboard')],
-      'past'      => ['Past rounds', 'bx-history', route('performance.ninety-day-goals.past')],
-      'comments'  => ['Comments', 'bx-comment-detail', route('performance.ninety-day-goals.comments')],
-  ];
+  $navUser = auth()->user();
+  $navAll  = \App\Services\NinetyDayGoalService::seesEveryone($navUser);
+  $navMgr  = \App\Services\NinetyDayGoalService::managesEveryone($navUser);
+  $navSale = \App\Services\NinetyDayGoalService::isSalesStaff($navUser);
+  $tabs = [];
+  if ($navAll) {
+      $tabs['dashboard'] = ['Dashboard', 'bx-grid-alt', route('performance.ninety-day-goals.program-dashboard')];
+      $tabs['programs']  = ['Programs', 'bx-list-ul', route('performance.ninety-day-goals.programs.index')];
+      if ($navMgr) {
+          $tabs['new'] = ['New Program', 'bx-plus-circle', route('performance.ninety-day-goals.programs.create')];
+      }
+  } else {
+      if ($navSale) {
+          $tabs['mine']     = ['My Dashboard', 'bx-grid-alt', route('performance.ninety-day-goals.my-dashboard')];
+          $tabs['programs'] = ['My Programs', 'bx-target-lock', route('performance.ninety-day-goals.my-program')];
+      }
+      if (($seesMany ?? false)) {
+          $tabs['team'] = ['Team Dashboard', 'bx-group', route('performance.ninety-day-goals.program-dashboard')];
+      }
+  }
+  $navOn = $navTab ?? null;
 @endphp
+@if($tabs)
 <div class="d-flex gap-2 flex-wrap mb-6 mx-4 ndg-tabs">
   @foreach($tabs as $key => [$label, $icon, $href])
-    <a href="{{ $href }}" class="ndg-tab {{ $tab === $key ? 'on' : '' }}"><i class="bx {{ $icon }}"></i>{{ $label }}</a>
+    <a href="{{ $href }}" class="ndg-tab {{ $navOn === $key ? 'on' : '' }}"><i class="bx {{ $icon }}"></i>{{ $label }}</a>
   @endforeach
 </div>
 <style>
@@ -19,3 +36,4 @@
   .ndg-tab:hover { border-color: #007a7a; color: #007a7a; }
   .ndg-tab.on { background: #007a7a; border-color: #007a7a; color: #fff; }
 </style>
+@endif

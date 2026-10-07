@@ -45,7 +45,11 @@
     <div>
       <nav class="small text-muted mb-1">
         <a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i>
-        <a href="{{ route('performance.ninety-day-goals.index') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i>
+        @if($round->program_id && \App\Services\NinetyDayGoalService::seesEveryone(auth()->user()))
+          <a href="{{ route('performance.ninety-day-goals.program', $round->program_id) }}" class="text-muted">{{ optional($round->program)->name ?? 'Program' }}</a> <i class="bx bx-chevron-right"></i>
+        @else
+          <a href="{{ route('performance.ninety-day-goals.my-dashboard') }}" class="text-muted">My 90-Day Goals</a> <i class="bx bx-chevron-right"></i>
+        @endif
         {{ $title }} <i class="bx bx-chevron-right"></i> Weekly Submission
       </nav>
       <h3 class="fw-extrabold mb-1 text-dark d-flex align-items-center gap-2">
@@ -62,6 +66,31 @@
   </div>
 
   <div class="px-4">
+
+  {{-- Order detected from the Sales Report a second time for a customer that already had one:
+       never assumed to be an upsell, confirmed here first. --}}
+  @if(($pendingUpsells ?? collect())->isNotEmpty() && ($canEdit ?? false))
+    <div class="hitech-card mb-6 mx-4" style="border-color:#f5a623">
+      <div class="card-body p-4 border-bottom">
+        <h6 class="fw-bold mb-0 text-dark"><i class="bx bx-receipt" style="color:#f5a623"></i> {{ $pendingUpsells->count() }} order{{ $pendingUpsells->count() === 1 ? '' : 's' }} detected from the Sales Report need confirming</h6>
+        <div class="small text-muted">A customer already had one order this round, and the Sales Report shows another. Confirm it is a repeat order / upsell, or leave it to fill in yourself.</div>
+      </div>
+      <div class="card-body p-0">
+        @foreach($pendingUpsells as $ck)
+          <div class="ndg-upsell-row" data-checkin="{{ $ck->id }}">
+            <div class="flex-grow-1">
+              <div class="fw-semibold text-dark">{{ optional($ck->goal)->client_name }} <span class="text-muted fw-normal">· W{{ $ck->week_no }}, due {{ optional($ck->due_on)->format('d M') }}</span></div>
+              <div class="small text-muted">{{ optional($ck->goal)->product }} · {{ optional($ck->goal)->brand }}</div>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-hitech ndg-upsell-yes">Yes, it's an upsell</button>
+              <button type="button" class="btn btn-sm btn-hitech-cancel ndg-upsell-no">No</button>
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
 
   {{-- KPI cards + Submit All Updates --}}
   <div class="row g-3 mb-6 align-items-stretch">
@@ -89,6 +118,93 @@
       <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center justify-content-center gap-2 w-100" id="ndgSubmitAllTop"><i class="bx bx-send"></i> Submit All Updates</button>
     </div>
     @endif
+  </div>
+
+  {{-- The customer rules, always in view: how many customers the round needs, whether the
+       window to add them is open (with a live countdown), and what can still be edited. --}}
+  @php
+    $w = $window;
+    $nLocked = count($lockedTargetIds);
+    $nGoals = $goals->whereNull('closed_at')->count();
+    // Can this viewer add right now? Then every red alert opens the add-customer popup.
+    $canAddNow = $canEdit && $isActive && ($w['open'] || $managesAll);
+    $addAttrs = $canAddNow ? 'role=button tabindex=0 data-bs-toggle=modal data-bs-target=#ndgRdAddModal title="Click to add customers"' : '';
+  @endphp
+  @if(!$w['meets_min'] && $isActive)
+    {{-- Short of the minimum: a red alert, clickable straight into the add-customer popup. --}}
+    <div class="ndg-alert-red mb-3 {{ $canAddNow ? 'ndg-alert-click' : '' }}" id="ndgMinAlert" {!! $addAttrs !!}>
+      <i class="bx bx-error-circle fs-3"></i>
+      <div class="flex-grow-1">
+        <div class="fw-bold">This round is incomplete - add {{ $w['short_by'] }} more {{ \Illuminate\Support\Str::plural('customer', $w['short_by']) }} (minimum {{ $w['min'] }}, you have {{ $w['count'] }})</div>
+        <div class="small">
+          @if($w['open'])
+            The window to add customers closes {{ $w['closes_at']->format('d M Y, h:i A') }} - a round below {{ $w['min'] }} customers is not counted.
+          @else
+            The window to add customers closed {{ $w['closes_at']->format('d M Y, h:i A') }}.@unless($managesAll) Ask admin/HR to reopen it.@endunless
+          @endif
+        </div>
+      </div>
+      @if($canAddNow)
+        <span class="btn btn-hitech-danger rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-plus"></i> Add customers now</span>
+      @endif
+    </div>
+  @endif
+  <div class="row g-3 mb-6" id="ndgRulesStrip">
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100 {{ $w['meets_min'] ? '' : 'ndg-kpi3-red' }} {{ !$w['meets_min'] && $canAddNow ? 'ndg-alert-click' : '' }}" {!! !$w['meets_min'] ? $addAttrs : '' !!}>
+        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? '#dcfce7;color:#166534' : '#ffe4e6;color:#e11d48' }}"><i class="bx {{ $w['meets_min'] ? 'bx-check-circle' : 'bx-error-circle' }}"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Customers (minimum {{ $w['min'] }})</div>
+          <div class="ndg-kpi3-v">{{ $w['count'] }} / {{ $w['min'] }}
+            @if($w['meets_min'])
+              <span class="badge bg-label-success align-middle" style="font-size:.65rem">Complete</span>
+            @else
+              <span class="badge bg-label-danger align-middle" style="font-size:.65rem">Incomplete</span>
+            @endif
+          </div>
+          <div class="small text-muted">
+            @if($w['meets_min'])
+              The round counts. You can keep adding while the window is open.
+            @else
+              Add {{ $w['short_by'] }} more {{ \Illuminate\Support\Str::plural('customer', $w['short_by']) }} - until then this round does not count.
+            @endif
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100 {{ $w['meets_min'] ? '' : 'ndg-kpi3-red' }} {{ !$w['meets_min'] && $canAddNow ? 'ndg-alert-click' : '' }}" {!! !$w['meets_min'] ? $addAttrs : '' !!}>
+        <div class="ndg-kpi3-icon" style="background:{{ $w['meets_min'] ? ($w['open'] ? '#e0f2f1;color:#007a7a' : '#e2e8f0;color:#475569') : '#ffe4e6;color:#e11d48' }}"><i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }}"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Window to add customers</div>
+          @if($w['open'] && $isActive)
+            <div class="ndg-kpi3-v" id="ndgWinCountdown" data-closes="{{ $w['closes_at']->toIso8601String() }}">{{ $w['hours_left'] }}h left</div>
+            <div class="small text-muted">Closes {{ $w['closes_at']->format('d M Y, h:i A') }}</div>
+          @else
+            <div class="ndg-kpi3-v">Closed</div>
+            <div class="small text-muted">Closed {{ $w['closes_at']->format('d M Y, h:i A') }}.@unless($managesAll) Ask admin/HR to reopen it if you need to add more.@endunless</div>
+          @endif
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-4">
+      <div class="ndg-kpi3 h-100">
+        <div class="ndg-kpi3-icon" style="background:#ede9fe;color:#5b21b6"><i class="bx bx-edit"></i></div>
+        <div>
+          <div class="small text-muted fw-semibold">Editing customers</div>
+          @if(!$isActive)
+            <div class="ndg-kpi3-v">Locked</div>
+            <div class="small text-muted">This round has ended.</div>
+          @elseif($managesAll)
+            <div class="ndg-kpi3-v">Open</div>
+            <div class="small text-muted">Admin/HR can change any customer, including fixed targets.</div>
+          @else
+            <div class="ndg-kpi3-v">{{ $nGoals - $nLocked }} of {{ $nGoals }} targets editable</div>
+            <div class="small text-muted">Product, brand, stage and expected date can be edited until the round ends. A customer's target is fixed once you report a status on it. Customers can't be removed.</div>
+          @endif
+        </div>
+      </div>
+    </div>
   </div>
 
   {{-- Sub-tabs --}}
@@ -136,8 +252,10 @@
               @else
                 <span class="badge badge-hitech badge-brand-soft">Due today</span>
               @endif
-              @if($canEdit && $isActive)
+              @if($canEdit && $isActive && ($window['open'] || $managesAll))
                 <button type="button" class="btn-hitech rounded-pill px-3 py-2 d-flex align-items-center gap-2" style="font-size:.8rem" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
+              @elseif($canEdit && $isActive)
+                <span class="small text-muted" title="The window to add customers closed {{ $window['closes_at']->format('d M, h:i A') }}"><i class="bx bx-lock-alt"></i> Adding closed</span>
               @endif
             </div>
           </div>
@@ -146,7 +264,7 @@
               <thead class="small text-uppercase text-muted">
                 <tr>
                   <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹ L)</th><th style="min-width:150px">Expected Stage</th>
-                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th style="min-width:150px">Next Follow-up Date</th><th class="pe-3"></th>
+                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th class="pe-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -170,10 +288,10 @@
                       <option value="">Choose…</option>
                       @foreach($statuses as $s)<option value="{{ $s }}" {{ optional($ck)->status === $s ? 'selected' : '' }}>{{ $s }}</option>@endforeach
                     </select>
+                    @if($rowsByGoal->has($g->id))<div class="mt-1">@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $rowsByGoal[$g->id]])</div>@endif
                   </td>
                   <td><input type="text" class="form-control ndg-wk-comment" maxlength="1000" placeholder="Optional note" value="{{ optional($ck)->comment }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
                   <td><input type="text" class="form-control ndg-wk-next-action" maxlength="255" placeholder="e.g. Share quotation" value="{{ optional($ck)->next_action }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
-                  <td><input type="date" class="form-control ndg-wk-next-date" value="{{ optional($ck)->next_follow_up_date ? $ck->next_follow_up_date->format('Y-m-d') : '' }}" {{ $canEdit && $isActive ? '' : 'disabled' }}></td>
                   <td class="pe-3 text-end">
                     @if($canEdit && $isActive)
                       <button type="button" class="btn btn-sm btn-hitech-cancel ndg-wk-save">Save</button>
@@ -181,7 +299,7 @@
                   </td>
                 </tr>
               @empty
-                <tr><td colspan="10" class="text-center text-muted p-5">No target customers yet — add one from Customer Summary.</td></tr>
+                <tr><td colspan="9" class="text-center text-muted p-5">No target customers yet — add one from Customer Summary.</td></tr>
               @endforelse
               </tbody>
             </table>
@@ -271,7 +389,7 @@
         </select>
         <span class="small text-muted" id="ndgRdCount"></span>
         <div class="ms-auto d-flex gap-2">
-          @if($canEdit && $isActive)
+          @if($canEdit && $isActive && ($window['open'] || $managesAll))
           <button type="button" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#ndgRdAddModal"><i class="bx bx-plus"></i> Add Customer</button>
           @endif
           @if($isAdmin)
@@ -390,7 +508,7 @@
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Goal Amount</span><b>₹{{ $fmtL($g->monthly_potential) }} L</b></div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Expected Order Date</span><b>{{ $g->expected_order_date ? $g->expected_order_date->format('d M Y') : '—' }}</b></div>
                     <div class="d-flex justify-content-between small py-1"><span class="text-muted">Current Status</span>
-                      @if(optional($r)->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif
+                      @if(optional($r)->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif
                     </div>
                   </div>
                 </div>
@@ -399,7 +517,7 @@
                 <div class="hitech-card h-100">
                   <div class="card-body p-4">
                     <div class="fw-bold text-dark mb-3"><i class="bx bx-trending-up" style="color:#007a7a"></i> Progress</div>
-                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Target (3 mo.)</span><b>{{ $fmtL(optional($r)->target ?? 0) }} L</b></div>
+                    <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Target</span><b>{{ $fmtL(optional($r)->target ?? 0) }} L</b></div>
                     <div class="d-flex justify-content-between small py-1 border-bottom"><span class="text-muted">Achieved</span><b>{{ $fmtL(optional($r)->achieved ?? 0) }} L</b></div>
                     <div class="mt-2"><div class="progress" style="height:7px"><div class="progress-bar" style="width:{{ min(100, (float) optional($r)->pct) }}%;background:{{ $pctColor(optional($r)->pct) }}"></div></div></div>
                   </div>
@@ -414,15 +532,23 @@
                 <div class="fw-bold text-dark">Weekly Timeline &amp; Comments</div>
               </div>
               <div class="card-body p-4 d-flex flex-wrap gap-3">
-                @forelse($g->checkins->whereNotNull('status') as $ck)
+                {{-- Weeks with a status, a comment, or already due - a lead or admin can comment
+                     on a week before the salesperson has filled it in. --}}
+                @forelse($g->checkins->filter(fn ($c) => $c->status !== null || $c->notes->isNotEmpty() || $c->due_on->lte(today())) as $ck)
                   <div class="ndg-rd-wk-card" style="min-width:150px">
                     <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
-                    <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status }}</span>
+                    <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status ?? 'Not submitted' }}</span>
                     <div class="small mt-1">{{ $ck->comment ?: '—' }}</div>
                     @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
                     @foreach($ck->notes as $n)
-                      <div class="small mt-1 pt-1 border-top"><b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}</div>
+                      <div class="small mt-1 pt-1 border-top">
+                        @if($canRemoveComment ?? false)<button type="button" class="ndg-note-del" data-id="{{ $n->id }}" title="Remove comment">&times;</button>@endif
+                        <b>{{ trim(optional($n->author)->first_name . ' ' . optional($n->author)->last_name) }}:</b> {{ $n->body }}
+                      </div>
                     @endforeach
+                    @if($canComment ?? false)
+                      <button type="button" class="btn btn-link btn-sm p-0 mt-1 ndg-addnote" data-goal="{{ $g->id }}" data-week="{{ $ck->week_no }}"><i class="bx bx-comment-add"></i> Add comment</button>
+                    @endif
                   </div>
                 @empty
                   <div class="small text-muted p-2">No weekly updates yet.</div>
@@ -468,7 +594,7 @@
               <td class="ps-4 fw-semibold">{{ $r->goal->client_name }}</td>
               <td class="small text-muted">{{ $r->goal->product }}</td>
               <td class="text-end fw-semibold">{{ $fmtL($r->achieved) }}@if($r->repeat)<span class="badge bg-label-info rounded-pill ms-1" style="font-size:.6rem">repeat</span>@endif</td>
-              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@endif</td>
+              <td class="pe-4">@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@endif</td>
             </tr>
           @empty
             <tr><td colspan="4" class="text-center text-muted p-4">No qualifying orders yet.</td></tr>
@@ -493,7 +619,7 @@
     <div class="row g-4">
       <div class="col-xl-6">
         <div class="hitech-card h-100">
-          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by monthly potential</div></div>
+          <div class="card-body p-4 border-bottom"><div class="fw-bold text-dark">Top customers by target</div></div>
           <div class="card-body p-4">
             @php $maxCust = max(1, (float) optional($d['topCustomers']->first())->potential); @endphp
             @forelse($d['topCustomers'] as $tc)
@@ -560,7 +686,7 @@
     </div>
   </div>
 
-  {{-- Edit an existing target: product, brand, goal, monthly potential, expected order date. --}}
+  {{-- Edit an existing target: product, brand, goal, overall target, expected order date. --}}
   <div class="modal fade" id="ndgEditGoalModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -571,7 +697,7 @@
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Product</label><input type="text" name="product" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Brand</label><input type="text" name="brand" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Goal</label><input type="text" name="goal" class="form-control"></div>
-            <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Monthly potential (₹ lakh)</label><input type="number" step="0.01" min="0" name="monthly_potential" class="form-control"></div>
+            <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Target for the program (₹ lakh)</label><input type="number" step="0.01" min="0" name="monthly_potential" class="form-control"></div>
             <div class="mb-3"><label class="form-label fw-bold small text-muted text-uppercase">Expected order date</label><input type="date" name="expected_order_date" class="form-control"></div>
           </div>
           <div class="modal-footer">
@@ -593,6 +719,14 @@
   .ndg-kpi2-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex: none; }
   .ndg-kpi2-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.2; font-variant-numeric: tabular-nums; }
   .ndg-kpi2-l { font-size: .68rem; color: #94a3b8; font-weight: 600; }
+  /* Customer-rule alerts: red while the round is short of its minimum, and clickable into the add-customer popup. */
+  .ndg-alert-red { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 18px; border-radius: 12px; border: 1px solid #e11d48; background: #fff1f2; color: #9f1239; }
+  .ndg-alert-red .bx { color: #e11d48; }
+  .ndg-alert-red .btn .bx { color: #fff; }
+  .ndg-kpi3.ndg-kpi3-red { border-color: #e11d48; background: #fff1f2; }
+  .ndg-kpi3.ndg-kpi3-red .ndg-kpi3-v, .ndg-kpi3.ndg-kpi3-red .small { color: #9f1239 !important; }
+  .ndg-alert-click { cursor: pointer; transition: box-shadow .15s, transform .15s; }
+  .ndg-alert-click:hover, .ndg-alert-click:focus { box-shadow: 0 6px 18px rgba(225, 29, 72, .22); transform: translateY(-1px); outline: none; }
   .ndg-kpi3 { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; background: #fff; height: 100%; display: flex; align-items: flex-start; gap: 12px; }
   .ndg-kpi3-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex: none; }
   .ndg-kpi3-v { font-size: 1.2rem; font-weight: 800; color: #0f172a; line-height: 1.25; font-variant-numeric: tabular-nums; }
@@ -629,16 +763,52 @@
   .ndg-src { font-size: .65rem; }
   #ndgWeeklyTable input, #ndgWeeklyTable select { font-size: .82rem; }
   #ndgWeeklyTable .ndg-needs-stage { border-color: #f5a623 !important; box-shadow: 0 0 0 1px #f5a623; }
+  .ndg-upsell-row { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #f1f5f9; }
+  .ndg-upsell-row:last-child { border-bottom: none; }
+  .ndg-note-del { border: 0; background: none; color: #ef4444; float: right; line-height: 1; font-size: 1rem; padding: 0 2px; }
 </style>
 @endsection
 
 @section('page-script')
 <script>
+// The red customer alerts are role=button: Enter/Space opens the popup like a click does.
+// Arriving with ?add=1 (from the My Dashboard alert) opens the add-customer popup straight away;
+// it waits for 'load' because Bootstrap is loaded deferred by Vite.
+(function () {
+  document.addEventListener('keydown', function (e) {
+    var el = e.target;
+    if ((e.key === 'Enter' || e.key === ' ') && el && el.classList && el.classList.contains('ndg-alert-click')) { e.preventDefault(); el.click(); }
+  });
+  if (new URLSearchParams(location.search).get('add') === '1' && document.getElementById('ndgRdAddModal')) {
+    window.addEventListener('load', function () {
+      if (window.bootstrap && window.bootstrap.Modal) { window.bootstrap.Modal.getOrCreateInstance(document.getElementById('ndgRdAddModal')).show(); }
+    });
+  }
+})();
+// Live countdown to the close of the add-customer window; reloads once it closes so the
+// add buttons disappear without a stale page accepting a click the server will refuse.
+(function () {
+  var el = document.getElementById('ndgWinCountdown');
+  if (!el) { return; }
+  var closes = new Date(el.getAttribute('data-closes')).getTime();
+  if (isNaN(closes)) { return; }
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  var tick = function () {
+    var left = Math.floor((closes - Date.now()) / 1000);
+    if (left <= 0) { el.textContent = 'Closed'; clearInterval(timer); setTimeout(function () { location.reload(); }, 1500); return; }
+    var d = Math.floor(left / 86400), h = Math.floor(left % 86400 / 3600), m = Math.floor(left % 3600 / 60), sec = left % 60;
+    el.textContent = (d ? d + 'd ' : '') + pad(h) + 'h ' + pad(m) + 'm ' + pad(sec) + 's left';
+  };
+  var timer = setInterval(tick, 1000);
+  tick();
+})();
 (function () {
   var CSRF = '{{ csrf_token() }}';
   var ROUND_USER_ID = {{ (int) $round->user_id }};
   var SELECTED_WEEK = {{ (int) $selectedWeek }};
   var URLS = {
+    confirmUpsell: '{{ route('performance.ninety-day-goals.confirm-upsell') }}',
+    notes: '{{ url('performance/ninety-day-goals/notes') }}',
     checkin: '{{ route('performance.ninety-day-goals.checkin') }}',
     update: '{{ url('performance/ninety-day-goals') }}',
     customers: '{{ route('performance.ninety-day-goals.pipeline-customers') }}',
@@ -648,6 +818,44 @@
     return fetch(url, { method: method, headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF }, body: body ? JSON.stringify(body) : undefined })
       .then(function (r) { return r.json().then(function (j) { j._status = r.status; return j; }); });
   }
+
+  // ── comments on a customer's week: add (owner, lead, admin/HR) / remove (admin/HR) ──
+  document.addEventListener('click', function (e) {
+    var add = e.target.closest ? e.target.closest('.ndg-addnote') : null;
+    if (add) {
+      var body = window.prompt('Comment for W' + add.getAttribute('data-week') + ':');
+      if (body === null || !body.trim()) { return; }
+      add.disabled = true;
+      post(URLS.notes, 'POST', { goal_id: parseInt(add.getAttribute('data-goal'), 10), week_no: parseInt(add.getAttribute('data-week'), 10), body: body.trim() }).then(function (j) {
+        if (!j.success) { add.disabled = false; alert(j.message || 'Could not save the comment.'); return; }
+        location.reload();
+      }).catch(function () { add.disabled = false; alert('Request failed. Try again.'); });
+      return;
+    }
+    var del = e.target.closest ? e.target.closest('.ndg-note-del') : null;
+    if (del) {
+      if (!confirm('Remove this comment?')) { return; }
+      post(URLS.notes + '/' + del.getAttribute('data-id'), 'DELETE').then(function (j) {
+        if (!j.success) { alert(j.message || 'Could not remove it.'); return; }
+        location.reload();
+      }).catch(function () { alert('Request failed. Try again.'); });
+    }
+  });
+
+  // ── upsell confirmation ──
+  document.querySelectorAll('.ndg-upsell-row').forEach(function (row) {
+    var checkinId = parseInt(row.getAttribute('data-checkin'), 10);
+    function answer(isUpsell) {
+      var buttons = row.querySelectorAll('button');
+      buttons.forEach(function (b) { b.disabled = true; });
+      post(URLS.confirmUpsell, 'POST', { checkin_id: checkinId, is_upsell: isUpsell }).then(function (j) {
+        if (!j.success) { buttons.forEach(function (b) { b.disabled = false; }); alert(j.message || 'Could not save that.'); return; }
+        location.reload();
+      }).catch(function () { buttons.forEach(function (b) { b.disabled = false; }); alert('Request failed. Try again.'); });
+    }
+    row.querySelector('.ndg-upsell-yes').addEventListener('click', function () { answer(true); });
+    row.querySelector('.ndg-upsell-no').addEventListener('click', function () { answer(false); });
+  });
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
   // ── top-level sub-tabs ──
@@ -878,7 +1086,7 @@
   }
 
   // ── add customer modal: only this round owner's own Sales Pipeline, nobody types one in.
-  // Checking a customer expands Product / Brand / Goal / Monthly potential right there, editable
+  // Checking a customer expands Product / Brand / Goal / Target right there, editable
   // before it's added — not just accepted blind from whatever the pipeline already says. ──
   var addModalEl = document.getElementById('ndgRdAddModal');
   if (addModalEl) {
@@ -910,7 +1118,7 @@
             '<input type="text" class="form-control form-control-sm ndg-product" style="max-width:220px" placeholder="Product" value="' + esc(c.pProduct != null ? c.pProduct : c.product) + '">' +
             '<select class="form-select form-select-sm ndg-brand" style="max-width:150px">' + brandOptions(c.pBrand != null ? c.pBrand : c.brand) + '</select>' +
             '<select class="form-select form-select-sm ndg-goal" style="max-width:170px">' + goalOptions(c.pGoal != null ? c.pGoal : 'Order') + '</select>' +
-            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Monthly ₹ lakh" value="' + esc(c.pPot != null ? c.pPot : c.potential) + '">' +
+            '<input type="number" step="0.01" min="0" class="form-control form-control-sm ndg-pot" style="max-width:150px" placeholder="Target ₹ lakh"' + (c.potential ? ' title="Sales Report potential: ' + esc(c.potential) + ' lakh a month"' : '') + ' value="' + esc(c.pPot != null ? c.pPot : '') + '">' +
           '</div></div>';
       }).join('');
     }
@@ -941,7 +1149,7 @@
       if (!picked.length) { addMsg.textContent = 'Tick at least one customer.'; return; }
       for (var i = 0; i < picked.length; i++) {
         if (!String(picked[i].pGoal != null ? picked[i].pGoal : 'Order').trim()) { addMsg.textContent = picked[i].customer + ': write the goal.'; return; }
-        if (picked[i].pPot === undefined || picked[i].pPot === '' || isNaN(parseFloat(picked[i].pPot))) { addMsg.textContent = picked[i].customer + ': enter the monthly potential in lakh.'; return; }
+        if (picked[i].pPot === undefined || picked[i].pPot === '' || isNaN(parseFloat(picked[i].pPot))) { addMsg.textContent = picked[i].customer + ': enter the target in lakh.'; return; }
       }
       addMsg.textContent = ''; this.disabled = true; var btn = this;
       var customers = picked.map(function (c) {

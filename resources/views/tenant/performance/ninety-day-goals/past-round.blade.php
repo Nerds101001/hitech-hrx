@@ -40,7 +40,7 @@
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
       <div class="d-flex align-items-center gap-2 mb-1">
-        <a href="{{ route('performance.ninety-day-goals.past') }}" class="text-muted" title="Back to Past rounds"><i class="bx bx-arrow-back"></i></a>
+        <a href="{{ \App\Services\NinetyDayGoalService::seesEveryone(auth()->user()) ? route('performance.ninety-day-goals.programs.index', ['status' => 'ended']) : route('performance.ninety-day-goals.my-program') }}" class="text-muted" title="Back"><i class="bx bx-arrow-back"></i></a>
         <h3 class="fw-extrabold mb-0 text-dark">Round {{ $round->round_no }}@if($seesMany) · <a href="{{ route('performance.ninety-day-goals.person', $round->user_id) }}" class="text-dark">{{ $name($round->user) }}</a>@endif</h3>
         <span class="ndg-closed-badge">closed</span>
       </div>
@@ -90,7 +90,6 @@
     @php
       $cards = [
         ['bx-target-lock', 'Customers', $c['goals']],
-        ['bx-rupee', 'Monthly potential (₹L)', $fmtL($c['potential'])],
         ['bx-flag', 'Round target (₹L)', $fmtL($c['target'])],
         ['bx-trending-up', 'Sold (₹L)', $fmtL($c['achieved'])],
         ['bx-pie-chart-alt-2', 'Achievement', $pctText($c['pct'])],
@@ -138,7 +137,7 @@
                 <b class="small" style="min-width:44px;text-align:right;color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</b>
               </div>
             </td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">no status left</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">no status left</span>@endif</td>
           </tr>
         @empty
           <tr><td colspan="7" class="text-center text-muted p-4">No customers in this round.</td></tr>
@@ -271,7 +270,7 @@
             <td class="fw-semibold">{{ $r->goal->client_name }}</td>
             <td>{{ $r->brand }}</td>
             <td class="text-end">{{ $fmtL($r->potential) }}</td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@else<span class="ndg-none">nothing yet</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">nothing yet</span>@endif</td>
             <td>
               @if($r->overdueWeeks > 0)
                 <span class="ndg-overdue">{{ $r->overdueWeeks }} {{ \Illuminate\Support\Str::plural('week', $r->overdueWeeks) }}@if($r->oldestOverdue) · since {{ $r->oldestOverdue->format('d M') }}@endif</span>

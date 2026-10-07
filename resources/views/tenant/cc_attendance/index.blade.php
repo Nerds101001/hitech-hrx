@@ -115,9 +115,9 @@
 
     @if(!empty($isLocked) && $isLocked)
         <div class="alert alert-warning d-flex align-items-center" role="alert">
-            <i class="ti ti-lock me-2"></i>
+            <i class="bx bx-lock-alt me-2"></i>
             <div>Attendance for <strong>{{ \Carbon\Carbon::parse($date)->format('d M Y') }}</strong> is <strong>locked</strong> —
-            the filling window closed on {{ $lockDeadline->format('d M Y, h:i A') }} (each date stays open until 2 days later, 12:00 PM).
+            the filling window closed on {{ $lockDeadline->format('d M Y, h:i A') }} (each date stays open until 12:00 PM on the 2nd working day after it; Sundays and holidays don't count).
             Only Admin/HR can mark it now.</div>
         </div>
     @elseif(isset($openWindow) && $date >= $openWindow[0] && $date <= $openWindow[1] && !$user->hasRole(['admin','hr']))
@@ -127,8 +127,8 @@
         </div>
     @elseif(isset($lockDeadline) && !$user->hasRole(['admin','hr']))
         <div class="alert alert-info py-2 d-flex align-items-center" role="alert" style="font-size:.85rem;">
-            <i class="ti ti-clock me-2"></i>
-            <div>This date can be filled until <strong>{{ $lockDeadline->format('d M Y, h:i A') }}</strong>, after which it locks (Admin/HR only).</div>
+            <i class="bx bx-time-five me-2"></i>
+            <div>This date can be filled until <strong>{{ $lockDeadline->format('d M Y, h:i A') }}</strong>, after which it locks (Admin/HR only). Sundays and holidays don't count towards the window.</div>
         </div>
     @endif
 
@@ -384,7 +384,7 @@
                                                     @endif
                                                 </div>
                                             @elseif(!empty($isLocked))
-                                                {{-- Date closed (D+2 12:00 PM) — nothing can be marked here. --}}
+                                                {{-- Date closed (12:00 PM on the 2nd working day after it) — nothing can be marked here. --}}
                                                 <span class="text-muted fst-italic"><i class="ti ti-lock me-1"></i>Locked — contact Admin/HR</span>
                                             @else
                                                 <div class="d-flex flex-column gap-2">

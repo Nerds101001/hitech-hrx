@@ -26,7 +26,7 @@ class TaskOverdue extends Notification
   {
     $this->task = $task;
     $this->title = 'Task Overdue';
-    $this->message = 'Your task "' . $task->title . '" was due ' . $task->due_date->format('d M Y') . ' and is still open.';
+    $this->message = 'Your task "' . $task->title . '" was due ' . $task->dueLabel() . ' and is still open.';
   }
 
   public function via(object $notifiable): array
@@ -42,7 +42,7 @@ class TaskOverdue extends Notification
         'notifiable'  => $notifiable,
         'taskTitle'   => $this->task->title,
         'description' => $this->task->description,
-        'dueDate'     => $this->task->due_date->format('d M Y'),
+        'dueDate'     => $this->task->dueLabel(),
         'actionUrl'   => url('/my-tasks'),
       ]);
   }

@@ -9,7 +9,8 @@ use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
 
 /**
  * An admin-opened window in which back-dated salesperson attendance may still
- * be filled, overriding the normal D+2 12:00 PM deadline.
+ * be filled, overriding the normal deadline (12:00 PM on the 2nd working day
+ * after the date - CcAttendanceController::lockDeadline()).
  *
  * @see \App\Http\Controllers\tenant\CcAttendanceController::isLockedFor()
  */

@@ -154,7 +154,7 @@ class LeaveAttendanceReconciler
                 // payroll already uses.
                 if ($att && $needsFullDay) {
                     $mins = ($att->check_in_time && $att->check_out_time)
-                        ? Carbon::parse($att->check_in_time)->diffInMinutes(Carbon::parse($att->check_out_time))
+                        ? \App\Services\AttendanceDayStatus::workedMinutes(Carbon::parse($att->check_in_time), Carbon::parse($att->check_out_time))
                         : 0;
                     if ($mins < 465) {
                         $att = null;   // part-day attendance is exactly what this leave expects

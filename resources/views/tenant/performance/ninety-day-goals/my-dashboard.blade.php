@@ -37,7 +37,7 @@
 
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4 mx-4">
     <div>
-      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> <a href="{{ route('performance.ninety-day-goals.index') }}" class="text-muted">90-Day Goals</a> <i class="bx bx-chevron-right"></i> My Dashboard</nav>
+      <nav class="small text-muted mb-1"><a href="{{ route('tenant.dashboard') }}" class="text-muted">Dashboard</a> <i class="bx bx-chevron-right"></i> 90-Day Goals <i class="bx bx-chevron-right"></i> My Dashboard</nav>
       <h3 class="fw-extrabold mb-1 text-dark">My 90-Day Sales Goals</h3>
       <p class="text-muted mb-0 small">Track your progress across all assigned programs. Select a program to view detailed information.</p>
     </div>
@@ -50,10 +50,12 @@
        be counted as stopping at zero, and neither said when the chance to fix it runs out. --}}
   @foreach($windowAlerts as $w)
     @php $r = $w['round']; @endphp
-    <div class="hitech-card mb-4" style="border-color:{{ $w['open'] ? '#f5a623' : '#dc3545' }};background:{{ $w['open'] ? '#fffbeb' : '#fef2f2' }}">
+    {{-- Red, and while the window is open the whole alert opens the round with the Add Customer popup. --}}
+    @if($w['open'])<a href="{{ route('performance.ninety-day-goals.round', $r->id) }}?add=1" class="d-block text-decoration-none ndg-dash-alert" title="Click to add customers">@endif
+    <div class="hitech-card mb-4" style="border-color:#e11d48;background:#fff1f2">
       <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div class="d-flex align-items-center gap-3">
-          <i class="bx {{ $w['open'] ? 'bx-time-five' : 'bx-lock-alt' }} fs-2" style="color:{{ $w['open'] ? '#f5a623' : '#dc3545' }}"></i>
+          <i class="bx {{ $w['open'] ? 'bx-error-circle' : 'bx-lock-alt' }} fs-2" style="color:#e11d48"></i>
           <div>
             @if($w['open'])
               <div class="fw-bold text-dark">
@@ -77,10 +79,11 @@
           </div>
         </div>
         @if($w['open'])
-          <a href="{{ route('performance.ninety-day-goals.round', $r->id) }}" class="btn-hitech rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-search-alt"></i> Search &amp; Add Customers</a>
+          <span class="btn btn-hitech-danger rounded-pill px-4 d-flex align-items-center gap-2 flex-shrink-0"><i class="bx bx-plus"></i> Add customers now</span>
         @endif
       </div>
     </div>
+    @if($w['open'])</a>@endif
   @endforeach
 
   {{-- Select Program: a compact dropdown for small screens, real cards for the rest --}}
@@ -225,7 +228,7 @@
             @endfor
             <td class="fw-semibold">{{ $fmtL($r->achieved) }}</td>
             <td style="color:{{ $pctColor($r->pct) }}">{{ $pctText($r->pct) }}</td>
-            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@else<span class="ndg-none">·</span>@endif</td>
+            <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
             <td class="small text-muted">{{ $nextAction($r->status) }}</td>
             <td><a href="{{ route('performance.ninety-day-goals.round', $r->goal->round_id) }}" class="text-muted" title="View in My Programs"><i class="bx bx-dots-vertical-rounded"></i></a></td>
           </tr>

@@ -265,6 +265,9 @@ class AttendanceImportController extends Controller
         $user = $usersById->get($record['user_id']);
         if (!$user) return 'not_found';
 
+        // Reports sometimes list a day's punches evening-first: store them in order.
+        [$checkIn, $checkOut] = \App\Services\AttendanceDayStatus::orderPunches($checkIn, $checkOut, $user->shift);
+
         // 1. Skip only someone actually CCare-managed (cc_salesperson_map,
         // role='ccare') — being in a department/designation whose NAME
         // happens to contain "Sales" is not the same thing, and wrongly
