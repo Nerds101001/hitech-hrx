@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\TallyPushController;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -8,6 +10,12 @@ use Illuminate\Support\Facades\Route;
  * verifies the bearer key + HMAC before the controller ever runs), not the app's normal user/JWT auth -- the
  * caller is the local hrx:tally-push command, not a logged-in person.
  */
+
+// The throttle:tally_push limiter is defined here (rather than in a provider) so this feature deploys as a
+// self-contained set of files that only ever APPENDS a require to routes/api.php -- no change to the obfuscated
+// provider on production. 20 pushes/min per IP is far above a 2-hourly sync yet caps a flood of refusals.
+RateLimiter::for('tally_push', fn ($request) => Limit::perMinute(20)->by($request->ip()));
+
 Route::middleware(['api', 'tally_push.signed', 'throttle:tally_push'])
     ->withoutMiddleware(\App\Http\Middleware\TransformApiResponse::class)
     ->group(function () {
