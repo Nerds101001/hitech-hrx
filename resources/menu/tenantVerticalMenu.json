@@ -1021,6 +1021,12 @@
                     "permission": ["access-sales-ops", "sales_visits.create"]
                 },
                 {
+                    "url": "/sales-visits/trials",
+                    "name": "Trials",
+                    "slug": "sales-visits.trials.index",
+                    "permission": ["access-sales-ops", "sales_ops.view_all", "sales_visits.view", "sales_visits.create", "sales_report.view", "cc_attendance.manage"]
+                },
+                {
                     "url": "/sales-visits/reports",
                     "name": "Analytics & Reports",
                     "slug": "sales-visits.reports",

@@ -901,7 +901,20 @@ Route::middleware([
             Route::get('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'index'])->name('index');
             Route::get('/create', [\App\Http\Controllers\tenant\SalesVisitController::class, 'create'])->name('create');
             Route::post('/', [\App\Http\Controllers\tenant\SalesVisitController::class, 'store'])->name('store');
-            
+
+            // Trials — a salesperson lodges a completed trial, or CCare/NewBiz pre-book one that the
+            // salesperson completes in the field. Specific paths declared before /trials/{id}.
+            Route::get('/trials', [\App\Http\Controllers\tenant\SalesTrialController::class, 'index'])->name('trials.index');
+            Route::get('/trials/lodge', [\App\Http\Controllers\tenant\SalesTrialController::class, 'create'])->name('trials.create');
+            Route::post('/trials', [\App\Http\Controllers\tenant\SalesTrialController::class, 'store'])->name('trials.store');
+            Route::get('/trials/book', [\App\Http\Controllers\tenant\SalesTrialController::class, 'bookCreate'])->name('trials.book');
+            Route::post('/trials/book', [\App\Http\Controllers\tenant\SalesTrialController::class, 'bookStore'])->name('trials.book.store');
+            Route::get('/trials/companies', [\App\Http\Controllers\tenant\SalesTrialController::class, 'pipelineCompanies'])->name('trials.companies');
+            Route::get('/trials/{id}', [\App\Http\Controllers\tenant\SalesTrialController::class, 'show'])->whereNumber('id')->name('trials.show');
+            Route::get('/trials/{id}/complete', [\App\Http\Controllers\tenant\SalesTrialController::class, 'completeForm'])->whereNumber('id')->name('trials.complete.form');
+            Route::post('/trials/{id}/complete', [\App\Http\Controllers\tenant\SalesTrialController::class, 'complete'])->whereNumber('id')->name('trials.complete');
+            Route::post('/trials/{id}/cancel', [\App\Http\Controllers\tenant\SalesTrialController::class, 'cancel'])->whereNumber('id')->name('trials.cancel');
+
             // Sales Report (formerly pipeline)
             Route::get('/sales-report', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'index'])->name('pipeline.index');
             Route::get('/sales-pipeline', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'actualPipelineIndex'])->name('actual-pipeline.index');
