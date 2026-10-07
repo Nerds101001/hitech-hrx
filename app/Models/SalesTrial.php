@@ -88,11 +88,15 @@ class SalesTrial extends Model
     /** "Booked by CCare" / "Booked by New Biz" / "Self-lodged". */
     public function sourceLabel(): string
     {
+        if (!$this->booked_by_id || $this->booked_by_role === 'self') {
+            return 'Self-lodged';
+        }
+
         return match ($this->booked_by_role) {
             'ccare'  => 'Booked by CCare',
             'newbiz' => 'Booked by New Biz',
-            'self'   => 'Self-lodged',
-            default  => $this->booked_by_id ? 'Pre-booked' : 'Self-lodged',
+            'admin'  => 'Booked (admin)',
+            default  => 'Pre-booked',
         };
     }
 }

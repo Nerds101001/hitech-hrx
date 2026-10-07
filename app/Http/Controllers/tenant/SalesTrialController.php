@@ -41,20 +41,23 @@ class SalesTrialController extends Controller
         // Scope: admin/HR/managers see everything; a CCare/NewBiz agent sees their bookings + their
         // mapped salespeople's trials; a salesperson sees their own.
         if (!$this->seesEveryone($user)) {
-            $mapped = CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id')->all();
-            $query->where(function ($q) use ($user, $mapped) {
-                $q->where('salesperson_id', $user->id)
-                  ->orWhere('booked_by_id', $user->id);
-                if ($mapped) {
-                    $q->orWhereIn('salesperson_id', $mapped);
-                }
+            $ids = $this->visibleSalespersonIds($user);
+            $query->where(function ($q) use ($user, $ids) {
+                $q->whereIn('salesperson_id', $ids)->orWhere('booked_by_id', $user->id);
             });
         }
+
+        $stats = [
+            'total'     => (clone $query)->count(),
+            'booked'    => (clone $query)->where('status', 'booked')->count(),
+            'completed' => (clone $query)->where('status', 'completed')->count(),
+        ];
 
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
         }
-        if ($request->filled('salesperson_id') && $this->seesEveryone($user)) {
+        if ($request->filled('salesperson_id')) {
+            // Safe for everyone: the base query is already scoped to who the viewer may see.
             $query->where('salesperson_id', (int) $request->query('salesperson_id'));
         }
         if ($request->filled('from')) {
@@ -67,12 +70,15 @@ class SalesTrialController extends Controller
         $trials = $query->paginate(20)->withQueryString();
 
         return view('tenant.sales-trials.index', [
-            'trials'   => $trials,
-            'filters'  => $request->only(['status', 'salesperson_id', 'from', 'to']),
-            'canBook'  => $this->canBook($user),
-            'canLodge' => $this->canLodge($user),
-            'isAdmin'  => $this->seesEveryone($user),
-            'people'   => $this->seesEveryone($user) ? User::whereIn('id', SalesTrial::distinct()->pluck('salesperson_id'))->get(['id', 'first_name', 'last_name']) : collect(),
+            'trials'         => $trials,
+            'filters'        => $request->only(['status', 'salesperson_id', 'from', 'to']),
+            'canBook'        => $this->canBook($user),
+            'canLodge'       => $this->canLodge($user),
+            'isAdmin'        => $this->seesEveryone($user),
+            'people'         => $this->filterablePeople($user),
+            'lodgeCompanies' => $this->companiesFor($user->id),
+            'bookSalespeople' => $this->canBook($user) ? $this->bookableSalespeople($user) : collect(),
+            'stats'          => $stats,
         ]);
     }
 
@@ -81,20 +87,19 @@ class SalesTrialController extends Controller
         $trial = SalesTrial::with(['salesperson', 'bookedBy', 'pipeline', 'images'])->findOrFail($id);
         abort_unless($this->canView(Auth::user(), $trial), 404);
 
-        return view('tenant.sales-trials.show', ['trial' => $trial]);
+        return view('tenant.sales-trials.show', [
+            'trial'            => $trial,
+            'isAdmin'          => $this->seesEveryone(Auth::user()),
+            'completeCompanies' => $this->companiesFor($trial->salesperson_id),
+        ]);
     }
 
     // ─────────────────────────────────────────────── salesperson lodges new
 
     public function create()
     {
-        $user = Auth::user();
-        abort_unless($this->canLodge($user), 403, 'Only a salesperson can lodge their own trial.');
-
-        return view('tenant.sales-trials.lodge', [
-            'companies' => $this->companiesFor($user->id),
-            'trial'     => null,
-        ]);
+        // Lodging is a modal on the list; keep this route as a redirect for old links.
+        return redirect()->route('sales-visits.trials.index');
     }
 
     public function store(Request $request)
@@ -136,12 +141,8 @@ class SalesTrialController extends Controller
 
     public function bookCreate()
     {
-        $user = Auth::user();
-        abort_unless($this->canBook($user), 403, 'Only CCare/NewBiz (or admin) can book a trial.');
-
-        return view('tenant.sales-trials.book', [
-            'salespeople' => $this->bookableSalespeople($user),
-        ]);
+        // Booking is a modal on the list; keep this route as a redirect for old links.
+        return redirect()->route('sales-visits.trials.index');
     }
 
     /** AJAX: the chosen salesperson's own pipeline/report companies (for the dependent dropdown). */
@@ -198,14 +199,8 @@ class SalesTrialController extends Controller
 
     public function completeForm($id)
     {
-        $trial = SalesTrial::with('pipeline')->findOrFail($id);
-        $user = Auth::user();
-        abort_unless($trial->isBooked() && ($trial->salesperson_id === $user->id || $this->seesEveryone($user)), 404);
-
-        return view('tenant.sales-trials.lodge', [
-            'companies' => $this->companiesFor($trial->salesperson_id),
-            'trial'     => $trial,
-        ]);
+        // Completion is a modal on the detail page; keep this route as a redirect for old links.
+        return redirect()->route('sales-visits.trials.show', $id);
     }
 
     public function complete(Request $request, $id)
@@ -332,7 +327,7 @@ class SalesTrialController extends Controller
     private function canBookFor(User $user, int $salespersonId): ?string
     {
         if ($this->seesEveryone($user)) {
-            return 'self';
+            return 'admin';
         }
         $map = CcSalespersonMap::where('cc_user_id', $user->id)->where('sales_user_id', $salespersonId)->first();
 
@@ -357,16 +352,55 @@ class SalesTrialController extends Controller
         if ($this->seesEveryone($user)) {
             return true;
         }
-        if ($trial->salesperson_id === $user->id || $trial->booked_by_id === $user->id) {
+        if ($trial->booked_by_id === $user->id) {
             return true;
         }
 
-        return CcSalespersonMap::where('cc_user_id', $user->id)->where('sales_user_id', $trial->salesperson_id)->exists();
+        return in_array($trial->salesperson_id, $this->visibleSalespersonIds($user), true);
     }
 
+    /**
+     * Full visibility: sees every salesperson's trials and may book for anyone.
+     * By default this is ONLY Admin and HR. Any other role must be granted the
+     * granular `sales_trials.view_all` permission in Roles & Permissions — no
+     * other role, department or sales permission opens the complete data set.
+     * Everyone else (managers, CCare/NewBiz, salespeople) stays scoped via
+     * visibleSalespersonIds().
+     */
     private function seesEveryone(User $user): bool
     {
-        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR', 'manager', 'Manager', 'accounts'])
-            || $user->can('sales_report.manage') || $user->can('sales_report.view');
+        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR'])
+            || $user->can('sales_trials.view_all');
+    }
+
+    /**
+     * The salespeople whose trials a non-admin viewer may see: themselves, their direct-report
+     * team (a manager sees their team), and the salespeople a CCare/NewBiz agent is mapped to.
+     *
+     * @return array<int,int>
+     */
+    private function visibleSalespersonIds(User $user): array
+    {
+        // Self (plus any vacant positions delegated to this account), the direct-report
+        // team of whoever reports to any of those identities, and CCare/NewBiz mappings.
+        // No "manager" role gate: a non-manager simply has no reports, so the set is self-correcting.
+        $identities = $user->managerIdentityIds();
+
+        $ids = collect($identities)
+            ->merge(User::whereIn('reporting_to_id', $identities)->pluck('id'))
+            ->merge(CcSalespersonMap::where('cc_user_id', $user->id)->pluck('sales_user_id'));
+
+        return $ids->filter()->unique()->values()->all();
+    }
+
+    /** The salesperson filter dropdown: everyone (admin) or just the viewer's visible set. */
+    private function filterablePeople(User $user)
+    {
+        $q = User::query()->whereIn('id', SalesTrial::distinct()->pluck('salesperson_id'));
+        if (!$this->seesEveryone($user)) {
+            $q->whereIn('id', $this->visibleSalespersonIds($user));
+        }
+
+        return $q->orderBy('first_name')->get(['id', 'first_name', 'last_name']);
     }
 }

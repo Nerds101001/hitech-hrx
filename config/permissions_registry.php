@@ -137,6 +137,7 @@ return [
         'sales_visits.create' => 'Book a Field Visit',
         'sales_visits.manage' => 'Edit / Cancel Field Visits',
         'sales_visits.verify' => 'Verify Completed Visits',
+        'sales_trials.view_all' => "View All Trials — every salesperson's complete data (default: Admin & HR only)",
         'client_master.view' => 'View Client Master',
         'client_master.manage' => 'Add / Remove Clients',
         'sales_report.view' => 'View Sales Report',
