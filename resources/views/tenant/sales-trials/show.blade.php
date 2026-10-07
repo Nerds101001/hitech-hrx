@@ -18,7 +18,13 @@
 
 <style>
   .tr-hero{background:linear-gradient(135deg,#004d4d 0%,#008a8a 100%);border-radius:22px;box-shadow:0 14px 34px rgba(0,90,90,.22);position:relative;overflow:hidden}
-  .tr-hero::after{content:'';position:absolute;right:-40px;top:-60px;width:220px;height:220px;background:rgba(255,255,255,.07);border-radius:50%}
+  .tr-hero::after{content:'';position:absolute;right:-40px;top:-60px;width:220px;height:220px;background:rgba(255,255,255,.07);border-radius:50%;z-index:0;pointer-events:none}
+  .tr-hero > div{position:relative;z-index:1}
+  .tr-hero .btn{font-weight:700}
+  .tr-hero .btn-complete{background:#fff;color:#007a7a;border:0;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+  .tr-hero .btn-complete:hover{background:#eafdfb;color:#005a5a}
+  .tr-hero .btn-back{background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.9)}
+  .tr-hero .btn-back:hover{background:#fff;color:#007a7a;border-color:#fff}
   .tr-hero-icon{width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;flex-shrink:0}
   .tr-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:999px;padding:3px 12px;font-size:.72rem;font-weight:700}
   .tr-fi{width:34px;height:34px;border-radius:9px;background:rgba(0,128,128,.08);color:#008080;display:flex;align-items:center;justify-content:center;font-size:1.05rem;flex-shrink:0}
@@ -46,8 +52,8 @@
         </div>
       </div>
       <div class="d-flex gap-2">
-        @if($canComplete)<button type="button" class="btn btn-light fw-bold text-teal px-4" style="color:#007a7a" data-bs-toggle="modal" data-bs-target="#completeModal"><i class="bx bx-check-circle me-1"></i> Complete this trial</button>@endif
-        <a href="{{ route('sales-visits.trials.index') }}" class="btn btn-outline-light"><i class="bx bx-arrow-back"></i></a>
+        @if($canComplete)<button type="button" class="btn btn-complete px-4" data-bs-toggle="modal" data-bs-target="#completeModal"><i class="bx bx-check-circle me-1"></i> Complete this trial</button>@endif
+        <a href="{{ route('sales-visits.trials.index') }}" class="btn btn-back"><i class="bx bx-arrow-back"></i></a>
       </div>
     </div>
   </div>

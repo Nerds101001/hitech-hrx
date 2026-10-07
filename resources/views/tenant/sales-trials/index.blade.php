@@ -7,8 +7,14 @@
 
     <style>
       .tr-hero{background:linear-gradient(135deg,#004d4d 0%,#008a8a 100%);border-radius:22px;box-shadow:0 14px 34px rgba(0,90,90,.22);position:relative;overflow:hidden}
-      .tr-hero::after{content:'';position:absolute;right:-40px;top:-60px;width:220px;height:220px;background:rgba(255,255,255,.07);border-radius:50%}
+      .tr-hero::after{content:'';position:absolute;right:-40px;top:-60px;width:220px;height:220px;background:rgba(255,255,255,.07);border-radius:50%;z-index:0;pointer-events:none}
+      .tr-hero > div{position:relative;z-index:1}
       .tr-hero-icon{width:56px;height:56px;border-radius:16px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;flex-shrink:0}
+      .tr-hero .btn{border-radius:11px;padding:.5rem 1.15rem;font-weight:700;white-space:nowrap}
+      .tr-hero .btn-lodge{background:#fff;color:#007a7a;border:0;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+      .tr-hero .btn-lodge:hover{background:#eafdfb;color:#005a5a}
+      .tr-hero .btn-book{background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.9)}
+      .tr-hero .btn-book:hover{background:#fff;color:#007a7a;border-color:#fff}
       .tr-stat{border-radius:16px;border:1px solid #e9eef3;background:#fff;padding:1.1rem 1.25rem;box-shadow:0 4px 12px rgba(0,0,0,.03);transition:transform .25s ease,box-shadow .25s ease}
       .tr-stat:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(0,90,90,.08)}
       .tr-stat .n{font-size:1.7rem;font-weight:800;line-height:1}
@@ -30,8 +36,8 @@
           </div>
         </div>
         <div class="d-flex gap-2">
-          @if($canBook)<button type="button" class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#bookTrialModal"><i class="bx bx-calendar-plus me-1"></i> Book Trial</button>@endif
-          @if($canLodge)<button type="button" class="btn btn-light fw-bold" style="color:#007a7a" data-bs-toggle="modal" data-bs-target="#lodgeTrialModal"><i class="bx bx-plus-circle me-1"></i> Lodge Trial</button>@endif
+          @if($canBook)<button type="button" class="btn btn-book" data-bs-toggle="modal" data-bs-target="#bookTrialModal"><i class="bx bx-calendar-plus me-1"></i> Book Trial</button>@endif
+          @if($canLodge)<button type="button" class="btn btn-lodge" data-bs-toggle="modal" data-bs-target="#lodgeTrialModal"><i class="bx bx-plus-circle me-1"></i> Lodge Trial</button>@endif
         </div>
       </div>
     </div>
