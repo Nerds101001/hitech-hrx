@@ -149,7 +149,7 @@
             if (isset($m->department) && !$isAdminUser
                 && !(isset($m->departmentOrPermission) && $hasAnyPermission($menuUser, $m->departmentOrPermission))) {
                 if (!$menuUser || !$menuUser->department
-                    || stripos($menuUser->department->name, $m->department) === false) return false;
+                    || !collect(explode('|', (string) $m->department))->contains(fn ($d) => stripos($menuUser->department->name, trim($d)) !== false)) return false;
             }
 
             // The menu JSON carries almost no "permission" keys, so until now
@@ -213,7 +213,7 @@
           }
 
           if(isset($menu->department)) {
-              if (!$user || !$user->department || stripos($user->department->name, $menu->department) === false) {
+              if (!$user || !$user->department || !collect(explode('|', (string) $menu->department))->contains(fn ($d) => stripos($user->department->name, trim($d)) !== false)) {
                   // Only skip if they aren't admin/hr, don't match the department, and
                   // don't hold a permission the entry accepts instead
                   // (departmentOrPermission). Someone outside Sales given goals.manage
@@ -302,7 +302,7 @@
                        // department gates, as on the parent).
                        if ($hiddenForUser($submenu)) continue;
                        if (isset($submenu->department) && !$isAdmin
-                           && (!$user->department || stripos($user->department->name, $submenu->department) === false)) continue;
+                           && (!$user->department || !collect(explode('|', (string) $submenu->department))->contains(fn ($d) => stripos($user->department->name, trim($d)) !== false))) continue;
 
                        // Same gate as the parent: never draw a child the user
                        // would only get a 403 from.
