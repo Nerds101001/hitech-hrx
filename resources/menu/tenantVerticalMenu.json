@@ -81,16 +81,6 @@
             ]
         },
         {
-            "url": "/reports",
-            "name": "Reports",
-            "icon": "menu-icon bx bx-file",
-            "slug": "reports.index",
-            "roles": [
-                "admin",
-                "hr"
-            ]
-        },
-        {
             "icon": "menu-icon bx bx-bullseye",
             "name": "Monitoring",
             "slug": [
@@ -1508,7 +1498,8 @@
                 "documenttypes.index",
                 "roles.index",
                 "auditLogs.index",
-                "settings.index"
+                "settings.index",
+                "reports.index"
             ],
             "roles": [
                 "admin",
@@ -1564,6 +1555,15 @@
                     "url": "/settings",
                     "name": "General Settings",
                     "slug": "settings.index",
+                    "roles": [
+                        "admin",
+                        "hr"
+                    ]
+                },
+                {
+                    "url": "/reports",
+                    "name": "Reports",
+                    "slug": "reports.index",
                     "roles": [
                         "admin",
                         "hr"
