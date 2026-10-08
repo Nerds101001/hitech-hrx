@@ -35,6 +35,14 @@
         @php
             $tone = ['completed_on_time' => '#059669', 'completed_late' => '#d97706', 'missed' => '#e11d48', 'pending' => '#94a3b8'];
             $fmt = fn($v) => $v === null ? '—' : rtrim(rtrim(number_format($v,2),'0'),'.');
+            // Red / amber / green by the share of a KPI's marks earned that month —
+            // green >= 70%, amber 40-69%, red below 40% (incl. a zero). Info/penalty
+            // KPIs (no max) and not-yet-scored cells stay neutral grey.
+            $rag = function ($score, $max) {
+                if ($score === null || (float) $max <= 0) return '#94a3b8';
+                $p = (float) $score / (float) $max * 100;
+                return $p >= 70 ? '#16a34a' : ($p >= 40 ? '#d97706' : '#dc2626');
+            };
             $rows = $assignments->sortBy([['kra_group','asc'],['title','asc']])->values();
             $overallPct = $possible > 0 ? round(($earned / $possible) * 100) : 0;
 
@@ -339,7 +347,7 @@
                             @endphp
                             <td class="text-end">
                                 @if($check)
-                                    <span style="color:{{ $tone[$check->status] ?? '#78716c' }};">{{ $fmt($check->achieved_value) }}</span>
+                                    <span style="color:{{ $rag($check->score, $a->max_marks) }};">{{ $fmt($check->achieved_value) }}</span>
                                 @else
                                     <span class="text-muted">—</span>
                                 @endif
@@ -350,7 +358,7 @@
                                         <i class="bx bx-check"></i>
                                     </button>
                                 @elseif($check)
-                                    <span style="color:{{ $tone[$check->status] ?? '#78716c' }};font-weight:600;">{{ $fmt($check->score) }}</span>
+                                    <span style="color:{{ $rag($check->score, $a->max_marks) }};font-weight:600;">{{ $fmt($check->score) }}</span>
                                 @else
                                     <span class="text-muted">—</span>
                                 @endif
