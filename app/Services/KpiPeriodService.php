@@ -246,19 +246,23 @@ class KpiPeriodService
                 // Never more than the KPI's own maximum (user decision 2026-09-30).
                 // The Sales rule book's top tiers paid past it - YoY 30 on a 25-mark
                 // KPI, New Customer Wins 15/13, Market Share 15/10 - and scorecards
-                // showed "30 / 25". A 0-mark KPI (a penalty, or a shown-only figure)
-                // is left as its bands say, so a negative penalty still applies.
+                // showed "30 / 25".
                 if ((float) $a->max_marks > 0) {
                     $marks = min($marks, (float) $a->max_marks);
                 }
 
-                return round($marks, 2);
+                // Never below zero: a bad result scores 0, never a negative mark
+                // (user decision 2026-10-08). A band set up as a penalty no longer
+                // deducts - it bottoms out at 0 like any other KPI.
+                return max(0.0, round($marks, 2));
             }
         }
 
         $ceiling = $a->result_cap_percent !== null ? (float) $a->result_cap_percent : 100.0;
 
-        return round(min($pct, $ceiling) / 100 * $a->max_marks, 2);
+        // Floored at zero too: a negative result (e.g. revenue below a target that
+        // reads as a negative %) scores 0, never a negative mark.
+        return max(0.0, round(min($pct, $ceiling) / 100 * $a->max_marks, 2));
     }
 
     /**
