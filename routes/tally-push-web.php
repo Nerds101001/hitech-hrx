@@ -42,6 +42,13 @@ Route::middleware([
             Route::delete('/connection/{credential}', [\App\Http\Controllers\tenant\TallyPush\TallyPushConnectionController::class, 'destroy'])
                 ->name('connection.destroy');
 
+            // Backfill: queue a month (or range) for the office PC to pull from Tally and push to the live server.
+            Route::post('/connection/backfill', [\App\Http\Controllers\tenant\TallyPush\TallyPushConnectionController::class, 'backfill'])
+                ->name('connection.backfill');
+            // Refresh a snapshot (outstanding receivables, or the customer ledger master) via the same job queue.
+            Route::post('/connection/refresh', [\App\Http\Controllers\tenant\TallyPush\TallyPushConnectionController::class, 'refresh'])
+                ->name('connection.refresh');
+
             // Request log: every inbound hit, accepted or rejected, with time / IP / reason.
             Route::get('/request-log', [\App\Http\Controllers\tenant\TallyPush\TallyPushAdminController::class, 'requestLog'])
                 ->name('request-log');

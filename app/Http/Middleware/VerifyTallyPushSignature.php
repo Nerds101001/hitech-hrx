@@ -118,13 +118,18 @@ class VerifyTallyPushSignature
             return $this->fail($request, $failKey, $cfg, 401, 'invalid_signature', 'HMAC signature did not match', $ip);
         }
 
-        // Proven genuine. Count the use, name the caller to the controller, and log the accepted request so the
-        // admin page shows it next to the refusals.
-        if (isset($credential['model'])) {
-            $credential['model']->markUsed($ip);
-        }
+        // Proven genuine. The job-queue endpoints (claim / progress report) are control-plane -- the office PC
+        // polls them every couple of minutes whether or not there's work -- so they are NOT counted or logged as
+        // data pushes, which would otherwise bury the real sync activity on the admin page. Data pushes still are.
+        $isJobPolling = str_contains($request->path(), 'tally-push/jobs');
+
         $request->attributes->set('tally_push_credential_label', $credential['label'] ?? null);
-        $this->recordAccepted($request, $ip, $credential['label'] ?? null);
+        if (!$isJobPolling) {
+            if (isset($credential['model'])) {
+                $credential['model']->markUsed($ip);
+            }
+            $this->recordAccepted($request, $ip, $credential['label'] ?? null);
+        }
 
         return $next($request);
     }
