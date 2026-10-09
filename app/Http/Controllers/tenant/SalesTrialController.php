@@ -82,6 +82,7 @@ class SalesTrialController extends Controller
             'canBook'        => $this->canBook($user),
             'canLodge'       => $this->canLodge($user),
             'isAdmin'        => $this->seesEveryone($user),
+            'canDelete'      => $this->canDelete($user),
             'people'         => $this->filterablePeople($user),
             'lodgeCompanies' => $this->companiesFor($user->id),
             'bookSalespeople' => $this->canBook($user) ? $this->bookableSalespeople($user) : collect(),
@@ -98,6 +99,7 @@ class SalesTrialController extends Controller
         return view('tenant.sales-trials.show', [
             'trial'            => $trial,
             'isAdmin'          => $this->seesEveryone(Auth::user()),
+            'canDelete'        => $this->canDelete(Auth::user()),
             'completeCompanies' => $this->companiesFor($trial->salesperson_id),
             'trialStatuses'    => config('trial_status.statuses', []),
             'canTrack'         => $this->canUpdateStatus(Auth::user(), $trial),
@@ -306,6 +308,37 @@ class SalesTrialController extends Controller
         $trial->update(['status' => 'cancelled']);
 
         return back()->with('success', 'Trial cancelled.');
+    }
+
+    /**
+     * Permanently delete a trial — its photos (files + rows) and its outcome
+     * timeline (FK cascade). Admin / HR only; destructive and irreversible.
+     * Handy for clearing demo/test rows.
+     */
+    public function destroy($id)
+    {
+        $trial = SalesTrial::with('images')->findOrFail($id);
+        abort_unless($this->canDelete(Auth::user()), 403);
+
+        // Remove the compressed photo files from the public disk, then the rows.
+        foreach ($trial->images as $image) {
+            if ($image->path) {
+                Storage::disk('public')->delete($image->path);
+            }
+        }
+        $trial->images()->delete();
+        // sales_trial_status_updates are removed by the FK cascade on delete.
+        $company = $trial->company_name;
+        $trial->delete();
+
+        return redirect()->route('sales-visits.trials.index')
+            ->with('success', 'Trial deleted' . ($company ? ' — ' . $company : '') . '.');
+    }
+
+    /** Who may permanently delete a trial: core admins and HR only. */
+    private function canDelete(User $user): bool
+    {
+        return $user->hasRole(['admin', 'Admin', 'super_admin', 'hr', 'HR']);
     }
 
     // ───────────────────────────────────────────────────────────── helpers

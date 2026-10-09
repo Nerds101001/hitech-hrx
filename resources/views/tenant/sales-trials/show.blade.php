@@ -61,6 +61,13 @@
       </div>
       <div class="d-flex gap-2">
         @if($canComplete)<button type="button" class="btn btn-complete px-4" data-bs-toggle="modal" data-bs-target="#completeModal"><i class="bx bx-check-circle me-1"></i> Complete this trial</button>@endif
+        @if($canDelete ?? false)
+        <form method="POST" action="{{ route('sales-visits.trials.destroy', $trial->id) }}" class="d-inline"
+              onsubmit="return confirm('Delete this trial permanently?\n\nIts photos and full status history will also be removed. This cannot be undone.');">
+          @csrf
+          <button type="submit" class="btn btn-danger"><i class="bx bx-trash me-1"></i> Delete</button>
+        </form>
+        @endif
         <a href="{{ route('sales-visits.trials.index') }}" class="btn btn-back"><i class="bx bx-arrow-back"></i></a>
       </div>
     </div>

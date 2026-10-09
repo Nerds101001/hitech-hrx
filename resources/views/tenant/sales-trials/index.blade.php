@@ -105,7 +105,18 @@
                   @if($t->next_expected_date)<div class="mt-1 {{ $t->isFollowUpOverdue() ? 'text-danger fw-semibold' : 'text-muted' }}"><i class="bx bx-alarm"></i> {{ $t->next_expected_date->format('d M Y') }}</div>@endif
                 @else<span class="text-muted">—</span>@endif
               </td>
-              <td class="text-end pe-4"><a href="{{ route('sales-visits.trials.show', $t->id) }}" class="btn btn-sm btn-hitech-secondary">Open</a></td>
+              <td class="text-end pe-4">
+                <div class="d-inline-flex gap-1">
+                  <a href="{{ route('sales-visits.trials.show', $t->id) }}" class="btn btn-sm btn-hitech-secondary">Open</a>
+                  @if($canDelete ?? false)
+                  <form method="POST" action="{{ route('sales-visits.trials.destroy', $t->id) }}" class="d-inline"
+                        onsubmit="return confirm('Delete this trial permanently?\n\n{{ addslashes($t->company_name ?: 'This trial') }} — its photos and status history will also be removed. This cannot be undone.');">
+                    @csrf
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete trial"><i class="bx bx-trash"></i></button>
+                  </form>
+                  @endif
+                </div>
+              </td>
             </tr>
           @empty
             <tr><td colspan="9" class="text-center text-muted py-5">No trials yet. @if($canLodge)Tap <b>Lodge Trial</b> to add one.@endif</td></tr>

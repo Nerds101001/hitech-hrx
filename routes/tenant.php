@@ -915,6 +915,7 @@ Route::middleware([
             Route::post('/trials/{id}/complete', [\App\Http\Controllers\tenant\SalesTrialController::class, 'complete'])->whereNumber('id')->name('trials.complete');
             Route::post('/trials/{id}/cancel', [\App\Http\Controllers\tenant\SalesTrialController::class, 'cancel'])->whereNumber('id')->name('trials.cancel');
             Route::post('/trials/{id}/status', [\App\Http\Controllers\tenant\SalesTrialController::class, 'addStatus'])->whereNumber('id')->name('trials.status');
+            Route::post('/trials/{id}/delete', [\App\Http\Controllers\tenant\SalesTrialController::class, 'destroy'])->whereNumber('id')->name('trials.destroy');
 
             // Sales Report (formerly pipeline)
             Route::get('/sales-report', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'index'])->name('pipeline.index');
