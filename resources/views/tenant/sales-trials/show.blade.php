@@ -46,6 +46,14 @@
           <h3 class="fw-bold mb-1" style="color:#fff !important">{{ $trial->company_name ?: 'Trial' }}</h3>
           <div class="d-flex flex-wrap align-items-center gap-2">
             <span class="badge" style="background:#fff;color:{{ $statusColor }};font-weight:800">{{ ucfirst($trial->status) }}</span>
+            @if($trial->status === 'completed')
+              <span class="badge" style="background:{{ $trial->statusColor() }};color:#fff;font-weight:800">{{ $trial->statusLabel() }}</span>
+              @if($trial->isFollowUpOverdue())
+                <span class="tr-pill" style="background:#fee2e2;color:#b91c1c;border-color:#fecaca"><i class="bx bx-alarm-exclamation"></i> Follow-up overdue · {{ $trial->next_expected_date->format('d M Y') }}</span>
+              @elseif($trial->next_expected_date)
+                <span class="tr-pill"><i class="bx bx-alarm"></i> Next: {{ $trial->next_expected_date->format('d M Y') }}</span>
+              @endif
+            @endif
             <span class="tr-pill"><i class="bx bx-user-voice"></i> {{ $trial->sourceLabel() }}</span>
             <span class="tr-pill"><i class="bx bx-calendar"></i> {{ optional($trial->trial_date)->format('d M Y') }} @if($trial->trial_time){{ substr((string)$trial->trial_time,0,5) }}@endif</span>
           </div>
@@ -92,6 +100,31 @@
     @endif
   </div></div>
 
+  {{-- Outcome timeline --}}
+  @if($trial->status === 'completed')
+  <div class="hitech-card rounded-4 mb-4"><div class="p-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="hitech-section-banner mb-0"><div class="hitech-section-icon"><i class="bx bx-trending-up"></i></div><div class="hitech-section-title">Outcome tracking</div></div>
+      @if($canTrack ?? false)<button type="button" class="btn btn-hitech-primary btn-sm" data-bs-toggle="modal" data-bs-target="#statusModal"><i class="bx bx-plus me-1"></i> Update status</button>@endif
+    </div>
+    <div class="small text-muted mb-3 mt-1">The trial's result over time — waiting for a result, a retrial, finally pass / fail / order.</div>
+    @forelse($trial->statusUpdates as $u)
+      <div style="margin-left:7px;padding-left:20px;padding-bottom:16px;position:relative;{{ !$loop->last ? 'border-left:2px solid #eef2f6;' : '' }}">
+        <span style="position:absolute;left:-8px;top:2px;width:15px;height:15px;border-radius:50%;background:{{ $u->color() }};border:2px solid #fff;box-shadow:0 0 0 1.5px {{ $u->color() }}"></span>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="badge" style="background:{{ $u->color() }};color:#fff;font-weight:700">{{ $u->label() }}</span>
+          @if($loop->first)<span class="badge" style="background:#e0f2fe;color:#0369a1;font-weight:700">Current</span>@endif
+          @if($u->expected_date)<span class="small fw-semibold" style="color:#b45309"><i class="bx bx-alarm"></i> expected {{ $u->expected_date->format('d M Y') }}</span>@endif
+          <span class="small text-muted">· {{ $u->created_at->format('d M Y, g:i A') }}@if($u->loggedBy) by {{ trim($u->loggedBy->first_name.' '.$u->loggedBy->last_name) }}@endif</span>
+        </div>
+        @if($u->comment)<div class="mt-1" style="color:#334155">{{ $u->comment }}</div>@endif
+      </div>
+    @empty
+      <div class="text-center text-muted py-3"><i class="bx bx-list-check" style="font-size:1.8rem;opacity:.4"></i><div class="small mt-2">No status recorded yet.@if($canTrack ?? false) Tap <b>Update status</b> to log the result — pass, fail, order, retrial or waiting for result.@endif</div></div>
+    @endforelse
+  </div></div>
+  @endif
+
   {{-- Photos --}}
   <div class="hitech-card rounded-4"><div class="p-4">
     <div class="hitech-section-banner"><div class="hitech-section-icon"><i class="bx bx-images"></i></div><div class="hitech-section-title">Photos ({{ $trial->images->count() }})</div></div>
@@ -131,10 +164,62 @@
   </div>
 </div>
 @endif
+
+{{-- Update status modal --}}
+@if(($canTrack ?? false) && $trial->status === 'completed')
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-hitech">
+      <div class="modal-header modal-header-hitech">
+        <div class="d-flex align-items-center"><div class="modal-icon-header me-3"><i class="bx bx-trending-up"></i></div><h5 class="modal-title modal-title-hitech mb-0">Update Trial Status</h5></div>
+        <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+      </div>
+      <form method="POST" action="{{ route('sales-visits.trials.status', $trial->id) }}">
+        @csrf
+        <div class="modal-body modal-body-hitech">
+          <div class="mb-3">
+            <label class="form-label form-label-hitech">Status</label>
+            <select name="status" id="st-status" class="form-select form-select-hitech" required>
+              <option value="" disabled selected>Choose a status…</option>
+              @foreach($trialStatuses as $key => $s)
+                <option value="{{ $key }}" data-needs-date="{{ !empty($s['needs_date']) ? 1 : 0 }}">{{ $s['label'] }}</option>
+              @endforeach
+            </select>
+          </div>
+          <div class="mb-3 d-none" id="st-date-wrap">
+            <label class="form-label form-label-hitech">Next expected date</label>
+            <input type="date" name="expected_date" id="st-date" class="form-control form-control-hitech" min="{{ now()->toDateString() }}">
+            <div class="form-text">When the result — or the next trial — is expected. You'll be reminded on this date.</div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label form-label-hitech">Comment / remark</label>
+            <textarea name="comment" class="form-control form-control-hitech" rows="3" maxlength="2000" placeholder="What happened, what's pending, any context…"></textarea>
+          </div>
+          @error('expected_date')<div class="text-danger small mt-2">{{ $message }}</div>@enderror
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-hitech-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-hitech-modal-submit">Save status <i class="bx bx-check ms-1"></i></button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+@endif
 </div>
 
 @if($canComplete)
 @include('tenant.sales-trials._form_js')
 <script>(function(){ initTrialForm('comp'); var m=document.getElementById('completeModal'); if(m) m.addEventListener('shown.bs.modal',function(){captureTrialGeo('comp');}); })();</script>
 @endif
+<script>(function(){
+  var sel=document.getElementById('st-status'), wrap=document.getElementById('st-date-wrap'), dt=document.getElementById('st-date');
+  if(!sel) return;
+  sel.addEventListener('change', function(){
+    var opt=sel.options[sel.selectedIndex], needs=opt && opt.getAttribute('data-needs-date')==='1';
+    if(wrap) wrap.classList.toggle('d-none', !needs);
+    if(dt) dt.required = needs;
+  });
+})();</script>
+@error('expected_date')<script>(function(){var m=document.getElementById('statusModal'); if(m && window.bootstrap) new bootstrap.Modal(m).show();})();</script>@enderror
 @endsection

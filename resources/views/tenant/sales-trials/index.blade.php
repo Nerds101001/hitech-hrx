@@ -45,11 +45,15 @@
     {{-- Stat cards --}}
     <div class="row g-3 mb-4">
       @foreach([['Total',$stats['total'],'bx-layer','#0f172a','#eef2f6'],['Booked',$stats['booked'],'bx-calendar-event','#b45309','#fef3c7'],['Completed',$stats['completed'],'bx-check-circle','#15803d','#dcfce7']] as [$l,$n,$ic,$col,$bg])
-        <div class="col-12 col-md-4"><div class="tr-stat d-flex align-items-center justify-content-between">
+        <div class="col-6 col-md-3"><div class="tr-stat d-flex align-items-center justify-content-between" style="height:100%">
           <div><div class="l mb-1">{{ $l }}</div><div class="n" style="color:{{ $col }}">{{ number_format($n) }}</div></div>
           <div class="si" style="background:{{ $bg }};color:{{ $col }}"><i class="bx {{ $ic }}"></i></div>
         </div></div>
       @endforeach
+      <div class="col-6 col-md-3"><a href="{{ route('sales-visits.trials.index', ['overdue' => 1]) }}" class="tr-stat d-flex align-items-center justify-content-between text-decoration-none" style="height:100%">
+        <div><div class="l mb-1">Follow-up overdue</div><div class="n" style="color:#b91c1c">{{ number_format($stats['overdue'] ?? 0) }}</div></div>
+        <div class="si" style="background:#fee2e2;color:#b91c1c"><i class="bx bx-alarm-exclamation"></i></div>
+      </a></div>
     </div>
 
     @if(session('success'))<div class="alert alert-success py-2 small rounded-3">{{ session('success') }}</div>@endif
@@ -58,12 +62,16 @@
     {{-- Filters --}}
     <form method="GET" class="hitech-card-white rounded-4 p-3 mb-4">
       <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-2"><label class="form-label-hitech">Status</label>
+        <div class="col-6 col-md-2"><label class="form-label-hitech">Stage</label>
           <select name="status" class="form-select form-select-hitech"><option value="">All</option>
             @foreach(['booked','completed','cancelled'] as $s)<option value="{{ $s }}" {{ ($filters['status']??'')===$s?'selected':'' }}>{{ ucfirst($s) }}</option>@endforeach
           </select></div>
+        <div class="col-6 col-md-2"><label class="form-label-hitech">Outcome</label>
+          <select name="outcome" class="form-select form-select-hitech"><option value="">All</option>
+            @foreach($trialStatuses as $key => $s)<option value="{{ $key }}" {{ ($filters['outcome']??'')===$key?'selected':'' }}>{{ $s['label'] }}</option>@endforeach
+          </select></div>
         @if($people->isNotEmpty())
-          <div class="col-6 col-md-3"><label class="form-label-hitech">Salesperson</label>
+          <div class="col-6 col-md-2"><label class="form-label-hitech">Salesperson</label>
             <select name="salesperson_id" class="form-select form-select-hitech"><option value="">All</option>
               @foreach($people as $p)<option value="{{ $p->id }}" {{ ($filters['salesperson_id']??'')==$p->id?'selected':'' }}>{{ $p->first_name }} {{ $p->last_name }}</option>@endforeach
             </select></div>
@@ -79,11 +87,11 @@
       <div class="table-responsive">
         <table class="table align-middle mb-0 tr-table">
           <thead><tr class="small text-muted text-uppercase">
-            <th class="ps-4">Company</th><th>Salesperson</th><th>Topic / Product</th><th>Date</th><th>Source</th><th class="text-center">Photos</th><th>Status</th><th></th>
+            <th class="ps-4">Company</th><th>Salesperson</th><th>Topic / Product</th><th>Date</th><th>Source</th><th class="text-center">Photos</th><th>Stage</th><th>Outcome</th><th></th>
           </tr></thead>
           <tbody>
           @forelse($trials as $t)
-            <tr>
+            <tr @if($t->isFollowUpOverdue()) style="background:#fff7ed" @endif>
               <td class="ps-4 fw-semibold">{{ $t->company_name ?: '—' }}</td>
               <td class="small">{{ optional($t->salesperson)->first_name }} {{ optional($t->salesperson)->last_name }}<br><span class="text-muted">{{ optional($t->salesperson)->code }}</span></td>
               <td class="small">{{ $t->topic ?: '—' }}<br><span class="text-muted">{{ $t->product }}</span></td>
@@ -91,10 +99,16 @@
               <td class="small">{{ $t->sourceLabel() }}</td>
               <td class="text-center"><span class="badge bg-label-secondary">{{ $t->images->count() }}</span></td>
               <td><span class="badge {{ $t->statusBadge() }}">{{ ucfirst($t->status) }}</span></td>
+              <td class="small">
+                @if($t->status === 'completed')
+                  <span class="badge" style="background:{{ $t->statusColor() }};color:#fff">{{ $t->statusLabel() }}</span>
+                  @if($t->next_expected_date)<div class="mt-1 {{ $t->isFollowUpOverdue() ? 'text-danger fw-semibold' : 'text-muted' }}"><i class="bx bx-alarm"></i> {{ $t->next_expected_date->format('d M Y') }}</div>@endif
+                @else<span class="text-muted">—</span>@endif
+              </td>
               <td class="text-end pe-4"><a href="{{ route('sales-visits.trials.show', $t->id) }}" class="btn btn-sm btn-hitech-secondary">Open</a></td>
             </tr>
           @empty
-            <tr><td colspan="8" class="text-center text-muted py-5">No trials yet. @if($canLodge)Tap <b>Lodge Trial</b> to add one.@endif</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-5">No trials yet. @if($canLodge)Tap <b>Lodge Trial</b> to add one.@endif</td></tr>
           @endforelse
           </tbody>
         </table>

@@ -51,10 +51,17 @@ class SalesTrialController extends Controller
             'total'     => (clone $query)->count(),
             'booked'    => (clone $query)->where('status', 'booked')->count(),
             'completed' => (clone $query)->where('status', 'completed')->count(),
+            'overdue'   => (clone $query)->where('status', 'completed')->whereDate('next_expected_date', '<', now())->count(),
         ];
 
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
+        }
+        if ($request->filled('outcome')) {
+            $query->where('current_status', $request->query('outcome'));
+        }
+        if ($request->boolean('overdue')) {
+            $query->where('status', 'completed')->whereDate('next_expected_date', '<', now());
         }
         if ($request->filled('salesperson_id')) {
             // Safe for everyone: the base query is already scoped to who the viewer may see.
@@ -71,27 +78,81 @@ class SalesTrialController extends Controller
 
         return view('tenant.sales-trials.index', [
             'trials'         => $trials,
-            'filters'        => $request->only(['status', 'salesperson_id', 'from', 'to']),
+            'filters'        => $request->only(['status', 'outcome', 'overdue', 'salesperson_id', 'from', 'to']),
             'canBook'        => $this->canBook($user),
             'canLodge'       => $this->canLodge($user),
             'isAdmin'        => $this->seesEveryone($user),
             'people'         => $this->filterablePeople($user),
             'lodgeCompanies' => $this->companiesFor($user->id),
             'bookSalespeople' => $this->canBook($user) ? $this->bookableSalespeople($user) : collect(),
+            'trialStatuses'  => config('trial_status.statuses', []),
             'stats'          => $stats,
         ]);
     }
 
     public function show($id)
     {
-        $trial = SalesTrial::with(['salesperson', 'bookedBy', 'pipeline', 'images'])->findOrFail($id);
+        $trial = SalesTrial::with(['salesperson', 'bookedBy', 'pipeline', 'images', 'statusUpdates.loggedBy:id,first_name,last_name'])->findOrFail($id);
         abort_unless($this->canView(Auth::user(), $trial), 404);
 
         return view('tenant.sales-trials.show', [
             'trial'            => $trial,
             'isAdmin'          => $this->seesEveryone(Auth::user()),
             'completeCompanies' => $this->companiesFor($trial->salesperson_id),
+            'trialStatuses'    => config('trial_status.statuses', []),
+            'canTrack'         => $this->canUpdateStatus(Auth::user(), $trial),
         ]);
+    }
+
+    /** Who may add an outcome/status update: the trial's own salesperson, or an admin/HR viewer. */
+    private function canUpdateStatus(User $user, SalesTrial $trial): bool
+    {
+        return $trial->salesperson_id === $user->id || $this->seesEveryone($user);
+    }
+
+    /**
+     * Record a step on the trial's outcome timeline (Waiting / Retrial / Pass / Fail / Order / …)
+     * and roll the headline status + next-expected-date onto the trial for lists and reminders.
+     */
+    public function addStatus(Request $request, $id)
+    {
+        $trial = SalesTrial::findOrFail($id);
+        $user = Auth::user();
+        abort_unless($this->canUpdateStatus($user, $trial), 403);
+        // Outcome tracking only begins once the trial has actually been performed.
+        if ($trial->status !== 'completed') {
+            return back()->with('error', 'Complete the trial in the field before tracking its outcome.');
+        }
+
+        $keys = array_keys(config('trial_status.statuses', []));
+        $data = $request->validate([
+            'status'        => ['required', \Illuminate\Validation\Rule::in($keys)],
+            'comment'       => ['nullable', 'string', 'max:2000'],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+
+        $meta = config('trial_status.statuses.' . $data['status']);
+        // Waiting / Retrial must carry the date the next result/attempt is due.
+        if (!empty($meta['needs_date']) && empty($data['expected_date'])) {
+            return back()->withErrors(['expected_date' => 'Pick the next expected date for "' . $meta['label'] . '".'])->withInput();
+        }
+        $expected = !empty($meta['needs_date']) ? $data['expected_date'] : null;
+
+        $trial->statusUpdates()->create([
+            'tenant_id'     => $trial->tenant_id,
+            'status'        => $data['status'],
+            'comment'       => $data['comment'] ?? null,
+            'expected_date' => $expected,
+            'logged_by_id'  => $user->id,
+        ]);
+
+        // A terminal status (pass/fail/order/lost) clears the follow-up date.
+        $trial->update([
+            'current_status'     => $data['status'],
+            'next_expected_date' => $expected,
+        ]);
+
+        return redirect()->route('sales-visits.trials.show', $trial->id)->with('success', 'Status updated.');
     }
 
     // ─────────────────────────────────────────────── salesperson lodges new
@@ -118,6 +179,7 @@ class SalesTrialController extends Controller
             'booked_by_id'      => null,
             'booked_by_role'    => 'self',
             'status'            => 'completed',
+            'current_status'    => config('trial_status.default', 'pending'),
             'trial_date'        => $data['trial_date'],
             'trial_time'        => $data['trial_time'],
             'topic'             => $data['topic'],
@@ -134,7 +196,7 @@ class SalesTrialController extends Controller
         ]);
         $this->storePhotos($trial, $request);
 
-        return redirect()->route('sales-visits.trials.show', $trial->id)->with('success', 'Trial lodged.');
+        return redirect()->route('sales-visits.trials.show', $trial->id)->with('success', 'Trial lodged. Now track its outcome below.');
     }
 
     // ─────────────────────────────────────────────── CCare/NewBiz pre-books
@@ -229,10 +291,11 @@ class SalesTrialController extends Controller
             'longitude'         => $data['longitude'] ?? null,
             'location_accuracy' => $data['location_accuracy'] ?? null,
             'completed_at'      => now(),
+            'current_status'    => $trial->current_status ?: config('trial_status.default', 'pending'),
         ]);
         $this->storePhotos($trial, $request);
 
-        return redirect()->route('sales-visits.trials.show', $trial->id)->with('success', 'Trial completed.');
+        return redirect()->route('sales-visits.trials.show', $trial->id)->with('success', 'Trial completed. Now track its outcome below.');
     }
 
     public function cancel($id)
