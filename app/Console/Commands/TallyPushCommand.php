@@ -42,6 +42,7 @@ class TallyPushCommand extends Command
                             {--gateway-url= : Override services.tally.gateway_url (for testing against the sandbox)}
                             {--gateway-company= : Override services.tally.gateway_company}
                             {--target-url= : Override tally_push.outbound.target_url (e.g. to push to localhost while testing)}
+                            {--emit-totals : Print a machine-readable "TALLY_TOTALS {json}" line at the end (used by hrx:tally-jobs-poll)}
                             {--dry-run : Pull and map only; push nothing, write nothing}';
 
     protected $description = 'Pull sales invoices and sale orders from Tally\'s XML gateway and push them to /api/tally-push/sync, one day at a time';
@@ -94,6 +95,7 @@ class TallyPushCommand extends Command
         $this->line("Gateway: {$gateway->baseUrl()}   company: {$gateway->expectedCompany()}" . ($dry ? '   (dry run: nothing pushed)' : "   target: {$targetUrl}"));
 
         $totals = ['invoices' => 0, 'invoice_lines' => 0, 'sale_lines' => 0, 'sale_orders' => 0, 'deliveries' => 0, 'receipts' => 0];
+        $daysDone = 0;
         for ($day = $start->copy(); $day->lte($end); $day = $day->copy()->addDay()) {
             $t = microtime(true);
             try {
@@ -126,6 +128,8 @@ class TallyPushCommand extends Command
                     $day->format('Y-m-d D'), $secs, $counts['invoices'], $counts['invoice_lines'], $counts['sale_lines'], $counts['sale_orders'], $counts['deliveries'], $counts['receipts'], $message));
             }
 
+            $daysDone++;
+
             if ($secs > 45 && $day->lt($end)) {
                 $this->warn('That took over 45s -- stopping here to avoid straining Tally. Resume later with --from the next day.');
                 break;
@@ -140,6 +144,11 @@ class TallyPushCommand extends Command
             'Done. Pushed %d invoice(s), %d invoice line(s), %d sale line(s), %d sale order line(s), %d delivery line(s), %d receipt(s).',
             $totals['invoices'], $totals['invoice_lines'], $totals['sale_lines'], $totals['sale_orders'], $totals['deliveries'], $totals['receipts']
         ));
+
+        // One machine-readable line for hrx:tally-jobs-poll to parse back into the sync job's counts.
+        if ($this->option('emit-totals')) {
+            $this->line('TALLY_TOTALS ' . json_encode($totals + ['days_done' => $daysDone]));
+        }
         return self::SUCCESS;
     }
 
@@ -323,27 +332,38 @@ class TallyPushCommand extends Command
         return ($gst['CGST'] ?? 0.0) + ($gst['SGST/UTGST'] ?? 0.0);
     }
 
+    /**
+     * The signed headers every call to the push API carries: bearer key + HMAC-SHA256 over timestamp.nonce.body,
+     * a fresh timestamp and single-use nonce each time. Shared with hrx:tally-jobs-poll's claim/report calls so
+     * the two can never drift out of step with what VerifyTallyPushSignature expects.
+     *
+     * @return array<string,string>
+     */
+    public static function signedHeaders(string $apiKey, string $secret, string $body): array
+    {
+        $timestamp = (string) time();
+        $nonce = Str::random(32);
+        return [
+            'Authorization' => 'Bearer ' . $apiKey,
+            'X-HRX-Timestamp' => $timestamp,
+            'X-HRX-Nonce' => $nonce,
+            'X-HRX-Signature' => 'sha256=' . hash_hmac('sha256', $timestamp . '.' . $nonce . '.' . $body, $secret),
+        ];
+    }
+
     /** @return array{0: bool, 1: string} */
     private function push(string $url, array $payload): array
     {
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        $timestamp = (string) time();
-        $nonce = Str::random(32);
         $secret = (string) config('tally_push.outbound.secret');
         $apiKey = (string) config('tally_push.outbound.api_key');
         if ($apiKey === '' || $secret === '') {
             return [false, 'TALLY_PUSH_API_KEY / TALLY_PUSH_SECRET not set'];
         }
-        $signature = hash_hmac('sha256', $timestamp . '.' . $nonce . '.' . $body, $secret);
 
         try {
             $response = Http::withBody($body, 'application/json')
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
-                    'X-HRX-Timestamp' => $timestamp,
-                    'X-HRX-Nonce' => $nonce,
-                    'X-HRX-Signature' => 'sha256=' . $signature,
-                ])
+                ->withHeaders(self::signedHeaders($apiKey, $secret, $body))
                 ->connectTimeout(10)
                 ->timeout((int) config('tally_push.outbound.timeout', 60))
                 ->post($url);

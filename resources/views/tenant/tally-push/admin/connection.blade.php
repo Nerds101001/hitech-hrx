@@ -101,6 +101,105 @@
       @endforeach
     </div>
 
+    {{-- Backfill / re-sync a month --}}
+    @php
+      $activeJobs = $jobs->whereIn('status', ['pending', 'claimed', 'running'])->count();
+    @endphp
+    <div class="card border-0 shadow-sm rounded-4 mb-4" style="border-left:4px solid #6366f1 !important;">
+      <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+          <h6 class="fw-bold mb-0"><i class="bx bx-calendar-event me-1"></i> Sync a month to the live server</h6>
+          @if($activeJobs > 0)<span class="badge bg-label-info"><i class="bx bx-loader bx-spin me-1"></i> {{ $activeJobs }} in progress</span>@endif
+        </div>
+        <p class="text-muted small mb-3">
+          Pick a month and the office PC pulls those days from Tally and pushes them here. It's queued, not instant — the PC
+          picks it up within a minute or two and this card shows the progress. Re-running a month is safe: it replaces, never duplicates.
+        </p>
+
+        {{-- Quick pick: each month of the financial year so far --}}
+        <label class="form-label small fw-semibold mb-1">This financial year</label>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          @foreach($fyMonths as $mo)
+            <form method="POST" action="{{ route('user.tally-push.admin.connection.backfill') }}" class="d-inline">
+              @csrf
+              <input type="hidden" name="from" value="{{ $mo['from'] }}">
+              <input type="hidden" name="to" value="{{ $mo['to'] }}">
+              <button class="btn btn-sm btn-outline-primary" type="submit">{{ $mo['label'] }}</button>
+            </form>
+          @endforeach
+          @if(count($fyMonths))
+            <form method="POST" action="{{ route('user.tally-push.admin.connection.backfill') }}" class="d-inline"
+                  onsubmit="return confirm('Queue every month of this financial year so far? That's {{ count($fyMonths) }} jobs.');">
+              @csrf
+              <input type="hidden" name="from" value="{{ end($fyMonths)['from'] }}">
+              <input type="hidden" name="to" value="{{ $fyMonths[0]['to'] }}">
+              <button class="btn btn-sm btn-primary" type="submit"><i class="bx bx-calendar me-1"></i> Whole year so far</button>
+            </form>
+          @endif
+        </div>
+
+        {{-- Custom range --}}
+        <form method="POST" action="{{ route('user.tally-push.admin.connection.backfill') }}" class="border rounded-3 p-3" style="background:#f8fafc;">
+          @csrf
+          <label class="form-label small fw-semibold mb-1">Or a custom range</label>
+          <div class="row g-2 align-items-end">
+            <div class="col-6 col-md-3"><label class="form-label small text-muted mb-1">From</label><input type="date" name="from" class="form-control form-control-sm" required></div>
+            <div class="col-6 col-md-3"><label class="form-label small text-muted mb-1">To</label><input type="date" name="to" class="form-control form-control-sm" required></div>
+            <div class="col-md-3"><button class="btn btn-sm btn-success w-100"><i class="bx bx-sync me-1"></i> Queue sync</button></div>
+          </div>
+          <div class="form-text mt-2">A range spanning several months is split into one job per month so each stays within the push limit.</div>
+        </form>
+
+        {{-- Snapshot refreshes: receivables + the ledger master, which aren't carried by the daily voucher push --}}
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+          <span class="small fw-semibold me-1">Also refresh:</span>
+          <form method="POST" action="{{ route('user.tally-push.admin.connection.refresh') }}" class="d-inline">
+            @csrf <input type="hidden" name="kind" value="outstanding">
+            <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bx bx-receipt me-1"></i> Outstanding (receivables)</button>
+          </form>
+          <form method="POST" action="{{ route('user.tally-push.admin.connection.refresh') }}" class="d-inline">
+            @csrf <input type="hidden" name="kind" value="parties">
+            <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bx bx-id-card me-1"></i> Customer ledgers (credit / GSTIN / contacts)</button>
+          </form>
+        </div>
+        <div class="form-text mt-1">The Outstanding and Finance screens, and Credit &amp; Contacts, come from these snapshots rather than the day-by-day sync — refresh them when the figures look stale.</div>
+
+        {{-- Recent jobs --}}
+        @if($jobs->isNotEmpty())
+          <div class="table-responsive mt-3">
+            <table class="table table-sm align-middle mb-0">
+              <thead><tr class="small text-muted text-uppercase"><th>Job</th><th>Type</th><th>Range</th><th>Status</th><th>Days</th><th>Invoices</th><th>Orders</th><th>Deliveries</th><th>Receipts</th><th>When</th></tr></thead>
+              <tbody>
+              @foreach($jobs as $j)
+                @php
+                  $badge = ['pending' => 'bg-label-secondary', 'claimed' => 'bg-label-info', 'running' => 'bg-label-info', 'done' => 'bg-label-success', 'failed' => 'bg-label-danger'][$j->status] ?? 'bg-label-secondary';
+                  $spin = in_array($j->status, ['claimed', 'running']);
+                @endphp
+                <tr>
+                  <td class="fw-semibold">{{ $j->label }}</td>
+                  <td class="small">{{ $j->kindLabel() }}</td>
+                  <td class="small text-muted">@if($j->from_date && $j->to_date){{ \Illuminate\Support\Carbon::parse($j->from_date)->format('d M') }} – {{ \Illuminate\Support\Carbon::parse($j->to_date)->format('d M') }}@else<span class="text-muted">—</span>@endif</td>
+                  <td><span class="badge {{ $badge }}">@if($spin)<i class="bx bx-loader bx-spin me-1"></i>@endif{{ $j->statusLabel() }}</span>
+                      @if($j->status === 'failed' && $j->message)<i class="bx bx-info-circle text-danger ms-1" title="{{ $j->message }}"></i>@endif</td>
+                  <td class="small">{{ $j->days_done }}@if($j->days_total)/{{ $j->days_total }}@endif</td>
+                  <td class="small">{{ $j->status === 'done' || $j->invoices ? number_format($j->invoices) : '—' }}</td>
+                  <td class="small">{{ $j->status === 'done' || $j->sale_orders ? number_format($j->sale_orders) : '—' }}</td>
+                  <td class="small">{{ $j->status === 'done' || $j->deliveries ? number_format($j->deliveries) : '—' }}</td>
+                  <td class="small">{{ $j->status === 'done' || $j->receipts ? number_format($j->receipts) : '—' }}</td>
+                  <td class="small text-muted">{{ \Illuminate\Support\Carbon::parse($j->requested_at)->diffForHumans() }}@if($j->requested_by_name)<br><span style="font-size:.72rem;">by {{ $j->requested_by_name }}</span>@endif</td>
+                </tr>
+              @endforeach
+              </tbody>
+            </table>
+          </div>
+          @if($activeJobs > 0)
+            <div class="form-text mt-2"><i class="bx bx-time me-1"></i> This card refreshes on its own while a sync is in progress.</div>
+            <script>setTimeout(function(){ location.reload(); }, 20000);</script>
+          @endif
+        @endif
+      </div>
+    </div>
+
     {{-- Endpoint + master switch --}}
     <div class="card border-0 shadow-sm rounded-4 mb-4">
       <div class="card-body">

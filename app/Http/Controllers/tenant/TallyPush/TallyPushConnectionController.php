@@ -5,6 +5,7 @@ namespace App\Http\Controllers\tenant\TallyPush;
 use App\Http\Controllers\Controller;
 use App\Models\TallyPushCredential;
 use App\Models\TallyPushRequest;
+use App\Models\TallySyncJob;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -42,7 +43,30 @@ class TallyPushConnectionController extends Controller
             'viewers' => config('tally_push.viewers', []),
             'configFallback' => $this->configFallback(),
             'stats' => $this->stats(),
+            'fyMonths' => $this->financialYearMonths(),
+            'jobs' => TallySyncJob::orderByDesc('requested_at')->limit(12)->get(),
         ]);
+    }
+
+    /** Each month of the current financial year up to today, newest first, for the backfill picker. */
+    private function financialYearMonths(): array
+    {
+        $today = Carbon::today();
+        $fyStart = $today->month >= 4
+            ? Carbon::create($today->year, 4, 1)
+            : Carbon::create($today->year - 1, 4, 1);
+
+        $months = [];
+        for ($m = $fyStart->copy(); $m->lte($today); $m->addMonth()) {
+            $months[] = [
+                'value' => $m->format('Y-m'),
+                'label' => $m->format('F Y'),
+                'from' => $m->copy()->startOfMonth()->toDateString(),
+                'to' => $m->copy()->endOfMonth()->min($today)->toDateString(),
+            ];
+        }
+
+        return array_reverse($months);
     }
 
     /** Is anything still relying on the .env credentials? The table wins if both are set. */
@@ -181,6 +205,107 @@ class TallyPushConnectionController extends Controller
         $credential->delete();
 
         return back()->with('success', 'Credential deleted. Any request still using it will be refused.');
+    }
+
+    /**
+     * Queue a backfill. The live server can't reach Tally, so this only RECORDS the request: the office PC's poller
+     * claims it (claimJob) within a minute or two, runs hrx:tally-push for the range, and reports back (jobUpdate).
+     * A multi-month request is split into one job per calendar month so each stays under the command's 31-day cap
+     * and the page can show month-by-month progress. A month already waiting or running is not queued again.
+     */
+    public function backfill(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+
+        $today = Carbon::today();
+        $from = Carbon::parse($data['from'])->startOfDay();
+        $to = Carbon::parse($data['to'])->startOfDay()->min($today);
+
+        if ($from->gt($to)) {
+            return back()->with('error', 'That range is entirely in the future — nothing to sync yet.');
+        }
+
+        // Months the office PC hasn't finished with yet, so clicking twice doesn't pile up duplicates.
+        $open = TallySyncJob::whereIn('status', [TallySyncJob::PENDING, TallySyncJob::CLAIMED, TallySyncJob::RUNNING])
+            ->pluck('label')->filter()->all();
+
+        $queued = [];
+        $skipped = [];
+        for ($m = $from->copy()->startOfMonth(); $m->lte($to); $m->addMonth()) {
+            $monthFrom = $m->copy()->startOfMonth()->max($from);
+            $monthTo = $m->copy()->endOfMonth()->min($to);
+            $label = $m->format('F Y');
+
+            if (in_array($label, $open, true)) {
+                $skipped[] = $label;
+                continue;
+            }
+
+            TallySyncJob::create([
+                'tenant_id' => config('tally_push.default_tenant_id'),
+                'kind' => TallySyncJob::KIND_BACKFILL,
+                'from_date' => $monthFrom->toDateString(),
+                'to_date' => $monthTo->toDateString(),
+                'status' => TallySyncJob::PENDING,
+                'label' => $label,
+                'requested_by_id' => $request->user()->id,
+                'requested_by_name' => $this->requesterName($request),
+                'requested_at' => now(),
+                'days_total' => $monthFrom->diffInDays($monthTo) + 1,
+            ]);
+            $queued[] = $label;
+        }
+
+        $msg = $queued
+            ? 'Queued ' . implode(', ', $queued) . '. The office PC will pick '
+                . (count($queued) === 1 ? 'it' : 'them') . ' up within a minute or two — this page shows the progress.'
+            : 'Nothing new to queue.';
+        if ($skipped) {
+            $msg .= ' Already in progress: ' . implode(', ', $skipped) . '.';
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Queue a snapshot refresh -- the whole bill-wise outstanding (receivables) or the customer ledger master.
+     * Same hand-off as backfill(): the office PC claims it and runs hrx:tally-push-outstanding / -parties. A
+     * refresh of that kind already waiting isn't queued again (clicking twice does nothing extra).
+     */
+    public function refresh(Request $request): RedirectResponse
+    {
+        $kind = $request->validate([
+            'kind' => ['required', 'in:' . TallySyncJob::KIND_OUTSTANDING . ',' . TallySyncJob::KIND_PARTIES],
+        ])['kind'];
+
+        $label = $kind === TallySyncJob::KIND_OUTSTANDING ? 'Outstanding' : 'Customer ledgers';
+
+        $alreadyWaiting = TallySyncJob::where('kind', $kind)
+            ->whereIn('status', [TallySyncJob::PENDING, TallySyncJob::CLAIMED, TallySyncJob::RUNNING])
+            ->exists();
+        if ($alreadyWaiting) {
+            return back()->with('success', "A {$label} refresh is already in progress — this page shows the progress.");
+        }
+
+        TallySyncJob::create([
+            'tenant_id' => config('tally_push.default_tenant_id'),
+            'kind' => $kind,
+            'status' => TallySyncJob::PENDING,
+            'label' => $label,
+            'requested_by_id' => $request->user()->id,
+            'requested_by_name' => $this->requesterName($request),
+            'requested_at' => now(),
+        ]);
+
+        return back()->with('success', "Queued a {$label} refresh. The office PC will pick it up within a minute or two — this page shows the progress.");
+    }
+
+    private function requesterName(Request $request): string
+    {
+        return trim($request->user()->first_name . ' ' . $request->user()->last_name) ?: $request->user()->email;
     }
 
     /** Drop the middleware's cached lookups so a change takes effect at once, not up to a minute later. */

@@ -510,6 +510,111 @@ class TallyGateway
         return $out;
     }
 
+    /**
+     * Every bill reference in the company with its running balance -- Tally's bill-wise outstanding, the same data
+     * the Bills Receivable / Ledger Outstandings reports show. One Collection export (heavy but single-request --
+     * the whole company's bills come back in a few seconds), so like ledgerMaster() the caller filters it down
+     * (e.g. to real customers, joining PARENT -> the ledger's group) rather than asking Tally to.
+     *
+     * @return array<int, array<string, mixed>> one per OPEN bill (settled bills carry a zero balance and are dropped):
+     *   bill_ref, bill_date (Y-m-d|null), party_name (the ledger the bill sits under), closing_balance (signed the
+     *   way Tally reports it -- a receivable's Dr balance is NEGATIVE), due_date (Y-m-d|null), is_advance (bool)
+     */
+    public function billsOutstanding(): array
+    {
+        return self::parseBills($this->send(self::billsRequest($this->assertCompany())));
+    }
+
+    public static function billsRequest(string $company): string
+    {
+        $name = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXBills</ID></HEADER><BODY><DESC>'
+            . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
+            . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXBills" ISMODIFY="No"><TYPE>Bills</TYPE>'
+            . '<FETCH>Name, BillDate, Parent, BillCreditPeriod, ClosingBalance, IsAdvance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+    }
+
+    /**
+     * The group tree: every group's immediate parent. A ledger's PARENT (from ledgerMaster) is only its immediate
+     * group -- in this company customers sit in many named sub-groups (VADODARA, HYDERABAAD, ...) that roll up to
+     * the reserved "Sundry Debtors" group. Walking this map lets the caller resolve a ledger to its reporting
+     * bucket (Sundry Debtors / Sundry Creditors) so the receivables screens group correctly.
+     *
+     * @return array<string,string> group name => immediate parent ('' / 'Primary' at the top)
+     */
+    public function groupMaster(): array
+    {
+        return self::parseGroups($this->send(self::groupMasterRequest($this->assertCompany())));
+    }
+
+    public static function groupMasterRequest(string $company): string
+    {
+        $name = htmlspecialchars($company, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        return '<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>HRXGroups</ID></HEADER><BODY><DESC>'
+            . '<STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' . $name . '</SVCURRENTCOMPANY></STATICVARIABLES>'
+            . '<TDL><TDLMESSAGE><COLLECTION NAME="HRXGroups" ISMODIFY="No"><TYPE>Group</TYPE>'
+            . '<FETCH>Name, Parent</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>';
+    }
+
+    /** @return array<string,string> group name => immediate parent. */
+    public static function parseGroups(string $xml): array
+    {
+        $out = [];
+        foreach (self::load($xml)->xpath('//GROUP[@NAME]') ?: [] as $g) {
+            $name = trim((string) $g['NAME']);
+            if ($name !== '') {
+                $out[$name] = trim((string) $g->PARENT);   // cleanXml() has already stripped Tally's &#4; noise
+            }
+        }
+        return $out;
+    }
+
+    /** @return array<int, array<string, mixed>> see billsOutstanding() for the shape. */
+    public static function parseBills(string $xml): array
+    {
+        $s = fn ($n) => trim((string) $n);
+        $out = [];
+        foreach (self::load($xml)->xpath('//BILL[@NAME]') ?: [] as $b) {
+            $party = $s($b->PARENT);
+            $ref = $s($b->NAME) !== '' ? $s($b->NAME) : $s($b['NAME']);
+            if ($party === '' || $ref === '') {
+                continue;
+            }
+            $closing = TallyFileReader::amount($s($b->CLOSINGBALANCE));
+            if ($closing === null || abs($closing) < 0.005) {
+                continue;                               // a settled bill carries a zero balance -- not outstanding
+            }
+            $out[] = [
+                'bill_ref' => $ref,
+                'bill_date' => self::ymdToDate($s($b->BILLDATE)),
+                'party_name' => $party,
+                'closing_balance' => $closing,
+                'due_date' => self::shortDateToDate($s($b->BILLCREDITPERIOD)),
+                'is_advance' => strcasecmp($s($b->ISADVANCE), 'Yes') === 0,
+            ];
+        }
+        return $out;
+    }
+
+    /** Tally's compact "20130724" -> "2013-07-24". */
+    private static function ymdToDate(string $v): ?string
+    {
+        return preg_match('/^(\d{4})(\d{2})(\d{2})$/', $v, $m) ? "{$m[1]}-{$m[2]}-{$m[3]}" : null;
+    }
+
+    /** A bill's due date "24-Jul-13" -> "2013-07-24". */
+    private static function shortDateToDate(string $v): ?string
+    {
+        if ($v === '') {
+            return null;
+        }
+        try {
+            return \Carbon\Carbon::createFromFormat('!j-M-y', $v)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public static function parseStockItems(string $xml): array
     {
         $s = fn($n) => trim((string) $n);

@@ -172,7 +172,10 @@ class TallyPushController extends Controller
                     $now = now();
                     $rows = [];
                     foreach ($data['invoices'] as $r) {
-                        $code = $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? null;
+                        // '0' is the analytics' "unmapped customer" sentinel (PARTY_KEY groups it by name). The push must never
+                        // leave party_code null, or TallyAnalytics::scope()'s whereNotNull(party_code) silently drops the row from
+                        // every figure -- which is exactly what hid an entire day's data on a server with no file-import history.
+                        $code = $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0';
                         $codeByInvoiceNo[$r['invoice_no']] = $code;
                         $rows[] = $this->invoiceRow(array_merge($r, ['party_code' => $code]), $now);
                     }
@@ -192,18 +195,18 @@ class TallyPushController extends Controller
                 if (!empty($data['invoice_lines'])) {
                     $counts['invoice_lines'] = $this->replaceByKey('tally_invoice_lines', 'invoice_no', $data['invoice_lines'],
                         fn ($r) => $this->invoiceLineRow(array_merge($r, ['party_code' =>
-                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? null])));
+                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
                 }
 
                 if (!empty($data['sale_lines'])) {
                     $counts['sale_lines'] = $this->replaceByKey('tally_sale_lines', 'invoice_no', $data['sale_lines'],
                         fn ($r) => $this->saleLineRow(array_merge($r, ['party_code' =>
-                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? null])));
+                            $codeByInvoiceNo[$r['invoice_no']] ?? $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
                 }
 
                 if (!empty($data['sale_orders'])) {
                     $counts['sale_orders'] = $this->replaceByKey('tally_sale_orders', 'order_no', $data['sale_orders'],
-                        fn ($r) => $this->saleOrderRow(array_merge($r, ['party_code' => $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? null])));
+                        fn ($r) => $this->saleOrderRow(array_merge($r, ['party_code' => $r['party_code'] ?? $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
                 }
 
                 if (!empty($data['deliveries'])) {
@@ -213,7 +216,7 @@ class TallyPushController extends Controller
 
                 if (!empty($data['receipts'])) {
                     $counts['receipts'] = $this->replaceByKey('tally_receipts', 'receipt_key', $data['receipts'],
-                        fn ($r) => $this->receiptRow(array_merge($r, ['party_code' => $codeLookup[$r['normalized_name'] ?? ''] ?? null])));
+                        fn ($r) => $this->receiptRow(array_merge($r, ['party_code' => $codeLookup[$r['normalized_name'] ?? ''] ?? '0'])));
                 }
             });
         } catch (\Throwable $e) {
@@ -473,5 +476,121 @@ class TallyPushController extends Controller
         });
 
         return response()->json(['ok' => true, 'count' => count($rows)]);
+    }
+
+    /**
+     * Bill-wise outstanding (receivables) as a full-table replace -- the office PC pulls it from Tally's Bills
+     * collection (hrx:tally-push-outstanding). Like sync-parties this is a snapshot, not a per-day append: the
+     * whole tally_outstanding table is swapped in one transaction. Validation is deliberately loose (the caller is
+     * already HMAC-authenticated and a bill-list can run to tens of thousands of rows -- per-field rules on every
+     * one would be needlessly slow); each field is cast defensively below instead.
+     */
+    public function syncOutstanding(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'outstanding' => ['required', 'array', 'min:1'],
+        ]);
+
+        // Guard: refuse a suspiciously small replacement (a partial/failed pull) from wiping a good table.
+        $current = DB::table('tally_outstanding')->count();
+        if ($current > 50 && count($data['outstanding']) < $current * 0.5) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'Refusing: this push has only ' . count($data['outstanding']) . " bills, well under the {$current} already on file. Looks like a partial pull, not a genuine full refresh.",
+            ], 422);
+        }
+
+        $clean = static function ($v, int $max): ?string {
+            $v = is_scalar($v) ? trim((string) $v) : '';
+            return $v === '' ? null : mb_substr($v, 0, $max);
+        };
+        $rows = array_map(fn ($r) => [
+            'bill_ref' => $clean($r['bill_ref'] ?? null, 60),
+            'bill_date' => $clean($r['bill_date'] ?? null, 10),
+            'party_code' => $clean($r['party_code'] ?? null, 20),
+            'party_name' => $clean($r['party_name'] ?? null, 255),
+            'normalized_name' => $clean($r['normalized_name'] ?? null, 255),
+            'ledger_group' => $clean($r['ledger_group'] ?? null, 120),
+            'amount' => round((float) ($r['amount'] ?? 0), 2),
+            'credit_days' => isset($r['credit_days']) && is_numeric($r['credit_days'])
+                ? max(0, min(65535, (int) $r['credit_days'])) : null,
+        ], array_values($data['outstanding']));
+
+        DB::transaction(function () use ($rows) {
+            DB::table('tally_outstanding')->delete();
+            foreach (array_chunk($rows, 1000) as $chunk) {
+                DB::table('tally_outstanding')->insert($chunk);
+            }
+        });
+
+        return response()->json(['ok' => true, 'count' => count($rows)]);
+    }
+
+    /**
+     * The office PC's job poller claims the oldest waiting backfill request (made from the admin page). The live
+     * server can't pull from Tally, so it only hands out the date range; the PC runs hrx:tally-push for it and
+     * reports back via jobUpdate(). Atomic claim so two pollers never grab the same job.
+     */
+    public function claimJob(Request $request): JsonResponse
+    {
+        $job = null;
+        DB::transaction(function () use (&$job, $request) {
+            $row = DB::table('tally_sync_jobs')->where('status', \App\Models\TallySyncJob::PENDING)
+                ->orderBy('requested_at')->lockForUpdate()->first();
+            if (!$row) {
+                return;
+            }
+            DB::table('tally_sync_jobs')->where('id', $row->id)->update([
+                'status' => \App\Models\TallySyncJob::CLAIMED,
+                'claimed_at' => now(),
+                'claimed_ip' => $request->ip(),
+                'updated_at' => now(),
+            ]);
+            $job = $row;
+        });
+
+        if (!$job) {
+            return response()->json(['job' => null]);
+        }
+
+        return response()->json(['job' => [
+            'id' => $job->id,
+            'kind' => $job->kind ?? \App\Models\TallySyncJob::KIND_BACKFILL,
+            'from' => $job->from_date ? \Illuminate\Support\Carbon::parse($job->from_date)->format('Y-m-d') : null,
+            'to' => $job->to_date ? \Illuminate\Support\Carbon::parse($job->to_date)->format('Y-m-d') : null,
+            'label' => $job->label,
+        ]]);
+    }
+
+    /** The office PC reports a claimed job's progress/result. Counts are cumulative totals for the whole range. */
+    public function jobUpdate(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', 'in:running,done,failed'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'days_total' => ['nullable', 'integer', 'min:0'],
+            'days_done' => ['nullable', 'integer', 'min:0'],
+            'invoices' => ['nullable', 'integer', 'min:0'],
+            'invoice_lines' => ['nullable', 'integer', 'min:0'],
+            'sale_lines' => ['nullable', 'integer', 'min:0'],
+            'sale_orders' => ['nullable', 'integer', 'min:0'],
+            'deliveries' => ['nullable', 'integer', 'min:0'],
+            'receipts' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $row = DB::table('tally_sync_jobs')->where('id', $id)->first();
+        if (!$row) {
+            return response()->json(['error' => ['code' => 'not_found', 'message' => 'No such job']], 404);
+        }
+
+        $update = array_filter($data, fn ($v, $k) => $k !== 'status' && $v !== null, ARRAY_FILTER_USE_BOTH);
+        $update['status'] = $data['status'];
+        $update['updated_at'] = now();
+        if ($data['status'] !== 'running') {
+            $update['finished_at'] = now();
+        }
+        DB::table('tally_sync_jobs')->where('id', $id)->update($update);
+
+        return response()->json(['ok' => true]);
     }
 }
