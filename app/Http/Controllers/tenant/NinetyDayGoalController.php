@@ -1639,10 +1639,15 @@ class NinetyDayGoalController extends Controller
             }
             $other = User::notTerminated()->find((int) $request->input('user_id'));
 
-            return $other && Goals::isSalesStaff($other) ? $other : null;
+            // A participant (anyone enrolled, incl. Export-department staff an admin
+            // added to a program) may manage their own customers too — not only
+            // Sales-department staff. Mirrors canOpenPage(), which already lets a
+            // participant open the page; the add/store gate was stricter and left
+            // enrolled non-Sales people unable to add any customers (403).
+            return $other && (Goals::isSalesStaff($other) || Goals::isParticipant($other)) ? $other : null;
         }
 
-        return Goals::isSalesStaff($user) ? $user : null;
+        return (Goals::isSalesStaff($user) || Goals::isParticipant($user)) ? $user : null;
     }
 
     private function mayChange(NinetyDayGoal $goal): bool
