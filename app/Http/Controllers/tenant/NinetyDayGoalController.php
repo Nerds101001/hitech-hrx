@@ -187,7 +187,7 @@ class NinetyDayGoalController extends Controller
 
         // Weekly submission compliance, done ÷ expected, for the chart.
         $compliance = collect($d['strip'])->map(fn ($s, $w) => [
-            'week' => 'W' . $w, 'submitted' => $s['done'], 'pending' => max(0, $s['total'] - $s['done']),
+            'week' => 'W' . ($w + 1), 'submitted' => $s['done'], 'pending' => max(0, $s['total'] - $s['done']),
             'pct'  => $s['total'] > 0 ? round($s['done'] / $s['total'] * 100) : 0,
         ])->values();
 
@@ -388,7 +388,7 @@ class NinetyDayGoalController extends Controller
             $out = fopen('php://output', 'w');
             fputcsv($out, array_merge(
                 ['Program', 'Salesperson', 'Customer', 'Product', 'Brand', 'Goal (Monthly ₹L)'],
-                array_map(fn ($w) => 'W' . $w, range(0, $weeksSpan - 1)),
+                array_map(fn ($w) => 'W' . ($w + 1), range(0, $weeksSpan - 1)),
                 ['Actual (₹L)', 'Achievement %', 'Current Status']
             ));
             // Customer/product are typed by salespeople: a cell starting with
@@ -715,7 +715,7 @@ class NinetyDayGoalController extends Controller
         $achieved = [];
         foreach (range(0, $weeks - 1) as $w) {
             $due = Goals::dueOn($round, $w);
-            $labels[] = 'W' . $w . ' ' . $due->format('d M');
+            $labels[] = 'W' . ($w + 1) . ' ' . $due->format('d M');
             $target[] = round($targetPerWeek * ($w + 1), 2);
             $cum = 0.0;
             foreach ($roundMonths as $ym) {
@@ -1132,7 +1132,7 @@ class NinetyDayGoalController extends Controller
             }
         }
         if (!$targetIds) {
-            return response()->json(['success' => true, 'message' => 'Everyone has already submitted week W' . $week . '.', 'count' => 0]);
+            return response()->json(['success' => true, 'message' => 'Everyone has already submitted week W' . ($week + 1) . '.', 'count' => 0]);
         }
 
         $weekDue = $program->starts_on->copy()->addDays(7 * $week);
@@ -1146,7 +1146,7 @@ class NinetyDayGoalController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Reminder sent to ' . count($targetIds) . ' ' . \Illuminate\Support\Str::plural('salesperson', count($targetIds)) . ' for week W' . $week . '.',
+            'message' => 'Reminder sent to ' . count($targetIds) . ' ' . \Illuminate\Support\Str::plural('salesperson', count($targetIds)) . ' for week W' . ($week + 1) . '.',
             'count'   => count($targetIds),
         ]);
     }

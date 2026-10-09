@@ -161,7 +161,7 @@
         <thead>
           <tr>
             <th class="ndg-mx-l">Customer</th>
-            @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
+            @for($w = 0; $w < $weeks; $w++)<th>W{{ $w + 1 }}</th>@endfor
           </tr>
         </thead>
         <tbody>
@@ -176,7 +176,7 @@
                 [$bg] = $st ? ($G::STATUS_COLORS[$st] ?? ['#94a3b8']) : [null];
                 $title = $st ? ($st . ($ck->is_late ? ' (late)' : '')) : ($ck ? 'Not sent' : 'Not due yet');
               @endphp
-              <td class="ndg-mx-c {{ !$st && $ck ? 'ndg-mx-notsent' : '' }}" style="{{ $bg ? 'background:' . $bg : '' }}" title="W{{ $w }}: {{ $title }}">
+              <td class="ndg-mx-c {{ !$st && $ck ? 'ndg-mx-notsent' : '' }}" style="{{ $bg ? 'background:' . $bg : '' }}" title="W{{ $w + 1 }}: {{ $title }}">
                 @if(!$st && $ck)×@endif
               </td>
             @endfor
@@ -291,14 +291,14 @@
   <section id="detail" class="ndg-report-section">
   {{-- Full week-by-week detail: exactly how the result above was reached, every status and every comment. --}}
   <div class="hitech-card mb-6">
-    <div class="card-body p-4 border-bottom fw-bold text-dark">Week-by-week detail, W0 to W{{ $weeks - 1 }}</div>
+    <div class="card-body p-4 border-bottom fw-bold text-dark">Week-by-week detail, W1 to W{{ $weeks }}</div>
     <div class="card-body p-0 ndg-scroll">
       <table class="table align-middle mb-0 ndg-grid">
         <thead>
           <tr>
             <th rowspan="2" style="min-width:180px">Customer</th><th rowspan="2" style="min-width:150px">Product</th>
             <th rowspan="2">Brand</th><th rowspan="2" style="min-width:130px">Goal</th><th rowspan="2" class="text-end">Monthly ₹ L</th>
-            @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w }}</th>@endfor
+            @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center ndg-wk ndg-wkhead">W{{ $w + 1 }}</th>@endfor
           </tr>
           <tr class="ndg-sub">
             @for($w = 0; $w < $weeks; $w++)<th class="ndg-st">Status</th><th>Comment</th>@endfor

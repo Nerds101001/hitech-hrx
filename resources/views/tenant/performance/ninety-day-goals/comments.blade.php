@@ -63,7 +63,7 @@
           @if($c->status)<span class="ndg-chip" style="background:{{ $bg }};color:{{ $fg }}">{{ $c->status }}</span>@endif
           <span class="fw-bold text-dark">{{ $g->client_name }}</span>
           <span class="text-muted small">{{ $g->product }}@if($g->brand) · {{ $g->brand }}@endif</span>
-          <span class="ms-auto small text-muted">Week {{ $c->week_no }}@if($c->due_on) · due {{ $c->due_on->format('D d M') }}@endif</span>
+          <span class="ms-auto small text-muted">Week {{ $c->week_no + 1 }}@if($c->due_on) · due {{ $c->due_on->format('D d M') }}@endif</span>
         </div>
         <div class="ndg-cm-body">{{ $c->text }}</div>
         <div class="ndg-cm-foot small text-muted">

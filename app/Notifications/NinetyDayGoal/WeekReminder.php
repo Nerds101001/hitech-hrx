@@ -33,7 +33,7 @@ class WeekReminder extends Notification
     public function toArray(object $notifiable): array
     {
         return [
-            'title'      => 'Week W' . $this->week . ' updates are pending — ' . $this->program->name,
+            'title'      => 'Week W' . ($this->week + 1) . ' updates are pending — ' . $this->program->name,
             'message'    => 'Please submit this week\'s status for every customer in "' . $this->program->name . '" (due ' . $this->dueOn->format('d M Y') . ').',
             'program_id' => $this->program->id,
             'week'       => $this->week,

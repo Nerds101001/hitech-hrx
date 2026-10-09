@@ -78,7 +78,7 @@
     <table class="ndg-mx" style="font-size:.74rem">
       <thead><tr>
         <th class="ndg-mx-l" data-col="no" style="left:0">#</th><th class="ndg-mx-l ndg-ell" data-col="cust" style="left:40px">Customer</th><th class="ndg-ell">Product</th><th class="ndg-ell">Salesperson</th><th>Target ₹L</th><th>Expected</th>
-        @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
+        @for($w = 0; $w < $weeks; $w++)<th>W{{ $w + 1 }}</th>@endfor
         <th style="text-align:right">Actual ₹L</th><th>Ach.%</th><th style="text-align:left">Status</th><th style="text-align:left">Last Comment</th>
       </tr></thead>
       <tbody>
@@ -131,7 +131,7 @@
           <td>@if($r->status)<span class="ndg-chip" style="background:{{ $G::STATUS_COLORS[$r->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$r->status][1] ?? '#475569' }}">{{ $r->status }}</span>@include('tenant.performance.ninety-day-goals.partials.order-check', ['r' => $r])@else<span class="ndg-none">·</span>@endif</td>
           <td class="small ndg-lastc">
             @if($last)
-              <span class="text-dark" title="{{ $last['by'] }} · W{{ $last['week'] }}: {{ $last['text'] }}">{{ \Illuminate\Support\Str::limit($last['text'], 38) }}</span>
+              <span class="text-dark" title="{{ $last['by'] }} · W{{ $last['week'] + 1 }}: {{ $last['text'] }}">{{ \Illuminate\Support\Str::limit($last['text'], 38) }}</span>
             @else
               <span class="text-muted">No comments yet</span>
             @endif

@@ -205,7 +205,7 @@
           <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th>
           @if(!$selectedRoundId)<th>Program</th>@endif
           <th>Target ₹L</th><th>Expected</th>
-          @for($w = 0; $w < $G::WEEKS; $w++)<th>W{{ $w }}</th>@endfor
+          @for($w = 0; $w < $G::WEEKS; $w++)<th>W{{ $w + 1 }}</th>@endfor
           <th>Actual ₹L</th><th>Ach.%</th><th>Status</th><th>Next Action</th><th></th>
         </tr></thead>
         <tbody>

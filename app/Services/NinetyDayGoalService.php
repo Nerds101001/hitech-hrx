@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\DB;
  *
  * Each person in the Sales department picks target customers from their own
  * Sales Pipeline (customer, product, brand, goal, target for the round in lakh) and
- * reports a status on every Monday until the round ends — 13 weeks (W0 to W12)
- * for the usual 90-day round, but an admin-created program can run a different
+ * reports a status on every Monday until the round ends — 12 weeks (shown W1 to
+ * W12; week_no is 0-based internally) for the usual round, but an admin-created program can run a different
  * length, and its rounds stretch or shrink to match (see weeksOf()). Then the
  * round closes and a new one starts the following Monday.
  *
@@ -57,11 +57,11 @@ class NinetyDayGoalService
         'Transferred' => ['#cbd5e1', '#334155'],
     ];
 
-    /** W0 to W12. */
-    public const WEEKS = 13;
+    /** 12 weeks. Shown as W1..W12; week_no stays 0-based internally (0..11). */
+    public const WEEKS = 12;
 
-    /** Days from a round's first Monday to its last day (13 weeks). */
-    public const ROUND_SPAN_DAYS = 90;
+    /** Days from a round's first Monday to its last day (12 weeks). */
+    public const ROUND_SPAN_DAYS = 84;
 
     /** Brand => spellings found in the free-text product column (same list the Sales Pipeline filters on). */
     public const BRANDS = [
@@ -393,7 +393,7 @@ class NinetyDayGoalService
 
     /**
      * How many Mondays a round actually has, from its own starts_on/ends_on — not the fixed
-     * 90-day/13-week assumption. A self-started round is always exactly self::WEEKS (13), since
+     * 12-week assumption. A self-started round is always exactly self::WEEKS (12), since
      * startRound() always uses ROUND_SPAN_DAYS; an admin-created program can run longer or
      * shorter, and its rounds must stretch or shrink the same way.
      */
@@ -1022,7 +1022,8 @@ class NinetyDayGoalService
 
     private static function weekTaskTitle(int $week, Carbon $due): string
     {
-        return '90-Day Goals: submit W' . $week . ' status (due ' . $due->format('D d M') . ')';
+        // Title is 1-based for display (W1..W12); $week is the 0-based week_no.
+        return '90-Day Goals: submit W' . ($week + 1) . ' status (due ' . $due->format('D d M') . ')';
     }
 
     private static function addCustomersTitle(NinetyDayRound $round): string
@@ -1066,13 +1067,14 @@ class NinetyDayGoalService
         $title = (string) $task->title;
 
         if (preg_match('/^90-Day Goals: submit W(\d+) status/', $title, $m)) {
-            $week = (int) $m[1];
+            $display = (int) $m[1];       // title is 1-based (W1..W12)
+            $week = $display - 1;         // week_no is 0-based
             $open = NinetyDayGoalCheckin::where('week_no', $week)->whereNull('status')
                 ->whereHas('goal', fn ($g) => $g->where('user_id', $task->user_id)->whereNull('closed_at')
                     ->whereHas('round', fn ($r) => $r->where('status', 'active')))
                 ->exists();
 
-            return $open ? "Give a status for every customer for week {$week} before marking this complete." : null;
+            return $open ? "Give a status for every customer for week W{$display} before marking this complete." : null;
         }
 
         if (str_starts_with($title, '90-Day Goals: add your target customers')) {

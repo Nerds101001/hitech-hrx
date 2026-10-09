@@ -140,7 +140,7 @@
           <label class="form-label fw-bold small text-muted text-uppercase mb-2">Week</label>
           <select name="week" class="form-select form-select-hitech">
             <option value="">All</option>
-            @for($w = 0; $w < $weeks; $w++)<option value="{{ $w }}" {{ $filters['week'] === $w ? 'selected' : '' }}>W{{ $w }}</option>@endfor
+            @for($w = 0; $w < $weeks; $w++)<option value="{{ $w }}" {{ $filters['week'] === $w ? 'selected' : '' }}>W{{ $w + 1 }}</option>@endfor
           </select>
         </div>
         <div class="col-md-1">
@@ -275,7 +275,7 @@
             <table class="ndg-mx" style="font-size:.74rem">
               <thead><tr>
                 <th class="ndg-mx-l" style="left:0">#</th><th class="ndg-mx-l" style="left:30px">Customer</th><th>Product</th><th>Salesperson</th><th>Target ₹L</th>
-                @for($w = 0; $w < $weeks; $w++)<th>W{{ $w }}</th>@endfor
+                @for($w = 0; $w < $weeks; $w++)<th>W{{ $w + 1 }}</th>@endfor
                 <th>Actual ₹L</th><th>Ach.%</th><th>Status</th>
               </tr></thead>
               <tbody>
@@ -501,7 +501,7 @@
             <tr>
               <th class="ndg-mx-l" style="left:0" rowspan="2">Program</th><th class="ndg-mx-l" style="left:110px" rowspan="2">Salesperson</th><th class="ndg-mx-l" style="left:220px" rowspan="2">Customer</th>
               <th rowspan="2">Product</th><th rowspan="2">Goal ₹L</th>
-              @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center">W{{ $w }}</th>@endfor
+              @for($w = 0; $w < $weeks; $w++)<th colspan="2" class="text-center">W{{ $w + 1 }}</th>@endfor
               <th rowspan="2">Actual ₹L</th><th rowspan="2">Achv %</th><th rowspan="2">Status</th>
             </tr>
             <tr>

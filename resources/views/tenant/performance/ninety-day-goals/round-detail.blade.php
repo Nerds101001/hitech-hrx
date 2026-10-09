@@ -59,8 +59,8 @@
       <p class="text-muted mb-0 small">{{ $round->starts_on->format('d M Y') }} – {{ $round->ends_on->format('d M Y') }} ({{ $weeks * 7 }} days) · Submit your weekly updates, track progress and achieve your sales goals.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Current Week</div><div class="fw-bold text-dark fs-5">W{{ $currentWeek }}</div><div class="small text-muted">{{ $dates[$currentWeek]->format('d M') }} – {{ $dates[$currentWeek]->copy()->addDays(6)->format('d M Y') }}</div></div>
-      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Next Week</div><div class="fw-bold text-dark fs-5">W{{ $nextWeekIdx }}</div><div class="small text-muted">{{ $dates[$nextWeekIdx]->format('d M') }} – {{ $dates[$nextWeekIdx]->copy()->addDays(6)->format('d M Y') }}</div></div>
+      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Current Week</div><div class="fw-bold text-dark fs-5">W{{ $currentWeek + 1 }}</div><div class="small text-muted">{{ $dates[$currentWeek]->format('d M') }} – {{ $dates[$currentWeek]->copy()->addDays(6)->format('d M Y') }}</div></div>
+      <div class="ndg-infobox"><div class="small text-muted fw-semibold">Next Week</div><div class="fw-bold text-dark fs-5">W{{ $nextWeekIdx + 1 }}</div><div class="small text-muted">{{ $dates[$nextWeekIdx]->format('d M') }} – {{ $dates[$nextWeekIdx]->copy()->addDays(6)->format('d M Y') }}</div></div>
       <div class="ndg-infobox"><div class="small text-muted fw-semibold"><i class="bx bx-calendar"></i> Days Left</div><div class="fw-bold text-dark fs-5">{{ $daysLeft }}</div><div class="small text-muted">&nbsp;</div></div>
     </div>
   </div>
@@ -79,7 +79,7 @@
         @foreach($pendingUpsells as $ck)
           <div class="ndg-upsell-row" data-checkin="{{ $ck->id }}">
             <div class="flex-grow-1">
-              <div class="fw-semibold text-dark">{{ optional($ck->goal)->client_name }} <span class="text-muted fw-normal">· W{{ $ck->week_no }}, due {{ optional($ck->due_on)->format('d M') }}</span></div>
+              <div class="fw-semibold text-dark">{{ optional($ck->goal)->client_name }} <span class="text-muted fw-normal">· W{{ $ck->week_no + 1 }}, due {{ optional($ck->due_on)->format('d M') }}</span></div>
               <div class="small text-muted">{{ optional($ck->goal)->product }} · {{ optional($ck->goal)->brand }}</div>
             </div>
             <div class="d-flex gap-2">
@@ -222,13 +222,13 @@
       @foreach($weekStrip as $w)
         @if($w['week'] > $currentWeek)
           <span class="ndg-week-pill is-future" title="Not due yet">
-            <div class="fw-bold">W{{ $w['week'] }}</div>
+            <div class="fw-bold">W{{ $w['week'] + 1 }}</div>
             <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
             <div class="small">—</div>
           </span>
         @else
           <a href="?{{ http_build_query(['w' => $w['week']]) }}" class="ndg-week-pill {{ $w['week'] === $selectedWeek ? 'on' : '' }} {{ $w['week'] === $currentWeek ? 'is-current' : '' }}">
-            <div class="fw-bold">W{{ $w['week'] }}</div>
+            <div class="fw-bold">W{{ $w['week'] + 1 }}</div>
             <div class="small">{{ $dates[$w['week']]->format('d-M') }}</div>
             <div class="small">{{ $w['total'] ? $w['pct'] . '%' : '—' }}</div>
           </a>
@@ -264,7 +264,7 @@
               <thead class="small text-uppercase text-muted">
                 <tr>
                   <th class="ps-3">#</th><th style="min-width:160px">Customer</th><th>Product</th><th class="text-end">Target (₹ L)</th><th style="min-width:150px">Expected Stage</th>
-                  <th style="min-width:150px">Status (W{{ $selectedWeek }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th class="pe-3"></th>
+                  <th style="min-width:150px">Status (W{{ $selectedWeek + 1 }})</th><th style="min-width:200px">Comment / Remark</th><th style="min-width:160px">Next Action</th><th class="pe-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -408,7 +408,7 @@
             <tr class="small text-uppercase text-muted">
               <th style="width:30px"></th>
               <th class="ps-3">#</th><th>Customer</th><th>Product</th><th class="text-end">Goal (₹ L)</th><th>Expected Order</th>
-              @for($w = 0; $w < $weeks; $w++)<th class="text-center">W{{ $w }}</th>@endfor
+              @for($w = 0; $w < $weeks; $w++)<th class="text-center">W{{ $w + 1 }}</th>@endfor
               <th class="text-end">Actual Order (₹ L)</th><th>Status</th><th class="pe-3"></th>
             </tr>
           </thead>
@@ -459,7 +459,7 @@
                   <div class="d-flex flex-wrap gap-3">
                     @forelse($g->checkins->whereNotNull('status') as $ck)
                       <div class="ndg-rd-wk-card">
-                        <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
+                        <div class="small text-muted">W{{ $ck->week_no + 1 }} · {{ $ck->due_on->format('d M') }}</div>
                         <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status }}</span>
                         <div class="small mt-1">{{ $ck->comment ?: 'No comment added.' }}</div>
                         @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
@@ -536,7 +536,7 @@
                      on a week before the salesperson has filled it in. --}}
                 @forelse($g->checkins->filter(fn ($c) => $c->status !== null || $c->notes->isNotEmpty() || $c->due_on->lte(today())) as $ck)
                   <div class="ndg-rd-wk-card" style="min-width:150px">
-                    <div class="small text-muted">W{{ $ck->week_no }} · {{ $ck->due_on->format('d M') }}</div>
+                    <div class="small text-muted">W{{ $ck->week_no + 1 }} · {{ $ck->due_on->format('d M') }}</div>
                     <span class="ndg-chip mt-1" style="background:{{ $G::STATUS_COLORS[$ck->status][0] ?? '#e2e8f0' }};color:{{ $G::STATUS_COLORS[$ck->status][1] ?? '#475569' }}">{{ $ck->status ?? 'Not submitted' }}</span>
                     <div class="small mt-1">{{ $ck->comment ?: '—' }}</div>
                     @if($ck->next_action)<div class="small mt-1 text-muted"><b>Next:</b> {{ $ck->next_action }}@if($ck->next_follow_up_date) · {{ $ck->next_follow_up_date->format('d M') }}@endif</div>@endif
@@ -648,7 +648,7 @@
           <tbody>
           @foreach($d['strip'] as $w => $s)
             <tr>
-              <td class="ps-4 fw-semibold">W{{ $w }}</td>
+              <td class="ps-4 fw-semibold">W{{ $w + 1 }}</td>
               <td class="text-end">{{ $s['total'] }}</td>
               <td class="text-end">{{ $s['done'] }}</td>
               <td class="text-end"><span class="{{ $s['total'] - $s['done'] ? 'text-danger fw-bold' : '' }}">{{ ($s['total'] - $s['done']) ?: '·' }}</span></td>
