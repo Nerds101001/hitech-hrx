@@ -1108,7 +1108,7 @@ class NinetyDayGoalService
     public static function runWeekly(?Carbon $today = null): array
     {
         $today = ($today ?: Carbon::today())->copy()->startOfDay();
-        $out = ['closed' => 0, 'started' => 0, 'checkins' => 0, 'tasks' => 0, 'errors' => 0];
+        $out = ['closed' => 0, 'started' => 0, 'checkins' => 0, 'tasks' => 0, 'emails' => 0, 'errors' => 0];
 
         $close = function (NinetyDayRound $round) use (&$out) {
             NinetyDayGoal::where('round_id', $round->id)->whereNull('closed_at')->update(['closed_at' => now()]);
@@ -1143,7 +1143,20 @@ class NinetyDayGoalService
                     continue;
                 }
                 if (self::pending($round, $today)->where('week_no', $week)->isNotEmpty()) {
-                    $out['tasks'] += self::ensureTask($user, self::weekTaskTitle($week, self::dueOn($round, $week)), self::dueOn($round, $week))->wasRecentlyCreated ? 1 : 0;
+                    $task = self::ensureTask($user, self::weekTaskTitle($week, self::dueOn($round, $week)), self::dueOn($round, $week));
+                    if ($task->wasRecentlyCreated) {
+                        $out['tasks']++;
+                        // When the week's task first appears (its Monday), send the same
+                        // TaskAssigned notification the Task Management module sends on
+                        // assignment — email + in-app + push. Only on creation, so the daily
+                        // run never re-notifies; a mail failure must not stop the loop.
+                        try {
+                            $user->notify(new \App\Notifications\Task\TaskAssigned($task));
+                            $out['emails']++;
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning("90-Day weekly task email failed for user {$user->id}: " . $e->getMessage());
+                        }
+                    }
                 }
             } catch (\Throwable $e) {
                 $out['errors']++;

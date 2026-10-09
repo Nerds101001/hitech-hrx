@@ -24,7 +24,7 @@ class NinetyDayGoalsWeeklyCommand extends Command
         $today = $this->option('date') ? Carbon::parse($this->option('date')) : Carbon::today();
         $r = NinetyDayGoalService::runWeekly($today);
 
-        $this->info("90-Day Goals for {$today->toDateString()}: closed {$r['closed']} round(s), started {$r['started']}, opened {$r['checkins']} check-in(s), added {$r['tasks']} task(s).");
+        $this->info("90-Day Goals for {$today->toDateString()}: closed {$r['closed']} round(s), started {$r['started']}, opened {$r['checkins']} check-in(s), added {$r['tasks']} task(s), emailed {$r['emails']} assignee(s).");
 
         return self::SUCCESS;
     }
