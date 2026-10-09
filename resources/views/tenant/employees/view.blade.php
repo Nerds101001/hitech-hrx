@@ -4123,6 +4123,10 @@
             // onclick handlers.
             window.moveToOnboarding = moveToOnboarding;
             window.navigateTabs = navigateTabs;
+            // Same module-scope trap: the status switch's inline
+            // onchange="toggleEmployeeStatus(...)" threw "is not defined", so the
+            // toggle did nothing and reverted on refresh. Export it like the rest.
+            window.toggleEmployeeStatus = toggleEmployeeStatus;
 
             // Clicking an existing payroll adjustment opens the same form as "Add
             // Item". editAdjustment() was never defined on this page (only on
