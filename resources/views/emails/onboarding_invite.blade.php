@@ -81,8 +81,16 @@
 </table>
 
 <div class="warning-banner">
-    Please complete your onboarding form within <strong>3 days</strong>. After that your
-    temporary account is deactivated for security reasons.
+    ⏳ <strong>This invitation is valid for 3 days.</strong>
+    @if(!empty($user->onboarding_deadline))
+        Please sign in and complete your onboarding form by
+        <strong>{{ \Illuminate\Support\Carbon::parse($user->onboarding_deadline)->format('l, d M Y, g:i A') }}</strong>.
+    @else
+        Please sign in and complete your onboarding form within <strong>3 days</strong> of receiving this email.
+    @endif
+    If it is not completed in time, your temporary account will be
+    <strong>automatically deactivated and you will lose access</strong> — you will then
+    need to contact HR to be re-invited.
 </div>
 
 <div class="cta-container">
