@@ -118,11 +118,13 @@
                                         <span class="badge bg-warning-light text-warning rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-window-open small me-1"></i>Popup</span>
                                     @endif
                                     
+                                    <a href="{{ route('hr-policies.targets', $policy->id) }}" class="text-decoration-none" title="See who this policy targets">
                                     @if(empty($policy->target_departments))
-                                        <span class="badge bg-success-light text-success rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-buildings small me-1"></i>All Depts</span>
+                                        <span class="badge bg-success-light text-success rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-buildings small me-1"></i>All Depts <i class="bx bx-link-external small ms-1"></i></span>
                                     @else
-                                        <span class="badge bg-info-light text-info rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-target-lock small me-1"></i>Targeted ({{ count($policy->target_departments) }})</span>
+                                        <span class="badge bg-info-light text-info rounded-pill px-3 py-1 fw-bold" style="font-size: 0.7rem;"><i class="bx bx-target-lock small me-1"></i>Targeted ({{ count($policy->target_departments) }}) <i class="bx bx-link-external small ms-1"></i></span>
                                     @endif
+                                    </a>
                                 </div>
                             </td>
                             <td>
@@ -138,6 +140,11 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-hitech shadow-lg">
                                         <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.view', $policy->id) }}" target="_blank"><i class="bx bx-show me-2 text-info"></i> View PDF</a></li>
+                                        <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center edit-policy" href="javascript:void(0);"
+                                               data-id="{{ $policy->id }}" data-title="{{ $policy->title }}" data-category="{{ $policy->category }}"
+                                               data-description="{{ $policy->description }}" data-mandatory="{{ $policy->is_mandatory ? 1 : 0 }}"
+                                               data-popup="{{ $policy->show_as_popup ? 1 : 0 }}" data-departments='@json($policy->target_departments ?? [])'><i class="bx bx-edit me-2 text-warning"></i> Edit</a></li>
+                                        <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.targets', $policy->id) }}"><i class="bx bx-group me-2 text-primary"></i> Target Users</a></li>
                                         <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.acknowledgments', $policy->id) }}"><i class="bx bx-list-check me-2 text-primary"></i> Acknowledgments</a></li>
                                         <li><hr class="dropdown-divider mx-3"></li>
                                         <li><a class="dropdown-item dropdown-item-hitech text-danger py-2 d-flex align-items-center delete-policy" href="javascript:void(0);" data-id="{{ $policy->id }}" data-title="{{ $policy->title }}"><i class="bx bx-trash me-2 text-danger"></i> Delete</a></li>
@@ -239,12 +246,96 @@
     </div>
 </div>
 
+<!-- Edit Policy Modal -->
+<div class="modal fade" id="editPolicyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-content-hitech border-0 shadow-lg">
+            <div class="modal-header modal-header-hitech">
+                <h5 class="modal-title modal-title-hitech d-flex align-items-center gap-3"><i class="bx bx-edit fs-4"></i> Edit Policy</h5>
+                <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
+            </div>
+            <div class="modal-body p-6">
+                <form id="editPolicyForm" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="form-label-hitech">Policy Title</label>
+                            <input type="text" name="title" id="edit_title" class="form-control form-control-hitech" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label-hitech">Category</label>
+                            <select name="category" id="edit_category" class="form-select form-control-hitech">
+                                <option value="General">General</option>
+                                <option value="Security">Security</option>
+                                <option value="Attendance">Attendance</option>
+                                <option value="Finance">Finance</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-hitech">Target Departments</label>
+                            <select name="target_departments[]" id="edit_departments" class="form-select select2-edit form-control-hitech" multiple="multiple" data-placeholder="All Departments (Default)">
+                                @foreach($departments as $department)
+                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="form-text small mt-1 text-muted">Leave blank to apply to everyone.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-hitech">Replace PDF <span class="text-muted">(optional)</span></label>
+                            <input type="file" name="file" class="form-control form-control-hitech" accept="application/pdf">
+                            <div class="form-text small text-muted mt-1">Leave blank to keep the current document. Max 10MB, PDF only.</div>
+                        </div>
+                        <div class="col-12">
+                            <div class="p-4 rounded-3" style="background-color: #F8FAFC;">
+                                <div class="form-check form-switch mb-3">
+                                    <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="edit_mandatory">
+                                    <label class="form-check-label fw-bold text-dark" for="edit_mandatory">Mandatory for all staff</label>
+                                </div>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="show_as_popup" value="1" id="edit_popup">
+                                    <label class="form-check-label fw-bold text-dark" for="edit_popup">Show as popup to all</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label-hitech">Short Description</label>
+                            <textarea name="description" id="edit_description" class="form-control form-control-hitech" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end gap-3 mt-5">
+                        <button type="button" class="btn btn-label-danger px-6 rounded-pill fw-bold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-hitech px-8 rounded-pill fw-bold shadow-sm"><i class="bx bx-save me-2"></i> Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @endsection
 
 @section('page-script')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     $(function() {
+        // Edit policy: prefill the modal from the row's data attributes.
+        if ($('#edit_departments').data('select2') === undefined) {
+            $('#edit_departments').select2({ dropdownParent: $('#editPolicyModal'), placeholder: 'All Departments (Default)', width: '100%' });
+        }
+        $('.edit-policy').on('click', function() {
+            const d = $(this).data();
+            $('#edit_title').val(d.title || '');
+            $('#edit_category').val(d.category || 'General');
+            $('#edit_description').val(d.description || '');
+            $('#edit_mandatory').prop('checked', String(d.mandatory) === '1');
+            $('#edit_popup').prop('checked', String(d.popup) === '1');
+            let depts = d.departments;
+            if (!Array.isArray(depts)) { try { depts = JSON.parse(depts || '[]'); } catch (e) { depts = []; } }
+            $('#edit_departments').val((depts || []).map(String)).trigger('change');
+            $('#editPolicyForm').attr('action', '{{ url('hr-policies') }}/' + d.id);
+            new bootstrap.Modal(document.getElementById('editPolicyModal')).show();
+        });
+
         $('.delete-policy').on('click', function() {
             const id = $(this).data('id');
             const title = $(this).data('title');

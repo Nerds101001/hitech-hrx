@@ -83,6 +83,74 @@ class HRPolicyController extends Controller
     }
 
     /**
+     * Admin: Update an existing policy — title/category/flags/target
+     * departments, and optionally replace the PDF (the old one is removed
+     * from the vault). The file is optional here, unlike on create.
+     */
+    public function update(Request $request, $id)
+    {
+        $policy = HRPolicy::findOrFail($id);
+
+        $request->validate([
+            'title' => 'required|string|max:255',
+            'file' => 'nullable|mimes:pdf|max:10240',
+            'category' => 'nullable|string',
+            'is_mandatory' => 'boolean',
+            'show_as_popup' => 'boolean',
+            'target_departments' => 'nullable|array',
+            'target_departments.*' => 'exists:departments,id',
+        ]);
+
+        $data = [
+            'title' => $request->title,
+            'description' => $request->description,
+            'category' => $request->category ?? 'General',
+            'is_mandatory' => $request->boolean('is_mandatory'),
+            'show_as_popup' => $request->boolean('show_as_popup'),
+            // Empty = everyone (same meaning as on create).
+            'target_departments' => $request->filled('target_departments') ? array_values($request->target_departments) : null,
+        ];
+
+        if ($request->hasFile('file')) {
+            // Replace the attachment: remove the superseded PDF, store the new one.
+            if ($policy->file_path && Storage::disk('r2')->exists($policy->file_path)) {
+                Storage::disk('r2')->delete($policy->file_path);
+            }
+            $filename = time() . '_' . Str::slug($request->title) . '.pdf';
+            $data['file_path'] = $request->file('file')->storeAs('hr-policies', $filename, 'r2');
+        }
+
+        $policy->update($data);
+
+        return back()->with('success', 'Policy updated' . ($request->hasFile('file') ? ' (new document uploaded)' : '') . '.');
+    }
+
+    /**
+     * Admin: Who this policy targets — every active employee in its target
+     * departments (or everyone, if it targets all), with whether each has
+     * acknowledged it yet.
+     */
+    public function targets($id)
+    {
+        $policy = HRPolicy::findOrFail($id);
+
+        $query = \App\Models\User::query()
+            ->where('status', \App\Enums\UserAccountStatus::ACTIVE)
+            ->with('department:id,name');
+        if (!empty($policy->target_departments)) {
+            $query->whereIn('department_id', $policy->target_departments);
+        }
+        $users = $query->orderBy('first_name')->get(['id', 'first_name', 'last_name', 'email', 'department_id']);
+
+        $ackMap = HRPolicyAcknowledgment::where('hr_policy_id', $policy->id)
+            ->pluck('acknowledged_at', 'user_id');
+
+        $deptNames = \App\Models\Department::whereIn('id', $policy->target_departments ?? [])->pluck('name')->all();
+
+        return view('tenant.hr-policies.targets', compact('policy', 'users', 'ackMap', 'deptNames'));
+    }
+
+    /**
      * Employee: Acknowledge a policy
      */
     public function acknowledge(Request $request, $id)

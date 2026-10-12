@@ -1142,6 +1142,8 @@ Route::middleware([
         Route::middleware(['role_or_permission:admin|hr|hr_policies.manage'])->prefix('hr-policies')->name('hr-policies.')->group(function() {
             Route::get('/', [HRPolicyController::class, 'index'])->name('index');
             Route::post('/', [HRPolicyController::class, 'store'])->name('store');
+            Route::post('/{id}', [HRPolicyController::class, 'update'])->name('update')->whereNumber('id');
+            Route::get('/{id}/targets', [HRPolicyController::class, 'targets'])->name('targets')->whereNumber('id');
             Route::delete('/{id}', [HRPolicyController::class, 'destroy'])->name('destroy');
             Route::get('/acknowledgments/{id}', [HRPolicyController::class, 'acknowledgments'])->name('acknowledgments');
         });
