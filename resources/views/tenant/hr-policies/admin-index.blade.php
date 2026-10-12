@@ -140,10 +140,7 @@
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end dropdown-menu-hitech shadow-lg">
                                         <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.view', $policy->id) }}" target="_blank"><i class="bx bx-show me-2 text-info"></i> View PDF</a></li>
-                                        <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center edit-policy" href="javascript:void(0);"
-                                               data-id="{{ $policy->id }}" data-title="{{ $policy->title }}" data-category="{{ $policy->category }}"
-                                               data-description="{{ $policy->description }}" data-mandatory="{{ $policy->is_mandatory ? 1 : 0 }}"
-                                               data-popup="{{ $policy->show_as_popup ? 1 : 0 }}" data-departments='@json($policy->target_departments ?? [])'><i class="bx bx-edit me-2 text-warning"></i> Edit</a></li>
+                                        <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="javascript:void(0);" data-bs-toggle="modal" data-bs-target="#editPolicyModal{{ $policy->id }}"><i class="bx bx-edit me-2 text-warning"></i> Edit</a></li>
                                         <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.targets', $policy->id) }}"><i class="bx bx-group me-2 text-primary"></i> Target Users</a></li>
                                         <li><a class="dropdown-item dropdown-item-hitech py-2 d-flex align-items-center" href="{{ route('hr-policies.acknowledgments', $policy->id) }}"><i class="bx bx-list-check me-2 text-primary"></i> Acknowledgments</a></li>
                                         <li><hr class="dropdown-divider mx-3"></li>
@@ -246,8 +243,10 @@
     </div>
 </div>
 
-<!-- Edit Policy Modal -->
-<div class="modal fade" id="editPolicyModal" tabindex="-1" aria-hidden="true">
+<!-- Edit Policy Modals (one per policy, prefilled server-side) -->
+@foreach($policies as $policy)
+@php $pt = $policy->target_departments ?? []; @endphp
+<div class="modal fade" id="editPolicyModal{{ $policy->id }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content modal-content-hitech border-0 shadow-lg">
             <div class="modal-header modal-header-hitech">
@@ -255,32 +254,36 @@
                 <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
             </div>
             <div class="modal-body p-6">
-                <form id="editPolicyForm" method="POST" enctype="multipart/form-data">
+                <form method="POST" action="{{ route('hr-policies.update', $policy->id) }}" enctype="multipart/form-data">
                     @csrf
                     <div class="row g-4">
                         <div class="col-md-6">
                             <label class="form-label-hitech">Policy Title</label>
-                            <input type="text" name="title" id="edit_title" class="form-control form-control-hitech" required>
+                            <input type="text" name="title" class="form-control form-control-hitech" value="{{ $policy->title }}" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label-hitech">Category</label>
-                            <select name="category" id="edit_category" class="form-select form-control-hitech">
-                                <option value="General">General</option>
-                                <option value="Security">Security</option>
-                                <option value="Attendance">Attendance</option>
-                                <option value="Finance">Finance</option>
+                            <select name="category" class="form-select form-control-hitech">
+                                @foreach(['General','Security','Attendance','Finance'] as $cat)
+                                    <option value="{{ $cat }}" @selected($policy->category === $cat)>{{ $cat }}</option>
+                                @endforeach
                             </select>
                         </div>
                         <div class="col-12">
                             <label class="form-label-hitech">Target Departments</label>
-                            <select name="target_departments[]" id="edit_departments" class="form-select select2-edit form-control-hitech" multiple="multiple" data-placeholder="All Departments (Default)">
+                            <select name="target_departments[]" class="form-select form-control-hitech" multiple size="7">
                                 @foreach($departments as $department)
-                                    <option value="{{ $department->id }}">{{ $department->name }}</option>
+                                    <option value="{{ $department->id }}" @selected(in_array($department->id, $pt))>{{ $department->name }}</option>
                                 @endforeach
                             </select>
-                            <div class="form-text small mt-1 text-muted">Leave blank to apply to everyone.</div>
+                            <div class="form-text small mt-1 text-muted">Hold Ctrl (Cmd on Mac) to select several. Select none to apply to <strong>everyone</strong>. Currently: <strong>{{ empty($pt) ? 'All departments' : count($pt) . ' selected' }}</strong>.</div>
                         </div>
                         <div class="col-12">
+                            <label class="form-label-hitech">Current document</label>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <a href="{{ route('hr-policies.view', $policy->id) }}" target="_blank" class="btn btn-sm btn-hitech-secondary"><i class="bx bx-file me-1"></i> View current PDF</a>
+                                <span class="text-muted small">Uploaded policy document</span>
+                            </div>
                             <label class="form-label-hitech">Replace PDF <span class="text-muted">(optional)</span></label>
                             <input type="file" name="file" class="form-control form-control-hitech" accept="application/pdf">
                             <div class="form-text small text-muted mt-1">Leave blank to keep the current document. Max 10MB, PDF only.</div>
@@ -288,18 +291,18 @@
                         <div class="col-12">
                             <div class="p-4 rounded-3" style="background-color: #F8FAFC;">
                                 <div class="form-check form-switch mb-3">
-                                    <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="edit_mandatory">
-                                    <label class="form-check-label fw-bold text-dark" for="edit_mandatory">Mandatory for all staff</label>
+                                    <input class="form-check-input" type="checkbox" name="is_mandatory" value="1" id="edit_mandatory{{ $policy->id }}" @checked($policy->is_mandatory)>
+                                    <label class="form-check-label fw-bold text-dark" for="edit_mandatory{{ $policy->id }}">Mandatory for all staff</label>
                                 </div>
                                 <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" name="show_as_popup" value="1" id="edit_popup">
-                                    <label class="form-check-label fw-bold text-dark" for="edit_popup">Show as popup to all</label>
+                                    <input class="form-check-input" type="checkbox" name="show_as_popup" value="1" id="edit_popup{{ $policy->id }}" @checked($policy->show_as_popup)>
+                                    <label class="form-check-label fw-bold text-dark" for="edit_popup{{ $policy->id }}">Show as popup to all</label>
                                 </div>
                             </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label-hitech">Short Description</label>
-                            <textarea name="description" id="edit_description" class="form-control form-control-hitech" rows="3"></textarea>
+                            <textarea name="description" class="form-control form-control-hitech" rows="3">{{ $policy->description }}</textarea>
                         </div>
                     </div>
                     <div class="d-flex justify-content-end gap-3 mt-5">
@@ -311,6 +314,7 @@
         </div>
     </div>
 </div>
+@endforeach
 
 @endsection
 
@@ -318,23 +322,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     $(function() {
-        // Edit policy: prefill the modal from the row's data attributes.
-        if ($('#edit_departments').data('select2') === undefined) {
-            $('#edit_departments').select2({ dropdownParent: $('#editPolicyModal'), placeholder: 'All Departments (Default)', width: '100%' });
-        }
-        $('.edit-policy').on('click', function() {
-            const d = $(this).data();
-            $('#edit_title').val(d.title || '');
-            $('#edit_category').val(d.category || 'General');
-            $('#edit_description').val(d.description || '');
-            $('#edit_mandatory').prop('checked', String(d.mandatory) === '1');
-            $('#edit_popup').prop('checked', String(d.popup) === '1');
-            let depts = d.departments;
-            if (!Array.isArray(depts)) { try { depts = JSON.parse(depts || '[]'); } catch (e) { depts = []; } }
-            $('#edit_departments').val((depts || []).map(String)).trigger('change');
-            $('#editPolicyForm').attr('action', '{{ url('hr-policies') }}/' + d.id);
-            new bootstrap.Modal(document.getElementById('editPolicyModal')).show();
-        });
+        // Edit modals are per-policy and prefilled server-side; they open via
+        // Bootstrap's data-bs-toggle, so no JS is needed to populate them.
 
         $('.delete-policy').on('click', function() {
             const id = $(this).data('id');
