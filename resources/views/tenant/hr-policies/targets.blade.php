@@ -23,7 +23,14 @@
         @if(empty($policy->target_departments))
           Targeted at <strong>all employees</strong> (no department filter).
         @else
-          Departments: <strong>{{ implode(', ', $deptNames) ?: 'selected departments' }}</strong>
+          Departments:
+          @foreach($targetDepts as $td)
+            @if($td['name'])
+              <span class="badge bg-info-light text-info">{{ $td['name'] }}</span>
+            @else
+              <span class="badge bg-danger-light text-danger" title="This department id does not exist">ID {{ $td['id'] }} — not found</span>
+            @endif
+          @endforeach
         @endif
       </p>
     </div>
@@ -57,6 +64,22 @@
       </div>
     </div>
   </div>
+
+  @php $missingDepts = $targetDepts->whereNull('name')->pluck('id')->all(); @endphp
+  @if($users->isEmpty() && !empty($policy->target_departments))
+    <div class="mx-4 mb-4 p-4 rounded-3" style="background:#fff7ed;border:1px solid #fed7aa;">
+      <div class="fw-bold text-dark mb-1"><i class="bx bx-error-circle text-warning me-1"></i>This policy currently reaches nobody</div>
+      <div class="small text-muted">
+        It targets
+        @if($missingDepts)
+          department id(s) <strong>{{ implode(', ', $missingDepts) }}</strong> that <strong>no longer exist</strong>, so no employee matches.
+        @else
+          departments that have no active employees.
+        @endif
+        Open the policy's <strong>Edit</strong> menu to pick valid departments — or clear them to target <strong>all employees</strong>.
+      </div>
+    </div>
+  @endif
 
   <div class="animate__animated animate__fadeIn px-4 mt-6">
     <div class="hitech-card-white p-0 overflow-hidden shadow-sm">

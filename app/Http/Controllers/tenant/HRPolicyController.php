@@ -145,9 +145,17 @@ class HRPolicyController extends Controller
         $ackMap = HRPolicyAcknowledgment::where('hr_policy_id', $policy->id)
             ->pluck('acknowledged_at', 'user_id');
 
-        $deptNames = \App\Models\Department::whereIn('id', $policy->target_departments ?? [])->pluck('name')->all();
+        // Resolve each targeted department id to a name so a policy aimed at a
+        // department that no longer exists (e.g. a stale "999") reads clearly
+        // instead of showing a blank list with no explanation.
+        $existing = \App\Models\Department::whereIn('id', $policy->target_departments ?? [])->pluck('name', 'id');
+        $targetDepts = collect($policy->target_departments ?? [])->map(fn ($id) => [
+            'id' => $id,
+            'name' => $existing[$id] ?? null,
+        ]);
+        $deptNames = $existing->values()->all();
 
-        return view('tenant.hr-policies.targets', compact('policy', 'users', 'ackMap', 'deptNames'));
+        return view('tenant.hr-policies.targets', compact('policy', 'users', 'ackMap', 'deptNames', 'targetDepts'));
     }
 
     /**
