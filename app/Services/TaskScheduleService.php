@@ -30,6 +30,16 @@ class TaskScheduleService
     {
         $day = $day ?: Carbon::today();
 
+        // Past its optional end date: deactivate it so it stops looping, and
+        // create nothing more.
+        if ($schedule->hasEnded($day)) {
+            if ($schedule->is_active) {
+                $schedule->update(['is_active' => false]);
+                Log::info("Recurring task schedule {$schedule->id} reached its end date ({$schedule->ends_on->toDateString()}); deactivated.");
+            }
+            return collect();
+        }
+
         // Never on a Sunday or company holiday; an occurrence that fell on
         // one fires on the first working day after it (TaskSchedule::isDueOn).
         if (!$schedule->is_active || !$schedule->isDueOn($day)) {

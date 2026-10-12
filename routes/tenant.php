@@ -538,6 +538,7 @@ Route::middleware([
       Route::post('/', [\App\Http\Controllers\tenant\TaskManagementController::class, 'store'])->name('store');
       Route::get('batch/{batchId}', [\App\Http\Controllers\tenant\TaskManagementController::class, 'showBatch'])->name('batch');
       Route::post('schedules/{id}/stop', [\App\Http\Controllers\tenant\TaskManagementController::class, 'stopSchedule'])->name('schedules.stop');
+      Route::post('schedules/{id}/end-date', [\App\Http\Controllers\tenant\TaskManagementController::class, 'setScheduleEndDate'])->name('schedules.endDate');
       Route::post('schedules/{id}/remove-user', [\App\Http\Controllers\tenant\TaskManagementController::class, 'removeFromSchedule'])->name('schedules.removeUser');
       Route::get('schedules/{id}/history', [\App\Http\Controllers\tenant\TaskManagementController::class, 'scheduleHistory'])->name('schedules.history');
       // Static path before the {id} wildcards below, or "bulk-destroy" would

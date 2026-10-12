@@ -28,6 +28,7 @@ class TaskSchedule extends Model implements AuditableContract
     'frequency',
     'weekday',
     'day_of_month',
+    'ends_on',
     'target_user_ids',
     'cc_user_ids',
     'assigned_by_id',
@@ -43,6 +44,7 @@ class TaskSchedule extends Model implements AuditableContract
     'cc_user_ids' => 'array',
     'is_active' => 'boolean',
     'last_run_on' => 'date',
+    'ends_on' => 'date',
     'weekday' => 'integer',
     'day_of_month' => 'integer',
   ];
@@ -67,11 +69,19 @@ class TaskSchedule extends Model implements AuditableContract
   /** How this reads on screen — "Every Tuesday", "Every 7th of the month", "Every day". */
   public function recurrenceLabel(): string
   {
-    return match ($this->frequency) {
+    $base = match ($this->frequency) {
       'weekly'  => 'Every ' . (self::WEEKDAY_NAMES[$this->weekday] ?? '—'),
       'monthly' => 'Every ' . self::ordinal((int) $this->day_of_month) . ' of the month',
       default   => 'Every day',
     };
+
+    return $this->ends_on ? $base . ' until ' . $this->ends_on->format('d M Y') : $base;
+  }
+
+  /** True once the schedule is past its end date — nothing more should be created. */
+  public function hasEnded(?\Carbon\Carbon $day = null): bool
+  {
+    return $this->ends_on && ($day ?: \Carbon\Carbon::today())->startOfDay()->gt($this->ends_on->copy()->startOfDay());
   }
 
   private static function ordinal(int $n): string

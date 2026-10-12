@@ -341,6 +341,8 @@ class TaskManagementController extends Controller
             'interval'       => 'nullable|in:daily,weekly,monthly',
             'weekday'        => 'required_if:interval,weekly|nullable|integer|min:0|max:6',
             'day_of_month'   => 'required_if:interval,monthly|nullable|integer|min:1|max:31',
+            // Optional end date for a recurring task — after this it stops on its own.
+            'ends_on'        => 'nullable|date|after_or_equal:today',
             'employee_ids'   => 'nullable|array',
             'employee_ids.*' => 'integer|exists:users,id',
             'department_ids'   => 'nullable|array',
@@ -507,6 +509,7 @@ class TaskManagementController extends Controller
             'frequency'       => $validated['interval'],
             'weekday'         => $validated['interval'] === 'weekly' ? $validated['weekday'] : null,
             'day_of_month'    => $validated['interval'] === 'monthly' ? $validated['day_of_month'] : null,
+            'ends_on'         => !empty($validated['ends_on']) ? $validated['ends_on'] : null,
             'target_user_ids' => $targetIds->values()->all(),
             'cc_user_ids'     => $ccIds->values()->all(),
             'assigned_by_id'  => $user->id,
@@ -536,6 +539,25 @@ class TaskManagementController extends Controller
         $schedule->update(['is_active' => false]);
 
         return response()->json(['success' => true, 'message' => 'Recurring task stopped. Nothing more will be created from it.']);
+    }
+
+    /** Set (or clear) the end date on a recurring schedule so it stops on its own. */
+    public function setScheduleEndDate(Request $request, $id)
+    {
+        $schedule = TaskSchedule::findOrFail($id);
+        if (!TaskAccess::isUnrestricted(auth()->user()) && $schedule->assigned_by_id !== auth()->id()) {
+            abort(403, 'You cannot manage a recurring task you did not create.');
+        }
+
+        $data = $request->validate(['ends_on' => 'nullable|date|after_or_equal:today']);
+        $schedule->update(['ends_on' => $data['ends_on'] ?? null, 'updated_by_id' => auth()->id()]);
+
+        return response()->json([
+            'success' => true,
+            'message' => empty($data['ends_on'])
+                ? 'End date cleared — this recurring task now runs until stopped.'
+                : 'End date set to ' . \Illuminate\Support\Carbon::parse($data['ends_on'])->format('d M Y') . '. It will stop on its own after that.',
+        ]);
     }
 
     /** Drop one person from an active schedule's future occurrences, without touching anyone else on it. */

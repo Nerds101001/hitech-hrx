@@ -632,6 +632,7 @@
                     @if($canManageSchedule)
                       <button type="button" class="btn btn-sm btn-hitech-cancel js-manage-schedule"
                               data-id="{{ $s->id }}" data-title="{{ $s->title }}" data-recurrence="{{ $s->recurrenceLabel() }}"
+                              data-ends-on="{{ optional($s->ends_on)->format('Y-m-d') }}"
                               data-targets="{{ json_encode(collect($s->target_user_ids ?? [])->map(fn($uid) => ['id' => $uid, 'name' => optional($targetNames->get($uid))->getFullName() ?? 'Unknown'])->values()) }}">
                         Manage
                       </button>
@@ -853,6 +854,11 @@
               <input type="text" id="at_recurrence_display" class="form-control d-none" readonly>
               <div class="form-text d-none" id="at_recurrence_help">Repeats on its own — a task appears for each person every time this day comes round. Stop it any time from the Recurring Tasks list below.</div>
             </div>
+            <div class="col-md-4 d-none" id="at_ends_on_wrap">
+              <label class="form-label">End date <span class="text-muted">(optional)</span></label>
+              <input type="date" id="at_ends_on" class="form-control">
+              <div class="form-text">Leave blank to run until stopped. After this date it stops on its own.</div>
+            </div>
 
             <div class="col-12"><hr class="my-1"></div>
 
@@ -1060,6 +1066,15 @@
       </div>
       <div class="modal-body">
         <p class="text-muted small mb-3" id="msRecurrence"></p>
+        <div class="border rounded p-3 mb-3 bg-light">
+          <label class="form-label fw-semibold mb-1"><i class="bx bx-calendar-x me-1"></i>End date <span class="text-muted fw-normal">(optional)</span></label>
+          <div class="d-flex gap-2 align-items-center">
+            <input type="date" id="msEndsOn" class="form-control form-control-sm" style="max-width:200px">
+            <button type="button" class="btn btn-sm btn-hitech" id="msEndsOnSave">Save</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="msEndsOnClear" title="Clear end date">Clear</button>
+          </div>
+          <div class="form-text">Set a date to make this recurring task stop on its own. Leave blank / clear to run until stopped.</div>
+        </div>
         <ul class="list-group" id="msTargetList"></ul>
       </div>
       <div class="modal-footer justify-content-between">
@@ -1179,10 +1194,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (atDueDatePicker.altInput) atDueDatePicker.altInput.classList.toggle('d-none', isRecurring);
     document.getElementById('at_recurrence_display').classList.toggle('d-none', !isRecurring);
     document.getElementById('at_recurrence_help').classList.toggle('d-none', !isRecurring);
+    document.getElementById('at_ends_on_wrap').classList.toggle('d-none', !isRecurring);
     if (isRecurring) {
       document.getElementById('at_recurrence_display').value = recurrenceLabel(interval);
     } else {
       atDueDatePicker.clear();
+      document.getElementById('at_ends_on').value = '';
     }
   }
 
@@ -1213,6 +1230,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (document.getElementById('at_interval').value) fd.append('interval', document.getElementById('at_interval').value);
     fd.append('weekday', document.getElementById('at_weekday').value);
     fd.append('day_of_month', document.getElementById('at_monthday').value);
+    if (document.getElementById('at_interval').value && document.getElementById('at_ends_on').value) fd.append('ends_on', document.getElementById('at_ends_on').value);
     (($('#at_employees').val()) || []).forEach(id => fd.append('employee_ids[]', id));
     (($('#at_departments').val()) || []).forEach(id => fd.append('department_ids[]', id));
     (($('#at_cc').val()) || []).forEach(id => fd.append('cc_user_ids[]', id));
@@ -1766,6 +1784,7 @@ document.addEventListener('DOMContentLoaded', function () {
         currentScheduleId = btn.dataset.id;
         document.getElementById('msTitle').textContent = btn.dataset.title;
         document.getElementById('msRecurrence').innerHTML = '<i class="bx bx-repeat"></i> ' + btn.dataset.recurrence;
+        document.getElementById('msEndsOn').value = btn.dataset.endsOn || '';
         renderTargetList(JSON.parse(btn.dataset.targets || '[]'));
         manageModal.show();
       });
@@ -1788,6 +1807,30 @@ document.addEventListener('DOMContentLoaded', function () {
             else { Swal.fire({ icon: 'error', title: 'Could not stop', text: data.message || '' }); }
           });
       });
+    });
+
+    function saveEndDate(value) {
+      if (!currentScheduleId) return;
+      fetchJson('/task-management/schedules/' + currentScheduleId + '/end-date', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': "{{ csrf_token() }}", 'Accept': 'application/json' },
+        body: JSON.stringify({ ends_on: value || null }),
+      })
+        .then(({ data }) => {
+          if (data.success) {
+            Swal.fire({ icon: 'success', title: 'Saved', text: data.message, timer: 1800, showConfirmButton: false })
+              .then(() => window.location.reload());
+          } else {
+            Swal.fire({ icon: 'error', title: 'Could not save', text: data.message || '' });
+          }
+        });
+    }
+    document.getElementById('msEndsOnSave').addEventListener('click', function () {
+      saveEndDate(document.getElementById('msEndsOn').value);
+    });
+    document.getElementById('msEndsOnClear').addEventListener('click', function () {
+      document.getElementById('msEndsOn').value = '';
+      saveEndDate(null);
     });
   }
 });
