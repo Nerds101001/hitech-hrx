@@ -774,9 +774,21 @@
           <p class="text-muted small mb-0">Click a department to filter the table below to just that team.</p>
         </div>
         <div class="table-responsive">
+          @php
+            $deptSortLink = fn($col) => request()->fullUrlWithQuery([
+              'pendency_dept_sort' => $col,
+              'pendency_dept_dir' => ($pendency['deptSort'] === $col && $pendency['deptDir'] === 'desc') ? 'asc' : 'desc',
+            ]) . '#tmPendency';
+            $deptSortIcon = fn($col) => $pendency['deptSort'] !== $col ? '' : ($pendency['deptDir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
+          @endphp
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
-              <tr><th style="min-width:200px">Department</th><th>Pending</th><th>Overdue</th><th class="text-end">Filter</th></tr>
+              <tr>
+                <th style="min-width:200px"><a href="{{ $deptSortLink('name') }}" class="text-dark text-decoration-none js-pendency-tab-link">Department{!! $deptSortIcon('name') !!}</a></th>
+                <th><a href="{{ $deptSortLink('pending') }}" class="text-dark text-decoration-none js-pendency-tab-link">Pending{!! $deptSortIcon('pending') !!}</a></th>
+                <th><a href="{{ $deptSortLink('overdue') }}" class="text-dark text-decoration-none js-pendency-tab-link">Overdue{!! $deptSortIcon('overdue') !!}</a></th>
+                <th class="text-end">Filter</th>
+              </tr>
             </thead>
             <tbody>
               @forelse($pendency['byDepartment'] as $d)

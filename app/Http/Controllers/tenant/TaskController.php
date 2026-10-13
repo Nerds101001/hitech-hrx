@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskUpdate;
 use App\Notifications\Task\TaskAssigned;
+use App\Notifications\Task\TaskDetailsUpdated;
+use App\Notifications\Task\TaskStatusUpdated;
 use App\Support\TaskAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -102,12 +104,49 @@ class TaskController extends Controller
         ]);
 
         try {
+            $oldDue = $task->dueLabel() ?? 'no due date';
+            $titleChanged = $task->title !== $validated['title'];
+            $dueChanged = optional($task->due_date)->format('Y-m-d') !== $validated['due_date'];
+
             $task->title = $validated['title'];
             $task->description = $validated['description'] ?? null;
             $task->due_date = $validated['due_date'] ?? null;
             $task->type = $validated['type'];
             $task->updated_by_id = auth()->id();
             $task->save();
+
+            $notes = [];
+            if ($titleChanged) {
+                $notes[] = 'Title changed to "' . $validated['title'] . '".';
+            }
+            if ($dueChanged) {
+                $notes[] = 'Due date changed from ' . $oldDue . ' to ' . ($task->dueLabel() ?? 'no due date') . '.';
+            }
+            // Logged even when nothing listed above changed (description/type
+            // can still differ) - same taskUpdates trail every other edit path
+            // on this page leaves, which this endpoint never kept before.
+            $task->taskUpdates()->create([
+                'comment'       => $notes ? implode(' ', $notes) : 'Task details updated.',
+                'update_type'   => 'comment',
+                'is_admin'      => auth()->id() !== $task->user_id,
+                'created_by_id' => auth()->id(),
+                'updated_by_id' => auth()->id(),
+            ]);
+
+            if ((int) $task->user_id !== auth()->id()) {
+                $summary = $notes ? implode(' ', $notes) : 'description or type changed.';
+                $taskId = $task->id;
+                $actorId = auth()->id();
+                app()->terminating(function () use ($taskId, $summary, $actorId) {
+                    try {
+                        $fresh = Task::with('user')->find($taskId);
+                        $actor = \App\Models\User::find($actorId);
+                        $fresh?->user?->notify(new TaskDetailsUpdated($fresh, $summary, $actor));
+                    } catch (\Throwable $e) {
+                        Log::warning("Task-details-updated notify failed for task {$taskId}: " . $e->getMessage());
+                    }
+                });
+            }
 
             return response()->json(['success' => true, 'message' => 'Task updated successfully.']);
         } catch (\Exception $e) {
@@ -138,6 +177,29 @@ class TaskController extends Controller
                 $task->completed_at = null;
             }
             $task->save();
+
+            $statusLabel = ucfirst(str_replace('_', ' ', $validated['status']));
+            $task->taskUpdates()->create([
+                'comment'       => 'Status changed to ' . $statusLabel . '.',
+                'update_type'   => in_array($validated['status'], Task::CLOSED_STATUSES, true) ? 'complete' : 'comment',
+                'is_admin'      => auth()->id() !== $task->user_id,
+                'created_by_id' => auth()->id(),
+                'updated_by_id' => auth()->id(),
+            ]);
+
+            if ((int) $task->user_id !== auth()->id()) {
+                $taskId = $task->id;
+                $actorId = auth()->id();
+                app()->terminating(function () use ($taskId, $statusLabel, $actorId) {
+                    try {
+                        $fresh = Task::with('user')->find($taskId);
+                        $actor = \App\Models\User::find($actorId);
+                        $fresh?->user?->notify(new TaskStatusUpdated($fresh, $statusLabel, $actor));
+                    } catch (\Throwable $e) {
+                        Log::warning("Admin task status-change notify failed for task {$taskId}: " . $e->getMessage());
+                    }
+                });
+            }
 
             return response()->json(['success' => true, 'message' => 'Task status updated to ' . $validated['status']]);
         } catch (\Exception $e) {

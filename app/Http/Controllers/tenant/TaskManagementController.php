@@ -308,6 +308,17 @@ class TaskManagementController extends Controller
         $overdueCase = 'sum(case when tasks.due_date is not null and ' . Task::DEADLINE_SQL . ' < ? then 1 else 0 end) as overdue';
         $now = now()->toDateTimeString();
 
+        // The department breakdown table has its own sort, independent of the
+        // by-person table below it - "Pending" (worst-first) by default.
+        $deptSort = in_array($request->input('pendency_dept_sort'), ['pending', 'overdue', 'name'], true)
+            ? $request->input('pendency_dept_sort') : 'pending';
+        $deptDir = $request->input('pendency_dept_dir') === 'asc' ? 'asc' : 'desc';
+        $deptOrderColumn = match ($deptSort) {
+            'overdue' => 'overdue',
+            'name'    => 'department_name',
+            default   => 'pending',
+        };
+
         $byDepartment = (clone $base)
             ->join('users', 'users.id', '=', 'tasks.user_id')
             ->leftJoin('departments', 'departments.id', '=', 'users.department_id')
@@ -318,7 +329,7 @@ class TaskManagementController extends Controller
             )
             ->selectRaw($overdueCase, [$now])
             ->groupBy('departments.id', 'departments.name')
-            ->orderByDesc('pending')
+            ->orderBy($deptOrderColumn, $deptDir)
             ->get();
 
         $sort = in_array($request->input('pendency_sort'), ['pending', 'overdue', 'name', 'department'], true)
@@ -367,6 +378,8 @@ class TaskManagementController extends Controller
             'byPerson'            => $byPerson,
             'sort'                => $sort,
             'dir'                 => $dir,
+            'deptSort'            => $deptSort,
+            'deptDir'             => $deptDir,
         ];
     }
 
@@ -757,7 +770,11 @@ class TaskManagementController extends Controller
             ? User::find((int) $validated['user_id'])
             : null;
 
-        DB::transaction(function () use ($targets, $validated, $request, $user, $newDue, $reassignTo) {
+        // Collected inside the transaction, dispatched after it commits - one
+        // entry per target whose own details changed (not reassigned; that
+        // path already notifies the new assignee via TaskAssigned).
+        $notifyList = [];
+        DB::transaction(function () use ($targets, $validated, $request, $user, $newDue, $reassignTo, &$notifyList) {
             foreach ($targets as $t) {
                 $notes = [];
                 $tDueChanged = optional($newDue)->format('Y-m-d H:i') !== optional($t->due_date)->format('Y-m-d H:i');
@@ -802,6 +819,9 @@ class TaskManagementController extends Controller
                         'created_by_id' => $user->id,
                         'updated_by_id' => $user->id,
                     ]);
+                    if (!$reassignTo && (int) $t->user_id !== (int) $user->id) {
+                        $notifyList[] = ['taskId' => $t->id, 'summary' => implode(' ', $notes)];
+                    }
                 }
             }
         });
@@ -815,6 +835,23 @@ class TaskManagementController extends Controller
                     $fresh?->user?->notify(new TaskAssigned($fresh));
                 } catch (\Throwable $e) {
                     Log::warning("Task-reassigned notify failed for task {$taskId}: " . $e->getMessage());
+                }
+            });
+        }
+
+        // Everyone whose own task's title/due date/priority changed (not
+        // reassigned) is told what changed.
+        if ($notifyList) {
+            $actorId = $user->id;
+            app()->terminating(function () use ($notifyList, $actorId) {
+                $actor = User::find($actorId);
+                foreach ($notifyList as $entry) {
+                    try {
+                        $fresh = Task::with('user')->find($entry['taskId']);
+                        $fresh?->user?->notify(new \App\Notifications\Task\TaskDetailsUpdated($fresh, $entry['summary'], $actor));
+                    } catch (\Throwable $e) {
+                        Log::warning("Task-details-updated notify failed for task {$entry['taskId']}: " . $e->getMessage());
+                    }
                 }
             });
         }

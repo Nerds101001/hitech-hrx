@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\EmployeeSetupTask;
 use App\Models\ExitClearance;
 use App\Models\Task;
+use App\Notifications\Task\TaskReplied;
+use App\Notifications\Task\TaskStatusUpdated;
 use App\Support\TaskAttachment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -167,6 +170,8 @@ class MyTasksController extends Controller
             'updated_by_id'  => auth()->id(),
         ]);
 
+        self::notifyStatusChange($task, 'Completed', $validated['remarks'] ?? null);
+
         return response()->json(['success' => true, 'message' => 'Task marked complete.']);
     }
 
@@ -210,6 +215,8 @@ class MyTasksController extends Controller
             'created_by_id'  => auth()->id(),
             'updated_by_id'  => auth()->id(),
         ]);
+
+        self::notifyStatusChange($task, 'Resubmitted', $validated['remarks'] ?? null);
 
         return response()->json(['success' => true, 'message' => 'Resubmitted.']);
     }
@@ -258,6 +265,8 @@ class MyTasksController extends Controller
             'updated_by_id' => auth()->id(),
         ]);
 
+        self::notifyStatusChange($task, Task::PROGRESS_STATUSES[$validated['status']], $validated['remarks'] ?? null);
+
         return response()->json([
             'success' => true,
             'message' => Task::PROGRESS_STATUSES[$validated['status']] . '.',
@@ -291,6 +300,8 @@ class MyTasksController extends Controller
             'created_by_id' => auth()->id(),
             'updated_by_id' => auth()->id(),
         ]);
+
+        self::notifyReply($task, $update);
 
         return response()->json(['success' => true, 'update' => [
             'id'         => $update->id,
@@ -437,5 +448,63 @@ class MyTasksController extends Controller
     public static function countFor($user): int
     {
         return collect(self::forUser($user))->sum(fn($g) => count($g['items']));
+    }
+
+    /**
+     * Tell the person who assigned this task that its status just moved.
+     * Every caller here is the assignee acting on their own task, so the
+     * counterpart is always the assigner - unless they assigned it to
+     * themselves, in which case there is no one else to tell.
+     * app()->terminating() rather than dispatch(...)->afterResponse(): a
+     * slow mail host must not make the status update wait, and the latter's
+     * closure serialization breaks on prod's obfuscated source (same reason
+     * TaskManagementController::objection() uses this pattern).
+     */
+    private static function notifyStatusChange(Task $task, string $statusLabel, ?string $remarks): void
+    {
+        $taskId = $task->id;
+        $actorId = auth()->id();
+        app()->terminating(function () use ($taskId, $statusLabel, $remarks, $actorId) {
+            try {
+                $fresh = Task::with(['assignedBy'])->find($taskId);
+                $actor = \App\Models\User::find($actorId);
+                if ($fresh && $fresh->assignedBy && (int) $fresh->assigned_by_id !== $actorId) {
+                    $fresh->assignedBy->notify(new TaskStatusUpdated($fresh, $statusLabel, $actor, $remarks));
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Task status-change notify failed for task {$taskId}: " . $e->getMessage());
+            }
+        });
+    }
+
+    /**
+     * Tell the other side of the thread a reply landed - the assignee's
+     * reply goes to the assigner, and anyone else's (assigner or a CC'd
+     * co-owner) goes to the assignee, since they're the one most likely
+     * waiting on an answer. Never notifies the person who just replied.
+     */
+    private static function notifyReply(Task $task, \App\Models\TaskUpdate $update): void
+    {
+        $taskId = $task->id;
+        $updateId = $update->id;
+        $actorId = auth()->id();
+        app()->terminating(function () use ($taskId, $updateId, $actorId) {
+            try {
+                $fresh = Task::with(['user', 'assignedBy'])->find($taskId);
+                $freshUpdate = \App\Models\TaskUpdate::with('createdBy')->find($updateId);
+                if (!$fresh || !$freshUpdate) {
+                    return;
+                }
+                $recipients = collect([$fresh->user, $fresh->assignedBy])
+                    ->filter()
+                    ->unique('id')
+                    ->reject(fn ($u) => (int) $u->id === (int) $actorId);
+                foreach ($recipients as $recipient) {
+                    $recipient->notify(new TaskReplied($fresh, $freshUpdate));
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Task reply notify failed for task {$taskId}: " . $e->getMessage());
+            }
+        });
     }
 }
