@@ -211,11 +211,11 @@
     var box = document.createElement('input');
     box.type = 'text'; box.className = 'form-control'; box.placeholder = 'Type 2–3 letters to search…'; box.autocomplete = 'off';
     var list = document.createElement('div');
-    list.className = 'list-group shadow'; list.style.cssText = 'position:absolute;z-index:1050;left:0;right:0;top:100%;max-height:260px;overflow:auto;display:none;';
+    list.className = 'list-group shadow'; list.style.cssText = 'position:absolute;z-index:1060;left:0;right:0;top:100%;margin-top:2px;max-height:260px;overflow:auto;display:none;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 10px 25px rgba(15,23,42,.18);';
     sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(box); wrap.appendChild(list);
 
     function choose(it) {
-      sel.value = it.id; box.value = it.name; box.classList.add('is-valid'); list.style.display = 'none';
+      sel.value = it.id; box.value = it.name; box.classList.add('is-valid'); list.style.display = 'none'; wrap.style.zIndex = '';
       sel.dispatchEvent(new Event('change'));
     }
     function render() {
@@ -224,20 +224,20 @@
       var hits = items.filter(function (i) { return !q || i.name.toLowerCase().indexOf(q) !== -1 || i.dept.toLowerCase().indexOf(q) !== -1; });
       hits.slice(0, 15).forEach(function (it) {
         var b = document.createElement('button');
-        b.type = 'button'; b.className = 'list-group-item list-group-item-action py-2';
+        b.type = 'button'; b.className = 'list-group-item list-group-item-action py-2'; b.style.cssText = 'background:#fff;color:#1e293b;border:0;border-bottom:1px solid #f1f5f9;text-align:left;';
         var n = document.createElement('span'); n.textContent = it.name;
         var d = document.createElement('small'); d.className = 'text-muted ms-2'; d.textContent = it.dept;
         b.appendChild(n); b.appendChild(d);
         b.addEventListener('mousedown', function (e) { e.preventDefault(); choose(it); });   // before the box loses focus
         list.appendChild(b);
       });
-      if (!hits.length) { var none = document.createElement('div'); none.className = 'list-group-item text-muted'; none.textContent = 'No one matches "' + box.value + '"'; list.appendChild(none); }
-      else if (hits.length > 15) { var more = document.createElement('div'); more.className = 'list-group-item small text-muted'; more.textContent = (hits.length - 15) + ' more… keep typing to narrow it down'; list.appendChild(more); }
-      list.style.display = 'block';
+      if (!hits.length) { var none = document.createElement('div'); none.className = 'list-group-item text-muted'; none.style.background = '#fff'; none.textContent = 'No one matches "' + box.value + '"'; list.appendChild(none); }
+      else if (hits.length > 15) { var more = document.createElement('div'); more.className = 'list-group-item small text-muted'; more.style.background = '#fff'; more.textContent = (hits.length - 15) + ' more… keep typing to narrow it down'; list.appendChild(more); }
+      list.style.display = 'block'; wrap.style.zIndex = 1060;
     }
     box.addEventListener('input', function () { sel.value = ''; box.classList.remove('is-valid'); render(); });
     box.addEventListener('focus', render);
-    box.addEventListener('blur', function () { setTimeout(function () { list.style.display = 'none'; }, 150); });
+    box.addEventListener('blur', function () { setTimeout(function () { list.style.display = 'none'; wrap.style.zIndex = ''; }, 150); });
     sel._reset = function () { sel.value = ''; box.value = ''; box.classList.remove('is-valid'); list.style.display = 'none'; };
   });
 
