@@ -35,6 +35,20 @@
             ]
         },
         {
+            "url": "/my-warnings-complaints",
+            "name": "My Warnings & Complaints",
+            "icon": "menu-icon bx bx-error-circle",
+            "slug": "employee-lifecycle.my-notices",
+            "roles": [
+                "admin",
+                "hr",
+                "manager",
+                "employee",
+                "accounts",
+                "office_employee"
+            ]
+        },
+        {
             "url": "/task-management",
             "name": "Task Management",
             "icon": "menu-icon bx bx-list-check",

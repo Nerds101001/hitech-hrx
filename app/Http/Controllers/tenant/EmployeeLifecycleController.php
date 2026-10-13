@@ -18,6 +18,7 @@ use App\Models\Team;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 
@@ -276,9 +277,17 @@ class EmployeeLifecycleController extends Controller
             'description' => 'required|string|max:1000',
             'action_taken' => 'nullable|string|max:1000',
             'notes' => 'nullable|string|max:1000',
+            'attachment' => 'nullable|file|max:10240',
         ]);
 
         $validated['given_by_id'] = Auth::id();
+
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = time() . '_' . \Illuminate\Support\Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+            $validated['attachment_path'] = $file->storeAs('employee-warnings', $filename, 'r2');
+        }
+        unset($validated['attachment']);
 
         EmployeeWarning::create($validated);
 
@@ -552,18 +561,95 @@ class EmployeeLifecycleController extends Controller
     public function storeComplaint(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'complainant_id' => 'required|exists:users,id',
-            'respondent_id' => 'nullable|exists:users,id',
+            'user_id' => 'required|exists:users,id',
             'complaint_type' => 'required|in:harassment,discrimination,safety,policy',
             'severity' => 'required|in:low,medium,high,critical',
             'complaint_date' => 'required|date',
             'description' => 'required|string|max:1000',
             'notes' => 'nullable|string|max:1000',
+            'attachment' => 'nullable|file|max:10240',
         ]);
 
-        EmployeeComplaint::create($validated);
+        $data = [
+            'respondent_id' => $validated['user_id'],
+            'complainant_id' => Auth::id(),
+            'complaint_type' => $validated['complaint_type'],
+            'severity' => $validated['severity'],
+            'complaint_date' => $validated['complaint_date'],
+            'description' => $validated['description'],
+            'notes' => $validated['notes'] ?? null,
+        ];
+
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filename = time() . '_' . \Illuminate\Support\Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME)) . '.' . $file->getClientOriginalExtension();
+            $data['attachment_path'] = $file->storeAs('employee-complaints', $filename, 'r2');
+        }
+
+        EmployeeComplaint::create($data);
 
         return redirect()->back()->with('success', 'Complaint recorded successfully.');
+    }
+
+    /**
+     * Self-service: the signed-in user's own warnings and complaints only —
+     * never anyone else's. Warnings/complaints are lodged solely by HR/Admin
+     * (see the role-gated routes), but the employee they concern can always
+     * see what was recorded about them.
+     */
+    public function myNotices(): View
+    {
+        $userId = Auth::id();
+
+        $myWarnings = EmployeeWarning::with('givenBy')
+            ->where('user_id', $userId)
+            ->latest()
+            ->get();
+
+        $myComplaints = EmployeeComplaint::with(['complainant', 'approvedBy'])
+            ->where('respondent_id', $userId)
+            ->latest()
+            ->get();
+
+        return view('tenant.employee-lifecycle.my-notices', compact('myWarnings', 'myComplaints'));
+    }
+
+    /**
+     * Download a warning's attachment. Allowed for HR/Admin, or the employee
+     * the warning was issued to — nobody else.
+     */
+    public function downloadWarningAttachment(EmployeeWarning $warning)
+    {
+        $user = Auth::user();
+        $isOwner = $warning->user_id === $user->id;
+        if (!$isOwner && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage')) {
+            abort(403);
+        }
+
+        if (!$warning->attachment_path || !Storage::disk('r2')->exists($warning->attachment_path)) {
+            abort(404, 'Attachment not found.');
+        }
+
+        return redirect()->away(Storage::disk('r2')->temporaryUrl($warning->attachment_path, now()->addMinutes(30)));
+    }
+
+    /**
+     * Download a complaint's attachment. Allowed for HR/Admin, or the
+     * employee the complaint concerns (the respondent) — nobody else.
+     */
+    public function downloadComplaintAttachment(EmployeeComplaint $complaint)
+    {
+        $user = Auth::user();
+        $isOwner = $complaint->respondent_id === $user->id || $complaint->complainant_id === $user->id;
+        if (!$isOwner && !$user->hasRole(['admin', 'hr']) && !$user->can('lifecycle.manage')) {
+            abort(403);
+        }
+
+        if (!$complaint->attachment_path || !Storage::disk('r2')->exists($complaint->attachment_path)) {
+            abort(404, 'Attachment not found.');
+        }
+
+        return redirect()->away(Storage::disk('r2')->temporaryUrl($complaint->attachment_path, now()->addMinutes(30)));
     }
 
     /**

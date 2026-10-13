@@ -22,6 +22,7 @@ class EmployeeWarning extends Model implements AuditableContract
         'action_taken',
         'notes',
         'status',
+        'attachment_path',
     ];
 
     protected $casts = [

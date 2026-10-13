@@ -738,7 +738,14 @@ Route::middleware([
       Route::get('announcements', [EmployeeLifecycleController::class, 'announcements'])->name('announcements');
       Route::post('announcements/store', [EmployeeLifecycleController::class, 'storeAnnouncement'])->name('announcements.store');
     });
-    
+
+    // Employee Lifecycle (All Authenticated Users) — self-service: an
+    // employee may only ever see warnings/complaints recorded about
+    // themselves. Ownership is enforced inside the controller, not by role.
+    Route::get('my-warnings-complaints', [EmployeeLifecycleController::class, 'myNotices'])->name('employee-lifecycle.my-notices');
+    Route::get('employee-lifecycle/warnings/{warning}/attachment', [EmployeeLifecycleController::class, 'downloadWarningAttachment'])->name('employee-lifecycle.warnings.attachment');
+    Route::get('employee-lifecycle/complaints/{complaint}/attachment', [EmployeeLifecycleController::class, 'downloadComplaintAttachment'])->name('employee-lifecycle.complaints.attachment');
+
     // Approvals (HR/Admin)
     Route::middleware(['role_or_permission:hr|admin|approvals.manage'])->prefix('approvals')->name('approvals.')->group(function () {
       Route::get('', [ApprovalController::class, 'index'])->name('index');

@@ -23,6 +23,7 @@ class EmployeeComplaint extends Model implements AuditableContract
         'resolution',
         'notes',
         'status',
+        'attachment_path',
     ];
 
     protected $casts = [
@@ -39,6 +40,17 @@ class EmployeeComplaint extends Model implements AuditableContract
     public function respondent()
     {
         return $this->belongsTo(User::class, 'respondent_id');
+    }
+
+    /**
+     * Alias for respondent — the employee a complaint concerns. Lets the
+     * lifecycle dashboard's shared "who is this about" display code and
+     * manager team-scoping (both written against a generic `user` relation)
+     * work the same way for complaints as for warnings/promotions/etc.
+     */
+    public function user()
+    {
+        return $this->respondent();
     }
 
     public function approvedBy()

@@ -302,19 +302,26 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Type</th><th>Issued</th><th>Reason</th><th>Status</th>
+                  <th>Employee</th><th>Type</th><th>Issued</th><th>Reason</th><th>Status</th><th>Attachment</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabWarnings as $r)
                   <tr>
                     <td>{!! $who($r) !!}</td>
-                    <td class="text-capitalize">{{ str_replace('_', ' ', $r->warningType->name ?? $r->warning_type ?? '—') }}</td>
-                    <td>{{ $fmt($r->issued_date ?? $r->created_at ?? null) }}</td>
-                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->reason ?: ($r->description ?: '—'), 40) }}</small></td>
+                    <td class="text-capitalize">{{ str_replace('_', ' ', $r->warning_type ?? '—') }}</td>
+                    <td>{{ $fmt($r->warning_date ?? $r->created_at ?? null) }}</td>
+                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small></td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
+                    <td>
+                      @if($r->attachment_path)
+                        <a href="{{ route('employee-lifecycle.warnings.attachment', $r->id) }}" target="_blank" class="btn btn-sm btn-hitech-modal-cancel"><i class="bx bx-paperclip"></i></a>
+                      @else
+                        <span class="text-muted">—</span>
+                      @endif
+                    </td>
                   </tr>
                 @empty
-                  <tr><td colspan="5" class="text-center text-muted py-5">No warnings recorded</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-5">No warnings recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>
@@ -339,19 +346,26 @@
             <div class="table-responsive">
               <table class="table table-hover mb-0">
                 <thead><tr>
-                  <th>Employee</th><th>Subject</th><th>Category</th><th>Filed</th><th>Status</th>
+                  <th>Employee</th><th>Details</th><th>Type</th><th>Filed</th><th>Status</th><th>Attachment</th>
                 </tr></thead>
                 <tbody>
                 @forelse($tabComplaints as $r)
                   <tr>
                     <td>{!! $who($r) !!}</td>
-                    <td>{{ \Illuminate\Support\Str::limit($r->subject ?: ($r->title ?: '—'), 40) }}</td>
-                    <td class="text-capitalize">{{ str_replace('_', ' ', $r->category ?? '—') }}</td>
-                    <td>{{ $fmt($r->created_at ?? null) }}</td>
+                    <td><small class="text-muted">{{ \Illuminate\Support\Str::limit($r->description ?: '—', 40) }}</small></td>
+                    <td class="text-capitalize">{{ str_replace('_', ' ', $r->complaint_type ?? '—') }}</td>
+                    <td>{{ $fmt($r->complaint_date ?? $r->created_at ?? null) }}</td>
                     <td>{!! $pill($r->status ?? null) !!}</td>
+                    <td>
+                      @if($r->attachment_path)
+                        <a href="{{ route('employee-lifecycle.complaints.attachment', $r->id) }}" target="_blank" class="btn btn-sm btn-hitech-modal-cancel"><i class="bx bx-paperclip"></i></a>
+                      @else
+                        <span class="text-muted">—</span>
+                      @endif
+                    </td>
                   </tr>
                 @empty
-                  <tr><td colspan="5" class="text-center text-muted py-5">No complaints recorded</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-5">No complaints recorded</td></tr>
                 @endforelse
                 </tbody>
               </table>
@@ -630,7 +644,7 @@
         <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
       </div>
       <div class="modal-body modal-body-hitech">
-        <form action="{{ route('employee-lifecycle.warnings.store') }}" method="POST">
+        <form action="{{ route('employee-lifecycle.warnings.store') }}" method="POST" enctype="multipart/form-data">
           @csrf
           <div class="row g-4">
             <div class="col-12">
@@ -643,16 +657,34 @@
               </select>
             </div>
             <div class="col-md-6">
-              <label class="form-label-hitech">Severity</label>
-              <select name="severity" class="form-select form-select-hitech"><option value="verbal">Verbal</option><option value="written">Written</option><option value="final">Final</option></select>
+              <label class="form-label-hitech">Warning Type <span class="text-danger">*</span></label>
+              <select name="warning_type" class="form-select form-select-hitech" required>
+                <option value="verbal">Verbal</option>
+                <option value="written">Written</option>
+                <option value="performance">Performance</option>
+                <option value="attendance">Attendance</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Severity <span class="text-danger">*</span></label>
+              <select name="severity" class="form-select form-select-hitech" required>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
             </div>
             <div class="col-md-6">
               <label class="form-label-hitech">Issued Date <span class="text-danger">*</span></label>
-              <input type="date" name="issued_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
+              <input type="date" name="warning_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
             </div>
             <div class="col-md-12">
               <label class="form-label-hitech">Reason <span class="text-danger">*</span></label>
-              <textarea name="reason" rows="2" class="form-control form-control-hitech" required></textarea>
+              <textarea name="description" rows="2" class="form-control form-control-hitech" required></textarea>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Attachment</label>
+              <input type="file" name="attachment" class="form-control form-control-hitech">
             </div>
           </div>
           <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
@@ -677,7 +709,7 @@
         <button type="button" class="btn-close-hitech" data-bs-dismiss="modal"><i class="bx bx-x"></i></button>
       </div>
       <div class="modal-body modal-body-hitech">
-        <form action="{{ route('employee-lifecycle.complaints.store') }}" method="POST">
+        <form action="{{ route('employee-lifecycle.complaints.store') }}" method="POST" enctype="multipart/form-data">
           @csrf
           <div class="row g-4">
             <div class="col-12">
@@ -689,21 +721,35 @@
                 @endforeach
               </select>
             </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Complaint Type <span class="text-danger">*</span></label>
+              <select name="complaint_type" class="form-select form-select-hitech" required>
+                <option value="harassment">Harassment</option>
+                <option value="discrimination">Discrimination</option>
+                <option value="safety">Safety</option>
+                <option value="policy">Policy</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label-hitech">Severity <span class="text-danger">*</span></label>
+              <select name="severity" class="form-select form-select-hitech" required>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
             <div class="col-md-12">
-              <label class="form-label-hitech">Subject <span class="text-danger">*</span></label>
-              <input type="text" name="subject" class="form-control form-control-hitech" required>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label-hitech">Category</label>
-              <select name="category" class="form-select form-select-hitech"><option value="harassment">Harassment</option><option value="workplace">Workplace</option><option value="payroll">Payroll</option><option value="other">Other</option></select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label-hitech">Date</label>
-              <input type="date" name="complaint_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}">
+              <label class="form-label-hitech">Date <span class="text-danger">*</span></label>
+              <input type="date" name="complaint_date" class="form-control form-control-hitech" value="{{ now()->toDateString() }}" required>
             </div>
             <div class="col-md-12">
               <label class="form-label-hitech">Details <span class="text-danger">*</span></label>
               <textarea name="description" rows="2" class="form-control form-control-hitech" required></textarea>
+            </div>
+            <div class="col-md-12">
+              <label class="form-label-hitech">Attachment</label>
+              <input type="file" name="attachment" class="form-control form-control-hitech">
             </div>
           </div>
           <div class="modal-footer border-0 px-0 pb-0 pt-4 d-flex justify-content-end gap-3">
