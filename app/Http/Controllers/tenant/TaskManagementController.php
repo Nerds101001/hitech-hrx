@@ -209,21 +209,30 @@ class TaskManagementController extends Controller
         ];
 
         $scheduleQuery = TaskSchedule::where('is_active', true)->with('assignedBy');
+        // A regular user sees schedules they assigned OR are a target of. The
+        // target match is on a JSON-ish column, so resolve the visible ids in
+        // PHP (a small set) and constrain the paginated query to them — this
+        // keeps "assigned to me or by me" while still allowing search + paging.
         if (!$canSeeAll) {
-            $scheduleQuery->where('assigned_by_id', $user->id);
+            $visibleScheduleIds = TaskSchedule::where('is_active', true)
+                ->get(['id', 'assigned_by_id', 'target_user_ids'])
+                ->filter(fn ($s) => (int) $s->assigned_by_id === $user->id || in_array($user->id, $s->target_user_ids ?? []))
+                ->pluck('id');
+            $scheduleQuery->whereIn('id', $visibleScheduleIds);
         }
-        $schedules = $scheduleQuery->orderByDesc('created_at')->get();
-        // A schedule where I'm only a target (not the assigner) still
-        // belongs to "my" tasks under the same assigned-to-me-or-by-me rule
-        // the rest of this page uses - the where() above only caught the
-        // assigner side.
-        if (!$canSeeAll) {
-            $mineAsTarget = TaskSchedule::where('is_active', true)->with('assignedBy')
-                ->where('assigned_by_id', '!=', $user->id)
-                ->get()
-                ->filter(fn ($s) => in_array($user->id, $s->target_user_ids ?? []));
-            $schedules = $schedules->concat($mineAsTarget)->sortByDesc('created_at')->values();
+        // Search by task title.
+        if ($request->filled('recurring_search')) {
+            $scheduleQuery->where('title', 'like', '%' . $request->recurring_search . '%');
         }
+        // Sort: task title, how it repeats, or newest (default).
+        $recurringSort = in_array($request->input('recurring_sort'), ['title', 'frequency', 'created'], true)
+            ? $request->input('recurring_sort') : 'created';
+        $recurringDir = $request->input('recurring_dir') === 'asc' ? 'asc' : 'desc';
+        $scheduleQuery->orderBy(match ($recurringSort) {
+            'title' => 'title', 'frequency' => 'frequency', default => 'created_at',
+        }, $recurringDir);
+        $schedules = $scheduleQuery->paginate(15, ['*'], 'recurring_page')
+            ->withQueryString()->fragment('tmRecurring');
         // Resolved once here rather than per-row in the view (N+1) — the id
         // list is small (schedule targets), so one query per page is fine.
         $allTargetIds = $schedules->flatMap(fn ($s) => $s->target_user_ids ?? [])->unique();
@@ -250,7 +259,7 @@ class TaskManagementController extends Controller
 
         $pendency = $this->buildPendency($request, $user);
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir'));
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir', 'recurringSort', 'recurringDir'));
     }
 
     /**
@@ -308,18 +317,26 @@ class TaskManagementController extends Controller
             $personQuery->where('users.department_id', $request->pendency_department_id);
         }
 
+        // Search a person by name.
+        if ($request->filled('pendency_search')) {
+            $term = $request->pendency_search;
+            $personQuery->where(fn ($q) => $q->where('users.first_name', 'like', "%{$term}%")
+                ->orWhere('users.last_name', 'like', "%{$term}%"));
+        }
+
         $orderColumn = match ($sort) {
             'overdue' => 'overdue',
             'name'    => 'users.first_name',
             default   => 'pending',
         };
-        $byPerson = $personQuery->orderBy($orderColumn, $dir)->get();
+        $byPerson = $personQuery->orderBy($orderColumn, $dir)
+            ->paginate(15, ['*'], 'pendency_page')->withQueryString()->fragment('tmPendency');
 
         return [
             'totalPending'        => (clone $base)->count(),
             'totalOverdue'        => (clone $base)->overdue()->count(),
             'departmentsAffected' => $byDepartment->count(),
-            'peopleAffected'      => $byPerson->count(),
+            'peopleAffected'      => $byPerson->total(),
             'byDepartment'        => $byDepartment,
             'byPerson'            => $byPerson,
             'sort'                => $sort,

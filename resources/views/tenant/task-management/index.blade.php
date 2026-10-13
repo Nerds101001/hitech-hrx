@@ -561,14 +561,39 @@
     <div class="tab-pane fade" id="tmRecurring">
       <div class="hitech-card">
         <div class="card-body p-4 pb-2">
-          <p class="text-muted small mb-0">Fires automatically every time its day comes round — no need to reassign it yourself. Expand a row to see every day it has actually fired.</p>
+          <p class="text-muted small mb-2">Fires automatically every time its day comes round — no need to reassign it yourself. Expand a row to see every day it has actually fired.</p>
+          <form method="GET" class="row g-2 align-items-center">
+            <div class="col-md-5">
+              <div class="search-wrapper-hitech mw-100">
+                <i class="bx bx-search text-muted ms-3"></i>
+                <input type="text" name="recurring_search" class="form-control" placeholder="Search recurring task title..." value="{{ request('recurring_search') }}">
+                <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              @if(request()->filled('recurring_search'))
+                <a href="{{ request()->fullUrlWithQuery(['recurring_search' => null, 'recurring_page' => null]) }}#tmRecurring" class="btn btn-sm btn-hitech-cancel">Clear search</a>
+              @endif
+            </div>
+            @foreach(['recurring_sort', 'recurring_dir'] as $keep)
+              @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+            @endforeach
+          </form>
         </div>
         <div class="table-responsive">
+          @php
+            $recSortLink = fn($col) => request()->fullUrlWithQuery([
+              'recurring_sort' => $col,
+              'recurring_dir' => (($recurringSort ?? 'created') === $col && ($recurringDir ?? 'desc') === 'desc') ? 'asc' : 'desc',
+              'recurring_page' => null,
+            ]) . '#tmRecurring';
+            $recSortIcon = fn($col) => ($recurringSort ?? 'created') !== $col ? '' : (($recurringDir ?? 'desc') === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
+          @endphp
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
               <tr>
-                <th style="min-width:200px">Task</th>
-                <th>Repeats</th>
+                <th style="min-width:200px"><a href="{{ $recSortLink('title') }}" class="text-dark text-decoration-none">Task{!! $recSortIcon('title') !!}</a></th>
+                <th><a href="{{ $recSortLink('frequency') }}" class="text-dark text-decoration-none">Repeats{!! $recSortIcon('frequency') !!}</a></th>
                 <th>Priority</th>
                 <th>Assigned By</th>
                 <th>People</th>
@@ -661,12 +686,19 @@
               @empty
                 <tr><td colspan="7" class="text-center text-muted py-5">
                   <i class="bx bx-repeat fs-3 d-block mb-2 text-success"></i>
-                  No recurring tasks set up.
+                  @if(request()->filled('recurring_search'))
+                    No recurring tasks match "{{ request('recurring_search') }}".
+                  @else
+                    No recurring tasks set up.
+                  @endif
                 </td></tr>
               @endforelse
             </tbody>
           </table>
         </div>
+        @if($schedules->hasPages())
+          <div class="p-3 border-top">{{ $schedules->links() }}</div>
+        @endif
       </div>
     </div>{{-- /#tmRecurring --}}
 
@@ -745,6 +777,19 @@
               <p class="text-muted small mb-0">Every person with at least one pending task, worst first.</p>
             @endif
           </div>
+          <form method="GET" class="d-flex align-items-center gap-2">
+            <div class="search-wrapper-hitech mw-100">
+              <i class="bx bx-search text-muted ms-3"></i>
+              <input type="text" name="pendency_search" class="form-control" placeholder="Search person..." value="{{ request('pendency_search') }}">
+              <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+            </div>
+            @if(request()->filled('pendency_search'))
+              <a href="{{ request()->fullUrlWithQuery(['pendency_search' => null, 'pendency_page' => null]) }}#tmPendency" class="btn btn-sm btn-hitech-cancel">Clear</a>
+            @endif
+            @foreach(['pendency_sort', 'pendency_dir', 'pendency_department_id'] as $keep)
+              @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+            @endforeach
+          </form>
         </div>
         <div class="table-responsive">
           <table class="table table-hover align-middle mb-0">
@@ -754,6 +799,7 @@
                   $pendSortLink = fn($col) => request()->fullUrlWithQuery([
                     'pendency_sort' => $col,
                     'pendency_dir' => ($pendency['sort'] === $col && $pendency['dir'] === 'desc') ? 'asc' : 'desc',
+                    'pendency_page' => null,
                   ]) . '#tmPendency';
                   $sortIcon = fn($col) => $pendency['sort'] !== $col ? '' : ($pendency['dir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
                 @endphp
@@ -782,11 +828,20 @@
                   </td>
                 </tr>
               @empty
-                <tr><td colspan="5" class="text-center text-muted py-4">No one has a pending task right now — clean slate.</td></tr>
+                <tr><td colspan="5" class="text-center text-muted py-4">
+                  @if(request()->filled('pendency_search'))
+                    No one matches "{{ request('pendency_search') }}".
+                  @else
+                    No one has a pending task right now — clean slate.
+                  @endif
+                </td></tr>
               @endforelse
             </tbody>
           </table>
         </div>
+        @if($pendency['byPerson']->hasPages())
+          <div class="p-3 border-top">{{ $pendency['byPerson']->links() }}</div>
+        @endif
       </div>
     </div>{{-- /#tmPendency --}}
 
@@ -1127,10 +1182,19 @@ document.addEventListener('DOMContentLoaded', function () {
   // Pendency's department/sort links reload the page (GET params drive the
   // query) rather than fetching in place, which would otherwise dump
   // whoever clicked one back on the One-Time tab instead of where they were.
-  if (window.location.hash === '#tmPendency') {
-    const trigger = document.querySelector('.js-tm-tab[data-tm-target="#tmPendency"]');
-    if (trigger) trigger.click();
-  }
+  // Restore the active tab after a reload — from the URL hash, or from a tab's
+  // own query params (its search box submits a plain form with no hash).
+  (function () {
+    const params = new URLSearchParams(window.location.search);
+    const hasPrefix = (pre) => [...params.keys()].some((k) => k.startsWith(pre));
+    let target = null;
+    if (window.location.hash === '#tmRecurring' || hasPrefix('recurring_')) target = '#tmRecurring';
+    else if (window.location.hash === '#tmPendency' || hasPrefix('pendency_')) target = '#tmPendency';
+    if (target) {
+      const trigger = document.querySelector('.js-tm-tab[data-tm-target="' + target + '"]');
+      if (trigger) trigger.click();
+    }
+  })();
 
   // No theme option: this project styles select2's own default markup
   // (see select2.scss) rather than the separate "bootstrap-5" theme, which
