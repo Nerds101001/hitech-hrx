@@ -1059,15 +1059,6 @@
                     ]
                 },
                 {
-                    "url": "/sales-visits/leaver-handover",
-                    "name": "Leaver Handover",
-                    "slug": "sales-visits.leaver-handover.index",
-                    "roles": [
-                        "admin",
-                        "hr"
-                    ]
-                },
-                {
                     "url": "/cc-attendance",
                     "name": "Attendance",
                     "slug": "cc-attendance.index",

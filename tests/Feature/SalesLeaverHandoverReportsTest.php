@@ -36,6 +36,9 @@ class SalesLeaverHandoverReportsTest extends TestCase
         parent::setUp();
         Mail::fake();
         Carbon::setTestNow('2031-03-10 11:00:00');
+        // Handovers that already exist in this database (real ones made through the page) are set aside for
+        // the length of the test, which runs in a transaction that is rolled back.
+        DB::table('sales_pipeline_handovers')->update(['reverted_at' => now()]);
         SalesPipelineHandover::flush();
         $this->admin  = $this->person('admin');
         $this->leaver = $this->person();

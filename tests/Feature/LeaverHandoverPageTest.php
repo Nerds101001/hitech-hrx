@@ -30,8 +30,12 @@ class LeaverHandoverPageTest extends TestCase
         parent::setUp();
         Mail::fake();
         Carbon::setTestNow('2031-03-10 11:00:00');
+        // Handovers that already exist in this database (real ones made through the page) are set aside for
+        // the length of the test, which runs in a transaction that is rolled back.
+        DB::table('sales_pipeline_handovers')->update(['reverted_at' => now()]);
         SalesPipelineHandover::flush();
         $this->admin  = $this->person('active', 'admin');
+        config(['handover.viewer_emails' => [$this->admin->email]]);
         $this->plain  = $this->person('active');
         $this->leaver = $this->person('terminated');
         $this->next   = $this->person('active');
@@ -67,11 +71,23 @@ class LeaverHandoverPageTest extends TestCase
 
     public function test_only_admin_and_hr_may_open_or_use_it(): void
     {
-        // Turned away (a redirect or a 403, depending on the middleware) -- never served.
-        foreach ([['get', ''], ['postJson', '/preview'], ['postJson', '/apply']] as [$verb, $path]) {
-            $r = $this->actingAs($this->plain)->{$verb}('/sales-visits/leaver-handover' . $path, $verb === 'get' ? [] : $this->body());
-            $this->assertContains($r->getStatusCode(), [302, 403], "{$path} must not be open to a plain user");
+        // Hidden: anyone not on the viewer list gets "not found" -- a plain user, and an admin who is not named.
+        $otherAdmin = $this->person('active', 'admin');
+        foreach ([$this->plain, $otherAdmin] as $who) {
+            foreach ([['get', ''], ['postJson', '/preview'], ['postJson', '/apply']] as [$verb, $path]) {
+                $r = $this->actingAs($who)->{$verb}('/sales-visits/leaver-handover' . $path, $verb === 'get' ? [] : $this->body());
+                // A user with no Sales access is turned away earlier by the Sales area's own guard
+                // (a redirect, same as every Sales page); an admin who is not named gets "not found".
+                if ($who === $otherAdmin) {
+                    $r->assertNotFound();
+                } else {
+                    $this->assertContains($r->getStatusCode(), [302, 403, 404]);
+                }
+            }
         }
+        // And an empty list admits nobody, not even the admin.
+        config(['handover.viewer_emails' => []]);
+        $this->actingAs($this->admin)->get('/sales-visits/leaver-handover')->assertNotFound();
         $this->assertSame($this->leaver->id, (int) $this->p->fresh()->salesperson_id);
     }
 
@@ -137,7 +153,8 @@ class LeaverHandoverPageTest extends TestCase
         $this->assertStringContainsString('Customer,Role,From,To', $text);
 
         foreach (["/sales-visits/leaver-handover/{$batch}", "/sales-visits/leaver-handover/{$batch}/export"] as $url) {
-            $this->assertContains($this->actingAs($this->plain)->get($url)->getStatusCode(), [302, 403]);
+            $this->assertContains($this->actingAs($this->plain)->get($url)->getStatusCode(), [302, 403, 404]);
+            $this->actingAs($this->person('active', 'admin'))->get($url)->assertNotFound();
         }
         $this->actingAs($this->admin)->get('/sales-visits/leaver-handover/99999999')->assertNotFound();
     }

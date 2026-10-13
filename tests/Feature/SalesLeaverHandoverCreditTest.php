@@ -32,6 +32,9 @@ class SalesLeaverHandoverCreditTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Handovers that already exist in this database (real ones made through the page) are set aside for
+        // the length of the test, which runs in a transaction that is rolled back.
+        DB::table('sales_pipeline_handovers')->update(['reverted_at' => now()]);
         SalesPipelineHandover::flush();
         $this->leaver = $this->person();
         $this->next   = $this->person();

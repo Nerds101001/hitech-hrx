@@ -17,9 +17,18 @@ use Illuminate\Support\Facades\DB;
  */
 class LeaverHandoverController extends Controller
 {
+    /**
+     * Hidden tool: only the people in config('handover.viewer_emails') who are also Admin or HR
+     * get in. Anyone else, admins included, simply gets "not found". An empty list admits nobody.
+     */
     private function authorizeHandover(): void
     {
-        abort_unless(auth()->user() && auth()->user()->hasRole(['admin', 'Admin', 'hr', 'HR']), 403);
+        $u = auth()->user();
+        $allowed = array_map('strtolower', (array) config('handover.viewer_emails', ['ai@rustx.com']));
+        $ok = $u
+            && $u->hasRole(['admin', 'Admin', 'hr', 'HR'])
+            && in_array(strtolower((string) $u->email), $allowed, true);
+        abort_unless($ok, 404);
     }
 
     public function index()
