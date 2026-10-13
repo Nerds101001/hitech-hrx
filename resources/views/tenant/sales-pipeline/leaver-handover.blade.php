@@ -197,22 +197,48 @@
     el.addEventListener('change', function () { filterTable(el.dataset.table); });
   });
 
-  // A small search box above each replacement list (the list is long).
+  // Type-ahead for every replacement list: type 2-3 letters of a name (or department) and the
+  // matching people appear underneath; click one to choose. The real <select> stays hidden and
+  // holds the value, so nothing else changes.
   document.querySelectorAll('.js-repl').forEach(function (sel) {
-    var box = document.createElement('input');
-    box.type = 'search'; box.className = 'form-control form-control-sm mb-1'; box.placeholder = 'Search people…';
-    sel.parentNode.insertBefore(box, sel);
-    box.addEventListener('input', function () {
-      var q = box.value.trim().toLowerCase();
-      sel.querySelectorAll('optgroup').forEach(function (g) {
-        var any = false;
-        g.querySelectorAll('option').forEach(function (o) {
-          var show = !q || o.textContent.toLowerCase().indexOf(q) !== -1 || g.label.toLowerCase().indexOf(q) !== -1;
-          o.hidden = !show; o.disabled = !show; if (show) any = true;
-        });
-        g.hidden = !any;
-      });
+    var items = [];
+    sel.querySelectorAll('optgroup').forEach(function (g) {
+      g.querySelectorAll('option').forEach(function (o) { items.push({ id: o.value, name: o.textContent.trim(), dept: g.label }); });
     });
+    sel.style.display = 'none';
+
+    var wrap = document.createElement('div'); wrap.style.position = 'relative';
+    var box = document.createElement('input');
+    box.type = 'text'; box.className = 'form-control'; box.placeholder = 'Type 2–3 letters to search…'; box.autocomplete = 'off';
+    var list = document.createElement('div');
+    list.className = 'list-group shadow'; list.style.cssText = 'position:absolute;z-index:1050;left:0;right:0;top:100%;max-height:260px;overflow:auto;display:none;';
+    sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(box); wrap.appendChild(list);
+
+    function choose(it) {
+      sel.value = it.id; box.value = it.name; box.classList.add('is-valid'); list.style.display = 'none';
+      sel.dispatchEvent(new Event('change'));
+    }
+    function render() {
+      var q = box.value.trim().toLowerCase();
+      list.innerHTML = '';
+      var hits = items.filter(function (i) { return !q || i.name.toLowerCase().indexOf(q) !== -1 || i.dept.toLowerCase().indexOf(q) !== -1; });
+      hits.slice(0, 15).forEach(function (it) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'list-group-item list-group-item-action py-2';
+        var n = document.createElement('span'); n.textContent = it.name;
+        var d = document.createElement('small'); d.className = 'text-muted ms-2'; d.textContent = it.dept;
+        b.appendChild(n); b.appendChild(d);
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); choose(it); });   // before the box loses focus
+        list.appendChild(b);
+      });
+      if (!hits.length) { var none = document.createElement('div'); none.className = 'list-group-item text-muted'; none.textContent = 'No one matches "' + box.value + '"'; list.appendChild(none); }
+      else if (hits.length > 15) { var more = document.createElement('div'); more.className = 'list-group-item small text-muted'; more.textContent = (hits.length - 15) + ' more… keep typing to narrow it down'; list.appendChild(more); }
+      list.style.display = 'block';
+    }
+    box.addEventListener('input', function () { sel.value = ''; box.classList.remove('is-valid'); render(); });
+    box.addEventListener('focus', render);
+    box.addEventListener('blur', function () { setTimeout(function () { list.style.display = 'none'; }, 150); });
+    sel._reset = function () { sel.value = ''; box.value = ''; box.classList.remove('is-valid'); list.style.display = 'none'; };
   });
 
   document.querySelectorAll('.js-pick').forEach(function (b) {
@@ -227,7 +253,7 @@
       $('hoCount_sp').textContent = b.dataset.sp > 0 ? '(' + b.dataset.sp + ' customers)' : '';
       $('hoCount_cc').textContent = b.dataset.cc > 0 ? '(' + b.dataset.cc + ' customers)' : '';
       $('hoCount_nb').textContent = b.dataset.nb > 0 ? '(' + b.dataset.nb + ' customers)' : '';
-      document.querySelectorAll('.js-repl').forEach(function (s) { s.value = ''; });
+      document.querySelectorAll('.js-repl').forEach(function (s) { s.value = ''; if (s._reset) s._reset(); });
       $('hoResult').innerHTML = ''; lastPreview = null;
       $('hoForm').classList.remove('d-none');
       $('hoForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
