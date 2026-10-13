@@ -114,6 +114,19 @@
         };
 
         $menuUser = auth()->user();
+
+        // A KPI "data owner" is usually a plain employee (the person who holds
+        // the number), not admin/HR/manager — but Bulk KPI Entry lives inside
+        // the otherwise admin/HR/manager-only "Performance" group, so they never
+        // saw it. Same source of truth Nav::allows() uses for the link itself.
+        $canBulkKpi = false;
+        try { $canBulkKpi = $menuUser ? \App\Models\KpiDataOwner::canOpenBulkEntry($menuUser) : false; } catch (\Throwable $e) {}
+        $leadsToBulkKpi = function ($m) {
+            if (($m->url ?? null) === '/kpi/bulk-entry') return true;
+            foreach (($m->submenu ?? []) as $s) { if (($s->url ?? null) === '/kpi/bulk-entry') return true; }
+            return false;
+        };
+
         // "hideForRoles": links meant for one audience only (e.g. a salesperson's own pages),
         // hidden from these roles even though they pass every other gate.
         $hiddenForUser = function ($m) use ($menuUser) {
@@ -121,7 +134,7 @@
             $ur = array_map('strtolower', $menuUser->roles->pluck('name')->toArray());
             return (bool) array_intersect($ur, array_map('strtolower', (array) $m->hideForRoles));
         };
-        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission, $hiddenForUser) {
+        $itemVisible = function ($m) use ($menuUser, $addonService, $settings, $hasAnyPermission, $hiddenForUser, $canBulkKpi, $leadsToBulkKpi) {
             if ($hiddenForUser($m)) return false;
             if (isset($m->addon) && !$addonService->isAddonEnabled($m->addon)) return false;
             if (isset($m->standardAddon)
@@ -141,7 +154,8 @@
                 // check the permission in the controller, not the route).
                 if (empty(array_intersect($ur, $rr))
                     && !(isset($m->rolesOrPermission) && $hasAnyPermission($menuUser, $m->rolesOrPermission))
-                    && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($m), $menuUser)) return false;
+                    && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($m), $menuUser)
+                    && !($canBulkKpi && $leadsToBulkKpi($m))) return false;
             }
             if (isset($m->permission) && !$isAdminUser) {
                 if (!$hasAnyPermission($menuUser, $m->permission)) return false;
@@ -202,9 +216,14 @@
               $userRoles = array_map('strtolower', $user->roles->pluck('name')->toArray());
               $requiredRoles = array_map('strtolower', (array) $menu->roles);
               if (empty(array_intersect($userRoles, $requiredRoles))) {
+                  // Data owners reach the Performance group only for Bulk KPI
+                  // Entry; its other children stay gated by their own roles, so
+                  // do NOT mark the group $viaPermission in that case.
+                  $byBulkKpi = $canBulkKpi && $leadsToBulkKpi($menu);
                   if (!(isset($menu->rolesOrPermission) && $hasAnyPermission($user, $menu->rolesOrPermission))
-                      && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)) continue;
-                  $viaPermission = true;
+                      && !\App\Support\Nav::grantedByPermission(\App\Support\Nav::menuUrls($menu), $user)
+                      && !$byBulkKpi) continue;
+                  if (!$byBulkKpi) $viaPermission = true;
               }
           }
 
