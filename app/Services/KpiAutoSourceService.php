@@ -78,6 +78,7 @@ class KpiAutoSourceService
         'auto:new_customer_revenue_pct'   => '% of revenue from customers added to the Sales Report this financial year',
         'auto:customer_attrition'         => '% of last year\'s ordering customers with no order yet this year',
         'auto:market_share'               => 'Sales as a % of the book\'s monthly business potential',
+        'auto:transfer_order_rate'        => '% of customers moved from New Biz to this CCare person (last 3 months) that ordered after the move',
         'auto:cost_of_selling'            => 'Travel + expense cost as a % of revenue',
         'auto:mindspeak_insights'         => 'Competitor Insights submissions accepted in Mind Speak',
         'auto:mindspeak_ideas'            => 'New Product Ideas accepted in Mind Speak',
@@ -127,6 +128,7 @@ class KpiAutoSourceService
             'auto:new_customer_revenue_pct' => self::newCustomerRevenuePct($a->user_id, $start, $end),
             'auto:customer_attrition'       => self::customerAttrition($a->user_id, $start, $end),
             'auto:market_share'             => self::marketShare($a->user_id, $start, $end),
+            'auto:transfer_order_rate'      => self::transferOrderRate($a->user_id, $start, $end),
             'auto:cost_of_selling'          => self::costOfSelling($a->user_id, $start, $end),
             'auto:mindspeak_insights'       => self::mindSpeakAccepted($a->user_id, $start, $end, 'Competitor Insights'),
             'auto:mindspeak_ideas'          => self::mindSpeakAccepted($a->user_id, $start, $end, 'Idea'),
@@ -521,6 +523,55 @@ class KpiAutoSourceService
             ->distinct()->count('sales_pipeline_id');
 
         return round($still / $eligible->count() * 100, 2);
+    }
+
+    /** Months after a New Biz -> CCare move in which the customer is still being given the chance to order. */
+    public const TRANSFER_WINDOW_MONTHS = 3;
+
+    /**
+     * Transfer Order Rate: of the customers New Biz handed to this CCare person in
+     * the three months before the period ended, the % that placed an order after
+     * the move.
+     *
+     * "Transferred" is the Sales Report's own 5-month rule (SalesPipeline sets
+     * ccare_from and former_new_biz_id when New Biz lets go). The month of the
+     * move is not counted as an order: it is the month that triggered the move,
+     * so an order after it means the customer stayed with CCare. A customer moved
+     * in the period's own month has had no month to order in yet and is left out
+     * until the next period.
+     *
+     * Null when nobody was transferred in the window, so a quiet month neither
+     * scores nor costs marks.
+     */
+    public static function transferOrderRate(int $userId, Carbon $start, Carbon $end): ?float
+    {
+        $endKey = $end->format('Y-m');
+        $from   = $end->copy()->startOfMonth()->subMonths(self::TRANSFER_WINDOW_MONTHS)->format('Y-m');
+
+        $moved = DB::table('sales_pipelines')
+            ->whereNull('deleted_at')
+            ->where('ccare_id', $userId)
+            ->whereNotNull('ccare_from')
+            ->where('ccare_from', '>=', $from)
+            ->where('ccare_from', '<', $endKey)
+            ->pluck('ccare_from', 'id');
+
+        if ($moved->isEmpty()) {
+            return null;
+        }
+
+        $ordered = 0;
+        foreach ($moved as $id => $movedMonth) {
+            $hasOrder = DB::table('sales_pipeline_months')
+                ->where('sales_pipeline_id', $id)
+                ->where('month_year', '>', $movedMonth)
+                ->where('month_year', '<=', $endKey)
+                ->where('sale_amount', '>', 0)
+                ->exists();
+            $ordered += $hasOrder ? 1 : 0;
+        }
+
+        return round($ordered / $moved->count() * 100, 2);
     }
 
     /**
