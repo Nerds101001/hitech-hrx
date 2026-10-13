@@ -132,9 +132,17 @@
       d.textContent = m;
       return d.innerHTML;
     }).join('<br>');
-    if (typeof window.showErrorSwalHtml === 'function') {
-      window.showErrorSwalHtml(errorMessages);
-    }
+    // window.showErrorSwalHtml is defined further down in this very script,
+    // so calling it here - at this point in a synchronous <script> - always
+    // found it undefined and silently dropped every validation error on
+    // every plain form POST in the app. setTimeout defers to a macrotask,
+    // by which time the rest of this script (including that definition)
+    // has already run.
+    setTimeout(function () {
+      if (typeof window.showErrorSwalHtml === 'function') {
+        window.showErrorSwalHtml(errorMessages);
+      }
+    }, 0);
   })();
   @endif
 
