@@ -50,8 +50,12 @@ class TaskEscalationService
 
     /**
      * 'escalated' (already sent), 'will_escalate' (overdue long enough that
-     * the next run will send it, just hasn't run yet), or 'pending' (overdue
-     * but not yet at the threshold).
+     * the next run will actually send it), 'pending' (overdue but not yet at
+     * the threshold), or 'exempt' (past the threshold but its deadline fell
+     * before config('tasks.escalate_from') - the storm guard that stops
+     * escalation going live from dumping the whole pre-existing backlog on
+     * managers; EscalateOverdueTasks will never pick these up, so they must
+     * never be shown as "will escalate" here either).
      */
     public static function statusFor(Task $task): string
     {
@@ -59,7 +63,14 @@ class TaskEscalationService
             return 'escalated';
         }
         $threshold = max(1, (int) config('tasks.escalate_after_days', 2));
+        if (self::daysOverdue($task) < $threshold) {
+            return 'pending';
+        }
+        $from = config('tasks.escalate_from');
+        if ($from && $task->due_deadline && $task->due_deadline->lt(\Carbon\Carbon::parse($from))) {
+            return 'exempt';
+        }
 
-        return self::daysOverdue($task) >= $threshold ? 'will_escalate' : 'pending';
+        return 'will_escalate';
     }
 }

@@ -367,6 +367,7 @@ class TaskManagementController extends Controller
             'escalatedCount'    => $rows->where('status', 'escalated')->count(),
             'willEscalateCount' => $rows->where('status', 'will_escalate')->count(),
             'pendingCount'      => $rows->where('status', 'pending')->count(),
+            'exemptCount'       => $rows->where('status', 'exempt')->count(),
             'sort'              => $escSort,
             'dir'               => $escDir,
             'thresholdDays'     => max(1, (int) config('tasks.escalate_after_days', 2)),

@@ -917,7 +917,7 @@
     </div>{{-- /#tmPendency --}}
 
     <div class="tab-pane fade" id="tmEscalations">
-      <div class="row row-cols-2 row-cols-md-3 g-6 mb-6">
+      <div class="row row-cols-2 row-cols-md-4 g-6 mb-6">
         <div class="col">
           <div class="hitech-stat-card dashboard-variant card-red uniform-card">
             <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-red" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-error-circle"></i></div></div>
@@ -934,6 +934,12 @@
           <div class="hitech-stat-card dashboard-variant card-blue uniform-card">
             <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-blue" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-hourglass"></i></div></div>
             <div><h3 class="stat-value mb-0">{{ $escalations['pendingCount'] }}</h3><span class="stat-label">Overdue, Not Yet at {{ $escalations['thresholdDays'] }}d</span></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="hitech-stat-card dashboard-variant card-teal uniform-card" title="Overdue since before escalation went live ({{ config('tasks.escalate_from') }}) - the storm guard excludes these from ever auto-escalating, on purpose.">
+            <div class="stat-card-header mb-2"><div class="stat-icon-wrap icon-teal" style="width:38px;height:38px;font-size:1.2rem;"><i class="bx bx-shield-x"></i></div></div>
+            <div><h3 class="stat-value mb-0">{{ $escalations['exemptCount'] }}</h3><span class="stat-label">Pre-Rule Backlog (Exempt)</span></div>
           </div>
         </div>
       </div>
@@ -960,6 +966,7 @@
                 <option value="escalated" {{ request('escalation_status') === 'escalated' ? 'selected' : '' }}>Already Escalated</option>
                 <option value="will_escalate" {{ request('escalation_status') === 'will_escalate' ? 'selected' : '' }}>Will Escalate Next Run</option>
                 <option value="pending" {{ request('escalation_status') === 'pending' ? 'selected' : '' }}>Overdue, Not Yet at Threshold</option>
+                <option value="exempt" {{ request('escalation_status') === 'exempt' ? 'selected' : '' }}>Pre-Rule Backlog (Exempt)</option>
               </select>
             </div>
             <div class="col-lg-2 col-md-6">
@@ -986,7 +993,7 @@
               'escalation_page' => null,
             ]) . '#tmEscalations';
             $escSortIcon = fn($col) => $escalations['sort'] !== $col ? '' : ($escalations['dir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
-            $escStatusBadge = ['escalated' => ['Escalated', 'badge-hitech-danger'], 'will_escalate' => ['Will Escalate', 'badge-brand-soft'], 'pending' => ['Pending', 'badge-muted']];
+            $escStatusBadge = ['escalated' => ['Escalated', 'badge-hitech-danger'], 'will_escalate' => ['Will Escalate', 'badge-brand-soft'], 'pending' => ['Pending', 'badge-muted'], 'exempt' => ['Exempt', 'badge-muted']];
           @endphp
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
