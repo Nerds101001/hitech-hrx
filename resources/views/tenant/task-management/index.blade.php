@@ -560,20 +560,52 @@
 
     <div class="tab-pane fade" id="tmRecurring">
       <div class="hitech-card">
-        <div class="card-body p-4 pb-2">
-          <p class="text-muted small mb-2">Fires automatically every time its day comes round — no need to reassign it yourself. Expand a row to see every day it has actually fired.</p>
-          <form method="GET" class="row g-2 align-items-center">
-            <div class="col-md-5">
+        <div class="card-body p-4 pb-2 border-bottom">
+          <p class="text-muted small mb-3">Fires automatically every time its day comes round — no need to reassign it yourself. Expand a row to see every day it has actually fired.</p>
+          <form method="GET" class="row align-items-end g-4">
+            <div class="col-lg-3 col-md-6">
               <div class="search-wrapper-hitech mw-100">
                 <i class="bx bx-search text-muted ms-3"></i>
                 <input type="text" name="recurring_search" class="form-control" placeholder="Search recurring task title..." value="{{ request('recurring_search') }}">
                 <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
               </div>
             </div>
-            <div class="col-md-3">
-              @if(request()->filled('recurring_search'))
-                <a href="{{ request()->fullUrlWithQuery(['recurring_search' => null, 'recurring_page' => null]) }}#tmRecurring" class="btn btn-sm btn-hitech-cancel">Clear search</a>
-              @endif
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Status</label>
+              <select class="form-select form-select-hitech" name="recurring_status" onchange="this.form.submit()">
+                <option value="active" {{ (request('recurring_status', 'active') === 'active') ? 'selected' : '' }}>Active (default)</option>
+                <option value="stopped" {{ request('recurring_status') === 'stopped' ? 'selected' : '' }}>Stopped</option>
+                <option value="all" {{ request('recurring_status') === 'all' ? 'selected' : '' }}>Active + Stopped</option>
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Priority</label>
+              <select class="form-select form-select-hitech" name="recurring_priority" onchange="this.form.submit()">
+                <option value="">All priorities</option>
+                @foreach(\App\Models\Task::PRIORITIES as $p)
+                  <option value="{{ $p }}" {{ request('recurring_priority') === $p ? 'selected' : '' }}>{{ ucfirst($p) }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Repeats</label>
+              <select class="form-select form-select-hitech" name="recurring_frequency" onchange="this.form.submit()">
+                <option value="">All</option>
+                <option value="daily" {{ request('recurring_frequency') === 'daily' ? 'selected' : '' }}>Daily</option>
+                <option value="weekly" {{ request('recurring_frequency') === 'weekly' ? 'selected' : '' }}>Weekly</option>
+                <option value="monthly" {{ request('recurring_frequency') === 'monthly' ? 'selected' : '' }}>Monthly</option>
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Per Page</label>
+              <select class="form-select form-select-hitech" name="recurring_per_page" onchange="this.form.submit()">
+                @foreach(['10' => '10 per page', '15' => '15 per page', '20' => '20 per page', '50' => '50 per page', '100' => '100 per page', 'all' => 'All'] as $val => $label)
+                  <option value="{{ $val }}" {{ (string) request('recurring_per_page', '15') === $val ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-lg-1 col-md-6">
+              <a href="{{ route('task-management.index') }}#tmRecurring" class="btn btn-hitech-cancel w-100">Clear</a>
             </div>
             @foreach(['recurring_sort', 'recurring_dir'] as $keep)
               @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
@@ -594,7 +626,7 @@
               <tr>
                 <th style="min-width:200px"><a href="{{ $recSortLink('title') }}" class="text-dark text-decoration-none">Task{!! $recSortIcon('title') !!}</a></th>
                 <th><a href="{{ $recSortLink('frequency') }}" class="text-dark text-decoration-none">Repeats{!! $recSortIcon('frequency') !!}</a></th>
-                <th>Priority</th>
+                <th><a href="{{ $recSortLink('priority') }}" class="text-dark text-decoration-none">Priority{!! $recSortIcon('priority') !!}</a></th>
                 <th>Assigned By</th>
                 <th>People</th>
                 <th style="min-width:170px">Last Fired</th>
@@ -623,7 +655,12 @@
                         </button>
                       @endif
                       <div>
-                        <div class="fw-medium">{{ $s->title }}</div>
+                        <div class="fw-medium">
+                          {{ $s->title }}
+                          @unless($s->is_active)
+                            <span class="badge-hitech badge-muted ms-1" title="No longer creating tasks">Stopped</span>
+                          @endunless
+                        </div>
                         @if($s->description)<small class="text-muted">{{ \Illuminate\Support\Str::limit($s->description, 70) }}</small>@endif
                       </div>
                     </div>
@@ -686,8 +723,9 @@
               @empty
                 <tr><td colspan="7" class="text-center text-muted py-5">
                   <i class="bx bx-repeat fs-3 d-block mb-2 text-success"></i>
-                  @if(request()->filled('recurring_search'))
-                    No recurring tasks match "{{ request('recurring_search') }}".
+                  @if(request()->filled('recurring_search') || request()->filled('recurring_priority') || request()->filled('recurring_frequency') || request('recurring_status', 'active') !== 'active')
+                    Nothing matches these filters —
+                    <a href="{{ route('task-management.index') }}#tmRecurring">clear them</a>.
                   @else
                     No recurring tasks set up.
                   @endif
@@ -765,28 +803,42 @@
       </div>
 
       <div class="hitech-card">
-        <div class="card-body p-4 pb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div>
-            <h6 class="fw-bold mb-0">Pending by Person</h6>
-            @if(request()->filled('pendency_department_id'))
-              <p class="text-muted small mb-0">
-                Filtered to one department -
-                <a href="{{ request()->fullUrlWithQuery(['pendency_department_id' => null]) }}#tmPendency" class="js-pendency-tab-link">show everyone</a>
-              </p>
-            @else
+        <div class="card-body p-4 pb-2 border-bottom">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+            <div>
+              <h6 class="fw-bold mb-0">Pending by Person</h6>
               <p class="text-muted small mb-0">Every person with at least one pending task, worst first.</p>
-            @endif
-          </div>
-          <form method="GET" class="d-flex align-items-center gap-2">
-            <div class="search-wrapper-hitech mw-100">
-              <i class="bx bx-search text-muted ms-3"></i>
-              <input type="text" name="pendency_search" class="form-control" placeholder="Search person..." value="{{ request('pendency_search') }}">
-              <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
             </div>
-            @if(request()->filled('pendency_search'))
-              <a href="{{ request()->fullUrlWithQuery(['pendency_search' => null, 'pendency_page' => null]) }}#tmPendency" class="btn btn-sm btn-hitech-cancel">Clear</a>
-            @endif
-            @foreach(['pendency_sort', 'pendency_dir', 'pendency_department_id'] as $keep)
+          </div>
+          <form method="GET" class="row align-items-end g-4">
+            <div class="col-lg-3 col-md-6">
+              <div class="search-wrapper-hitech mw-100">
+                <i class="bx bx-search text-muted ms-3"></i>
+                <input type="text" name="pendency_search" class="form-control" placeholder="Search person..." value="{{ request('pendency_search') }}">
+                <button class="btn-search shadow-sm" type="submit"><i class="bx bx-search fs-5"></i><span>Search</span></button>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Department</label>
+              <select class="form-select form-select-hitech" name="pendency_department_id" onchange="this.form.submit()">
+                <option value="">All Departments</option>
+                @foreach($departments as $d)
+                  <option value="{{ $d->id }}" {{ (string) request('pendency_department_id') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-lg-2 col-md-6">
+              <label class="form-label fw-bold small text-muted text-uppercase mb-2">Per Page</label>
+              <select class="form-select form-select-hitech" name="pendency_per_page" onchange="this.form.submit()">
+                @foreach(['10' => '10 per page', '15' => '15 per page', '25' => '25 per page', '50' => '50 per page', 'all' => 'All'] as $val => $label)
+                  <option value="{{ $val }}" {{ (string) request('pendency_per_page', '15') === $val ? 'selected' : '' }}>{{ $label }}</option>
+                @endforeach
+              </select>
+            </div>
+            <div class="col-lg-1 col-md-6">
+              <a href="{{ route('task-management.index') }}#tmPendency" class="btn btn-hitech-cancel w-100">Clear</a>
+            </div>
+            @foreach(['pendency_sort', 'pendency_dir'] as $keep)
               @if(request()->filled($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
             @endforeach
           </form>
@@ -804,7 +856,7 @@
                   $sortIcon = fn($col) => $pendency['sort'] !== $col ? '' : ($pendency['dir'] === 'desc' ? ' <i class="bx bx-chevron-down"></i>' : ' <i class="bx bx-chevron-up"></i>');
                 @endphp
                 <th style="min-width:180px"><a href="{{ $pendSortLink('name') }}" class="text-dark text-decoration-none js-pendency-tab-link">Person{!! $sortIcon('name') !!}</a></th>
-                <th>Department</th>
+                <th><a href="{{ $pendSortLink('department') }}" class="text-dark text-decoration-none js-pendency-tab-link">Department{!! $sortIcon('department') !!}</a></th>
                 <th><a href="{{ $pendSortLink('pending') }}" class="text-dark text-decoration-none js-pendency-tab-link">Pending{!! $sortIcon('pending') !!}</a></th>
                 <th><a href="{{ $pendSortLink('overdue') }}" class="text-dark text-decoration-none js-pendency-tab-link">Overdue{!! $sortIcon('overdue') !!}</a></th>
                 <th class="text-end">View</th>
@@ -829,8 +881,9 @@
                 </tr>
               @empty
                 <tr><td colspan="5" class="text-center text-muted py-4">
-                  @if(request()->filled('pendency_search'))
-                    No one matches "{{ request('pendency_search') }}".
+                  @if(request()->filled('pendency_search') || request()->filled('pendency_department_id'))
+                    Nothing matches these filters —
+                    <a href="{{ route('task-management.index') }}#tmPendency">clear them</a>.
                   @else
                     No one has a pending task right now — clean slate.
                   @endif

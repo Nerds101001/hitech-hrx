@@ -208,13 +208,23 @@ class TaskManagementController extends Controller
             'pending'    => (clone $query)->whereNotIn('tasks.status', Task::CLOSED_STATUSES)->count(),
         ];
 
-        $scheduleQuery = TaskSchedule::where('is_active', true)->with('assignedBy');
+        // Status filter: a schedule is normally "active" (still firing); a
+        // stopped one used to be unreachable here once it stopped looping -
+        // there was no way to look back at what it was or who was on it.
+        $recurringStatus = in_array($request->input('recurring_status'), ['active', 'stopped', 'all'], true)
+            ? $request->input('recurring_status') : 'active';
+        $scheduleQuery = TaskSchedule::query()->with('assignedBy');
+        match ($recurringStatus) {
+            'stopped' => $scheduleQuery->where('is_active', false),
+            'all'     => null,
+            default   => $scheduleQuery->where('is_active', true),
+        };
         // A regular user sees schedules they assigned OR are a target of. The
         // target match is on a JSON-ish column, so resolve the visible ids in
         // PHP (a small set) and constrain the paginated query to them — this
         // keeps "assigned to me or by me" while still allowing search + paging.
         if (!$canSeeAll) {
-            $visibleScheduleIds = TaskSchedule::where('is_active', true)
+            $visibleScheduleIds = TaskSchedule::query()
                 ->get(['id', 'assigned_by_id', 'target_user_ids'])
                 ->filter(fn ($s) => (int) $s->assigned_by_id === $user->id || in_array($user->id, $s->target_user_ids ?? []))
                 ->pluck('id');
@@ -224,14 +234,27 @@ class TaskManagementController extends Controller
         if ($request->filled('recurring_search')) {
             $scheduleQuery->where('title', 'like', '%' . $request->recurring_search . '%');
         }
-        // Sort: task title, how it repeats, or newest (default).
-        $recurringSort = in_array($request->input('recurring_sort'), ['title', 'frequency', 'created'], true)
+        if ($request->filled('recurring_priority')) {
+            $scheduleQuery->where('priority', $request->recurring_priority);
+        }
+        if ($request->filled('recurring_frequency')) {
+            $scheduleQuery->where('frequency', $request->recurring_frequency);
+        }
+        // Sort: task title, how it repeats, priority, or newest (default).
+        $recurringSort = in_array($request->input('recurring_sort'), ['title', 'frequency', 'priority', 'created'], true)
             ? $request->input('recurring_sort') : 'created';
         $recurringDir = $request->input('recurring_dir') === 'asc' ? 'asc' : 'desc';
-        $scheduleQuery->orderBy(match ($recurringSort) {
-            'title' => 'title', 'frequency' => 'frequency', default => 'created_at',
-        }, $recurringDir);
-        $schedules = $scheduleQuery->paginate(15, ['*'], 'recurring_page')
+        if ($recurringSort === 'priority') {
+            $scheduleQuery->orderByRaw("FIELD(priority, 'low', 'medium', 'high') {$recurringDir}");
+        } else {
+            $scheduleQuery->orderBy(match ($recurringSort) {
+                'title' => 'title', 'frequency' => 'frequency', default => 'created_at',
+            }, $recurringDir);
+        }
+        // Same per-page options as the One-time tab.
+        $recurringPerPageOptions = ['10' => 10, '20' => 20, '50' => 50, '100' => 100, 'all' => 1000000];
+        $recurringPerPage = $recurringPerPageOptions[(string) $request->input('recurring_per_page', '15')] ?? 15;
+        $schedules = $scheduleQuery->paginate($recurringPerPage, ['*'], 'recurring_page')
             ->withQueryString()->fragment('tmRecurring');
         // Resolved once here rather than per-row in the view (N+1) — the id
         // list is small (schedule targets), so one query per page is fine.
@@ -259,7 +282,7 @@ class TaskManagementController extends Controller
 
         $pendency = $this->buildPendency($request, $user);
 
-        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir', 'recurringSort', 'recurringDir'));
+        return view('tenant.task-management.index', compact('tasks', 'departments', 'employees', 'stats', 'batchCounts', 'schedules', 'targetNames', 'activeTargetIds', 'lastFireStats', 'pendency', 'canSeeAll', 'sort', 'dir', 'recurringSort', 'recurringDir', 'recurringStatus'));
     }
 
     /**
@@ -298,7 +321,7 @@ class TaskManagementController extends Controller
             ->orderByDesc('pending')
             ->get();
 
-        $sort = in_array($request->input('pendency_sort'), ['pending', 'overdue', 'name'], true)
+        $sort = in_array($request->input('pendency_sort'), ['pending', 'overdue', 'name', 'department'], true)
             ? $request->input('pendency_sort') : 'pending';
         $dir = $request->input('pendency_dir') === 'asc' ? 'asc' : 'desc';
 
@@ -325,12 +348,15 @@ class TaskManagementController extends Controller
         }
 
         $orderColumn = match ($sort) {
-            'overdue' => 'overdue',
-            'name'    => 'users.first_name',
-            default   => 'pending',
+            'overdue'    => 'overdue',
+            'name'       => 'users.first_name',
+            'department' => 'departments.name',
+            default      => 'pending',
         };
+        $pendencyPerPageOptions = ['10' => 10, '15' => 15, '25' => 25, '50' => 50, 'all' => 1000000];
+        $pendencyPerPage = $pendencyPerPageOptions[(string) $request->input('pendency_per_page', '15')] ?? 15;
         $byPerson = $personQuery->orderBy($orderColumn, $dir)
-            ->paginate(15, ['*'], 'pendency_page')->withQueryString()->fragment('tmPendency');
+            ->paginate($pendencyPerPage, ['*'], 'pendency_page')->withQueryString()->fragment('tmPendency');
 
         return [
             'totalPending'        => (clone $base)->count(),
