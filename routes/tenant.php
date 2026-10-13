@@ -958,6 +958,14 @@ Route::middleware([
             Route::get('/sales-report/targets/export', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'exportTargetAchievement'])->name('pipeline.targets.export');
             Route::post('/sales-report/sync-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncSetu'])->name('pipeline.sync-setu');
             Route::post('/sales-report/resolve-setu/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveSetu'])->name('pipeline.resolve-setu');
+
+            // Hand a leaver's customers to a replacement from a chosen month (Admin / HR only).
+            Route::middleware(['role_or_permission:admin|hr'])->prefix('leaver-handover')->name('leaver-handover.')->group(function () {
+                Route::get('/', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'index'])->name('index');
+                Route::post('/preview', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'preview'])->name('preview');
+                Route::post('/apply', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'apply'])->name('apply');
+                Route::post('/{id}/revert', [\App\Http\Controllers\tenant\LeaverHandoverController::class, 'revert'])->whereNumber('id')->name('revert');
+            });
             Route::post('/sales-report/sync-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'syncCrmMapping'])->name('pipeline.sync-crm-mapping');
             Route::post('/sales-report/resolve-crm-mapping/{salespersonId}', [\App\Http\Controllers\tenant\SalesPipelineController::class, 'resolveCrmMapping'])->name('pipeline.resolve-crm-mapping');
 

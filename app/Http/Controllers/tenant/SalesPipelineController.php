@@ -1700,6 +1700,27 @@ class SalesPipelineController extends Controller
             }
         }
 
+        // Leaver handovers are written straight to the table (not through this model), so
+        // they carry no audit row of their own: list them from the handover ledger.
+        if (\Illuminate\Support\Facades\Schema::hasTable('sales_pipeline_handovers')) {
+            $ledger = \Illuminate\Support\Facades\DB::table('sales_pipeline_handovers as h')
+                ->join('sales_pipeline_handover_batches as b', 'b.id', '=', 'h.batch_id')
+                ->where('h.sales_pipeline_id', $pipeline->id)->whereNull('h.reverted_at')
+                ->get(['h.role', 'h.from_user_id', 'h.to_user_id', 'h.effective_month', 'b.created_by', 'b.created_at']);
+            foreach ($ledger as $h) {
+                foreach ([$h->from_user_id, $h->to_user_id, $h->created_by] as $uid) {
+                    if ($uid) $userIds->push($uid);
+                }
+                $entries[] = [
+                    'role' => $h->role === 'extra' ? 'Additional rep' : ($roleLabels[$h->role] ?? $h->role),
+                    'from_id' => $h->from_user_id, 'to_id' => $h->to_user_id, 'changed_by_id' => $h->created_by,
+                    'reason' => 'Claimed via leaver handover — credited to the new person from ' . $h->effective_month,
+                    'changed_at' => $h->created_at,
+                ];
+            }
+            usort($entries, fn ($a, $b) => strcmp((string) $b['changed_at'], (string) $a['changed_at']));
+        }
+
         $names = User::whereIn('id', $userIds->unique()->filter())->get()->keyBy('id')
             ->map(fn ($u) => trim($u->first_name . ' ' . $u->last_name));
 
